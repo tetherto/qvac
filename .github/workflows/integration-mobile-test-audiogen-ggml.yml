@@ -228,6 +228,7 @@ jobs:
           path: trusted-actions
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
+            .github/bare-toolchain
           sparse-checkout-cone-mode: false
           persist-credentials: false
 

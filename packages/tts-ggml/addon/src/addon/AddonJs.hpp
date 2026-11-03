@@ -36,6 +36,7 @@
 #include <tts-cpp/moss/fit.h>
 #include <tts-cpp/moss/sound_effect_fit.h>
 #include <tts-cpp/parler/fit.h>
+#include <tts-cpp/pocket/fit.h>
 #include <tts-cpp/supertonic/fit.h>
 
 #include "addon/AppMemoryBudget.hpp"
@@ -43,6 +44,7 @@
 #include "addon/VoiceControlsCatalog.hpp"
 #include "js-interface/JSAdapter.hpp"
 #include "model-interface/EnhancerLoader.hpp"
+#include "model-interface/WebGpuPolicy.hpp"
 #include "model-interface/audio8/Audio8Model.hpp"
 #include "model-interface/chatterbox/ChatterboxModel.hpp"
 #include "model-interface/cosyvoice/CosyvoiceModel.hpp"
@@ -120,6 +122,42 @@ struct JsSpeechReplyHandler
                   this->env_,
                   "text",
                   js::String::create(this->env_, reply.text));
+              return result;
+            }) {}
+};
+
+inline auto speechTokensToJs(js_env_t* env, const std::vector<int>& tokens)
+    -> js::Array {
+  auto result = js::Array::create(env);
+  for (size_t i = 0; i < tokens.size(); ++i)
+    result.set(env, i, js::Number::create(env, tokens[i]));
+  return result;
+}
+
+struct JsCosyvoiceReplyHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          cosyvoice::CosyvoiceReply> {
+  explicit JsCosyvoiceReplyHandler(int sampleRate)
+      : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+            cosyvoice::CosyvoiceReply>(
+            [this, sampleRate](
+                const cosyvoice::CosyvoiceReply& reply) -> js_value_t* {
+              auto result = js::Object::create(this->env_);
+              std::span<const int16_t> pcm(reply.pcm.data(), reply.pcm.size());
+              result.setProperty(
+                  this->env_,
+                  "outputArray",
+                  js::TypedArray<int16_t>::create(this->env_, pcm));
+              result.setProperty(
+                  this->env_,
+                  "sampleRate",
+                  js::Number::create(this->env_, sampleRate));
+              result.setProperty(
+                  this->env_,
+                  "speechTokenIds",
+                  speechTokensToJs(this->env_, reply.speechTokenIds));
+              result.setProperty(
+                  this->env_, "isLast", js::Boolean::create(this->env_, true));
               return result;
             }) {}
 };
@@ -248,6 +286,7 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   outHandlers.add(make_shared<JsAudioOutputHandler>(sampleRate));
   outHandlers.add(make_shared<JsStreamingPcmHandler>(sampleRate));
   outHandlers.add(make_shared<JsSpeechReplyHandler>(sampleRate));
+  outHandlers.add(make_shared<JsCosyvoiceReplyHandler>(sampleRate));
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env,
       args.get(0, "jsHandle"),
@@ -268,7 +307,9 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   JSAdapter{}.assertNoPerCallParlerCoreml(args.getJsObject(1, "inputObj"), env);
   auto [type, jsInput] = JsInterface::getInput(args);
 
-  if (type != "text") {
+  auto* supertonic =
+      dynamic_cast<SupertonicModel*>(&instance.addonCpp->model.get());
+  if (type != "text" && !(supertonic && type == "warmUp")) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
         "Unknown input type: " + type);
@@ -286,12 +327,13 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     return instance.runJob(std::any(std::move(modelInput)));
   }
 
-  if (dynamic_cast<SupertonicModel*>(&instance.addonCpp->model.get())) {
+  if (supertonic) {
     SupertonicModel::AnyInput modelInput;
     modelInput.text = js::String(env, jsInput).as<std::string>(env);
     // Supertonic conditions the engine at construction, so per-call emotion /
     // pace on the job object is rejected rather than silently dropped here.
     JSAdapter adapter;
+    modelInput.warmUp = type == "warmUp";
     adapter.assertNoPerCallSupertonicControls(
         args.getJsObject(1, "inputObj"), env);
     // Native streaming (config streamChunkTokens > 0) uses the same queue
@@ -313,6 +355,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     // progressively but first-audio latency is not yet reduced (true
     // token2wav low-latency streaming is reserved in tts-cpp).
     CosyvoiceModel::AnyInput modelInput;
+    modelInput.returnSpeechTokens = true;
     modelInput.text = js::String(env, jsInput).as<std::string>(env);
     // Per-call conditioning rides as siblings of `input` on the job object,
     // exactly as Parler's description fields do below.
@@ -322,8 +365,8 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     modelInput.hasControls = !modelInput.controls.empty();
     auto outputQueue = instance.addonCpp->outputQueue;
     modelInput.chunkCallback =
-        [outputQueue](std::vector<int16_t>&& pcm, int chunkIndex, bool isLast) {
-          StreamingPcmChunk chunk{std::move(pcm), chunkIndex, isLast};
+        [outputQueue](std::vector<int16_t>&& pcm, int chunkIndex, bool) {
+          StreamingPcmChunk chunk{std::move(pcm), chunkIndex, false};
           outputQueue->queueResult(std::any(std::move(chunk)));
         };
     return instance.runJob(std::any(std::move(modelInput)));
@@ -684,10 +727,38 @@ inline FitWork parseFitRequest(js_env_t* env, js_callback_info_t* info) {
   };
 
   switch (engine) {
+  case EngineType::Pocket: {
+    const auto cfg = adapter.buildPocketConfig(request, env);
+    tts_cpp::pocket::FitOptions options;
+    options.engine = cfg.options;
+    options.engine.backends_dir =
+        fitBackendsDir(cfg.options.backends_dir, requestBackendsDir);
+    options.text = text("text");
+    const auto bytes = [&](const char* key, uint64_t fallback) {
+      const auto value = number(key);
+      if (!value)
+        return fallback;
+      if (std::floor(*value) != *value ||
+          *value >= static_cast<double>(std::numeric_limits<uint64_t>::max())) {
+        throw StatusError(
+            general_error::InvalidArgument,
+            std::string(key) + " must be an unsigned integer byte count");
+      }
+      return static_cast<uint64_t>(*value);
+    };
+    options.margin_bytes = bytes("marginBytes", options.margin_bytes);
+    options.memory_budget_bytes =
+        bytes("memoryBudgetBytes", options.memory_budget_bytes);
+    return {
+        [options]() { return tts_cpp::pocket::fit_params(options); },
+        options.margin_bytes};
+  }
   case EngineType::Supertonic: {
     const auto cfg = adapter.buildSupertonicConfig(request, env);
+    requireSupertonicWebGpuSupport(cfg.backend, cfg.modelGgufPath);
     tts_cpp::supertonic::FitOptions options;
     options.model_gguf_path = cfg.modelGgufPath;
+    options.backend = cfg.backend;
     options.backends_dir = fitBackendsDir(cfg.backendsDir, requestBackendsDir);
     options.n_gpu_layers = resolveFitGpuLayers(cfg);
     if (cfg.vulkanDevice.has_value()) {
@@ -702,7 +773,8 @@ inline FitWork parseFitRequest(js_env_t* env, js_callback_info_t* info) {
             request.getOptionalProperty<js::String>(env, "precision")) {
       options.precision = precision->as<std::string>(env);
     }
-    integer("f16Weights", options.f16_weights);
+    if (cfg.f16Weights)
+      options.f16_weights = *cfg.f16Weights;
     if (auto seconds = number("audioSeconds")) {
       options.audio_seconds = static_cast<float>(*seconds);
     }
@@ -714,6 +786,7 @@ inline FitWork parseFitRequest(js_env_t* env, js_callback_info_t* info) {
     const auto cfg = adapter.buildParlerConfig(request, env);
     tts_cpp::parler::FitOptions options;
     options.model_gguf_path = cfg.modelGgufPath;
+    options.backend = cfg.backend;
     if (cfg.coremlDecoder.has_value())
       options.coreml_decoder = *cfg.coremlDecoder;
     options.backends_dir = fitBackendsDir(cfg.backendsDir, requestBackendsDir);
@@ -729,6 +802,7 @@ inline FitWork parseFitRequest(js_env_t* env, js_callback_info_t* info) {
   case EngineType::Chatterbox: {
     const auto cfg = adapter.buildChatterboxConfig(request, env);
     tts_cpp::chatterbox::FitOptions options;
+    options.backend = cfg.backend;
     options.t3_gguf_path = cfg.t3ModelPath;
     options.s3gen_gguf_path = cfg.s3genModelPath;
     options.backends_dir = fitBackendsDir(cfg.backendsDir, requestBackendsDir);
@@ -749,6 +823,7 @@ inline FitWork parseFitRequest(js_env_t* env, js_callback_info_t* info) {
   case EngineType::Audio8: {
     const auto cfg = adapter.buildAudio8Config(request, env);
     tts_cpp::audio8::FitOptions options;
+    options.backend = cfg.backend;
     options.lm_gguf_path = cfg.lmModelPath;
     options.codec_decoder_gguf_path = cfg.codecDecoderPath;
     options.codec_encoder_gguf_path = cfg.codecEncoderPath;
@@ -767,6 +842,7 @@ inline FitWork parseFitRequest(js_env_t* env, js_callback_info_t* info) {
   case EngineType::Cosyvoice: {
     const auto cfg = adapter.buildCosyvoiceConfig(request, env);
     tts_cpp::cosyvoice::FitOptions options;
+    options.backend = cfg.backend;
     options.llm_gguf_path = cfg.llmModelPath;
     options.flow_gguf_path = cfg.flowModelPath;
     options.hift_gguf_path = cfg.hiftModelPath;

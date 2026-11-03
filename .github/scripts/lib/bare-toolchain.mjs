@@ -4,7 +4,7 @@
  *
  * Only the packages that change what a build produces are watched. Their
  * per-platform packages are released in lockstep with them, and the remaining
- * entries are bare-make's own JavaScript dependencies.
+ * entries are the tools' other JavaScript dependencies.
  */
 
 'use strict'
@@ -13,6 +13,8 @@ import { posix, win32 } from 'node:path'
 
 export const WATCHED = [
   'bare-make',
+  'bare-link',
+  'bare-module-traverse',
   'cmake-toolchains',
   'llvm-runtime',
   'cmake-runtime',
@@ -88,10 +90,11 @@ export function issueBody(drift) {
     '',
     'To move the lock:',
     '',
-    '1. Merge the Dependabot pull request for `/.github/bare-toolchain`, or run `npm install --package-lock-only` there after editing the `bare-make` pin.',
+    '1. Merge the Dependabot pull request for `/.github/bare-toolchain`, or run `npm install --package-lock-only` there after editing the `bare-make` or `bare-link` pin.',
     '2. Add the `prebuilds` and `run-cpp-addon-tests` labels to that pull request. **On PR Trigger (Fabric)** then builds every fabric prebuild and runs cpp-lint, and **On PR Trigger (nx)** runs the llm-llamacpp C++ tests and coverage report against that fabric.',
-    '3. A new llvm-runtime major also moves the libc++ that fabric embeds and exports to every addon, so release fabric before the addons pick it up.',
-    "4. Once it merges, move every `setup-bare-tooling` SHA pin (`grep -rl 'setup-bare-tooling@' .github/workflows`) to its merge commit. A pinned action installs the lock from its own commit, so those workflows build with the old toolchain until then.",
+    '3. For bare-link or bare-module-traverse changes, dispatch the Android and iOS mobile integration smoke tests from the update branch to exercise native addon resolution and app linking.',
+    '4. A new llvm-runtime major also moves the libc++ that fabric embeds and exports to every addon, so release fabric before the addons pick it up.',
+    "5. Once it merges, move every `setup-bare-tooling` SHA pin (`grep -rl 'setup-bare-tooling@' .github/workflows`) to its merge commit. A pinned action installs the lock from its own commit, so those workflows build with the old toolchain until then.",
     '',
     'This issue is updated when a newer release appears and closed once the lock catches up. Closing it by hand puts this release off: it is not reported again, and the next newer release opens a new issue.',
   ].join('\n')
@@ -164,7 +167,7 @@ export function reportedVersion(output) {
   return match ? match[1] : null
 }
 
-export const PATH_TOOLS = ['bare-make', 'clang', 'llvm-profdata']
+export const PATH_TOOLS = ['bare-make', 'bare-link', 'clang', 'llvm-profdata']
 
 /**
  * The file a shell runs for `tool`: the first PATH entry holding it, trying
@@ -205,4 +208,13 @@ export function pathMismatches(bin, found, platform) {
     }
   }
   return mismatches
+}
+
+/**
+ * Compare tools whose package version is also their --version banner.
+ * LLVM wrappers use separate packaging versions, so only their PATH is checked.
+ */
+export function versionMismatches(locked, reported) {
+  return PATH_TOOLS.filter((tool) => locked[tool] !== undefined && reported[tool] !== locked[tool])
+    .map((tool) => ({ tool, expected: locked[tool], actual: reported[tool] ?? null }))
 }
