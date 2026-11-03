@@ -1,0 +1,35 @@
+--- a/src/model/diffusion/minimax_h3.hpp
++++ b/src/model/diffusion/minimax_h3.hpp
+@@ -162,10 +162,8 @@
+         ggml_tensor* forward(GGMLRunnerContext* ctx, ggml_tensor* x) override {
+             auto fc1 = std::dynamic_pointer_cast<Linear>(blocks["fc1"]);
+             auto fc2 = std::dynamic_pointer_cast<Linear>(blocks["fc2"]);
+-            auto uv  = ggml_ext_chunk(ctx->ggml_ctx, fc1->forward(ctx, x), 2, 0);
+-            return fc2->forward(ctx, ggml_mul(ctx->ggml_ctx,
+-                                              ggml_silu(ctx->ggml_ctx, uv[0]),
+-                                              uv[1]));
++            auto projected = fc1->forward(ctx, x);
++            return fc2->forward(ctx, ggml_swiglu(ctx->ggml_ctx, projected));
+         }
+     };
+
+@@ -216,10 +214,15 @@
+
+             int64_t sequence = x->ne[1];
+             int64_t batch    = x->ne[2] * x->ne[3];
+-            auto qkv         = ggml_ext_chunk(ctx->ggml_ctx, qkv_proj->forward(ctx, x), 3, 0);
+-            auto q           = ggml_reshape_4d(ctx->ggml_ctx, qkv[0], head_dim, heads, sequence, batch);
+-            auto k           = ggml_reshape_4d(ctx->ggml_ctx, qkv[1], head_dim, heads, sequence, batch);
+-            auto v           = ggml_reshape_4d(ctx->ggml_ctx, qkv[2], head_dim, heads, sequence, batch);
++            auto projected   = qkv_proj->forward(ctx, x);
++            auto view = [&](int index) {
++                return ggml_view_4d(ctx->ggml_ctx, projected, head_dim, heads, sequence, batch,
++                                    head_dim * projected->nb[0], projected->nb[1], projected->nb[2],
++                                    index * heads * head_dim * projected->nb[0]);
++            };
++            auto q = view(0);
++            auto k = view(1);
++            auto v = view(2);
+             q                = q_norm->forward(ctx, q);
+             k                = k_norm->forward(ctx, k);
+             if (pe != nullptr) {

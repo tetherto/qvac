@@ -32,3 +32,7 @@ then a focused engine backport where needed, addon overlay validation and
 repeated CUDA regression checks on that exact implementation. Preserve the
 existing full desktop CI matrix. Keep CUDA-only profiles scoped to CUDA;
 Strix/Vulkan/ROCm performance remains unmeasured. No PR is opened here.
+
+The separate [3 November extension](../evaluation-2026-11-03/README.md) adds
+Metal and Vulkan/HIP research. This October record remains a CUDA-only
+performance campaign at its original revisions.

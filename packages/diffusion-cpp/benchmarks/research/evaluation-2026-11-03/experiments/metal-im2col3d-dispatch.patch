@@ -1,0 +1,16 @@
+--- a/src/ggml-metal/ggml-metal-ops.cpp
++++ b/src/ggml-metal/ggml-metal-ops.cpp
+@@ -6030,7 +6030,9 @@
+     ggml_metal_encoder_set_buffer(enc, ggml_metal_get_buffer_id(dst), 2);
+
+     const uint64_t total = (uint64_t) args.N * args.OD * args.OH * args.OW;
+-    ggml_metal_encoder_dispatch_threadgroups(enc, total, 1, 1, 1, 1, 1);
+-
+-    return 1;
+-}
++    const uint64_t threads = total <= UINT32_MAX ?
++        std::min<uint64_t>(128, ggml_metal_pipeline_max_theads_per_threadgroup(pipeline)) : 1;
++    ggml_metal_encoder_dispatch_threadgroups(enc, (total + threads - 1) / threads, 1, 1, threads, 1, 1);
++
++    return 1;
++}

@@ -1,0 +1,29 @@
+{
+  "upstream_url": "https://github.com/0xShug0/audio.cpp/pull/1169",
+  "upstream_head": "0c6bb4dcc3e77f0f9bb9816d86155e6c62123886",
+  "base_ggml": "a4adfcb1304fb05b64473f1fe8d678bbce7a9ce0",
+  "scope": "Replace existing Metal IM2COL_3D packing kernel, argument layout, pipeline selection and dispatch only. Preserve operation admission and every other operation.",
+  "patch_sha256": "9371afc4880de8e97928937738cb09febc0a72c49a776ef8d75cb8b2fb3144f5",
+  "test_sha256": "70cb4ae7410fed19a52348f960f04091749df9c55449548589e81fb78c3a88c1",
+  "changed_files": {
+    "src/ggml-metal/ggml-metal-device.cpp": {
+      "before": "cfdd57744f45219c00c0b4cf83f3d89f64149baa479b2f5e2bf75e36ac7a94c0",
+      "after": "0afe598780e5027680cd7a4c96ab4a6ac12c540c73ed51751c4ec5d14f382198"
+    },
+    "src/ggml-metal/ggml-metal-ops.cpp": {
+      "before": "f3cbd418b819a0c0aa28a5b49024aaf081e50a6e61859a579c336f7a5ad9f9c4",
+      "after": "f28ab7dcea1c52e0fd247783b47d116c8212658db8bd15203053a8a48b55b0a5"
+    },
+    "src/ggml-metal/ggml-metal-impl.h": {
+      "before": "368048485c9fa02d06c986361fa32aade7a0fa81c06e395623a62998483203d8",
+      "after": "e4114306ab96a62f284decb71db8f3760d256b3ad0601d81318228bccb126885"
+    },
+    "src/ggml-metal/ggml-metal.metal": {
+      "before": "d573ee9d6945f2c86db95647999ee89806a87c2b6493081c051ea58b7b74dc19",
+      "after": "05576dfb6aa6bf3524c24edb2473405d3cdb16640529705dc21f39c3fe111ea2"
+    }
+  },
+  "test_adaptation": "Both F16/F32 packing outputs remain covered. Convolution comparison uses F16 weights required by pinned ggml_conv_3d; negative admission checks cover unsupported F16 packing with F32 weights.",
+  "executed_patch_sha256": "e06faff15bc39e6726e3e256a4529b68bfdd856209b58bf55cc51695cf342b53",
+  "publication_note": "Empty context lines are serialized without trailing spaces. Git apply and resulting source hashes are validated; the executed patch hash preserves the original benchmark provenance."
+}

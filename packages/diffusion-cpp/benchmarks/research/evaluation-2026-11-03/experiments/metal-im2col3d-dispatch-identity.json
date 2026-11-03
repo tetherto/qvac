@@ -1,0 +1,12 @@
+{
+  "scope": "One Metal dispatch function. Group up to 128 existing per-position threads; kernel arithmetic, tensor layout and large-position fallback unchanged.",
+  "engine_revision": "67fd0f590e8de432e6bb95fb05b0c3fdfdb2a1dd",
+  "ggml_revision": "a4adfcb1304fb05b64473f1fe8d678bbce7a9ce0",
+  "changed_file": "src/ggml-metal/ggml-metal-ops.cpp",
+  "before_sha256": "f3cbd418b819a0c0aa28a5b49024aaf081e50a6e61859a579c336f7a5ad9f9c4",
+  "after_sha256": "d1f69557531a21175b91ba3a38a9a286b4f69f25cd07a86aed113cf12ca413c8",
+  "patch_sha256": "aad96a9e5ddedcc046c2a80432251529219fe0875c5f92bb843d96302b8ebd84",
+  "test_sha256": "70cb4ae7410fed19a52348f960f04091749df9c55449548589e81fb78c3a88c1",
+  "executed_patch_sha256": "910ea29e5474ef63546e0b6526a3219356e64524cbca9d33672a60201b6fcde5",
+  "publication_note": "Empty context lines are serialized without trailing spaces. Git apply and resulting source hashes are validated; the executed patch hash preserves the original benchmark provenance."
+}

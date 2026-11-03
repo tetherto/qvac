@@ -1,0 +1,11 @@
+{
+  "source_engine": "67fd0f590e8de432e6bb95fb05b0c3fdfdb2a1dd",
+  "unchanged_ggml": "a4adfcb1304fb05b64473f1fe8d678bbce7a9ce0",
+  "source_url": "https://github.com/leejet/stable-diffusion.cpp/pull/2240",
+  "scope": "Research-only adaptation of existing fused SwiGLU and strided QKV views; one H3 header, no GGML changes, no normalization/residual/partial-RoPE changes.",
+  "header_before_sha256": "b4004e8d920e2ae8c4bbadfc01ef5a5ac128f03d3931adc858cbefd198912c33",
+  "header_after_sha256": "07892191a1c06badfb148cc7236a1c3869ea1e3e6e199b516e4eec2e318cc457",
+  "patch_sha256": "0b0f23777094a637860277ee069693eae847dca099b7c9ca7ccc62b94b96b6fd",
+  "executed_patch_sha256": "8308b66072653b1082072bc129e336503577c92d6ec4a5dda0662c62e43b8ed5",
+  "publication_note": "Empty context lines are serialized without trailing spaces. Git apply and resulting source hashes are validated; the executed patch hash preserves the original benchmark provenance."
+}
