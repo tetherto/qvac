@@ -11,6 +11,14 @@ export interface CodeSource {
   symbols: string[]
 }
 
+export function isCodeSourceFile(file: string): boolean {
+  return (
+    /\.[cm]?[jt]s$/.test(file) &&
+    !/\.d\.[cm]?ts$/.test(file) &&
+    !/(?:^|\/)(?:node_modules|dist|test|tests|examples|benchmarks|docs|scripts)\//.test(file)
+  )
+}
+
 export function checkCodeSources(
   registry: CodeRangeRegistry,
   sources: readonly CodeSource[],
@@ -20,8 +28,8 @@ export function checkCodeSources(
   const covered = new Set(sources.map(({ file }) => file))
   const generated = new Set(
     sources
-      .filter(({ file }) => file.endsWith('.ts'))
-      .map(({ file }) => file.replace('/src/', '/').replace(/\.ts$/, '.js'))
+      .filter(({ file }) => /\.[cm]?ts$/.test(file))
+      .map(({ file }) => file.replace('/src/', '/').replace(/ts$/, 'js'))
   )
   const numbers = new Map<number, { name: string; file: string }>()
   const names = new Map<
@@ -55,7 +63,11 @@ export function checkCodeSources(
         }
         numbers.set(code, { name, file })
         const key = `${allocation?.owner}:${name}`
-        const family = names.get(key) ?? { owner: allocation?.owner ?? owner, name, definitions: [] }
+        const family = names.get(key) ?? {
+          owner: allocation?.owner ?? owner,
+          name,
+          definitions: []
+        }
         family.definitions.push({ owner, code, file })
         names.set(key, family)
       }
@@ -81,7 +93,7 @@ export function checkCodeSources(
       !generated.has(file)
     ) {
       throw new Error(
-        `Unlisted error registration module: ${file}; add its code tables to code-ranges.json sources`
+        `Unlisted error registration module: ${file}; add its code tables to scripts/error-codes/sources.ts`
       )
     }
   }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
-import { checkCodeSources } from './check.js'
+import { checkCodeSources, isCodeSourceFile } from './check.js'
 import {
   validatePackageCodes,
   type CodeRangeRegistry
@@ -31,6 +31,40 @@ const sources = [
   { owner: 'sdk', file: 'packages/sdk/src/errors.ts', symbols: ['CODES'] },
   { owner: 'engine', file: 'packages/engine/src/errors.ts', symbols: ['CODES'] }
 ]
+
+test('discovers production JavaScript and TypeScript module variants', () => {
+  for (const extension of ['ts', 'js', 'mjs', 'cjs', 'mts', 'cts']) {
+    const file = `packages/example/src/errors.${extension}`
+    assert.equal(isCodeSourceFile(file), true, file)
+  }
+  for (const file of [
+    'packages/example/src/errors.d.ts',
+    'packages/example/src/errors.d.mts',
+    'packages/example/src/errors.d.cts',
+    'packages/example/test/errors.ts',
+    'packages/example/examples/errors.js',
+    'packages/example/scripts/errors.cjs'
+  ]) {
+    assert.equal(isCodeSourceFile(file), false, file)
+  }
+})
+
+test('ignores compiled module variants of listed TypeScript sources', () => {
+  for (const [extension, compiled] of [
+    ['ts', 'js'],
+    ['mts', 'mjs'],
+    ['cts', 'cjs']
+  ]) {
+    const file = `packages/example/src/errors.${extension}`
+    const files = new Map([
+      [file, 'const CODES = { FIRST: 1001 }'],
+      [`packages/example/errors.${compiled}`, "const { addCodes } = require('@qvac/error')"]
+    ])
+    assert.doesNotThrow(() =>
+      checkCodeSources(registry, [{ owner: 'sdk', file, symbols: ['CODES'] }], files)
+    )
+  }
+})
 
 test('checks real source tables, accepts shared codes and ignores compiled copies', () => {
   const files = new Map([
