@@ -340,6 +340,7 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
       cacheCheckpointsMaxBytes: number
       cacheCheckpointStorage: 'memory' | 'disk'
       cacheRamMib: number
+      cacheShareAcrossKeys: boolean
     }
     const dep = 'llm-prompt-cache-keys'
     try {
@@ -352,7 +353,8 @@ export class ModelLoadingExecutor extends AbstractModelExecutor<typeof modelLoad
           cache_checkpoints: p.cacheCheckpoints,
           cache_checkpoints_max_bytes: p.cacheCheckpointsMaxBytes,
           cache_checkpoint_storage: p.cacheCheckpointStorage,
-          cache_ram_mib: p.cacheRamMib
+          cache_ram_mib: p.cacheRamMib,
+          cache_share_across_keys: p.cacheShareAcrossKeys
         }
       })
       this.resources.register(dep, modelId)

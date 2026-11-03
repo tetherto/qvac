@@ -132,13 +132,15 @@ test('transformLlmConfig: the other prompt-cache keys keep their underscore spel
       cache_checkpoints_max_bytes: 8589934592,
       cache_checkpoint_storage: 'disk',
       cache_checkpoint_dir: '/data/cache',
-      cache_ram_mib: 0
+      cache_ram_mib: 0,
+      cache_share_across_keys: false
     })
   )
   t.is(result['cache_checkpoints_max_bytes'], '8589934592')
   t.is(result['cache_checkpoint_storage'], 'disk')
   t.is(result['cache_checkpoint_dir'], '/data/cache')
   t.is(result['cache_ram_mib'], '0')
+  t.is(result['cache_share_across_keys'], 'false')
   t.absent('cache-ram-mib' in result)
 })
 

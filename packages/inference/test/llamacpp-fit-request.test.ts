@@ -77,7 +77,8 @@ test('completion: the checkpoint and prompt-cache keys stay out of the fit reque
         cache_checkpoints_max_bytes: 1073741824,
         cache_checkpoint_storage: 'disk',
         cache_checkpoint_dir: '/data/cache',
-        cache_ram_mib: 512
+        cache_ram_mib: 512,
+        cache_share_across_keys: false
       })
     )?.config ?? {}
 
@@ -86,6 +87,7 @@ test('completion: the checkpoint and prompt-cache keys stay out of the fit reque
   t.absent('cache_checkpoint_storage' in config)
   t.absent('cache_checkpoint_dir' in config)
   t.absent('cache_ram_mib' in config)
+  t.absent('cache_share_across_keys' in config)
   t.is(config['ctx_size'], '4096')
 })
 
