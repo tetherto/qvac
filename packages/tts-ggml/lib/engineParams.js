@@ -10,7 +10,21 @@ const mossSoundEffect_1 = require("./engines/mossSoundEffect");
 const mossSpeech_1 = require("./engines/mossSpeech");
 const parler_1 = require("./engines/parler");
 const supertonic_1 = require("./engines/supertonic");
+const fabricOptions_1 = require("./fabricOptions");
 function buildNativeParams(setup) {
+    const parameters = buildEngineParams(setup);
+    (0, fabricOptions_1.assignFabricOptions)(setup.settings, parameters);
+    if (setup.config.backend !== undefined)
+        parameters.backend = setup.config.backend;
+    if (setup.engineType === engineIds_1.ENGINE_MOSS && setup.settings.nCtx !== undefined) {
+        parameters.nCtx = setup.settings.nCtx;
+    }
+    if (setup.engineType === engineIds_1.ENGINE_COSYVOICE3 && setup.settings.greedy !== undefined) {
+        parameters.greedy = setup.settings.greedy;
+    }
+    return parameters;
+}
+function buildEngineParams(setup) {
     if (setup.pocket)
         return { ...setup.pocket.params };
     switch (setup.engineType) {
