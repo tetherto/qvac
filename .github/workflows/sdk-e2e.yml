@@ -149,6 +149,8 @@ jobs:
       MQTT_HOST: ${{ secrets.MQTT_HOST }}
       MQTT_USERNAME: ${{ secrets.MQTT_USERNAME }}
       MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD }}
+      # The broker's CA, which mqttCerts writes to MQTT_CA_PATH for the app build and the producer.
+      MQTT_CA_CERT: ${{ secrets.MQTT_CA_CERT }}
       # Variables, not secrets: GitHub masks a short secret such as a port inside other values.
       MQTT_PROTOCOL: ${{ vars.MQTT_PROTOCOL }}
       MQTT_PORT: ${{ vars.MQTT_PORT }}
