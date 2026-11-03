@@ -33,8 +33,16 @@ on:
 
 permissions: {}
 
+# One group per kind of run, as main's on-pr-test-sdk.yml: a label this workflow ignores cancels nothing, and the Python
+# probe runs beside the smoke or full run instead of replacing it.
 concurrency:
-  group: sdk-e2e-${{ github.event.pull_request.number || github.ref }}-${{ inputs.platform || 'none' }}
+  group: >-
+    sdk-e2e-${{ github.event.pull_request.number || github.ref }}-${{ inputs.platform || 'none' }}-${{
+      github.event.action != 'labeled' && 'base'
+      || (github.event.label.name == 'test-e2e-smoke' && 'base')
+      || (github.event.label.name == 'test-e2e-full' && 'base')
+      || (github.event.label.name == 'test-e2e-python' && 'probe')
+      || format('ignored-{0}', github.event.label.name) }}
   cancel-in-progress: true
 
 jobs:
