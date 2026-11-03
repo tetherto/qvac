@@ -14,6 +14,13 @@
   `'auto'` keeps the CPU fallback, and so does a list that names it, such as
   `'cuda,auto'`.
 
+### Added
+
+- Bounded FuzzTest coverage for `safetensors_lite`, the custom length-prefixed
+  header parser used by the π₀.₅ / GR00T parity tests. Linux C++ CI runs the
+  suite after unit tests. Boundary tests cover both file and memory readers,
+  with isolated temporary fixtures for concurrent runs. No public addon API changes.
+
 ### Changed
 
 - π₀.₅ `run()` takes 1 to `hparams.numCameras` images instead of exactly
@@ -26,6 +33,12 @@
 
 - `sim/requirements.txt` and `scripts/requirements-pi05-oracle.txt` pinned
   `lerobot==0.5.2`, which is not on PyPI. Both pin `0.5.1` now.
+
+- Cap the safetensors header length at 16 MiB so a corrupt length field cannot
+  allocate before JSON parsing. `open()` checks that length before reading the
+  payload, so a bad header on a large file is rejected without allocating it.
+
+- Native and coverage builds reset fuzz mode when reusing the CMake build tree.
 
 ## [0.34.1] - 2026-10-29
 
