@@ -16,6 +16,7 @@ function normalizeRunOptions(runOptions) {
             generationParams: undefined,
             cacheKey: undefined,
             ephemeral: false,
+            baseCacheKey: undefined,
             rejectWhenBusy: undefined,
         };
     }
@@ -43,6 +44,9 @@ function normalizeRunOptions(runOptions) {
     if (options.ephemeral !== undefined && typeof options.ephemeral !== "boolean") {
         throw new TypeError("ephemeral must be a boolean when provided");
     }
+    if (options.baseCacheKey !== undefined && typeof options.baseCacheKey !== "string") {
+        throw new TypeError("baseCacheKey must be a string when provided");
+    }
     if (options.rejectWhenBusy !== undefined && typeof options.rejectWhenBusy !== "boolean") {
         throw new TypeError("rejectWhenBusy must be a boolean when provided");
     }
@@ -51,15 +55,28 @@ function normalizeRunOptions(runOptions) {
         generationParams: normalizeGenerationParams(options.generationParams),
         cacheKey: options.cacheKey,
         ephemeral: options.ephemeral === true,
+        baseCacheKey: options.baseCacheKey,
         // Left undefined when unset so admission falls back to the instance default.
         rejectWhenBusy: options.rejectWhenBusy,
     };
+}
+// Malformed parts (null, non-objects) are not byte media: they pass through
+// untouched so the native validator rejects them with `InvalidInputFormat`.
+function isByteMediaPart(part) {
+    const candidate = part;
+    return (candidate !== null &&
+        typeof candidate === "object" &&
+        candidate.type === "media" &&
+        candidate.content instanceof Uint8Array);
 }
 function promptToAddonMessages(prompt, runOptions) {
     if (!Array.isArray(prompt)) {
         throw new TypeError("Prompt input must be Message[]");
     }
-    const { prefill, generationParams, cacheKey, ephemeral } = normalizeRunOptions(runOptions);
+    const { prefill, generationParams, cacheKey, ephemeral, baseCacheKey } = normalizeRunOptions(runOptions);
+    // Only ever JSON-serialized into the addon's text message: a byte-buffer
+    // media part reaches the native side path-less, bound to the hoisted buffer
+    // by position, so the wire shape is wider than the public `Message` type.
     const textMessages = [];
     const mediaItems = [];
     for (const message of prompt) {
@@ -67,10 +84,26 @@ function promptToAddonMessages(prompt, runOptions) {
         if (media.role === "user" && media.type === "media" && media.content instanceof Uint8Array) {
             mediaItems.push(media.content);
             textMessages.push({ ...media, content: "" });
+            continue;
         }
-        else {
-            textMessages.push(message);
+        // Ordered parts: hoist each media part's bytes next to the other media
+        // messages and leave a path-less part behind. The native side records the
+        // plan in marker order, so the bytes still bind to the right markers.
+        const text = message;
+        if (Array.isArray(text.content)) {
+            textMessages.push({
+                ...text,
+                content: text.content.map((part) => {
+                    if (isByteMediaPart(part)) {
+                        mediaItems.push(part.content);
+                        return { type: "media" };
+                    }
+                    return part;
+                }),
+            });
+            continue;
         }
+        textMessages.push(message);
     }
     const promptMessages = [];
     for (const mediaData of mediaItems) {
@@ -83,6 +116,7 @@ function promptToAddonMessages(prompt, runOptions) {
         generationParams,
         cacheKey,
         ephemeral,
+        baseCacheKey,
     });
     return promptMessages;
 }
@@ -256,6 +290,15 @@ function sanitizePromptForLog(prompt) {
         const media = msg;
         if (media && media.type === "media" && media.content instanceof Uint8Array) {
             return { ...media, content: `[Uint8Array byteLength=${media.content.byteLength}]` };
+        }
+        const text = msg;
+        if (Array.isArray(text?.content)) {
+            return {
+                ...text,
+                content: text.content.map((part) => isByteMediaPart(part)
+                    ? { ...part, content: `[Uint8Array byteLength=${part.content.byteLength}]` }
+                    : part),
+            };
         }
         return msg;
     });
@@ -825,6 +868,62 @@ const LlmLlamacpp = class LlmLlamacpp {
             throw new Error("Model is not loaded");
         }
         await this.addon.discardCache(cacheKey);
+    }
+    /**
+     * Tokens `input` takes on the loaded model, without running it. `text`
+     * alone is counted raw, with no chat template and no BOS. With `history` or
+     * `tools` the conversation, `text` (even empty) appended as the last user
+     * turn, is rendered by the chat template as the opening request of a fresh
+     * conversation, with BOS and the generation prompt, as `run()` renders it.
+     * Tools the template leaves out are not counted. `tools` alone has no
+     * message to render and rejects, as `run()` does. Never queues behind
+     * `run()`: it reads only load-time state. A wrong-typed argument rejects
+     * with `TypeError`, and before `load()` it rejects with `Model is not
+     * loaded`. Other invalid input, a media message included, rejects with code
+     * `InvalidArgument`; a conversation the chat template cannot render fails
+     * as it would in `run()`.
+     */
+    async calcTokens(input) {
+        if (input === null || typeof input !== "object") {
+            throw new TypeError("calcTokens(input) requires an object");
+        }
+        const text = input.text ?? undefined;
+        const history = input.history ?? undefined;
+        const tools = input.tools ?? undefined;
+        if (text !== undefined && typeof text !== "string") {
+            throw new TypeError("calcTokens: text must be a string");
+        }
+        if (history !== undefined && !Array.isArray(history)) {
+            throw new TypeError("calcTokens: history must be a Message[]");
+        }
+        if (tools !== undefined && !Array.isArray(tools)) {
+            throw new TypeError("calcTokens: tools must be an array of function definitions");
+        }
+        if (!this.addon) {
+            throw new Error("Model is not loaded");
+        }
+        const params = {};
+        if (text !== undefined)
+            params.text = text;
+        // Media bytes are dropped rather than serialized: the native side rejects
+        // any media message or ordered media part by its type.
+        if (history !== undefined) {
+            params.history = JSON.stringify(history.map((message) => {
+                if (message?.type === "media")
+                    return { ...message, content: "" };
+                const textMessage = message;
+                if (Array.isArray(textMessage?.content)) {
+                    return {
+                        ...message,
+                        content: textMessage.content.map((part) => isByteMediaPart(part) ? { type: "media" } : part),
+                    };
+                }
+                return message;
+            }));
+        }
+        if (tools !== undefined)
+            params.tools = JSON.stringify(tools);
+        return this.addon.calcTokens(params);
     }
     getState() {
         return this.state;

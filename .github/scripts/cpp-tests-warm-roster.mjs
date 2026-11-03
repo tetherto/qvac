@@ -16,6 +16,7 @@ export const SHARED_CACHE_INPUTS = [
   '.github/actions/vcpkg-',
   '.github/scripts/configure-cpp-build.mjs',
   'vcpkg-overlays/',
+  '.github/bare-toolchain/package-lock.json',
 ]
 
 function declaresMatrixCi(target) {

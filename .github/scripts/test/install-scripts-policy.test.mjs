@@ -112,10 +112,10 @@ const PENDING = [
   // non-draft PR gets; the cpp-tests and integration legs need the
   // run-cpp-addon-tests and run-desktop-addon-tests labels.
   ...[
-    ['.github/workflows/cpp-lint.yaml', 2],
+    ['.github/workflows/cpp-lint.yaml', 1],
     ['.github/workflows/cpp-tests-nx.yml', 2],
     ['.github/workflows/integration-mobile-test-inference-addon-cpp.yml', 3],
-    ['.github/workflows/reusable-prebuilds.yml', 2],
+    ['.github/workflows/reusable-prebuilds.yml', 1],
     ['.github/actions/cpp-lint/action.yaml', 1],
     // The CI contract's job templates, carrying over vla's old cpp-tests and integration sites unchanged.
   ].map(([file, count]) => ({

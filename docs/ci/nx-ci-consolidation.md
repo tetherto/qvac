@@ -52,7 +52,9 @@ on-merge-nx.yml         (release-* push / workflow_dispatch)  ── publish orc
 benchmark-performance-nx.yml  (workflow_dispatch)  ── matrix → prebuilds-nx → integration-test-nx (RTF)
 ```
 
-The three leaves `prebuilds-nx.yml`, `cpp-tests-nx.yml`, `integration-test-nx.yml` are `workflow_call` reusables. Each starts with a `matrix` job that runs `nx-project-matrix` for its target, then fans out over the resulting rows. They are callable standalone via `workflow_dispatch` (base-ref/head-ref inputs) for testing.
+The three leaves `prebuilds-nx.yml`, `cpp-tests-nx.yml`, `integration-test-nx.yml` are `workflow_call` reusables. Each starts with a `matrix` job that runs `nx-project-matrix` for its target, then fans out over the resulting rows. They are callable standalone via `workflow_dispatch` (`base-ref`, `head-ref`, and optional `config-ref` inputs) for testing. `config-ref` selects reviewed package CI settings independently of the affected-code range; empty retains the base configuration. A manual `on-pr-nx.yml` dispatch forwards `config_ref_override` to all three leaves, so CUDA provisioning and test matrices use the same reviewed configuration. Automatic PR events do not forward this override and retain trusted-base configuration.
+
+A full branch validation can be dispatched with an explicit package list, `ref` set to the commit under review, and `config_ref_override` set to the reviewed configuration commit. The prebuild and integration jobs stay in the same run, so integration downloads that run's `prebuilds-<package>` bundle. A standalone prebuild run does not automatically supply another run's artifacts. Generic performance uploads use `perf-report-<package>-<os>-<arch>-<run number>` to match the collector pattern and distinguish multiple runners for the same platform/architecture. Integration runs only after successful prebuilds; performance collectors do not run when integration was skipped.
 
 ## `options.ci` cheat-sheet
 

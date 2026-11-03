@@ -252,6 +252,84 @@ test('missing file downloads then verifies', async function (t) {
   }
 })
 
+test('S3-only entry uses the staged copy and never downloads', async function (t) {
+  const name = 's3-only.gguf'
+  const { sha256 } = await buildManifest(name)
+  const manifest = {
+    models: {
+      [name]: { s3Path: 'qvac_models_compiled/ggml/x/s3-only.gguf', sha256, bytes: GOOD.length }
+    }
+  }
+  const dir = mkTmpDir()
+  const spy = { calls: 0 }
+  try {
+    writeModel(dir, name, GOOD)
+    const [resolvedName, resolvedDir] = await ensureModel({
+      modelName: name,
+      modelDir: dir,
+      manifest,
+      download: fakeDownloader(GOOD, spy)
+    })
+    t.is(resolvedName, name)
+    t.is(resolvedDir, dir)
+    t.is(spy.calls, 0, 'staged S3 model is reused without a download')
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('S3-only entry that was not staged fails with a staging hint', async function (t) {
+  const name = 's3-missing.gguf'
+  const { sha256 } = await buildManifest(name)
+  const manifest = {
+    models: {
+      [name]: { s3Path: 'qvac_models_compiled/ggml/x/s3-missing.gguf', sha256, bytes: GOOD.length }
+    }
+  }
+  const dir = mkTmpDir()
+  const spy = { calls: 0 }
+  try {
+    await t.exception(
+      ensureModel({
+        modelName: name,
+        modelDir: dir,
+        manifest,
+        download: fakeDownloader(GOOD, spy)
+      }),
+      /S3-only .*stage-s3-models\.mjs/
+    )
+    t.is(spy.calls, 0, 'no HTTP download is attempted for an S3-only entry')
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('S3 entry with an empty urls array also fails with the staging hint', async function (t) {
+  const name = 's3-empty-urls.gguf'
+  const { sha256 } = await buildManifest(name)
+  const manifest = {
+    models: {
+      [name]: { urls: [], s3Path: 'qvac_models_compiled/ggml/x/e.gguf', sha256, bytes: GOOD.length }
+    }
+  }
+  const dir = mkTmpDir()
+  const spy = { calls: 0 }
+  try {
+    await t.exception(
+      ensureModel({
+        modelName: name,
+        modelDir: dir,
+        manifest,
+        download: fakeDownloader(GOOD, spy)
+      }),
+      /S3-only .*stage-s3-models\.mjs/
+    )
+    t.is(spy.calls, 0, 'no download with an empty urls array')
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('entry without pinned integrity is rejected before cache use', async function (t) {
   const name = 'unpinned.gguf'
   const manifest = {
@@ -341,7 +419,10 @@ test('integration manifest is well-formed (usable url per entry, unique keys)', 
   t.is(new Set(names).size, names.length, 'no duplicate model keys')
 
   for (const [name, entry] of Object.entries(manifest.models)) {
-    const expectedKeys = entry.warm === undefined ? 'bytes,sha256,urls' : 'bytes,sha256,urls,warm'
+    const source = entry.s3Path === undefined ? 'urls' : 's3Path'
+    const expectedKeys = ['bytes', 'sha256', source, ...(entry.warm === undefined ? [] : ['warm'])]
+      .sort()
+      .join(',')
     t.is(
       Object.keys(entry).sort().join(','),
       expectedKeys,
@@ -349,6 +430,15 @@ test('integration manifest is well-formed (usable url per entry, unique keys)', 
     )
     if (entry.warm !== undefined) {
       t.is(entry.warm, false, `${name} only declares warm when explicitly deferred`)
+    }
+    if (source === 's3Path') {
+      t.ok(
+        /^qvac_models_compiled\/[\w./-]+$/.test(entry.s3Path) && !entry.s3Path.includes('..'),
+        `${name} s3Path points into the model registry`
+      )
+      t.ok(/^[0-9a-f]{64}$/i.test(entry.sha256), `${name} sha256 is pinned`)
+      t.ok(Number.isInteger(entry.bytes) && entry.bytes > 0, `${name} bytes is pinned`)
+      continue
     }
     const hasUrl =
       Array.isArray(entry.urls) &&

@@ -397,15 +397,10 @@ for (const variant of VARIANTS.filter((v) => v.draft)) {
         }
       })
 
-      t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', 'a verdict, not an error')
-      // Speculation also resizes the model's output buffers, so compute can
-      // shrink by more than a small draft adds; its weights are the signal.
-      const weights = (projection) =>
-        projection.devices.reduce((sum, row) => sum + row.modelBytes, 0)
-      t.comment(
-        `${variant.label}: plain ${weights(plain)} weight bytes, speculative ${weights(fit)}`
-      )
-      t.ok(weights(fit) > weights(plain), "the draft model's weights are in the figures")
+      t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', 'a verdict')
+      const used = (projection) => projection.devices.reduce((sum, row) => sum + row.usedBytes, 0)
+      t.comment(`${variant.label}: plain ${used(plain)} bytes, speculative ${used(fit)}`)
+      t.ok(used(fit) > used(plain), 'the draft model is in the rows')
     }
   )
 }

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -17,7 +17,7 @@ const VCPKG_VERSION_LINE = 'vcpkg package management program version 2026-10-01-
 const LARGE_VERSION_NOTES = 'Additional version output\n'.repeat(100000)
 const VCPKG_FAILURE_EXIT_CODE = 23
 
-function fingerprintVersionOutput(versionOutput, exitCode = 0) {
+function fingerprintVersionOutput(versionOutput, exitCode = 0, { lockfile = null } = {}) {
   const source = readFileSync(join(ROOT, FINGERPRINT_ACTION), 'utf8').replaceAll('\r\n', '\n')
   const body = source.split('      run: |\n')[1].split('\n    - if:')[0]
     .split('\n').map((line) => line.slice(8)).join('\n')
@@ -28,10 +28,15 @@ function fingerprintVersionOutput(versionOutput, exitCode = 0) {
     writeFileSync(output, '')
     writeFileSync(versionFile, versionOutput)
     writeFileSync(join(directory, 'vcpkg'), '#!/usr/bin/env bash\ncat "$VERSION_OUTPUT_FILE"\nexit "$VERSION_EXIT_CODE"\n', { mode: 0o755 })
+    if (lockfile !== null) {
+      mkdirSync(join(directory, '.github/bare-toolchain'), { recursive: true })
+      writeFileSync(join(directory, '.github/bare-toolchain/package-lock.json'), lockfile)
+    }
     const result = spawnSync('bash', ['--noprofile', '--norc', '-c', body], {
       encoding: 'utf8',
       env: { ...process.env, RUNNER_OS: 'Linux', CC: process.execPath, VCPKG_ROOT: directory,
-        GITHUB_ENV: output, VERSION_OUTPUT_FILE: versionFile, VERSION_EXIT_CODE: String(exitCode) },
+        GITHUB_WORKSPACE: directory, GITHUB_ENV: output, VERSION_OUTPUT_FILE: versionFile,
+        VERSION_EXIT_CODE: String(exitCode) },
     })
     return { ...result, githubEnv: readFileSync(output, 'utf8') }
   } finally {
@@ -39,10 +44,23 @@ function fingerprintVersionOutput(versionOutput, exitCode = 0) {
   }
 }
 
-function expectedFingerprint() {
-  const digest = createHash('sha256').update(process.version + '\nvcpkg=' + VCPKG_VERSION_LINE).digest('hex')
-  return 'TOOLCHAIN_FINGERPRINT=' + digest.slice(0, 16) + '\n'
+function sha256(text) {
+  return createHash('sha256').update(text).digest('hex')
 }
+
+function expectedFingerprint(lockfile = null) {
+  let probe = process.version + '\nvcpkg=' + VCPKG_VERSION_LINE
+  if (lockfile !== null) probe += '\nbare-toolchain=' + sha256(lockfile).slice(0, 16)
+  return 'TOOLCHAIN_FINGERPRINT=' + sha256(probe).slice(0, 16) + '\n'
+}
+
+test('toolchain fingerprint moves with the bare toolchain lock', () => {
+  const lockfile = readFileSync(join(ROOT, '.github/bare-toolchain/package-lock.json'), 'utf8')
+  const result = fingerprintVersionOutput(VCPKG_VERSION_LINE + '\n', 0, { lockfile })
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(result.githubEnv, expectedFingerprint(lockfile))
+  assert.notEqual(result.githubEnv, expectedFingerprint())
+})
 
 test('toolchain fingerprint uses the reported version line', () => {
   const result = fingerprintVersionOutput(VCPKG_VERSION_LINE + '\n')

@@ -6,12 +6,15 @@
 //     runtime (either breaks a CPU-only host at addon load, gh#3853), or
 //   - the dlopen'd Vulkan backend module is missing, or itself depends on an
 //     external C++ runtime (its dlopen would fail silently on stock distros).
+//   - the Linux CUDA backend module is missing or links an external
+//     C++ runtime. CUDA stays isolated in that module for CPU-only hosts.
 //
 // This is the blocking twin of test/integration/prebuild-dynamic-linking.
 // test.js: the integration legs are continue-on-error (a signal, not a
 // gate), so this script runs in the non-soft verify-prebuild-linking job of
-// on-pr-diffusion-cpp.yml, whose result feeds the qvac/prebuild-diffusion-cpp
-// commit status that Merge Guard requires. Plain Node, no dependencies.
+// on-pr-nx.yml, whose result feeds the prebuild status Merge Guard requires.
+// The prebuild workflow also runs it before merging release artifacts.
+// Plain Node, no dependencies.
 //
 // Usage: node verify-prebuild-linking.mjs <prebuilds-dir>
 
@@ -42,8 +45,8 @@ function readU64(buffer, off) {
   return buffer.readUInt32LE(off) + buffer.readUInt32LE(off + 4) * 0x100000000
 }
 
-// Minimal ELF64 dynamic-section reader: DT_NEEDED entries of a shared object.
-function elfNeeded(buffer) {
+// Minimal ELF64 reader for dependencies and required C++ runtime symbols.
+function elfInfo(buffer) {
   const isElf =
     buffer.length > 0x40 &&
     buffer[0] === 0x7f &&
@@ -65,7 +68,8 @@ function elfNeeded(buffer) {
       type: buffer.readUInt32LE(off + 4),
       offset: readU64(buffer, off + 0x18),
       size: readU64(buffer, off + 0x20),
-      link: buffer.readUInt32LE(off + 0x28)
+      link: buffer.readUInt32LE(off + 0x28),
+      entrySize: readU64(buffer, off + 0x38)
     })
   }
 
@@ -85,7 +89,36 @@ function elfNeeded(buffer) {
     const end = buffer.indexOf(0, strOff)
     needed.push(buffer.toString('utf8', strOff, end))
   }
-  return needed
+
+  // Strong undefined C++ runtime symbols still break dlopen when no runtime
+  // appears in DT_NEEDED. Node can mask this by already loading libstdc++.
+  // Weak references may legitimately remain unresolved. These three __cxa
+  // entry points belong to glibc, not to a separately shipped C++ runtime.
+  const glibcCxa = new Set(['__cxa_atexit', '__cxa_finalize', '__cxa_thread_atexit_impl'])
+  const cxxRuntime =
+    /^(?:_Z(?:N[KVR]*(?:St|S[a-z]|10__cxxabiv1)|St|T[ISV](?:St|N10__cxxabiv1)|n[aw]|d[al])|__cxa_|__gxx_personality_v0)/
+  const symbols = sections.find((section) => section.type === 11) // SHT_DYNSYM
+  if (!symbols || symbols.entrySize !== 24 || symbols.size % 24 !== 0) {
+    throw new Error('missing or invalid .dynsym section')
+  }
+  const symbolNames = sections[symbols.link]
+  if (!symbolNames) throw new Error('no dynamic symbol string table')
+  const unresolvedCxx = []
+  for (let off = symbols.offset; off < symbols.offset + symbols.size; off += 24) {
+    const binding = buffer[off + 4] >> 4
+    const sectionIndex = buffer.readUInt16LE(off + 6)
+    if (binding !== 1 || sectionIndex !== 0) continue // STB_GLOBAL, SHN_UNDEF
+    const nameOffset = symbolNames.offset + buffer.readUInt32LE(off)
+    const end = buffer.indexOf(0, nameOffset)
+    if (end < nameOffset || end >= symbolNames.offset + symbolNames.size) {
+      throw new Error('invalid dynamic symbol name')
+    }
+    const name = buffer.toString('utf8', nameOffset, end)
+    if (!cxxRuntime.test(name)) continue
+    if (glibcCxa.has(name) && needed.includes('libc.so.6')) continue
+    unresolvedCxx.push(name)
+  }
+  return { needed, unresolvedCxx }
 }
 
 const prebuildsDir = process.argv[2]
@@ -110,7 +143,12 @@ for (const target of TARGETS) {
   }
   checkedTargets++
 
-  const addonNeeded = elfNeeded(fs.readFileSync(addonPath))
+  const { needed: addonNeeded, unresolvedCxx: addonUnresolvedCxx } = elfInfo(
+    fs.readFileSync(addonPath)
+  )
+  if (addonUnresolvedCxx.length > 0) {
+    fail(target + ': addon has unresolved C++ runtime symbols: ' + addonUnresolvedCxx.join(', '))
+  }
   console.log(`${target}/${moduleName}.bare NEEDED: ${addonNeeded.join(', ')}`)
   for (const lib of [...FORBIDDEN_NEEDED, ...FORBIDDEN_RUNTIME]) {
     if (addonNeeded.some((n) => n.startsWith(lib))) {
@@ -124,7 +162,16 @@ for (const target of TARGETS) {
     continue
   }
 
-  const moduleNeeded = elfNeeded(fs.readFileSync(modulePath))
+  const { needed: moduleNeeded, unresolvedCxx: moduleUnresolvedCxx } = elfInfo(
+    fs.readFileSync(modulePath)
+  )
+  if (moduleUnresolvedCxx.length > 0) {
+    fail(
+      target +
+        ': Vulkan module has unresolved C++ runtime symbols: ' +
+        moduleUnresolvedCxx.join(', ')
+    )
+  }
   console.log(`${target}/libqvac-diffusion-ggml-vulkan.so NEEDED: ${moduleNeeded.join(', ')}`)
   if (!moduleNeeded.some((n) => n.startsWith('libvulkan.'))) {
     fail(`${target}: Vulkan module does not link libvulkan (broken module)`)
@@ -132,6 +179,29 @@ for (const target of TARGETS) {
   for (const lib of FORBIDDEN_RUNTIME) {
     if (moduleNeeded.some((n) => n.startsWith(lib))) {
       fail(`${target}: Vulkan module depends on ${lib}* (dlopen fails on stock distros)`)
+    }
+  }
+
+  const cudaPath = path.join(prebuildsDir, target, moduleName, 'libqvac-diffusion-ggml-cuda.so')
+  if (!fs.existsSync(cudaPath)) {
+    fail(`${target}: CUDA DL backend module missing at ${cudaPath}`)
+    continue
+  }
+  const { needed: cudaNeeded, unresolvedCxx: cudaUnresolvedCxx } = elfInfo(
+    fs.readFileSync(cudaPath)
+  )
+  if (cudaUnresolvedCxx.length > 0) {
+    fail(
+      target + ': CUDA module has unresolved C++ runtime symbols: ' + cudaUnresolvedCxx.join(', ')
+    )
+  }
+  console.log(`${target}/libqvac-diffusion-ggml-cuda.so NEEDED: ${cudaNeeded.join(', ')}`)
+  if (!cudaNeeded.some((n) => n.startsWith('libcudart.'))) {
+    fail(`${target}: CUDA module does not link libcudart (broken module)`)
+  }
+  for (const lib of FORBIDDEN_RUNTIME) {
+    if (cudaNeeded.some((n) => n.startsWith(lib))) {
+      fail(`${target}: CUDA module depends on ${lib}* (dlopen fails on stock distros)`)
     }
   }
 }
