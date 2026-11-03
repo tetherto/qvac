@@ -119,6 +119,7 @@ jobs:
       include-vulkan-sdk: ${{ matrix.includeVulkanSdk == true }}
       include-rocm: ${{ matrix.includeRocm == true }}
       include-cuda: ${{ matrix.includeCuda == true }}
+      verify-linux-module-cxx-runtime: ${{ matrix.verifyLinuxModuleCxxRuntime == true }}
       include-cuda-win32: ${{ matrix.includeCudaWin32 == true }}
       include-cuda-arm64: ${{ matrix.includeCudaArm64 == true }}
       include-cuda-arm64-jetson: ${{ matrix.includeCudaArm64Jetson == true }}

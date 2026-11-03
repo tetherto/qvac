@@ -45,6 +45,7 @@ jobs:
       # next to Vulkan and the CPU variants; hosts without the NVIDIA stack
       # skip it at load time.
       include-cuda: true
+      verify-linux-module-cxx-runtime: true
       platform-cmake-defines: |
         linux-x64: -D ENABLE_CUDA=ON
     secrets: inherit
