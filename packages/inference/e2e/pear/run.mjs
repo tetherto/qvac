@@ -61,8 +61,20 @@ function readJson(file) {
 
 function run(command, commandArgs, opts) {
   console.log(`$ ${command} ${commandArgs.join(' ')}`)
-  const { status, signal } = spawnSync(command, commandArgs, { stdio: 'inherit', ...opts })
+  const { status, signal, error } = spawnSync(command, commandArgs, { stdio: 'inherit', ...opts })
+  if (error) throw error
   if (status !== 0) throw new Error(`${command} exited with ${status ?? signal}`)
+}
+
+// On Windows npm is npm.cmd, which only runs through a shell. Quoting keeps
+// cmd from reading `^` in ranges as an escape.
+function npm(npmArgs, cwd) {
+  if (process.platform !== 'win32') return run('npm', npmArgs, { cwd })
+  run(
+    'npm',
+    npmArgs.map((arg) => `"${arg}"`),
+    { cwd, shell: true }
+  )
 }
 
 function packInference() {
@@ -74,7 +86,7 @@ function packInference() {
 
   const packDir = path.join(workDir, 'pack')
   fs.mkdirSync(packDir)
-  run('npm', ['pack', '--ignore-scripts', '--pack-destination', packDir], { cwd: packageDir })
+  npm(['pack', '--ignore-scripts', '--pack-destination', packDir], packageDir)
   return path.join(packDir, fs.readdirSync(packDir)[0])
 }
 
@@ -85,8 +97,7 @@ function installApp(inferenceTarball) {
   })
 
   // Fresh dir and no lockfile: every dependency resolves from npm.
-  run(
-    'npm',
+  npm(
     [
       'install',
       '--no-audit',
@@ -99,7 +110,7 @@ function installApp(inferenceTarball) {
       inferenceTarball,
       ...APP_PEERS.map((name) => `${name}@${manifest.peerDependencies[name]}`)
     ],
-    { cwd: appDir }
+    appDir
   )
 
   console.log('Resolved versions:')
