@@ -39,12 +39,49 @@ const vadParamsSchema = z
   })
   .optional()
 
+const MAIN_GPU_DESCRIPTION =
+  "GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`."
+
+// Mirrors the addon's validateMainGpu() so a bad selector is a structured
+// input error instead of a failure once model loading starts.
+const MAIN_GPU_INDEX_MAX = 2147483647
+
+const mainGpuSelectorSchema = z.union([
+  z.number().int().min(0).max(MAIN_GPU_INDEX_MAX),
+  z
+    .string()
+    .regex(/^\d+$/, 'main-gpu string must be a device index, dedicated, or integrated')
+    .refine((value) => Number(value) <= MAIN_GPU_INDEX_MAX, {
+      message: 'main-gpu device index must fit in a 32-bit integer'
+    }),
+  z.enum(['dedicated', 'integrated'])
+])
+
 const contextParamsSchema = z
   .object({
     model: z.string().optional().describe('Path to the whisper model file (context override).'),
     use_gpu: z.boolean().optional().describe('Enable GPU acceleration. Default false.'),
     flash_attn: z.boolean().optional().describe('Enable flash attention.'),
-    gpu_device: z.number().optional().describe('GPU device index to use.')
+    gpu_device: z
+      .number()
+      .optional()
+      .describe(
+        'GPU device index to use (legacy GPU/IGPU ordinal). Cannot be combined with `main-gpu`.'
+      ),
+    // The addon also reads a `main_gpu` spelling; the SDK carries the one
+    // used by the other engines' configs, which the generated Python model
+    // exposes as its `main_gpu` field. A second key with that name would
+    // collide with the field and serialise both spellings at once.
+    'main-gpu': mainGpuSelectorSchema.optional().describe(MAIN_GPU_DESCRIPTION)
+  })
+  .superRefine((params, ctx) => {
+    if (params['main-gpu'] !== undefined && params.gpu_device !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['gpu_device'],
+        message: 'main-gpu cannot be combined with gpu_device'
+      })
+    }
   })
   .optional()
 
@@ -149,6 +186,12 @@ export const whisperConfigSchema = z.object({
     .string()
     .optional()
     .describe('Initial prompt (context) prepended to the transcription.'),
+  carry_initial_prompt: z
+    .boolean()
+    .optional()
+    .describe(
+      'Prepend `initial_prompt` to every decode window instead of only the first. Default false.'
+    ),
   language: z
     .string()
     .optional()
@@ -487,7 +530,15 @@ export const mossTranscribeConfigSchema = z
     useGPU: z
       .boolean()
       .optional()
-      .describe('Enable the linked GPU backend, including Metal. Default false.'),
+      .describe(
+        'Select a GPU automatically when `backend` is `auto`, including Metal. Default false.'
+      ),
+    backend: z
+      .string()
+      .optional()
+      .describe(
+        'Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `metal`, or an exact ggml device name such as `CUDA0`. An explicit selection overrides `useGPU` and the load fails if it is unavailable.'
+      ),
     backendsDir: z
       .string()
       .optional()

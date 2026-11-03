@@ -127,6 +127,28 @@ std::optional<bool> readOptionalBool(
   return obj.getOptionalPropertyAs<js::Boolean, bool>(env, key);
 }
 
+std::optional<bool>
+readOptionalStrictBool(js::Object obj, js_env_t* env, const char* key) {
+  js_value_t* raw = obj.getProperty(env, key);
+  if (js::is<js::Undefined>(env, raw))
+    return std::nullopt;
+  if (js::is<js::Boolean>(env, raw))
+    return js::Boolean::fromValue(raw).as<bool>(env);
+  throw qvac_errors::StatusError(
+      general_error::InvalidArgument,
+      std::string("Property '") + key + "' must be a boolean");
+}
+
+void assertNoParlerCoreml(js::Object obj, js_env_t* env, const char* message) {
+  for (const char* key :
+       {"coremlDecoder", "coremlComputeUnits", "coremlStrict"}) {
+    if (!js::is<js::Undefined>(env, obj.getProperty(env, key))) {
+      throw qvac_errors::StatusError(
+          general_error::InvalidArgument, std::string(key) + message);
+    }
+  }
+}
+
 std::string readArrayString(
     js::Array array, js_env_t* env, uint32_t index, const char* key) {
   js_value_t* raw = nullptr;
@@ -320,6 +342,7 @@ EngineType JSAdapter::readEngineType(
 
 chatterbox::ChatterboxConfig JSAdapter::buildChatterboxConfig(
     js::Object configurationParams, js_env_t* env) {
+  assertNoParlerCoreml(configurationParams, env, " is a parler-only option");
   chatterbox::ChatterboxConfig cfg;
   cfg.t3ModelPath    = readOptionalString(configurationParams, env, "t3ModelPath");
   cfg.s3genModelPath = readOptionalString(configurationParams, env, "s3genModelPath");
@@ -422,9 +445,34 @@ void JSAdapter::assertNoPerCallSupertonicControls(
       readOptionalString(obj, env, "pace"));
 }
 
+void JSAdapter::assertNoPerCallParlerCoreml(js::Object obj, js_env_t* env) {
+  assertNoParlerCoreml(
+      obj, env, " must be set in the constructor or reload(), not per call");
+}
+
 parler::ParlerConfig
 JSAdapter::buildParlerConfig(js::Object configurationParams, js_env_t* env) {
   parler::ParlerConfig cfg;
+  cfg.coremlDecoder =
+      readOptionalStrictBool(configurationParams, env, "coremlDecoder");
+  cfg.coremlStrict =
+      readOptionalStrictBool(configurationParams, env, "coremlStrict");
+  js_value_t* units =
+      configurationParams.getProperty(env, "coremlComputeUnits");
+  if (!js::is<js::Undefined>(env, units)) {
+    if (!js::is<js::String>(env, units)) {
+      throw qvac_errors::StatusError(
+          general_error::InvalidArgument,
+          "coremlComputeUnits must be a string");
+    }
+    cfg.coremlComputeUnits = js::String::fromValue(units).as<std::string>(env);
+    if (cfg.coremlComputeUnits.empty()) {
+      throw qvac_errors::StatusError(
+          general_error::InvalidArgument,
+          "coremlComputeUnits must not be empty");
+    }
+    parler::validateCoremlComputeUnits(cfg.coremlComputeUnits);
+  }
   cfg.modelGgufPath =
       readOptionalString(configurationParams, env, "parlerModelPath");
   cfg.desc = readParlerDescriptionFields(configurationParams, env);
@@ -439,11 +487,6 @@ JSAdapter::buildParlerConfig(js::Object configurationParams, js_env_t* env) {
       readOptionalInt(configurationParams, env, "outputSampleRate");
   cfg.normalizeNumbers =
       readOptionalBool(configurationParams, env, "normalizeNumbers");
-  cfg.coremlDecoder =
-      readOptionalBool(configurationParams, env, "coremlDecoder");
-  cfg.coremlComputeUnits =
-      readOptionalString(configurationParams, env, "coremlComputeUnits");
-  cfg.coremlStrict = readOptionalBool(configurationParams, env, "coremlStrict");
   cfg.streamChunkTokens =
       readOptionalInt(configurationParams, env, "streamChunkTokens");
   cfg.streamFirstChunkTokens =
@@ -477,6 +520,7 @@ JSAdapter::readAudio8Voice(js::Object obj, js_env_t* env) {
 
 audio8::Audio8Config
 JSAdapter::buildAudio8Config(js::Object configurationParams, js_env_t* env) {
+  assertNoParlerCoreml(configurationParams, env, " is a parler-only option");
   audio8::Audio8Config cfg;
   cfg.lmModelPath =
       readOptionalString(configurationParams, env, "audio8LmPath");
@@ -505,6 +549,7 @@ JSAdapter::buildAudio8Config(js::Object configurationParams, js_env_t* env) {
 
 moss::MossConfig
 JSAdapter::buildMossConfig(js::Object configurationParams, js_env_t* env) {
+  assertNoParlerCoreml(configurationParams, env, " is a parler-only option");
   moss::MossConfig cfg;
   cfg.backbonePath =
       readOptionalString(configurationParams, env, "mossBackbonePath");
@@ -546,6 +591,7 @@ JSAdapter::buildMossConfig(js::Object configurationParams, js_env_t* env) {
 
 moss::MossSoundEffectConfig JSAdapter::buildMossSoundEffectConfig(
     js::Object configurationParams, js_env_t* env) {
+  assertNoParlerCoreml(configurationParams, env, " is a parler-only option");
   moss::MossSoundEffectConfig cfg;
   cfg.modelPath =
       readOptionalString(configurationParams, env, "mossSoundEffectPath");
@@ -571,6 +617,7 @@ JSAdapter::readMossSoundEffectCall(js::Object job, js_env_t* env) {
 
 moss::MossSpeechConfig JSAdapter::buildMossSpeechConfig(
     js::Object configurationParams, js_env_t* env) {
+  assertNoParlerCoreml(configurationParams, env, " is a parler-only option");
   moss::MossSpeechConfig cfg;
   cfg.modelPath =
       readOptionalString(configurationParams, env, "mossSpeechModelPath");
@@ -603,6 +650,7 @@ JSAdapter::readMossSpeechCall(js::Object job, js_env_t* env) {
 
 supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
     js::Object configurationParams, js_env_t* env) {
+  assertNoParlerCoreml(configurationParams, env, " is a parler-only option");
   supertonic::SupertonicConfig cfg;
   cfg.modelGgufPath = readOptionalString(configurationParams, env, "supertonicModelPath");
   cfg.voice         = readOptionalString(configurationParams, env, "voice");
@@ -669,6 +717,7 @@ supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
 
 cosyvoice::CosyvoiceConfig
 JSAdapter::buildCosyvoiceConfig(js::Object configurationParams, js_env_t* env) {
+  assertNoParlerCoreml(configurationParams, env, " is a parler-only option");
   cosyvoice::CosyvoiceConfig cfg;
   cfg.greedy = readOptionalBool(configurationParams, env, "greedy");
   cfg.forceSpeechTokens = detail::readOptionArray<int>(
@@ -740,6 +789,7 @@ JSAdapter::buildCosyvoiceConfig(js::Object configurationParams, js_env_t* env) {
 
 pocket::PocketConfig
 JSAdapter::buildPocketConfig(js::Object params, js_env_t* env) {
+  assertNoParlerCoreml(params, env, " is a parler-only option");
   pocket::PocketConfig cfg;
   auto& o = cfg.options;
   o.flow_lm_path = readOptionalString(params, env, "pocketFlowModelPath");

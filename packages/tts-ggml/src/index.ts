@@ -45,6 +45,7 @@ import { buildNativeParams } from "./lib/engineParams";
 import type { EngineSetup } from "./lib/engineSetup";
 import { pickAudio8VoiceFields } from "./lib/engines/audio8";
 import {
+  assertNoPerCallParlerCoreml,
   pickParlerDescFields,
   type ParlerJobSource,
 } from "./lib/engines/parler";
@@ -266,6 +267,7 @@ class TTSGgml {
     this._pocket?.checkReload();
     const normalized =
       options == null || typeof options !== "object" ? {} : options;
+    assertNoPerCallParlerCoreml(normalized, "runStream");
     if (this._setup.engineType === ENGINE_POCKET) {
       return this._startStream(() =>
         this._runStreamOrchestrator(
