@@ -9,6 +9,7 @@ option(BUILD_TESTING "Build tests" OFF)
 option(ENABLE_COVERAGE "Enable coverage" OFF)
 option(ENABLE_VULKAN "Enable Vulkan GPU acceleration" OFF)
 option(ENABLE_CUDA "Enable CUDA GPU acceleration" OFF)
+option(TTS_WEBGPU "Enable opt-in WebGPU acceleration" OFF)
 qvac_addon_fuzz_manifest()
 
 if(BUILD_TESTING)
@@ -22,6 +23,11 @@ endif()
 if(ENABLE_CUDA)
   list(APPEND VCPKG_MANIFEST_FEATURES "cuda")
 endif()
+
+if(TTS_WEBGPU)
+  list(APPEND VCPKG_MANIFEST_FEATURES "webgpu")
+endif()
+
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
@@ -413,6 +419,7 @@ if(BUILD_TESTING)
       addon/tests/test_app_memory_budget.cpp
       addon/tests/test_audio8_config.cpp
       addon/tests/test_backend_utils.cpp
+      addon/tests/test_fabric_options.cpp
       addon/tests/test_chatterbox_config.cpp
       addon/tests/test_moss_config.cpp
       addon/tests/test_moss_sound_effect_config.cpp
