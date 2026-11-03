@@ -325,3 +325,16 @@ jobs:
     with:
       repo_name: ${{ matrix.row.meta.publish.tagPrefix }}
       published_version: ${{ needs.publish.outputs.published_version }}
+
+  # The Kotlin SDK's Maven zips on the sdk-v<version> release, once @qvac/sdk is published and its release exists.
+  kotlin-maven-zips:
+    needs: [select, publish, github-release]
+    if: >-
+      always() && !cancelled() && needs.github-release.result == 'success' && needs.publish.outputs.published_version != '' &&
+      contains(fromJSON(needs.select.outputs.matrices).publish.*.project, '@qvac/sdk')
+    permissions:
+      contents: write
+    uses: ./.github/workflows/publish-kotlin.yml
+    with:
+      destination: release-assets
+      version: ${{ needs.publish.outputs.published_version }}
