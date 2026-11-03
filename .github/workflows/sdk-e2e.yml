@@ -3,10 +3,9 @@ name: SDK e2e
 # The SDK pod's end-to-end suites (packages tagged ci:sdk). Desktop configurations run on the label, base branch or
 # dispatch their ci.labels name, through _desktop.yml; Device Farm runs by dispatch, the runner driving the app over MQTT.
 on:
-  # TEMP rehearsal: pull_request until the stack merges, as pr-build-test.yml.
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
-    branches: [main, release-*, feature-*, tmp-*, feat/package-ci-contract-*]
+    branches: [main, release-*, feature-*, tmp-*]
   workflow_dispatch:
     inputs:
       packages:
