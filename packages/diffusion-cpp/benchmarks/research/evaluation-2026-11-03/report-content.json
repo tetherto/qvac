@@ -1,7 +1,7 @@
 {
   "title": "QVAC diffusion performance: four platforms, six API configurations",
   "status": "DRAFT - final confirmation jobs and evidence review in progress",
-  "updated_utc": "2026-11-03T20:58:49.100330+00:00",
+  "updated_utc": "2026-11-03T21:11:29.436540+00:00",
   "intro": "RTX, Mac and Strix: 3 November 2026. DGX Spark: retained 29 October 2026 measurements at their original revisions. The original RTX and Spark report measured CUDA only. This extension adds RTX Vulkan, Strix Vulkan and HIP/ROCm, and Mac Metal. Vulkan correctness checks in the older CI record were not performance measurements.",
   "platforms": [
     {
@@ -140,10 +140,10 @@
           "Global flash attention",
           "Existing parameter",
           "V",
-          "68.679 -> 61.573 s; -10.35% latency; 1.115x; 7.106 s saved",
-          "PSNR 48.14 dB; SSIM 0.996470; RMS channel error 0.3916% of full scale. Worst frame 47.09 dB. Audio exact.",
+          "68.799 -> 61.142 s; -11.13% latency; 1.125x; 7.657 s saved",
+          "PSNR 46.79-49.17 dB; SSIM 0.997254-0.997473; RMS channel error 0.3481-0.4574% of full scale. Worst frame 45.70 dB. Audio exact.",
           "Radeon 8060S / HIP",
-          "Prefer full 960 x 544 / 124-frame confirmation; otherwise short 512 x 288 / 39-frame screen only. Accepted paired coverage: 1 prompt(s), 512 x 288 / 39 frames; measured before/after repetitions per prompt 2/2, excluding warmup. native warm latency, matched prompt/seed/geometry.",
+          "Prefer full 960 x 544 / 124-frame confirmation; otherwise short 512 x 288 / 39-frame screen only. Accepted paired coverage: 2 prompt(s), 512 x 288 / 39 frames; measured before/after repetitions per prompt 2/2, excluding warmup. native warm latency, matched prompt/seed/geometry.",
           "Recommend the existing pinned-engine parameter in the tested model/API envelope: repeatable lower latency and accepted output comparisons. Keep diffusion FA enabled. Preserve explicit settings and the original global-FA setting outside this envelope; dated Spark and short-only HIP coverage remain explicitly limited."
         ],
         [
@@ -718,9 +718,9 @@
         {
           "row": "Global flash attention",
           "hardware": "Radeon 8060S / HIP",
-          "reference": "r3-strix-h3-short-abi128-rocm-baseline",
-          "candidate": "r3-strix-h3-short-abi128-rocm-global-flash",
-          "latency_reduction_percent": 10.347337997510161,
+          "reference": "r3-strix-h3-short-confirm-abi128-rocm-baseline",
+          "candidate": "r3-strix-h3-short-confirm-abi128-rocm-global-flash",
+          "latency_reduction_percent": 11.129441347684208,
           "quality_pending": false,
           "repeat_output_unstable": false
         },
@@ -2496,9 +2496,9 @@
         {
           "row": "Global flash attention",
           "hardware": "Radeon 8060S / HIP",
-          "reference": "r3-strix-h3-short-abi128-rocm-baseline",
-          "candidate": "r3-strix-h3-short-abi128-rocm-global-flash",
-          "latency_reduction_percent": 10.347337997510161,
+          "reference": "r3-strix-h3-short-confirm-abi128-rocm-baseline",
+          "candidate": "r3-strix-h3-short-confirm-abi128-rocm-global-flash",
+          "latency_reduction_percent": 11.129441347684208,
           "quality_pending": false,
           "repeat_output_unstable": false
         },
@@ -2622,10 +2622,10 @@
         ],
         [
           "Global flash attention / Radeon 8060S / HIP",
-          "75.783 -> 76.261 s; +0.63%",
-          "38.979 -> 38.982 GB; +0.01%",
-          "24.266 -> 17.806 GB VRAM + GTT; -26.62%",
-          "VAE: 22.294 -> 14.618 s; -34.43%"
+          "109.103 -> 77.748 s; -28.74%",
+          "38.974 -> 38.979 GB; +0.01%",
+          "24.277 -> 24.257 GB VRAM + GTT; -0.08%",
+          "VAE: 22.142 -> 14.550 s; -34.29%"
         ]
       ],
       "tradeoff_note": "Resource observations for the paired profiles above. GB = 10^9 bytes; MiB = 2^20 bytes. Startup is load plus the first request in a fresh model context, with uncontrolled OS file cache. Process RSS and device-wide samples are separate counters; do not add them on unified-memory machines. Different rows may use different prompts or clip lengths.",
@@ -2665,7 +2665,7 @@
         ],
         [
           "Radeon 8060S / HIP",
-          "`flash_attn=true` within the measured HIP envelope: 68.679 -> 61.573 s; -10.35% latency; 1.115x; 7.106 s saved",
+          "`flash_attn=true` within the measured HIP envelope: 68.799 -> 61.142 s; -11.13% latency; 1.125x; 7.657 s saved",
           "HIP release packaging is not yet present. Full-size latency affected by external work is excluded; keep the baseline outside clean checked inputs."
         ]
       ],
@@ -2811,10 +2811,10 @@
           "DiT matrix expansion to F16",
           "Existing tensor-type parameter",
           "V",
-          "27.889 -> 26.884 s; -3.60% latency; 1.037x; 1.005 s saved",
-          "Decoded pixels exact. 1 comparison.",
+          "27.875 -> 26.875 s; -3.59% latency; 1.037x; 1.000 s saved",
+          "Decoded pixels exact. 3 comparisons.",
           "M3 Ultra / Metal",
-          "Expand only Q8 transformer block weight matrices at load time. Verify rule matching, startup and memory. Accepted paired coverage: 1 prompt(s), 1024 x 1024; measured before/after repetitions per prompt 3/3, excluding warmup. native warm latency, matched prompt/seed/geometry.",
+          "Expand only Q8 transformer block weight matrices at load time. Verify rule matching, startup and memory. Accepted paired coverage: 3 prompt(s), 1024 x 1024; measured before/after repetitions per prompt 3/3, excluding warmup. native warm latency, matched prompt/seed/geometry.",
           "Optional higher-memory warm-latency profile only: measured output is exact and repeated warm requests improve. Expansion increases memory and can increase startup cost. Keep original quantized matrices as the default/fallback until capacity and startup policy are validated; do not extend this rule to other checkpoints."
         ],
         [
@@ -3162,9 +3162,9 @@
         {
           "row": "DiT matrix expansion to F16",
           "hardware": "M3 Ultra / Metal",
-          "reference": "r3-mac-flux2-screen-metal-direct",
-          "candidate": "r3-mac-flux2-screen-metal-dit-f16",
-          "latency_reduction_percent": 3.6035713005127437,
+          "reference": "r3-mac-flux2-f16-confirm-1024-metal-baseline",
+          "candidate": "r3-mac-flux2-f16-confirm-1024-metal-dit-f16",
+          "latency_reduction_percent": 3.587443946188341,
           "quality_pending": false,
           "repeat_output_unstable": false
         },
@@ -3514,10 +3514,10 @@
         ],
         [
           "DiT matrix expansion to F16 / M3 Ultra / Metal",
-          "34.936 -> 34.090 s; -2.42%",
-          "11.851 -> 17.694 GB; +49.29%",
+          "34.654 -> 29.258 s; -15.57%",
+          "11.849 -> 17.531 GB; +47.94%",
           "Unified memory; RSS is not total device usage",
-          "Denoising: 23.433 -> 22.433 s; -4.26%"
+          "Denoising: 23.427 -> 22.427 s; -4.27%"
         ],
         [
           "DiT matrix expansion to F16 / Radeon 8060S / Vulkan",
@@ -3575,7 +3575,7 @@
         ],
         [
           "M3 Ultra / Metal",
-          "Keep direct VAE. F16 matrix-only expansion: 27.889 -> 26.884 s; -3.60% latency; 1.037x; 1.005 s saved",
+          "Keep direct VAE. F16 matrix-only expansion: 27.875 -> 26.875 s; -3.59% latency; 1.037x; 1.000 s saved",
           "Original Q8 weights remain the lower-memory default. Expansion is optional only after exact-output/multi-shape confirmation; Metal GEMM is slower."
         ],
         [
@@ -4431,7 +4431,7 @@
     "Completed local addon checks: 137/137 Bare unit tests, 89/89 Node unit tests, typecheck and lint. Lint retains 70 pre-existing warnings. These checks validate the existing addon and research harness; they do not validate the future selection policy.",
     "Focused H3 baseline/candidate builds passed 26 CTests on CUDA, 21 on RTX Vulkan and 23 on Metal, including independent fused-operation/QKV-view checks. Metal end-to-end output differences still disqualify that patch from the preferred Metal profile. Operator tests alone cannot establish full-model equivalence.",
     "Metal packing/dispatch experiments passed their existing suites and independent operator checks, but were rejected on performance evidence. The greater-than-2^32-element packing specialization was not exercised.",
-    "Corrected baseline/forced-BLAS/forced-MMQ HIP backend builds passed their four existing CTests. The separately queued rocWMMA build has its own result and cannot inherit those passes.",
+    "Corrected baseline/forced-BLAS/forced-MMQ HIP backend builds passed their four existing CTests. The separate rocWMMA variant requires its own successful build and full-model checks; it cannot inherit those passes.",
     "No new full desktop CI run certifies a November production feature: no such feature has been implemented. The retained October workflow passed 37 jobs with 14 conditional routes, including a 98/98 Windows retry; that historical run is not a replacement for implementation CI. RTX research builds used local Clang 20.1.8; release builds must use the repository CI toolchain."
   ],
   "enablement_strategy": {
