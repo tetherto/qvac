@@ -112,7 +112,7 @@ const PENDING = [
   // non-draft PR gets; the cpp-tests and integration legs need the
   // run-cpp-addon-tests and run-desktop-addon-tests labels.
   ...[
-    ['.github/workflows/cpp-lint.yaml', 2],
+    ['.github/workflows/cpp-lint.yaml', 1],
     ['.github/workflows/cpp-test-coverage-asr-ggml.yml', 1],
     ['.github/workflows/cpp-test-coverage-bci-whispercpp.yml', 1],
     ['.github/workflows/cpp-test-coverage-tts-ggml.yml', 1],
@@ -120,7 +120,7 @@ const PENDING = [
     ['.github/workflows/integration-mobile-test-inference-addon-cpp.yml', 3],
     ['.github/workflows/integration-test-asr-ggml.yml', 1],
     ['.github/workflows/integration-test-audiogen-ggml.yml', 1],
-    ['.github/workflows/reusable-prebuilds.yml', 2],
+    ['.github/workflows/reusable-prebuilds.yml', 1],
     ['.github/actions/cpp-lint/action.yaml', 1],
     // The CI contract's job templates, carrying over vla's old cpp-tests and integration sites unchanged.
   ].map(([file, count]) => ({

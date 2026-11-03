@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Runs addon-test, then fails when GR00T parity was staged but skipped, a no-op behind a green check.
 
-import { appendFileSync, existsSync, readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { appendFileSync, existsSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -62,5 +63,15 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       process.env.GITHUB_STEP_SUMMARY,
       `## GR00T multi-embodiment sweep\n\n${r.sweep.length} rows checked against the PyTorch oracle.\n\n\`\`\`\n${r.sweep.slice(0, 17).join('\n')}\n\`\`\`\n`
     )
+  }
+  // Bounded fuzzing on Linux, then a fresh addon build to prove the fuzz configuration left a working one.
+  if (process.platform === 'linux') {
+    const dir = join(PKG, 'prebuilds/linux-x64')
+    execFileSync('npm', ['run', 'fuzz:build'], { cwd: PKG, stdio: 'inherit' })
+    execFileSync('npm', ['run', 'fuzz:run'], { cwd: PKG, stdio: 'inherit' })
+    rmSync(dir, { recursive: true, force: true })
+    execFileSync('npm', ['run', 'build:native'], { cwd: PKG, stdio: 'inherit' })
+    if (!readdirSync(dir).some((f) => f.endsWith('.bare') && statSync(join(dir, f)).size > 0))
+      throw new Error(`build:native after fuzzing left no .bare in ${dir}`)
   }
 }

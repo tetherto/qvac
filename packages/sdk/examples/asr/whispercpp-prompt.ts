@@ -2,14 +2,20 @@
  * Whisper transcription with prompt example.
  *
  * Usage:
- *   npx tsx examples/asr/whispercpp-prompt.ts
+ *   npx tsx examples/asr/whispercpp-prompt.ts <wav-file>
  *
- * This example requires a test audio file (default: examples/audio/sample-16khz.wav).
- * Sample audio files are available in the QVAC source repository, but not included in the published npm package.
- * Set audioChunk to a custom WAV, or download the default audio into examples/audio/:
+ * Pass the path of a 16 kHz mono WAV file. A sample is available in the QVAC
+ * source repository, but not included in the published npm package:
  *   https://github.com/tetherto/qvac/blob/main/packages/sdk/examples/audio/sample-16khz.wav
  */
 import { loadModel, unloadModel, transcribe, WHISPER_TINY } from '@qvac/sdk'
+
+const audioFilePath = process.argv[2]
+
+if (!audioFilePath) {
+  console.error('Usage: npx tsx examples/asr/whispercpp-prompt.ts <wav-file>')
+  process.exit(1)
+}
 
 try {
   console.log('▸ Starting Whisper transcription with prompt example...')
@@ -67,7 +73,7 @@ try {
   console.log('▸ Transcribing audio...')
   const text = await transcribe({
     modelId,
-    audioChunk: 'examples/audio/sample-16khz.wav',
+    audioChunk: audioFilePath,
     prompt: 'This is a test recording with clear speech and proper punctuation.'
   })
 

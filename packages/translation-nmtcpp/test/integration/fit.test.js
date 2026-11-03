@@ -8,6 +8,11 @@ const process = require('bare-process')
 const TranslationNmtcpp = require('../../index.js')
 const { ensureIndicTransModel, ensureBergamotModel, TEST_TIMEOUT } = require('./utils')
 
+const OVERHEAD_BYTES = 512 * 1024 * 1024
+const allowance = (sourceBytes) => sourceBytes * 4 + OVERHEAD_BYTES
+const isVerdict = (fit) => fit.status === 'fits' || fit.status === 'does-not-fit'
+const demand = (fit) => fit.devices.map((row) => [row.id, row.usedBytes])
+
 test('fit rejects a relative model path before native use', async (t) => {
   let error
   try {
@@ -32,14 +37,23 @@ test('a malformed native request rejects', async (t) => {
   await t.exception(promise, /marginBytes/)
 })
 
-test('fit reports a missing model without loading it', async (t) => {
-  const result = await TranslationNmtcpp.assessFit({
+test('a missing model rejects without loading it', async (t) => {
+  await t.exception(
+    TranslationNmtcpp.assessFit({
+      files: { model: path.resolve(__dirname, 'missing-model.bin') },
+      config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans }
+    }),
+    /cannot read the translation model/
+  )
+})
+
+test('a main-gpu selection is unknown', async (t) => {
+  const fit = await TranslationNmtcpp.assessFit({
     files: { model: path.resolve(__dirname, 'missing-model.bin') },
-    config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans }
+    config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans, 'main-gpu': 0 }
   })
-  t.is(result.status, 'error')
-  t.is(result.reason, 'model-unreadable')
-  t.is(result.modelBytes, 0)
+  t.is(fit.status, 'unknown')
+  t.alike(fit.devices, [])
 })
 
 test('fit reads model, pivot, and vocab files below a Unicode directory', async (t) => {
@@ -60,8 +74,12 @@ test('fit reads model, pivot, and vocab files below a Unicode directory', async 
       files,
       config: { modelType: TranslationNmtcpp.ModelTypes.Bergamot }
     })
-    t.is(fit.modelBytes, 64 * 6)
-    t.ok(!fit.report.includes('unreadable'), 'every UTF-8 path was inspected')
+    t.comment(JSON.stringify(fit))
+    t.ok(isVerdict(fit), 'a verdict')
+    t.is(fit.devices.length, 1, 'Bergamot runs on the CPU alone')
+    t.ok(fit.devices[0].unified, 'the CPU row is the host')
+    t.is(fit.devices[0].usedBytes, allowance(64 * 6), 'every UTF-8 path was inspected')
+    t.alike(fit.stats, {})
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
   }
@@ -86,33 +104,27 @@ test('queued fits keep their own requests and all settle', async (t) => {
       files: { model: path.join(dir, 'missing.bin') },
       config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans }
     })
-    const [a, b, c] = await Promise.all([first, second, missing])
-    t.is(a.modelBytes, 64 * 3, 'the first call owns its original files')
-    t.ok(b.report.includes('dstVocab'), 'the second call owns its changed files')
-    t.is(c.reason, 'model-unreadable', 'an error outcome does not strand queued callers')
+    const [a, b, c] = await Promise.allSettled([first, second, missing])
+    t.is(a.status, 'fulfilled', 'the first call read its files')
+    t.is(a.value.devices[0].usedBytes, allowance(64 * 3), 'the first call owns its original files')
+    t.ok(String(b.reason).includes('dstVocab'), 'the second call owns its changed files')
+    t.is(c.status, 'rejected', 'a rejection does not strand queued callers')
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
   }
 })
 
-async function checkRealModelFit(t, request) {
+async function checkRealModelFit(t, request, sourceBytes) {
   const fit = await TranslationNmtcpp.assessFit(request)
-  t.comment(`backend=${fit.backend} status=${fit.status} reason=${fit.reason}`)
-  t.ok(fit.modelBytes > 0, 'model file bytes were inspected')
-  if (fit.freeBytes === 0) {
-    t.is(fit.status, 'error')
-    t.is(fit.reason, 'device-memory-unavailable')
-    return
+  t.comment(JSON.stringify(fit))
+  t.ok(isVerdict(fit) || fit.status === 'unknown', 'a verdict, or an explicit unknown')
+  if (isVerdict(fit)) {
+    t.is(fit.devices.length, 1, 'a CPU load is one row')
+    t.ok(fit.devices[0].usedBytes > sourceBytes, 'the load allowance includes overhead')
+    t.ok(fit.devices[0].freeBytes > 0, 'current memory was queried')
+  } else {
+    t.alike(fit.devices, [], 'an unknown carries no rows')
   }
-  t.ok(fit.requiredBytes > fit.modelBytes, 'load allowance includes overhead')
-  t.ok(fit.freeBytes > 0, 'current device memory was queried')
-  t.ok(fit.report.includes('Translation load estimate:'), 'a readable report was returned')
-  t.ok(
-    fit.status === 'fits' ||
-      fit.status === 'does-not-fit' ||
-      (fit.status === 'error' && fit.reason === 'insufficient-evidence'),
-    'the ordinary assessment has a capacity verdict or explicitly reports uncertainty'
-  )
 
   // The same real model cannot fit when the caller reserves every available
   // byte. This checks the capacity decision without assuming a runner's RAM.
@@ -121,8 +133,7 @@ async function checkRealModelFit(t, request) {
     marginBytes: Number.MAX_SAFE_INTEGER
   })
   t.is(reserved.status, 'does-not-fit')
-  t.is(reserved.reason, 'does-not-fit')
-  t.ok(reserved.modelBytes >= fit.modelBytes)
+  t.is(reserved.devices.length, 1)
 }
 
 test(
@@ -130,10 +141,14 @@ test(
   { timeout: TEST_TIMEOUT },
   async (t) => {
     const model = await ensureIndicTransModel()
-    await checkRealModelFit(t, {
-      files: { model },
-      config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans, use_gpu: false }
-    })
+    await checkRealModelFit(
+      t,
+      {
+        files: { model },
+        config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans, use_gpu: false }
+      },
+      fs.statSync(model).size
+    )
   }
 )
 
@@ -150,8 +165,13 @@ test(
       config: { ...config, gpu_backend: '', gpuBackend: 'no-such-backend' }
     })
     t.is(conflicting.status, automatic.status)
-    t.is(conflicting.reason, automatic.reason)
-    t.is(conflicting.backend, automatic.backend)
+    t.alike(
+      conflicting.devices.map((row) => row.id),
+      automatic.devices.map((row) => row.id)
+    )
+    if (isVerdict(automatic)) {
+      t.is(automatic.devices.at(-1).name, 'CPU', 'the host row is last')
+    }
   }
 )
 
@@ -167,14 +187,19 @@ test(
     t.ok(vocabName, 'Bergamot vocabulary is available')
     if (!modelName || !vocabName) return
 
-    await checkRealModelFit(t, {
-      files: {
-        model: path.join(modelDir, modelName),
-        srcVocab: path.join(modelDir, vocabName),
-        dstVocab: path.join(modelDir, vocabName)
+    const model = path.join(modelDir, modelName)
+    await checkRealModelFit(
+      t,
+      {
+        files: {
+          model,
+          srcVocab: path.join(modelDir, vocabName),
+          dstVocab: path.join(modelDir, vocabName)
+        },
+        config: { modelType: TranslationNmtcpp.ModelTypes.Bergamot }
       },
-      config: { modelType: TranslationNmtcpp.ModelTypes.Bergamot }
-    })
+      fs.statSync(model).size
+    )
   }
 )
 
@@ -186,6 +211,7 @@ test('fitting keeps the event loop responsive', { timeout: TEST_TIMEOUT }, async
     files: { model },
     config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans, use_gpu: false }
   }
+  const expected = await TranslationNmtcpp.assessFit(request)
   let pending = false
   let ticks = 0
   const timer = setInterval(() => {
@@ -202,7 +228,7 @@ test('fitting keeps the event loop responsive', { timeout: TEST_TIMEOUT }, async
     }
     t.ok(ticks > 0, 'timers ran before fitting settled')
     t.ok(
-      fits.every((fit) => fit.modelBytes > 0),
+      fits.every((fit) => JSON.stringify(demand(fit)) === JSON.stringify(demand(expected))),
       'every queued fit measured the model'
     )
     t.comment(`${ticks} timer ticks before completion`)
@@ -228,8 +254,10 @@ test(
       const fit = TranslationNmtcpp.assessFit({ files: { model: modelPath }, config })
       await model.unload()
       const result = await fit
-      t.ok(result.backend.length > 0, 'the backend name survives the model unloading')
-      t.not(result.reason, 'device-unavailable', 'the fit device stayed available')
+      t.ok(
+        ['fits', 'does-not-fit', 'unknown'].includes(result.status),
+        'the fit settled after the model unloaded'
+      )
     } finally {
       await model.destroy()
     }

@@ -57,7 +57,11 @@
             "dpkg -s mesa-vulkan-drivers >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers)"
           ]
         }
-      }
+      },
+      "inputs": [
+        "default",
+        "{workspaceRoot}/.github/bare-toolchain/package-lock.json"
+      ]
     },
     "build": {
       "executor": "nx:run-commands",

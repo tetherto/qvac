@@ -17,7 +17,7 @@ async function collectOutput(response) {
 }
 ```
 
-For a batch (`model.run([...])`) there is no top-level second argument — set cache options **per prompt** in `BatchPrompt.runOptions` (`cacheKey`, `ephemeral`, `prefill`, `generationParams`). Passing a second argument to a batch `run()` throws.
+For a batch (`model.run([...])`) there is no top-level second argument — set cache options **per prompt** in `BatchPrompt.runOptions` (`cacheKey`, `ephemeral`, `baseCacheKey`, `prefill`, `generationParams`). Passing a second argument to a batch `run()` throws.
 
 ```js
 // Batch: cache options go per item, not as a second run() argument.
@@ -31,12 +31,23 @@ A cached conversation is written to its file by `model.saveCache(cacheKey)`,
 or automatically when it would otherwise be lost; see [Save the cache to
 disk](#save-the-cache-to-disk).
 
+A request also reuses the prompt prefix it shares with any other
+conversation the model holds, whatever its `cacheKey`: the one in memory, the
+[RAM tier](#keep-switched-away-conversations-in-ram), or a `cacheKey` file
+used in this process. A new chat with the same system prompt and tools as an
+earlier one decodes only what follows them; on multimodal models an image
+the two share is not encoded again. Encoder-decoder models encode each prompt
+afresh and keep a key's state to that key. The other
+conversation is copied, never changed. See [Starting from another
+conversation](./cache-lifecycle.md#starting-from-another-conversation).
+
 ## runOptions reference
 
 | Option | Type | Description |
 | --- | --- | --- |
-| `cacheKey` | `string` | Path to the cache file. Omit to disable caching. The conversation stays in memory and is written to this file only by `saveCache()` or when it would otherwise be lost (see [Save the cache to disk](#save-the-cache-to-disk)). |
+| `cacheKey` | `string` | Path to the cache file. The conversation stays in memory and is written to this file only by `saveCache()` or when it would otherwise be lost (see [Save the cache to disk](#save-the-cache-to-disk)). Omit it and nothing is written to a file (see [Inference without a cacheKey](#inference-without-a-cachekey)). |
 | `ephemeral` | `boolean` | `true` keeps the conversation in memory only: whenever it would be written automatically, it is dropped instead. `saveCache()` still writes it. Default `false`. |
+| `baseCacheKey` | `string` | A `cacheKey` file to start from when nothing in memory serves more of the prompt, such as a primed system prompt. Read, never written; skipped when missing or when it shares no prefix with the prompt. Once named, the file stays a source for later requests on this model, as any `cacheKey` file it used does, until files named or picked as a prompt's closest match more recently push it out (the model keeps the 256 most recent, as far as 64 MiB of memory holds their prompt records). The file must come from a trusted source: its state is loaded as written. No effect with [`cache_share_across_keys: 'false'`](#keep-conversations-apart). See [Start from a primed file](#start-from-a-primed-file). |
 | `prefill` | `boolean` | Evaluate prompt without generating a response. On a model loaded with `parallel >= 2`, needs a `cacheKey` — see below. |
 | `generationParams` | `object` | Per-run overrides for temp, top_p, top_k, predict, seed, penalties. |
 
@@ -45,9 +56,9 @@ disk](#save-the-cache-to-disk).
 
 ## Prefill on a parallel model (`parallel >= 2`)
 
-A prefill-only run warms context state without generating. On a model loaded with `parallel >= 2` that state lives in a scheduler slot, and concurrent jobs can only reach it through its `cacheKey`, so the prefill needs a `cacheKey`: the warmed conversation then stays in its slot for the next request on that key.
+A prefill-only run warms context state without generating. On a model loaded with `parallel >= 2` that state lives in a scheduler slot, and only its `cacheKey` keeps it for a later request (without one it is at most parked anonymously, first to be evicted and never written), so the prefill needs a `cacheKey`: the warmed conversation then stays in its slot for the next request on that key.
 
-A *keyless* prefill is therefore rejected with `InvalidArgument` on a parallel model, both as a single `run()` and per batch item, rather than silently producing nothing. Load with `parallel: 1` if you want keyless cache warming, where the warmed context is reused by the next run on that instance.
+A *keyless* prefill is therefore rejected with `InvalidArgument` on a parallel model, both as a single `run()` and per batch item, rather than producing state no request can count on. Load with `parallel: 1` if you want keyless cache warming, where the warmed context is reused by the next run on that instance.
 
 See [continuous-batching.md](continuous-batching.md#prefill-rules-keyed-vs-keyless) for the scheduler-side rules.
 
@@ -236,7 +247,12 @@ as the single-prompt path: the conversation stays in memory between requests.
   switches keys), or dropped if it is ephemeral. Its next request restores it
   from wherever it went.
 - A conversation whose loaded `cacheKey` file is deleted is dropped, as on the
-  single-prompt path. Requests without a `cacheKey` are never kept.
+  single-prompt path.
+- **Shared prefixes.** A request whose key has no state of its own, or that
+  has no key, starts from a copy of the conversation that shares the most of
+  its prompt: parked in another slot, in the RAM tier, or in a `cacheKey`
+  file. A request without a `cacheKey` is kept in its slot for that purpose,
+  never written.
 
 Resident conversations with unsaved turns are written to their files when
 the model is reloaded (finetuning reloads it) or unloaded, except ephemeral
@@ -354,7 +370,8 @@ turns is written:
 1. **When switching to a different `cacheKey`**: the old conversation is
    saved, then the new one is loaded.
 2. **When a request omits `cacheKey`**: the active conversation is saved, then
-   cleared.
+   set aside: its memory stays for the prefix the next request shares with
+   it; on encoder-decoder models it is cleared.
 3. **When the model is reloaded** (finetuning does) **or unloaded.**
 
 Sending the same `cacheKey` again writes nothing. With the RAM tier on, cases
@@ -383,7 +400,10 @@ from admission to unload.
 **On both paths:**
 
 - An ephemeral conversation is never written automatically: each of the
-  writes above drops it instead, and its next request starts cold.
+  writes above drops it instead, and its key's next request finds no state of
+  its own. That request still starts from whatever prefix it shares with
+  what the model holds, which may include the dropped conversation's memory
+  left in place; on encoder-decoder models it starts cold.
 - A conversation with no unsaved turns, or with nothing committed (its only
   request rolled back), is not written.
 - A conversation whose loaded or saved file has been deleted (or its
@@ -429,7 +449,7 @@ same key without `ephemeral` makes it a normal conversation again.
 
 ## Switch between cache files
 
-On the single-prompt path, passing a different `cacheKey` saves the old conversation to its file if it has unsaved turns (moves it into the RAM tier when that is on, or drops it when it is ephemeral), then loads the new one.
+On the single-prompt path, passing a different `cacheKey` saves the old conversation to its file if it has unsaved turns (moves it into the RAM tier when that is on, or does not write it when it is ephemeral), then loads the new one. A new key without a file starts from the prefix it shares with the old conversation; on encoder-decoder models, or with [`cache_share_across_keys: 'false'`](#keep-conversations-apart), it starts cold.
 
 ```js
 await model.run([{ role: 'user', content: 'Topic A' }], { cacheKey: 'session1.bin' })
@@ -438,15 +458,42 @@ await model.run([{ role: 'user', content: 'Topic A' }], { cacheKey: 'session1.bi
 await model.run([{ role: 'user', content: 'Topic B' }], { cacheKey: 'session2.bin' })
 ```
 
-## Single-shot inference (no caching)
+## Inference without a cacheKey
 
-Omit `cacheKey`. No cache is used and the context is reset after each call.
+Omit `cacheKey`. Nothing is written to a file. The request still reuses the
+prefix it shares with what the model holds, and its state stays in memory for
+the next request, as llama-server does; on encoder-decoder models, or with
+[`cache_share_across_keys: 'false'`](#keep-conversations-apart), the context
+is reset after each call.
 
 ```js
 await model.run([{ role: 'user', content: 'One-off question' }])
 ```
 
-If caching was previously active, omitting `cacheKey` saves the active conversation to its file (unless it is ephemeral or has no unsaved turns) and clears it.
+If caching was previously active, omitting `cacheKey` saves the active conversation to its file (unless it is ephemeral or has no unsaved turns) and sets it aside.
+
+## Keep conversations apart
+
+Except on encoder-decoder models, a request starts from whichever state the
+model holds that serves the most of its prompt, whatever its `cacheKey` (see [Starting from another
+conversation](cache-lifecycle.md#starting-from-another-conversation)), and its
+`CacheTokens` and timing show how much was already held. When the callers of
+one model must not learn whether another conversation shares their prompt,
+such as different clients of one server, load it with
+`cache_share_across_keys: 'false'` (also `cache-share-across-keys`; `'0'` and
+`'off'` work too):
+
+```js
+const model = new LlmLlamacpp({
+  files: { model: [modelPath] },
+  config: { ctx_size: '16384', parallel: '4', cache_share_across_keys: 'false' }
+})
+```
+
+Every request then reuses only its own key's state: a request without a key
+starts cold and is reset afterwards, a new key starts cold, and `baseCacheKey`
+has no effect. The default, `'true'`, shares state as llama-server's prompt
+cache does.
 
 ## Tools and reasoning
 
@@ -520,9 +567,25 @@ every possible custom template or user message.
 
 The next turn on the same `cacheKey` continues that conversation, and the file
 written for it afterwards holds the whole conversation, not the primed prefix.
-To start several conversations from one primed prefix, copy the saved file to a
-new `cacheKey` per conversation before its first request, or keep the
-conversations `ephemeral` so the primed file is never overwritten.
+
+### Start from a primed file
+
+To start several conversations from one primed prefix, give each its own
+`cacheKey` and name the primed file as `baseCacheKey`:
+
+```js
+await model.run(systemAndTools, { cacheKey: 'primed.bin', prefill: true })
+await model.saveCache('primed.bin')
+
+// Later, possibly in another process:
+await model.run(history, { cacheKey: 'chat-42.bin', baseCacheKey: 'primed.bin' })
+```
+
+The request starts from a copy of `primed.bin` unless a state in memory serves
+more of its prompt, and decodes only what follows. `primed.bin` is never
+written; the conversation goes to `chat-42.bin`. The file must come from a
+model loaded with the same `parallel`: llama.cpp loads a state file only into
+a context with as many KV streams as the one that wrote it.
 
 > Migration note: this addon contract is intentionally incompatible with SDK
 > versions that still send delta messages/tools or expose
@@ -557,9 +620,10 @@ models. On hybrid, recurrent and sliding-window models the same holds by
 default; `cache_checkpoint_storage: 'disk'` moves their snapshots and
 checkpoints to temp files.
 
-The same rule applies to requests without `cacheKey`. Nothing reuses their
-state, so the only visible difference is `CacheTokens`, which reports the
-tokens actually decoded rather than the pre-request cursor.
+The same rule applies to requests without `cacheKey`. Their state stays in
+memory for the prefix the next request shares with it; on encoder-decoder
+models nothing reuses it, so the only visible difference is `CacheTokens`,
+which reports the tokens actually decoded rather than the pre-request cursor.
 
 The `cacheKey` file changes only through the writes described in [Save the
 cache to disk](#save-the-cache-to-disk), which also carry the newest

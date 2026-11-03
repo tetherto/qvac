@@ -1,5 +1,16 @@
 # Changelog
 
+## [unreleased]
+
+### Fixed
+
+- Linux CUDA, Jetson and HIP backend modules no longer leave libstdc++ symbols
+  undefined, so they load under hosts without libstdc++ in the global
+  namespace (such as `bare-sidecar`) instead of silently falling back to the
+  CPU. The CUDA modules link libstdc++ statically behind a version script, and
+  HIP host code builds against the libc++ fabric ships (`qvac-fabric`
+  `11259.2.0#2`).
+
 ## [0.25.0] - 2026-10-28
 
 ### Breaking
