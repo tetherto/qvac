@@ -99,6 +99,7 @@ jobs:
           workdir: ${{ env.WORKDIR }}
           target: ${{ matrix.row.target }}
       - if: steps.models.outputs.paths != '' && runner.environment != 'github-hosted'
+        id: models-restore
         uses: tetherto/qvac-actions/cache-restore@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           key: ${{ steps.models.outputs.key }}
@@ -110,6 +111,7 @@ jobs:
           workdir: ${{ env.WORKDIR }}
           bucket: ${{ secrets.MODEL_S3_BUCKET }}
           target: ${{ matrix.row.target }}
+          exact-hit: ${{ steps.models-restore.outputs.cache-hit }}
       - name: Install
         shell: bash
         working-directory: src
