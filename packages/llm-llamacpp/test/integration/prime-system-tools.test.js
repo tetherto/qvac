@@ -284,12 +284,23 @@ for (const { label, def } of MODELS) {
         for (const [i, primedKey] of primedKeys.entries()) {
           await model.saveCache(primedKey)
           const reloaded = await askAfterReload(t, modelPath, parallel, primedKey)
+          // In the same process an earlier key's question may serve even
+          // more of this one: its state is shared across keys. The first
+          // has no earlier question, and a fully served prompt still
+          // decodes its last token.
           const same = await run(model, ASK, { cacheKey: primedKey })
-          t.is(
-            same.promptTokens,
-            userTurn,
-            `prefill ${i}: in the same process the question prefilled only its ${userTurn}-token user turn`
-          )
+          if (i === 0) {
+            t.is(
+              same.promptTokens,
+              userTurn,
+              `prefill ${i}: in the same process the question prefilled only its ${userTurn}-token user turn`
+            )
+          } else {
+            t.ok(
+              same.promptTokens >= 1 && same.promptTokens <= userTurn,
+              `prefill ${i}: in the same process the question prefilled ${same.promptTokens}, between 1 and its ${userTurn}-token user turn`
+            )
+          }
           t.is(
             reloaded.promptTokens,
             userTurn,
