@@ -18,6 +18,15 @@ test('MOSS load request accepts GPU configuration and rejects streaming knobs', 
     loadModelRequestSchema.safeParse({ ...request, modelConfig: { useGPU: true, maxThreads: 4 } })
       .success
   )
+  // The native selector is passed through as given: the engine, not the
+  // schema, knows which devices this build has.
+  for (const backend of ['auto', 'cpu', 'cuda', 'vulkan', 'metal', 'CUDA0']) {
+    t.ok(
+      loadModelRequestSchema.safeParse({ ...request, modelConfig: { backend } }).success,
+      backend
+    )
+  }
+  t.absent(loadModelRequestSchema.safeParse({ ...request, modelConfig: { backend: 1 } }).success)
   t.absent(
     loadModelRequestSchema.safeParse({ ...request, modelConfig: { streaming: true } }).success
   )
@@ -66,6 +75,55 @@ test('MOSS batch op forwards hotwords per request without reloading', async (t) 
     {},
     { prompt: 'Transcribe the recording.', hotwords: [] }
   ])
+})
+
+test('MOSS batch op maps the engine stats reported under its own names', async (t) => {
+  // MossTranscribeModel::runtimeStats() names its counters differently from
+  // whisper and parakeet; the terminal stats carry every one of them.
+  const model = {
+    async run() {
+      return {
+        stats: {
+          totalTime: 460,
+          realTimeFactor: 0.14,
+          audioDurationMs: 3400,
+          segments: 2,
+          audioTokens: 42,
+          promptTokens: 18,
+          generatedTokens: 40,
+          encodeMs: 120,
+          prefillMs: 40,
+          decodeMs: 300,
+          backendDevice: 1,
+          backendId: 1
+        },
+        async *iterate() {
+          yield { text: 'QVAC', start: 1, end: 2, speaker: 'S01', speakerId: 0 }
+        }
+      }
+    }
+  } as unknown as AnyModel
+  const modelId = 'moss-stats-mapping-test'
+  registerModel(modelId, { model, path: '', config: {}, modelType: ModelType.mossTranscribe })
+  t.teardown(() => unregisterModel(modelId))
+
+  const run = transcribe({ modelId, audioChunk: { type: 'base64' as const, value: 'AAA=' } })
+  let result = await run.next()
+  while (!result.done) result = await run.next()
+  t.alike(result.value.stats, {
+    audioDuration: 3400,
+    realTimeFactor: 0.14,
+    totalSegments: 2,
+    encoderTime: 120,
+    decoderTime: 300,
+    backendDevice: 1,
+    backendId: 1,
+    totalTime: 460,
+    prefillTime: 40,
+    audioTokens: 42,
+    promptTokens: 18,
+    generatedTokens: 40
+  })
 })
 
 for (const modelType of [

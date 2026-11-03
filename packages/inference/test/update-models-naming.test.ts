@@ -1811,6 +1811,62 @@ test('parakeet: Unified RNN-T GGUF keeps PARAKEET_UNIFIED_<params>_<quant>', (t)
   t.is(exportName, 'PARAKEET_UNIFIED_0_6B_Q8_0')
 })
 
+test('parakeet: Mosaic GGUF names include the model and compact variant', (t) => {
+  const cases = [
+    {
+      filename: 'parakeet-mosaic.gguf',
+      quantization: 'q4_0/q8_0',
+      expected: 'PARAKEET_MOSAIC_Q4_0_Q8_0'
+    },
+    {
+      filename: 'parakeet-mosaic-compact.gguf',
+      quantization: 'q4_0/q8_0/q3_k/iq3_s',
+      expected: 'PARAKEET_MOSAIC_COMPACT_Q4_0_Q8_0_Q3_K_IQ3_S'
+    }
+  ]
+
+  for (const { filename, quantization, expected } of cases) {
+    t.is(
+      generateExportName({
+        path: `qvac_models_compiled/ggml/parakeet/2026-10-23/${filename}`,
+        engine: 'parakeet-transcription',
+        name: '',
+        quantization,
+        params: '0.6B',
+        tags: [],
+        usedNames: new Set()
+      }),
+      expected
+    )
+  }
+})
+
+test('parakeet: Mosaic directory names do not rename Core ML components', (t) => {
+  const components = [
+    { path: 'analytics/coremldata.bin', expected: 'PARAKEET_COREMLDATA' },
+    { path: 'coremldata.bin', expected: 'PARAKEET_COREMLDATA' },
+    { path: 'model.mil', expected: 'PARAKEET_MODEL' },
+    { path: 'weights/weight.bin', expected: 'PARAKEET_WEIGHT' }
+  ]
+
+  for (const stem of ['parakeet-mosaic', 'parakeet-mosaic-compact']) {
+    for (const { path, expected } of components) {
+      t.is(
+        generateExportName({
+          path: `qvac_models_compiled/ggml/parakeet/2026-10-23/${stem}-encoder.mlmodelc/${path}`,
+          engine: 'parakeet-transcription',
+          name: '',
+          quantization: '',
+          params: '0.6B',
+          tags: [],
+          usedNames: new Set()
+        }),
+        expected
+      )
+    }
+  }
+})
+
 test('parakeet: TranscribePsy GGUF names the model and keeps the Core ML build distinct', (t) => {
   const coreKey = Buffer.from('dd'.repeat(32), 'hex')
   const entry = (path: string, tags: string[]) => ({

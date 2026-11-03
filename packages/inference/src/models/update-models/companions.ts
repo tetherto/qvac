@@ -39,10 +39,10 @@ import { BERGAMOT_MODEL_RE } from '../../surface'
  *     hand-patch); only the LLM primary carries `companionSet` for directory load.
  *
  *   Apple Core ML bundles:
- *     Every file under a `<name>.mlmodelc/` directory is one component of a
- *     compiled bundle the loader stages beside its GGUF on macOS and iOS
- *     (`handlers/load-model/coreml-sidecars.ts`). No component is a model on
- *     its own, so all of them are companion-only.
+ *     Every file under a `<name>.mlmodelc/` or `<name>.mlpackage/` directory
+ *     is a bundle component. The loader stages supported compiled bundles beside
+ *     their GGUFs on macOS and iOS (`handlers/load-model/coreml-sidecars.ts`).
+ *     No component is a model on its own, so all of them are companion-only.
  */
 export function groupCompanionSets(models: ProcessedModel[]): ProcessedModel[] {
   const bySourcePath = new Map<string, ProcessedModel>()
@@ -68,7 +68,7 @@ export function groupCompanionSets(models: ProcessedModel[]): ProcessedModel[] {
   })
 }
 
-const COREML_BUNDLE_COMPONENT_RE = /(?:^|\/)[^/]+\.mlmodelc\//
+const COREML_BUNDLE_COMPONENT_RE = /(?:^|\/)[^/]+\.(?:mlmodelc|mlpackage)\//
 
 function markCoremlBundleComponents(models: ProcessedModel[], companionKeys: Set<string>): void {
   for (const model of models) {

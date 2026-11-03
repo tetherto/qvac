@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Breaking
+
+- `assessFit` returns `{ status, devices, stats }`: a row per device, then the
+  host CPU, and the resolved `ctxSize` and `gpuLayers`. `status` is `fits`,
+  `does-not-fit` or `unknown`. An unreadable model or an invalid request
+  rejects ([#5470](https://github.com/tetherto/qvac/pull/5470)).
+- On an iOS device, `assessFit` checks the load and its margin against the
+  app's memory limit ([#5470](https://github.com/tetherto/qvac/pull/5470)).
+
 ## [0.53.1] - 2026-10-29
 
 ### Changed

@@ -7,7 +7,7 @@ import {
   TTS_DENOISER_LAVASR_FP16,
   TTS_ENHANCER_LAVASR_FP16
 } from '@qvac/sdk'
-import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './utils'
+import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './utils.js'
 
 // Supertonic 3 TTS (GGML) with LavaSR post-processing: the denoiser cleans the
 // synthesized signal first, then the enhancer bandwidth-extends it to 48 kHz.

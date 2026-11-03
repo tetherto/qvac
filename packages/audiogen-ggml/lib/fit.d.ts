@@ -3,7 +3,7 @@ export type AudiogenFitEngine = 'acestep' | 'minimax'
 export interface AudiogenFitRequest {
   /**
    * Engine that would run the load. Defaults to `acestep`. `minimax` is
-   * projected on desktop builds; on Android and iOS it is `unsupported-engine`.
+   * projected on desktop builds; on Android and iOS it rejects.
    */
   engine?: AudiogenFitEngine
   /**
@@ -58,62 +58,38 @@ export interface AudiogenFitRequest {
   marginBytes?: number
 }
 
-export type AudiogenFitStatus = 'fits' | 'does-not-fit' | 'error'
+/**
+ * `unknown` is a load the fitter cannot size: MiniMax with Core ML stages, or
+ * a failed measurement.
+ */
+export type AudiogenFitStatus = 'fits' | 'does-not-fit' | 'unknown'
 
-/** One pipeline stage, as the fitter placed it. */
-export interface AudiogenFitStage {
-  /**
-   * ACE-Step: `textenc` | `lm` | `cond` | `detok` | `dit` | `vae`.
-   * MiniMax: `lm` | `depth` | `cond` | `dit` | `vocoder`.
-   */
+export interface AudiogenFitDevice {
+  /** The PCI bus ID when the backend reports one, the device name otherwise. */
+  id: string
   name: string
-  /** Backend the stage loads on, after placement. */
-  deviceName: string
-  onGpu: boolean
-  weightsBytes: number
-  /** The portion mapped in place from the file, on the host. */
-  weightsMmapBytes: number
-  /** The KV cache of the LM, or of the MiniMax depth decoder. */
-  stateBytes: number
-  /** Largest compute arena the stage holds at once. */
-  computeBytes: number
-  /** Stage-phase host buffers: masks, latents, PCM, staged graph inputs. */
-  hostBytes: number
+  /** Memory the host owns: the host CPU, and a GPU that shares the host's memory. */
+  unified: boolean
+  /**
+   * The load's peak on this device across the pipeline phases. MiniMax keeps
+   * its stages resident, so its peak is the steady state of repeated runs.
+   */
+  usedBytes: number
+  freeBytes: number
+  totalBytes: number
 }
+
+export type AudiogenFitStats = Record<string, never>
 
 export interface AudiogenFitResult {
   status: AudiogenFitStatus
   /**
-   * The engine's own wording, e.g. `model-unreadable`, `workload-too-large`.
-   * `unsupported-engine` names an engine the addon loads and the fitter does
-   * not cover.
+   * Each device the pipeline uses, then the host CPU, which holds the
+   * CPU-placed stages, the mapped weights and the host-side buffers. One CPU
+   * row for a load on the CPU. Empty when `unknown`.
    */
-  reason: string
-  modelName: string
-  /** ACE-Step turbo checkpoint; always false for MiniMax. */
-  isTurbo: boolean
-  deviceName: string
-  deviceIsCpu: boolean
-  /** The device pool is system RAM, so host bytes compete with device bytes. */
-  deviceSharesHostMemory: boolean
-  deviceFreeBytes: number
-  deviceTotalBytes: number
-  /**
-   * Peak across the pipeline phases under the projected residency mode. MiniMax
-   * keeps its stages resident, so this is the steady state of repeated runs.
-   */
-  deviceBytes: number
-  hostBytes: number
-  /** Host capacity, which is a budget of its own where the device has its own memory. */
-  hostFreeBytes: number
-  hostTotalBytes: number
-  stagesResident: boolean
-  /**
-   * One row per pipeline stage. `deviceBytes` is a peak across phases, so the
-   * rows are where the weights, state and compute split apart.
-   */
-  stages: AudiogenFitStage[]
-  report: string
+  devices: AudiogenFitDevice[]
+  stats: AudiogenFitStats
 }
 
 export function assessFit(request: AudiogenFitRequest): Promise<AudiogenFitResult>
