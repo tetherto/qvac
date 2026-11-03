@@ -913,3 +913,42 @@ test('a failed stream clears cached blocks regardless of clearOnCancel', async (
 
   t.is(clears, 1, 'a failed stream clears its blocks even when a cancel would keep them')
 })
+
+for (const thrown of [null, undefined]) {
+  test(`a clearOnCancel that throws ${String(thrown)} still releases and clears`, async (t) => {
+    const dir = await tmp(t)
+    const outputFile = path.join(dir, 'model.gguf')
+
+    const client = makeClient(t)
+    const warnings = []
+    client.logger.warn = (msg, data) => warnings.push({ msg, data })
+    // lunte-disable-next-line require-await
+    client._core.close = async () => {
+      client._events.push('core.close')
+    }
+    // lunte-disable-next-line require-await
+    client._clearBlobBlocks = async () => {
+      client._events.push('clear')
+    }
+    const signal = { aborted: false, addEventListener() {} }
+    // lunte-disable-next-line require-await
+    client._streamBlobToFile = async () => {
+      signal.aborted = true
+      throw new Error('Download cancelled')
+    }
+    const clearOnCancel = () => {
+      throw thrown
+    }
+
+    await t.exception(
+      () => client.downloadModel('models/tiny.gguf', 's3', { outputFile, signal, clearOnCancel }),
+      /Download cancelled/,
+      'the cancellation error is what rejects'
+    )
+
+    t.ok(client._events.includes('clear'), 'blocks are cleared as the safe default')
+    t.ok(client._events.includes('core.close'), 'the blob core is closed')
+    const warning = warnings.find((w) => w.msg.includes('clearOnCancel threw'))
+    t.is(warning && warning.data.error, String(thrown), 'the non-Error value is logged as text')
+  })
+}

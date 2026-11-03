@@ -35,7 +35,9 @@ function clearOnCancel(options, logger) {
   try {
     return Boolean(clearOnCancel())
   } catch (err) {
-    logger.warn('clearOnCancel threw; clearing cached blocks', { error: err.message })
+    logger.warn('clearOnCancel threw; clearing cached blocks', {
+      error: err instanceof Error ? err.message : String(err)
+    })
     return true
   }
 }
