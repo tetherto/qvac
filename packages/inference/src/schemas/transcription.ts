@@ -65,8 +65,14 @@ export const transcribeStatsSchema = z.object({
   totalSegments: z.number().optional(),
   whisperEncodeTime: z.number().optional(),
   whisperDecodeTime: z.number().optional(),
-  encoderTime: z.number().optional(),
-  decoderTime: z.number().optional(),
+  encoderTime: z
+    .number()
+    .optional()
+    .describe('Parakeet encoder time, or the MOSS audio-encoder time, in ms.'),
+  decoderTime: z
+    .number()
+    .optional()
+    .describe('Parakeet decoder time, or the MOSS decode time, in ms.'),
   melSpecTime: z.number().optional(),
   // Backend selection captured once at model load.
   // `0` CPU / `1` GPU; `backendId` codes the GPU family (see the addon's
@@ -113,7 +119,22 @@ export const transcribeStatsSchema = z.object({
   encoderUsedCoreml: z
     .number()
     .optional()
-    .describe('Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.')
+    .describe(
+      'Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.'
+    ),
+  aoscActive: z
+    .number()
+    .optional()
+    .describe(
+      'Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.'
+    ),
+
+  // MOSS-Transcribe-Diarize counters. Its encode and decode timings arrive on
+  // `encoderTime` / `decoderTime`, and its segment count on `totalSegments`.
+  prefillTime: z.number().optional().describe('MOSS: prompt prefill time, in ms.'),
+  audioTokens: z.number().optional().describe('MOSS: audio tokens fed to the decoder.'),
+  promptTokens: z.number().optional().describe('MOSS: prompt tokens prefilled before decoding.'),
+  generatedTokens: z.number().optional().describe('MOSS: tokens the decoder generated.')
 })
 
 /**
@@ -229,6 +250,10 @@ export const vadStateEventSchema = z.object({
     .describe('Dominant speaker for Parakeet diarization activity; omitted when unavailable.'),
   speaking: z.boolean(),
   probability: z.number(),
+  timestamp: z
+    .number()
+    .optional()
+    .describe('Parakeet: event time in seconds from the start of the streaming session.'),
   source: z
     .enum(['silero', 'energy', 'sortformer'])
     .optional()
