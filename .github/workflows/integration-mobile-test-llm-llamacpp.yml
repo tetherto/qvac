@@ -322,6 +322,7 @@ jobs:
           s3-prefix: qvac_models_compiled/mobile-pilot/llm/
           aws-role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           hf-token: ${{ secrets.HF_TOKEN }}
+          source-s3-bucket: ${{ secrets.MODEL_S3_BUCKET }}
           model-names: ${{ steps.mobileset.outputs.names }}
           mode: seed
 
