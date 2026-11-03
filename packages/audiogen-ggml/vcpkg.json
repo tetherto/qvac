@@ -19,7 +19,8 @@
         "audiogen",
         "metal"
       ],
-      "platform": "osx | ios"
+      "platform": "osx | ios",
+      "version>=": "2026-11-03"
     },
     {
       "name": "speech-cpp",
@@ -29,7 +30,8 @@
         "vulkan",
         "opencl"
       ],
-      "platform": "android"
+      "platform": "android",
+      "version>=": "2026-11-03"
     },
     {
       "name": "speech-cpp",
@@ -38,7 +40,8 @@
         "audiogen",
         "vulkan"
       ],
-      "platform": "!(osx | ios | android)"
+      "platform": "!(osx | ios | android)",
+      "version>=": "2026-11-03"
     }
   ],
   "features": {
@@ -111,7 +114,7 @@
     },
     {
       "name": "speech-cpp",
-      "version": "2026-10-29",
+      "version": "2026-11-03",
       "port-version": 0
     }
   ]
