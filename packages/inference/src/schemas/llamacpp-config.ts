@@ -158,6 +158,12 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       'Host-RAM budget, in MiB, for cached conversations that are not running (0–1048576). Default 0 (off). A conversation the model switches away from (another `kvCache` key, or a slot eviction with `parallel >= 2`) is kept in RAM, so returning to its caller-managed string `kvCache` key skips reading its `cacheKey` file. Model fit checks do not count this memory.'
     ),
+  cache_share_across_keys: z
+    .boolean()
+    .optional()
+    .describe(
+      'Whether decoder-only requests may reuse a prompt prefix held by another conversation. Default true. Set false to keep each request to its own `kvCache` state; requests without a key then start cold and reset afterwards.'
+    ),
   'cache-type-k': z
     .string()
     .optional()

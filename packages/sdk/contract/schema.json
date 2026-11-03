@@ -12551,6 +12551,10 @@
                       "minimum": 0,
                       "maximum": 1048576
                     },
+                    "cache_share_across_keys": {
+                      "description": "Whether decoder-only requests may reuse a prompt prefix held by another conversation. Default true. Set false to keep each request to its own `kvCache` state; requests without a key then start cold and reset afterwards.",
+                      "type": "boolean"
+                    },
                     "cache-type-k": {
                       "description": "KV-cache key quantization type (`f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …). Unset selects a backend-safe default.",
                       "type": "string"
