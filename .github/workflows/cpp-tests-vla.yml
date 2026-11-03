@@ -425,6 +425,25 @@ jobs:
             echo "Multi-embodiment sweep validated $sweep_rows embodiment row(s)"
           fi
 
+      - name: Build fuzz targets
+        if: matrix.platform == 'linux' && steps.cpp-tests.outcome == 'success'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run fuzz:build
+
+      - name: Run fuzz targets (bounded)
+        if: matrix.platform == 'linux' && steps.cpp-tests.outcome == 'success'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run fuzz:run
+
+      - name: Build a fresh native addon after fuzzing
+        if: matrix.platform == 'linux' && steps.cpp-tests.outcome == 'success'
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          rm -rf prebuilds/linux-x64
+          npm run build:native
+          test -n "$(find prebuilds/linux-x64 -maxdepth 1 -type f -name '*.bare' -size +0c -print -quit)"
+
       - name: Archive Test Results
         if: ${{ always() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0

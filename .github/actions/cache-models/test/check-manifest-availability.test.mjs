@@ -103,6 +103,13 @@ test('checkEntry: skipped when there is no HF LFS source', async () => {
   assert.equal(r.status, 'skipped')
 })
 
+test('checkEntry: skipped for an S3-only entry', async () => {
+  const fetch = fakeFetch({})
+  const entry = pinnedEntry({ urls: undefined, s3Path: 'qvac_models_compiled/ggml/x/model.gguf' })
+  const r = await checkEntry('m', entry, { fetch })
+  assert.equal(r.status, 'skipped')
+})
+
 test('checkEntry: skipped on a non-LFS 200 response', async () => {
   const fetch = fakeFetch({ [HF_URL]: { statusCode: 200, headers: {} } })
   const r = await checkEntry('m', pinnedEntry(), { fetch })
