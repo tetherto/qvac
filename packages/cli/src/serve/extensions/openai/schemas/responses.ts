@@ -1,4 +1,5 @@
 import crypto from 'node:crypto'
+import type { IncomingHttpHeaders } from 'node:http'
 import { z } from 'zod'
 import type { Tool } from '@qvac/sdk'
 import {
@@ -85,6 +86,28 @@ export class InvalidResponsesBackgroundError extends Error {
     super('"background": true is not supported; only synchronous responses are available.')
     this.name = 'InvalidResponsesBackgroundError'
   }
+}
+
+export class InvalidResponsesKvCacheKeyError extends Error {
+  constructor() {
+    super('KV cache key must be a nonempty string of at most 512 UTF-8 bytes.')
+    this.name = 'InvalidResponsesKvCacheKeyError'
+  }
+}
+
+function responsesKvCacheKey(
+  headers: IncomingHttpHeaders,
+  body: ResponsesBody
+): string | undefined {
+  // A supplied header takes precedence; metadata is only a fallback. Validate
+  // before trimming/hashing so padding and multibyte strings cannot bypass the limit.
+  const key: unknown = headers['x-qvac-kv-cache-key'] ?? body.metadata?.['qvac_kv_cache_key']
+  if (key === undefined) return undefined
+  if (typeof key !== 'string' || Buffer.byteLength(key, 'utf8') > 512 || key.trim().length === 0) {
+    throw new InvalidResponsesKvCacheKeyError()
+  }
+  // Never give an opaque caller key to the SDK's filesystem cache layout.
+  return `responses-${crypto.createHash('sha256').update(key).digest('hex')}`
 }
 
 export function validateResponsesStatefulOptions(body: Record<string, unknown>): {
@@ -387,6 +410,7 @@ function extractOutputTextFromMessage(msg: Record<string, unknown>): string {
 export type ResponsesBody = z.infer<typeof responsesBody>
 
 export interface SdkResponsesArgs {
+  kvCache: string | undefined
   history: ResponsesHistoryItem[]
   tools: Tool[] | undefined
   generationParams: GenerationParams | undefined
@@ -402,7 +426,10 @@ export interface SdkResponsesArgs {
   stream: boolean
 }
 
-export function toSdkResponsesArgs(body: ResponsesBody): SdkResponsesArgs {
+export function toSdkResponsesArgs(
+  body: ResponsesBody,
+  headers: IncomingHttpHeaders = {}
+): SdkResponsesArgs {
   const { previousResponseId, storeEnabled } = validateResponsesStatefulOptions(
     body as Record<string, unknown>
   )
@@ -424,6 +451,7 @@ export function toSdkResponsesArgs(body: ResponsesBody): SdkResponsesArgs {
     typeof body.parallel_tool_calls === 'boolean' ? body.parallel_tool_calls : undefined
 
   return {
+    kvCache: responsesKvCacheKey(headers, body),
     history,
     tools,
     generationParams: withParallelToolCalls(

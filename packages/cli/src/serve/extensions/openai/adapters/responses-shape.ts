@@ -88,10 +88,15 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
     typeof params.completionTokens === 'number' && Number.isFinite(params.completionTokens)
       ? params.completionTokens
       : completionTokensFromStats(params.text || '', params.stats)
-  // SDK does not expose prompt token count today; `cacheTokens` is KV-cache hit count, not full prompt size.
+  // Keep existing OpenAI token accounting. SDK cacheTokens is cache occupancy,
+  // not tokens reused by this request, so expose it as a QVAC diagnostic only.
   const inputTokens = 0
+  const cacheTokens = params.stats?.cacheTokens
   const usage = {
     input_tokens: inputTokens,
+    ...(typeof cacheTokens === 'number' && Number.isFinite(cacheTokens) && cacheTokens >= 0
+      ? { qvac_cache_tokens: cacheTokens }
+      : {}),
     output_tokens: outputTokens,
     total_tokens: inputTokens + outputTokens
   }

@@ -127,7 +127,7 @@ export async function createCoreServer(
         matchCorsOrigin(origin, (error, allowed) => callback(error, allowed ?? false))
       },
       methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-QVAC-KV-Cache-Key'],
       strictPreflight: false
     })
   }

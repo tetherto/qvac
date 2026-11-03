@@ -15,6 +15,7 @@ import {
   historyPrefixFromStoredResponse,
   InvalidResponsesBackgroundError,
   InvalidResponsesConversationError,
+  InvalidResponsesKvCacheKeyError,
   toSdkResponsesArgs,
   UnsupportedToolTypeError,
   type ResponsesHistoryItem
@@ -72,6 +73,15 @@ expired \`previous_response_id\` returns \`404 previous_response_not_found\`.
 
 **\`store: false\`** opts out of storage — the response is returned but not
 addressable via GET / DELETE / input_items.
+
+**KV cache (opt-in)**: send \`X-QVAC-KV-Cache-Key: <session-key>\` or, as a
+fallback, \`metadata.qvac_kv_cache_key\`. The header wins. Keys must be nonempty
+strings of at most 512 UTF-8 bytes and are SHA-256 hashed before filesystem use.
+Reuse the key with the same conversation's growing history on every request;
+\`previous_response_id\` and \`store\` do not select a cache session. Without a
+key, Responses remains uncached. SDK cache occupancy is reported as
+\`usage.qvac_cache_tokens\` (also in the final SSE response); this is not a
+per-request count of reused tokens.
 
 **Rejections**:
 - \`conversation\` → \`400 conversation_not_supported\` (Conversation persistence not implemented)
@@ -133,8 +143,11 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
       let sdk
       try {
-        sdk = toSdkResponsesArgs(req.body)
+        sdk = toSdkResponsesArgs(req.body, req.headers)
       } catch (err) {
+        if (err instanceof InvalidResponsesKvCacheKeyError) {
+          throw new HttpError(400, 'invalid_kv_cache_key', err.message)
+        }
         if (err instanceof InvalidResponsesConversationError) {
           throw new HttpError(400, 'conversation_not_supported', err.message)
         }
@@ -238,6 +251,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
             modelId: params.sdkModelId,
             history,
             stream,
+            ...(sdk.kvCache !== undefined ? { kvCache: sdk.kvCache } : {}),
             ...(params.tools !== undefined ? { tools: params.tools } : {}),
             ...(params.generationParams !== undefined
               ? { generationParams: params.generationParams }
