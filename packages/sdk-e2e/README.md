@@ -244,8 +244,8 @@ other's bundle.
 
 ## Running in CI
 
-The suite runs on the package CI contract (`docs/ci/workflow-standard.md`): the sdk's `test:integration`
-configurations in `pr-build-test.yml`, and its `test:mobile` and sdk-kotlin's in `mobile-tests.yml`. The
+The suite runs on the package CI contract (`docs/ci/workflow-standard.md`) through `sdk-e2e.yml`: the sdk's
+`test:integration` configurations on desktop, and its `test:mobile` and sdk-kotlin's on Device Farm. The
 steps live in `packages/sdk/ci/`: `e2e.mjs` runs one desktop leg, `mobile.mjs` builds a mobile consumer
 app and drives it.
 
@@ -257,10 +257,10 @@ Each configuration names the labels that run it in `ci.labels`, and the suite ea
 | -------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
 | `linux-x64-gpu`, `darwin-arm64-gpu`, `win32-x64-gpu` (desktop) | the three GPU hosts                              | `test-e2e-smoke` (smoke suite), `test-e2e-full` (full catalog), and every push to a PR into `release-*` (full catalog) |
 | `*-python` (the catalog on the Python client)                  | the same hosts                                   | `test-e2e-python` (smoke suite)                                                                                        |
-| `*-electron`                                                   | the same hosts, the macOS one with a GUI session | a dispatch of `pr-build-test.yml` with `labels: electron` (full catalog)                                               |
-| `linux-x64-snap` (strict Snap)                                 | the Linux GPU host                               | a dispatch of `pr-build-test.yml` with `labels: snap` (full catalog)                                                   |
+| `*-electron`                                                   | the same hosts, the macOS one with a GUI session | a dispatch of `sdk-e2e.yml` with `labels: electron` (full catalog)                                                     |
+| `linux-x64-snap` (strict Snap)                                 | the Linux GPU host                               | a dispatch of `sdk-e2e.yml` with `labels: snap` (full catalog)                                                         |
 
-A dispatch of `pr-build-test.yml` with `packages: @qvac/sdk` and `labels: test-e2e-smoke` (or any label
+A dispatch of `sdk-e2e.yml` with `packages: @qvac/sdk` and `labels: test-e2e-smoke` (or any label
 above) runs the same configurations on a branch. Every leg builds `packages/inference` and
 `packages/test-suite` from the checkout and tests them together with `packages/sdk`, downloads its models
 in the run, and uploads its reports as `sdk-results-<configuration>`. The job summary compares them with
@@ -271,10 +271,10 @@ the newest dispatch run's on the base branch; a failed test fails the leg.
 
 ### Mobile, by dispatch
 
-Dispatch `mobile-tests.yml` with `packages: @qvac/sdk` (Android or iOS) or `packages: sdk-kotlin` (the
-Kotlin app, Android only). The run builds the consumer APK or IPA with the run id and broker baked in,
+Dispatch `sdk-e2e.yml` with `platform: Android` or `platform: iOS` and `packages: @qvac/sdk`, or
+`platform: Android` and `packages: sdk-kotlin` (the Kotlin app). The run builds the consumer APK or IPA with the run id and broker baked in,
 starts it on a Device Farm pool from `SDK_ANDROID_DEVICE_FARM_POOLS` or `SDK_IOS_DEVICE_FARM_POOLS`
-(the dispatch's `devices` names one pool; empty prefers an available private pool), drives the full catalog over MQTT once
+(the dispatch's `pool` names one pool; empty prefers an available private pool), drives the full catalog over MQTT once
 the device runs, and fails on any failed test. `tests` narrows it to comma-separated categories or testId
 prefixes. No pull request label starts a mobile run.
 
