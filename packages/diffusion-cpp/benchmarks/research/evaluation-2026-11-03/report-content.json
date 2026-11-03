@@ -1,7 +1,7 @@
 {
   "title": "QVAC diffusion performance: four platforms, six API configurations",
-  "status": "DRAFT - final confirmation jobs and evidence review in progress",
-  "updated_utc": "2026-11-03T21:16:25.673062+00:00",
+  "status": "Research campaign concluded; measured implementation candidates and explicit remaining gaps",
+  "updated_utc": "2026-11-03T21:29:52.735582+00:00",
   "intro": "RTX, Mac and Strix: 3 November 2026. DGX Spark: retained 29 October 2026 measurements at their original revisions. The original RTX and Spark report measured CUDA only. This extension adds RTX Vulkan, Strix Vulkan and HIP/ROCm, and Mac Metal. Vulkan correctness checks in the older CI record were not performance measurements.",
   "platforms": [
     {
@@ -169,9 +169,9 @@
         [
           "HIP full-size quality control",
           "Validation control",
-          "Pending",
+          "Partial",
           "No accepted full-size warm speed result.",
-          "Output comparison pending.",
+          "PSNR 46.33 dB; SSIM 0.993642; RMS channel error 0.4823% of full scale. Worst frame 45.13 dB. Audio exact. Visually identical in the reviewed full-size frame samples; single-output quality coverage only.",
           "Radeon 8060S / HIP",
           "The original full-size HIP timing control overlapped an external inference workload and was interrupted. A separately named single-output run checks quality at 960 x 544 / 124 frames only.",
           "Use clean repeated short-clip timing for the speed claim. A full-size quality comparison cannot replace a clean repeated full-size latency pair."
@@ -259,42 +259,42 @@
         [
           "Minimal SwiGLU + QKV views",
           "Engine graph optimization",
-          "Pending",
+          "Not checked / incomplete",
           "Not yet collected/validated",
-          "Pending",
+          "Not established for this pair.",
           "Radeon 8060S / Vulkan",
-          "One model header using existing GGML operations. RTX full clips; Mac/Strix short screens. Multi-prompt RTX confirmations are reported separately.",
-          "Provisional: accept only a reproducible gain with the required quality tier; no automatic enablement from a single screen."
+          "One model header using existing GGML operations. RTX full clips; Mac/Strix short screens. Multi-prompt RTX confirmations are reported separately. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff.",
+          "Defer; retain the baseline. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff."
         ],
         [
           "Minimal operations + global FA",
           "Measured combination",
-          "Pending",
+          "Not checked / incomplete",
           "Not yet collected/validated",
-          "Pending",
+          "Not established for this pair.",
           "Radeon 8060S / Vulkan",
-          "Combined profile measured directly against its own baseline; do not multiply separate speedups.",
-          "Provisional pending incremental benefit and output validation."
+          "Combined profile measured directly against its own baseline; do not multiply separate speedups. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff.",
+          "Defer; retain the baseline. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff."
         ],
         [
           "Minimal SwiGLU + QKV views",
           "Engine graph optimization",
-          "Pending",
+          "Not checked / incomplete",
           "Not yet collected/validated",
-          "Pending",
+          "Not established for this pair.",
           "Radeon 8060S / HIP",
-          "One model header using existing GGML operations. RTX full clips; Mac/Strix short screens. Multi-prompt RTX confirmations are reported separately.",
-          "Provisional: accept only a reproducible gain with the required quality tier; no automatic enablement from a single screen."
+          "One model header using existing GGML operations. RTX full clips; Mac/Strix short screens. Multi-prompt RTX confirmations are reported separately. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff.",
+          "Defer; retain the baseline. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff."
         ],
         [
           "Minimal operations + global FA",
           "Measured combination",
-          "Pending",
+          "Not checked / incomplete",
           "Not yet collected/validated",
-          "Pending",
+          "Not established for this pair.",
           "Radeon 8060S / HIP",
-          "Combined profile measured directly against its own baseline; do not multiply separate speedups.",
-          "Provisional pending incremental benefit and output validation."
+          "Combined profile measured directly against its own baseline; do not multiply separate speedups. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff.",
+          "Defer; retain the baseline. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff."
         ],
         [
           "Older isolated H3 operations",
@@ -509,32 +509,32 @@
         [
           "HIP rocWMMA attention after global FA",
           "Attention kernel build option",
-          "Pending",
+          "Not checked / incomplete",
           "Not yet collected/validated",
-          "Pending",
+          "Not established for this pair.",
           "Radeon 8060S / HIP",
-          "`GGML_HIP_ROCWMMA_FATTN=ON`, matching pinned GGML and ABI128; rocWMMA headers extracted inside the test workspace. Installed ROCm unchanged. This is a backend build option, not a per-request setting; selective production use needs a validated dispatch/build policy and the original kernel fallback.",
-          "Decide from diffusion results; the [published LLM result](https://github.com/ggml-org/llama.cpp/issues/24437) is not a diffusion validation."
+          "`GGML_HIP_ROCWMMA_FATTN=ON`, matching pinned GGML and ABI128; rocWMMA headers extracted inside the test workspace. Installed ROCm unchanged. This is a backend build option, not a per-request setting; selective production use needs a validated dispatch/build policy and the original kernel fallback. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff.",
+          "Defer; retain the baseline. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff."
         ],
         [
           "HIP force-blas",
           "Matrix kernel build option",
-          "Pending",
+          "Not checked / incomplete",
           "Not yet collected/validated",
-          "Pending",
+          "Not established for this pair.",
           "Radeon 8060S / HIP",
-          "`GGML_CUDA_FORCE_CUBLAS=ON` (HIPBLAS on this backend). Existing compile-time forced-selection control; same corrected tensor-name ABI and checkpoint. It affects the backend module, so mixed model results cannot be solved by silently changing an addon-wide default.",
-          "Require numerical output checks and repeatable incremental speed before any production selection change."
+          "`GGML_CUDA_FORCE_CUBLAS=ON` (HIPBLAS on this backend). Existing compile-time forced-selection control; same corrected tensor-name ABI and checkpoint. It affects the backend module, so mixed model results cannot be solved by silently changing an addon-wide default. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff.",
+          "Defer; retain the baseline. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff."
         ],
         [
           "HIP force-mmq",
           "Matrix kernel build option",
-          "Pending",
+          "Not checked / incomplete",
           "Not yet collected/validated",
-          "Pending",
+          "Not established for this pair.",
           "Radeon 8060S / HIP",
-          "`GGML_CUDA_FORCE_MMQ=ON`. Existing compile-time forced-selection control; same corrected tensor-name ABI and checkpoint. It affects the backend module, so mixed model results cannot be solved by silently changing an addon-wide default.",
-          "Require numerical output checks and repeatable incremental speed before any production selection change."
+          "`GGML_CUDA_FORCE_MMQ=ON`. Existing compile-time forced-selection control; same corrected tensor-name ABI and checkpoint. It affects the backend module, so mixed model results cannot be solved by silently changing an addon-wide default. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff.",
+          "Defer; retain the baseline. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff."
         ],
         [
           "Memory-mapped checkpoint reads",
@@ -995,7 +995,7 @@
           "repeat_output_unstable": false
         }
       ],
-      "optimal_profile_status": "Final confirmations and evidence review in progress.",
+      "optimal_profile_status": "Measured scoped recommendations with explicit remaining coverage gaps.",
       "grouped_measurement_references": [
         {
           "api": "cuda",
@@ -3030,12 +3030,12 @@
         [
           "HIP rocWMMA attention after GEMM",
           "Attention kernel build option",
-          "Pending",
+          "Not checked / incomplete",
           "Not yet collected/validated",
-          "Pending",
+          "Not established for this pair.",
           "Radeon 8060S / HIP",
-          "`GGML_HIP_ROCWMMA_FATTN=ON`, matching pinned GGML and ABI128; rocWMMA headers extracted inside the test workspace. Installed ROCm unchanged. This is a backend build option, not a per-request setting; selective production use needs a validated dispatch/build policy and the original kernel fallback.",
-          "Decide from diffusion results; the [published LLM result](https://github.com/ggml-org/llama.cpp/issues/24437) is not a diffusion validation."
+          "`GGML_HIP_ROCWMMA_FATTN=ON`, matching pinned GGML and ABI128; rocWMMA headers extracted inside the test workspace. Installed ROCm unchanged. This is a backend build option, not a per-request setting; selective production use needs a validated dispatch/build policy and the original kernel fallback. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff.",
+          "Defer; retain the baseline. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff."
         ],
         [
           "Memory-mapped checkpoint reads",
@@ -3331,7 +3331,7 @@
           "repeat_output_unstable": false
         }
       ],
-      "optimal_profile_status": "Final confirmations and evidence review in progress.",
+      "optimal_profile_status": "Measured scoped recommendations with explicit remaining coverage gaps.",
       "historical_screening_note": "Retained CUDA-only screens from 29 October, at the older revisions. These include rejected alternatives and unmeasured ideas; V means tried, not recommended. They do not establish Metal, Vulkan or HIP performance. Round-two controls already include H3 flash attention, FLUX GEMM and LTX residency as stated in the original records.",
       "historical_rows": [
         [
@@ -3724,32 +3724,32 @@
         [
           "DiT matrix expansion to F16",
           "Existing tensor-type parameter",
-          "Pending",
+          "Not checked / incomplete",
           "Not yet collected/validated",
-          "Pending",
+          "Not established for this pair.",
           "Radeon 8060S / Vulkan",
-          "Verified rule selects 1632 quantized matrix weights (37.10 GB after expansion), excluding normalization and embedding weights. Same checkpoint and sampling.",
-          "Pending quality, warm-speed, startup and memory checks. Extra memory must be capacity-gated; no RTX resident profile is claimed."
+          "Verified rule selects 1632 quantized matrix weights (37.10 GB after expansion), excluding normalization and embedding weights. Same checkpoint and sampling. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff.",
+          "Defer; retain the baseline. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff."
         ],
         [
           "DiT matrix expansion to F16",
           "Existing tensor-type parameter",
-          "Pending",
+          "Not checked / incomplete",
           "Not yet collected/validated",
-          "Pending",
+          "Not established for this pair.",
           "Radeon 8060S / HIP",
-          "Verified rule selects 1632 quantized matrix weights (37.10 GB after expansion), excluding normalization and embedding weights. Same checkpoint and sampling.",
-          "Pending quality, warm-speed, startup and memory checks. Extra memory must be capacity-gated; no RTX resident profile is claimed."
+          "Verified rule selects 1632 quantized matrix weights (37.10 GB after expansion), excluding normalization and embedding weights. Same checkpoint and sampling. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff.",
+          "Defer; retain the baseline. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff."
         ],
         [
           "Repeated-request stability control",
           "Reliability validation",
-          "Pending",
+          "Not checked / incomplete",
           "Not yet collected/validated",
-          "Pending",
+          "Not established for this pair.",
           "Radeon 8060S / Vulkan",
-          "Unchanged baseline settings, one warmup and three measured identical requests in a fresh model context. Added after a third request in the temporal-flag screen changed video/audio and latency despite the same stateful decoder path.",
-          "Diagnostic control, not an optimization. Preserve all anomalous outputs and require stable repeated behavior before recommending a new Vulkan LTX profile."
+          "Unchanged baseline settings, one warmup and three measured identical requests in a fresh model context. Added after a third request in the temporal-flag screen changed video/audio and latency despite the same stateful decoder path. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff.",
+          "Defer; retain the baseline. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff."
         ],
         [
           "VAE residency + full-temporal",
@@ -3854,72 +3854,72 @@
         [
           "CPU parameter placement",
           "Memory placement parameter",
-          "Pending",
+          "Not checked / incomplete",
           "Not yet collected/validated",
-          "Pending",
+          "Not established for this pair.",
           "Radeon 8060S / Vulkan",
-          "`params_backend=cpu`. One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed.",
-          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+          "`params_backend=cpu`. One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff.",
+          "Defer; retain the baseline. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff."
         ],
         [
           "2D VAE GEMM control",
           "Existing decoder parameter",
-          "Pending",
+          "Not checked / incomplete",
           "Not yet collected/validated",
-          "Pending",
+          "Not established for this pair.",
           "Radeon 8060S / Vulkan",
-          "`vae_conv_direct=false`. One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed.",
-          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+          "`vae_conv_direct=false`. One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff.",
+          "Defer; retain the baseline. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff."
         ],
         [
           "CPU parameter placement",
           "Memory placement parameter",
-          "Pending",
+          "Not checked / incomplete",
           "Not yet collected/validated",
-          "Pending",
+          "Not established for this pair.",
           "Radeon 8060S / HIP",
-          "`params_backend=cpu`. One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed.",
-          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+          "`params_backend=cpu`. One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff.",
+          "Defer; retain the baseline. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff."
         ],
         [
           "2D VAE GEMM control",
           "Existing decoder parameter",
-          "Pending",
+          "Not checked / incomplete",
           "Not yet collected/validated",
-          "Pending",
+          "Not established for this pair.",
           "Radeon 8060S / HIP",
-          "`vae_conv_direct=false`. One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed.",
-          "Retain the existing profile unless the measured benefit is repeatable, material and passes quality/memory checks."
+          "`vae_conv_direct=false`. One-prompt parameter screen; retain individual run/stage/resource records. No global default change is proposed. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff.",
+          "Defer; retain the baseline. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff."
         ],
         [
           "HIP rocWMMA attention",
           "Attention kernel build option",
-          "Pending",
+          "Not checked / incomplete",
           "Not yet collected/validated",
-          "Pending",
+          "Not established for this pair.",
           "Radeon 8060S / HIP",
-          "`GGML_HIP_ROCWMMA_FATTN=ON`, matching pinned GGML and ABI128; rocWMMA headers extracted inside the test workspace. Installed ROCm unchanged. This is a backend build option, not a per-request setting; selective production use needs a validated dispatch/build policy and the original kernel fallback.",
-          "Decide from diffusion results; the [published LLM result](https://github.com/ggml-org/llama.cpp/issues/24437) is not a diffusion validation."
+          "`GGML_HIP_ROCWMMA_FATTN=ON`, matching pinned GGML and ABI128; rocWMMA headers extracted inside the test workspace. Installed ROCm unchanged. This is a backend build option, not a per-request setting; selective production use needs a validated dispatch/build policy and the original kernel fallback. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff.",
+          "Defer; retain the baseline. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff."
         ],
         [
           "HIP force-blas",
           "Matrix kernel build option",
-          "Pending",
+          "Not checked / incomplete",
           "Not yet collected/validated",
-          "Pending",
+          "Not established for this pair.",
           "Radeon 8060S / HIP",
-          "`GGML_CUDA_FORCE_CUBLAS=ON` (HIPBLAS on this backend). Existing compile-time forced-selection control; same corrected tensor-name ABI and checkpoint. It affects the backend module, so mixed model results cannot be solved by silently changing an addon-wide default.",
-          "Require numerical output checks and repeatable incremental speed before any production selection change."
+          "`GGML_CUDA_FORCE_CUBLAS=ON` (HIPBLAS on this backend). Existing compile-time forced-selection control; same corrected tensor-name ABI and checkpoint. It affects the backend module, so mixed model results cannot be solved by silently changing an addon-wide default. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff.",
+          "Defer; retain the baseline. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff."
         ],
         [
           "HIP force-mmq",
           "Matrix kernel build option",
-          "Pending",
+          "Not checked / incomplete",
           "Not yet collected/validated",
-          "Pending",
+          "Not established for this pair.",
           "Radeon 8060S / HIP",
-          "`GGML_CUDA_FORCE_MMQ=ON`. Existing compile-time forced-selection control; same corrected tensor-name ABI and checkpoint. It affects the backend module, so mixed model results cannot be solved by silently changing an addon-wide default.",
-          "Require numerical output checks and repeatable incremental speed before any production selection change."
+          "`GGML_CUDA_FORCE_MMQ=ON`. Existing compile-time forced-selection control; same corrected tensor-name ABI and checkpoint. It affects the backend module, so mixed model results cannot be solved by silently changing an addon-wide default. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff.",
+          "Defer; retain the baseline. The remaining Strix window was reduced by external inference/build workloads; interrupted timings are excluded. The corresponding clean pair did not finish before the booking cutoff."
         ],
         [
           "Memory-mapped checkpoint reads",
@@ -4125,7 +4125,7 @@
           "repeat_output_unstable": false
         }
       ],
-      "optimal_profile_status": "Final confirmations and evidence review in progress.",
+      "optimal_profile_status": "Measured scoped recommendations with explicit remaining coverage gaps.",
       "historical_screening_note": "Retained CUDA-only screens from 29 October, at the older revisions. These include rejected alternatives and unmeasured ideas; V means tried, not recommended. They do not establish Metal, Vulkan or HIP performance. Round-two controls already include H3 flash attention, FLUX GEMM and LTX residency as stated in the original records.",
       "historical_rows": [
         [
@@ -4634,6 +4634,8 @@
   ],
   "completion": [
     "RTX 5090: the November 3 project directory, including models and build/test files, was removed after SHA-256-verified evidence collection and branch preservation. Completed 2026-11-03T20:03:33.252849+00:00; filesystem free space rose by 88.49 GiB during cleanup. Other files and workloads were not modified.",
+    "Mac Studio: the November 3 project directory, including models and build/test files, was removed after SHA-256-verified evidence collection and branch preservation. Completed 2026-11-03T21:17:19.053603+00:00; filesystem free space rose by 74.99 GiB during cleanup. Other files and workloads were not modified.",
+    "AMD Strix: cleanup completion is not yet confirmed in the collected receipts.",
     "Generated outputs and raw private logs remain in the verified local evidence archive. The branch contains sanitized timing, quality, memory, source/model identities, reproduction configurations and experimental patches. Dated Spark evidence was retained without reconnecting to that unbooked host."
   ]
 }
