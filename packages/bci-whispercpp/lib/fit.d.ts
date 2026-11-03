@@ -22,34 +22,28 @@ export interface BciFitRequest {
     /** Directory scanned, as given, for the dynamically-loaded ggml backends. */
     backendsDir?: string;
 }
-export type BciFitStatus = 'fits' | 'does-not-fit' | 'error';
+/** `unknown` is a load the fitter cannot size, such as one whose memory it cannot measure. */
+export type BciFitStatus = 'fits' | 'does-not-fit' | 'unknown';
+export interface BciFitDevice {
+    /** The PCI bus ID when the backend reports one, the device name otherwise. */
+    id: string;
+    name: string;
+    /** Memory the host owns: the host CPU, and a GPU that shares the host's memory. */
+    unified: boolean;
+    /** Memory the load takes on this device. */
+    usedBytes: number;
+    freeBytes: number;
+    totalBytes: number;
+}
+export type BciFitStats = Record<string, never>;
 export interface BciFitResult {
     status: BciFitStatus;
-    /** Whisper's own wording, e.g. `model-unreadable`, `no-backend-device`, or `embedder-unreadable`. */
-    reason: string;
-    /** `tiny` | `base` | ... | `large v3`. */
-    modelType: string;
-    deviceName: string;
-    deviceIsCpu: boolean;
-    /** The device pool is system RAM, so host bytes compete with device bytes. */
-    deviceSharesHostMemory: boolean;
-    deviceFreeBytes: number;
-    deviceTotalBytes: number;
-    deviceBytes: number;
-    weightsBytes: number;
-    kvBytes: number;
-    computeBytes: number;
-    /** Device-component bytes the runtime places in host RAM instead. */
-    hostOverflowBytes: number;
-    /** Host RAM the load needs beside the device projection, the embedder included. */
-    hostBytes: number;
     /**
-     * Host RAM the embedder keeps: its day and month projections, its session
-     * map and the dense projection it caches per day, 0 when it could not be
-     * read. Counted in `hostBytes`.
+     * The device the load resolves to, then the host CPU, whose row includes the
+     * embedder. One CPU row for a load on the CPU. Empty when `unknown`.
      */
-    embedderBytes: number;
-    report: string;
+    devices: BciFitDevice[];
+    stats: BciFitStats;
 }
 /**
  * Projects a BCI load against the memory free right now, reading model
@@ -57,8 +51,8 @@ export interface BciFitResult {
  *
  * Covers the whisper model and the embedder, from the files or from the
  * registry's weightless descriptions of them. A model or embedder the fitter
- * cannot read resolves to `status: "error"`; a broken request, or a host
- * with no native binding, rejects. Concurrent calls run one at a time.
+ * cannot read, a broken request, or a host with no native binding rejects.
+ * Concurrent calls run one at a time.
  *
  * Unset, the backend directory is the one a real load uses, next to the loaded
  * module. The native side registers backends once per process, so the

@@ -43,46 +43,28 @@ export interface MossTranscribeFitRequest extends AsrFitCommon, MossTranscribeRu
     threads?: number;
 }
 export type AsrFitRequest = ParakeetFitRequest | WhisperFitRequest | MossTranscribeFitRequest;
-export type AsrFitStatus = 'fits' | 'does-not-fit' | 'error';
+/** `unknown` is a load the fitter cannot size, such as one whose memory it cannot measure. */
+export type AsrFitStatus = 'fits' | 'does-not-fit' | 'unknown';
+export interface AsrFitDevice {
+    /** The PCI bus ID when the backend reports one, the device name otherwise. */
+    id: string;
+    name: string;
+    /** Memory the host owns: the host CPU, and a GPU that shares the host's memory. */
+    unified: boolean;
+    /** Memory the load takes on this device. */
+    usedBytes: number;
+    freeBytes: number;
+    totalBytes: number;
+}
+export type AsrFitStats = Record<string, never>;
 export interface AsrFitResult {
     status: AsrFitStatus;
-    /** The engine's own wording, e.g. `model-unreadable`, `workload-too-large`. */
-    reason: string;
     /**
-     * Parakeet: `ctc` | `rnnt` | `tdt` | `eou` | `nemotron` | `sortformer` |
-     * `nemotron-diarization`.
-     * Whisper: `tiny` | `base` | ... | `large v3`. MOSS: `moss-transcribe`.
+     * The device the load resolves to, then the host CPU. One CPU row for a load
+     * on the CPU. Empty when `unknown`.
      */
-    modelType: string;
-    modelVariant: string;
-    deviceName: string;
-    deviceIsCpu: boolean;
-    /** The device pool is system RAM, so host bytes compete with device bytes. */
-    deviceSharesHostMemory: boolean;
-    deviceFreeBytes: number;
-    deviceTotalBytes: number;
-    deviceBytes: number;
-    weightsBytes: number;
-    hostBytes: number;
-    report: string;
-    /**
-     * Parakeet on macOS and iOS: system RAM of the Core ML diarizer sidecars
-     * (`<stem>-diarizer-<frames>.mlmodelc`) a Nemotron 3 Diarization or
-     * Sortformer v2.1 workload can load, counted in the verdict on unified
-     * memory. 0 without sidecars and on other platforms.
-     */
-    coremlBytes?: number;
-    /** Parakeet and MOSS-Transcribe. */
-    encoderComputeBytes?: number;
-    decoderStateBytes?: number;
-    decoderComputeBytes?: number;
-    /** Whisper only. */
-    kvBytes?: number;
-    computeBytes?: number;
-    /** 0 when no VAD model was projected. */
-    vadBytes?: number;
-    /** Device-component bytes the runtime places in host RAM instead. */
-    hostOverflowBytes?: number;
+    devices: AsrFitDevice[];
+    stats: AsrFitStats;
 }
 /**
  * Projects one model against the memory free right now, reading model metadata
@@ -99,8 +81,7 @@ export interface AsrFitResult {
  * each load does. `marginBytes` defaults to the engine's own headroom, which
  * is 256 MiB for parakeet.
  *
- * A model the fitter cannot read resolves with `status: "error"` and the
- * engine's reason. Only a broken request rejects.
+ * A model the fitter cannot read, or an invalid request, rejects.
  *
  * Concurrent calls run one at a time.
  */

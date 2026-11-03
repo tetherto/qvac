@@ -7,8 +7,8 @@ exports.assessFit = assessFit;
  *
  * Covers the whisper model and the embedder, from the files or from the
  * registry's weightless descriptions of them. A model or embedder the fitter
- * cannot read resolves to `status: "error"`; a broken request, or a host
- * with no native binding, rejects. Concurrent calls run one at a time.
+ * cannot read, a broken request, or a host with no native binding rejects.
+ * Concurrent calls run one at a time.
  *
  * Unset, the backend directory is the one a real load uses, next to the loaded
  * module. The native side registers backends once per process, so the
