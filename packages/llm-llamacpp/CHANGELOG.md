@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.67.0] - 2026-11-02
 
 ### Added
 
@@ -13,6 +13,14 @@
   whether another conversation shares their prompt. Default `'true'`
   ([#5417](https://github.com/tetherto/qvac/pull/5417),
   [#5422](https://github.com/tetherto/qvac/pull/5422)).
+- A user message's `content` may be an ordered array of parts
+  (`{ type: 'text', text }` and `{ type: 'media', content: pathOrBytes }`), so
+  one turn can interleave text and media. Each media part renders as an
+  `<__media__>` marker at its position, the prompt llama-server builds from an
+  OpenAI content-parts request, instead of the split turns the one-message-per-
+  part workaround produces. Media parts on non-user messages and unknown part
+  types are rejected with `InvalidInputFormat`
+  ([#5504](https://github.com/tetherto/qvac/pull/5504)).
 
 ### Changed
 

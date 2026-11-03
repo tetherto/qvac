@@ -2,11 +2,29 @@ import type { TranscribeSegment } from '@qvac/sdk'
 
 export type TimedTranscriptionFormat = 'srt' | 'vtt' | 'verbose_json'
 
+interface PartialVerboseToken {
+  text: string
+  start: number
+  end: number
+  probability: number
+}
+
 interface PartialVerboseSegment {
   id: number
   start: number
   end: number
   text: string
+  /** Whisper: language the segment was decoded in. */
+  language?: string
+  /** Whisper: probability that the window holds no speech. */
+  no_speech_prob?: number
+  /** Whisper with `tdrz_enable`: a speaker turn follows this segment. */
+  speaker_turn_next?: boolean
+  /**
+   * Whisper with `token_timestamps`. Not OpenAI's `tokens`, which are token
+   * ids; these carry the token text, its timing in seconds and probability.
+   */
+  token_timestamps?: PartialVerboseToken[]
   speaker?: string
   speaker_id?: number
   speaker_segments?: { speaker_id: number; start: number; end: number }[]
@@ -15,6 +33,8 @@ interface PartialVerboseSegment {
 interface PartialVerboseTranscription {
   text: string
   duration: number
+  /** Present when every segment that reports a language reports the same one. */
+  language?: string
   segments: PartialVerboseSegment[]
 }
 
@@ -39,7 +59,8 @@ export function formatTimedTranscription(
         contentType: 'text/vtt; charset=utf-8',
         body: `WEBVTT\n${segments.length > 0 ? `\n${formatCues(segments, '.')}` : ''}`
       }
-    case 'verbose_json':
+    case 'verbose_json': {
+      const language = sharedLanguage(segments)
       return {
         contentType: 'application/json; charset=utf-8',
         body: {
@@ -47,6 +68,7 @@ export function formatTimedTranscription(
             .map((segment) => segment.text)
             .join('')
             .trim(),
+          ...(language !== undefined ? { language } : {}),
           duration:
             segments.reduce(
               (maximumEndMs, segment) =>
@@ -61,6 +83,21 @@ export function formatTimedTranscription(
             start: roundMilliseconds(segment.startMs) / 1000,
             end: roundMilliseconds(segment.endMs) / 1000,
             text: segment.text,
+            ...(segment.language !== undefined ? { language: segment.language } : {}),
+            ...(segment.noSpeechProb !== undefined ? { no_speech_prob: segment.noSpeechProb } : {}),
+            ...(segment.speakerTurnNext !== undefined
+              ? { speaker_turn_next: segment.speakerTurnNext }
+              : {}),
+            ...(segment.tokens !== undefined
+              ? {
+                  token_timestamps: segment.tokens.map((token) => ({
+                    text: token.text,
+                    start: roundMilliseconds(token.startMs) / 1000,
+                    end: roundMilliseconds(token.endMs) / 1000,
+                    probability: token.probability
+                  }))
+                }
+              : {}),
             ...(segment.speaker !== undefined ? { speaker: segment.speaker } : {}),
             ...(segment.speakerId !== undefined ? { speaker_id: segment.speakerId } : {}),
             ...(segment.speakerSegments !== undefined
@@ -75,11 +112,20 @@ export function formatTimedTranscription(
           }))
         }
       }
+    }
     default: {
       const exhaustive: never = format
       return exhaustive
     }
   }
+}
+
+/** Whisper decodes each window in its own language; report one only when they agree. */
+function sharedLanguage(segments: TranscribeSegment[]): string | undefined {
+  const languages = new Set(
+    segments.flatMap((segment) => (segment.language === undefined ? [] : [segment.language]))
+  )
+  return languages.size === 1 ? [...languages][0] : undefined
 }
 
 function formatCues(segments: TranscribeSegment[], separator: ',' | '.'): string {
