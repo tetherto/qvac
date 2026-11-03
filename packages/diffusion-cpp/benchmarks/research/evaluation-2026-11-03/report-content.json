@@ -1,7 +1,7 @@
 {
   "title": "QVAC diffusion performance: four platforms, six API configurations",
   "status": "DRAFT - final confirmation jobs and evidence review in progress",
-  "updated_utc": "2026-11-03T21:11:29.436540+00:00",
+  "updated_utc": "2026-11-03T21:16:25.673062+00:00",
   "intro": "RTX, Mac and Strix: 3 November 2026. DGX Spark: retained 29 October 2026 measurements at their original revisions. The original RTX and Spark report measured CUDA only. This extension adds RTX Vulkan, Strix Vulkan and HIP/ROCm, and Mac Metal. Vulkan correctness checks in the older CI record were not performance measurements.",
   "platforms": [
     {
@@ -2840,11 +2840,11 @@
         [
           "F16 matrices, 1280-square confirmation",
           "Existing tensor-type parameter",
-          "Pending",
-          "Not yet collected/validated",
-          "Pending",
+          "V",
+          "45.634 -> 44.159 s; -3.23% latency; 1.033x; 1.475 s saved",
+          "Decoded pixels exact. 1 comparison.",
           "M3 Ultra / Metal",
-          "One prompt at 1280 x 1280, one warmup and three measured requests. Same verified matrix-only rule as the 1024-square confirmation.",
+          "One prompt at 1280 x 1280, one warmup and three measured requests. Same verified matrix-only rule as the 1024-square confirmation. Accepted paired coverage: 1 prompt(s), 1280 x 1280; measured before/after repetitions per prompt 3/3, excluding warmup. native warm latency, matched prompt/seed/geometry.",
           "Use to bound the optional Metal precision profile by tested geometry, exact output, startup and memory; original Q8 matrices remain the fallback."
         ],
         [
@@ -3183,6 +3183,15 @@
           "reference": "r3-strix-flux2-abi128-rocm-gemm",
           "candidate": "r3-strix-flux2-abi128-rocm-gemm-dit-f16-clean",
           "latency_reduction_percent": -0.6043645241001606,
+          "quality_pending": false,
+          "repeat_output_unstable": false
+        },
+        {
+          "row": "F16 matrices, 1280-square confirmation",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-flux2-f16-confirm-1280-metal-baseline",
+          "candidate": "r3-mac-flux2-f16-confirm-1280-metal-dit-f16",
+          "latency_reduction_percent": 3.232239119954423,
           "quality_pending": false,
           "repeat_output_unstable": false
         },
@@ -3534,6 +3543,13 @@
           "Denoising: 28.393 -> 28.728 s; +1.18%"
         ],
         [
+          "F16 matrices, 1280-square confirmation / M3 Ultra / Metal",
+          "47.867 -> 46.659 s; -2.52%",
+          "11.884 -> 17.700 GB; +48.94%",
+          "Unified memory; RSS is not total device usage",
+          "Denoising: 38.619 -> 37.122 s; -3.88%"
+        ],
+        [
           "DiT matrix expansion to F16 / RTX 5090 / CUDA",
           "5.300 -> 5.767 s; +8.81%",
           "2.703 -> 2.973 GB; +10.00%",
@@ -3576,7 +3592,7 @@
         [
           "M3 Ultra / Metal",
           "Keep direct VAE. F16 matrix-only expansion: 27.875 -> 26.875 s; -3.59% latency; 1.037x; 1.000 s saved",
-          "Original Q8 weights remain the lower-memory default. Expansion is optional only after exact-output/multi-shape confirmation; Metal GEMM is slower."
+          "Exact pixels confirmed on three 1024-square prompts and one 1280-square prompt, with repeated requests. Keep Q8 as the lower-memory fallback; F16 is an optional modest warm-speed profile on the tested M3 Ultra, not a default for smaller Apple machines. Metal GEMM remains slower."
         ],
         [
           "Radeon 8060S / Vulkan",
@@ -3593,7 +3609,8 @@
         "RTX CUDA GEMM plus CPU parameter placement: 8.786 -> 3.365 s; -61.70% latency; 2.611x; 5.421 s saved This trades additional transfer/host memory for much lower device usage; it is not as fast as resident GEMM.",
         "RTX CUDA GEMM plus F16 matrices: 8.877 -> 2.876 s; -67.60% latency; 3.087x; 6.001 s saved Reject the extra F16 setting: GEMM alone is slightly faster and avoids the visible poster change and extra memory.",
         "Do not combine CUDA GEMM with a Metal/Vulkan precision result or multiply their ratios. Metal/Vulkan keep direct convolution; Strix HIP precision combinations are accepted only if their own complete paired results pass.",
-        "Strix HIP GEMM plus F16 matrices was measured directly. The F16 increment is 33.589 -> 33.792 s; +0.60% latency; 0.994x; 0.203 s slower Keep GEMM alone: the combination costs more memory, changes fine image details and is slightly slower."
+        "Strix HIP GEMM plus F16 matrices was measured directly. The F16 increment is 33.589 -> 33.792 s; +0.60% latency; 0.994x; 0.203 s slower Keep GEMM alone: the combination costs more memory, changes fine image details and is slightly slower.",
+        "Metal keeps direct VAE convolution. Its matrix-only F16 profile is 27.875 -> 26.875 s; -3.59% latency; 1.037x; 1.000 s saved at 1024 square and 45.634 -> 44.159 s; -3.23% latency; 1.033x; 1.475 s saved at 1280 square. No additional decoder change is recommended."
       ],
       "decision_briefs": {
         "GEMM VAE": "Recommend on measured CUDA and HIP, subject to memory/packaging gates. Reject on Metal/Vulkan because it regresses complete-request latency. Covers measured Klein 4B/decoder only, not the whole FLUX family.",
@@ -4379,7 +4396,7 @@
         "Do not carry the rejected Metal packing/dispatch code, broad upstream upgrade or slower CUDA stateful/3D-GEMM alternatives into the release feature. Any new kernel should have independent operator coverage plus a repeatable end-to-end benefit.",
         "Run existing audio-video integration tests and the full desktop CI matrix on the final selection policy. Validate combined profiles directly, fallback behavior, mixed backend assignments and longer/reference-conditioned requests before widening the release envelope."
       ],
-      "recommendation": "Use exact-output placement first: on RTX Vulkan, keep only VAE weights on GPU when capacity permits. This improves 97- and 193-frame requests without changing the output. CUDA full-temporal decoding is a separate minor-output-change option, with larger benefit on longer clips; keep temporal tiling for strict baseline behavior. On Metal, matrix-only F16 expansion is an optional high-memory profile if the completed confirmation remains exact; the much smaller temporal gain does not justify changing the preferred output tier. Retain existing settings where Strix checks are incomplete or neutral. The Metal kernel rewrites are rejected because they did not establish a reliable end-to-end benefit.",
+      "recommendation": "Use exact-output placement first: on RTX Vulkan, keep only VAE weights on GPU when capacity permits. This improves 97- and 193-frame requests without changing the output. CUDA full-temporal decoding is a separate minor-output-change option, with larger benefit on longer clips; keep temporal tiling for strict baseline behavior. On Metal, matrix-only F16 expansion is an optional high-memory profile, with byte-exact output confirmed on three 97-frame prompts; the much smaller temporal gain does not justify changing the preferred output tier. Retain existing settings where Strix checks are incomplete or neutral. The Metal kernel rewrites are rejected because they did not establish a reliable end-to-end benefit.",
       "profiles": [
         [
           "RTX 5090 / CUDA",
@@ -4403,13 +4420,13 @@
         ],
         [
           "Radeon 8060S / Vulkan",
-          "Use only the completed clean Vulkan results in the table; keep current stateful decode and parameter placement otherwise.",
-          "Temporal flag is redundant on the existing Vulkan decoder. No improvement is assumed from another API or from an interrupted run."
+          "Keep the current stateful decoder, quantized matrices and parameter placement. No new reliable speed profile was established in this booking.",
+          "The temporal flag is redundant, and repeated candidate output varied. Investigate that anomaly before promoting decoder changes; unfinished precision checks are not passes."
         ],
         [
           "Radeon 8060S / HIP",
-          "Use only the completed clean HIP results in the table; production HIP packaging is a separate requirement.",
-          "Current quantized matrices and tiled decoding unless a complete reliable pair supports a separate explicit profile."
+          "Keep current quantized matrices and tiled decoding. The observed 4.06% temporal-pair gain needs a clean reverse-order control before acceptance.",
+          "About half the apparent saving is denoising drift outside the decoder change. Production HIP packaging and broader output/memory checks remain separate requirements."
         ]
       ],
       "cumulative": [
