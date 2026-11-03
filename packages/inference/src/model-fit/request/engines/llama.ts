@@ -57,6 +57,7 @@ export function createLlamaFitRequest(params: LlamaFitRequestParams): FitRequest
       cache_checkpoint_storage: _cacheCheckpointStorage,
       cache_checkpoint_dir: _cacheCheckpointDir,
       cache_ram_mib: _cacheRamMib,
+      cache_share_across_keys: _cacheShareAcrossKeys,
       ...fitConfig
     } = modelConfig
     const config = transformLlmConfig(fitConfig as LlmConfig)

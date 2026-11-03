@@ -883,8 +883,8 @@ importers:
         specifier: ^0.1.2
         version: 0.1.3
       '@qvac/llm-llamacpp':
-        specifier: ^0.65.0
-        version: 0.65.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.67.0
+        version: 0.67.0(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/ocr-ggml':
         specifier: ^0.31.0
         version: 0.31.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
@@ -1633,8 +1633,8 @@ importers:
         specifier: ^0.1.2
         version: 0.1.3
       '@qvac/llm-llamacpp':
-        specifier: ^0.65.0
-        version: 0.65.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+        specifier: ^0.67.0
+        version: 0.67.0(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1
@@ -4820,8 +4820,8 @@ packages:
       '@qvac/fabric-ios':
         optional: true
 
-  '@qvac/llm-llamacpp@0.65.1':
-    resolution: {integrity: sha512-quiZbqSMm7e6OnkNZ89oJPdXtWsCHTvAy6VS5n4mKMd6swPz5iTZcI8KtCcU2ieWzg3xwXCQc9kjYSQeuMPZTw==}
+  '@qvac/llm-llamacpp@0.67.0':
+    resolution: {integrity: sha512-hlc7zbJl3NR4/YoSsPIBMgj6Bju7r+Ffi1QFbHCkNqlNTY5wz11K6eAzSPyORylhR+7ZPAmuzxfXhi93ELc7Lw==}
     engines: {bare: '>=1.24.0'}
     peerDependencies:
       '@qvac/fabric-android-arm64': ^0.25.0
@@ -14710,7 +14710,7 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
-  '@qvac/llm-llamacpp@0.65.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
+  '@qvac/llm-llamacpp@0.67.0(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
     dependencies:
       '@qvac/fabric': 0.25.0(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)
       '@qvac/infer-base': 0.8.0
