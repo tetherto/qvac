@@ -50,8 +50,30 @@ const DISK_SHARDED_MODEL = {
 
 const DISK_SHARDS_LOG = 'load the model metadata from disk shards'
 const STREAMED_METADATA_LOG = 'load the model metadata from memory'
+// llama.cpp logs this per additional split it opens. A streamed load never
+// resolves the shard paths, so the absolute path only appears for a disk load.
+const SPLIT_FILE_LOG = 'loading split-file'
 
-async function ensureDiskShardedModel(modelDir) {
+// [label, index of the shard passed to GGMLBert]
+const SHARD_CASES = [
+  ['the first shard', 0],
+  ['a middle shard', 2],
+  ['the last shard', 4]
+]
+
+let diskShardedModel = null
+
+function ensureDiskShardedModel(modelDir) {
+  if (!diskShardedModel) {
+    diskShardedModel = downloadDiskShardedModel(modelDir).catch((err) => {
+      diskShardedModel = null
+      throw err
+    })
+  }
+  return diskShardedModel
+}
+
+async function downloadDiskShardedModel(modelDir) {
   fs.mkdirSync(modelDir, { recursive: true })
 
   for (const shard of DISK_SHARDED_MODEL.shards) {
@@ -79,11 +101,11 @@ async function ensureDiskShardedModel(modelDir) {
 // Passes one shard path, as a caller with the shards already on disk does:
 // GGMLBert skips _streamShards(), and the addon finds the sibling shards by
 // file name and loads them with llama_model_load_from_splits().
-async function runDiskShardedInference(t, modelPath, modelDir) {
+async function runDiskShardedInference(t, shardPaths, shardIndex, modelDir) {
   const specLogger = attachSpecLogger({ forwardToConsole: true })
 
   const addon = new GGMLBert({
-    files: { model: [modelPath] },
+    files: { model: [shardPaths[shardIndex]] },
     config: {
       device: 'cpu',
       gpu_layers: '0',
@@ -126,34 +148,29 @@ async function runDiskShardedInference(t, modelPath, modelDir) {
       specLogger.logs.some((line) => line.includes(STREAMED_METADATA_LOG)),
       'metadata should not be read from streamed buffers'
     )
+    for (const siblingPath of shardPaths.slice(1)) {
+      t.ok(
+        specLogger.logs.some((line) => line.includes(`${SPLIT_FILE_LOG} ${siblingPath}`)),
+        `${path.basename(siblingPath)} should be loaded from disk`
+      )
+    }
   } finally {
     specLogger.release()
     await addon.unload().catch(() => {})
   }
 }
 
-safeTest(
-  'sharded embed model loads from disk given the first shard',
-  {
-    timeout: 10 * 60 * 1000,
-    skip: isMobile
-  },
-  async (t) => {
-    const modelDir = path.resolve(__dirname, '../model')
-    const shardPaths = await ensureDiskShardedModel(modelDir)
-    await runDiskShardedInference(t, shardPaths[0], modelDir)
-  }
-)
-
-safeTest(
-  'sharded embed model loads from disk given a later shard',
-  {
-    timeout: 10 * 60 * 1000,
-    skip: isMobile
-  },
-  async (t) => {
-    const modelDir = path.resolve(__dirname, '../model')
-    const shardPaths = await ensureDiskShardedModel(modelDir)
-    await runDiskShardedInference(t, shardPaths[2], modelDir)
-  }
-)
+for (const [label, shardIndex] of SHARD_CASES) {
+  safeTest(
+    `sharded embed model loads from disk given ${label}`,
+    {
+      timeout: 10 * 60 * 1000,
+      skip: isMobile
+    },
+    async (t) => {
+      const modelDir = path.resolve(__dirname, '../model')
+      const shardPaths = await ensureDiskShardedModel(modelDir)
+      await runDiskShardedInference(t, shardPaths, shardIndex, modelDir)
+    }
+  )
+}
