@@ -359,7 +359,7 @@ jobs:
 
       - name: Setup LLVM (Linux arm and macOS)
         if: runner.environment == 'github-hosted'
-        uses: tetherto/qvac/.github/actions/setup-llvm@98a6a6b6e8f3866dfdd75052a4071269ce85dc41
+        uses: tetherto/qvac/.github/actions/setup-llvm@090068be5ebab86edb32bcc4747f79809f4c8fa5
 
       - name: Manual Workspace Cleanup
         run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
