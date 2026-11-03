@@ -15,8 +15,8 @@ function resolve(env) {
   let train = env.TRAIN_INPUT || ''
   let source = train ? env.SOURCE_INPUT || 'train' : ''
   let ref = env.REF_INPUT || ''
-  // A train's backmerge into the default branch carries the train's versions, so it checks the train too. A train
-  // with fromNpm packages checks the published train instead: the commit npm records as its gitHead.
+  // A train's backmerge into the default branch checks the published train: the commit npm records as its gitHead,
+  // with every package from npm, since the default branch's copies outside the train may hold unpublished changes.
   const backmerge = (env.HEAD_REF || '').match(
     /^backmerge\/(release-train-([a-z0-9][a-z0-9-]*)-\d+\.\d+\.\d+)$/
   )
@@ -27,11 +27,8 @@ function resolve(env) {
     env.HEAD_REPO === env.REPOSITORY
   ) {
     train = backmerge[2]
-    source = 'train'
-    if (capture('node', [TRAIN, 'from-npm', train]) !== '[]') {
-      source = 'published'
-      ref = capture('node', [TRAIN, 'published-commit', backmerge[1]])
-    }
+    source = 'published'
+    ref = capture('node', [TRAIN, 'published-commit', backmerge[1]])
   }
   const projects = train ? capture('node', [TRAIN, 'projects', train]) : ''
   console.log(train ? `Train ${train}, source ${source}, projects ${projects}` : 'No release train')
