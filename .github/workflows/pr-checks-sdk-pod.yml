@@ -157,14 +157,13 @@ jobs:
 
           # A release train's packages are not on npm until it publishes, so a
           # train PR checks all of them with each train package installed from
-          # a tarball of this commit (the `train` source). Its backmerge into
-          # the default branch carries the same versions, so it does the same.
-          # A train with fromNpm packages builds only with those packages out
-          # of the workspace, which the default branch keeps, and the default
-          # branch's code may already need versions of them npm does not have.
-          # Its backmerge checks the published train instead: the commit npm
-          # records as its gitHead, with every package from npm, as the train
-          # run's checks after publishing do. It passes once npm has the train.
+          # a tarball of this commit (the `train` source). A train builds with
+          # every package outside it out of the workspace, which the default
+          # branch keeps, and the default branch's copies may hold changes npm
+          # does not have yet. So a backmerge checks the published train: the
+          # commit npm records as its gitHead, with every package from npm, as
+          # the train run's checks after publishing do. It passes once npm has
+          # the train.
           TRAIN="${TRAIN_INPUT:-}"
           BACKMERGE=false
           if [ -z "$TRAIN" ] && [[ "${BASE_REF:-}" =~ ^release-train-([a-z0-9][a-z0-9-]*)-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -177,7 +176,7 @@ jobs:
           SOURCE=""
           REF=""
           if [ -n "$TRAIN" ]; then SOURCE="${SOURCE_INPUT:-train}"; fi
-          if [ "$BACKMERGE" = "true" ] && [ "$(node .github/scripts/release-train.mjs from-npm "$TRAIN")" != "[]" ]; then
+          if [ "$BACKMERGE" = "true" ]; then
             SOURCE=published
             REF=$(node .github/scripts/release-train.mjs published-commit "${HEAD_REF#backmerge/}")
           fi
