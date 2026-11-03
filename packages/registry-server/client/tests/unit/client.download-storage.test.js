@@ -224,3 +224,76 @@ test('drain timeout logs remaining peer counters with real Hypercore peers', asy
   )
   t.ok(downloadedBlocks >= CANCEL_AFTER_BLOCKS, 'cancellation fired after blocks started arriving')
 })
+
+test('cancelled download keeps its blocks for resume when clearOnCancel is false', async (t) => {
+  const root = await tmp(t)
+  const writerStorage = path.join(root, 'writer')
+  const readerStorage = path.join(root, 'reader')
+  const outputFile = path.join(root, 'partial.gguf')
+
+  const writerStore = new Corestore(writerStorage)
+  const writerCore = writerStore.get({ name: 'blobs' })
+  await writerCore.ready()
+  const coreKey = writerCore.key
+  const writerBlobs = new Hyperblobs(writerCore)
+  await writerBlobs.ready()
+  const pointer = await writerBlobs.put(Buffer.alloc(PAYLOAD_BYTES, 1))
+
+  const readerStore = new Corestore(readerStorage)
+  const readerCore = readerStore.get({ key: coreKey })
+  await readerCore.ready()
+  const readerBlobs = new Hyperblobs(readerCore)
+  await readerBlobs.ready()
+
+  const writerReplication = writerStore.replicate(true)
+  const readerReplication = readerStore.replicate(false)
+  writerReplication.pipe(readerReplication).pipe(writerReplication)
+
+  const client = Object.create(QVACRegistryClient.prototype)
+  client.logger = logger()
+  client.hyperswarm = {
+    join() {},
+    flush() {
+      return Promise.resolve()
+    }
+  }
+  client._ensureMetadata = () => Promise.resolve()
+  client.getModel = () =>
+    Promise.resolve({
+      name: 'storage-resume-test',
+      blobBinding: { coreKey, ...pointer }
+    })
+  client._getBlobsCore = () => Promise.resolve({ core: readerCore, blobs: readerBlobs })
+
+  const controller = cancellation()
+  let downloadedBlocks = 0
+  readerCore.on('download', () => {
+    downloadedBlocks++
+    if (downloadedBlocks === CANCEL_AFTER_BLOCKS) controller.abort()
+  })
+
+  await t.exception(
+    () =>
+      client.downloadModel('models/storage-resume-test.gguf', 's3', {
+        outputFile,
+        signal: controller.signal,
+        maxRetries: 1,
+        clearOnCancel: () => false
+      }),
+    /Download cancelled/,
+    'the download is cancelled while blocks are in flight'
+  )
+
+  readerReplication.destroy()
+  writerReplication.destroy()
+  await readerStore.close()
+  await writerBlobs.close()
+  await writerCore.close()
+  await writerStore.close()
+
+  t.ok(downloadedBlocks >= CANCEL_AFTER_BLOCKS, 'blocks arrived before the cancellation')
+  t.ok(
+    (await countBlocks(readerStorage, coreKey, pointer)) >= CANCEL_AFTER_BLOCKS,
+    'the downloaded blocks survive the cancel and a corestore reopen'
+  )
+})

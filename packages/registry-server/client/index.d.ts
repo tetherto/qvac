@@ -82,6 +82,12 @@ export interface QVACDownloadOptions {
     totalBlocks: number
   }) => void
   signal?: AbortSignal
+  /**
+   * Whether a cancelled download drops its cached blocks (default `true`).
+   * `false`, or a function asked at cancel time, keeps them so the next
+   * download of the same blob resumes from them.
+   */
+  clearOnCancel?: boolean | (() => boolean)
 }
 
 export interface QVACBlobDownloadOptions {
@@ -95,6 +101,12 @@ export interface QVACBlobDownloadOptions {
     totalBlocks: number
   }) => void
   signal?: AbortSignal
+  /**
+   * Whether a cancelled download drops its cached blocks (default `true`).
+   * `false`, or a function asked at cancel time, keeps them so the next
+   * download of the same blob resumes from them.
+   */
+  clearOnCancel?: boolean | (() => boolean)
 }
 
 export interface QVACBlobDownloadResult {

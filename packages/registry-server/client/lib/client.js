@@ -24,6 +24,16 @@ const INFLIGHT_DRAIN_POLL_MS = 10
 const RESUME_WAIT_MAX_MS = 5 * 60 * 1000
 const RESUME_WAIT_POLL_MS = 200
 
+// A failed download clears the blob's cached blocks. A cancelled one clears
+// them too, unless the caller's `clearOnCancel` (a boolean, or a function asked
+// at cancel time) says to keep them as the checkpoint a later download of the
+// same blob resumes from.
+function shouldClearAfter(options) {
+  if (!options.signal || !options.signal.aborted) return true
+  const { clearOnCancel = true } = options
+  return Boolean(typeof clearOnCancel === 'function' ? clearOnCancel() : clearOnCancel)
+}
+
 class QVACRegistryClient extends ReadyResource {
   constructor(opts = {}) {
     super()
@@ -391,7 +401,9 @@ class QVACRegistryClient extends ReadyResource {
     } catch (error) {
       this.logger.error('Error downloading model', error)
 
-      await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd)
+      await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd, {
+        clear: shouldClearAfter(options)
+      })
 
       throw error
     }
@@ -493,7 +505,9 @@ class QVACRegistryClient extends ReadyResource {
     } catch (error) {
       this.logger.error('Error downloading blob directly', error)
 
-      await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd)
+      await this._releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd, {
+        clear: shouldClearAfter(options)
+      })
 
       throw error
     }
@@ -516,11 +530,18 @@ class QVACRegistryClient extends ReadyResource {
     stream.once('close', release)
   }
 
-  async _releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd) {
+  // `clear: false` keeps the blob's blocks as the checkpoint the next download
+  // of the same blob resumes from.
+  async _releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd, { clear = true } = {}) {
     // Hypercore can commit in-flight responses after a range is destroyed.
     if (rangeDownload) rangeDownload.destroy()
 
-    if (core && blockStart !== undefined) {
+    if (!clear) {
+      this.logger.info('Keeping cached blob blocks for resume', {
+        start: blockStart,
+        end: blockEnd
+      })
+    } else if (core && blockStart !== undefined) {
       if (rangeDownload) await this._waitForInflightBlocks(core)
       await this._clearBlobBlocks(core, blockStart, blockEnd)
     }

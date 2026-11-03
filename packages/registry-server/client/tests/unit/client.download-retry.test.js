@@ -666,3 +666,137 @@ test('withRetry retries only listed codes and stays bounded', async (t) => {
   )
   t.is(nonRetriable, 1, 'non-retriable error propagates immediately')
 })
+
+test('downloadModel clears cached blocks when cancelled by default', async (t) => {
+  const dir = await tmp(t)
+  const outputFile = path.join(dir, 'model.gguf')
+
+  const client = makeClient(t)
+  // lunte-disable-next-line require-await
+  client._clearBlobBlocks = async () => {
+    client._events.push('clear')
+  }
+  const signal = { aborted: false, addEventListener() {} }
+  // lunte-disable-next-line require-await
+  client._streamBlobToFile = async () => {
+    signal.aborted = true
+    throw new Error('Download cancelled')
+  }
+
+  await t.exception(
+    () => client.downloadModel('models/tiny.gguf', 's3', { outputFile, signal }),
+    /Download cancelled/,
+    'the cancelled download rejects'
+  )
+
+  t.is(client._events.filter((e) => e === 'clear').length, 1, 'a plain cancel still clears')
+})
+
+test('downloadModel keeps cached blocks when cancelled with clearOnCancel false', async (t) => {
+  const dir = await tmp(t)
+  const outputFile = path.join(dir, 'model.gguf')
+
+  const client = makeClient(t)
+  client._core.download = () => ({
+    destroy() {
+      client._events.push('destroy')
+    }
+  })
+  // lunte-disable-next-line require-await
+  client._core.close = async () => {
+    client._events.push('core.close')
+  }
+  // lunte-disable-next-line require-await
+  client._clearBlobBlocks = async () => {
+    client._events.push('clear')
+  }
+  const signal = { aborted: false, addEventListener() {} }
+  // lunte-disable-next-line require-await
+  client._streamBlobToFile = async () => {
+    signal.aborted = true
+    throw new Error('Download cancelled')
+  }
+
+  await t.exception(
+    () =>
+      client.downloadModel('models/tiny.gguf', 's3', { outputFile, signal, clearOnCancel: false }),
+    /Download cancelled/,
+    'the cancelled download rejects'
+  )
+
+  t.absent(client._events.includes('clear'), 'cached blocks stay as the resume checkpoint')
+  t.ok(client._events.includes('destroy'), 'replication for the range is stopped')
+  t.ok(client._events.includes('core.close'), 'the blob core is still closed')
+})
+
+test('downloadBlob asks clearOnCancel at cancel time', async (t) => {
+  const dir = await tmp(t)
+  const outputFile = path.join(dir, 'blob.bin')
+
+  const client = makeClient(t)
+  // lunte-disable-next-line require-await
+  client.ready = async () => {}
+  // lunte-disable-next-line require-await
+  client._clearBlobBlocks = async () => {
+    client._events.push('clear')
+  }
+  const signal = { aborted: false, addEventListener() {} }
+  let discard = false
+  let asked = 0
+  // lunte-disable-next-line require-await
+  client._streamBlobToFile = async () => {
+    signal.aborted = true
+    throw new Error('Download cancelled')
+  }
+  const clearOnCancel = () => {
+    asked++
+    return discard
+  }
+  const blobBinding = {
+    coreKey: Buffer.alloc(32),
+    blockOffset: 3,
+    blockLength: 7,
+    byteLength: 700
+  }
+
+  await t.exception(
+    () => client.downloadBlob(blobBinding, { outputFile, signal, clearOnCancel }),
+    /Download cancelled/,
+    'the paused download rejects'
+  )
+  t.is(asked, 1, 'the callback is consulted once, at cancel time')
+  t.absent(client._events.includes('clear'), 'a pause keeps the blocks')
+
+  discard = true
+  signal.aborted = false
+  await t.exception(
+    () => client.downloadBlob(blobBinding, { outputFile, signal, clearOnCancel }),
+    /Download cancelled/,
+    'the discarded download rejects'
+  )
+  t.is(asked, 2, 'the callback is consulted again on the next cancel')
+  t.ok(client._events.includes('clear'), 'a discard clears the blocks')
+})
+
+test('a failure clears cached blocks regardless of clearOnCancel', async (t) => {
+  const dir = await tmp(t)
+  const outputFile = path.join(dir, 'model.gguf')
+
+  const client = makeClient(t)
+  // lunte-disable-next-line require-await
+  client._clearBlobBlocks = async () => {
+    client._events.push('clear')
+  }
+  // lunte-disable-next-line require-await
+  client._streamBlobToFile = async () => {
+    throw new Error('disk full')
+  }
+
+  await t.exception(
+    () => client.downloadModel('models/tiny.gguf', 's3', { outputFile, clearOnCancel: false }),
+    /disk full/,
+    'the failed download rejects'
+  )
+
+  t.ok(client._events.includes('clear'), 'blocks are cleared after a failure')
+})
