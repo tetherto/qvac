@@ -1,9 +1,9 @@
 # Four-platform diffusion evaluation, 3 November 2026
 
-**Work in progress.** This research snapshot preserves completed measurements
-and explicitly marks pending confirmations. It does not change production
-defaults, engine dependencies, model checkpoints or addon versions. No PR is
-opened as part of this research step.
+**Research campaign concluded.** This snapshot preserves completed measurements,
+rejected experiments and explicit remaining coverage gaps. It does not change
+production defaults, engine dependencies, model checkpoints or addon versions.
+No PR was opened as part of this research step.
 
 | Platform | Accelerator | API measured | Date |
 | --- | --- | --- | --- |
@@ -19,11 +19,11 @@ measurements. Do not attribute this campaign's Vulkan results to Spark.
 ## Contents
 
 - [REPORT.md](REPORT.md): shareable Markdown report with one approach-by-API
-  matrix per model, decision reasons, quality and memory tradeoffs. It remains
-  a draft until the running confirmations finish. No comparison images are
-  required.
+  matrix per model, decision reasons, measured cumulative effects, quality and
+  memory tradeoffs, selective enablement and fallback rules. No comparison
+  images are included.
 - `report-content.json`: model descriptions, eight-column decision tables,
-  measured and pending profiles, technical scope and remaining gates.
+  measured and incomplete profiles, technical scope and remaining gates.
 - `reproduction-records.json`: individually hashed UTF-8 virtual files for
   completed measurements, benchmark inputs, source/checkpoint identities,
   numerical quality comparisons and validation records. Verify each content
@@ -66,5 +66,14 @@ implementation validation.
 
 Raw media and private operational logs remain outside Git in verified local
 evidence storage. No model weights, binaries, credentials or host connection
-details are included here. The final snapshot will add completion, cleanup and
-remaining-coverage status after the booked checks finish.
+details are included here. The three November project directories, including
+models and build/test files, were removed after archive verification and branch
+preservation. Cleanup receipts are included in the reproduction records; no
+files outside those project directories were changed by cleanup.
+
+The evidence supports scoped implementation of the selected profiles, not a
+release-ready automatic policy. Remaining gaps include clean full-size HIP H3
+latency, Strix LTX stability/precision follow-ups, rocWMMA, other Apple capacities,
+other model variants and the actual implementation's full desktop CI matrix.
+The completed HIP H3 full-size run validates one output pair only. Spark retains
+its dated CUDA evidence and was not accessed during this campaign.

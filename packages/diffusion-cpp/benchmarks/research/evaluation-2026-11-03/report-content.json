@@ -1,7 +1,7 @@
 {
   "title": "QVAC diffusion performance: four platforms, six API configurations",
   "status": "Research campaign concluded; measured implementation candidates and explicit remaining gaps",
-  "updated_utc": "2026-11-03T21:29:52.735582+00:00",
+  "updated_utc": "2026-11-03T21:30:54.406171+00:00",
   "intro": "RTX, Mac and Strix: 3 November 2026. DGX Spark: retained 29 October 2026 measurements at their original revisions. The original RTX and Spark report measured CUDA only. This extension adds RTX Vulkan, Strix Vulkan and HIP/ROCm, and Mac Metal. Vulkan correctness checks in the older CI record were not performance measurements.",
   "platforms": [
     {
@@ -4452,7 +4452,7 @@
     "No new full desktop CI run certifies a November production feature: no such feature has been implemented. The retained October workflow passed 37 jobs with 14 conditional routes, including a 98/98 Windows retry; that historical run is not a replacement for implementation CI. RTX research builds used local Clang 20.1.8; release builds must use the repository CI toolchain."
   ],
   "enablement_strategy": {
-    "status": "Implementation design constraints; final accepted profiles depend on completed measurements.",
+    "status": "Implementation constraints after the research campaign; accepted profiles and remaining gaps are specified in REPORT.md.",
     "scope": "Keep production defaults and package pins unchanged during research. Implement only the accepted profiles in the next step.",
     "selection": [
       "Key a profile by the exact supported model/decoder family, resolved module backend, tested accelerator class and request envelope. A generic device=gpu or NVIDIA device name does not distinguish CUDA from Vulkan.",
@@ -4635,7 +4635,7 @@
   "completion": [
     "RTX 5090: the November 3 project directory, including models and build/test files, was removed after SHA-256-verified evidence collection and branch preservation. Completed 2026-11-03T20:03:33.252849+00:00; filesystem free space rose by 88.49 GiB during cleanup. Other files and workloads were not modified.",
     "Mac Studio: the November 3 project directory, including models and build/test files, was removed after SHA-256-verified evidence collection and branch preservation. Completed 2026-11-03T21:17:19.053603+00:00; filesystem free space rose by 74.99 GiB during cleanup. Other files and workloads were not modified.",
-    "AMD Strix: cleanup completion is not yet confirmed in the collected receipts.",
+    "AMD Strix: the November 3 project directory, including models and build/test files, was removed after SHA-256-verified evidence collection and branch preservation. Completed 2026-11-03T21:30:33.979463+00:00; filesystem free space rose by 78.20 GiB during cleanup. Other files and workloads were not modified.",
     "Generated outputs and raw private logs remain in the verified local evidence archive. The branch contains sanitized timing, quality, memory, source/model identities, reproduction configurations and experimental patches. Dated Spark evidence was retained without reconnecting to that unbooked host."
   ]
 }

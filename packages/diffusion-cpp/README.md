@@ -1076,6 +1076,11 @@ The patch applies to that upstream candidate, not to the pinned QVAC engine, and
 is not included in addon builds. Compare its CLI generation timings separately
 from this runner's warm-request latency before considering an engine backport.
 
+The [four-platform evaluation](benchmarks/research/evaluation-2026-11-03/REPORT.md)
+compares H3, FLUX.2 Klein and LTX across the measured CUDA, Metal, Vulkan and HIP
+configurations, with quality, memory, fallback and remaining validation details.
+Its experimental patches are unapplied; production defaults and pins are unchanged.
+
 ## Operational Notes
 
 - Native C++ logs are process-global. Configure them once with

@@ -859,7 +859,7 @@ Directly measured cumulative effect for one cat prompt at 97 frames, paired agai
 
 - RTX 5090: the November 3 project directory, including models and build/test files, was removed after SHA-256-verified evidence collection and branch preservation. Completed 2026-11-03T20:03:33.252849+00:00; filesystem free space rose by 88.49 GiB during cleanup. Other files and workloads were not modified.
 - Mac Studio: the November 3 project directory, including models and build/test files, was removed after SHA-256-verified evidence collection and branch preservation. Completed 2026-11-03T21:17:19.053603+00:00; filesystem free space rose by 74.99 GiB during cleanup. Other files and workloads were not modified.
-- AMD Strix: cleanup completion is not yet confirmed in the collected receipts.
+- AMD Strix: the November 3 project directory, including models and build/test files, was removed after SHA-256-verified evidence collection and branch preservation. Completed 2026-11-03T21:30:33.979463+00:00; filesystem free space rose by 78.20 GiB during cleanup. Other files and workloads were not modified.
 - Generated outputs and raw private logs remain in the verified local evidence archive. The branch contains sanitized timing, quality, memory, source/model identities, reproduction configurations and experimental patches. Dated Spark evidence was retained without reconnecting to that unbooked host.
 
 ## Primary sources
