@@ -26,7 +26,7 @@ The addon's loader depends on these choices:
   three duplicate ``mean``/``std`` buffers, which go to KV instead. Anything else left
   unmapped is an error.
 - The addon accepts a GGUF only when its tensor layout fingerprint matches this
-  script's output (BridgeDepthGraph.cpp ``kExpectedLayout``). Update both together.
+  script's output (BridgeDepthGraph.cpp ``EXPECTED_LAYOUT``). Update both together.
 
 Usage:
     python convert-bridgedepth.py --fork <BridgeDepth checkout> --output bridgedepth-vits-f32.gguf \
@@ -41,6 +41,7 @@ GGUF holds every tensor the forward pass reads, and that the dropped ones are de
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 from pathlib import Path
 
@@ -78,7 +79,21 @@ def is_dropped(k: str) -> bool:
     return k in DROP_EXACT or k.startswith(DROP_PREFIX)
 
 
+# The checkout's own code builds the model, so only the commit the converter was
+# validated against is imported.
+FORK_COMMIT = "f6d8cddfcfbe2f6d4b7b6b7be091e5aadd76fd70"
+
+
+def check_fork(fork: str) -> None:
+    head = subprocess.run(
+        ["git", "-C", fork, "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+    if head != FORK_COMMIT:
+        sys.exit(f"--fork is at {head}, expected bench-vits {FORK_COMMIT}")
+
+
 def load_model(fork: str, checkpoint: str):
+    check_fork(fork)
     sys.path.insert(0, fork)
     from bridgedepth.bridgedepth import BridgeDepth
     return BridgeDepth.from_pretrained(checkpoint, encoder="vits").eval()

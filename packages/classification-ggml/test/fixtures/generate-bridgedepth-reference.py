@@ -13,6 +13,7 @@ docs/bridgedepth.md), with its requirements installed; it downloads
 rvc_pretrain and Depth-Anything-V2-Small from Hugging Face.
 """
 import argparse
+import subprocess
 import sys
 from pathlib import Path
 
@@ -48,6 +49,12 @@ def view(shift_background, shift_foreground):
 for name, image in (("left", view(0, 0)), ("right", view(8, 20))):
     cv2.imwrite(str(root / f"bridgedepth-{name}.png"), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
 
+FORK_COMMIT = "f6d8cddfcfbe2f6d4b7b6b7be091e5aadd76fd70"
+head = subprocess.run(
+    ["git", "-C", str(args.fork), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+).stdout.strip()
+if head != FORK_COMMIT:
+    sys.exit(f"--fork is at {head}, expected bench-vits {FORK_COMMIT}")
 sys.path.insert(0, str(args.fork))
 import torch  # noqa: E402
 from bridgedepth.bridgedepth import BridgeDepth  # noqa: E402
