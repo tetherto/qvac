@@ -29,6 +29,31 @@ if(NOT tts-cpp_pocket_FOUND)
     "speech repository's engines/tts and set tts-cpp_DIR to its "
     "share/tts-cpp directory; see README.md for local build instructions.")
 endif()
+# The SDK maps per-model Core ML policy into these public options. Reject a
+# stale speech-cpp package at configure time, before compiling the addon.
+include(CheckCXXSourceCompiles)
+function(tts_check_parler_coreml_policy)
+  # Header capability only: cross-platform shared backends need not link into
+  # an executable, and caller try-compile settings remain unchanged.
+  set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+  set(CMAKE_REQUIRED_LIBRARIES tts-cpp::tts-cpp)
+  unset(TTS_CPP_HAS_PARLER_COREML_POLICY CACHE)
+  check_cxx_source_compiles("#include <tts-cpp/parler/engine.h>
+int main() {
+  tts_cpp::parler::EngineOptions options;
+  options.coreml_decoder = true;
+  options.coreml_compute_units = \"cpu_only\";
+  options.coreml_strict = false;
+  return 0;
+}" TTS_CPP_HAS_PARLER_COREML_POLICY)
+  if(NOT TTS_CPP_HAS_PARLER_COREML_POLICY)
+    message(FATAL_ERROR
+      "tts-ggml requires speech-cpp with per-instance Parler Core ML policy. "
+      "Rebuild/install the updated speech library and addon together; see README.md.")
+  endif()
+endfunction()
+tts_check_parler_coreml_policy()
+
 find_package(mecab CONFIG REQUIRED)
 
 # tts-cpp was compiled against the same ggml headers; its ggml symbols come
@@ -119,6 +144,7 @@ if(BUILD_TESTING)
       addon/tests/test_app_memory_budget.cpp
       addon/tests/test_audio8_config.cpp
       addon/tests/test_backend_utils.cpp
+      addon/tests/test_fabric_options.cpp
       addon/tests/test_chatterbox_config.cpp
       addon/tests/test_moss_config.cpp
       addon/tests/test_moss_sound_effect_config.cpp

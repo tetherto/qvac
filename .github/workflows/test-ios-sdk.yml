@@ -45,6 +45,11 @@ on:
         required: false
         type: number
         default: 90
+      device-farm-billing-method:
+        description: "Device Farm billing: UNMETERED (shared slots, METERED after 15 min in queue) or METERED."
+        required: false
+        type: string
+        default: UNMETERED
       device-farm-project-arn:
         description: "AWS Device Farm project ARN"
         required: true
@@ -451,6 +456,15 @@ jobs:
     outputs:
       name: ${{ steps.select.outputs.name }}
       availability: ${{ steps.select.outputs.availability }}
+      billing-method: ${{ steps.schedule.outputs.billing-method }}
+      # For the METERED reschedule in wait-device-farm-running.
+      pool-arn: ${{ steps.select.outputs.arn }}
+      app-arn: ${{ steps.upload-app.outputs.app-arn }}
+      test-package-arn: ${{ steps.upload-test-pkg.outputs.pkg-arn }}
+      test-spec-arn: ${{ steps.upload-spec.outputs.spec-arn }}
+      run-name: ${{ steps.schedule.outputs.run-name }}
+      safe-name: ${{ steps.save-arn.outputs.safe-name }}
+      wait-timeout: ${{ steps.wait-timeout.outputs.minutes }}
     steps:
       - name: Reject UI re-runs
         if: github.run_attempt != '1'
@@ -469,7 +483,9 @@ jobs:
           repository: ${{ github.repository }}
           ref: ${{ github.workflow_sha }}
           persist-credentials: false
-          sparse-checkout: .github/actions/sdk-device-farm-select-pool
+          sparse-checkout: |
+            .github/actions/sdk-device-farm-select-pool
+            .github/actions/sdk-device-farm-schedule-run
           sparse-checkout-cone-mode: false
           path: .workflow
 
@@ -614,30 +630,17 @@ jobs:
 
       - name: Schedule Device Farm run
         id: schedule
-        run: |
-          echo "Scheduling Device Farm run on ${{ steps.select.outputs.name }}..."
-
-          RUN_NAME="ios-${{ steps.select.outputs.name }}-${{ github.run_number }}-${{ github.run_attempt }}"
-
-          RUN_ARN=$(aws devicefarm schedule-run \
-            --project-arn "${{ inputs.device-farm-project-arn }}" \
-            --device-pool-arn "${{ steps.select.outputs.arn }}" \
-            --app-arn "${{ steps.upload-app.outputs.app-arn }}" \
-            --name "$RUN_NAME" \
-            --test type=APPIUM_NODE,testPackageArn=${{ steps.upload-test-pkg.outputs.pkg-arn }},testSpecArn=${{ steps.upload-spec.outputs.spec-arn }} \
-            --execution-configuration jobTimeoutMinutes=${{ inputs.device-farm-timeout }} \
-            --query 'run.arn' --output text)
-
-          echo "run-arn=$RUN_ARN" >> $GITHUB_OUTPUT
-          echo "Device Farm run scheduled: $RUN_ARN"
-
-          PROJECT_ID=$(echo "${{ inputs.device-farm-project-arn }}" | sed -n 's/.*:project:\(.*\)/\1/p')
-          RUN_ID=$(echo "$RUN_ARN" | sed -n 's/.*:run:[^/]*\/\(.*\)/\1/p')
-          DF_URL="https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${PROJECT_ID}/runs/${RUN_ID}"
-          echo "Device Farm Console (${{ steps.select.outputs.name }}): $DF_URL"
-
-          echo "### Device Farm: ${{ steps.select.outputs.name }}" >> $GITHUB_STEP_SUMMARY
-          echo "[Open Device Farm Console]($DF_URL)" >> $GITHUB_STEP_SUMMARY
+        uses: ./.workflow/.github/actions/sdk-device-farm-schedule-run
+        with:
+          project-arn: ${{ inputs.device-farm-project-arn }}
+          device-pool-arn: ${{ steps.select.outputs.arn }}
+          pool-name: ${{ steps.select.outputs.name }}
+          app-arn: ${{ steps.upload-app.outputs.app-arn }}
+          test-package-arn: ${{ steps.upload-test-pkg.outputs.pkg-arn }}
+          test-spec-arn: ${{ steps.upload-spec.outputs.spec-arn }}
+          run-name: ios-${{ steps.select.outputs.name }}-${{ github.run_number }}-${{ github.run_attempt }}
+          job-timeout-minutes: ${{ inputs.device-farm-timeout }}
+          billing-method: ${{ inputs.device-farm-billing-method }}
 
       - name: Save run ARN
         id: save-arn
@@ -653,12 +656,21 @@ jobs:
           path: ${{ steps.save-arn.outputs.safe-name }}.txt
           retention-days: 1
 
+      # Slot wait + METERED reschedule + a second start wait, plus margin.
+      - name: Compute wait job timeout
+        id: wait-timeout
+        env:
+          START_TIMEOUT: ${{ inputs.device-farm-start-timeout }}
+        run: echo "minutes=$(( START_TIMEOUT * 2 + 25 ))" >> "$GITHUB_OUTPUT"
+
   wait-device-farm-running:
     name: "[ios] wait-device-farm-running"
     needs: [build, device-farm]
     runs-on: ubuntu-latest
     environment: release
-    timeout-minutes: ${{ inputs.device-farm-start-timeout }}
+    timeout-minutes: ${{ fromJSON(needs.device-farm.outputs.wait-timeout) }}
+    outputs:
+      billing-method: ${{ steps.reschedule.outputs.billing-method || needs.device-farm.outputs.billing-method }}
     steps:
       - name: Reject UI re-runs
         if: github.run_attempt != '1'
@@ -668,7 +680,9 @@ jobs:
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          sparse-checkout: .github/actions/sdk-device-farm-wait-for-running
+          sparse-checkout: |
+            .github/actions/sdk-device-farm-wait-for-running
+            .github/actions/sdk-device-farm-schedule-run
           sparse-checkout-cone-mode: false
 
       - name: Download run ARNs
@@ -685,6 +699,57 @@ jobs:
           aws-region: us-west-2
 
       - name: Wait for Device Farm runs to enter RUNNING
+        id: wait
+        uses: ./.github/actions/sdk-device-farm-wait-for-running
+        with:
+          platform: ios
+          run-arns-directory: ./run-arns
+          start-timeout-minutes: ${{ inputs.device-farm-start-timeout }}
+          # UNMETERED runs get 15 min to find a free slot, then go METERED.
+          unmetered-wait-minutes: ${{ needs.device-farm.outputs.billing-method == 'UNMETERED' && 15 || 0 }}
+
+      - name: Reschedule as METERED
+        id: reschedule
+        if: steps.wait.outputs.slot-timeout == 'true'
+        uses: ./.github/actions/sdk-device-farm-schedule-run
+        with:
+          project-arn: ${{ inputs.device-farm-project-arn }}
+          device-pool-arn: ${{ needs.device-farm.outputs.pool-arn }}
+          pool-name: ${{ needs.device-farm.outputs.name }}
+          app-arn: ${{ needs.device-farm.outputs.app-arn }}
+          test-package-arn: ${{ needs.device-farm.outputs.test-package-arn }}
+          test-spec-arn: ${{ needs.device-farm.outputs.test-spec-arn }}
+          run-name: ${{ needs.device-farm.outputs.run-name }}-metered
+          job-timeout-minutes: ${{ inputs.device-farm-timeout }}
+          billing-method: METERED
+
+      # Runs on cancel too, so cleanup always finds the METERED run.
+      - name: Save METERED run ARN
+        if: always() && steps.reschedule.outputs.run-arn != ''
+        env:
+          RUN_ARN: ${{ steps.reschedule.outputs.run-arn }}
+          SAFE_NAME: ${{ needs.device-farm.outputs.safe-name }}
+        run: echo "$RUN_ARN" > "./run-arns/${SAFE_NAME}.txt"
+
+      - name: Upload METERED run ARN
+        id: upload-metered-arn
+        if: always() && steps.reschedule.outputs.run-arn != ''
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: device-farm-arn-ios-${{ env.E2E_RUN_ID }}-${{ needs.device-farm.outputs.safe-name }}
+          path: ./run-arns/${{ needs.device-farm.outputs.safe-name }}.txt
+          retention-days: 1
+          overwrite: true
+
+      # Cleanup finds runs only through the ARN artifact.
+      - name: Stop the METERED run if its ARN was not saved
+        if: always() && steps.reschedule.outputs.run-arn != '' && steps.upload-metered-arn.outcome != 'success'
+        env:
+          RUN_ARN: ${{ steps.reschedule.outputs.run-arn }}
+        run: aws devicefarm stop-run --arn "$RUN_ARN"
+
+      - name: Wait for the METERED run to enter RUNNING
+        if: steps.reschedule.outcome == 'success'
         uses: ./.github/actions/sdk-device-farm-wait-for-running
         with:
           platform: ios
@@ -1029,17 +1094,29 @@ jobs:
               STATUS=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.status' --output text 2>/dev/null || echo "UNKNOWN")
               echo "Device $DEVICE_NAME: status=$STATUS"
 
-              if [ "$STATUS" = "RUNNING" ] || [ "$STATUS" = "PENDING" ]; then
+              # Stop queued runs too, or they take a slot later.
+              if [ "$STATUS" != "COMPLETED" ] && [ "$STATUS" != "STOPPING" ]; then
                 echo "Stopping run: $RUN_ARN"
                 aws devicefarm stop-run --arn "$RUN_ARN" || true
               fi
 
               echo "Waiting for run to finish: $DEVICE_NAME (up to 30 min)..."
+              UNKNOWN_COUNT=0
               for attempt in $(seq 1 120); do
                 STATUS=$(aws devicefarm get-run --arn "$RUN_ARN" --query 'run.status' --output text 2>/dev/null || echo "UNKNOWN")
-                if [ "$STATUS" = "COMPLETED" ] || [ "$STATUS" = "STOPPED" ] || [ "$STATUS" = "ERRORED" ]; then
+                # A stopped run ends as COMPLETED; STOPPED/ERRORED are results, not statuses.
+                if [ "$STATUS" = "COMPLETED" ]; then
                   echo "Run $DEVICE_NAME finished with status: $STATUS"
                   break
+                fi
+                if [ "$STATUS" = "UNKNOWN" ]; then
+                  UNKNOWN_COUNT=$((UNKNOWN_COUNT + 1))
+                  if [ "$UNKNOWN_COUNT" -ge 8 ]; then
+                    echo "::warning::get-run keeps failing for $DEVICE_NAME; not waiting further"
+                    break
+                  fi
+                else
+                  UNKNOWN_COUNT=0
                 fi
                 if [ $((attempt % 6)) -eq 0 ]; then
                   echo "Run $DEVICE_NAME still $STATUS (${attempt}/120, $((attempt * 15))s elapsed)..."
@@ -1085,7 +1162,7 @@ jobs:
 
   report-finalize:
     name: "[ios] report-finalize"
-    needs: [report-start, run-producer, device-farm]
+    needs: [report-start, run-producer, device-farm, wait-device-farm-running]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -1110,10 +1187,11 @@ jobs:
           test-suite-provenance: ${{ inputs.test-suite-provenance }}
           device-pool-name: ${{ needs.device-farm.outputs.name }}
           device-pool-availability: ${{ needs.device-farm.outputs.availability }}
+          device-farm-billing-method: ${{ needs.wait-device-farm-running.outputs.billing-method || needs.device-farm.outputs.billing-method }}
 
   report-artifacts-refresh:
     name: "[ios] report-artifacts-refresh"
-    needs: [report-start, run-producer, cleanup-device-farm, device-farm]
+    needs: [report-start, run-producer, cleanup-device-farm, device-farm, wait-device-farm-running]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -1138,4 +1216,5 @@ jobs:
           test-suite-provenance: ${{ inputs.test-suite-provenance }}
           device-pool-name: ${{ needs.device-farm.outputs.name }}
           device-pool-availability: ${{ needs.device-farm.outputs.availability }}
+          device-farm-billing-method: ${{ needs.wait-device-farm-running.outputs.billing-method || needs.device-farm.outputs.billing-method }}
           update-summary: "false"
