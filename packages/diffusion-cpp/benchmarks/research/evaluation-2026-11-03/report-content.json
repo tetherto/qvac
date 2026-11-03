@@ -1,7 +1,7 @@
 {
   "title": "QVAC diffusion performance: four platforms, six API configurations",
   "status": "DRAFT - final confirmation jobs and evidence review in progress",
-  "updated_utc": "2026-11-03T20:26:29.053193+00:00",
+  "updated_utc": "2026-11-03T20:58:49.100330+00:00",
   "intro": "RTX, Mac and Strix: 3 November 2026. DGX Spark: retained 29 October 2026 measurements at their original revisions. The original RTX and Spark report measured CUDA only. This extension adds RTX Vulkan, Strix Vulkan and HIP/ROCm, and Mac Metal. Vulkan correctness checks in the older CI record were not performance measurements.",
   "platforms": [
     {
@@ -155,6 +155,16 @@
           "DGX Spark GB10 / CUDA, 29 Oct",
           "Older package/engine revisions; 960 x 544, 124 frames.",
           "Recommend the existing pinned-engine parameter in the tested model/API envelope: repeatable lower latency and accepted output comparisons. Keep diffusion FA enabled. Preserve explicit settings and the original global-FA setting outside this envelope; dated Spark and short-only HIP coverage remain explicitly limited."
+        ],
+        [
+          "Global flash attention, short-clip confirmation",
+          "Parameter validation",
+          "V",
+          "133.181 -> 99.685 s; -25.15% latency; 1.336x; 33.496 s saved",
+          "PSNR 56.92-59.12 dB; SSIM 0.999713-0.999764; RMS channel error 0.1107-0.1426% of full scale. Worst frame 55.43 dB. Audio exact.",
+          "M3 Ultra / Metal",
+          "Two additional prompts at 512 x 288 / 39 frames. This complements the full-size panda-prompt control; it is not an additional cumulative optimization. Accepted paired coverage: 2 prompt(s), 512 x 288 / 39 frames; measured before/after repetitions per prompt 2/2, excluding warmup. native warm latency, matched prompt/seed/geometry.",
+          "Use as prompt-coverage confirmation for the existing FA profile, keeping its full-size and short-clip timings separate."
         ],
         [
           "HIP full-size quality control",
@@ -569,22 +579,22 @@
         [
           "Global FA + residency (short)",
           "Measured combination",
-          "Pending",
-          "Not yet collected/validated",
-          "Pending",
+          "V",
+          "133.181 -> 97.449 s; -26.83% latency; 1.367x; 35.732 s saved",
+          "PSNR 56.92-59.12 dB; SSIM 0.999713-0.999764; RMS channel error 0.1107-0.1426% of full scale. Worst frame 55.43 dB. Audio exact.",
           "M3 Ultra / Metal",
-          "Full: 960 x 544 / 124 frames; short: additional prompts at 512 x 288 / 39 frames.",
-          "Confirm combined speed and memory; preserve the offloaded baseline on unvalidated capacities."
+          "Full: 960 x 544 / 124 frames; short: additional prompts at 512 x 288 / 39 frames. Accepted paired coverage: 2 prompt(s), 512 x 288 / 39 frames; measured before/after repetitions per prompt 2/2, excluding warmup. native warm latency, matched prompt/seed/geometry.",
+          "The useful total speed gain comes from global FA. Treat residency as a separate optional memory-placement choice, not another large speed multiplier. Preserve the exact FA-only output tier and validate capacity on the selected machine."
         ],
         [
           "Residency added after global FA (short)",
           "Incremental memory placement",
-          "Pending",
-          "Not yet collected/validated",
-          "Pending",
+          "V",
+          "99.685 -> 97.449 s; -2.24% latency; 1.023x; 2.236 s saved",
+          "Video/audio files byte exact. 2 comparisons.",
           "M3 Ultra / Metal",
-          "Separates the residency contribution from the flash-attention gain.",
-          "Use only if the memory/speed tradeoff remains reliable over repeated requests."
+          "Separates the residency contribution from the flash-attention gain. Accepted paired coverage: 2 prompt(s), 512 x 288 / 39 frames; measured before/after repetitions per prompt 2/2, excluding warmup. native warm latency, matched prompt/seed/geometry.",
+          "Optional placement profile on the tested 96 GiB M3 Ultra, primarily for lower measured process RSS. The full-size case adds only 0.12% warm speed beyond FA and is not a meaningful speed-default change. Video/audio remain byte exact relative to FA alone. Total unified-memory usage and smaller-machine fit are not established by RSS; keep CPU parameter placement as fallback."
         ],
         [
           "Graph patch after FA: reverse-order confirmation",
@@ -711,6 +721,15 @@
           "reference": "r3-strix-h3-short-abi128-rocm-baseline",
           "candidate": "r3-strix-h3-short-abi128-rocm-global-flash",
           "latency_reduction_percent": 10.347337997510161,
+          "quality_pending": false,
+          "repeat_output_unstable": false
+        },
+        {
+          "row": "Global flash attention, short-clip confirmation",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-h3-short-confirm-metal-baseline",
+          "candidate": "r3-mac-h3-short-confirm-metal-global-flash",
+          "latency_reduction_percent": 25.150734714411218,
           "quality_pending": false,
           "repeat_output_unstable": false
         },
@@ -895,6 +914,24 @@
           "repeat_output_unstable": false
         },
         {
+          "row": "Global FA + residency (short)",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-h3-short-confirm-metal-baseline",
+          "candidate": "r3-mac-h3-short-confirm-metal-global-flash-resident",
+          "latency_reduction_percent": 26.829652878413583,
+          "quality_pending": false,
+          "repeat_output_unstable": false
+        },
+        {
+          "row": "Residency added after global FA (short)",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-h3-short-confirm-metal-global-flash",
+          "candidate": "r3-mac-h3-short-confirm-metal-global-flash-resident",
+          "latency_reduction_percent": 2.2430656568189695,
+          "quality_pending": false,
+          "repeat_output_unstable": false
+        },
+        {
           "row": "Graph patch after FA: reverse-order confirmation",
           "hardware": "RTX 5090 / CUDA",
           "reference": "r3-rtx-h3-cli-warm-reverse-cuda-p1-baseline-global-flash",
@@ -958,7 +995,7 @@
           "repeat_output_unstable": false
         }
       ],
-      "optimal_profile_status": "Pending final quality, memory and cumulative review.",
+      "optimal_profile_status": "Final confirmations and evidence review in progress.",
       "grouped_measurement_references": [
         {
           "api": "cuda",
@@ -2466,6 +2503,15 @@
           "repeat_output_unstable": false
         },
         {
+          "row": "Global flash attention, short-clip confirmation",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-h3-short-confirm-metal-baseline",
+          "candidate": "r3-mac-h3-short-confirm-metal-global-flash",
+          "latency_reduction_percent": 25.150734714411218,
+          "quality_pending": false,
+          "repeat_output_unstable": false
+        },
+        {
           "row": "Minimal operations + global FA",
           "hardware": "M3 Ultra / Metal",
           "reference": "r3-mac-h3-short-cli-pinned-metal-baseline",
@@ -2507,6 +2553,15 @@
           "reference": "r3-mac-h3-full-confirm-metal-baseline",
           "candidate": "r3-mac-h3-full-confirm-metal-global-flash-resident",
           "latency_reduction_percent": 19.892833894155242,
+          "quality_pending": false,
+          "repeat_output_unstable": false
+        },
+        {
+          "row": "Global FA + residency (short)",
+          "hardware": "M3 Ultra / Metal",
+          "reference": "r3-mac-h3-short-confirm-metal-baseline",
+          "candidate": "r3-mac-h3-short-confirm-metal-global-flash-resident",
+          "latency_reduction_percent": 26.829652878413583,
           "quality_pending": false,
           "repeat_output_unstable": false
         },
@@ -2765,22 +2820,22 @@
         [
           "DiT matrix expansion to F16",
           "Existing tensor-type parameter",
-          "Pending",
-          "Not yet collected/validated",
-          "Pending",
+          "V",
+          "29.601 -> 52.465 s; +77.24% latency; 0.564x; 22.864 s slower",
+          "Decoded pixels exact. 1 comparison.",
           "Radeon 8060S / Vulkan",
-          "Expand only Q8 transformer block weight matrices at load time. Verify rule matching, startup and memory.",
-          "Pending speed/quality confirmation; not the original unquantized checkpoint."
+          "Expand only Q8 transformer block weight matrices at load time. Verify rule matching, startup and memory. Accepted paired coverage: 1 prompt(s), 1024 x 1024; measured before/after repetitions per prompt 3/3, excluding warmup. native warm latency, matched prompt/seed/geometry.",
+          "Reject: the completed clean Vulkan screen preserves pixels but increases latency from 29.601 to 52.465 s (+77.24%) and sampled VRAM+GTT from 11.140 to 14.591 GB (+30.97%). Keep Q8 matrices and direct VAE. Exact output alone does not justify the regression."
         ],
         [
           "DiT matrix expansion to F16",
           "Existing tensor-type parameter",
-          "Pending",
-          "Not yet collected/validated",
-          "Pending",
+          "V",
+          "33.589 -> 33.792 s; +0.60% latency; 0.994x; 0.203 s slower",
+          "PSNR 31.91 dB; SSIM 0.986062; RMS channel error 2.5392% of full scale. Max channel error 212/255.",
           "Radeon 8060S / HIP",
-          "Expand only Q8 transformer block weight matrices at load time. Verify rule matching, startup and memory.",
-          "Pending speed/quality confirmation; not the original unquantized checkpoint."
+          "Expand only Q8 transformer block weight matrices at load time. Verify rule matching, startup and memory. Accepted paired coverage: 1 prompt(s), 1024 x 1024; measured before/after repetitions per prompt 3/3, excluding warmup. native warm latency, matched prompt/seed/geometry.",
+          "Reject the F16 addition: GEMM alone is faster (33.589 versus 33.792 s, +0.60% latency for F16). Expansion raises sampled VRAM+GTT from 16.626 to 20.439 GB (+22.93%) and changes visible fine details (PSNR 31.91 dB). Keep Q8 matrices with the validated GEMM VAE profile."
         ],
         [
           "F16 matrices, 1280-square confirmation",
@@ -3010,7 +3065,8 @@
         "CPU parameter placement reduces RTX device-memory consumption while retaining most of the GEMM speed gain, at the cost of host memory and additional latency. It is not proof that the profile fits every nominal 8 GB GPU.",
         "The final Markdown report contains no comparison images. Visually identical labels refer to inspected outputs supported by full-output numerical comparisons; exact output and small visible texture changes are distinguished.",
         "The tested FLUX matrix-only tensor_type_rules value is `^model[.]diffusion_model[.](double_blocks|single_blocks)[.].*[.]weight$=f16`. Inspection selected 80 matrix tensors (7,361,003,520 bytes after expansion). This is an existing load-time conversion setting; no checkpoint download or new dependency is required.",
-        "F16 expansion does not recover information removed by Q8 quantization. It stores selected already-quantized weight values as F16 so the backend can choose different matrix kernels and avoid repeated quantized-weight handling. Kernel/arithmetic behavior differs by API: some measured Metal/Vulkan outputs are exact, while the CUDA poster changes visibly. This is a speed/memory experiment, not a claimed quality upgrade."
+        "F16 expansion does not recover information removed by Q8 quantization. It stores selected already-quantized weight values as F16 so the backend can choose different matrix kernels and avoid repeated quantized-weight handling. Kernel/arithmetic behavior differs by API: some measured Metal/Vulkan outputs are exact, while the CUDA poster changes visibly. This is a speed/memory experiment, not a claimed quality upgrade.",
+        "Current upstream already sets vae_conv_direct=false in packages/diffusion-cpp/examples/generate-image-flux2-cuda.js, introduced with CUDA support in [PR #5043](https://github.com/tetherto/qvac/pull/5043). The measured roughly threefold CUDA gain is relative to the direct-convolution library/test baseline, not an additional gain for callers already using that optimized example. Remaining implementation work is reliable model/backend/capacity selection and override handling. The example also uses a separate four-step preset; this campaign keeps ten steps fixed for the paired comparison."
       ],
       "measurement_references": [
         {
@@ -3109,6 +3165,24 @@
           "reference": "r3-mac-flux2-screen-metal-direct",
           "candidate": "r3-mac-flux2-screen-metal-dit-f16",
           "latency_reduction_percent": 3.6035713005127437,
+          "quality_pending": false,
+          "repeat_output_unstable": false
+        },
+        {
+          "row": "DiT matrix expansion to F16",
+          "hardware": "Radeon 8060S / Vulkan",
+          "reference": "r3-strix-flux2-vulkan-direct-validation",
+          "candidate": "r3-strix-flux2-vulkan-dit-f16-clean",
+          "latency_reduction_percent": -77.24063376237291,
+          "quality_pending": false,
+          "repeat_output_unstable": false
+        },
+        {
+          "row": "DiT matrix expansion to F16",
+          "hardware": "Radeon 8060S / HIP",
+          "reference": "r3-strix-flux2-abi128-rocm-gemm",
+          "candidate": "r3-strix-flux2-abi128-rocm-gemm-dit-f16-clean",
+          "latency_reduction_percent": -0.6043645241001606,
           "quality_pending": false,
           "repeat_output_unstable": false
         },
@@ -3248,7 +3322,7 @@
           "repeat_output_unstable": false
         }
       ],
-      "optimal_profile_status": "Pending final quality, memory and cumulative review.",
+      "optimal_profile_status": "Final confirmations and evidence review in progress.",
       "historical_screening_note": "Retained CUDA-only screens from 29 October, at the older revisions. These include rejected alternatives and unmeasured ideas; V means tried, not recommended. They do not establish Metal, Vulkan or HIP performance. Round-two controls already include H3 flash attention, FLUX GEMM and LTX residency as stated in the original records.",
       "historical_rows": [
         [
@@ -3446,6 +3520,20 @@
           "Denoising: 23.433 -> 22.433 s; -4.26%"
         ],
         [
+          "DiT matrix expansion to F16 / Radeon 8060S / Vulkan",
+          "31.458 -> 54.726 s; +73.97%",
+          "2.325 -> 2.417 GB; +3.97%",
+          "11.140 -> 14.591 GB VRAM + GTT; +30.97%",
+          "Denoising: 27.277 -> 50.092 s; +83.64%"
+        ],
+        [
+          "DiT matrix expansion to F16 / Radeon 8060S / HIP",
+          "37.722 -> 36.173 s; -4.11%",
+          "2.581 -> 2.774 GB; +7.50%",
+          "16.626 -> 20.439 GB VRAM + GTT; +22.93%",
+          "Denoising: 28.393 -> 28.728 s; +1.18%"
+        ],
+        [
           "DiT matrix expansion to F16 / RTX 5090 / CUDA",
           "5.300 -> 5.767 s; +8.81%",
           "2.703 -> 2.973 GB; +10.00%",
@@ -3468,7 +3556,7 @@
         "If F16 matrix expansion is selected on a proven platform, use the verified checkpoint-specific matrix-only rule. Preserve custom tensor_type_rules. Test startup, sustained memory and every accepted request geometry; expansion does not restore the original unquantized checkpoint.",
         "Add focused selection/override/fallback tests and run the existing addon integration and full desktop CI matrix. Check other FLUX checkpoints, reference-image/editing modes and larger shapes before broadening scope. No SDK or engine algorithm change is needed for the existing parameter itself."
       ],
-      "recommendation": "Implement a narrow FLUX.2 Klein 4B profile that sets `vae_conv_direct=false` for the measured CUDA VAE backends, and for tested Strix HIP after its packaging work. Preserve `vae_conv_direct=true` on Metal and Vulkan: GEMM regresses those measured APIs. The CUDA/HIP images are visually identical in reviewed comparisons, with small numerical differences; they are not byte-identical. The speed comes mainly from replacing direct VAE convolution with packing plus accelerated matrix multiplication. This uses an existing parameter and needs no engine algorithm or SDK change. The extra memory makes capacity-qualified selection essential. Matrix expansion is a separate optional warm-speed/memory tradeoff, never a blanket precision change. The main Vulkan direct controls measured 2.605 s on RTX and 31.135 s on Strix; HIP GEMM measured 33.569 s on Strix. The large HIP improvement is therefore not a reason to replace an already-selected Vulkan path. Cross-API seeded images differ, so these absolute figures inform an explicit API choice rather than a transparent optimization.",
+      "recommendation": "Implement a narrow FLUX.2 Klein 4B profile that sets `vae_conv_direct=false` for the measured CUDA VAE backends, and for tested Strix HIP after its packaging work. Preserve `vae_conv_direct=true` on Metal and Vulkan: GEMM regresses those measured APIs. The CUDA/HIP images are visually identical in reviewed comparisons, with small numerical differences; they are not byte-identical. The speed comes mainly from replacing direct VAE convolution with packing plus accelerated matrix multiplication. This uses an existing parameter and needs no engine algorithm or SDK change. The extra memory makes capacity-qualified selection essential. The current CUDA example already selects this setting; callers using that example already receive this benefit. The release gap is safe selection for other applicable callers, not a new convolution kernel. Matrix expansion is a separate optional warm-speed/memory tradeoff, never a blanket precision change. The main Vulkan direct controls measured 2.605 s on RTX and 31.135 s on Strix; HIP GEMM measured 33.569 s on Strix. The large HIP improvement is therefore not a reason to replace an already-selected Vulkan path. Cross-API seeded images differ, so these absolute figures inform an explicit API choice rather than a transparent optimization.",
       "profiles": [
         [
           "RTX 5090 / CUDA",
@@ -3492,19 +3580,20 @@
         ],
         [
           "Radeon 8060S / Vulkan",
-          "Keep direct VAE; any F16 option depends on the completed clean precision pair.",
-          "Original Q8 weights and direct VAE. Interrupted precision runs are not accepted. GEMM is substantially slower."
+          "Keep direct VAE and Q8 matrices. The completed Vulkan F16 screen is 77.24% slower despite exact pixels.",
+          "Reject both GEMM VAE and F16 expansion on this measured Vulkan configuration; preserve its original settings."
         ],
         [
           "Radeon 8060S / HIP",
           "`vae_conv_direct=false`: 67.780 -> 33.569 s; -50.47% latency; 2.019x; 34.211 s saved",
-          "Direct VAE / original Q8 weights outside validated capacity. HIP requires release-module packaging, ABI and linking validation before production availability."
+          "Direct VAE / original Q8 weights outside validated capacity. HIP requires release-module packaging, ABI and linking validation before production availability. Reject F16 expansion: it adds memory and small visible changes with no incremental speed benefit."
         ]
       ],
       "cumulative": [
         "RTX CUDA GEMM plus CPU parameter placement: 8.786 -> 3.365 s; -61.70% latency; 2.611x; 5.421 s saved This trades additional transfer/host memory for much lower device usage; it is not as fast as resident GEMM.",
         "RTX CUDA GEMM plus F16 matrices: 8.877 -> 2.876 s; -67.60% latency; 3.087x; 6.001 s saved Reject the extra F16 setting: GEMM alone is slightly faster and avoids the visible poster change and extra memory.",
-        "Do not combine CUDA GEMM with a Metal/Vulkan precision result or multiply their ratios. Metal/Vulkan keep direct convolution; Strix HIP precision combinations are accepted only if their own complete paired results pass."
+        "Do not combine CUDA GEMM with a Metal/Vulkan precision result or multiply their ratios. Metal/Vulkan keep direct convolution; Strix HIP precision combinations are accepted only if their own complete paired results pass.",
+        "Strix HIP GEMM plus F16 matrices was measured directly. The F16 increment is 33.589 -> 33.792 s; +0.60% latency; 0.994x; 0.203 s slower Keep GEMM alone: the combination costs more memory, changes fine image details and is slightly slower."
       ],
       "decision_briefs": {
         "GEMM VAE": "Recommend on measured CUDA and HIP, subject to memory/packaging gates. Reject on Metal/Vulkan because it regresses complete-request latency. Covers measured Klein 4B/decoder only, not the whole FLUX family.",
@@ -3853,7 +3942,7 @@
         "The four-file Metal IM2COL_3D candidate parallelizes packed values, with bounded dispatch and independent operator tests. It initially appeared faster only because checkpoint I/O differed; decoder timing regressed. The simpler one-file candidate groups existing per-position threads without changing arithmetic. Evaluate both on decoder timing and complete requests, and reject added code without a reliable end-to-end gain.",
         "Do not combine the broad upstream engine update with these claims: earlier output corruption and unsupported new-model architecture require separate compatibility work.",
         "The tested LTX matrix-only tensor_type_rules value is `^model[.]diffusion_model[.]transformer_blocks[.].*(to_q|to_k|to_v|to_out[.]0|to_gate_logits|net[.]0[.]proj|net[.]2)[.]weight$=f16`. Inspection selected 1632 matrix tensors (37,100,716,032 bytes after expansion). Keep this separate from VAE/text-encoder precision and preserve caller-supplied rules.",
-        "F16 expansion preserves the information in the selected Q5 checkpoint matrices; it does not restore an original higher-precision model. In the three-prompt Metal confirmation, warm latency fell from 93.243 to 88.229 s (-5.38%) with byte-exact video/audio, while peak process RSS rose from 43.952 to 68.546 GB (+24.594 GB, +55.96%). The denoising stage explains most of the speed gain. Process RSS is not a total unified-memory capacity estimate."
+        "F16 expansion converts the selected Q5 checkpoint matrices to F16; it does not restore an original higher-precision model. Conversion rounding and different matrix kernels can affect outputs, so exact parity is an observed result within the checked cases, not a mathematical guarantee for every input. In the three-prompt Metal confirmation, warm latency fell from 93.243 to 88.229 s (-5.38%) with byte-exact video/audio, while peak process RSS rose from 43.952 to 68.546 GB (+24.594 GB, +55.96%). The denoising stage explains most of the speed gain. Process RSS is not a total unified-memory capacity estimate."
       ],
       "measurement_references": [
         {
@@ -4019,7 +4108,7 @@
           "repeat_output_unstable": false
         }
       ],
-      "optimal_profile_status": "Pending final quality, memory and cumulative review.",
+      "optimal_profile_status": "Final confirmations and evidence review in progress.",
       "historical_screening_note": "Retained CUDA-only screens from 29 October, at the older revisions. These include rejected alternatives and unmeasured ideas; V means tried, not recommended. They do not establish Metal, Vulkan or HIP performance. Round-two controls already include H3 flash attention, FLUX GEMM and LTX residency as stated in the original records.",
       "historical_rows": [
         [
