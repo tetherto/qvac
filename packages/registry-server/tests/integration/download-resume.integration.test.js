@@ -302,7 +302,10 @@ test('onProgress reports initial cached bytes on resume', async (t) => {
           }
         }
       })
-    } catch {}
+      t.fail('should have thrown on cancel')
+    } catch (err) {
+      t.is(err.message, 'Download cancelled', 'throws cancel error')
+    }
 
     await cleanupTestClient(clientCtx1)
   } catch (err) {
@@ -368,7 +371,10 @@ test('cancel with clearBlocksOnCancel leaves no blocks for the next download', a
           }
         }
       })
-    } catch {}
+      t.fail('should have thrown on cancel')
+    } catch (err) {
+      t.is(err.message, 'Download cancelled', 'throws cancel error')
+    }
 
     await cleanupTestClient(clientCtx1)
   } catch (err) {
