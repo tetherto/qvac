@@ -242,7 +242,8 @@ test('audioGen terminal stats carry the MiniMax stage timings', async (t) => {
     flowMs: 7_000,
     vocoderMs: 1_500,
     backendDevice: 0,
-    backendId: 0
+    backendId: 0,
+    gpuFallbackReason: 1
   })
 })
 
@@ -310,7 +311,7 @@ test('audioGen terminal diagnostics report a GPU fallback reason, or omit it', a
       frames[0]?.diagnostics,
       `${reason} also reaches the symbol`
     )
-    t.absent('gpuFallbackReason' in (frames[0]?.stats ?? {}), 'the raw code stays off the wire')
+    t.is(frames[0]?.stats?.gpuFallbackReason, code, 'the raw code rides on the stats')
   }
 
   // none / not-requested describe a run that never lost a GPU, and an
@@ -340,6 +341,7 @@ test('audioGen terminal diagnostics report a GPU fallback reason, or omit it', a
       { selectedBackend: 'cpu', selectedDevice: 'cpu' },
       `code ${code} carries no fallback`
     )
+    t.is(frames[0]?.stats?.gpuFallbackReason, code, `code ${code} still rides on the stats`)
   }
 })
 

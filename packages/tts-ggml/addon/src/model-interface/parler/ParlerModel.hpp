@@ -16,6 +16,7 @@
 
 namespace tts_cpp::parler {
 class Engine;
+struct SynthesisResult;
 }
 
 namespace tts_cpp::lavasr {
@@ -82,6 +83,21 @@ public:
   static std::string resolveDescription(const ParlerDescriptionFields& desc);
 
 private:
+  friend struct ParlerModelTestPeer;
+
+  // Commit completion only if the captured engine is still installed. An old
+  // call finishing after reload must not overwrite the replacement's state.
+  void completeSynthesis(
+      const std::shared_ptr<tts_cpp::parler::Engine>& engine,
+      const tts_cpp::parler::SynthesisResult& result, double totalSeconds,
+      int sampleRate, int64_t samples, size_t textLength,
+      bool decoderSidecarLoaded, bool dacSidecarLoaded);
+
+  // Caller holds engineMu_; stale captured engines cannot alter live flags.
+  void recordSynthesisFailureLocked(
+      const std::shared_ptr<tts_cpp::parler::Engine>& engine,
+      bool decoderSidecarLoaded, bool dacSidecarLoaded);
+
   struct SynthResult {
     Output pcm;
     bool wasStreaming = false;
@@ -92,6 +108,7 @@ private:
   void unloadLocked();
 
   ParlerConfig cfg_;
+  ParlerConfig activeConfig_; // immutable settings of the installed engine
 
   mutable std::mutex engineMu_;
   std::shared_ptr<tts_cpp::parler::Engine> engine_;
@@ -114,13 +131,16 @@ private:
   int64_t totalSamples_ = 0;
   double realTimeFactor_ = 0.0;
   double tokensPerSecond_ = 0.0;
-  size_t textLength_ = 0;
   int sampleRate_ = kParlerNativeSampleRate;
 
   int backendDevice_ = 0;
   int backendId_ = 0;
   std::string backendName_ = "CPU";
   bool gpuUnsupported_ = false;
+  bool decoderSidecarLoaded_ = false;
+  bool dacSidecarLoaded_ = false;
+  bool decoderOnCoreml_ = false;
+  bool dacOnCoreml_ = false;
 
   // LavaSR enhancer backend, surfaced in runtimeStats so a host / GPU smoke
   // test can tell which device actually ran the enhancement.
