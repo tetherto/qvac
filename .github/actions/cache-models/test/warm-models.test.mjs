@@ -13,6 +13,7 @@ import {
   manifestModelPaths,
   markerFileName,
   selectManifestEntries,
+  selectWarmEntries,
   validateModelName,
   warmModels
 } from '../warm-models.mjs'
@@ -165,6 +166,63 @@ test('group selection is exact and legacy selection still honors warm:false', ()
     'cache paths retain lazily populated warm:false files'
   )
   assert.throws(() => selectManifestEntries(manifest, 'missing'), /no models in group/)
+})
+
+test('S3-only entries are left to the package workflow but stay in cache paths', () => {
+  const manifest = {
+    models: {
+      'hf.gguf': { urls: ['https://huggingface.co/o/r/resolve/abc/hf.gguf'] },
+      's3.gguf': { s3Path: 'qvac_models_compiled/ggml/x/s3.gguf' },
+      'both.gguf': { urls: ['https://huggingface.co/o/r/resolve/abc/both.gguf'], s3Path: 'x/both.gguf' }
+    }
+  }
+
+  assert.deepEqual(
+    selectManifestEntries(manifest).entries.map(([name]) => name),
+    ['hf.gguf', 'both.gguf']
+  )
+  assert.deepEqual(
+    selectWarmEntries(manifest).map(([name]) => name),
+    ['hf.gguf', 'both.gguf']
+  )
+  assert.deepEqual(
+    selectManifestEntries(manifest, '', { includeDeferred: true }).entries.map(([name]) => name),
+    ['hf.gguf', 's3.gguf', 'both.gguf']
+  )
+
+  const grouped = {
+    models: {
+      'hf.gguf': { group: 'g', urls: ['https://huggingface.co/o/r/resolve/abc/hf.gguf'] },
+      's3.gguf': { group: 'g', s3Path: 'x/s3.gguf' }
+    }
+  }
+  assert.deepEqual(selectManifestEntries(grouped, 'g').entries.map(([name]) => name), ['hf.gguf'])
+  assert.deepEqual(
+    selectManifestEntries(grouped, 'g', { includeDeferred: true }).entries.map(([name]) => name),
+    ['hf.gguf', 's3.gguf']
+  )
+})
+
+test('a group made only of S3-only entries warms nothing instead of failing', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'qvac-warm-s3-group-'))
+  try {
+    const dir = join(root, 'packages/example/test/integration')
+    await mkdir(dir, { recursive: true })
+    await writeFile(
+      join(dir, 'models.manifest.json'),
+      JSON.stringify({ models: { 's3.gguf': { group: 's3', s3Path: 'x/s3.gguf', sha256: SHA256, bytes: GOOD.length } } })
+    )
+    let downloads = 0
+    const result = await warmModels(
+      { package: 'example', root, group: 's3' },
+      { download: async () => { downloads++ } }
+    )
+    assert.equal(result.mode, 'nothing-to-warm')
+    assert.equal(downloads, 0)
+    assert.throws(() => selectManifestEntries({ models: {} }, 's3'), /no models in group/)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })
 
 test('manifest names must be plain basenames', () => {
