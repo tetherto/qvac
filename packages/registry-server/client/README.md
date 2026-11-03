@@ -85,7 +85,7 @@ const hfModels = await client.findModels({
     - `outputFile`: Optional file path to save directly to disk
     - `onProgress`: Callback `({ downloaded, total, cachedBlocks, totalBlocks }) => void`
     - `signal`: `AbortSignal` for cancellation
-    - `clearBlocksOnCancel`: `boolean` or `() => boolean`, read when `signal` aborts (default: `false`). Applies with `outputFile`: by default a cancelled download keeps its blocks in the corestore, so the next download of the same model resumes from them. Set it to drop them instead. Failed downloads always drop their blocks; successful ones drop them once the file is written. Without `outputFile`, destroying `artifact.stream` always drops the blocks
+    - `clearBlocksOnCancel`: `boolean` or `() => boolean`, read when `signal` aborts (default: `true`). Applies with `outputFile`: pass `false` to keep a cancelled download's blocks in the corestore, so the next download of the same model resumes from them. A failed download always keeps its blocks; a successful one drops them once the file is written. Reclaim kept blocks with `clearBlob`. Without `outputFile`, destroying `artifact.stream` always drops the blocks
   - Returns: `{ model: QVACModelEntry, artifact: QVACDownloadedArtifact }`
     - If `outputFile` provided: `artifact = { path: '/path/to/file' }`
     - Otherwise: `artifact = { stream: ReadableStream }`
@@ -139,6 +139,8 @@ const result = await client.downloadBlob(
 )
 console.log('Downloaded to:', result.artifact.path)
 ```
+
+- `clearBlob(blobBinding)`: Deletes a blob's cached blocks from the corestore, such as those a cancelled or failed download kept for resume. Takes `{ coreKey, blockOffset, blockLength }`; works offline.
 
 ## CLI
 

@@ -82,7 +82,7 @@ export interface QVACDownloadOptions {
     totalBlocks: number
   }) => void
   signal?: AbortSignal
-  /** With `outputFile`, clear cached blocks when `signal` aborts. Defaults to keeping them so the download can resume. */
+  /** With `outputFile`, whether to clear cached blocks when `signal` aborts (default `true`). Pass `false` to keep them so the download can resume. */
   clearBlocksOnCancel?: boolean | (() => boolean)
 }
 
@@ -97,7 +97,7 @@ export interface QVACBlobDownloadOptions {
     totalBlocks: number
   }) => void
   signal?: AbortSignal
-  /** With `outputFile`, clear cached blocks when `signal` aborts. Defaults to keeping them so the download can resume. */
+  /** With `outputFile`, whether to clear cached blocks when `signal` aborts (default `true`). Pass `false` to keep them so the download can resume. */
   clearBlocksOnCancel?: boolean | (() => boolean)
 }
 
@@ -164,6 +164,10 @@ export class QVACRegistryClient extends ReadyResource {
     blobBinding: QVACBlobBinding,
     options?: QVACBlobDownloadOptions
   ): Promise<QVACBlobDownloadResult>
+  /** Deletes a blob's cached blocks, e.g. those a cancelled or failed download kept for resume. */
+  clearBlob(
+    blobBinding: Pick<QVACBlobBinding, 'coreKey' | 'blockOffset' | 'blockLength'>
+  ): Promise<void>
 
   findBy(params?: FindByParams): Promise<QVACModelEntry[]>
   findModels(query?: QVACModelQuery): Promise<QVACModelEntry[]>

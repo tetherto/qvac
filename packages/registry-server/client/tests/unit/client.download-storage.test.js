@@ -131,8 +131,8 @@ async function cancelMidDownload(t, downloadOptions = {}) {
   }
 }
 
-test('cancelled download keeps its blocks after reopen so it can resume', async (t) => {
-  const { storedBlocks } = await cancelMidDownload(t)
+test('cancel with clearBlocksOnCancel false keeps its blocks after reopen so it can resume', async (t) => {
+  const { storedBlocks } = await cancelMidDownload(t, { clearBlocksOnCancel: false })
 
   t.ok(
     storedBlocks >= CANCEL_AFTER_BLOCKS,
@@ -140,10 +140,8 @@ test('cancelled download keeps its blocks after reopen so it can resume', async 
   )
 })
 
-test('cancelled download with clearBlocksOnCancel leaves no durable blocks after reopen', async (t) => {
-  const { downloadedBlocks, storedBlocks } = await cancelMidDownload(t, {
-    clearBlocksOnCancel: true
-  })
+test('cancelled download leaves no durable blocks after reopen', async (t) => {
+  const { downloadedBlocks, storedBlocks } = await cancelMidDownload(t)
 
   t.ok(downloadedBlocks > CANCEL_AFTER_BLOCKS, 'in-flight blocks arrived after cancellation')
   t.is(storedBlocks, 0, 'no downloaded blocks remain after reopening the corestore')
@@ -220,8 +218,7 @@ test('drain timeout logs remaining peer counters with real Hypercore peers', asy
       client.downloadModel('models/storage-timeout-test.gguf', 's3', {
         outputFile,
         signal: controller.signal,
-        maxRetries: 1,
-        clearBlocksOnCancel: true
+        maxRetries: 1
       }),
     /Download cancelled/,
     'the download is cancelled while verify is still held'

@@ -230,6 +230,7 @@ test('download cancel and resume produces correct file', async (t) => {
         outputFile,
         timeout: 30000,
         signal: ac.signal,
+        clearBlocksOnCancel: false,
         onProgress: (progress) => {
           if (progress.downloaded > 0 && !ac.signal.aborted) {
             ac.abort()
@@ -296,6 +297,7 @@ test('onProgress reports initial cached bytes on resume', async (t) => {
         outputFile,
         timeout: 30000,
         signal: ac.signal,
+        clearBlocksOnCancel: false,
         onProgress: (progress) => {
           if (progress.downloaded > 0 && !ac.signal.aborted) {
             ac.abort()
@@ -346,7 +348,7 @@ test('onProgress reports initial cached bytes on resume', async (t) => {
   }
 })
 
-test('cancel with clearBlocksOnCancel leaves no blocks for the next download', async (t) => {
+test('cancel leaves no blocks for the next download by default', async (t) => {
   t.timeout(60000)
   const { bootstrap } = await createTestnet(3, t.teardown)
   const { ctx, model, testPayload } = await setupRegistryWithModel(t, bootstrap)
@@ -364,7 +366,6 @@ test('cancel with clearBlocksOnCancel leaves no blocks for the next download', a
         outputFile,
         timeout: 30000,
         signal: ac.signal,
-        clearBlocksOnCancel: true,
         onProgress: (progress) => {
           if (progress.downloaded > 0 && !ac.signal.aborted) {
             ac.abort()
@@ -385,7 +386,7 @@ test('cancel with clearBlocksOnCancel leaves no blocks for the next download', a
   t.is(
     await countStoredBlocks(clientStorage, model.blobBinding),
     0,
-    'no blocks survived the clearing cancel'
+    'no blocks survived the cancel'
   )
 
   const clientCtx2 = await createTestClient(t, ctx, bootstrap, clientStorage)
@@ -402,4 +403,47 @@ test('cancel with clearBlocksOnCancel leaves no blocks for the next download', a
     await cleanupTestClient(clientCtx2)
     await cleanupService(ctx)
   }
+})
+
+test('clearBlob reclaims the blocks a kept cancel left behind', async (t) => {
+  t.timeout(60000)
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const { ctx, model } = await setupRegistryWithModel(t, bootstrap)
+
+  const clientStorage = await createTempStorage(t)
+  const outputFile = path.join(await createTempStorage(t), 'output.bin')
+
+  const clientCtx = await createTestClient(t, ctx, bootstrap, clientStorage)
+
+  try {
+    const ac = new AbortController()
+
+    try {
+      await clientCtx.client.downloadModel(model.path, model.source, {
+        outputFile,
+        timeout: 30000,
+        signal: ac.signal,
+        clearBlocksOnCancel: false,
+        onProgress: (progress) => {
+          if (progress.downloaded > 0 && !ac.signal.aborted) {
+            ac.abort()
+          }
+        }
+      })
+      t.fail('should have thrown on cancel')
+    } catch (err) {
+      t.is(err.message, 'Download cancelled', 'throws cancel error')
+    }
+
+    await clientCtx.client.clearBlob(model.blobBinding)
+  } finally {
+    await cleanupTestClient(clientCtx)
+    await cleanupService(ctx)
+  }
+
+  t.is(
+    await countStoredBlocks(clientStorage, model.blobBinding),
+    0,
+    'clearBlob removed the kept blocks'
+  )
 })

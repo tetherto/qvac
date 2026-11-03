@@ -35,6 +35,7 @@ class QVACRegistryClient extends ReadyResource {
     this.hyperswarm = null
     this._connectionHandler = null
     this._metadataReady = null
+    this._pendingReleases = new Map()
 
     this.storage = this.registryConfig.getRegistryStorage(opts.storage)
     this.registryCoreKey = this.registryConfig.getRegistryCoreKey(opts.registryCoreKey)
@@ -200,15 +201,29 @@ class QVACRegistryClient extends ReadyResource {
     return { cachedBlocks, totalBlocks, totalBytes }
   }
 
-  async _getBlobsCore(blobsCoreKey) {
-    let keyBuffer
-    if (Buffer.isBuffer(blobsCoreKey)) {
-      keyBuffer = blobsCoreKey
-    } else if (typeof blobsCoreKey === 'object' && blobsCoreKey.data) {
-      keyBuffer = Buffer.from(blobsCoreKey.data)
-    } else {
-      keyBuffer = IdEnc.decode(blobsCoreKey)
+  _decodeCoreKey(blobsCoreKey) {
+    if (Buffer.isBuffer(blobsCoreKey)) return blobsCoreKey
+    if (typeof blobsCoreKey === 'object' && blobsCoreKey.data) {
+      return Buffer.from(blobsCoreKey.data)
     }
+    return IdEnc.decode(blobsCoreKey)
+  }
+
+  _releaseId(coreKey, blockStart) {
+    return `${IdEnc.normalize(coreKey)}:${blockStart}`
+  }
+
+  // A caller may start the next download of a blob before the previous one's
+  // teardown finishes; clearing then would delete blocks the new one counted.
+  async _awaitPendingRelease(blobsCoreKey, blockStart) {
+    const pending = this._pendingReleases?.get(
+      this._releaseId(this._decodeCoreKey(blobsCoreKey), blockStart)
+    )
+    if (pending) await pending
+  }
+
+  async _getBlobsCore(blobsCoreKey) {
+    const keyBuffer = this._decodeCoreKey(blobsCoreKey)
 
     this.logger.debug('Creating hyperblobs core', {
       blobCore: IdEnc.normalize(keyBuffer)
@@ -329,6 +344,7 @@ class QVACRegistryClient extends ReadyResource {
 
       this.logger.debug('Model metadata retrieved', { model })
 
+      await this._awaitPendingRelease(model.blobBinding.coreKey, model.blobBinding.blockOffset)
       const blobsCore = await this._getBlobsCore(model.blobBinding.coreKey)
       core = blobsCore.core
       blobs = blobsCore.blobs
@@ -432,6 +448,7 @@ class QVACRegistryClient extends ReadyResource {
 
       await this.ready()
 
+      await this._awaitPendingRelease(blobBinding.coreKey, blobBinding.blockOffset)
       const blobsCore = await this._getBlobsCore(blobBinding.coreKey)
       core = blobsCore.core
       blobs = blobsCore.blobs
@@ -520,16 +537,31 @@ class QVACRegistryClient extends ReadyResource {
     stream.once('close', release)
   }
 
-  // A cancelled download keeps its blocks so the next attempt resumes from them,
-  // unless the caller opts in via `clearBlocksOnCancel` (read at cancel time).
+  // A failed download keeps its blocks so the next attempt resumes from them;
+  // `clearBlob` reclaims them. A cancel clears unless `clearBlocksOnCancel`
+  // (read at cancel time) says otherwise.
   _shouldClearBlocksAfterError(options) {
-    if (!options.signal || !options.signal.aborted) return true
+    if (!options.signal || !options.signal.aborted) return false
 
     const clear = options.clearBlocksOnCancel
+    if (clear === undefined) return true
     return Boolean(typeof clear === 'function' ? clear() : clear)
   }
 
-  async _releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd, opts = {}) {
+  _releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd, opts = {}) {
+    const release = this._doReleaseDownload(core, blobs, rangeDownload, blockStart, blockEnd, opts)
+    if (!core || !core.key || blockStart === undefined) return release
+
+    const id = this._releaseId(core.key, blockStart)
+    this._pendingReleases ??= new Map()
+    const tracked = release.finally(() => {
+      if (this._pendingReleases.get(id) === tracked) this._pendingReleases.delete(id)
+    })
+    this._pendingReleases.set(id, tracked)
+    return tracked
+  }
+
+  async _doReleaseDownload(core, blobs, rangeDownload, blockStart, blockEnd, opts) {
     const { clearBlocks = true } = opts
 
     // Hypercore can commit in-flight responses after a range is destroyed.
@@ -579,6 +611,31 @@ class QVACRegistryClient extends ReadyResource {
       }
       await new Promise((resolve) => setTimeout(resolve, pollMs))
     }
+  }
+
+  /**
+   * Deletes a blob's cached blocks, e.g. those an abandoned download kept for
+   * resume. No-op for blocks that were never downloaded.
+   */
+  async clearBlob(blobBinding) {
+    if (!blobBinding || !blobBinding.coreKey) {
+      throw new Error('Invalid blobBinding: coreKey is required')
+    }
+    if (
+      typeof blobBinding.blockOffset !== 'number' ||
+      typeof blobBinding.blockLength !== 'number'
+    ) {
+      throw new Error('Invalid blobBinding: blockOffset and blockLength are required numbers')
+    }
+
+    await this.ready()
+    await this._awaitPendingRelease(blobBinding.coreKey, blobBinding.blockOffset)
+
+    const { core, blobs } = await this._getBlobsCore(blobBinding.coreKey)
+    // A cancel that kept its blocks skipped the drain; its in-flight blocks can still land.
+    await this._waitForInflightBlocks(core)
+    const start = blobBinding.blockOffset
+    await this._releaseDownload(core, blobs, null, start, start + blobBinding.blockLength)
   }
 
   async _clearBlobBlocks(core, start, end) {
