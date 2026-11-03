@@ -199,6 +199,15 @@ function commonPrefixLength(a, b) {
   return i
 }
 
+// A stop word that first appears in the second half of `text`, so generation
+// drafts for a while before an accepted run reaches it. Stop strings match
+// case-insensitively.
+function pickStopWord(text) {
+  const lower = text.toLowerCase()
+  const half = Math.floor(lower.length / 2)
+  return (lower.slice(half).match(/[a-z]{5,}/g) || []).find((word) => lower.indexOf(word) >= half)
+}
+
 for (const variant of VARIANTS) {
   const { label, target, skip } = variant
   const timeout = (ms) => Math.max(ms, variant.timeout || 0)
@@ -245,15 +254,8 @@ for (const variant of VARIANTS) {
         }
       }
 
-      // A stop word that first appears in the second half of the plain output,
-      // so generation drafts for a while before an accepted run reaches it.
-      // Stop strings match case-insensitively.
       const reference = await run(baseConfig({ 'spec-type': 'none' }))
-      const lower = reference.output.toLowerCase()
-      const half = Math.floor(lower.length / 2)
-      const stopWord = (lower.slice(half).match(/[a-z]{5,}/g) || []).find(
-        (word) => lower.indexOf(word) >= half
-      )
+      const stopWord = pickStopWord(reference.output)
       t.ok(stopWord, `found a stop word in the plain output: ${stopWord}`)
 
       const plain = await run(baseConfig({ 'spec-type': 'none', reverse_prompt: stopWord }))
@@ -277,6 +279,29 @@ for (const variant of VARIANTS) {
             'predictionLimit',
             'speculative text without the stop word ran to the prediction limit'
           )
+          // That run never matched, so it is the speculative output without a
+          // stop. A word from it must stop speculative decoding, unless the
+          // next run diverges from it before the word.
+          const own = speculative.output
+          const ownWord = pickStopWord(own)
+          t.ok(ownWord, `found a stop word in the speculative output: ${ownWord}`)
+          const stopped = await run(await variantConfig(variant, { reverse_prompt: ownWord }))
+          if (stopped.output.toLowerCase().includes(ownWord)) {
+            t.is(
+              stopped.stats.stopReason,
+              'antiprompt',
+              'speculative decoding stopped on a word from its own output'
+            )
+            assertStopsAtFirstMatch(t, stopped.output, ownWord, 'speculative')
+            assertDrafted(t, stopped.stats, 'own stop string')
+          } else {
+            const at = commonPrefixLength(stopped.output, own)
+            t.ok(
+              at < own.toLowerCase().indexOf(ownWord) + ownWord.length,
+              'speculative text without its own stop word diverged from its own output before it'
+            )
+            t.comment(`second speculative run diverged at character ${at}`)
+          }
         }
         const a = speculative.output
         const b = plain.output
