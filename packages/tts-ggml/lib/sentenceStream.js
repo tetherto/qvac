@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.SentenceStreamer = exports.LAST_REPORTED_STREAM_STATS = void 0;
+exports.SentenceStreamer = exports.EVERY_CHUNK_STREAM_STATS = exports.LAST_REPORTED_STREAM_STATS = void 0;
 exports.normalizeError = normalizeError;
 exports.ttsOutputDebugString = ttsOutputDebugString;
 exports.isAudioOutputEvent = isAudioOutputEvent;
@@ -16,8 +16,8 @@ const textChunker_1 = require("./textChunker");
 const textStreamAccumulator_1 = require("./textStreamAccumulator");
 /**
  * Stats a stream keeps from the last chunk that reported them instead of
- * summing: where the synthesis ran, and whether the Audio8 codec used its
- * Core ML sidecar.
+ * summing: where the synthesis ran, whether the Audio8 codec used its Core ML
+ * sidecar, and which Parler sidecars were still loaded.
  */
 exports.LAST_REPORTED_STREAM_STATS = [
     "backendDevice",
@@ -29,6 +29,17 @@ exports.LAST_REPORTED_STREAM_STATS = [
     "denoiserBackendId",
     "codecSidecarLoaded",
     "codecOnCoreml",
+    "decoderSidecarLoaded",
+    "dacSidecarLoaded",
+];
+/**
+ * Stats a stream keeps at the lowest value any chunk reported. Complete
+ * Core ML execution requires every sentence to have used it: a capacity
+ * fallback can leave the sidecar attached for the next sentence.
+ */
+exports.EVERY_CHUNK_STREAM_STATS = [
+    "decoderOnCoreml",
+    "dacOnCoreml",
 ];
 function normalizeError(error) {
     return typeof error === "string"
@@ -226,6 +237,7 @@ function mergeSentenceStreamStats(accumulator, data) {
     accumulator.generatedFrames +=
         typeof data.generatedFrames === "number" ? data.generatedFrames : 0;
     retainLastReportedStats(accumulator, data);
+    retainLowestReportedStats(accumulator, data);
 }
 function retainLastReportedStats(accumulator, data) {
     for (const field of exports.LAST_REPORTED_STREAM_STATS) {
@@ -233,6 +245,17 @@ function retainLastReportedStats(accumulator, data) {
         if (typeof value === "number")
             accumulator[field] = value;
     }
+}
+function retainLowestReportedStats(accumulator, data) {
+    for (const field of exports.EVERY_CHUNK_STREAM_STATS) {
+        const value = data[field];
+        if (typeof value === "number") {
+            accumulator[field] = lowestReported(accumulator[field], value);
+        }
+    }
+}
+function lowestReported(previous, value) {
+    return previous === undefined ? value : Math.min(previous, value);
 }
 /**
  * Drives one sentence stream at a time. The wrapper routes native output and
