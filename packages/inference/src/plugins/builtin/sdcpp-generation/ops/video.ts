@@ -85,7 +85,11 @@ function asVideoModel(model: unknown, modelId: string): VideoStableDiffusion {
   throw new ModelOperationNotSupportedError(modelId, modelType, 'video', ['diffusion'], [])
 }
 
-export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamResponse> {
+export type VideoOpResult = { stats: VideoStats | undefined }
+
+export async function* video(
+  request: VideoRequest
+): AsyncGenerator<VideoStreamResponse, VideoOpResult> {
   await using ctx = await getRequestRegistry().begin({
     requestId: request.requestId ?? generateRandomRequestId(),
     kind: 'diffusion',
@@ -112,8 +116,9 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
     )
   }
 
+  let cancelPromise: Promise<void> | undefined
   const onAbort = () => {
-    model.cancel().catch((err: unknown) => {
+    cancelPromise ??= model.cancel().catch((err: unknown) => {
       requestLogger.warn(
         `[cancel] model.cancel() rejected during abort for modelId=${request.modelId}: ${err instanceof Error ? err.message : String(err)}`
       )
@@ -121,8 +126,9 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
   }
   ctx.signal.addEventListener('abort', onAbort, { once: true })
   if (ctx.signal.aborted) onAbort()
-  ctx.scope.defer(() => {
+  ctx.scope.defer(async () => {
     ctx.signal.removeEventListener('abort', onAbort)
+    await cancelPromise
   })
 
   const runParams = {
@@ -214,10 +220,21 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
         })
       : await model.run({ ...runParams, mode: 'txt2vid' })
 
+  let drained = false
+  ctx.scope.defer(async () => {
+    if (drained) return
+    onAbort()
+    try {
+      await response.await()
+    } catch {
+      // Preserve the stream's original failure or consumer exit.
+    }
+  })
+
   let outputIndex = 0
 
   for await (const chunk of response.iterate()) {
-    if (ctx.signal.aborted) break
+    if (ctx.signal.aborted) continue
     if (chunk instanceof Uint8Array) {
       yield {
         type: 'videoStream',
@@ -240,11 +257,8 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
       }
     }
   }
+  drained = true
 
   const responseWithStats = response as unknown as ResponseWithStats
-  yield {
-    type: 'videoStream',
-    done: true,
-    stats: toVideoStats(responseWithStats.stats)
-  }
+  return { stats: toVideoStats(responseWithStats.stats) }
 }

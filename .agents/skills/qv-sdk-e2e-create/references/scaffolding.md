@@ -2,10 +2,10 @@
 
 Templates for step 8 of the workflow in [`../SKILL.md`](../SKILL.md).
 
-## Test definition (`tests/<feature>-tests.ts`)
+## Test definition (`catalog/<feature>-tests.ts`)
 
-A declarative body, shaped like `packages/sdk/e2e/tests/vision-tests.ts` and
-`packages/sdk/e2e/tests/tts-moss-tests.ts`:
+A declarative body, shaped like `packages/sdk-e2e/catalog/vision-tests.ts` and
+`packages/sdk-e2e/catalog/tts-moss-tests.ts`:
 
 ```ts
 import type { Step, TestDefinition } from '@qvac/test-suite'
@@ -70,7 +70,7 @@ export const <feature>Tests: TestDefinition[] = [
   pre-download and the per-test preload read it, not the body; `npm run check:step-dependencies`
   fails on a mismatch. Use `'none'` only for a body with no `useModel`, such as a validation error
   raised before any model is looked up.
-- Each `<resource-key>` is an entry in `tests/shared/resource-table.ts` whose `on` covers every leg
+- Each `<resource-key>` is an entry in `catalog/resource-table.ts` whose `on` covers every leg
   the test runs on.
 - `'$params.<name>'` reads the definition's `params`; with a trailing `?` the field is left out of
   the call when a test does not set it, so one helper serves tests with different inputs.
@@ -80,7 +80,7 @@ export const <feature>Tests: TestDefinition[] = [
   runner must do with them is in its
   [conformance spec](../../../../packages/test-suite/docs/conformance.md).
 
-Register in `tests/test-definitions.ts`:
+Register in `catalog/test-definitions.ts`:
 
 ```ts
 import { <feature>Tests } from './<feature>-tests.js'
@@ -96,12 +96,12 @@ const catalog: TestDefinition[] = [
 Only for a body that cannot be data. Leave `steps` out of the definition and keep the rest of the
 template, `metadata.dependency` included.
 
-Extend `AbstractModelExecutor` (base: `tests/shared/executors/abstract-model-executor.ts`) or use
+Extend `AbstractModelExecutor` (base: `runners/js/shared/executors/abstract-model-executor.ts`) or use
 `createExecutor` with `TestHandler` for ad-hoc cases. Bind handlers per `testId`, and use
 `ResourceManager.ensureLoaded("<resource-name>")` to obtain model IDs.
 
 Register the new executor in every compatible `handlers: [...]` array: desktop, mobile, and Electron
-(which also covers Snap). Skip intentionally unsupported legs in `tests/platform-skips.ts`.
+(which also covers Snap). Skip intentionally unsupported legs in `catalog/platform-skips.ts`.
 
 ## Expectation reference
 

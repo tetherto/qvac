@@ -69,7 +69,7 @@ export const UNRESOLVED_IMPORT_EXEMPTIONS: readonly UnresolvedImportExemption[] 
     reason: 'This unit test intentionally loads compiled CLI output.',
   },
   {
-    importer: /^packages\/sdk\/e2e\/tests\/mobile\//,
+    importer: /^packages\/sdk-e2e\/runners\/js\/mobile\//,
     specifier: /^(?:\.\.\/)+(?:assets|consumer-config)$/,
     reason: 'Mobile asset and consumer configuration modules are generated during consumer assembly.',
   },

@@ -68,8 +68,11 @@ export interface TurboVecIndex {
 }
 
 export interface TurboVecIndexProvider {
-  create(options: { dim: number; storage: TurboVecIndexStorage }): TurboVecIndex
-  load(path: string): TurboVecIndex
+  create(options: {
+    dim: number
+    storage: TurboVecIndexStorage
+  }): TurboVecIndex | Promise<TurboVecIndex>
+  load(path: string): TurboVecIndex | Promise<TurboVecIndex>
 }
 
 interface NativeIdRecord {
@@ -369,7 +372,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
   ): Promise<void> {
     try {
       this._assertWriterOwnership()
-      this._ensureIndex(docs[0].dimension)
+      await this._ensureIndex(docs[0].dimension)
       if (!this.index) {
         for (let index = 0; index < docs.length; index++) {
           this._assertRuntimeMapping(nativeIds[index].value, docs[index].id)
@@ -719,7 +722,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
           manifest.revision <= currentRevision &&
           (manifest.storage === this.preferredStorage || manifest.storage === this.fallbackStorage)
         ) {
-          const loaded = this.indexProvider.load(
+          const loaded = await this.indexProvider.load(
             path.join(this.checkpointWorkspaceDir, manifest.snapshot)
           )
           if (loaded.dim !== dimension || loaded.length !== manifest.vectorCount) {
@@ -756,7 +759,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
     const config = await this.getConfig()
     if (!config) return 0
 
-    const nextIndex = this._createIndex(config.dimension)
+    const nextIndex = await this._createIndex(config.dimension)
     if (!nextIndex) {
       this.index?.dispose()
       this.index = null
@@ -904,19 +907,20 @@ export class TurboVecAdapter extends BaseDBAdapter {
     })
   }
 
-  private _ensureIndex(dimension: number): void {
+  private async _ensureIndex(dimension: number): Promise<void> {
     if (this.index && this.index.dim === dimension) return
     if (this.indexUnavailable) return
     this.index?.dispose()
-    this.index = this._createIndex(dimension)
+    this.index = null
+    this.index = await this._createIndex(dimension)
     this.indexRevision = 0
     this.idToDocument.clear()
   }
 
-  private _createIndex(dimension: number): TurboVecIndex | null {
+  private async _createIndex(dimension: number): Promise<TurboVecIndex | null> {
     if (dimension <= 1024 && dimension % 8 === 0) {
       try {
-        const index = this.indexProvider.create({
+        const index = await this.indexProvider.create({
           dim: dimension,
           storage: this.preferredStorage
         })
@@ -931,7 +935,7 @@ export class TurboVecAdapter extends BaseDBAdapter {
       }
     }
     try {
-      const fallback = this.indexProvider.create({
+      const fallback = await this.indexProvider.create({
         dim: dimension,
         storage: this.fallbackStorage
       })

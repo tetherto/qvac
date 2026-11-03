@@ -12,6 +12,10 @@ export interface LlmStats {
   // Renders in this request that provably left the supplied tool definitions
   // out; 0 when no tools were sent.
   toolDefinitionsDropped?: number
+  // Speculative decoding: draft tokens proposed and accepted; set only when
+  // the model was loaded with `spec_type`.
+  draftTokens?: number
+  draftAcceptedTokens?: number
   backendDevice?: 'cpu' | 'gpu'
   stopReason?:
     'none' | 'eos' | 'antiprompt' | 'predictionLimit' | 'sequenceLimit' | 'contextOverflow'
@@ -83,7 +87,30 @@ export interface EmbedResponse {
   await(): Promise<Float32Array[][]>
 }
 
-export type TranscribeStats = Partial<ASRGgml.WhisperRuntimeStats & ASRGgml.ParakeetRuntimeStats>
+/**
+ * MOSS-Transcribe-Diarize runtime statistics. The addon types only the whisper
+ * and parakeet shapes, so these are the keys `MossTranscribeModel::runtimeStats()`
+ * emits, under its own names.
+ */
+export interface MossTranscribeRuntimeStats {
+  totalTime: number
+  realTimeFactor: number
+  audioDurationMs: number
+  /** Output segments of the run. */
+  segments: number
+  audioTokens: number
+  promptTokens: number
+  generatedTokens: number
+  encodeMs: number
+  prefillMs: number
+  decodeMs: number
+  backendDevice: number
+  backendId: number
+}
+
+export type TranscribeStats = Partial<
+  ASRGgml.WhisperRuntimeStats & ASRGgml.ParakeetRuntimeStats & MossTranscribeRuntimeStats
+>
 
 export type TranscribeAddonSegment = ASRGgml.TranscriptionSegment
 export type TranscribeAddonVadEvent = ASRGgml.VadEvent

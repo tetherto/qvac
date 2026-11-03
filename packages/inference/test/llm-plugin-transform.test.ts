@@ -151,3 +151,18 @@ test('transformLlmConfig: moe-cache-mib and fit-target take their string forms',
   t.is(transformLlmConfig(makeConfig({ 'moe-cache-mib': 'auto' }))['moe-cache-mib'], 'auto')
   t.is(transformLlmConfig(makeConfig({ 'fit-target': 512 }))['fit-target'], '512')
 })
+
+test('transformLlmConfig: speculative keys reach the addon as underscore strings', (t) => {
+  const result = transformLlmConfig(
+    makeConfig({
+      spec_type: 'draft-mtp',
+      spec_draft_n_max: 4,
+      spec_draft_n_min: 0,
+      spec_draft_p_min: 0.5
+    })
+  )
+  t.is(result['spec_type'], 'draft-mtp')
+  t.is(result['spec_draft_n_max'], '4')
+  t.is(result['spec_draft_n_min'], '0')
+  t.is(result['spec_draft_p_min'], '0.5')
+})

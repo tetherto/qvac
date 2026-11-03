@@ -35,6 +35,12 @@ const INT32_MAX = 2147483647;
 const FLOAT32_MAX = 3.4028234663852886e38;
 const FLOAT32_MIN_POSITIVE = 1.401298464324817e-45;
 const MINIMAX_DEVICES = ['cpu', 'gpu', 'auto'];
+const MINIMAX_COREML_COMPUTE_UNITS = [
+    'CPU_ONLY',
+    'CPU_AND_GPU',
+    'CPU_AND_NE',
+    'ALL'
+];
 /** `AudiogenStats.backendId` codes, named. Codes match @qvac/tts-ggml. */
 exports.AUDIOGEN_BACKEND_NAMES = {
     0: 'cpu',
@@ -359,8 +365,26 @@ function validateAcestepOptions(files, config) {
     if (config.device !== undefined) {
         throw invalidInput('ACE-Step does not accept device (use useGPU and nGpuLayers)');
     }
+    if (config.coremlProfileDir !== undefined || config.coremlComputeUnits !== undefined) {
+        throw invalidInput('coremlProfileDir and coremlComputeUnits are MiniMax-only options');
+    }
+}
+function validateMinimaxCoreMLConfig(config) {
+    if (config.coremlProfileDir === undefined && config.coremlComputeUnits === undefined)
+        return;
+    if (typeof config.coremlProfileDir !== 'string' ||
+        config.coremlProfileDir.length === 0 ||
+        config.coremlProfileDir.includes('\0') ||
+        typeof config.coremlComputeUnits !== 'string' ||
+        !MINIMAX_COREML_COMPUTE_UNITS.includes(config.coremlComputeUnits)) {
+        throw invalidInput('MiniMax Core ML requires coremlProfileDir and coremlComputeUnits (CPU_ONLY, CPU_AND_GPU, CPU_AND_NE or ALL)');
+    }
+    if (os.platform() !== 'darwin') {
+        throw invalidInput('MiniMax Core ML requires macOS 15 or later');
+    }
 }
 function validateMinimaxConfig(config) {
+    validateMinimaxCoreMLConfig(config);
     if (config.useGPU !== undefined && typeof config.useGPU !== 'boolean') {
         throw invalidInput('useGPU must be a boolean');
     }
@@ -586,6 +610,8 @@ class AudioGen {
                 threads,
                 useGPU: config.useGPU ?? false,
                 device: config.device,
+                coremlProfileDir: config.coremlProfileDir,
+                coremlComputeUnits: config.coremlComputeUnits,
                 backendsDir
             };
         }

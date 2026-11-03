@@ -27,6 +27,7 @@ const cancelKindSchema = z
     'batchCompletion',
     'embeddings',
     'decision',
+    'rerank',
     'transcribe',
     'translate',
     'diffusion',

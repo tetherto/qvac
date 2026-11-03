@@ -25,5 +25,10 @@ Source code and tests win over historical agent notes.
   sufficient.
 - When runtime behavior changes, update the owning package documentation in place.
   Do not append corrections while leaving obsolete descriptions active.
+- Keep `README.md` to the overview, installation, quickstart, and links. It is the
+  npm package page. Do not add feature documentation or release highlights to it,
+  and do not mirror the documentation website in package markdown. User-facing
+  documentation belongs on the website (`docs/website`), release changes in the
+  changelog, and contributor workflow in `CONTRIBUTING.md`.
 - Inspect `package.json` and run the narrowest relevant format, lint, type, unit,
   integration, and contract checks before handoff.

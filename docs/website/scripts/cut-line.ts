@@ -1,29 +1,46 @@
 #!/usr/bin/env bun
 /**
- * Cut a versioned collection's next documentation line.
+ * Cut a versioned collection's documentation line for the version being
+ * released.
  *
- * A line is a folder under its collection holding a complete page tree. The
- * current line's folder is parenthesized, a Fumadocs group excluded from the
- * slug, so its pages answer at the version-less paths; every other line's
- * folder is plain, so its pages carry the version. Cutting is therefore two
- * moves — the outgoing group becomes plain, and a copy of it becomes the new
- * group — plus the edits that keep the rest of the site agreeing with them.
+ * A line is a folder holding a complete page tree. Every line that has been
+ * cut lives under `content/docs/<collection>/`: the newest one is
+ * parenthesized, a Fumadocs group excluded from the slug, so its pages answer
+ * at the version-less paths, and every older one is plain, so its pages carry
+ * the version. The line still being written lives outside the site, at
+ * `content/_unpublished/<collection>/next/`, where nothing builds it and no URL
+ * reaches it.
+ *
+ * A cut is therefore: the outgoing group becomes plain, a copy of the
+ * development line becomes the new group, and the development line stays where
+ * it is — it is already the next version's. The development line is neither
+ * renamed nor deleted, so git has no deletion to pair a pre-cutoff edit
+ * against and cannot replay a feature PR's work into a version it was not
+ * written for. That is the whole reason the line is addressed by a fixed name
+ * instead of by its number.
+ *
+ * The outgoing group is renamed, though, and the new group is byte-identical
+ * to it wherever the sprint changed nothing. A PR that edits the group and
+ * merges after the cut therefore has two exact rename candidates per page, and
+ * git picks one (QVAC-27286). The `Documentation lines` job in
+ * `.github/workflows/docs-website-pr-checks.yml` fails such a PR until it is
+ * rebased — it is not a required check, so it makes the window visible rather
+ * than withholding the merge; a fixed group folder name would remove the
+ * rename altogether, and is the structural answer this model has not taken.
  *
  * This does exactly what the hand procedure in `README.md` does, in one
  * command. It is a convenience and never a dependency: a cut made by hand is
- * the same cut, and the build is what accepts either. Nothing in the release
- * flow calls this — the documentation engineer runs it, reviews the diff, and
- * opens a PR.
+ * the same cut, and the build is what accepts either.
  *
  * It does not build. The checks that reject a malformed cut already exist, and
  * reporting success of its own would be a second opinion that could disagree
  * with them.
  *
  * Usage:
- *   bun run scripts/cut-line.ts <collection> <version>
+ *   bun run scripts/cut-line.ts <collection> <version being released>
  *
- *   bun run scripts/cut-line.ts sdk v0.21
- *   bun run scripts/cut-line.ts cli 0.15
+ *   bun run scripts/cut-line.ts sdk v0.24
+ *   bun run scripts/cut-line.ts cli 0.18
  */
 
 import * as fs from "fs/promises";
@@ -31,6 +48,7 @@ import * as path from "path";
 import { execFileSync } from "child_process";
 import { fileURLToPath } from "node:url";
 import { DOCUMENTED_SOFTWARE } from "../src/lib/versions.js";
+import { developmentLineDir } from "./lib/release-shared.js";
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DOCS_WEBSITE_DIR = path.resolve(SCRIPT_DIR, "..");
@@ -43,13 +61,15 @@ export interface CutRequest {
   root: string;
   /** The collection's slug, as its path's single segment: `sdk`, `cli`. */
   slug: string;
-  /** The line to open, `vX.Y`. */
+  /** The version being released, `vX.Y`. Its line is the one the cut opens. */
   version: string;
 }
 
 export interface CutResult {
+  /** The version released, whose line the cut published. */
+  released: string;
+  /** The line that lost the group. */
   preserved: string;
-  opened: string;
   /** Paths changed, relative to the root, in the order they were touched. */
   changed: string[];
 }
@@ -77,6 +97,10 @@ function isAbove(
   b: { major: number; minor: number },
 ): boolean {
   return a.major !== b.major ? a.major > b.major : a.minor > b.minor;
+}
+
+function escapeForRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**
@@ -203,41 +227,36 @@ export function relabelTitle(
 }
 
 /**
- * Empty the opened line's release notes, keeping the page.
+ * Point a line's release-notes sidebar entry at its own GitHub release.
  *
- * The API summary is left as the copy brought it, because the release that
- * renders it is reviewed as a diff: against the previous line's summary, only
- * the part of the surface that actually moved shows up. Release notes share
- * nothing with the line before them, so carrying them over costs that review
- * its signal — the diff becomes a wholesale replacement — and publishes the
- * previous release's notes under this line's title until the release lands.
+ * The site publishes no release-notes page: `reference/meta.json` carries an
+ * external entry naming the tag of that line's first release
+ * (`sdk-v0.22.0`). The URL is per line, and the development line is a copy of
+ * the line cut before it, so without this the line being opened would inherit
+ * the previous tag and advertise the wrong release — silently, since an
+ * external entry is never checked against the content tree.
  *
- * The frontmatter stays. `meta.json` lists the page, so removing it would drop
- * it from the sidebar, and the title it carries is the one the cut just
- * relabelled. Only the description, which names a version that is not this
- * line's, and the body are rewritten.
+ * The tag does not exist yet when the cut runs; it is created when the version
+ * publishes, days later, which is also when production starts serving the
+ * line. Pointing at it early is therefore correct, not broken.
  *
- * Returns `null` when the source carries no frontmatter to keep.
+ * Returns `null` when the file carries no such entry, which is every
+ * collection but the SDK.
  */
-export function emptyReleaseNotes(
+export function retargetReleaseNotesLink(
   source: string,
-  opened: string,
-  pkg: string,
+  slug: string,
+  to: string,
 ): string | null {
-  const closing = source.indexOf("\n---\n", 3);
-  if (!source.startsWith("---\n") || closing === -1) return null;
-
-  const frontmatter = source.slice(0, closing + 5);
-  const description = `description: Release notes for ${pkg} ${opened}.`;
-  const body =
-    `${opened} has not been released yet. This page is written when the ` +
-    `release ships, from the changelog of each package it covers.\n`;
-
-  return (
-    (/^description:.*$/m.test(frontmatter)
-      ? frontmatter.replace(/^description:.*$/m, description)
-      : frontmatter.replace(/^(title:.*)$/m, `$1\n${description}`)) +
-    `\n${body}`
+  const entry = new RegExp(
+    `(external:\\[[^\\]]*\\]\\([^)]*/releases/tag/)` +
+      `${escapeForRegExp(slug)}-v[0-9]+\\.[0-9]+\\.0(\\))`,
+  );
+  if (!entry.test(source)) return null;
+  return source.replace(
+    entry,
+    (_match, before: string, after: string) =>
+      `${before}${slug}-${to}.0${after}`,
   );
 }
 
@@ -275,27 +294,28 @@ async function relabelLine(
 }
 
 /**
- * Empty the opened line's release notes, best-effort: only a collection whose
- * release flow generates the page carries one, so a line without it is a valid
- * line. Today that is the SDK; the CLI publishes no reference pages.
+ * Retarget a line's release-notes link, best-effort: only a collection whose
+ * releases are published on GitHub carries the entry, so a line without it is
+ * a valid line. Today that is the SDK; the CLI publishes no reference pages
+ * and has no GitHub releases.
  */
-async function emptyLineReleaseNotes(
+async function retargetLineReleaseNotesLink(
   dir: string,
+  slug: string,
   opened: string,
-  pkg: string,
 ): Promise<string[]> {
-  const page = path.join(dir, "reference", "release-notes.mdx");
-  if (!(await exists(page))) return [];
+  const meta = path.join(dir, "reference", "meta.json");
+  if (!(await exists(meta))) return [];
 
-  const emptied = emptyReleaseNotes(
-    await fs.readFile(page, "utf-8"),
+  const retargeted = retargetReleaseNotesLink(
+    await fs.readFile(meta, "utf-8"),
+    slug,
     opened,
-    pkg,
   );
-  if (emptied === null) return [];
+  if (retargeted === null) return [];
 
-  await fs.writeFile(page, emptied);
-  return [page];
+  await fs.writeFile(meta, retargeted);
+  return [meta];
 }
 
 /** Perform the cut. Every refusal happens before the first write. */
@@ -325,18 +345,29 @@ export async function cutLine(request: CutRequest): Promise<CutResult> {
   }
 
   const line = parseLine(request.version);
-  const opened = `v${line.major}.${line.minor}`;
+  const released = `v${line.major}.${line.minor}`;
+  const collectionDir = path.join(root, "content", "docs", slug);
+  const development = developmentLineDir(slug, root);
+  const hasDevelopmentLine = await exists(development);
+
   if (!isAbove(line, parseLine(current.version))) {
     throw new Error(
-      `${opened} is not above ${current.version}, the current line of ` +
-        `'${slug}'. A cut opens the line that comes next.`,
+      `${released} is not above ${current.version}, the line '${slug}' last ` +
+        `cut. A cut opens the line of the version that comes next.`,
     );
   }
 
-  const collectionDir = path.join(root, "content", "docs", slug);
+  if (!hasDevelopmentLine) {
+    throw new Error(
+      `'${slug}' has no development line at ` +
+        `${path.relative(root, development)}, so there is nothing to publish ` +
+        `as ${released}. Cut ${current.version} first: that is what creates it.`,
+    );
+  }
+
   const outgoing = path.join(collectionDir, `(${current.version})`);
   const preserved = path.join(collectionDir, current.version);
-  const openedDir = path.join(collectionDir, `(${opened})`);
+  const openedDir = path.join(collectionDir, `(${released})`);
 
   for (const occupied of [preserved, openedDir]) {
     if (await exists(occupied)) {
@@ -353,7 +384,7 @@ export async function cutLine(request: CutRequest): Promise<CutResult> {
     await fs.readFile(manifestPath, "utf-8"),
     collectionPath,
     current.version,
-    opened,
+    released,
   );
   const redirects = cutRedirects(
     await fs.readFile(redirectsPath, "utf-8"),
@@ -363,28 +394,39 @@ export async function cutLine(request: CutRequest): Promise<CutResult> {
 
   // Every refusal is behind us; from here the cut is applied.
   await fs.rename(outgoing, preserved);
-  await fs.cp(preserved, openedDir, { recursive: true });
+
+  // The development line carries the outgoing line's markers, because that is
+  // what it was copied from. Relabel and retarget it before the copy, so the
+  // line being opened and the line still being written both come out naming
+  // the version released — and the next cut has the same invariant to work
+  // from.
+  const relabelledDevelopment = await relabelLine(
+    development,
+    current.version,
+    released,
+  );
+  const retargeted = await retargetLineReleaseNotesLink(
+    development,
+    slug,
+    released,
+  );
+  await fs.cp(development, openedDir, { recursive: true });
+
   await fs.writeFile(manifestPath, manifest);
   await fs.writeFile(redirectsPath, redirects);
 
   const relabelled = [
     ...(await relabelLine(preserved, current.version, null)),
-    ...(await relabelLine(openedDir, current.version, opened)),
+    ...relabelledDevelopment,
   ];
 
-  const emptied = await emptyLineReleaseNotes(
-    openedDir,
-    opened,
-    software.package,
-  );
-
-  const touched = [...relabelled, ...emptied].map((page) =>
+  const touched = [...relabelled, ...retargeted].map((page) =>
     path.relative(root, page),
   );
 
   return {
+    released,
     preserved: current.version,
-    opened,
     changed: [
       path.relative(root, preserved),
       path.relative(root, openedDir),
@@ -428,20 +470,25 @@ function refuseDirtyTree(root: string): void {
 if (import.meta.main) {
   const [slug, version, ...rest] = process.argv.slice(2);
   if (!slug || !version || rest.length > 0) {
-    console.log("Usage: bun run scripts/cut-line.ts <collection> <version>");
+    console.log(
+      "Usage: bun run scripts/cut-line.ts <collection> <version being released>",
+    );
     console.log("");
-    console.log("  bun run scripts/cut-line.ts sdk v0.21");
+    console.log("  bun run scripts/cut-line.ts sdk v0.24");
     console.log("");
-    console.log("Cuts the collection's next documentation line: preserves the");
-    console.log("current one, opens the new one as a copy, and updates the");
-    console.log("manifest, the redirects, and the currency marker.");
+    console.log("Cuts the line of the version being released: preserves the");
+    console.log("line cut before it, opens this one as a copy of the");
+    console.log("development line, and updates the manifest, the redirects and");
+    console.log("the currency marker. The development line stays where it is.");
     process.exit(slug && version ? 1 : 0);
   }
 
   try {
     refuseDirtyTree(DOCS_WEBSITE_DIR);
     const result = await cutLine({ root: DOCS_WEBSITE_DIR, slug, version });
-    console.log(`Cut ${slug}: ${result.preserved} preserved, ${result.opened} opened.`);
+    console.log(
+      `Cut ${slug}: ${result.released} opened, ${result.preserved} preserved.`,
+    );
     for (const change of result.changed) console.log(`  ${change}`);
     console.log("");
     console.log("Review the diff, then `npm run build` and `npm test`.");

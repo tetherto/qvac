@@ -190,8 +190,8 @@ function buildManifest({
     if (isSdkPackage(packagePath) || packagePath === "packages/inference") {
       packageInfo.sdkE2eSetup = sdkE2eSetup(allChangedPaths);
       packageInfo.sdkE2eCwd = worktreePath
-        ? join(worktreePath, "packages", "sdk", "e2e")
-        : "packages/sdk/e2e";
+        ? join(worktreePath, "packages", "sdk-e2e")
+        : "packages/sdk-e2e";
     }
 
     touchedPackages.push(packageInfo);

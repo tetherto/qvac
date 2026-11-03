@@ -1,13 +1,13 @@
 ---
 name: qv-quality-reporting
-description: Run the deterministic code-quality audit, turn related findings into contextual remediation groups, prepare approval-gated Asana proposals, reconcile recurring runs, or configure twice-monthly quality reporting.
+description: Run the deterministic code-quality audit, turn related findings into contextual remediation groups, prepare proposals, reconcile recurring runs, or configure twice-monthly quality reporting.
 ---
 
 # Quality Reporting
 
 Turn the repository's deterministic quality evidence into a short, actionable
 review. This skill owns contextual grouping and triage; it does not replace the
-underlying findings or mutate Asana without explicit approval.
+underlying findings without explicit approval.
 
 ## Default Workflow
 
@@ -41,43 +41,15 @@ underlying findings or mutate Asana without explicit approval.
      `.quality/triage.json`'s deterministically ranked `candidates` array. Merged
      groups take the best contributing rank; split groups share their source
      rank. Break remaining ties by `groupKey` in ascending lexical order.
-   - Generate provisional proposals from that ordered queue in pages, reconcile
-     each page read-only, discard exact-existing and unchanged outcomes, and
-     continue until ten actionable proposals remain or candidates are exhausted.
-     Ambiguous matches count as actionable decisions. Backfill from the same
-     ordered queue and preserve its order in the final batch. Never cap the
-     source candidates before grouping, ranking, and reconciliation.
+   - Take the first ten groups from that ordered queue as the batch, or all of
+     them when fewer remain. Never cap the source candidates before grouping
+     and ranking.
 
    Write the final machine batch to `.quality/proposals.json`. Retain unreviewed
    candidates for later pages; do not discard them.
-7. Reconcile each provisional page read-only with:
-
-   ```bash
-   node .agents/skills/qv-quality-reporting/scripts/asana-quality.mjs \
-     --proposals .quality/proposals.json \
-     --report .quality/triage.json
-   ```
-
-   Suppress exact duplicate creations and unchanged actions, surface ambiguous
-   matches, and show the resulting final batch in chat as a numbered, concise
-   review. If local Asana
-   access is unavailable, label the proposals unreconciled and do not apply them
-   until reconciliation succeeds.
-8. End the initial run by asking the user which proposal IDs to approve. Do not
-   use `--apply`, even if the user previously authorized analysis.
-9. After the user explicitly approves IDs, rerun the helper for only that subset
-   without `--apply` and show the exact actions. Stop if the match is ambiguous or
-   the result differs materially from what the user approved. Otherwise run:
-
-   ```bash
-   node .agents/skills/qv-quality-reporting/scripts/asana-quality.mjs \
-     --proposals .quality/proposals.json \
-     --report .quality/triage.json \
-     --approve <comma-separated-proposal-ids> \
-     --apply
-   ```
-
-   Never infer approval for proposals the user did not name.
+7. Show the batch in chat as a numbered, concise review. Use only local audit,
+   triage, and user-provided evidence. State that existing external tickets have
+   not been checked. A human handles any task-tracker reconciliation or updates.
 
 ## Review Shape
 
@@ -90,8 +62,8 @@ For each proposal, show:
 - a two-to-four sentence explanation of what is wrong and where;
 - one focused remediation boundary;
 - compact evidence: paths, rules, severity, threshold excess, and Git activity;
-- lifecycle action: create, comment on a materially worsened group, or review an
-  apparent resolution.
+- lifecycle context: new remediation, material regression, or apparent resolution
+  requiring human review.
 
 Prefer source links in chat when a concrete line is available. Keep the
 deterministic finding list in `.quality/report.md` as the evidence trail.
@@ -117,21 +89,14 @@ the first run uses the committed audit baseline. The command advances the local
 snapshot only after complete analysis and successful triage. Do not delete it
 between recurring runs.
 
-Reconcile by stable group marker before proposing work:
+Compare local lifecycle evidence by stable group key before proposing work:
 
-- new actionable group with no match: propose ticket creation;
+- new actionable group: propose a remediation for human review;
 - materially worse existing group: use `changes[].direction` and the retained
-  before/after values to justify a proposed comment on its existing ticket;
+  before/after values to explain the regression;
 - improved-only drift: do not describe it as a regression;
-- apparently resolved group: show a review notice, never complete a task;
-- unchanged group: stay silent;
-- ambiguous match: request a decision and do not mutate Asana.
-
-The helper records only the group action and deterministic evidence hash in
-`.quality/reporting-state.json`. This ignored local checkpoint prevents the same
-ticket creation, regression comment, or resolution notice from being proposed
-repeatedly. It contains no Asana IDs or private links. Do not delete it between
-recurring runs.
+- apparently resolved group: show a review notice;
+- unchanged group: stay silent.
 
 Use [`references/scheduling.md`](references/scheduling.md) only when the user asks
 to create or modify the twice-monthly automation.
@@ -141,5 +106,5 @@ to create or modify the twice-monthly automation.
 When the user corrects ownership, importance, or group cohesion, apply that
 feedback to the current review. Offer a minimal update to
 `references/triage-config.json` only when it expresses a reusable repository
-rule. Do not store task IDs, private Asana links, people, tokens, or transient
-ticket state in repository files.
+rule. Do not store private task links, people, tokens, or transient ticket state in
+repository files.

@@ -74,6 +74,10 @@ export function classifySourceFile(path: string): SourceProfile {
       'test',
       'tests',
     ].includes(segment)
+      // An end-to-end suite such as packages/sdk-e2e is test code throughout,
+      // whatever its inner directories are called.
+      || segment === 'e2e'
+      || segment.endsWith('-e2e')
   }) || /(?:^|\.)+(?:config|test|spec)\.[^.]+$/.test(filename)
 
   return isAuxiliary ? 'auxiliary' : 'production'

@@ -63,6 +63,40 @@ def test_normalize_strips_think_blocks_and_unclosed_tail():
 # ---- run handles ----------------------------------------------------------------
 
 
+@pytest.mark.parametrize("prefill", [None, False, True])
+async def test_prefill_forwarding_and_empty_completion(prefill):
+    transport = FakeTransport(
+        [
+            _chunk(
+                [
+                    {
+                        "type": "completionStats",
+                        "seq": 0,
+                        "stats": {"generatedTokens": 0},
+                    },
+                    _done(1),
+                ],
+                done=True,
+            )
+        ]
+    )
+    run = completion(
+        transport,
+        model_id="m",
+        history=[{"role": "system", "content": "Hi"}],
+        kv_cache="prime",
+        prefill=prefill,
+    )
+    result = await run.final
+    assert result.content_text == ""
+    assert result.tool_calls == []
+    assert result.stats.generated_tokens == 0
+    assert transport.sent["kvCache"] == "prime"
+    assert transport.sent.get("prefill") is prefill
+    if prefill is None:
+        assert "prefill" not in transport.sent
+
+
 async def test_completion_aggregates_content_thinking_and_stats():
     transport = FakeTransport(
         stream_items=[
@@ -316,6 +350,32 @@ WEATHER_TOOL = {
         "required": ["city"],
     },
 }
+
+
+async def test_orchestrate_prefill_forwards_cache_without_callbacks():
+    from tetherto.qvac_sdk._completion import completion_orchestrate
+
+    class PrefillTransport(OrchestratingFakeTransport):
+        async def call_duplex(self, payload, up):
+            self.sent = payload
+            yield _orch(turn=0, events=[_done(0)])
+            yield _orch(done=True)
+
+    transport = PrefillTransport()
+    run = completion_orchestrate(
+        transport,
+        model_id="m",
+        history=[{"role": "system", "content": "Hi"}],
+        tools=[],
+        kv_cache="prime",
+        prefill=True,
+    )
+    final = await run.final
+    assert final.content_text == ""
+    assert final.tool_calls == []
+    assert transport.sent["prefill"] is True
+    assert transport.sent["kvCache"] == "prime"
+    assert transport.received == []
 
 
 async def test_orchestrate_runs_handler_and_folds_final_turn():

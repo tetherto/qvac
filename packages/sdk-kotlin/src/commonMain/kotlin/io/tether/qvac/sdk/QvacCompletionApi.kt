@@ -160,6 +160,8 @@ data class QvacCompletionOptions(
     val toolDialect: String? = null,
     val responseFormat: QvacResponseFormat? = null,
     val requestId: String = qvacRequestId(),
+    /** Evaluate the prompt without generating an answer; requires an enabled KV cache. */
+    val prefill: Boolean? = null,
 )
 
 sealed interface QvacCompletionEvent {
@@ -272,6 +274,7 @@ fun QvacCompletion.run(
         generationParams = options.generation.toStreamParams(),
         history = history.map { it.toStreamItem() },
         kvCache = options.kvCache?.toWire(),
+        prefill = options.prefill,
         modelId = modelId,
         requestId = options.requestId,
         responseFormat = options.responseFormat?.toStreamFormat(),
@@ -319,6 +322,7 @@ fun QvacCompletion.orchestrate(
         history = history.map { it.toStreamItem() },
         kvCache = options.kvCache?.toWire(),
         maxToolTurns = maxToolTurns.toLong(),
+        prefill = options.prefill,
         modelId = modelId,
         requestId = options.requestId,
         responseFormat = options.responseFormat?.toStreamFormat(),

@@ -10,6 +10,7 @@ const { spawnSync } = require('node:child_process')
 
 const PACKAGE_ROOT = path.resolve(__dirname, '..', '..')
 const PACKAGE_JSON_PATH = path.join(PACKAGE_ROOT, 'package.json')
+const PATCHED_BROTLI_BASELINE = '61d7eaeb094a6acbc23d9c2e54de9208175fda47'
 const NPM_COMMAND = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const JAVASCRIPT_EXTENSIONS = new Set(['.cjs', '.js', '.mjs'])
 const IMPORT_PATTERNS = [
@@ -131,6 +132,21 @@ function assertRuntimeProbesResolve(consumerRoot) {
     assert.equal(result.status, 0, `${specifier}: ${result.stdout}${result.stderr}`)
   })
 }
+
+test('Brotli resolves exclusively from its patched native registry', () => {
+  const configuration = JSON.parse(
+    fs.readFileSync(path.join(PACKAGE_ROOT, 'vcpkg-configuration.json'), 'utf8')
+  )
+  const registries = configuration.registries.filter((registry) =>
+    registry.packages.includes('brotli')
+  )
+
+  assert.equal(registries.length, 1)
+  assert.equal(registries[0].kind, 'git')
+  assert.equal(registries[0].repository, 'https://github.com/microsoft/vcpkg')
+  assert.equal(registries[0].baseline, PATCHED_BROTLI_BASELINE)
+  assert.deepEqual(registries[0].packages, ['brotli'])
+})
 
 test('published files declare every external runtime module', () => {
   const packageJson = JSON.parse(fs.readFileSync(PACKAGE_JSON_PATH, 'utf8'))

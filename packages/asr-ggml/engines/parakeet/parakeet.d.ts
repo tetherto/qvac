@@ -1,5 +1,6 @@
 import { END_OF_INPUT } from "../../lib/constants";
 import type { BackendInfo } from "../../lib/types";
+import type { ParakeetSpeakerAttributionConfig } from "./options";
 export type { BackendInfo };
 export interface ParakeetConfigurationParams {
     /** Unified native `createInstance` dispatch key. */
@@ -7,8 +8,9 @@ export interface ParakeetConfigurationParams {
     modelPath?: string;
     maxThreads?: number;
     useGPU?: boolean;
-    /** MOSS native backend selector. */
+    /** Native ggml backend selector. */
     backend?: string;
+    speakerAttribution?: ParakeetSpeakerAttributionConfig;
     sampleRate?: number;
     channels?: number;
     captionEnabled?: boolean;

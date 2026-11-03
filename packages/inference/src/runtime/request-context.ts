@@ -21,6 +21,7 @@ export type RequestKind =
   | 'batchCompletion'
   | 'embeddings'
   | 'decision'
+  | 'rerank'
   | 'transcribe'
   | 'translate'
   | 'diffusion'
@@ -106,6 +107,13 @@ function installDefaultPolicies(r: RequestRegistry): void {
     onOverflow: 'queue',
     maxQueueDepthPerModel: 64
   })
+  // The reranker likewise runs one job at a time per model.
+  r.policy({
+    kind: 'rerank',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    maxQueueDepthPerModel: 64
+  })
   // Cap is the model's `parallel`, passed per request by the handlers; the value
   // here is only the fallback when a caller supplies none.
   r.policy({
@@ -166,6 +174,12 @@ function installDefaultPolicies(r: RequestRegistry): void {
     maxConcurrentPerModel: 1,
     onOverflow: 'queue',
     maxQueueDepthPerModel: 256
+  })
+  // Diffusion has one native job per model and model-wide cancellation.
+  r.policy({
+    kind: 'diffusion',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'reject'
   })
   // An ABot-World session runs one job at a time: the addon rejects a second
   // step while a block is still streaming, and scene creation shares the same

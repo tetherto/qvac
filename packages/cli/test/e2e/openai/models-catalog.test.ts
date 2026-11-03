@@ -2,6 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { FastifyInstance } from 'fastify'
 import { useServer } from '../helpers/server.js'
+import { assertStatusAndError } from '../helpers/http.js'
 
 interface CatalogEntry {
   object: string
@@ -83,3 +84,16 @@ describe('serve: model catalog', () => {
     assert.equal((res.json() as { error: { code: string } }).error.code, 'model_not_found')
   })
 })
+
+// Paging codes are core's, so they must not change with the mounted surfaces.
+for (const extensions of [undefined, ['openai']]) {
+  describe(`serve: model catalog paging errors (${extensions?.join(',') ?? 'all surfaces'})`, () => {
+    const server = useServer(extensions ? { extensions } : {})
+
+    it('names the bad paging field', async () => {
+      const get = (url: string) => server().inject({ method: 'GET', url })
+      assertStatusAndError(await get('/v1/models/catalog?limit=0'), 400, 'invalid_limit')
+      assertStatusAndError(await get('/v1/models/catalog?offset=-1'), 400, 'invalid_offset')
+    })
+  })
+}

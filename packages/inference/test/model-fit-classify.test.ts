@@ -132,6 +132,16 @@ test('the diffusion placement stands in for a reason string', (t) => {
   )
   t.is(unreadable.verdict, 'unknown')
   t.is(unreadable.reason, 'model-unreadable')
+
+  const unsupported = classifyFit(
+    {
+      engine: 'diffusion-cpp',
+      result: { ...base, status: 'error', reason: 'unsupported-config' as const, changed: false }
+    },
+    PROVENANCE
+  )
+  t.is(unsupported.verdict, 'unknown')
+  t.is(unsupported.reason, 'unsupported-config')
 })
 
 test('a speech projection carries the device the engine measured', (t) => {

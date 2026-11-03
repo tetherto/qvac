@@ -27,6 +27,30 @@ import kotlin.test.assertTrue
 
 class QvacCompletionApiTest {
     @Test
+    fun prefillForwardsOptionsAndFinishesWithoutAnswer() = runTest {
+        val transport = ApiTransport(stream = flowOf(completionFrame(
+            done = true,
+            event("completionStats", 0) {
+                put("stats", buildJsonObject { put("generatedTokens", 0) })
+            },
+            event("completionDone", 1) {},
+        )))
+        val client = QvacClient(transport)
+        try {
+            val result = client.completion.run(
+                "model", listOf(QvacMessage.system("Hi")),
+                options = QvacCompletionOptions(kvCache = QvacKvCache.Key("prime"), prefill = true),
+            ).final.await()
+            assertEquals("", result.text)
+            assertTrue(result.toolCalls.isEmpty())
+            assertEquals(JsonPrimitive(true), transport.lastPayload?.get("prefill"))
+            assertEquals(JsonPrimitive("prime"), transport.lastPayload?.get("kvCache"))
+        } finally {
+            client.close()
+        }
+    }
+
+    @Test
     fun completionRunAggregatesTextThinkingStatsAndStopReason() = runTest {
         val transport = ApiTransport(
             stream = flowOf(
@@ -259,6 +283,7 @@ class QvacCompletionApiTest {
         val options = QvacCompletionOptions(
             generation = QvacGenerationOptions(temperature = 0.2, predict = 64, seed = 7, reasoningBudget = 0),
             kvCache = QvacKvCache.Enabled(true),
+            prefill = true,
             toolDialect = "hermes",
             requestId = "request-1",
         )
@@ -273,6 +298,7 @@ class QvacCompletionApiTest {
         }
 
         assertEquals("completionOrchestrate", orchestrated.getValue("type").jsonPrimitive.content)
+        assertEquals(JsonPrimitive(true), orchestrated["prefill"])
         assertEquals(3, orchestrated.getValue("maxToolTurns").jsonPrimitive.content.toInt())
         assertEquals(streamed - setOf("type"), orchestrated - setOf("type", "maxToolTurns"))
         val properties = orchestrated.getValue("tools").jsonArray.single().jsonObject

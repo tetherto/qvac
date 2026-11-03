@@ -477,11 +477,14 @@ void ParlerModel::loadLocked() {
   LoadedEnhancer enhancer = loadEnhancer(
       cfg_.enhancerGgufPath,
       backend.device == kBackendDeviceGpu,
-      "ParlerModel::load: lavasr enhancer: ");
+      "ParlerModel::load: lavasr enhancer: ",
+      0,
+      cfg_.enhancerCoreml);
   LoadedDenoiser denoiser = loadDenoiser(
       cfg_.denoiserGgufPath,
       backend.device == kBackendDeviceGpu,
-      "ParlerModel::load: lavasr denoiser: ");
+      "ParlerModel::load: lavasr denoiser: ",
+      cfg_.denoiserCoreml);
 
   engine_ = std::move(engine);
   backendName_ = backend.name;

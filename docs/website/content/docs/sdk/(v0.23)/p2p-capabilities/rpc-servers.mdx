@@ -45,7 +45,7 @@ Unload models using the endpoint before calling `stopRpcServer({ serverId })`. T
 
 `rdmaAvailable` describes the server's advertised RDMA availability. Actual transport depends on client support and negotiation.
 
-Discovery accepts only RPC protocol `111.0.x` and rejects incompatible servers with a diagnostic containing the received and supported versions. Native inference also requires matching protocol major versions. Keep the Fabric versions used by your model addon and RPC servers compatible.
+Discovery accepts only RPC protocol `112.0.x` and rejects incompatible servers with a diagnostic containing the received and supported versions. Native inference also requires matching protocol major versions. Keep the Fabric versions used by your model addon and RPC servers compatible.
 
 Choose and order the endpoints before calling `getRpcDeviceMap(selected)`. Pass those same endpoints, in the same order, as the comma-separated `modelConfig["rpc-servers"]` value to [`loadModel()`](/sdk/reference/api#loadmodel). The map assigns `RPC0`, `RPC1`, and subsequent aliases across every device in endpoint order. Aliases start at `RPC0` for each model load, including when you reuse a worker.
 

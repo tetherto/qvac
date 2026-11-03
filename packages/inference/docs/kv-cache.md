@@ -28,3 +28,37 @@ KV-cache behavior is owned by the llama.cpp completion plugin under
   deleting caller-owned named caches; active cache keys remain protected.
 
 Implementation and focused tests are authoritative for the current cache format.
+
+## Prime a prompt before the question arrives
+
+Pass `prefill: true` to `completion()` with `kvCache: true` or a nonempty named
+key. The run evaluates the history and tools, completes with stats and no answer,
+and saves the prepared prefix. Await `run.final` before sending the question.
+Prefill cannot use a forced `generationParams.tool_choice` (`required` or a tool
+name, including `tool_search`). The default `auto` and `none` are supported.
+
+```typescript
+const history = [{ role: 'system', content: 'You are a helpful assistant.' }]
+await completion({ modelId, history, tools, stream: false, kvCache: 'chat', prefill: true }).final
+const answer = await completion({
+  modelId,
+  history: [...history, { role: 'user', content: 'What is the weather in Lugano?' }],
+  tools,
+  stream: false,
+  kvCache: 'chat'
+}).final
+```
+
+Load with `modelConfig.tools: true` to include tool definitions. Send the same
+system prompt and tools again with the user question; the addon reuses their
+token prefix and evaluates the remaining user-turn/template suffix. Named
+caches persist at the same identity. Auto-prefill caches are committed under
+the normalized complete history, without an empty assistant message.
+With `kvCache: true`, the first question moves that cache to the conversation's
+new history, so the prime serves one conversation. Use a named key for reuse
+across conversations, or prime each conversation separately.
+
+Requires `@qvac/llm-llamacpp` 0.64.1 or later for affected no-user templates.
+Arbitrary custom templates may fall back to normal rendering without full
+prefix reuse. This is a library request option; the CLI load-config picker and
+OpenAI-compatible HTTP endpoints do not expose cache priming.

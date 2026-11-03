@@ -134,7 +134,8 @@ const TRIPLET_COMPILER_LIBS = [
 // ---------------------------------------------------------------------------
 // Packages to skip entirely
 // ---------------------------------------------------------------------------
-const SKIP_PACKAGES = new Set(['docs'])
+// sdk-e2e is a private test consumer: nothing it installs ships to users.
+const SKIP_PACKAGES = new Set(['docs', 'sdk-e2e'])
 
 // ---------------------------------------------------------------------------
 // Packages without their own package.json (skip JS scan)

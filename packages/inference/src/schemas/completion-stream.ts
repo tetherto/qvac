@@ -7,7 +7,8 @@ import { REASONING_BUDGET_MAX } from '@/schemas/llamacpp-config'
 export { completionStatsSchema, type CompletionStats } from '@/schemas/completion-event'
 
 /**
- * Tool-call output dialect. Auto-detected from the model name; pass via
+ * Tool-call output dialect. Detected at load from the model name, then from the
+ * GGUF `general.architecture`, then `"hermes"`; pass via
  * `completion({ toolDialect })` to override.
  *
  * Expected raw model output per dialect:
@@ -82,7 +83,7 @@ export const generationParamsSchema = z
       .boolean()
       .optional()
       .describe(
-        'Whether one response may carry more than one tool call. `true` lets the chat template and tool-call grammar accept several; unset or `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.'
+        'Whether one response may carry more than one tool call. `true` (default) lets the chat template and tool-call grammar accept several; `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.'
       )
   })
   .strict()
@@ -123,8 +124,8 @@ export function refineToolChoiceMatchesTools(
     })
     return
   }
-  // A deferred tool has no parameter schema in the prompt, so the addon has
-  // nothing to build a grammar from and could not honour the demand.
+  // A deferred tool has no parameter schema in the prompt until a search loads
+  // it, which this check cannot see, so the demand may be unbuildable.
   if (named.deferLoading === true) {
     ctx.addIssue({
       code: 'custom',
@@ -264,7 +265,11 @@ export const completionParamsSchema = z.object({
     .optional()
     .describe(
       'KV cache configuration — `true` to auto-generate a cache key from history, a string to use a custom key, or `false`/`undefined` to disable.'
-    )
+    ),
+  prefill: z
+    .boolean()
+    .optional()
+    .describe('Evaluate the prompt without generating an answer. Requires an enabled KV cache.')
 })
 
 const completionClientParamsBaseSchema = completionParamsSchema.extend({
@@ -296,7 +301,7 @@ const completionClientParamsBaseSchema = completionParamsSchema.extend({
   toolDialect: toolDialectSchema
     .optional()
     .describe(
-      'Override auto-detected tool-call dialect. Use when name-based detection picks the wrong parser chain for your model.'
+      'Override auto-detected tool-call dialect. Use when detection from the model name and GGUF architecture picks the wrong parser chain for your model.'
     ),
   responseFormat: responseFormatSchema
     .optional()
@@ -334,7 +339,34 @@ function refineNoToolsWithStructuredOutput(
   }
 }
 
+function refinePrefill(
+  data: {
+    prefill?: boolean | undefined
+    kvCache?: boolean | string | undefined
+    generationParams?: { tool_choice?: string | undefined } | undefined
+  },
+  ctx: z.RefinementCtx
+): void {
+  if (!data.prefill) return
+  if (!data.kvCache) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'prefill requires kvCache: true or a nonempty cache key.',
+      path: ['kvCache']
+    })
+  }
+  const choice = data.generationParams?.tool_choice
+  if (choice !== undefined && choice !== 'auto' && choice !== 'none') {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'prefill cannot be combined with a forced tool_choice.',
+      path: ['generationParams', 'tool_choice']
+    })
+  }
+}
+
 export const completionClientParamsSchema = completionClientParamsBaseSchema
+  .superRefine(refinePrefill)
   .superRefine(refineNoToolsWithStructuredOutput)
   .superRefine(refineToolChoiceMatchesTools)
   .superRefine(refineReservedToolNames)
@@ -343,6 +375,7 @@ export const completionStreamRequestSchema = completionClientParamsBaseSchema
   .extend({
     type: z.literal('completionStream')
   })
+  .superRefine(refinePrefill)
   .superRefine(refineNoToolsWithStructuredOutput)
   .superRefine(refineToolChoiceMatchesTools)
   .superRefine(refineReservedToolNames)
@@ -375,6 +408,7 @@ export const completionOrchestrateRequestSchema = completionClientParamsBaseSche
           'the next turn. Defaults to 8.'
       )
   })
+  .superRefine(refinePrefill)
   .superRefine(refineNoToolsWithStructuredOutput)
   .superRefine(refineToolChoiceMatchesTools)
   .superRefine(refineReservedToolNames)

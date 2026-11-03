@@ -30,8 +30,9 @@ new RPC(socket, async request => {
     setTimeout(() => socket.end(), 30)
   } else if (payload.type === 'stream') {
     const stream = request.createResponseStream()
+    const pad = 'x'.repeat(1024)
     for (let i = 0; i < 200; i++) {
-      await new Promise((resolve, reject) => stream.write(Buffer.from(JSON.stringify({ type: 'item', index: i }) + '\n'), error => error ? reject(error) : resolve()))
+      await new Promise((resolve, reject) => stream.write(Buffer.from(JSON.stringify({ type: 'item', index: i, pad }) + '\n'), error => error ? reject(error) : resolve()))
     }
     stream.end()
   } else throw new Error('unexpected request')

@@ -106,7 +106,7 @@ await ocr.unload()
 loading their weights. It checks a conservative weight-load estimate against
 the selected backend's currently free memory. It does **not** assess image
 decoding, detection or recognition graphs, or the number of text regions in a
-future image. A `fits` result therefore covers model weights only; `error`
+future image. A `fits` result therefore covers model weights only; `unknown`
 means the check could not reach a reliable capacity verdict.
 
 ```js
@@ -118,16 +118,38 @@ const fit = await assessFit({
   backendDevice: 'cpu',
   marginBytes: 1024 * 1024 * 1024
 })
-console.log(fit.status, fit.reason, fit.report)
+
+fit.status // 'fits' | 'does-not-fit' | 'unknown'
+fit.devices // [{ id, name, unified, usedBytes, freeBytes, totalBytes }]
+fit.stats // {}
 ```
 
-`assessFit` returns a Promise. Concurrent calls run one at a time. An invalid
-request rejects.
+`devices` holds the selected device, then the host CPU. The selected device
+carries the conservative weight-load estimate. For a discrete GPU the host row
+carries it too, since the host holds the GGUF staging copies while the weights
+load; for a GPU that shares host memory the host row carries 0, as the copies
+are the same memory. A load on the CPU is one row, and `unknown` has none. `id`
+is the PCI bus ID when the backend reports one, and the device name otherwise.
+`unified` is true for memory the host owns: the CPU, an integrated GPU, a GPU
+that shares the host's memory, Android's OpenCL GPU, and a device that reports
+no memory of its own, which takes the host's figures.
+
+`fits` means the estimate fits every row with `marginBytes` left free.
+`does-not-fit` means a CPU load whose source tensors alone do not fit. Anything
+between is `unknown`.
+
+On an iOS device every unified row's free memory is capped at the app's own
+memory limit, `os_proc_available_memory()`, before the verdict. A limit of 0
+means the app has none left.
+
+`assessFit` returns a Promise. Concurrent calls run one at a time. A model that
+cannot be read, or an invalid request, rejects with an `InvalidArgument` error,
+and a host with no backend device rejects with an `InternalError`.
 
 Use the same `pipelineType`, `backendDevice`, `gpuDevice`, and `main-gpu`
 settings intended for the eventual `OcrGgml` load. DocTR configurations that
-place stages on different devices return `error` with `unsupported-config`
-until a multi-device weight estimate is available.
+place stages on different devices are `unknown`, since the weight estimate
+covers a single device.
 
 The `doctr` pipeline is language-agnostic, so `langList` can be omitted
 entirely:

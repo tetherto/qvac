@@ -28,6 +28,8 @@ export interface OpenAIState {
   completionOverride?: typeof sdk.completion
   /** Test seam — overrides `textToSpeechStream()` from `@qvac/sdk` when set. */
   textToSpeechStreamOverride?: typeof sdk.textToSpeechStream
+  /** Test seam — overrides `diffusion()` from `@qvac/sdk` when set. */
+  diffusionOverride?: typeof sdk.diffusion
   /** Test seam — overrides `video()` from `@qvac/sdk` when set. */
   videoOverride?: typeof sdk.video
   /** Test seam — overrides `cancel()` from `@qvac/sdk` when set. */

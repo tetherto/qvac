@@ -768,12 +768,18 @@ and free.
 - The **`run-mobile-addon-tests` label is kept** but no longer starts a standalone
   mobile suite. See [LABELS.md](./LABELS.md).
 
-## What did **not** change
+## Publishing and reusable workflows
 
-The reusable (`workflow_call`) paths are untouched — benchmarks, the weekend run,
-and on-merge triggers still call the same `integration-mobile-test-<addon>.yml`
-workflows with their existing inputs and scheduling (sharded / dual-flagship /
-single-pool). The on-demand behaviour is additive and only kicks in for a direct
+Speech, OCR and translation publishing in `on-merge-nx.yml` does not launch
+mobile E2E or desktop integration tests. ASR, TTS, BCI, decoder-audio, AudioGen,
+OCR and translation opt out of post-publish testing in their package CI
+configuration. Generated-wrapper verification remains a pre-publish integrity
+gate, including on release pushes and manual dispatches without a PR.
+The publish workflow has no speech mobile callers.
+
+The reusable (`workflow_call`) interfaces remain available to benchmarks and
+other test workflows with their existing inputs and scheduling (sharded /
+dual-flagship / single-pool). The on-demand behaviour only kicks in for a direct
 `workflow_dispatch` run.
 
 ## Re-enabling automatic PR runs (later)

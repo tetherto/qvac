@@ -3,7 +3,7 @@
 Run [OpenClaw](https://openclaw.ai) against a **local, on-device** QVAC model.
 The plugin registers a `qvac` provider, exposes the shared QVAC model catalog,
 and starts `qvac serve --openai --no-default` itself when the provider is used.
-Requires `@qvac/cli` 0.16.0 or newer.
+Requires `@qvac/cli` 0.17.0 or newer.
 
 ## Install
 

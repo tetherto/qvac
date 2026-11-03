@@ -415,7 +415,8 @@ jobs:
       - name: Install Bare runtime
         run: |
           npm install -g --force bare-dev
-          npm install -g --force bare bare-make@1.8.0
+          npm install -g --force bare
+          node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
 
       - name: Download prebuilds
         id: prebuilds

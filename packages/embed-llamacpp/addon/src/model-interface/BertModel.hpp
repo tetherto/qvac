@@ -17,6 +17,7 @@
 
 #include "LlamaModelLoader.hpp"
 #include "ModelMetadata.hpp"
+#include "MultimodalEmbedder.hpp"
 #include "inference-addon-cpp/GGUFShards.hpp"
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
@@ -84,7 +85,8 @@ private:
 public:
   // These using definitions are accessed by the Addon<BertModel> template.
   using OutputType = BertEmbeddings;
-  using Input = std::variant<std::string, std::vector<std::string>>;
+  using Input = std::variant<
+      std::string, std::vector<std::string>, std::vector<MultimodalInput>>;
   using InputView = Input;
   using Output = OutputType;
 
@@ -102,13 +104,17 @@ public:
   /// override default common params by a configuration object.
   ///
   /// @param config: Configuration key/value map.
+  /// @param projectionPath: Optional projection model (mmproj) that lets the
+  /// model embed inputs with images and audio; empty for text only.
   BertModel(
       const std::string& modelGgufPath,
       const std::unordered_map<std::string, std::string>& config,
-      const std::string& backendsDir = "");
+      const std::string& backendsDir = "",
+      const std::string& projectionPath = "");
 
   /// @brief Construct with already parsed parameters bundled in a
-  /// @ref BertModelSetup.
+  /// @ref BertModelSetup, for text only: the setup's config has already been
+  /// parsed, so it cannot carry projector options.
   explicit BertModel(BertModelSetup& setup);
 
   /// @brief Deletes model implementation.
@@ -145,6 +151,15 @@ public:
   /// sequences array detection and parsing
   BertEmbeddings
   encodeHostF32Sequences(const std::vector<std::string>& sequenceArray);
+
+  /// @brief Process inputs that mix text with images and audio, one decode
+  /// per input, and return one embedding per input.
+  /// @throws qvac_errors::StatusError(InvalidRequest) when the model was
+  /// loaded without a projection model.
+  /// @note Awaits for initialization to finish if its loading .gguf shards
+  /// asynchronously.
+  BertEmbeddings
+  encodeHostF32Multimodal(const std::vector<MultimodalInput>& inputs);
 
   /// @brief Read-only access to the context.
   const llama_context* getCtx() const;
@@ -207,6 +222,12 @@ private:
       bool ctxSizeConfigured);
   /// Caches the model handles and rejects models that cannot embed.
   void onLoaded(llama_model* model, llama_context* ctx);
+
+  std::string projectionPath_;
+  /// Projector options taken out of the load config.
+  MultimodalOptions multimodalOptions_;
+  /// Set in onLoaded when a projection model is given.
+  std::unique_ptr<MultimodalEmbedder> multimodal_;
 
   // Last member: destroyed first, so the llama context goes before the members
   // its hooks write.

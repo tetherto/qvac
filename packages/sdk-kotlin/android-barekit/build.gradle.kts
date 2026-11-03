@@ -1,4 +1,6 @@
 import org.gradle.api.publish.maven.MavenPublication
+import org.gradle.api.services.BuildService
+import org.gradle.api.services.BuildServiceParameters
 import java.net.URI
 
 plugins {
@@ -16,15 +18,10 @@ mavenPublishing {
     publishToMavenCentral(automaticRelease = false,
         validateDeployment = com.vanniktech.maven.publish.DeploymentValidation.PUBLISHED)
 }
-dokka {
-    // All runtime profiles expose the same Kotlin sources; document them once.
-    dokkaSourceSets.configureEach { suppress.set(name != "aioRelease") }
-}
-
 val runtimeRoot = rootProject.layout.projectDirectory
 val bareKitRoot = runtimeRoot.dir("node_modules/react-native-bare-kit/android/libs/bare-kit")
 data class RuntimeProfile(val name: String, val configFile: String, val artifactId: String, val pomName: String)
-val runtimeProfiles = listOf(
+val allRuntimeProfiles = listOf(
     RuntimeProfile("aio", "qvac.config.json", "qvac-sdk-android", "QVAC SDK for Android"),
     RuntimeProfile("assistant", "qvac.config.assistant.json", "qvac-sdk-android-assistant", "QVAC Android Assistant SDK"),
     RuntimeProfile("llm", "qvac.config.llm.json", "qvac-sdk-android-llm", "QVAC Android LLM SDK"),
@@ -33,6 +30,19 @@ val runtimeProfiles = listOf(
     RuntimeProfile("media", "qvac.config.media.json", "qvac-sdk-android-media", "QVAC Android Media SDK"),
     RuntimeProfile("robotics", "qvac.config.robotics.json", "qvac-sdk-android-robotics", "QVAC Android Robotics SDK"),
 )
+// -PqvacProfile=<name> builds and publishes only that profile. Without it, or
+// when it is blank, every profile is built, as a release needs.
+val selectedProfile = providers.gradleProperty("qvacProfile").filter { it.isNotBlank() }.orNull
+val runtimeProfiles = if (selectedProfile == null) allRuntimeProfiles else listOf(
+    allRuntimeProfiles.singleOrNull { it.name == selectedProfile }
+        ?: error("Unknown qvacProfile '$selectedProfile'; expected one of ${allRuntimeProfiles.map { it.name }}")
+)
+
+dokka {
+    // All runtime profiles expose the same Kotlin sources; document them once.
+    val documentedSourceSet = "${runtimeProfiles.first().name}Release"
+    dokkaSourceSets.configureEach { suppress.set(name != documentedSourceSet) }
+}
 
 android {
     namespace = "io.tether.qvac.sdk.barekit"
@@ -121,28 +131,46 @@ val npmCi by tasks.registering(Exec::class) {
     outputs.dir(runtimeRoot.dir("node_modules"))
 }
 
+// A checkout of this package alone (no sibling packages/sdk, as the sparse
+// clone in scripts/install-local.sh makes) bundles the exact-pinned @qvac/sdk
+// that npmCi installs. The worker build and the inputs that read the sibling
+// packages exist only in the monorepo.
+val workspaceSdk = runtimeRoot.dir("../sdk")
+val hasWorkspaceSdk = workspaceSdk.file("package.json").asFile.exists()
+
 val buildWorkspaceSdk by tasks.registering(Exec::class) {
     description = "Build packages/sdk with the shared worker build"
+    onlyIf { hasWorkspaceSdk }
     workingDir(runtimeRoot)
     commandLine("python3", "../sdk-python/scripts/build_worker.py", "--force")
-    inputs.dir(runtimeRoot.dir("../sdk/src"))
-    inputs.dir(runtimeRoot.dir("../inference/src"))
-    inputs.files(
-        runtimeRoot.file("../sdk/package.json"),
-        runtimeRoot.file("../sdk/tsconfig.json"),
-        runtimeRoot.file("../sdk/tsconfig.alias.json"),
-        runtimeRoot.file("../sdk/scripts/link-workspace-inference.mjs"),
-        runtimeRoot.file("../inference/package.json"),
-        runtimeRoot.file("../inference/tsconfig.build.json"),
-        runtimeRoot.file("../inference/tsconfig.alias.json"),
-        runtimeRoot.file("../sdk-python/scripts/build_worker.py"),
-    )
-    outputs.dir(runtimeRoot.dir("../sdk/dist/src/worker"))
+    if (hasWorkspaceSdk) {
+        inputs.dir(workspaceSdk.dir("src"))
+        inputs.dir(runtimeRoot.dir("../inference/src"))
+        inputs.files(
+            workspaceSdk.file("package.json"),
+            workspaceSdk.file("tsconfig.json"),
+            workspaceSdk.file("tsconfig.alias.json"),
+            workspaceSdk.file("scripts/link-workspace-inference.mjs"),
+            runtimeRoot.file("../inference/package.json"),
+            runtimeRoot.file("../inference/tsconfig.build.json"),
+            runtimeRoot.file("../inference/tsconfig.alias.json"),
+            runtimeRoot.file("../sdk-python/scripts/build_worker.py"),
+        )
+        outputs.dir(workspaceSdk.dir("dist/src/worker"))
+    }
+}
+
+// Every profile bundles through the same packages/sdk/qvac/worker.bundle.*
+// files, so the prepare tasks must not run concurrently.
+abstract class QvacRuntimeBundleLock : BuildService<BuildServiceParameters.None>
+val runtimeBundleLock = gradle.sharedServices.registerIfAbsent("qvacRuntimeBundleLock", QvacRuntimeBundleLock::class) {
+    maxParallelUsages.set(1)
 }
 
 val prepareRuntimeTasks = runtimeProfiles.associateWith { profile ->
     tasks.register<Exec>("prepare${profile.name.replaceFirstChar(Char::uppercase)}QvacAndroidRuntime") {
         description = "Bundle the ${profile.name} QVAC worker and link Android addons"
+        usesService(runtimeBundleLock)
         dependsOn(npmCi, buildWorkspaceSdk)
         workingDir(runtimeRoot)
         commandLine("node", "scripts/prepare-android-runtime.mjs")
@@ -155,11 +183,17 @@ val prepareRuntimeTasks = runtimeProfiles.associateWith { profile ->
         inputs.files(
             runtimeRoot.file("package.json"),
             runtimeRoot.file("scripts/prepare-android-runtime.mjs"),
-            runtimeRoot.file("../sdk/package.json"),
-            runtimeRoot.file("../sdk/LICENSE"),
-            runtimeRoot.file("../sdk/NOTICE"),
         )
-        inputs.dir(runtimeRoot.dir("../sdk/dist/src/worker"))
+        if (hasWorkspaceSdk) {
+            inputs.files(
+                workspaceSdk.file("package.json"),
+                workspaceSdk.file("LICENSE"),
+                workspaceSdk.file("NOTICE"),
+            )
+            inputs.dir(workspaceSdk.dir("dist/src/worker"))
+        } else {
+            inputs.dir(runtimeRoot.dir("node_modules/@qvac/sdk"))
+        }
         inputs.file(runtimeRoot.file(profile.configFile))
         outputs.dir(layout.buildDirectory.dir("generated/qvac/${profile.name}"))
     }

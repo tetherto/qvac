@@ -77,6 +77,7 @@ export const registry: Record<string, HandlerEntry> = {
   },
   embed: { type: 'reply', pluginOp: true, handler: pluginReply('embed') },
   decide: { type: 'reply', pluginOp: true, handler: pluginReply('decide') },
+  rerank: { type: 'reply', pluginOp: true, handler: pluginReply('rerank') },
   cancel: {
     type: 'reply',
     handler: cancelHandler

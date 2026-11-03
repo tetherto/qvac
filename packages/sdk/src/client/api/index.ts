@@ -60,3 +60,4 @@ export { audioUnderstand } from '@/client/api/audio-understand'
 export { startRpcServer, stopRpcServer, discoverRpcServers } from './rpc-server'
 
 export { decide } from './decide'
+export { rerank } from './rerank'

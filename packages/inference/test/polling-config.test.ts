@@ -1,11 +1,13 @@
 import test from 'brittle'
 import { llmConfigSchema, embedConfigSchema } from '@/schemas/llamacpp-config'
 import { decisionConfigSchema } from '@/schemas/decision'
+import { rerankConfigSchema } from '@/schemas/rerank'
 import { loadModelOptionsToRequestSchema, loadModelSrcRequestSchema } from '@/schemas/load-model'
 import { ModelType, deviceConfigDefaultsSchema } from '@/schemas'
 import { transformLlmConfig } from '@/plugins/builtin/llamacpp-completion/transform'
 import { transformEmbedConfig } from '@/plugins/builtin/llamacpp-embedding/transform'
 import { transformDecisionConfig } from '@/plugins/builtin/llamacpp-decision/helpers'
+import { transformRerankConfig } from '@/plugins/builtin/llamacpp-rerank/helpers'
 
 const cases = [
   {
@@ -22,6 +24,11 @@ const cases = [
     modelType: ModelType.llamacppDecision,
     transform: (config: Record<string, unknown>) =>
       transformDecisionConfig(decisionConfigSchema.parse(config))
+  },
+  {
+    modelType: ModelType.llamacppRerank,
+    transform: (config: Record<string, unknown>) =>
+      transformRerankConfig(rerankConfigSchema.parse(config))
   }
 ]
 

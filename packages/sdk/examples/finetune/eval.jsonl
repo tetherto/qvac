@@ -1,0 +1,8 @@
+{"messages":[{"role":"system","content":"Answer in one short sentence."},{"role":"user","content":"What is the capital of Brazil?"},{"role":"assistant","content":"Brasília is the capital of Brazil."}]}
+{"messages":[{"role":"user","content":"Which planet has the most moons?"},{"role":"assistant","content":"Saturn has the most moons."}]}
+{"messages":[{"role":"user","content":"What is the chemical symbol for gold?"},{"role":"assistant","content":"The chemical symbol for gold is Au."}]}
+{"messages":[{"role":"user","content":"How many millilitres are in a litre?"},{"role":"assistant","content":"A litre contains 1,000 millilitres."}]}
+{"messages":[{"role":"user","content":"Which desert is the largest hot desert?"},{"role":"assistant","content":"The Sahara is the largest hot desert."}]}
+{"messages":[{"role":"user","content":"What organ filters blood in the human body?"},{"role":"assistant","content":"The kidneys filter blood in the human body."}]}
+{"messages":[{"role":"user","content":"How many strings does a standard guitar have?"},{"role":"assistant","content":"A standard guitar has six strings."}]}
+{"messages":[{"role":"user","content":"What is the largest mammal?"},{"role":"assistant","content":"The blue whale is the largest mammal."}]}

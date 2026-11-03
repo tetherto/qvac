@@ -38,3 +38,4 @@ Legend:
 | qvac-ci | CI utilities for the QVAC monorepo | Tool |
 | registry-server | Distributed model registry server for downloading AI models and contributing new ones | Tool |
 | test-suite | Distributed MQTT test-orchestration framework (`qvac-test` CLI) driving e2e suites across desktop, Electron, Snap, Android, and iOS consumers | Tool |
+| sdk-e2e | Private, unpublished e2e suite for the SDK clients: the client-neutral test catalog, the JS and Python runners, and the cross-client conformance corpus | Tool |

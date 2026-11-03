@@ -23,6 +23,11 @@ const RELEASE_NOTES_SEGMENTS = ['reference', 'release-notes'];
 /**
  * True when the page belongs to the release-notes section of any line.
  *
+ * Dormant: no line publishes a release-notes page any more — each line's
+ * sidebar entry links to that minor's GitHub release — so this matches
+ * nothing today. Kept because the page model may come back, and the rest of
+ * this comment describes what it does when it does.
+ *
  * Used exclusively by `llms-full.txt` to keep release notes out of the
  * full-documentation dump (QVAC-21379): each release note is a historical
  * changelog whose bulk text bloats the agent's token budget and dilutes its

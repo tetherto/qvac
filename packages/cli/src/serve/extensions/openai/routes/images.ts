@@ -6,13 +6,13 @@ import { HttpError } from '@/serve/lib/http-error'
 import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
 import { multipartToBody } from '@/serve/lib/multipart'
 import { requireModel } from '@/serve/core/plugins/require-model'
+import { openaiState } from '@/serve/extensions/openai/state'
 import {
   imagesGenerationsBody,
   imagesEditsBody,
   extractImageGenerationParams,
   extractImageEditParams,
   logImageUnsupportedParams,
-  logImageEditExtraWarnings,
   assertSupportedImageOutputParams,
   coerceMultipartFields,
   InvalidImagePromptError,
@@ -21,12 +21,10 @@ import {
   InvalidImageStrengthError,
   UnsupportedImageOutputError
 } from '@/serve/extensions/openai/schemas/images'
-import type { EphemeralFilesStore } from '@/serve/core/stores/ephemeral-files'
 import type { QvacContext } from '@/serve/core/context'
+import { IMAGE_OUTPUT_FORMAT, buildImageData, buildSizeString } from '@/serve/lib/image-response'
 
 const SUPPORTED_RESPONSE_FORMATS = new Set(['b64_json', 'url'])
-const RESPONSE_OUTPUT_FORMAT = 'png' as const
-const RESPONSE_CONTENT_TYPE = 'image/png' as const
 
 function rejectIfUrlWithoutPublicBaseUrl(
   responseFormat: string,
@@ -67,43 +65,6 @@ function mapImageParamError(err: unknown): never {
   throw err
 }
 
-function buildImageData(
-  buffers: Uint8Array[],
-  responseFormat: string,
-  publicBaseUrl: string,
-  ephemeralFiles: EphemeralFilesStore
-): Array<{ b64_json: string } | { url: string; expires_at?: number }> {
-  if (responseFormat !== 'url') {
-    return buffers.map((buf) => ({ b64_json: Buffer.from(buf).toString('base64') }))
-  }
-  return buffers.map((buf, i) => {
-    const id = ephemeralFiles.put({
-      data: Buffer.from(buf),
-      fileName: `image-${Date.now()}-${i}.png`,
-      purpose: 'image_generation',
-      contentType: RESPONSE_CONTENT_TYPE
-    })
-    const url = `${publicBaseUrl}/v1/files/${id}/content`
-    const stored = ephemeralFiles.get(id)
-    if (stored !== null && stored.expiresAtMs !== null) {
-      return { url, expires_at: Math.floor(stored.expiresAtMs / 1000) }
-    }
-    return { url }
-  })
-}
-
-function buildSizeString(
-  paramW: number | undefined,
-  paramH: number | undefined,
-  statsW: number | undefined,
-  statsH: number | undefined
-): string | null {
-  const w = statsW ?? paramW
-  const h = statsH ?? paramH
-  if (typeof w === 'number' && typeof h === 'number' && w > 0 && h > 0) return `${w}x${h}`
-  return null
-}
-
 function sendStreamingResponse(
   reply: FastifyReply,
   buffers: Uint8Array[],
@@ -116,7 +77,7 @@ function sendStreamingResponse(
     sendSSE(raw, {
       type: 'image_generation.completed',
       created_at: createdAt,
-      output_format: RESPONSE_OUTPUT_FORMAT,
+      output_format: IMAGE_OUTPUT_FORMAT,
       ...(sizeStr ? { size: sizeStr } : {}),
       b64_json: Buffer.from(buf).toString('base64')
     })
@@ -145,7 +106,7 @@ async function runAndRespond(
       `n=${params.batch_count ?? 1} response_format=${responseFormat} stream=${wantsStream}`
   )
 
-  const result = diffusion(params)
+  const result = (openaiState(ctx).diffusionOverride ?? diffusion)(params)
   const drainProgress = async (): Promise<void> => {
     try {
       for await (const tick of result.progressStream) {
@@ -179,13 +140,13 @@ async function runAndRespond(
 
   const data = buildImageData(
     buffers,
-    responseFormat,
-    ctx.serveConfig.publicBaseUrl ?? '',
-    ctx.files
+    responseFormat === 'url'
+      ? { publicBaseUrl: ctx.serveConfig.publicBaseUrl ?? '', files: ctx.files }
+      : undefined
   )
   reply.send({
     created: Math.floor(Date.now() / 1000),
-    output_format: RESPONSE_OUTPUT_FORMAT,
+    output_format: IMAGE_OUTPUT_FORMAT,
     ...(sizeStr ? { size: sizeStr } : {}),
     data
   })
@@ -225,8 +186,9 @@ Optional: \`prompt\`, \`size\`, \`response_format\`, \`n\`, \`strength\`, \`stre
 returns 400 \`mask_not_supported\` — the underlying diffusion engine has no mask
 channel. Use a prompt-only edit (full-image img2img) instead.
 
-**Multiple images via \`image[]\`** are accepted but only the first is used;
-the rest produce a warning log line.
+**Multiple images** sent as repeated \`image\` or \`image[]\` files are forwarded
+in upload order as SDK \`init_images\`. Use a model with multi-reference support,
+such as FLUX.2 or Qwen-Image-2.1. A single file uses SDK \`init_image\`.
 
 Same output / \`response_format=url\` / streaming caveats as
 \`POST /v1/images/generations\`.
@@ -314,18 +276,18 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         throw err
       }
 
-      const firstImage = imageFiles[0]!.buffer
-      const extraImageCount = imageFiles.length - 1
-
       let params: DiffusionClientParams
       try {
-        params = extractImageEditParams(coerced, firstImage, req.qvacModel!.sdkModelId)
+        params = extractImageEditParams(
+          coerced,
+          imageFiles.map((file) => file.buffer),
+          req.qvacModel!.sdkModelId
+        )
       } catch (err) {
         mapImageParamError(err)
       }
 
       logImageUnsupportedParams(coerced, app.qvac.logger)
-      logImageEditExtraWarnings(coerced, { extraImageCount }, app.qvac.logger)
 
       await runAndRespond(reply, app.qvac, {
         logLabel: 'image_edit',

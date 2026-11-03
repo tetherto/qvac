@@ -652,6 +652,33 @@ test('kv-cache-session: beginTurn defers retention until turn cleanup', async (t
   }
 })
 
+test('kv-cache-session: static auto commit schedules retention', async (t) => {
+  const { fs, mod, utils, retention, cleanup, writeFakeCache } = await loadSession()
+  try {
+    const staleKey = '8888888888888888'
+    const stalePath = await utils.getCacheFilePath('stale-model', 'config', staleKey)
+    writeFakeCache(stalePath)
+    await retention.markAutoCacheKey(staleKey)
+    await fs.promises.utimes(stalePath, new Date(1000), new Date(1000))
+    const session = mod.createKvCacheSession('test-model')
+    const turn = await session.beginTurn({
+      kind: 'auto',
+      configHash: mod.generateConfigHash('sys'),
+      history: [{ role: 'system', content: 'sys' }]
+    })
+    writeFakeCache(turn.cachePath)
+    await session.commitTurn(turn, { kind: 'static' })
+    await session.releaseTurn(turn)
+    await mod.__kvCacheSessionTestHooks.waitForAutoCacheSweepForTest()
+    t.ok(mod.__kvCacheSessionTestHooks.getLastAutoCacheSweepMsForTest() > 0)
+    t.is(fs.existsSync(stalePath), false, 'static auto commit expires stale caches')
+    t.ok(fs.existsSync(turn.cachePath), 'the new prime remains available')
+    t.is(mod.__kvCacheSessionTestHooks.getActivePathCountForTest(turn.cachePath), 0)
+  } finally {
+    cleanup()
+  }
+})
+
 test('kv-cache-session: retention evicts oldest auto caches and preserves named caches', async (t) => {
   const { fs, mod, utils, retention, cleanup, writeFakeCache } = await loadSession()
   try {

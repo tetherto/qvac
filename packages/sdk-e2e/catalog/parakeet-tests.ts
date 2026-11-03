@@ -1,0 +1,441 @@
+import type { Step, TestDefinition } from '@qvac/test-suite'
+
+type ParakeetDependency =
+  | 'parakeet-tdt'
+  | 'parakeet-ctc'
+  | 'parakeet-sortformer'
+  | 'parakeet-indic-conformer'
+  | 'parakeet-unified'
+  | 'parakeet-transcribepsy'
+  | 'parakeet-transcribepsy-windowed'
+  | 'parakeet-transcribepsy-coreml'
+
+/**
+ * One parakeet transcription. Same shape as the whisper ones; the difference is which model the
+ * test names, which the resource key already says.
+ */
+const parakeetSteps = (dependency: string): Step[] => [
+  { useModel: { deps: [dependency], as: 'model' } },
+  { asset: { kind: 'audio', file: '$params.audioFileName', form: 'path', as: 'audio' } },
+  {
+    call: {
+      method: 'transcribe',
+      params: { modelId: '$model', audioChunk: '$audio' },
+      as: 'run'
+    }
+  },
+  { project: { from: '$run', path: 'text', as: 'text' } },
+  { assert: { on: '$text', use: 'expectation' } }
+]
+
+/** A parakeet call the test expects to be refused. */
+const parakeetRejects = (dependency: string): Step[] => [
+  { useModel: { deps: [dependency], as: 'model' } },
+  { asset: { kind: 'audio', file: '$params.audioFileName', form: 'path', as: 'audio' } },
+  {
+    callError: {
+      method: 'transcribe',
+      params: { modelId: '$model', audioChunk: '$audio' },
+      as: 'err'
+    }
+  },
+  { project: { from: '$err', path: 'message', as: 'message' } },
+  { assert: { on: '$message', use: 'expectation' } }
+]
+
+/** A metadata transcription. */
+const parakeetMetadataSteps = (dependency: string): Step[] => [
+  { useModel: { deps: [dependency], as: 'model' } },
+  { asset: { kind: 'audio', file: '$params.audioFileName', form: 'path', as: 'audio' } },
+  {
+    call: {
+      method: 'transcribe',
+      params: { modelId: '$model', audioChunk: '$audio', metadata: true },
+      as: 'run'
+    }
+  },
+  { project: { from: '$run', path: 'segments', as: 'segments' } },
+  {
+    assert: {
+      on: '$segments',
+      named: 'transcriptSegmentsShape',
+      with: { flags: ['isEndOfTurn', 'startsWord'] }
+    }
+  }
+]
+
+const createParakeetTest = (
+  testId: string,
+  dependency: ParakeetDependency,
+  audioFileName: string,
+  expectation:
+    | { validation: 'contains-all' | 'contains-any'; contains: string[] }
+    | { validation: 'regex'; pattern: string }
+    | { validation: 'type'; expectedType: 'string' | 'number' | 'array' }
+    | { validation: 'throws-error'; errorContains: string },
+  estimatedDurationMs: number = 60000,
+  suites?: string[]
+): TestDefinition => ({
+  testId,
+  params: { audioFileName },
+  expectation,
+  ...(suites && { suites }),
+  metadata: {
+    category: 'parakeet',
+    dependency,
+    estimatedDurationMs
+  }
+})
+
+// ── TDT INT8 tests ────────────────────────────────────────────────────────────
+// Parakeet TDT 0.6B INT8 — multilingual speech-to-text
+
+export const parakeetTdtWav = createParakeetTest(
+  'parakeet-tdt-wav',
+  'parakeet-tdt',
+  'transcription-short-wav.wav',
+  { validation: 'contains-all', contains: ['test', 'automation'] },
+  300000, // download ~700 MB
+  ['smoke']
+)
+
+export const parakeetTdtMp3 = createParakeetTest(
+  'parakeet-tdt-mp3',
+  'parakeet-tdt',
+  'transcription-short-mp3.mp3',
+  { validation: 'contains-all', contains: ['test', 'automation'] },
+  120000
+)
+
+export const parakeetTdtM4a = createParakeetTest(
+  'parakeet-tdt-m4a',
+  'parakeet-tdt',
+  'transcription-short-m4a.m4a',
+  { validation: 'contains-all', contains: ['test'] },
+  120000
+)
+
+export const parakeetTdtSilence = createParakeetTest(
+  'parakeet-tdt-silence',
+  'parakeet-tdt',
+  'silence.m4a',
+  { validation: 'type', expectedType: 'string' },
+  120000
+)
+
+// Multi-segment: audio longer than a single processing chunk
+export const parakeetTdtMultiSegment = createParakeetTest(
+  'parakeet-tdt-multi-segment',
+  'parakeet-tdt',
+  'diarization-sample-16k.wav',
+  { validation: 'type', expectedType: 'string' },
+  180000
+)
+
+// Invalid MP3 — FFmpeg fails to decode it
+export const parakeetTdtMusic = createParakeetTest(
+  'parakeet-tdt-music',
+  'parakeet-tdt',
+  'only-music.mp3',
+  { validation: 'throws-error', errorContains: 'Invalid data' },
+  60000
+)
+
+// Corrupted WAV — decoder throws a codec-level error
+export const parakeetTdtCorruptedWav = createParakeetTest(
+  'parakeet-tdt-corrupted-wav',
+  'parakeet-tdt',
+  'corrupted-wav.wav',
+  { validation: 'throws-error', errorContains: '' },
+  60000,
+  ['smoke']
+)
+
+// ── CTC tests ─────────────────────────────────────────────────────────────────
+// Parakeet CTC FP32 — faster inference, no punctuation/capitalisation
+
+export const parakeetCtcWav = createParakeetTest(
+  'parakeet-ctc-wav',
+  'parakeet-ctc',
+  'transcription-short-wav.wav',
+  { validation: 'type', expectedType: 'string' },
+  600000 // CTC model download
+)
+
+export const parakeetCtcMp3 = createParakeetTest(
+  'parakeet-ctc-mp3',
+  'parakeet-ctc',
+  'transcription-short-mp3.mp3',
+  { validation: 'contains-all', contains: ['test', 'automation'] },
+  200000,
+  ['smoke']
+)
+
+export const parakeetCtcSilence = createParakeetTest(
+  'parakeet-ctc-silence',
+  'parakeet-ctc',
+  'silence.m4a',
+  { validation: 'type', expectedType: 'string' },
+  120000
+)
+
+// Corrupted WAV on CTC path
+export const parakeetCtcCorruptedWav = createParakeetTest(
+  'parakeet-ctc-corrupted-wav',
+  'parakeet-ctc',
+  'corrupted-wav.wav',
+  { validation: 'throws-error', errorContains: '' },
+  60000
+)
+
+// ── Unified RNN-T tests ───────────────────────────────────────────────────────
+// Parakeet Unified 0.6B — English batch + low-latency streaming from one
+// checkpoint (standard RNN-T with punctuation and capitalization). The engine
+// auto-detects the model type from the GGUF metadata.
+
+export const parakeetUnifiedWav = createParakeetTest(
+  'parakeet-unified-wav',
+  'parakeet-unified',
+  'transcription-short-wav.wav',
+  { validation: 'contains-all', contains: ['test', 'automation'] },
+  300000, // download ~400 MB (q4_0)
+  ['smoke']
+)
+
+// iOS-only: verifies that the registry GGUF and all five Core ML bundle
+// components land together in the device's cache before batch inference.
+export const parakeetUnifiedCoremlIos: TestDefinition = {
+  testId: 'parakeet-unified-coreml-ios',
+  params: { audioFileName: 'transcription-short-wav.wav' },
+  expectation: { validation: 'contains-all', contains: ['test', 'automation'] },
+  metadata: {
+    category: 'parakeet',
+    dependency: 'parakeet-unified',
+    estimatedDurationMs: 300000
+  }
+}
+
+export const parakeetUnifiedMp3 = createParakeetTest(
+  'parakeet-unified-mp3',
+  'parakeet-unified',
+  'transcription-short-mp3.mp3',
+  { validation: 'contains-all', contains: ['test', 'automation'] },
+  120000
+)
+
+export const parakeetUnifiedSilence = createParakeetTest(
+  'parakeet-unified-silence',
+  'parakeet-unified',
+  'silence.m4a',
+  { validation: 'type', expectedType: 'string' },
+  120000
+)
+
+// Corrupted WAV on the Unified path
+export const parakeetUnifiedCorruptedWav = createParakeetTest(
+  'parakeet-unified-corrupted-wav',
+  'parakeet-unified',
+  'corrupted-wav.wav',
+  { validation: 'throws-error', errorContains: '' },
+  60000
+)
+
+// ── TranscribePsy tests ───────────────────────────────────────────────────────
+// TranscribePsy-250M-EU-sub: a 254M Parakeet-TDT distilled for Dutch, English,
+// French, German, Italian, Polish, Portuguese and Spanish, published by QVAC on
+// Hugging Face. It loads as a TDT model and detects the language itself; long
+// recordings are encoded in the 60 s / 25 % windows the model recommends.
+
+export const parakeetTranscribePsyWav = createParakeetTest(
+  'parakeet-transcribepsy-wav',
+  'parakeet-transcribepsy',
+  'transcription-short-wav.wav',
+  { validation: 'contains-all', contains: ['test', 'automation'] },
+  300000, // download ~305 MB
+  ['smoke']
+)
+
+export const parakeetTranscribePsyMp3 = createParakeetTest(
+  'parakeet-transcribepsy-mp3',
+  'parakeet-transcribepsy',
+  'transcription-short-mp3.mp3',
+  { validation: 'contains-all', contains: ['test', 'automation'] },
+  120000
+)
+
+export const parakeetTranscribePsySilence = createParakeetTest(
+  'parakeet-transcribepsy-silence',
+  'parakeet-transcribepsy',
+  'silence.m4a',
+  { validation: 'type', expectedType: 'string' },
+  120000
+)
+
+// Corrupted WAV on the TranscribePsy path
+export const parakeetTranscribePsyCorruptedWav = createParakeetTest(
+  'parakeet-transcribepsy-corrupted-wav',
+  'parakeet-transcribepsy',
+  'corrupted-wav.wav',
+  { validation: 'throws-error', errorContains: '' },
+  60000
+)
+
+// Explicit long-form windows: the resource loads the same GGUF with 15 s
+// windows and 1.28 s of context, so the 17 s fixture is encoded as two windows
+// and the transcript still carries the words that straddle them.
+export const parakeetTranscribePsyWindowed = createParakeetTest(
+  'parakeet-transcribepsy-windowed',
+  'parakeet-transcribepsy-windowed',
+  'transcription-short-wav.wav',
+  { validation: 'contains-all', contains: ['test', 'automation'] },
+  120000
+)
+
+// macOS / iOS only: the Core ML distribution is an encoder-less GGUF whose
+// encoder and decoder bundles the loader stages beside it, and the batch run
+// has to report that its encoder ran on Core ML rather than on ggml.
+export const parakeetTranscribePsyCoremlWav: TestDefinition = {
+  testId: 'parakeet-transcribepsy-coreml-wav',
+  params: { audioFileName: 'transcription-short-wav.wav' },
+  expectation: { validation: 'contains-all', contains: ['test', 'automation'] },
+  metadata: {
+    category: 'parakeet',
+    dependency: 'parakeet-transcribepsy-coreml',
+    estimatedDurationMs: 300000
+  },
+  steps: [
+    ...parakeetSteps('parakeet-transcribepsy-coreml'),
+    { project: { from: '$run', path: 'stats.encoderUsedCoreml', as: 'encoderUsedCoreml' } },
+    { assert: { on: '$encoderUsedCoreml', named: 'valueIn', with: { values: [1] } } }
+  ]
+}
+
+// ── Indic Conformer CTC (desktop-only) ────────────────────────────────────────
+// Multilingual CTC with a required `modelConfig.language` mask. Happy path
+// uses the asr-ggml Hindi sample (`sample_hi.raw` wrapped as WAV) and asserts
+// Devanagari rather than a brittle token list. Not tagged smoke: mobile is
+// skipped, and smoke must be stable on both desktop and mobile.
+
+export const parakeetIndicConformerHi = createParakeetTest(
+  'parakeet-indic-conformer-hi',
+  'parakeet-indic-conformer',
+  'sample-hi.wav',
+  { validation: 'regex', pattern: '[\\u0900-\\u097F]' },
+  600000
+)
+
+export const parakeetIndicConformerSilence = createParakeetTest(
+  'parakeet-indic-conformer-silence',
+  'parakeet-indic-conformer',
+  'silence.m4a',
+  { validation: 'type', expectedType: 'string' },
+  120000
+)
+
+export const parakeetIndicConformerCorruptedWav = createParakeetTest(
+  'parakeet-indic-conformer-corrupted-wav',
+  'parakeet-indic-conformer',
+  'corrupted-wav.wav',
+  { validation: 'throws-error', errorContains: '' },
+  60000
+)
+
+// ── Sortformer v2.1 (diarization) tests ───────────────────────────────────────
+// Batch `transcribe` on PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0 — expect "Speaker …"
+
+export const parakeetSortformerSingle = createParakeetTest(
+  'parakeet-sortformer-single',
+  'parakeet-sortformer',
+  'diarization-sample-16k.wav',
+  { validation: 'contains-any', contains: ['Speaker'] },
+  600000, // Sortformer model download
+  ['smoke']
+)
+
+export const parakeetSortformerTwoSpeakers = createParakeetTest(
+  'parakeet-sortformer-two-speakers',
+  'parakeet-sortformer',
+  'two-speakers-16k.wav',
+  { validation: 'contains-any', contains: ['Speaker'] },
+  180000
+)
+
+// Per-segment metadata: the executor validates the segment shape and the
+// parakeet-only `isEndOfTurn` / `startsWord` flags, so the expectation here
+// is only the pass-through.
+export const parakeetTdtMetadata: TestDefinition = {
+  testId: 'parakeet-tdt-metadata',
+  params: { audioFileName: 'transcription-short-wav.wav', metadata: true },
+  expectation: { validation: 'function', fn: () => true },
+  metadata: { category: 'parakeet', dependency: 'parakeet-tdt', estimatedDurationMs: 30000 }
+}
+
+export const parakeetTdtTests = [
+  parakeetTdtWav,
+  parakeetTdtMp3,
+  parakeetTdtM4a,
+  parakeetTdtSilence,
+  parakeetTdtMultiSegment,
+  parakeetTdtMusic,
+  parakeetTdtCorruptedWav,
+  parakeetTdtMetadata
+]
+
+export const parakeetCtcTests = [
+  parakeetCtcWav,
+  parakeetCtcMp3,
+  parakeetCtcSilence,
+  parakeetCtcCorruptedWav
+]
+
+export const parakeetUnifiedTests = [
+  parakeetUnifiedWav,
+  parakeetUnifiedCoremlIos,
+  parakeetUnifiedMp3,
+  parakeetUnifiedSilence,
+  parakeetUnifiedCorruptedWav
+]
+
+export const parakeetTranscribePsyTests = [
+  parakeetTranscribePsyWav,
+  parakeetTranscribePsyMp3,
+  parakeetTranscribePsySilence,
+  parakeetTranscribePsyCorruptedWav,
+  parakeetTranscribePsyWindowed,
+  parakeetTranscribePsyCoremlWav
+]
+
+export const parakeetIndicConformerTests = [
+  parakeetIndicConformerHi,
+  parakeetIndicConformerSilence,
+  parakeetIndicConformerCorruptedWav
+]
+
+export const parakeetSortformerTests = [parakeetSortformerSingle, parakeetSortformerTwoSpeakers]
+
+export const parakeetTests = [
+  ...parakeetTdtTests,
+  ...parakeetCtcTests,
+  ...parakeetUnifiedTests,
+  ...parakeetTranscribePsyTests,
+  ...parakeetIndicConformerTests,
+  ...parakeetSortformerTests
+]
+
+/**
+ * Attach a body to every parakeet definition, branching exactly where the executor branched:
+ * metadata mode returns segments instead of a transcript, and a `throws-error` expectation asserts
+ * on the refusal instead of a result.
+ */
+for (const test of parakeetTests) {
+  if (test.steps) continue
+  const dependency = String(test.metadata?.dependency ?? 'parakeet-tdt')
+  if ((test.params as { metadata?: boolean }).metadata === true) {
+    test.steps = parakeetMetadataSteps(dependency)
+    continue
+  }
+  test.steps =
+    test.expectation.validation === 'throws-error'
+      ? parakeetRejects(dependency)
+      : parakeetSteps(dependency)
+}

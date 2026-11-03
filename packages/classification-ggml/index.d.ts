@@ -1,6 +1,6 @@
 export { MegaLoc, type MegaLocOptions, type ImageEmbeddingOptions, type MegaLocRuntimeStats } from "./megaloc";
 /**
- * Canonical labels emitted by the bundled 3-class MobileNetV3-Small model.
+ * Canonical labels emitted by the default 3-class MobileNetV3-Small model.
  * Kept permissive for future fine-tunes that ship different class names
  * via the GGUF `mobilenet.class_N` metadata.
  */
@@ -30,8 +30,9 @@ export interface ImageClassifierLogger {
 }
 export interface ImageClassifierOptions {
     /**
-     * Absolute path to the FP16 GGUF weights file. Defaults to the bundled
-     * `weights/mobilenetv3_3class_v3_fp16.gguf` shipped inside this package.
+     * Absolute path to the FP16 GGUF weights file. Required unless
+     * `QVAC_CLASSIFICATION_MODEL_PATH` is set. `@qvac/inference` downloads the
+     * registry model when `loadModel` omits `modelSrc`.
      */
     modelPath?: string;
     /** Optional logger compatible with `@qvac/logging`. */
@@ -54,7 +55,7 @@ export interface ImageClassifierState {
  * High-level classifier for MobileNetV3-Small 3-class image triage.
  *
  * ```js
- * const classifier = new ImageClassifier()
+ * const classifier = new ImageClassifier({ modelPath })
  * await classifier.load()
  * const result = await classifier.classify(jpegBuffer)
  * // [ { label: 'food', confidence: 0.93 }, ... ]

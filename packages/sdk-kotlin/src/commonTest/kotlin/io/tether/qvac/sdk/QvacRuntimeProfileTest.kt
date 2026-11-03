@@ -56,6 +56,47 @@ class QvacRuntimeProfileTest {
     }
 
     @Test
+    fun rerankCapabilityIsCheckedBeforeDispatch() = runTest {
+        val transport = ProfileTransport(
+            QvacRuntimeProfile(
+                name = "llm",
+                sdkVersion = "0.21.0",
+                capabilities = setOf(QvacCapability.LLM, QvacCapability.EMBEDDINGS),
+            ),
+        )
+        val client = QvacClient(transport)
+
+        for (operation in listOf("rerank", "loadModel")) {
+            val error = assertFailsWith<UnsupportedCapabilityException> {
+                client.call(buildJsonObject {
+                    put("type", operation)
+                    if (operation == "loadModel") put("modelType", "llamacpp-rerank")
+                })
+            }
+            assertEquals(QvacCapability.RERANK, error.capability)
+            assertFalse(transport.dispatched)
+        }
+    }
+
+    @Test
+    fun rerankCapabilityFromManifestAllowsDispatch() = runTest {
+        val profile = Json.decodeFromString<QvacRuntimeProfile>(
+            """{"name":"aio","sdkVersion":"0.21.0","capabilities":["RERANK"],"plugins":["@qvac/sdk/llamacpp-rerank/plugin"]}""",
+        )
+        val transport = ProfileTransport(profile)
+        val client = QvacClient(transport)
+
+        for (operation in listOf("rerank", "loadModel")) {
+            transport.dispatched = false
+            client.call(buildJsonObject {
+                put("type", operation)
+                if (operation == "loadModel") put("modelType", "llamacpp-rerank")
+            })
+            assertTrue(transport.dispatched)
+        }
+    }
+
+    @Test
     fun omittedCapabilityFailsBeforeDispatch() = runTest {
         val transport = ProfileTransport(
             QvacRuntimeProfile(

@@ -3,7 +3,7 @@ import path from 'bare-path'
 import { getConfiguredCacheDir } from '@/runtime/state'
 import { getQvacPath } from '@/utils/qvac-paths'
 import type { ShardFileMetadata } from '@/schemas/index'
-import { calculateFileChecksum } from '@/utils/checksum'
+import { calculateCachedFileChecksum } from '@/utils/checksum'
 import { validateAndJoinPath, joinWithinBase } from '@/utils/path-security'
 import { generateShortHash } from '@/utils/formatting'
 import { getEngineLogger } from '@/logging/index'
@@ -158,7 +158,7 @@ export async function checkShardCompleteness(
 
       if (fileMeta.sha256Checksum) {
         const start = nowMs()
-        const actualChecksum = await calculateFileChecksum(shardPath)
+        const actualChecksum = await calculateCachedFileChecksum(shardPath)
         onChecksumTimeMs?.(nowMs() - start)
         if (actualChecksum !== fileMeta.sha256Checksum) {
           logger.warn(

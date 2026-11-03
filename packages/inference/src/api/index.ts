@@ -58,3 +58,4 @@ export { vlaPreprocessImage, vlaPadState, VLA_DEFAULT_IMAGE_SIZE } from '@/api/v
 export { startRpcServer, stopRpcServer, discoverRpcServers } from './rpc-server'
 
 export { decide } from '@/api/decide'
+export { rerank } from '@/api/rerank'

@@ -24,8 +24,11 @@ interface DiffusionResult {
  *
  * @param params - Diffusion request parameters (model, prompt, dimensions, sampler, seed, etc.).
  * @returns A result object exposing `progressStream` (async iterator of `{ step, totalSteps, elapsedMs }`), `outputs` (promise of the generated image buffers), and `stats` (promise of generation statistics).
+ * @throws {InferenceCancelledError} The run's promises reject and progress stream throws when an active generation is cancelled.
+ * @throws {RequestRejectedByPolicyError} The run rejects when another image or video generation owns the model.
  *
- * Supports both txt2img (no `init_image`) and img2img (with `init_image`).
+ * Supports txt2img without input images, img2img via `init_image`,
+ * and ordered multi-reference editing via `init_images` on supported models.
  *
  * @example
  * ```typescript
@@ -57,6 +60,20 @@ interface DiffusionResult {
  *   init_images: [refA, refB],
  *   width: 768,
  *   height: 768,
+ * });
+ *
+ * // Qwen-Image-2.1 reference editing. Load the matching Qwen3-VL encoder,
+ * // vision projector, and 2.1 VAE from your local files first.
+ * const { outputs: edited } = diffusion({
+ *   modelId,
+ *   prompt: "Place the two referenced people together in one office.",
+ *   init_images: [refA, refB],
+ *   width: 512,
+ *   height: 512,
+ *   steps: 30,
+ *   cfg_scale: 6,
+ *   sampling_method: "euler",
+ *   seed: 42,
  * });
  *
  * // LoRA adapter for this generation (absolute path required).

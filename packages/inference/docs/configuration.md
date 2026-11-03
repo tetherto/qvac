@@ -23,6 +23,10 @@ required plugins explicitly. `audiogen-ggml` can also produce PCM or WAV without
 FFmpeg. Compressed audio file decoding and compressed audiogen output formats
 require `bare-ffmpeg` to be bundled.
 
+Decoded audio input streams consume PCM updates without retaining a second
+history in the decoder response. The decoder still buffers the encoded input,
+and downstream stream queues can retain decoded PCM.
+
 MOSS transcription uses the `moss-transcribe` model type and plugin. It supports
 batch transcription, with optional `maxThreads`, `useGPU` (Metal), and
 `backendsDir` model configuration. Per-request `hotwords` or `prompt` and
@@ -41,3 +45,12 @@ speaker-activity VAD events retain `speakerId`. `diarizationThreshold` and
 `diarizationMinSegmentMs` are load-time controls and per-call streaming controls.
 Omitted controls preserve native model defaults. Registry constants and model-output
 validation are pending registry weights.
+
+TranscribePsy-250M-EU-sub (`PARAKEET_TRANSCRIBEPSY_250M_Q8_0`) loads through
+`parakeet-transcription` as a TDT model; it detects its eight European languages
+itself. `longFormWindowFrames` and `longFormContextFrames` bound the offline
+encoder window on long recordings in 80 ms encoder frames; the default `0` takes
+the window the model recommends (60 s with 25 % overlap for TranscribePsy). Its
+Core ML distribution, `PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0`, is an
+encoder-less GGUF whose encoder and decoder bundles the loader stages beside it on
+macOS and iOS; on any other platform that load is refused before the download.

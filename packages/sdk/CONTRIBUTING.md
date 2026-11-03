@@ -32,10 +32,36 @@ If you manage to solve a problem by removing code, that gives you double points 
 
 ## 🚀 Quickstart (fast lane)
 
-- Node.js 22, then `npm run sdk-source:workspace` (installs the SDK against the in-repo engine; see the README's Build section)
+- Node.js 22, then `npm run sdk-source:workspace` (installs the SDK against the in-repo engine; see Build from source below)
 - Run `npm run lint` then `npm run test:unit` before opening a PR (husky hooks will enforce lint, format and typecheck on commit)
 - Keep PRs focused on one change; draft early if work is in progress
 - Follow commit format `prefix[tags]?: subject` (e.g., `fix: tighten cache validation`)
+
+## 🛠️ Build from source
+
+Node.js 22 and npm are the only tools needed. No lockfile is committed; `package-lock.json` is gitignored.
+
+Build and test against the in-repo engine at the same commit (this is what CI does):
+
+```bash
+npm run sdk-source:workspace
+```
+
+This installs and builds `../inference`, points `@qvac/inference` at it, and installs the SDK's dependencies. A plain `npm install` resolves `@qvac/inference` to its published release instead, which fails with `ERESOLVE` whenever the SDK on `main` already depends on addon versions the published engine has not been released against.
+
+```bash
+npm run build  # or `watch` for hotreload
+```
+
+```bash
+npm run build:pack
+```
+
+This outputs a tarball under `dist/qvac-sdk-{version}.tgz` that you can install in your project, e.g.:
+
+```bash
+npm i path/to/qvac-sdk-0.21.0.tgz
+```
 
 ## 🛣️ Contribution lanes
 
@@ -61,7 +87,75 @@ If you manage to solve a problem by removing code, that gives you double points 
 - Add tests for any behavior change (or explain why not).
 - Note breaking or API-affecting changes with `[bc]` or `[api]` tags and include required code examples in the PR body.
 
+## 📝 Commit messages and PR titles
+
+Commit messages and PR titles are structured so changelogs can be generated from them. [`scripts/sdk/validator.cjs`](../../scripts/sdk/validator.cjs) is the source of truth for the allowed values; the Husky `commit-msg` hook validates commits, and CI validates PR titles and descriptions.
+
+```
+prefix[tags]?: subject          # commit message
+TICKET prefix[tags]?: subject   # PR title
+```
+
+**Prefixes:** `feat`, `fix`, `doc`, `test`, `chore`, `infra`.
+
+**Tags** are optional; separate several with `|`, e.g. `feat[mod|bc]`:
+
+- `[api]` - non-breaking API change
+- `[bc]` - breaking change, including breaking API changes
+- `[mod]` - model change
+- `[notask]` - lets the PR title omit the ticket
+- `[skiplog]` - leaves the PR out of the changelog
+
+```bash
+QVAC-123 feat: add RAG support for LanceDB
+QVAC-456 fix[api]: fix completion stream error handling
+QVAC-101 feat[bc]: redesign loadModel signature
+doc[notask]: update installation instructions
+```
+
+Tagged PRs must include examples in the description:
+
+- `[bc]` needs a before/after migration example, either `BEFORE:` / `AFTER:` code blocks or `// old` / `// new` comments in one block:
+
+  ````markdown
+  ## BC Changes
+
+  **BEFORE:**
+
+  ```typescript
+  const model = await loadModel('model-path')
+  ```
+
+  **AFTER:**
+
+  ```typescript
+  const modelId = await loadModel('model-path', { modelType: 'llm' })
+  ```
+  ````
+
+- `[api]` needs at least one fenced code block showing the new usage.
+- `[mod]` needs a `## Models` section with at least one `### Added models`, `### Updated models` or `### Removed models` subsection containing a code block.
+
+Merge, revert, `squash!`, version-bump and release commits skip validation.
+
+### Generating changelogs
+
+```bash
+npm run changelog:generate
+```
+
+This collects the PRs merged into the package since its latest release tag, classifies them by prefix and tag, and writes `changelog/<version>/CHANGELOG.md`, plus `breaking.md` and `api.md` with the code examples from `[bc]` and `[api]` PRs.
+
 ## 🧪 Testing expectations
+
+The SDK test suite is organized into two buckets by runtime:
+
+| Bucket            | Runtime   | Location      | Command                                            |
+| ----------------- | --------- | ------------- | -------------------------------------------------- |
+| Unit              | Node      | `test/`       | `npm run test:unit`                                |
+| Client (consumer) | Node / RN | `../sdk-e2e/` | See [`../sdk-e2e/README.md`](../sdk-e2e/README.md) |
+
+See [`TESTING.md`](./TESTING.md) for the full decision tree on where new tests should land.
 
 - New features and bug fixes need at least one test.
 - Prefer small, focused tests over broad fixtures.

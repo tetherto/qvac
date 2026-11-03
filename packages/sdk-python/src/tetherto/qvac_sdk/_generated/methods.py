@@ -80,6 +80,8 @@ from . import (
     RagProgressResponse,
     RagRequest,
     RagResponse,
+    RerankRequest,
+    RerankResponse,
     ResumeRequest,
     ResumeResponse,
     StartRpcServerRequest,
@@ -403,6 +405,11 @@ async def rag_with_progress(
             yield RagResponse.model_validate(chunk)
 
 
+async def rerank(transport: Transport, params: RerankRequest) -> RerankResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return RerankResponse.model_validate(await transport.call(payload))
+
+
 async def resume(transport: Transport, params: ResumeRequest) -> ResumeResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     return ResumeResponse.model_validate(await transport.call(payload))
@@ -554,6 +561,7 @@ __all__ = [
     "plugin_invoke_stream",
     "rag",
     "rag_with_progress",
+    "rerank",
     "resume",
     "start_rpc_server",
     "state",

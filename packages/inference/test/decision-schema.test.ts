@@ -8,10 +8,7 @@ import {
   ModelType
 } from '@/schemas/index'
 import { resolveModelConfigWithContext } from '@/runtime/model-config-utils'
-import {
-  transformDecisionConfig,
-  decisionModelFiles
-} from '@/plugins/builtin/llamacpp-decision/helpers'
+import { transformDecisionConfig } from '@/plugins/builtin/llamacpp-decision/helpers'
 
 const questions = {
   team: {
@@ -57,15 +54,6 @@ test('Decision requests preserve option order, labels, structured states and bat
   ]) {
     t.absent(decideParamsSchema.safeParse(input).success)
   }
-})
-
-test('Laya passes complete shard files in addon order', (t) => {
-  t.alike(decisionModelFiles('/models/laya.gguf'), ['/models/laya.gguf'])
-  t.alike(decisionModelFiles('/models/laya-00002-of-00002.gguf'), [
-    '/models/laya.tensors.txt',
-    '/models/laya-00001-of-00002.gguf',
-    '/models/laya-00002-of-00002.gguf'
-  ])
 })
 
 test('Laya config accepts only supported context options and preserves native defaults', (t) => {

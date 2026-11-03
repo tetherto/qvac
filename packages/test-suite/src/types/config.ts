@@ -171,7 +171,8 @@ const externalConsumerSchema = z.object({
     .default('bridge')
     .describe(
       'bridge: the framework drives the client over stdin/stdout and owns MQTT. ' +
-        'mqtt: not implemented — a config that sets it is rejected at startup'
+        'mqtt: the client speaks the consumer protocol to the broker itself (an app on a device); ' +
+        'the framework only starts it, with the run in its environment'
     ),
 
   interpreter: z.string().describe('Executable that runs the client (e.g., ".venv/bin/python")'),
@@ -191,7 +192,21 @@ const externalConsumerSchema = z.object({
   env: z
     .record(z.string())
     .optional()
-    .describe('Extra environment variables for the client process')
+    .describe('Extra environment variables for the client process'),
+
+  prepare: z
+    .object({
+      interpreter: z.string().describe('Executable that runs the step (e.g., "node")'),
+      args: z.array(z.string()).optional().default([]),
+      cwd: z.string().optional().default('.'),
+      env: z.record(z.string()).optional()
+    })
+    .optional()
+    .describe(
+      'A step run:local:external completes before the producer starts, such as building an app. ' +
+        'The producer waits a fixed time for consumers to register, so a build cannot happen in the ' +
+        'client itself. Skipped with --skip-build'
+    )
 })
 
 export type ExternalConsumerConfig = z.infer<typeof externalConsumerSchema>

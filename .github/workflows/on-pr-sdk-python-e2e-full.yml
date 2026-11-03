@@ -23,6 +23,7 @@ on:
     paths:
       - "packages/sdk-python/**"
       - "packages/sdk/**"
+      - "packages/sdk-e2e/**"
   workflow_dispatch:
 
 permissions:

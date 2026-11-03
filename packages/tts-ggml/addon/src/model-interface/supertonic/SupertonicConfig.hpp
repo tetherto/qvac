@@ -3,6 +3,8 @@
 #include <optional>
 #include <string>
 
+#include <tts-cpp/lavasr/coreml.h>
+
 namespace qvac::ttsggml::supertonic {
 
 struct SupertonicConfig {
@@ -90,6 +92,7 @@ struct SupertonicConfig {
   // The enhancer always produces 48 kHz; if `outputSampleRate` is also set the
   // model resamples the enhanced signal to that rate afterwards.
   std::string enhancerGgufPath;
+  tts_cpp::lavasr::CoreMLOptions enhancerCoreml;
 
   // LavaSR neural speech denoiser (UL-UNAS). A non-empty `denoiserGgufPath` is
   // the single switch: when set, the model denoises the synthesized PCM BEFORE
@@ -97,6 +100,7 @@ struct SupertonicConfig {
   // The tts-cpp UL-UNAS forward is implemented in qvac-fabric-speech.cpp PR
   // #78; a non-empty path activates it once the pinned tts-cpp includes #78.
   std::string denoiserGgufPath;
+  tts_cpp::lavasr::CoreMLOptions denoiserCoreml;
 };
 
 }

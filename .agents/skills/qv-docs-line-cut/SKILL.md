@@ -1,21 +1,43 @@
 ---
 name: qv-docs-line-cut
-description: Cut the next documentation line of every versioned collection whose release has already shipped — run scripts/cut-line.ts per collection, commit each cut on its own, verify it mechanically, and measure the evidence the PR body quotes. Use when a release goes live, at the start of a sprint when the coming version needs a folder to land in, or when invoking /qv-docs-line-cut.
-disable-model-invocation: true
+description: Cut the documentation line of the version being released in each collection the release moves — run scripts/cut-line.ts per collection, commit each cut on its own, verify it mechanically, and measure the evidence the PR body quotes. Use at a release cutoff (step 4 of qv-docs-cutoff), or when invoking /qv-docs-line-cut.
 ---
 
 # Documentation Line Cut
 
-A versioned collection publishes its current line from a parenthesized folder,
-whose pages answer at the version-less paths, and every line cut before it from
-a plain folder. A cut preserves the outgoing line and opens the next one as a
-copy, so the sprint's features have a folder to land in while the version-less
-paths keep serving what was just released.
+A versioned collection publishes one folder per line it has cut: the
+parenthesized one answers the version-less paths, every plain one carries its
+version in the URL. The line still being written is not among them — it lives
+at `content/_unpublished/<collection>/next/`, outside the site.
+
+A cut publishes the line of the version being released:
+
+- the outgoing group is renamed to its plain folder and keeps its content
+- the development line is copied in as the new group, labelled with the
+  version being released
+- the development line stays where it is, now the next version's
+- the manifest, the redirects and the currency marker follow
+
+Nothing is deleted and the development line is never renamed, which is why a
+feature PR that straddles the cutoff merges into the path it was written to.
+
+The outgoing group is renamed, so a PR that edits it and merges after the cut
+has two exact rename candidates for every page the sprint left alone, and git
+picks one (QVAC-27286). `qv-docs-cutoff` lists those PRs before the cut, and the
+`Documentation lines` job fails them until they are rebased — it is not a
+required check, so it makes the window visible rather than withholding the
+merge. Neither is this skill's to run; both are named here because they are
+what keeps the rename from being silent.
 
 `docs/website/scripts/cut-line.ts` performs the cut. This skill is the round
-around it: which collections are due, in what order, what to measure, and what
-the PR has to prove. Every command runs from `docs/website` unless stated
-otherwise.
+around it: which collections to cut, what to measure, and what the PR has to
+prove. Every command runs from `docs/website` unless stated otherwise.
+
+**Invoked from a flow, not by hand.** `qv-docs-cutoff` calls this skill as its
+step 4, on a branch that already carries the regenerated API summary. It is
+model-invocable for that reason. A human running `/qv-docs-line-cut` directly
+is the exception — an out-of-band cut — and Step 1 is what refuses one made at
+the wrong moment.
 
 ## The roster comes from the manifest, never from this file
 
@@ -25,7 +47,7 @@ Read it at the start of every run and derive, per entry with
 
 - the **slug** the script takes, from `path` (`/sdk` → `sdk`)
 - the **npm package** the line follows, from `package`
-- the **current line**, the entry whose `folder` is parenthesized
+- the **line last cut**, the entry whose `folder` is parenthesized
 
 Two collections are versioned today and more are coming, so never carry a
 roster anywhere else. `cut-line.ts` reads the same manifest and refuses a slug
@@ -33,57 +55,53 @@ that is not a versioned collection, listing the ones that are.
 
 ## When to use
 
-- A release of a documented collection has gone live and its line must be cut
-  before the sprint's first feature PR needs a folder.
-- At the start of a sprint, to cut every line that is due in one PR.
+- Step 4 of `qv-docs-cutoff`, which is itself step 6 of
+  [`docs/ci/RELEASE-TRAIN.md`](../../../docs/ci/RELEASE-TRAIN.md) or step 1 of
+  the release flow in [`docs/gitflow.md`](../../../docs/gitflow.md).
 - `/qv-docs-line-cut` invoked directly.
 
 ## What it does NOT do
 
-- Does not release or publish. It reacts to releases that already shipped.
-- Does not write the opened line's content; the sprint's feature PRs do.
+- Does not release or publish. It reacts to a release that has started.
+- Does not write content. The sprint's feature PRs wrote the line it publishes.
 - Does not open the PR. It leaves the tree committed and the evidence measured.
-- Does not build the preserved line's content from anything but the outgoing
-  folder. A line cut late carries whatever was written into the current line
-  meanwhile — see "Cut on time".
+- Does not promote to production. That waits for npm.
 
 ## Workflow
 
-### Step 1: Decide which lines are due
+### Step 1: Check the moment, per collection
 
-For each collection in the manifest, ask the registry for the published
-version of the package it follows:
+The moment is **declared, not detected**: the caller names the version being
+released, and that invocation is the signal. A `release-train-*` branch can be
+cut early and sit open for days, so its existence says nothing.
 
-```bash
-npm view <package> version
-```
+What this step does is check the declared version against the manifest, per
+collection:
 
-Compare its major.minor against the collection's current line:
+- `<x.y>` **above** the line last cut → the cut is due. The ordinary case.
+- `<x.y>` **equal** to it → stop. This cut already ran.
+- `<x.y>` **below** it → stop and ask. The collection is a release ahead.
 
-- **Equal** → due. The current line has shipped, and the line to open is the
-  next minor.
-- **Below** → not due. The current line is still unreleased; leave it open and
-  skip the collection.
-- **Above** → stop and ask. A line was skipped, which this skill does not
-  resolve.
+No registry lookup is needed. Under this model a cut run late is not a
+correctness problem — the sprint's prose was going into the development line
+either way, never into a line already cut — so there is nothing to detect and
+warn about. Run it when the release says to.
 
-**Never read the version from `packages/<name>/package.json` on `main`.** The
-release bumps it on the release branch, and `main` only catches up when the
-backmerge lands, so a shipped release still reads as the previous version
-there. The registry is the signal.
+Report the roster, the version being released and the verdict per collection
+before cutting anything.
 
-Report the roster, the published version, and the verdict per collection before
-cutting anything.
-
-### Step 2: Cut each due collection, one commit each
+### Step 2: Cut each collection, one commit each
 
 Per collection, in manifest order:
 
 ```bash
-bun run scripts/cut-line.ts <slug> v<major>.<minor+1>
+bun run scripts/cut-line.ts <slug> v<x.y>
 git -C ../.. add -A docs/website
-git -C ../.. commit -m "docs: cut the <Collection> v<major>.<minor+1> documentation line"
+git -C ../.. commit -m "docs: publish the <Collection> v<x.y> documentation line"
 ```
+
+The version passed is the one being **released** — the line the cut opens, not
+a successor to compute.
 
 The commit between collections is not optional: `cut-line.ts` refuses a working
 tree that already carries changes under `docs/website`, because a cut is
@@ -91,45 +109,51 @@ reviewed as its own diff. That refusal is what makes one commit per collection
 the natural granularity, and it scales linearly — N collections, N runs, N
 commits.
 
-The script prints every path it touched. Expect the two folders, the manifest,
-the redirects, and the pages it relabelled. It refuses, before writing
-anything, a slug that is not a versioned collection, a version carrying a patch
-component, a version not above the current line, a destination already on
-disk, and a dirty tree.
+The script prints every path it touched. Expect the preserved folder, the
+opened folder, the manifest, the redirects and the pages it relabelled. It
+refuses, before writing anything, a slug that is not a versioned collection, a
+version carrying a patch component, a version not above the line last cut, a
+missing development line, a destination already on disk, and a dirty tree.
 
 ### Step 3: Verify each cut mechanically
 
-Per collection, against the commit that made the cut:
+Per collection, against the commit that made the cut. The opened line is a copy
+of the development line:
 
 ```bash
-diff -r -x release-notes.mdx content/docs/<slug>/<preserved> 'content/docs/<slug>/(<opened>)'
+diff -r content/_unpublished/<slug>/next 'content/docs/<slug>/(v<x.y>)'
 ```
 
-The only difference reported is the **title line of each page whose title names
-the series**, where the opened line gains the `(latest)` marker the preserved
-line loses. A collection publishing no such page reports nothing and exits 0 —
-a line with no marker anywhere is a valid line, not a failure.
+Two differences are reported, and only these two:
 
-`release-notes.mdx` is excluded because the cut empties it by design: the
-opened line's notes share nothing with the line before them, so carrying them
-over would publish the previous release's notes under the new line's title and
-turn the release PR's diff into a wholesale replacement. The page itself stays,
-because `reference/meta.json` lists it.
+- the **title line of each page whose title names the series**, where the
+  opened line gains the `(latest)` marker the development line never carries
+- the **release-notes link in `reference/meta.json`**, where the opened line
+  points at its own minor's GitHub release
 
-Second proof, free from git: the commit records the opened folder as a rename
-of the outgoing one, at 100% similarity for every page except the ones
-relabelled. Quote it alongside the diff.
+The preserved line is the outgoing group, unchanged but for the marker it lost:
 
-### Step 4: Check for a hardcoded current line
+```bash
+git show --stat HEAD -- 'docs/website/content/docs/<slug>'
+```
+
+Expect the outgoing folder recorded as a rename at 100% similarity for every
+page except the ones relabelled, and the opened folder recorded as additions —
+a copy, not a rename, since the development line it came from is still there.
+
+A collection with neither marker nor release link reports nothing from the
+`diff -r` and exits 0. A line with no marker is a valid line, not a failure.
+
+### Step 4: Check for a hardcoded line
 
 ```bash
 rg "\(v[0-9]+\.[0-9]+\)" src tests scripts
 ```
 
 Every hit must be a fixture with a synthetic version or a comment. A test
-asserting against the real current line breaks on the cut and must derive it
-from the manifest through `getCurrentLine()` instead. This is the one step
-`cut-line.ts` does not cover.
+asserting against the real group breaks on the cut and must derive it from the
+manifest through `getCurrentLine()` instead. This is the one step `cut-line.ts`
+does not cover.
 
 ### Step 5: Run the checks that reject a bad cut
 
@@ -141,60 +165,54 @@ bun run vitest run --exclude '**/tsdoc-completeness*'
 That is exactly what `.github/workflows/docs-website-pr-checks.yml` gates on.
 Between them they reject a manifest disagreeing with the folders, a collection
 left with no group or two, a patch-shaped folder name, a line numbered above
-the group, a URL that stopped resolving, and an artifact reaching into another
-line. `tsdoc-completeness` is excluded here because CI runs it separately with
-`continue-on-error`; it reads `packages/sdk` and never touches `content/docs`.
+the group, a symlinked line folder, a URL that stopped resolving, and an
+artifact reaching into another line. `tsdoc-completeness` is excluded here
+because CI runs it separately with `continue-on-error`; it reads `packages/sdk`
+and never touches `content/`.
+
+The development line is not built. Nothing under `content/_unpublished/` is,
+and that is the point — but `tests/link-integrity.test.ts` reads it anyway, so
+a broken link or a page with no title is rejected on the PR that wrote it. What
+still surfaces only here is malformed MDX, which needs a render to find.
 
 ### Step 6: Hand over the evidence
 
 The PR is mechanical, so its body carries the commands a reviewer replays
 rather than asking anyone to read 10k lines of copied content. Per collection:
-the `diff -r` of Step 3 with **its measured output**, and the rename similarity
-of Step 2.
+the `diff -r` of Step 3 with **its measured output**, and the rename and
+addition counts of Step 2.
 
 **Never write a number into the body that was not just measured.** A body
 promising a diff size that the tip no longer produces is worse than no body —
 it sends the reviewer looking for a discrepancy that is the body's fault.
 
-## Cut on time
-
-Cut as soon as the release goes live, not when the next one is being prepared.
-A line cut late is not just late: while the folder is missing, the sprint's
-feature PRs document their features inside the line that is still current, so
-the preserved line ends up describing features its release never shipped.
-Recovering costs an extra commit that resets the preserved folders to the tree
-of the release's backmerge commit, and the PR stops being pure script output.
-
 ## If the base moved under the branch
 
-**Never rebase a cut commit.** A cut is "rename the current folder and copy
-it", not a patch. Replaying it onto a base that moved applies cleanly and
-produces an incoherent tree: the opened line keeps the content from the old
-base while the preserved line gets the new one.
+**Never rebase a cut commit.** A cut is "rename one folder and copy another",
+not a patch. Replaying it onto a base that moved applies cleanly and produces
+an incoherent tree: the opened line keeps the content from the old base while
+the development line gets the new one.
 
 Reset onto the base and re-run the script instead. That is cheap precisely
 because the commits are script output.
 
-Avoid stacking the cut on another branch. Changing an open PR's base dismisses
-every approval on it — GitHub treats the base change as its own reason, apart
-from `dismiss_stale_reviews_on_push`.
-
 ## Quality Checklist
 
 - [ ] Roster read from `src/lib/versions.ts`, not assumed
-- [ ] Each collection's verdict based on `npm view`, not on `main`'s manifest
+- [ ] Per collection, the version being released checked against the line last cut
 - [ ] One `cut-line.ts` invocation and one commit per collection
-- [ ] `diff -r -x release-notes.mdx` run per collection, output recorded
-- [ ] Opened line's `release-notes.mdx` holds the placeholder, frontmatter kept
-- [ ] No hardcoded current line left in `src`, `tests`, or `scripts`
+- [ ] `diff -r` run per collection against the development line, output recorded
+- [ ] Opened line's `reference/meta.json` links its own minor's GitHub release
+- [ ] Development line still in place after every cut
+- [ ] No hardcoded group left in `src`, `tests`, or `scripts`
 - [ ] `npm run build` clean and `vitest` green minus `tsdoc-completeness`
 - [ ] Every number in the PR body measured against the branch tip
 
 ## References
 
 - Cut: `docs/website/scripts/cut-line.ts`
-- Hand procedure and the rest of the site's versioning:
-  `docs/website/README.md`, "Cutting a documentation line"
+- The round that invokes this one: `.agents/skills/qv-docs-cutoff/SKILL.md`
+- Line model and hand procedure: `docs/website/docs-workflow.md`
 - Manifest: `docs/website/src/lib/versions.ts`
 - Checks: `docs/website/tests/line-structure.test.ts`,
   `docs/website/tests/cut-line.test.ts`,

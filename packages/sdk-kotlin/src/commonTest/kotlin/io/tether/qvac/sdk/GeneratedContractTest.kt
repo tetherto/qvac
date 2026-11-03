@@ -13,7 +13,7 @@ import kotlin.test.assertTrue
 class GeneratedContractTest {
     @Test
     fun generatesEveryManifestOperation() {
-        assertEquals(47, QvacMethods.all.size)
+        assertEquals(48, QvacMethods.all.size)
         assertEquals(
             setOf(QvacCallShape.REQUEST_REPLY, QvacCallShape.SERVER_STREAM, QvacCallShape.DUPLEX),
             QvacMethods.all.map { it.callShape }.toSet(),
@@ -42,7 +42,7 @@ class GeneratedContractTest {
 
     @Test
     fun generatedErrorRegistryPreservesCollidingNames() {
-        assertEquals(142, ErrorCodes.all.size)
+        assertEquals(143, ErrorCodes.all.size)
         assertEquals(52002, ErrorCodes.lookup("MODEL_NOT_FOUND", 52002))
         assertEquals(19003, ErrorCodes.lookup("MODEL_NOT_FOUND", 19003))
         assertEquals(null, ErrorCodes.lookup("MODEL_NOT_FOUND"))

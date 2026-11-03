@@ -128,7 +128,7 @@
   pages: []          # tests are input evidence for Phase 3, never a documentation target
 - source: packages/*/tests/**
   pages: []
-- source: packages/sdk/e2e/**
+- source: packages/sdk-e2e/**
   pages: []          # e2e consumer harness; has its own README
 - source: packages/*/project.json
   pages: []          # Nx project config

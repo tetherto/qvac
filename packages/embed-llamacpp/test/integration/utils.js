@@ -392,16 +392,36 @@ const MODEL_CONFIGS = {
       'https://huggingface.co/ggml-org/models/resolve/main/jina-reranker-v1-tiny-en/ggml-model-f16.gguf',
     reranker: true,
     maxContextSize: 8192
+  },
+  // EmbeddingGemma 2: a 512 hidden size with a 768-d output projection, so the
+  // text suite checks the output size. Its trained context is 262144 tokens
+  // (the GGUF's and the HF config's), and the suite sizes its inputs from the
+  // context, so the tests load it with ctxSize: the overflow and batching
+  // tests then run as they do for embeddinggemma-300M.
+  'embeddinggemma-2-Q8_0.gguf': {
+    downloadUrl:
+      'https://huggingface.co/ggml-org/embeddinggemma-2-GGUF/resolve/main/embeddinggemma-2-Q8_0.gguf',
+    embeddingDimension: 768,
+    maxContextSize: 2048,
+    ctxSize: '2048'
+  },
+  // EmbeddingGemma 2's image and audio projector, for multimodal.test.js. Not
+  // an embedding model: getModelConfigs() leaves it out.
+  'mmproj-embeddinggemma-2-Q8_0.gguf': {
+    downloadUrl:
+      'https://huggingface.co/ggml-org/embeddinggemma-2-GGUF/resolve/main/mmproj-embeddinggemma-2-Q8_0.gguf',
+    projector: true
   }
 }
 
 /**
- * Gets the embedding model configurations (rerankers are left out)
+ * Gets the embedding model configurations (rerankers and projectors are left
+ * out)
  * @returns {Array<{modelName: string, config: Object}>}
  */
 function getModelConfigs() {
   return Object.entries(MODEL_CONFIGS)
-    .filter(([, config]) => !config.reranker)
+    .filter(([, config]) => !config.reranker && !config.projector)
     .map(([modelName, config]) => ({
       modelName,
       config
@@ -655,6 +675,13 @@ async function createEmbeddingsTestInstance(
   const config = {
     gpu_layers: actualGpuLayers,
     batch_size: batchSize
+  }
+
+  // A model whose trained context is too large to size test inputs from runs
+  // with a smaller one (see MODEL_CONFIGS).
+  const ctxSize = getModelConfig(modelName)?.ctxSize
+  if (ctxSize) {
+    config.ctx_size = ctxSize
   }
 
   if (device === 'cpu' || device === 'gpu') {

@@ -8,6 +8,7 @@ export interface TTSConfigurationParams {
 }
 
 export interface TTSJobData {
+  streamOutput?: boolean;
   type: string;
   input: string;
   // Parler per-call voice-description/template fields (siblings of `input`),

@@ -26,6 +26,7 @@ export const methodShapes = {
   downloadAsset: 'reply',
   embed: 'reply',
   decide: 'reply',
+  rerank: 'reply',
   finetune: 'reply',
   getLoadedModelInfo: 'reply',
   getModelInfo: 'reply',

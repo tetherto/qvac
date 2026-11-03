@@ -1,6 +1,7 @@
 // Locks the wrapper-drift gate on the publish pipelines. Nothing else can:
 // on-merge-* never runs on a pull request, and actionlint checks structure,
 // not semantics.
+// Requires jq on PATH to evaluate the workflow's actual publish-row expression.
 //
 // The `result == 'success'` assertion below is not redundant with the `needs:`
 // one. An `if:` containing `!cancelled()`, `always()` or `failure()` stops
@@ -8,9 +9,11 @@
 // fail-opens (the M5 defect); every publish-npm job uses `!cancelled()`.
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { tmpdir } from 'node:os'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 const WORKFLOW_DIR = join(root, '.github/workflows')
@@ -25,6 +28,7 @@ const GATE = "needs.verify-generated.result == 'success'"
 const GATE_MATRIX =
   "needs.verify-generated.result != 'failure' && needs.verify-generated.result != 'cancelled'"
 const CONSOLIDATED = '.github/workflows/on-merge-nx.yml'
+const NO_PUBLISH_TEST_PACKAGES = ['decoder-audio', 'asr-ggml', 'bci-whispercpp', 'tts-ggml', 'audiogen-ggml', 'ocr-ggml', 'translation-nmtcpp']
 
 function read(relativePath) {
   return readFileSync(join(root, relativePath), 'utf8')
@@ -87,46 +91,74 @@ function ifExpression(jobText) {
   return inline ? inline[1].trim() : null
 }
 
+test('RAG release publishing requires a successful build, release authorization and an uncancelled run', () => {
+  const job = eachJob(read('.github/workflows/trigger-reusable-lib-rag.yml'))
+    .find((job) => job.name === 'publish-release-npm')
+  assert.ok(job)
+  const expression = ifExpression(job.text)
+  assert.ok(expression)
+  const evaluate = new Function(
+    'needs',
+    'cancelled',
+    `return ${expression.replace(/needs\.([\w-]+)/g, (_, name) => `needs[${JSON.stringify(name)}]`)}`,
+  )
+
+  for (const build of ['success', 'failure', 'cancelled', 'skipped']) {
+    for (const guard of ['success', 'failure', 'cancelled', 'skipped']) {
+      for (const release of ['true', 'false']) {
+        const needs = {
+          build: { result: build },
+          'release-merge-guard': { result: guard },
+          'publish-logic': { outputs: { publish_release: release } },
+        }
+        for (const runCancelled of [false, true]) {
+          assert.equal(
+            evaluate(needs, () => runCancelled),
+            !runCancelled && build === 'success' && ['success', 'skipped'].includes(guard) && release === 'true',
+            `cancelled=${runCancelled}, build=${build}, guard=${guard}, release=${release}`,
+          )
+        }
+      }
+    }
+  }
+})
+
 // The packages the consolidated pipeline publishes, read from its own push paths
 // so the list cannot drift from the workflow.
 function consolidatedPackages() {
   return [...read(CONSOLIDATED).matchAll(/^ {6}- "packages\/([^/]+)\/\*\*"$/gm)].map((m) => m[1])
 }
 
-// Packages that opt into the gate: an on-merge addon that has generated wrappers.
+// Packages requiring the gate: an on-merge addon that has generated wrappers.
 //
 // Both halves are read from the packages themselves, never from the workflow
 // under test, or removing a package from that workflow would remove it from this
 // list too and the coverage assertion below could never fail.
 //
-// check:generated rather than a project.json flag, because that is what `detect`
-// reads: a flag could be cleared by the same push the gate is meant to check, and
-// two packages carried the script with no flag.
+// Script detection comes from the trusted default branch, not the pushed ref.
 function gatedPackages() {
   const packagesDir = join(root, 'packages')
   return readdirSync(packagesDir).filter((name) => {
     const projectJson = join(packagesDir, name, 'project.json')
     const packageJson = join(packagesDir, name, 'package.json')
     if (!existsSync(projectJson) || !existsSync(packageJson)) return false
-    const isOnMergeAddon = Boolean(
-      JSON.parse(readFileSync(projectJson, 'utf8'))?.targets?.['on-merge'],
-    )
+    const onMerge = JSON.parse(readFileSync(projectJson, 'utf8'))?.targets?.['on-merge']
     const hasGeneratedWrappers = Boolean(
       JSON.parse(readFileSync(packageJson, 'utf8'))?.scripts?.['check:generated'],
     )
-    return isOnMergeAddon && hasGeneratedWrappers
+    return Boolean(onMerge) && hasGeneratedWrappers
   })
 }
 
 // Coverage, not pipeline count. The nine per-package on-merge-<pkg>.yml files
 // collapse into on-merge-nx.yml, so counting pipelines stopped meaning anything;
-// what still has to hold is that every package opting into the gate is reached by
+// what still has to hold is that every package requiring the gate is reached by
 // one. Derived from project.json so a package cannot opt out by omission.
-test('every package that opts into the gate is covered by a pipeline', () => {
+test('every package with generated wrappers is covered by a pipeline', () => {
   const gated = gatedPackages()
   assert.ok(
-    gated.length >= 9,
-    `expected at least the nine TypeScript-wrapper packages, found ${gated.length}`,
+    gated.length >= 13,
+    `expected at least thirteen generated-wrapper packages, found ${gated.length}`,
   )
 
   const pipelines = wrapperPipelines()
@@ -139,10 +171,11 @@ test('every package that opts into the gate is covered by a pipeline', () => {
     const source = read(CONSOLIDATED)
     assert.match(source, /verify-generated-rows: \$\{\{ steps\.rows\.outputs\.verify-generated-rows \}\}/)
     assert.match(source, /select\(\.verifyGenerated == true\)/)
-    // The row flag must be derived from the script, not read from project.json,
-    // or the push being gated could clear it.
-    assert.match(source, /scripts\["check:generated"\]/)
+    // Script detection comes from the trusted ref and overrides package config.
     assert.match(source, /\+ \{verifyGenerated: \$verifyGenerated/)
+    assert.match(source, /scripts\["check:generated"\]/)
+    assert.ok(source.includes('git show "${CONFIG_REF}:${pj}"'))
+    assert.ok(source.includes('git show "${CONFIG_REF}:packages/${pkg}/package.json"'))
     assert.match(
       source,
       /include: \$\{\{ fromJSON\(needs\.detect\.outputs\.verify-generated-rows\) \}\}/,
@@ -245,23 +278,23 @@ test('wrapper drift is still checked somewhere at PR time', () => {
   assert.match(sanityChecks, /check:generated/)
 })
 
-test('decoder-audio integration runs after publishing, like the other speech packages', () => {
-  const speechPackages = ['decoder-audio', 'asr-ggml', 'bci-whispercpp', 'tts-ggml']
+test('speech, OCR and translation publishing retains wrapper verification without integration or mobile E2E tests', () => {
   const source = withoutComments(read(CONSOLIDATED))
   const jobs = eachJob(source)
 
-  for (const name of speechPackages) {
+  for (const name of NO_PUBLISH_TEST_PACKAGES) {
     const project = JSON.parse(read(`packages/${name}/project.json`))
     const config = project.targets['on-merge'].options.ci
-    assert.equal(config.testGateMode, 'post-publish-integration', name)
-    assert.equal(config.postIntegrationOnGpr, true, name)
+    assert.equal(config.testGateMode, 'none', name)
+    assert.equal(config.verifyGenerated, true, name)
+    assert.notEqual(config.postIntegrationOnGpr, true, name)
 
-    const mobile = jobs.find((job) => job.name === `mobile-post-publish-${name}`)
-    assert.ok(mobile, `${name}: missing post-publish mobile job`)
-    assert.match(mobile.text, /needs: \[post-build-gate\]/)
-    assert.ok(ifExpression(mobile.text).includes("needs.post-build-gate.outputs.should_run_tests == 'true'"))
-    assert.ok(ifExpression(mobile.text).includes(`contains(fromJSON(needs.post-build-gate.outputs.rows).*.package, '${name}')`))
-    assert.ok(mobile.text.includes(`uses: ./.github/workflows/integration-mobile-test-${name}.yml`))
+    assert.ok(!jobs.some((job) => job.text.includes(`uses: ./.github/workflows/integration-mobile-test-${name}.yml`)),
+      `${name}: publishing must not call mobile E2E tests`)
+
+    assert.ok(project.targets['test:integration'], `${name}: keep the integration test target`)
+    assert.match(read(`.github/workflows/integration-mobile-test-${name}.yml`), /^ {2}workflow_dispatch:/m,
+      `${name}: keep mobile tests available on demand`)
   }
 
   assert.doesNotMatch(source, /mobile-gate-decoder-audio/)
@@ -270,4 +303,140 @@ test('decoder-audio integration runs after publishing, like the other speech pac
     assert.ok(needs, `${job.name}: missing publish dependencies`)
     assert.doesNotMatch(needs[1], /mobile|post-build-gate|post-publish/)
   }
+})
+
+test('publish rows preserve wrapper verification while honoring integration test opt-outs', () => {
+  for (const name of consolidatedPackages()) {
+    const project = JSON.parse(read(`packages/${name}/project.json`))
+    const config = project.targets['on-merge'].options.ci
+    const manifest = `packages/${name}/package.json`
+    const hasCheck = existsSync(join(root, manifest)) && Boolean(JSON.parse(read(manifest)).scripts?.['check:generated'])
+    const row = publishRow(name, config, hasCheck, Boolean(project.targets.build), project.root)
+
+    assert.equal(row.verifyGenerated, hasCheck, name)
+    assert.equal(row.hasPrebuilds, Boolean(project.targets.build), `${name}: preserve prebuild selection`)
+    if (NO_PUBLISH_TEST_PACKAGES.includes(name)) {
+      assert.equal(row.testGateMode, 'none', name)
+      assert.ok(!project.targets.build?.options?.ci?.desktopSmokeCommand, `${name}: no prebuild smoke tests`)
+    }
+  }
+})
+
+// Evaluate workflow code so synthetic opt-ins cover the otherwise unused paths.
+function publishRow(name, config, hasCheck = true, hasPrebuilds = true, workdir = `packages/${name}`) {
+  const expression = read(CONSOLIDATED).match(/row=\$\(jq -n[\s\S]*?\n\s+'([\s\S]*?)'\)/)?.[1]
+  assert.ok(expression, 'missing publish row construction')
+  return JSON.parse(execFileSync('jq', [
+    '-n', '--arg', 'pkg', name, '--arg', 'workdir', workdir,
+    '--argjson', 'hasPrebuilds', String(hasPrebuilds),
+    '--argjson', 'verifyGenerated', String(hasCheck),
+    '--argjson', 'onmerge', JSON.stringify(config), expression,
+  ], { encoding: 'utf8' }))
+}
+
+function integrationRows(variable, rows) {
+  const line = read(CONSOLIDATED).split('\n').find((line) => line.trimStart().startsWith(`${variable}=`))
+  const expression = line?.match(/jq -c '([^']+)'/)?.[1]
+  assert.ok(expression, `missing ${variable} selector`)
+  return JSON.parse(execFileSync('jq', ['-c', expression], {
+    input: JSON.stringify(rows), encoding: 'utf8',
+  }))
+}
+
+function runGate(job, stepMarker, env) {
+  const stepStart = job.text.indexOf(stepMarker)
+  assert.notEqual(stepStart, -1, `${job.name}: missing ${stepMarker}`)
+  const script = job.text.slice(stepStart).match(/        run: \|\n((?: {10}[^\n]*\n|\n)+)/)?.[1]
+  assert.ok(script, `${job.name}: missing gate script`)
+  const dir = mkdtempSync(join(tmpdir(), 'publish-gate-'))
+  const output = join(dir, 'output')
+  try {
+    const result = spawnSync('bash', ['-c', script], {
+      env: { ...process.env, ...env, GITHUB_OUTPUT: output }, encoding: 'utf8',
+    })
+    assert.ifError(result.error)
+    return {
+      status: result.status,
+      outputs: existsSync(output) ? Object.fromEntries(readFileSync(output, 'utf8').trim().split('\n').map((line) => {
+        const separator = line.indexOf('=')
+        return [line.slice(0, separator), line.slice(separator + 1)]
+      })) : {},
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+test('package config cannot override derived wrapper verification', () => {
+  for (const hasCheck of [true, false]) {
+    for (const config of [{}, { verifyGenerated: true }, { verifyGenerated: false }]) {
+      assert.equal(publishRow('synthetic', config, hasCheck).verifyGenerated, hasCheck)
+    }
+  }
+})
+
+test('synthetic pre-publish opt-ins reach integration and both registry publish gates', () => {
+  const optedIn = publishRow('synthetic-pre', { testGateMode: 'pre-publish-integration' })
+  const rows = integrationRows('pre_publish_rows', [
+    optedIn,
+    publishRow('synthetic-none', { testGateMode: 'none' }),
+    publishRow('synthetic-post', { testGateMode: 'post-publish-integration' }),
+  ])
+  assert.deepEqual(rows, [optedIn])
+  const jobs = eachJob(read(CONSOLIDATED))
+  const integration = jobs.find((job) => job.name === 'pre-publish-integration')
+  assert.ok(integration)
+  assert.match(integration.text, /include: \$\{\{ fromJSON\(needs\.detect\.outputs\.pre-publish-rows\) \}\}/)
+  assert.match(integration.text, /uses: \.\/\.github\/workflows\/integration-test-nx\.yml/)
+  for (const name of ['publish-npm', 'publish-gpr']) {
+    const job = jobs.find((job) => job.name === name)
+    assert.ok(job)
+    assert.match(job.text, /^ {6}- pre-publish-integration$/m)
+    assert.match(job.text, /if: startsWith\(matrix\.testGateMode, 'pre-publish'\)/)
+    assert.match(job.text, /INTEGRATION_RESULT: \$\{\{ needs\.pre-publish-integration\.result \}\}/)
+    for (const [result, status] of [['success', 0], ['failure', 1], ['cancelled', 1]]) {
+      const actual = runGate(job, "- name: Enforce this package's pre-publish test gate", {
+        PACKAGE: rows[0].package, INTEGRATION_RESULT: result,
+      })
+      assert.equal(actual.status, status, `${name}: ${result}`)
+    }
+  }
+})
+
+test('synthetic post-publish opt-ins require a successful publish and honor the GPR opt-in', () => {
+  const npmOnly = publishRow('synthetic-npm', { testGateMode: 'post-publish-integration' })
+  const both = publishRow('synthetic-both', { testGateMode: 'post-publish-integration', postIntegrationOnGpr: true })
+  const rows = integrationRows('post_integration_rows', [
+    npmOnly, both, publishRow('synthetic-none', { testGateMode: 'none', postIntegrationOnGpr: true }),
+    publishRow('synthetic-pre', { testGateMode: 'pre-publish-integration' }),
+  ])
+  assert.deepEqual(rows, [npmOnly, both])
+  const jobs = eachJob(read(CONSOLIDATED))
+  const gate = jobs.find((job) => job.name === 'post-build-gate')
+  assert.ok(gate)
+  assert.match(gate.text, /ROWS: \$\{\{ needs\.detect\.outputs\.post-integration-rows \}\}/)
+  assert.match(gate.text, /NPM_RESULT: \$\{\{ needs\.publish-npm\.result \}\}/)
+  assert.match(gate.text, /GPR_RESULT: \$\{\{ needs\.publish-gpr\.result \}\}/)
+  for (const [npm, gpr, input, expected] of [
+    ['success', 'skipped', rows, rows],
+    ['success', 'success', rows, rows],
+    ['skipped', 'success', rows, [both]],
+    ['skipped', 'success', [npmOnly], []],
+    ['failure', 'failure', rows, []],
+    ['cancelled', 'skipped', rows, []],
+    ['skipped', 'skipped', rows, []],
+    ['success', 'skipped', [], []],
+  ]) {
+    const actual = runGate(gate, '- id: gate', {
+      NPM_RESULT: npm, GPR_RESULT: gpr, ROWS: JSON.stringify(input),
+    })
+    assert.equal(actual.status, 0)
+    assert.deepEqual(JSON.parse(actual.outputs.rows), expected, `npm=${npm} gpr=${gpr}`)
+    assert.equal(actual.outputs.should_run_tests, String(expected.length > 0))
+  }
+  const integration = jobs.find((job) => job.name === 'post-publish-integration')
+  assert.ok(integration)
+  assert.match(integration.text, /needs\.post-build-gate\.outputs\.should_run_tests == 'true'/)
+  assert.match(integration.text, /include: \$\{\{ fromJSON\(needs\.post-build-gate\.outputs\.rows\) \}\}/)
+  assert.match(integration.text, /uses: \.\/\.github\/workflows\/integration-test-nx\.yml/)
 })

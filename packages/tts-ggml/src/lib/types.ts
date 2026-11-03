@@ -30,12 +30,23 @@ export type {
 } from "./engines/mossSpeech";
 export type { Audio8SamplingFields } from "./engines/audio8";
 
+export type LavaSRCoreMLComputeUnits =
+  | "CPU_ONLY"
+  | "CPU_AND_GPU"
+  | "CPU_AND_NE"
+  | "ALL";
+
+export interface LavaSRCoreMLOptions {
+  coremlModelPath?: string;
+  coremlComputeUnits?: LavaSRCoreMLComputeUnits;
+}
+
 /**
  * LavaSR enhancer config. The discriminated `type` leaves room for future
  * enhancer kinds; v1 ships `lavasr`. Enhancement is enabled by providing a
  * GGUF path here or via `files.lavasrEnhancer`.
  */
-export interface LavaSREnhancerOptions {
+export interface LavaSREnhancerOptions extends LavaSRCoreMLOptions {
   type: "lavasr";
   /** Enhancer GGUF path (alternative to `files.lavasrEnhancer`). */
   enhancerPath?: string;
@@ -46,7 +57,7 @@ export interface LavaSREnhancerOptions {
  * is enabled by providing a GGUF path here or via `files.lavasrDenoiser`.
  * It runs before the enhancer and preserves the sample rate.
  */
-export interface LavaSRDenoiserOptions {
+export interface LavaSRDenoiserOptions extends LavaSRCoreMLOptions {
   type: "lavasr";
   /** Denoiser GGUF path (alternative to `files.lavasrDenoiser`). */
   denoiserPath?: string;
@@ -360,13 +371,13 @@ export interface RuntimeStats {
   totalSamples: number;
   /** Active compute device after load-time backend selection. 0 = CPU, 1 = GPU. */
   backendDevice?: number;
-  /** Stable backend code: 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other GPU. */
+  /** Stable backend code: 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other. */
   backendId?: number;
-  /** LavaSR enhancer compute device. -1 = not loaded, 0 = CPU, 1 = GPU. */
+  /** LavaSR enhancer device. -1 = off, 0 = CPU, 1 = GPU, 2 = Core ML-managed. */
   enhancerBackendDevice?: number;
   /** LavaSR enhancer backend code, using the same values as `backendId`. */
   enhancerBackendId?: number;
-  /** LavaSR denoiser compute device. -1 = not loaded, 0 = CPU, 1 = GPU. */
+  /** LavaSR denoiser device. -1 = off, 0 = CPU, 1 = GPU, 2 = Core ML-managed. */
   denoiserBackendDevice?: number;
   /** LavaSR denoiser backend code, using the same values as `backendId`. */
   denoiserBackendId?: number;

@@ -55,7 +55,7 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 | [`qv-sdk-changelog`](../qv-sdk-changelog/SKILL.md) | Changelogs for SDK pod packages (tag-based GitFlow). | Release prep, `CHANGELOG_LLM.md`. **Auto** |
 | [`qv-sdk-backmerge`](../qv-sdk-backmerge/SKILL.md) | Open backmerge PR (release version bump + changelog → `main`). | After SDK release PR; often chained from `qv-sdk-pr-create`. **Auto** |
 | [`qv-release-train`](../qv-release-train/SKILL.md) | Release a train's packages (`.github/release-trains.json`) from one branch and one publish run. | Packages of a train moving together. **Auto** |
-| [`qv-sdk-e2e-create`](../qv-sdk-e2e-create/SKILL.md) | Scaffold e2e tests in `packages/sdk/e2e` for new/changed public APIs. | Adding consumer-facing SDK APIs. **Auto** |
+| [`qv-sdk-e2e-create`](../qv-sdk-e2e-create/SKILL.md) | Scaffold e2e tests in `packages/sdk-e2e` for new/changed public APIs. | Adding consumer-facing SDK APIs. **Auto** |
 | [`qv-sdk-update-models`](../qv-sdk-update-models/SKILL.md) | Regen SDK `models.ts` from live registry and open a `[mod]` PR; optional provider/python cascade. | After registry model updates; `/qv-sdk-update-models`. **Manual** |
 | [`qv-agent-stack-sync`](../qv-agent-stack-sync/SKILL.md) | Plan / draft-cascade / promote the SDK → CLI → AI SDK provider → OpenCode + OpenClaw release chain. | Agent-stack release prep; `/qv-agent-stack-sync --plan`. **Auto** |
 
@@ -93,8 +93,7 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 |-------|---------|----------|
 | [`qv-dev-diary-setup`](../qv-dev-diary-setup/SKILL.md) | Opt-in local dev diary (`~/.config/qvac-pr-skills/`). | Enable diary, `diary --init`, configure capture. **Manual:** `/qv-dev-diary-setup` |
 | [`qv-dev-diary`](../qv-dev-diary/SKILL.md) | Read, inspect, append diary entries. | View today's log, add notes after setup. **Manual:** `/qv-dev-diary` |
-| [`qv-daily-work-update`](../qv-daily-work-update/SKILL.md) | Personal EOD update from diary + GitHub + PR state (+ optional Asana). | Personal standup / "what did I do today". **Manual:** `/qv-daily-work-update` |
-| [`qv-asana-sync`](../qv-asana-sync/SKILL.md) | Look up and update Asana tasks (status, comments, PR links). | Sync Asana task, move status, validate config. **Manual:** `/qv-asana-sync` |
+| [`qv-daily-work-update`](../qv-daily-work-update/SKILL.md) | Personal EOD update from diary + GitHub + PR state. | Personal standup / "what did I do today". **Manual:** `/qv-daily-work-update` |
 
 ---
 
@@ -102,7 +101,7 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 
 | Skill | Purpose | Use when |
 |-------|---------|----------|
-| [`qv-quality-reporting`](../qv-quality-reporting/SKILL.md) | Run deterministic quality analysis, triage cohesive debt groups, and prepare approval-gated Asana proposals. | Initial debt triage, recurring quality review, or twice-monthly reporting setup. **Manual:** `/qv-quality-reporting` |
+| [`qv-quality-reporting`](../qv-quality-reporting/SKILL.md) | Run deterministic quality analysis, triage cohesive debt groups, and prepare proposals. | Initial debt triage, recurring quality review, or twice-monthly reporting setup. **Manual:** `/qv-quality-reporting` |
 
 ---
 
@@ -120,7 +119,8 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 | Skill | Purpose | Use when |
 |-------|---------|----------|
 | [`qv-docs-update`](../qv-docs-update/SKILL.md) | Updates the docs website after a change to the SDK or CLI. | You added or changed a feature and the docs need to catch up. **Manual:** `/qv-docs-update` |
-| [`qv-docs-line-cut`](../qv-docs-line-cut/SKILL.md) | Cuts the next documentation line of every versioned collection whose release has shipped. | A release went live, or a sprint starts and the coming version needs a folder to land in. **Manual:** `/qv-docs-line-cut` |
+| [`qv-docs-cutoff`](../qv-docs-cutoff/SKILL.md) | Opens the one documentation PR of a release cutoff: it publishes the line of the version being released, per collection the release moves. | A release cutoff: `qv-release-train` invokes it at step 6 after cutting the train branch, `qv-sdk-changelog` at step 8 of a single-package release. **Manual:** `/qv-docs-cutoff` to redo a cutoff's PR. |
+| [`qv-docs-line-cut`](../qv-docs-line-cut/SKILL.md) | Publishes the documentation line of the version being released, in each collection the release moves. | Step 3 of a cutoff, invoked by `qv-docs-cutoff`. Manual invocation is the out-of-band exception. |
 
 ---
 
@@ -162,7 +162,8 @@ Rule nudge: `.cursor/rules/qip-triage.mdc`
 | Holepunch stack help | `qv-holepunch-dev` |
 | Generate NOTICE files | `qv-notice-generate` |
 | Update the docs website after an SDK/CLI change | `qv-docs-update` |
-| Cut the next docs line after a release | `qv-docs-line-cut` |
+| Open the docs PR of a release cutoff | `qv-docs-cutoff` |
+| Publish the docs line of a release | `qv-docs-line-cut` (invoked by `qv-docs-cutoff`) |
 | Check if a QIP is needed | `qv-qip-triage` |
 | Draft a QIP | `qv-qip-create` |
 | Review a QIP | `qv-qip-review` |

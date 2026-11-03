@@ -1,6 +1,6 @@
 name: SDK E2E node prepare
 description: >-
-  Install and build the SDK and the packages/sdk/e2e consumer for a
+  Install and build the SDK and the packages/sdk-e2e consumer for a
   runner-hosted SDK e2e leg: registries, the resolved inference and test-suite,
   MQTT certificates, then both installs and builds. Shared by
   test-node-sdk.yml and test-snap-sdk.yml; anything one family alone needs

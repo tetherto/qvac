@@ -265,6 +265,14 @@ object QvacMethods {
         progressResponseType = "RagProgressResponse",
         progressCondition = "request.withProgress === true && ['ingest', 'saveEmbeddings', 'reindex'].includes(request.operation)",
     )
+    val rerank = QvacMethodDescriptor(
+        name = "rerank",
+        callShape = QvacCallShape.REQUEST_REPLY,
+        requestType = "RerankRequest",
+        responseType = "RerankResponse",
+        progressResponseType = null,
+        progressCondition = null,
+    )
     val resume = QvacMethodDescriptor(
         name = "resume",
         callShape = QvacCallShape.REQUEST_REPLY,
@@ -426,6 +434,7 @@ object QvacMethods {
         pluginInvoke,
         pluginInvokeStream,
         rag,
+        rerank,
         resume,
         startRpcServer,
         state,
