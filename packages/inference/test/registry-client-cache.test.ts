@@ -151,7 +151,12 @@ test('deleteCache({ modelSrc }): an uncatalogued sharded model clears every shar
     blobBinding: { ...binding, blockOffset: n }
   })
   stubClient(t, {
-    findModels: async () => [shard(1), shard(2)],
+    findModels: async () => [
+      shard(1),
+      shard(2),
+      { path: 'x/model-extra-00001-of-00002.gguf', source: 's3', blobBinding: binding },
+      { ...shard(1), source: 'hf' }
+    ],
     clearBlob: async (blob: unknown) => {
       cleared.push(blob)
     }
@@ -166,7 +171,7 @@ test('deleteCache({ modelSrc }): an uncatalogued sharded model clears every shar
   })
 
   t.is(response.success, true)
-  t.is(cleared.length, 2, 'cleared both shards')
+  t.is(cleared.length, 2, "cleared both shards and no other model's")
   t.absent(fs.existsSync(shardDir), 'shard directory deleted')
 })
 

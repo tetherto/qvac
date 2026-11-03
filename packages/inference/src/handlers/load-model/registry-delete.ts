@@ -132,7 +132,11 @@ async function planUncatalogued(
 ): Promise<DeletePlan> {
   const filename = registryPath.split('/').pop() || registryPath
   if (detectShardedModel(filename).isSharded) {
-    const shards = await findModelShards(registryPath)
+    // The lookup matches by prefix, so it can return other models' shards.
+    const family = shardFamily(registryPath)
+    const shards = (await findModelShards(registryPath)).filter(
+      (shard) => shard.source === registrySource && shardFamily(shard.path) === family
+    )
     return {
       targets: [getShardedModelCacheDir(generateShortHash(registryPath))],
       bindings: shards.flatMap((shard) => (shard.blobBinding ? [shard.blobBinding] : []))
@@ -144,4 +148,8 @@ async function planUncatalogued(
     targets: [getClearStorageTarget(getSingleFileCachePath(registryPath)).path],
     bindings: model?.blobBinding ? [model.blobBinding] : []
   }
+}
+
+function shardFamily(registryPath: string): string {
+  return registryPath.replace(/-\d{5}-of-\d{5}\./, '.')
 }
