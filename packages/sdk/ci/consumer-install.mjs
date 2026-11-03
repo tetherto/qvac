@@ -3,7 +3,7 @@
 // and a default and a lean (--omit=optional) install with no peer warnings, one copy of each shared P2P package, and the
 // full API on import. Run by the sdk's test:unit after its build, in temporary directories only.
 
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { spawnSync, execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -37,6 +37,11 @@ const pack = (dir, dest) =>
   )
 
 const work = mkdtempSync(join(tmpdir(), 'sdk-consumer-'))
+// As main: the engine packs built. A train's checks install the SDK alone, so nothing has built the checkout's yet.
+if (!existsSync(join(inference, 'dist/index.js'))) {
+  for (const args of [['install', '--ignore-scripts'], ['run', 'build']])
+    execFileSync('npm', args, { cwd: inference, stdio: 'inherit', shell: process.platform === 'win32' })
+}
 const inferenceTgz = pack(inference, work)
 const sdkTgz = pack(sdk, work)
 
