@@ -217,6 +217,8 @@ namespace {
 
 constexpr const char* NO_DEVICE_MESSAGE = "matched no usable GPU device";
 constexpr const char* WEIGHT_LOAD_MESSAGE = "weight load failed on";
+constexpr const char* DEVICE_INIT_MESSAGE =
+    "ggml_backend_dev_init returned null";
 
 void expectOverrideStrictness(const char* arch, bool gpuReachesWeightLoad) {
   const std::vector<std::string> override{"cuda"};
@@ -243,9 +245,17 @@ void expectOverrideStrictness(const char* arch, bool gpuReachesWeightLoad) {
           << arch << ": a usable GPU exists, so the loader must not claim "
           << "there is none: " << what;
       if (gpuReachesWeightLoad) {
-        EXPECT_NE(what.find(WEIGHT_LOAD_MESSAGE), std::string::npos)
+        // A registered device can still fail ggml_backend_dev_init (broken
+        // driver), which stops the loader before the weight load. That is
+        // also a strict refusal, so accept either.
+        const bool refusedStrictly =
+            what.find(WEIGHT_LOAD_MESSAGE) != std::string::npos ||
+            what.find(DEVICE_INIT_MESSAGE) != std::string::npos;
+        EXPECT_TRUE(refusedStrictly)
             << arch << ": the device weight load must refuse the override "
             << "rather than fall back to CPU: " << what;
+        EXPECT_NE(what.find("not falling back to CPU"), std::string::npos)
+            << what;
       }
     } else {
       EXPECT_TRUE(refusedForNoDevice)
