@@ -403,7 +403,7 @@ test('audioGen shared ACE-Step controls follow the addon ranges', (t) => {
   t.absent(accepts({ dcwHighScaler: 1e39 }), 'DCW scalers are within the float32 range')
 })
 
-test('audioGenStatsSchema carries ACE-Step metadata and the MiniMax stage timings', (t) => {
+test('audioGenStatsSchema carries ACE-Step metadata, the GPU fallback code and the MiniMax stage timings', (t) => {
   const metadata = {
     caption: 'a hopeful indie track with jangly guitars',
     lyrics: '[verse]\nopen roads',
@@ -439,7 +439,8 @@ test('audioGenStatsSchema carries ACE-Step metadata and the MiniMax stage timing
     arMs: 41_000,
     conditionMs: 120,
     flowMs: 28_000,
-    vocoderMs: 4_000
+    vocoderMs: 4_000,
+    gpuFallbackReason: 0
   })
 })
 

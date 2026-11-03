@@ -13,6 +13,19 @@ export declare const PARLER_ONLY_KEYS: readonly ["description", "voiceDescriptio
 export type ParlerFieldKey = (typeof PARLER_FIELD_KEYS)[number];
 export type ParlerDescFields = Partial<Record<ParlerFieldKey, string>>;
 export type ParlerJobSource = ParlerDescriptionFields & TTSConditioningFields;
+export declare const PARLER_COREML_KEYS: readonly ["coremlDecoder", "coremlComputeUnits", "coremlStrict"];
+export declare const PARLER_COREML_COMPUTE_UNITS: readonly ["all", "cpu_and_ane", "cpu_and_gpu", "cpu_only"];
+/** Parler-only load/reload controls; never accepted per synthesis job. */
+export interface ParlerCoremlFields {
+    /** Enable the optional decoder sidecar. Omit to keep the engine default. */
+    coremlDecoder?: boolean;
+    /** Omit to inherit the engine's environment/default compute-unit policy. */
+    coremlComputeUnits?: (typeof PARLER_COREML_COMPUTE_UNITS)[number];
+    /** Omit to inherit strict mode; false explicitly permits fallback. */
+    coremlStrict?: boolean;
+}
+export declare function assertParlerCoremlOptions(engine: string, source: object | null | undefined, where: string): void;
+export declare function assertNoPerCallParlerCoreml(source: object | null | undefined, where: string): void;
 /**
  * Parler voice-description inputs. Either a free-text `description` (alias
  * `voiceDescription`) or the template fields, rendered natively through
