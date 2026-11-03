@@ -891,3 +891,25 @@ test('a throwing clearOnCancel still releases and clears', async (t) => {
     'the callback failure is logged'
   )
 })
+
+test('a failed stream clears cached blocks regardless of clearOnCancel', async (t) => {
+  const client = makeClient(t)
+  // lunte-disable-next-line require-await
+  client.ready = async () => {}
+  let clears = 0
+  // lunte-disable-next-line require-await
+  client._clearBlobBlocks = async () => {
+    clears++
+  }
+
+  const { artifact } = await client.downloadBlob(
+    { coreKey: Buffer.alloc(32), blockOffset: 3, blockLength: 7, byteLength: 700 },
+    { clearOnCancel: false }
+  )
+
+  t.comment("step: emitting 'error' then 'close' (stream failed, no 'end')")
+  await artifact.stream.emit('error')
+  await artifact.stream.emit('close')
+
+  t.is(clears, 1, 'a failed stream clears its blocks even when a cancel would keep them')
+})

@@ -528,6 +528,7 @@ class QVACRegistryClient extends ReadyResource {
   _releaseOnStreamEnd(stream, core, blobs, rangeDownload, blockStart, blockEnd, options) {
     let released = false
     let ended = false
+    let failed = false
 
     const release = (clear) => {
       if (released) return
@@ -541,10 +542,14 @@ class QVACRegistryClient extends ReadyResource {
       ended = true
       release(true)
     })
-    // 'close' without 'end' is the consumer destroying the stream: the stream
-    // path's cancel, so the caller's `clearOnCancel` applies. On 'end' alone a
+    stream.once('error', () => {
+      failed = true
+    })
+    // 'close' without 'end' or 'error' is the consumer destroying the stream:
+    // the stream path's cancel, so the caller's `clearOnCancel` applies. A
+    // failed stream clears like a failed file download. On 'end' alone a
     // destroyed stream would never free its blocks.
-    stream.once('close', () => release(ended || clearOnCancel(options, this.logger)))
+    stream.once('close', () => release(ended || failed || clearOnCancel(options, this.logger)))
   }
 
   // `clear: false` keeps the blob's blocks as the checkpoint the next download
