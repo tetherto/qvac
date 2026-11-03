@@ -51,11 +51,11 @@ const METADATA = {
   publish: ['publish'],
   // Prebuild directories besides the platform ones that the meta package ships, such as fabric's include and share.
   prebuildExtraDirs: ['publish'],
-  secrets: ['test:integration', 'test:backend', 'benchmark', 'test:mobile'],
+  secrets: ['test:integration', 'test:backend', 'benchmark', 'test:mobile', 'cpp:tests'],
   baseline: ['cpp:tests'],
   perfReport: ['test:integration']
 }
-// Secrets a target may ask for by name; each is named once in _desktop.yml or _mobile.yml, never indexed.
+// Secrets a target may ask for by name; each is named once in _desktop.yml, _mobile.yml or _cpp-tests.yml, never indexed.
 export const SECRETS = ['QASE_API_TOKEN', 'HF_TOKEN', 'MODEL_S3_BUCKET', 'GITHUB_TOKEN']
 // platformPackages publishes one npm package per platform before the meta; nameTransform renames the GPR build.
 const PUBLISH_KEYS = ['tagPrefix', 'platformPackages', 'nameTransform']

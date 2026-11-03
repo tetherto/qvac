@@ -129,6 +129,15 @@ const mossFitSync: TTSGgml.TtsFitResult = TTSGgml.assessFit(mossFitRequest)
 void TTSGgml.assessFit(mossFitWithoutDecoder)
 void [mossFitResult, mossFitSync]
 
+async function readFitRows(): Promise<void> {
+  const fit = await TTSGgml.assessFit(mossFitRequest)
+  const status: TTSGgml.TtsFitStatus = fit.status
+  const rows: TTSGgml.TtsFitDevice[] = fit.devices
+  const stats: TTSGgml.TtsFitStats = fit.stats
+  void [status, rows, stats]
+}
+void readFitRows
+
 const mossSfxWorkload = {
   engineType: 'moss-sfx' as const,
   prompt: 'Rain on a tin roof.',

@@ -87,6 +87,7 @@ jobs:
         run: >-
           node --test
           .github/scripts/test/ci-trust-policy.test.mjs
+          .github/scripts/test/bare-toolchain.test.mjs
           .github/scripts/test/cpp-tests-baseline.test.mjs
           .github/scripts/test/cpp-build-cache.test.mjs
           .github/scripts/test/cpp-lint-selection.test.mjs
@@ -104,6 +105,7 @@ jobs:
           .github/scripts/test/download-artifact-retry.test.mjs
           .github/scripts/test/integration-test-script.test.mjs
           .github/scripts/test/release-train.test.mjs
+          .github/scripts/test/linux-module-cxx-runtime.test.mjs
           .agents/skills/_lib/sdk/agent-stack-plan.test.mjs
 
       # Pins which registry the mobile prebuild fallback resolves. The

@@ -93,7 +93,7 @@
               "forwardAllArgs": false
             },
             {
-              "command": "pnpm exec bare-make generate -D BUILD_TESTING=OFF",
+              "command": "pnpm exec bare-make generate -D BUILD_TESTING=OFF -D SD_CUDA=ON",
               "forwardAllArgs": true
             },
             {
@@ -121,7 +121,7 @@
               "forwardAllArgs": false
             },
             {
-              "command": "pnpm exec bare-make generate -D BUILD_TESTING=OFF",
+              "command": "pnpm exec bare-make generate -D BUILD_TESTING=OFF -D SD_CUDA=ON",
               "forwardAllArgs": true
             },
             {

@@ -16,7 +16,7 @@ async function main() {
     seconds: Number(seconds),
     useGPU: false
   })
-  console.log(fit.report || `${fit.status}: ${fit.reason}`)
+  console.log(JSON.stringify(fit, null, 2))
 }
 
 main().catch((err) => {

@@ -57,7 +57,11 @@
             "dpkg -s mesa-vulkan-drivers >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers)"
           ]
         }
-      }
+      },
+      "inputs": [
+        "default",
+        "{workspaceRoot}/.github/bare-toolchain/package-lock.json"
+      ]
     },
     "build": {
       "executor": "nx:run-commands",
@@ -266,7 +270,10 @@
         }
       },
       "metadata": {
-        "timeoutMinutes": 120
+        "timeoutMinutes": 120,
+        "secrets": [
+          "MODEL_S3_BUCKET"
+        ]
       }
     },
     "test:integration": {
@@ -293,7 +300,17 @@
         "linux-x64-gpu": {
           "ci": {
             "runner": "linux_ubuntu2404_x64_gpu"
-          }
+          },
+          "commands": [
+            {
+              "command": "node ../../scripts/ci/run-integration.mjs",
+              "forwardAllArgs": true
+            },
+            {
+              "command": "node ci/sidecar-cuda-smoke.mjs",
+              "forwardAllArgs": false
+            }
+          ]
         },
         "linux-x64-vulkan": {
           "args": "--set CUDA_VISIBLE_DEVICES=-1",
@@ -377,7 +394,8 @@
         },
         "timeoutMinutes": 150,
         "secrets": [
-          "HF_TOKEN"
+          "HF_TOKEN",
+          "MODEL_S3_BUCKET"
         ]
       }
     },

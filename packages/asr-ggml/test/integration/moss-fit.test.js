@@ -35,15 +35,11 @@ test('MOSS fit validates the same transcription options as run', async (t) => {
   }
 })
 
-test('MOSS fit reports an unreadable model as an outcome', async (t) => {
-  const fit = await ASRGgml.assessFit({
-    engine: 'moss-transcribe',
-    modelPath: missing,
-    audioSeconds: 30
-  })
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'model-unreadable')
-  t.is(fit.modelType, 'moss-transcribe')
+test('MOSS fit rejects an unreadable model', async (t) => {
+  await t.exception(
+    ASRGgml.assessFit({ engine: 'moss-transcribe', modelPath: missing, audioSeconds: 30 }),
+    /model-unreadable/
+  )
 })
 
 test(
@@ -60,24 +56,14 @@ test(
       marginBytes: 0
     }
     const fit = await ASRGgml.assessFit(request)
-    t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', fit.report)
-    t.is(fit.modelType, 'moss-transcribe')
-    t.ok(fit.deviceIsCpu)
-    t.ok(fit.deviceSharesHostMemory)
-    t.ok(fit.weightsBytes > 0)
-    t.ok(fit.encoderComputeBytes > 0)
-    t.ok(fit.decoderStateBytes > 0)
-    t.ok(fit.hostBytes > 0)
-    t.is(
-      fit.deviceBytes,
-      fit.weightsBytes + fit.encoderComputeBytes + fit.decoderStateBytes + fit.decoderComputeBytes
-    )
+    t.ok(fit.status === 'fits' || fit.status === 'does-not-fit')
+    t.is(fit.devices.length, 1, 'a CPU load is one row')
+    t.is(fit.devices[0].unified, true, 'the CPU is host memory')
+    t.ok(fit.devices[0].usedBytes > 0)
+    t.alike(fit.stats, {})
     const longer = await ASRGgml.assessFit({ ...request, audioSeconds: 90 })
-    t.not(longer.status, 'error', longer.report)
-    t.ok(longer.decoderStateBytes > fit.decoderStateBytes)
-    t.ok(longer.hostBytes > fit.hostBytes)
+    t.ok(longer.devices[0].usedBytes > fit.devices[0].usedBytes, 'a longer recording costs more')
     const margin = await ASRGgml.assessFit({ ...request, marginBytes: Number.MAX_VALUE })
     t.is(margin.status, 'does-not-fit')
-    t.is(margin.reason, 'does-not-fit')
   }
 )
