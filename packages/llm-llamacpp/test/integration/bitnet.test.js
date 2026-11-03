@@ -4,14 +4,13 @@ const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
-const { recordPerformance } = require('./_perf-helper.js')
+const { recordPerformance, coldPrompt } = require('./_perf-helper.js')
 
 const os = require('bare-os')
 const isAndroid = os.platform() === 'android'
 
 const BITNET_MODEL = {
-  name: 'bitnet_b1_58-large-TQ2_0.gguf',
-  url: 'https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/main/bitnet_b1_58-large-TQ2_0.gguf'
+  name: 'bitnet_b1_58-large-TQ2_0.gguf'
 }
 
 const PROMPT = [{ role: 'user', content: 'What is 2 + 2?' }]
@@ -42,7 +41,7 @@ const PERF_LABEL = '[bitnet] [GPU]'
 
 async function runBitnetInference(addon, prompt) {
   const startTime = Date.now()
-  const response = await addon.run(prompt)
+  const response = await addon.run(coldPrompt(prompt))
   const chunks = []
   let error = null
   response
@@ -77,8 +76,7 @@ safeTest(
   { timeout: 900_000, skip: !isAndroid },
   async (t) => {
     const [modelName, dirPath] = await ensureModel({
-      modelName: BITNET_MODEL.name,
-      downloadUrl: BITNET_MODEL.url
+      modelName: BITNET_MODEL.name
     })
 
     const modelPath = path.join(dirPath, modelName)

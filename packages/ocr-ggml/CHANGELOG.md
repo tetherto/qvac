@@ -4,6 +4,17 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Breaking
+
+- `assessFit` returns `{ status, devices, stats }`: the selected device, then
+  the host CPU. `fits` needs every row to fit. An unreadable model or an
+  invalid request rejects
+  ([#5475](https://github.com/tetherto/qvac/pull/5475)).
+- On an iOS device, `assessFit` checks the load and its margin against the
+  app's memory limit ([#5475](https://github.com/tetherto/qvac/pull/5475)).
+
 ## [0.31.1] - 2026-10-29
 
 ### Changed

@@ -155,3 +155,49 @@ test('parakeetRuntimeConfigSchema: accepts the long-form window and context fram
   )
   t.ok(parakeetLoadConfigSchema.safeParse({ longFormWindowFrames: 375 }).success)
 })
+
+test('parakeetRuntimeConfigSchema: accepts the energy-VAD tuning controls', (t) => {
+  const config = {
+    streaming: true,
+    streamingEnergyVad: true,
+    streamingEnergyVadThresholdDb: -40,
+    streamingEnergyVadWindowMs: 50,
+    streamingEnergyVadHangoverMs: 300
+  }
+  t.alike(parakeetRuntimeConfigSchema.parse(config), config)
+  t.ok(parakeetLoadConfigSchema.safeParse(config).success)
+
+  // The threshold is a dBFS level, so it takes fractions; the window is a
+  // positive whole number of ms and the hangover a non-negative one.
+  t.is(
+    parakeetRuntimeConfigSchema.parse({ streamingEnergyVadThresholdDb: -27.5 })
+      .streamingEnergyVadThresholdDb,
+    -27.5
+  )
+  t.is(
+    parakeetRuntimeConfigSchema.parse({ streamingEnergyVadHangoverMs: 0 })
+      .streamingEnergyVadHangoverMs,
+    0
+  )
+  for (const invalid of [
+    { streamingEnergyVadWindowMs: 0 },
+    { streamingEnergyVadWindowMs: 12.5 },
+    { streamingEnergyVadHangoverMs: -1 },
+    { streamingEnergyVadHangoverMs: 0.5 }
+  ]) {
+    t.exception(() => parakeetRuntimeConfigSchema.parse(invalid), JSON.stringify(invalid))
+  }
+})
+
+test('parakeetRuntimeConfigSchema: accepts prewarm and the length of its pass', (t) => {
+  const config = { prewarm: true, prewarmAudioSeconds: 2.5 }
+  t.alike(parakeetRuntimeConfigSchema.parse(config), config)
+  t.ok(parakeetLoadConfigSchema.safeParse(config).success)
+  // The addon refuses a prewarm pass of no audio, so the schema does too.
+  for (const seconds of [0, -1]) {
+    t.exception(
+      () => parakeetRuntimeConfigSchema.parse({ prewarmAudioSeconds: seconds }),
+      `prewarmAudioSeconds ${seconds}`
+    )
+  }
+})
