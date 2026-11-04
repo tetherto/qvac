@@ -366,11 +366,8 @@ jobs:
           snap list mesa-core22
           snap connections qvac-sdk-e2e
 
-      # The same per-model cache as test-node-sdk.yml. The Snap reads models from its own
-      # directory, so the restored entries are staged there (hard links when the filesystem
-      # allows) rather than cached under a Snap-only path: a Snap leg shares every model with
-      # the Linux Electron leg. A selection that needs no model (snap-storage-* alone) plans
-      # nothing and skips the restore and bootstrap.
+      # Same per-model cache as test-node-sdk.yml. The Snap reads its own models directory, so
+      # restored files are hard-linked into it. A selection with no models skips the bootstrap.
       - name: Plan models cache
         id: models-plan
         continue-on-error: true
@@ -397,7 +394,6 @@ jobs:
             "--cache-root=$CACHE_ROOT" \
             "--out=$RUNNER_TEMP/sdk-e2e-model-cache-plan.json"
 
-      # A cache problem must not fail the leg: without outputs the bootstrap downloads everything.
       - name: Restore models cache
         id: models-cache
         if: inputs.cache-models != false && steps.models-plan.outputs.plan != ''
@@ -420,8 +416,6 @@ jobs:
             || cp -a --remove-destination "$WORKSPACE_MODELS/." "$SNAP_MODELS/"
           du -sh "$SNAP_MODELS"
 
-      # No plan (an older checkout) leaves QVAC_E2E_BOOTSTRAP_DEPS empty, which bootstraps
-      # every model as before.
       - name: Bootstrap models inside Snap
         if: >-
           steps.models-cache.outputs.complete != 'true' &&
@@ -436,9 +430,7 @@ jobs:
           --skip-build
           --skip-snap-install
 
-      # Trusted runs only, as in test-node-sdk.yml; also after a failed bootstrap, to keep what
-      # did download. Relinking a file that is already the same inode is harmless, and unlike
-      # `cp -n` it does not exit 1 on coreutils 9.2-9.4 when it meets an existing file.
+      # Trusted events only. Not `cp -n`: it exits 1 on existing files in coreutils 9.2-9.4.
       - name: Collect Snap downloads for the cache
         id: snap-collect
         if: >-

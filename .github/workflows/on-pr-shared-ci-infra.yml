@@ -81,14 +81,13 @@ jobs:
         run: node --test .github/actions/sdk-device-farm-wait-for-running/test/*.test.mjs
       - name: Run SDK e2e model cache action unit tests
         run: node --test .github/actions/sdk-e2e-model-cache/test/*.test.mjs
-      # The runner executes the committed bundle, not src/. A src/ change without a rebuild
-      # would ship the old behaviour while the tests above pass against the new one.
+      # The runner executes the committed dist/, not src/.
       - name: Check SDK e2e model cache action bundle is current
         working-directory: .github/actions/sdk-e2e-model-cache
         run: |
           npm ci --ignore-scripts
           npm run build
-          # --porcelain also catches a chunk file the build added but nobody committed.
+          # --porcelain also catches untracked chunk files.
           if [ -n "$(git status --porcelain -- dist)" ]; then
             git status --short -- dist
             echo "::error::dist/ is stale. Run 'npm ci && npm run build' in .github/actions/sdk-e2e-model-cache and commit dist/."

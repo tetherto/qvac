@@ -1,21 +1,15 @@
 import { createHash } from 'node:crypto'
 
 /**
- * Where the SDK puts each registry model inside its models cache directory, and which files with
- * which checksums it puts there, so CI can cache every model as its own entry and restore only
- * the ones a leg needs.
- *
- * This mirrors the SDK's layout rather than asking a running SDK, because the restore has to
- * happen before anything is downloaded. The rules live in packages/inference:
- *   - single file:   `<shortHash(registryPath)>_<filename>`  (utils/cache/paths.ts, getSingleFileCachePath)
- *   - sharded model: `sharded/<shortHash(registryPath)>/`     (utils/cache/paths.ts, getShardPath)
- *   - companion set: `sets/<setKey>/`                         (utils/cache/paths.ts, getCompanionSetPath)
- *   - Core ML set:   `sets/<shortHash(source:path:coreml:root)>/` on macOS, holding the GGUF and
- *                    its `.mlmodelc` bundles (handlers/load-model/coreml-sidecars.ts,
- *                    findCatalogCoremlCompanionSet)
- * A drift costs speed, never correctness: the SDK verifies every file against the registry
- * checksum when it loads it, the save verifies every file against the checksums listed here, and
- * the cache action warns about anything the SDK wrote that the plan did not cover.
+ * Mirror of the SDK models cache layout, so CI can cache each model as its own entry before
+ * anything is downloaded. Rules in packages/inference:
+ *   - single file:   `<shortHash(registryPath)>_<filename>`  (utils/cache/paths.ts)
+ *   - sharded model: not cached (the SDK writes an unpinned `<base>.tensors.txt`)
+ *   - companion set: `sets/<setKey>/`                         (utils/cache/paths.ts)
+ *   - Core ML set:   `sets/<shortHash(source:path:coreml:root)>/` on macOS; not cached when the
+ *                    catalog lacks a complete bundle (handlers/load-model/coreml-sidecars.ts)
+ * Drift costs a download, never a wrong result: the SDK verifies checksums on load, and the
+ * cache action warns about files no entry covers.
  */
 
 export interface RegistryLayoutItem {
@@ -24,7 +18,6 @@ export interface RegistryLayoutItem {
   registrySource: string
   expectedSize: number
   sha256Checksum: string
-  shardMetadata?: readonly { filename: string; expectedSize: number; sha256Checksum: string }[]
   companionSet?: {
     setKey: string
     files: readonly { targetName: string; expectedSize: number; sha256Checksum: string }[]
@@ -44,18 +37,11 @@ export interface ModelCacheFile {
 }
 
 export interface ModelCacheEntry {
-  /** Content identity: a digest of every file's checksum. The cache key. */
+  /** Digest of every file's checksum; the cache key */
   contentId: string
-  /**
-   * Workspace-relative, POSIX. Where the SDK keeps the model: its file, or its directory. Used to
-   * tell the SDK's other writes (layout drift) apart; the archive holds `files` only.
-   */
+  /** The model's file or directory, workspace-relative POSIX; used for drift checks */
   paths: string[]
-  /**
-   * Every file the registry pins for the model, with its exact size and checksum: exactly what
-   * the entry archives. Anything else the SDK writes beside them -- the Core ML set metadata,
-   * whose checksums the SDK would trust over the catalog's -- is never cached.
-   */
+  /** Exactly what the entry archives: registry-pinned files only, never SDK metadata */
   files: ModelCacheFile[]
   expectedSize: number
   models: string[]
@@ -64,10 +50,7 @@ export interface ModelCacheEntry {
 
 export interface ModelCachePlanResult {
   entries: ModelCacheEntry[]
-  /**
-   * Constants that cannot be laid out ahead of the download (no registry entry, or shards the
-   * registry lists only at download time), so they stay uncached
-   */
+  /** Constants with no known layout before download; they stay uncached */
   unresolved: string[]
 }
 
@@ -89,9 +72,8 @@ function basename(registryPath: string): string {
 }
 
 /**
- * One digest over every file's path inside `dir` and checksum, independent of listing order.
- * The cache action recomputes it (contentIdFor in .github/actions/sdk-e2e-model-cache), so the
- * sort is by code unit, never by locale.
+ * Digest of each file's path inside `dir` and checksum. Code-unit sort, not locale: the cache
+ * action recomputes it (contentIdFor).
  */
 function contentIdOf(files: readonly ModelCacheFile[], dir: string): string {
   const lines = files.map((file) => `${file.path.slice(dir.length)}:${file.sha256}`).sort()
@@ -99,9 +81,8 @@ function contentIdOf(files: readonly ModelCacheFile[], dir: string): string {
 }
 
 /**
- * Core ML sidecar families, mirrored from SIDECAR_FAMILIES and COREML_COMPONENTS in
- * packages/inference/src/handlers/load-model/coreml-sidecars.ts. The unit tests compare this
- * table with that source.
+ * Mirror of SIDECAR_FAMILIES and COREML_COMPONENTS in
+ * packages/inference/src/handlers/load-model/coreml-sidecars.ts; unit tests compare the two.
  */
 const COREML_COMPONENTS = [
   'analytics/coremldata.bin',
@@ -166,16 +147,8 @@ export const COREML_FAMILIES: readonly CoremlFamily[] = [
   }
 ]
 
-/**
- * The Core ML set the SDK assembles for a model on macOS from the catalog, or `undefined` when
- * the model has none: no family, no bundles for its stem, or no bundle complete in the catalog.
- * Same rules as getCoremlSidecarSpec + findCatalogCoremlCompanionSet.
- */
-export function coremlSetFor(
-  item: RegistryLayoutItem,
-  os: HostOs,
-  byPath: ReadonlyMap<string, RegistryLayoutItem>
-): { setKey: string; files: { targetName: string; size: number; sha256: string }[] } | undefined {
+/** The Core ML family and stem the SDK matches on macOS (getCoremlSidecarSpec), if any. */
+function coremlSpecFor(item: RegistryLayoutItem, os: HostOs) {
   if (os !== 'macos') return undefined
   const filename = basename(item.registryPath)
   for (const family of COREML_FAMILIES) {
@@ -184,44 +157,51 @@ export function coremlSetFor(
     }
     const stem = filename.match(family.stemPattern)?.[1]
     const bundles = stem ? family.bundlesByStem[stem] : undefined
-    if (!stem || !bundles) continue
-
-    const root =
-      family.root ?? item.registryPath.slice(0, item.registryPath.length - filename.length)
-    const sidecars: { targetName: string; size: number; sha256: string }[] = []
-    for (const bundle of bundles) {
-      const components = COREML_COMPONENTS.map((component) =>
-        byPath.get(`${family.source}:${root}${bundle.sourceName}.mlmodelc/${component}`)
-      )
-      if (components.some((entry) => !entry)) continue
-      components.forEach((entry, index) =>
-        sidecars.push({
-          targetName: `${stem}${bundle.targetSuffix}.mlmodelc/${COREML_COMPONENTS[index]}`,
-          size: entry!.expectedSize,
-          sha256: entry!.sha256Checksum
-        })
-      )
-    }
-    if (sidecars.length === 0) return undefined
-    return {
-      setKey: shortHash(`${item.registrySource}:${item.registryPath}:coreml:${root}`),
-      files: [
-        { targetName: filename, size: item.expectedSize, sha256: item.sha256Checksum },
-        ...sidecars
-      ]
-    }
+    if (stem && bundles) return { family, stem, bundles, filename }
   }
   return undefined
+}
+
+/** The Core ML set the SDK builds on macOS (findCatalogCoremlCompanionSet), or `undefined`. */
+export function coremlSetFor(
+  item: RegistryLayoutItem,
+  os: HostOs,
+  byPath: ReadonlyMap<string, RegistryLayoutItem>
+): { setKey: string; files: { targetName: string; size: number; sha256: string }[] } | undefined {
+  const spec = coremlSpecFor(item, os)
+  if (!spec) return undefined
+  const { family, stem, bundles, filename } = spec
+  const root = family.root ?? item.registryPath.slice(0, item.registryPath.length - filename.length)
+  const sidecars: { targetName: string; size: number; sha256: string }[] = []
+  for (const bundle of bundles) {
+    const components = COREML_COMPONENTS.map((component) =>
+      byPath.get(`${family.source}:${root}${bundle.sourceName}.mlmodelc/${component}`)
+    )
+    if (components.some((entry) => !entry)) continue
+    components.forEach((entry, index) =>
+      sidecars.push({
+        targetName: `${stem}${bundle.targetSuffix}.mlmodelc/${COREML_COMPONENTS[index]}`,
+        size: entry!.expectedSize,
+        sha256: entry!.sha256Checksum
+      })
+    )
+  }
+  if (sidecars.length === 0) return undefined
+  return {
+    setKey: shortHash(`${item.registrySource}:${item.registryPath}:coreml:${root}`),
+    files: [
+      { targetName: filename, size: item.expectedSize, sha256: item.sha256Checksum },
+      ...sidecars
+    ]
+  }
 }
 
 /** detectShardedModel's pattern (packages/inference/src/utils/shard-utils.ts). */
 export const SHARD_FILENAME = /^(.+)-(\d{5})-of-(\d{5})(\.\w+)$/
 
 /**
- * The entry for one registry model, with paths relative to the models cache directory, or
- * `undefined` when its files cannot be known before the download. Checked in the SDK's order
- * (handlers/load-model/registry.ts): a sharded filename, then a Core ML set on macOS, then a
- * companion set, then the single file.
+ * One model's layout relative to the cache directory, or `undefined` when unknown before
+ * download. SDK order (handlers/load-model/registry.ts): sharded, Core ML, companion set, single.
  */
 export function cacheLayoutFor(
   item: RegistryLayoutItem,
@@ -235,21 +215,13 @@ export function cacheLayoutFor(
     expectedSize: files.reduce((sum, file) => sum + file.size, 0)
   })
 
-  if (SHARD_FILENAME.test(basename(item.registryPath))) {
-    // Without shard metadata the SDK discovers the shards from the registry at download time.
-    if (!item.shardMetadata || item.shardMetadata.length === 0) return undefined
-    const dir = `sharded/${shortHash(item.registryPath)}`
-    return directory(
-      dir,
-      item.shardMetadata.map((shard) => ({
-        path: `${dir}/${shard.filename}`,
-        size: shard.expectedSize,
-        sha256: shard.sha256Checksum
-      }))
-    )
-  }
+  // The SDK writes `<base>.tensors.txt` beside the shards only on download, and a cache hit on
+  // restored shards would load without it. Not registry-pinned, so it cannot be cached here.
+  if (SHARD_FILENAME.test(basename(item.registryPath))) return undefined
 
   const coreml = coremlSetFor(item, os, byPath)
+  // No complete bundle in the catalog: the SDK asks the live registry, which may have one.
+  if (!coreml && coremlSpecFor(item, os)) return undefined
   if (coreml) {
     const dir = `sets/${coreml.setKey}`
     return directory(
@@ -287,10 +259,7 @@ function registryKey(source: string, registryPath: string): string {
   return `${source}:${registryPath}`
 }
 
-/**
- * One entry per distinct set of cached paths. Two constants that resolve to the same file
- * (an alias of a registry model) share an entry.
- */
+/** One entry per distinct path; aliases of one registry model share it. */
 export function buildModelCachePlan(options: {
   constants: readonly PlannedConstant[]
   registry: readonly RegistryLayoutItem[]
@@ -345,7 +314,7 @@ export function buildModelCachePlan(options: {
   }
 }
 
-/** Union of several plans' entries (a seed run warms more than one leg's set). */
+/** Union of several legs' entries (seed). */
 export function mergeModelCacheEntries(
   lists: readonly (readonly ModelCacheEntry[])[]
 ): ModelCacheEntry[] {

@@ -1,18 +1,10 @@
 import type { TestDefinition } from '@qvac/test-suite'
 import { collectTestDeps } from './collect-test-deps.js'
 
-/**
- * Set by CI from the leg's model-cache plan (`scripts/model-cache-plan.mjs`) so a standalone
- * `qvac-test run:bootstrap:*` downloads only what the leg's tests use. A JSON array of
- * ResourceManager dep keys; `[]` is a leg that needs no model at all.
- */
+/** JSON array of dep keys from the CI model-cache plan; narrows a standalone bootstrap. */
 export const BOOTSTRAP_DEPS_ENV = 'QVAC_E2E_BOOTSTRAP_DEPS'
 
-/**
- * Set by CI from the per-model cache restore: a JSON array of model constant names the cache did
- * not provide. The bootstrap then downloads only those, instead of re-verifying every restored
- * file (the run verifies each one on load anyway).
- */
+/** JSON array of model names the CI cache restore did not provide. */
 export const BOOTSTRAP_MODELS_ENV = 'QVAC_E2E_BOOTSTRAP_MODELS'
 
 function readStringArray(
@@ -36,9 +28,8 @@ function readStringArray(
 }
 
 /**
- * The deps a desktop-side bootstrap should pre-download. The producer's post-filter test list
- * (delivered via register-ack) wins; a standalone bootstrap has none and falls back to the
- * plan CI exported. `undefined` keeps the legacy "warm everything" path.
+ * Deps to pre-download: the producer's test list inside a run, else the CI plan's env, else
+ * `undefined` (everything).
  */
 export function resolveBootstrapDeps(
   filteredTests: readonly TestDefinition[] | undefined,
@@ -49,7 +40,7 @@ export function resolveBootstrapDeps(
   return readStringArray(env, BOOTSTRAP_DEPS_ENV, 'dep keys')
 }
 
-/** The model names a standalone bootstrap is limited to; `undefined` is no limit. */
+/** Model names a standalone bootstrap is limited to; `undefined` is no limit. */
 export function resolveBootstrapModels(
   env: Readonly<Record<string, string | undefined>> = process.env
 ): ReadonlySet<string> | undefined {

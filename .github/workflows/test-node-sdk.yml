@@ -297,13 +297,8 @@ jobs:
           console.log(`SDK cache dir: ${cacheDir}`);
           console.log(`Config written to: ${configPath}`);
 
-      # One cache entry per model instead of one archive per consumer: the plan lists the
-      # models this leg's own test selection uses (suite, filter, include, platform skips) and
-      # where the SDK keeps each one, the restore pulls only those, and the bootstrap downloads
-      # only what the cache did not have. Keys are the registry checksums, so a registry change
-      # touches only the models it changed. The Python leg resolves the same table as desktop
-      # and shares its entries. A checkout older than the planner, or a planner failure (which
-      # must not block the tests), bootstraps everything uncached.
+      # Per-model cache: plan the models this leg's tests use, restore those, bootstrap the rest.
+      # No plan (older checkout or planner failure) bootstraps everything uncached.
       - name: Plan models cache
         id: models-plan
         continue-on-error: true
@@ -330,7 +325,6 @@ jobs:
             "--cache-root=$CACHE_ROOT" \
             "--out=$RUNNER_TEMP/sdk-e2e-model-cache-plan.json"
 
-      # A cache problem must not fail the leg: without outputs the bootstrap downloads everything.
       - name: Restore models cache
         id: models-cache
         if: inputs.cache-models != false && steps.models-plan.outputs.plan != ''
@@ -347,7 +341,6 @@ jobs:
         env:
           PLAN: ${{ steps.models-plan.outputs.plan }}
           CONSUMER: ${{ inputs.consumer == 'python' && 'desktop' || inputs.consumer }}
-          # Only what the restore did not provide; empty (no restore) means every planned model.
           QVAC_E2E_BOOTSTRAP_MODELS: ${{ steps.models-cache.outputs.missing-models }}
         run: |
           if [ -n "$PLAN" ]; then
@@ -356,10 +349,7 @@ jobs:
             npx qvac-test "run:bootstrap:$CONSUMER" --config=.
           fi
 
-      # Entries are written by trusted runs only (dispatch here; push and schedule through
-      # on-merge-sdk-e2e-model-cache.yml), never by PR code; the action applies the same
-      # allowlist. It also runs after a failed bootstrap, so the models that did download are
-      # kept. Parallel legs that miss the same model race for one entry; the loser moves on.
+      # Trusted events only, never PR code. Also after a failed bootstrap, to keep what downloaded.
       - name: Save models cache
         if: >-
           !cancelled() &&

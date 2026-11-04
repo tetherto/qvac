@@ -173,10 +173,9 @@ export class ResourceManager {
    *    constant that is *also* referenced by a non-skipped def is still
    *    listed via that other def.
    *  - `options.onlyModels`, if given, keeps only constants with those
-   *    names (CI: the models the per-model cache restore did not provide).
+   *    names (CI: the models the cache restore did not provide).
    *
-   * CI sizes the per-model cache restore from this list, so a leg pulls
-   * exactly the models its bootstrap would otherwise download.
+   * The CI model-cache plan is built from this list.
    */
   async preDownloadConstants(options: PreDownloadOptions = {}): Promise<PreDownloadPlan> {
     const allowed = options.allowedDeps

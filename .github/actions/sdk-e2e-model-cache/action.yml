@@ -1,28 +1,14 @@
 name: SDK e2e model cache
 description: |
-  Caches the SDK e2e models one actions/cache entry per model, from a plan written by
-  packages/sdk-e2e/scripts/model-cache-plan.mjs. A leg restores only the models its test
-  selection needs; a registry change, a new model or a removed one touches only that model's
-  entry. Replaces the single per-consumer archive keyed on the whole registry file.
+  Caches SDK e2e models one actions/cache entry per model, from a plan written by
+  packages/sdk-e2e/scripts/model-cache-plan.mjs. Keys are `<key-prefix>-<contentId>`, a digest of
+  the registry sha256 of the model's files, recomputed here from the plan.
 
-  Keys are content-addressed, `<key-prefix>-<contentId>`: a digest of the registry sha256 of
-  every file the model consists of (its GGUF, shards, companion files or Core ML bundles); the
-  action recomputes it from the plan's checksums. The cache version folds in each entry's file
-  list and archive format, so desktop, Electron, Python and Snap share one copy of a model on
-  every runner with the same archiver (macOS keeps a model with Core ML bundles as its own
-  entry).
+  `restore` writes `<plan>.restore.json` for a later `save` in the same job. `save` runs only on
+  push, schedule, workflow_dispatch and merge_group, and only uploads files whose sha256 matches
+  the registry.
 
-  `restore` writes `<plan>.restore.json`, which a later `save` in the same job reads so it
-  uploads only what the restore did not have. `save` writes only on push, schedule,
-  workflow_dispatch and merge_group -- never from PR code -- and only files whose sha256 matches
-  the registry. An entry archives exactly the files the registry pins, nothing the SDK writes
-  beside them (its Core ML set metadata included), so a restored set is validated against the
-  catalog. The SDK checks every file against the registry again before it loads it. The gate
-  is in this action and in the calling workflows, not a hard boundary: code that runs earlier
-  in the same job can reach the cache API itself.
-
-  Source is in src/, the committed dist/ is what runs. After editing src/, run
-  `npm ci && npm run build` here and commit dist/; on-pr-shared-ci-infra.yml checks it.
+  The runner executes dist/. After editing src/, run `npm ci && npm run build` and commit dist/.
 
 inputs:
   mode:
@@ -36,17 +22,11 @@ inputs:
     required: false
     default: sdk-e2e-model-v1
   lookup-only:
-    description: |
-      `restore` only: check which entries exist without transferring them. A seed run uses
-      this to find what is missing; a run that needs the files must leave it off.
+    description: "`restore` only: check which entries exist without downloading them."
     required: false
     default: "false"
   fail-on-save-error:
-    description: |
-      `save` only: fail the step when a planned entry is not cached afterwards (not on disk,
-      checksum mismatch, or rejected by the cache server). A seed run sets it so a broken
-      download or a layout drift turns the run red; a test leg leaves it off, since its tests
-      matter more than its upload.
+    description: "`save` only: fail when a planned entry could not be saved (the seed sets it)."
     required: false
     default: "false"
   concurrency:
@@ -60,11 +40,9 @@ outputs:
   misses:
     description: Entries the cache did not have.
   complete:
-    description: "'true' when nothing is left to download; the bootstrap can be skipped."
+    description: "'true' when nothing is left to download."
   missing-models:
-    description: |
-      JSON array of the model constants left to download (not restored, or with no registry
-      entry to cache), for the bootstrap's QVAC_E2E_BOOTSTRAP_MODELS.
+    description: JSON array of model constants left to download, for QVAC_E2E_BOOTSTRAP_MODELS.
   saved:
     description: Entries a save uploaded.
 

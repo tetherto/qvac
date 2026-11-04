@@ -121,7 +121,7 @@ test('a plan that would key or write outside its contract is rejected', () => {
   assert.throws(() => validatePlan(plan(single, '/abs')), /cacheRoot/)
 })
 
-test('drift lists cache items no entry covers, but not dotfiles', () => {
+test('drift lists cache items no entry covers, but not dotfiles or shards', () => {
   const cwd = workspace({
     'c/0123_m.gguf': 'abcd',
     'c/9999_other.gguf': 'x',
@@ -133,8 +133,7 @@ test('drift lists cache items no entry covers, but not dotfiles', () => {
   const plan = { cacheRoot: root, entries: [single, set] }
   assert.deepEqual(unplannedPaths(plan, cwd), [
     'c/9999_other.gguf',
-    'c/sets/ffff',
-    'c/sharded/eeee'
+    'c/sets/ffff'
   ])
 })
 

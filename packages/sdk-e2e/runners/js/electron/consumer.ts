@@ -136,12 +136,10 @@ function ensureElectronE2EConfig() {
 export async function bootstrap(filteredTests?: TestDefinition[]) {
   ensureElectronE2EConfig()
 
-  // The producer's post-filter test list when the consumer bootstraps inside a run; the CI
-  // model-cache plan when `qvac-test run:bootstrap:*` warms a leg ahead of it.
   const allowedDeps = resolveBootstrapDeps(filteredTests)
   await resources.downloadAllOnce(console.log, {
     allowedDeps,
-    // Only on a standalone bootstrap: inside a run, the producer's list is the whole story.
+    // Standalone bootstrap only
     onlyModels: filteredTests ? undefined : resolveBootstrapModels()
   })
 }

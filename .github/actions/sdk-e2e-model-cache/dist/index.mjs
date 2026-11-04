@@ -95945,32 +95945,24 @@ var external_node_crypto_ = __nccwpck_require__(77598);
 ;// CONCATENATED MODULE: external "node:path"
 const external_node_path_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:path");
 ;// CONCATENATED MODULE: ./src/entries.mjs
-// Pure helpers for the per-model cache action: plan validation, cache paths, on-disk checks and
-// the drift report. Kept free of @actions/* so they run under plain `node --test`.
+// Pure helpers for the cache action, free of @actions/* so they run under `node --test`.
 
 
 
 
-/** The key an entry is saved and restored under. */
 function cacheKey(prefix, entry) {
   return `${prefix}-${entry.contentId}`
 }
 
 /**
- * The path list handed to actions/cache: the entry's exact files, sorted. A directory would be
- * archived whole (actions/cache tars what its globs match, and `!` exclusions do not reach into
- * a matched directory), taking along files the SDK writes but the registry does not pin. The
- * cache version is derived from this list, so restore and save must build it the same way.
+ * The entry's exact files, sorted. Not the directory: actions/cache would tar it whole, `!`
+ * exclusions included. The cache version hashes this list, so restore and save must match.
  */
 function cachePaths(entry) {
   return entry.files.map((file) => file.path).sort()
 }
 
-/**
- * Whether every file the registry pins for this entry is on disk at its exact size. The SDK
- * verifies checksums on load; this keeps a truncated download or a half-extracted archive from
- * counting as a hit.
- */
+/** Every file on disk at its exact size, so a truncated restore is not a hit. */
 function isComplete(entry, cwd = process.cwd()) {
   return entry.files.every((file) => {
     try {
@@ -95992,10 +95984,7 @@ function sha256File(file) {
   })
 }
 
-/**
- * The first file whose content is not the registry's, or `undefined` when all match. A save
- * runs this so an entry, which every later run restores, only ever holds registry content.
- */
+/** The first file whose sha256 is not the registry's, or `undefined`. */
 async function firstChecksumMismatch(entry, cwd = process.cwd()) {
   for (const file of entry.files) {
     if ((await sha256File(external_node_path_namespaceObject.resolve(cwd, file.path))) !== file.sha256) return file.path
@@ -96010,10 +95999,8 @@ function sha256Text(text) {
 }
 
 /**
- * The key an entry's files imply: a single file's own checksum, or for a directory a digest of
- * every file's path inside it and checksum (contentIdOf in
- * packages/sdk-e2e/runners/js/shared/model-cache-plan.ts). Recomputed here so a plan cannot
- * save files under another model's key.
+ * Same as contentIdOf in packages/sdk-e2e/runners/js/shared/model-cache-plan.ts. Recomputed so a
+ * plan cannot save files under another model's key.
  */
 function contentIdFor(entry) {
   const [location] = entry.paths
@@ -96022,7 +96009,6 @@ function contentIdFor(entry) {
   return sha256Text(lines.sort().join('\n'))
 }
 
-/** A path the plan may name: workspace-relative, POSIX, inside the cache root. */
 function isPlanPath(candidate, root) {
   return (
     typeof candidate === 'string' &&
@@ -96032,11 +96018,7 @@ function isPlanPath(candidate, root) {
   )
 }
 
-/**
- * Reject a plan the action cannot act on safely: a key or checksum that is not a sha256 digest,
- * or a path outside the cache root. The planner never writes one; this turns a bug, or a plan
- * from a checkout with another schema, into an error instead of a restore into the wrong place.
- */
+/** Reject a malformed plan: bad digests, paths outside the cache root, a wrong contentId. */
 function validatePlan(plan) {
   if (plan?.version !== 1 || !Array.isArray(plan.entries)) {
     throw new Error('not a version 1 model-cache plan')
@@ -96086,9 +96068,8 @@ function validatePlan(plan) {
 }
 
 /**
- * Cache-root items no entry covers: files the SDK wrote that the plan did not predict. Right
- * after a bootstrap that is layout drift between the plan's mirror and the SDK, and those
- * models are downloaded on every run until it is fixed.
+ * Cache-root items no entry covers: after a bootstrap, drift between the plan and the SDK.
+ * `sharded/` is never planned (the SDK writes an unpinned tensors file there), so it is skipped.
  */
 function unplannedPaths(plan, cwd = process.cwd()) {
   const covered = new Set(plan.entries.flatMap((entry) => entry.paths))
@@ -96103,7 +96084,8 @@ function unplannedPaths(plan, cwd = process.cwd()) {
   }
   for (const name of list(root)) {
     const relative = `${root}/${name}`
-    if (name === 'sets' || name === 'sharded') {
+    if (name === 'sharded') continue
+    if (name === 'sets') {
       for (const inner of list(relative)) {
         if (!covered.has(`${relative}/${inner}`)) found.push(`${relative}/${inner}`)
       }
@@ -96114,7 +96096,7 @@ function unplannedPaths(plan, cwd = process.cwd()) {
   return found
 }
 
-/** Run `worker` over `items`, at most `limit` at a time; results keep the input order. */
+/** `worker` over `items`, at most `limit` at a time, results in input order. */
 async function mapWithConcurrency(items, limit, worker) {
   const results = new Array(items.length)
   let next = 0
@@ -96133,28 +96115,23 @@ function formatBytes(bytes) {
 }
 
 ;// CONCATENATED MODULE: ./src/index.mjs
-// Restore or save the SDK e2e models one cache entry per model, from a plan written by
-// packages/sdk-e2e/scripts/model-cache-plan.mjs. See action.yml for the contract.
+// See action.yml for the contract.
 
 
 
 
 
 
-// Entries every later run restores are written from trusted triggers only, never from PR code
-// (A13 in .agents/skills/qv-devops-pr-review). The calling workflows gate the save step the same
-// way; this keeps a mis-wired caller from turning into a write.
+// Never save from PR code (A13). Callers gate the step too; this catches a mis-wired caller.
 const TRUSTED_EVENTS = new Set(['push', 'schedule', 'workflow_dispatch', 'merge_group'])
 
-// After saveCache returns -1, how long a seed keeps looking for an entry another job is still
-// finalizing. A test leg looks once: its save is best effort, and 40 s per entry across a cold
-// plan would cost it minutes when the server rejects writes outright.
+// After saveCache returns -1, a seed waits for another job finalizing the same entry; a test leg
+// checks once, so a server rejecting writes does not cost it minutes.
 const SEED_LOOKUP_ATTEMPTS = 3
 const LOOKUP_DELAY_MS = 20_000
 
 const label = (entry) => entry.models.join(',')
-// Restore state is per entry, not per key: two models with identical bytes at different paths
-// share a key but are separate entries.
+// Per entry, not per key: identical bytes at two paths share a key.
 const stateKey = (prefix, entry) => `${cacheKey(prefix, entry)}\n${entry.paths.join('\n')}`
 const statePath = (planPath) => `${planPath}.restore.json`
 const message = (error) => (error instanceof Error ? error.message : String(error))
@@ -96173,7 +96150,6 @@ async function restoreEntry(prefix, entry, lookupOnly) {
     const matched = await cache.restoreCache(cachePaths(entry), key, [], { lookupOnly }, true)
     if (!matched) return { hit: false }
     if (!lookupOnly && !isComplete(entry)) {
-      // Keys are immutable, so a damaged entry stays damaged until it is deleted.
       core.warning(
         `Restored ${label(entry)} is incomplete, downloading it again. If this repeats, ` +
           `delete the entry: gh cache delete ${key}`
@@ -96182,7 +96158,6 @@ async function restoreEntry(prefix, entry, lookupOnly) {
     }
     return { hit: true }
   } catch (error) {
-    // actions/cache only warns on a failed transfer; a throw here is the same thing.
     core.warning(`Restore of ${label(entry)} failed: ${message(error)}`)
     return { hit: false }
   }
@@ -96204,7 +96179,7 @@ async function restore(plan, planPath, prefix, concurrency, lookupOnly) {
   })
   external_node_fs_.writeFileSync(statePath(planPath), `${JSON.stringify(state, null, 2)}\n`)
 
-  // Constants with no registry entry have no cache entry either; the bootstrap still fetches them.
+  // Unresolved constants have no entry; the bootstrap still fetches them.
   const toDownload = [...missing.flatMap((entry) => entry.models), ...plan.unresolved]
   const hits = plan.entries.length - missing.length
   const seconds = Math.round((Date.now() - started) / 1000)
@@ -96246,7 +96221,6 @@ async function restore(plan, planPath, prefix, concurrency, lookupOnly) {
   }
 }
 
-/** Whether an entry exists, waiting out another job that is still finalizing it. */
 async function entryExists(paths, key, attempts) {
   for (let attempt = 0; attempt < attempts; attempt++) {
     if (attempt > 0) await (0,promises_namespaceObject.setTimeout)(LOOKUP_DELAY_MS)
@@ -96271,8 +96245,7 @@ async function saveEntry(prefix, entry, previous, lookupAttempts) {
   const key = cacheKey(prefix, entry)
   const paths = cachePaths(entry)
   try {
-    // saveCache logs and swallows its own failures (a reservation another job holds, a server
-    // error) and returns -1, so a lookup decides whether the entry is now there.
+    // saveCache swallows its errors and returns -1; a lookup decides whether the entry exists.
     if ((await cache.saveCache(paths, key, {}, true)) !== -1) return 'saved'
     if (await entryExists(paths, key, lookupAttempts)) return 'present'
     core.warning(`Save of ${label(entry)} under ${key} did not create an entry`)

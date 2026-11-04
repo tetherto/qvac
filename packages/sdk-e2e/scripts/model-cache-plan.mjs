@@ -1,13 +1,8 @@
 #!/usr/bin/env node
 /**
- * Work out which models a CI leg needs and where the SDK keeps each one, so the leg restores
- * exactly those from the per-model cache (.github/actions/sdk-e2e-model-cache) and bootstraps
- * only what the cache did not have.
- *
- * The selection is the run's own: the same suite/filter/include options the producer queues
- * from, minus the tests the leg's platform skips (`selectRunTests` from @qvac/test-suite), then
- * the ResourceManager deps those tests declare, then every model constant the bootstrap would
- * pre-download for them.
+ * Plan the models a CI leg needs and where the SDK keeps each one, for
+ * .github/actions/sdk-e2e-model-cache. Selection: the run's tests (`selectRunTests`), their
+ * deps, then every model constant the bootstrap would download.
  *
  *   node scripts/model-cache-plan.mjs --family desktop --suite smoke --out plan.json
  *   node scripts/model-cache-plan.mjs --family desktop,python,electron --out plan.json   # seed
@@ -32,9 +27,8 @@ const projectDir = resolve(here, '..')
 const load = (relativePath) => import(pathToFileURL(resolve(projectDir, relativePath)).href)
 
 /**
- * Per family: the consumer entry that bootstraps it, the label its tests register with (which
- * platform skips apply), and the label its client resolves the resource table under (which
- * `on`/`configOn` entries apply). The two differ only for Python.
+ * Per family: bootstrap consumer, skip-matching platform label, and resource-table label (they
+ * differ only for Python).
  */
 const FAMILIES = {
   desktop: {
@@ -47,14 +41,12 @@ const FAMILIES = {
     platform: (os) => `electron-${os}`,
     resourcePlatform: (os) => `electron-${os}`
   },
-  // The Python client registers as `desktop-python` but reads the table as QVAC_RESOURCE_PLATFORM,
-  // `desktop` by default (runners/python/qvac_e2e/resources.py); the desktop entry warms it.
+  // Registers as `desktop-python`, reads the table as `desktop` (qvac_e2e/resources.py).
   python: {
     consumer: 'desktop',
     platform: (_os, config) => externalPlatform(config, 'python'),
     resourcePlatform: () => 'desktop'
   },
-  // The Snap runs the Electron entry under its own label (test-suite's createSnapRuntimeEnv).
   snap: { consumer: 'electron', platform: () => 'snap-linux', resourcePlatform: () => 'snap-linux' }
 }
 
@@ -118,11 +110,7 @@ const selectionOptions = {
   include: values.include || undefined
 }
 
-/**
- * Transitional copy of `selectRunTests` (packages/test-suite/src/utils/test-selection.ts and
- * platform-match.ts) for a framework released before it. Delete it once packages/sdk-e2e
- * depends on a @qvac/test-suite that exports `selectRunTests`.
- */
+/** Copy of test-suite's `selectRunTests`. Delete once the published test-suite exports it. */
 function selectRunTestsFallback(tests, options) {
   const list = (value) =>
     (value ?? '')
@@ -177,7 +165,6 @@ function selectRunTestsFallback(tests, options) {
   return { tests: kept, platformSkippedTestIds, unknownTestIds }
 }
 
-/** The tests one leg executes: what the producer queues, minus what the platform skips. */
 function selectLegTests(platform) {
   const select =
     typeof testSuite.selectRunTests === 'function'
@@ -256,8 +243,7 @@ console.log(
 )
 
 if (process.env.GITHUB_OUTPUT) {
-  // `deps` is the first leg's: a test leg plans one family, and the Snap leg hands it to the
-  // bootstrap inside the Snap, which cannot read the plan file.
+  // First leg's deps: the in-Snap bootstrap cannot read the plan file.
   appendFileSync(
     process.env.GITHUB_OUTPUT,
     `plan=${outPath}\ndeps=${JSON.stringify(legs[0].deps)}\n`

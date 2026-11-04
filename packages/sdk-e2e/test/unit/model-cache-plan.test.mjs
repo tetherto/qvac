@@ -66,7 +66,7 @@ test('a single-file model is one flat file keyed by its registry checksum', () =
   assert.equal(layout.contentId, single.sha256Checksum)
 })
 
-test('a sharded model is its shard directory, keyed by every shard checksum', () => {
+test('a sharded model stays uncached: its tensors file is not registry-pinned', () => {
   const sharded = {
     ...single,
     registryPath: 'qvac_models_compiled/ggml/big/2026-01-01/m-00001-of-00002.gguf',
@@ -75,19 +75,8 @@ test('a sharded model is its shard directory, keyed by every shard checksum', ()
       { filename: 'm-00002-of-00002.gguf', expectedSize: 20, sha256Checksum: sha('b') }
     ]
   }
-  const dir = `sharded/${shortHash(sharded.registryPath)}`
-  const layout = cacheLayoutFor(sharded, 'linux')
-  assert.deepEqual(layout.paths, [dir])
-  assert.equal(layout.expectedSize, 30)
-  assert.deepEqual(layout.files, [
-    { path: `${dir}/m-00001-of-00002.gguf`, size: 10, sha256: sha('a') },
-    { path: `${dir}/m-00002-of-00002.gguf`, size: 20, sha256: sha('b') }
-  ])
-  const oneShard = cacheLayoutFor(
-    { ...sharded, shardMetadata: [sharded.shardMetadata[0]] },
-    'linux'
-  )
-  assert.notEqual(layout.contentId, oneShard.contentId)
+  assert.equal(cacheLayoutFor(sharded, 'linux'), undefined)
+  assert.equal(cacheLayoutFor({ ...sharded, shardMetadata: undefined }, 'linux'), undefined)
 })
 
 test('a companion set is its set directory and its key ignores file order', () => {
@@ -127,14 +116,15 @@ test('a Core ML model on macOS is the catalog set: GGUF plus every complete bund
   )
 })
 
-test('a Core ML model stays flat off macOS, without bundles, or with an incomplete bundle', () => {
+test('a Core ML model is flat off macOS, uncached on macOS without a complete catalog bundle', () => {
   const flat = [`${shortHash(parakeet.registryPath)}_parakeet-tdt-0.6b-v3.q4_0.gguf`]
   const complete = byPathOf([parakeet, ...encoder])
   assert.deepEqual(cacheLayoutFor(parakeet, 'linux', complete).paths, flat)
-  assert.deepEqual(cacheLayoutFor(parakeet, 'macos', byPathOf([parakeet])).paths, flat)
-  assert.deepEqual(
-    cacheLayoutFor(parakeet, 'macos', byPathOf([parakeet, ...encoder.slice(1)])).paths,
-    flat
+  // The SDK then asks the live registry for the bundles, so the layout is unknown.
+  assert.equal(cacheLayoutFor(parakeet, 'macos', byPathOf([parakeet])), undefined)
+  assert.equal(
+    cacheLayoutFor(parakeet, 'macos', byPathOf([parakeet, ...encoder.slice(1)])),
+    undefined
   )
   const ctc = {
     ...parakeet,
@@ -259,7 +249,7 @@ test('the plan prefixes Core ML files with the cache root', () => {
   assert.ok(entry.files.every((file) => file.path.startsWith(`${entry.paths[0]}/`)))
 })
 
-test('a sharded filename without shard metadata cannot be planned', () => {
+test('an unplannable model is listed as unresolved', () => {
   const unknownShards = {
     ...single,
     name: 'SHARDS',
@@ -286,15 +276,6 @@ test('a Core ML set wins over a companion set on macOS, as in the SDK', () => {
 })
 
 test('every planned entry passes the cache action validation, key included', () => {
-  const sharded = {
-    ...single,
-    name: 'SHARDED',
-    registryPath: 'qvac_models_compiled/ggml/big/2026-01-01/big-00001-of-00002.gguf',
-    shardMetadata: [
-      { filename: 'big-00001-of-00002.gguf', expectedSize: 10, sha256Checksum: sha('a') },
-      { filename: 'big-00002-of-00002.gguf', expectedSize: 20, sha256Checksum: sha('b') }
-    ]
-  }
   const companion = {
     ...single,
     name: 'COMPANION',
@@ -308,15 +289,15 @@ test('every planned entry passes the cache action validation, key included', () 
     }
   }
   const plan = buildModelCachePlan({
-    constants: ['LLAMA', 'SHARDED', 'COMPANION', 'PARAKEET'].map((name) => ({
+    constants: ['LLAMA', 'COMPANION', 'PARAKEET'].map((name) => ({
       constant: { name },
       owners: [name]
     })),
-    registry: [single, sharded, companion, parakeet, ...encoder],
+    registry: [single, companion, parakeet, ...encoder],
     os: 'macos',
     cacheRoot: 'packages/sdk-e2e/.qvac-cache'
   })
-  assert.equal(plan.entries.length, 4)
+  assert.equal(plan.entries.length, 3)
   assert.doesNotThrow(() =>
     validatePlan({ version: 1, cacheRoot: 'packages/sdk-e2e/.qvac-cache', ...plan })
   )

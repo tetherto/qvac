@@ -1,24 +1,15 @@
 name: On Merge SDK E2E Model Cache
 
-# Seeds the per-model SDK e2e cache (`sdk-e2e-model-v1-*`, see
-# .github/actions/sdk-e2e-model-cache). The e2e legs run from pull_request_target, where the
-# action only restores, so this and a test-sdk.yml dispatch are what write entries. Each leg
-# plans the whole catalog for every family on its OS, probes which models the cache already
-# has, downloads only the rest and saves each as its own entry -- a registry change that
-# touches one model costs one download here, not the whole set.
-#
-# One leg per runner OS the e2e legs use. Linux and Windows share every entry (they are
-# cross-OS), macOS adds the Core ML sets, so the legs run one after another: each later leg's
-# probe finds what the earlier ones saved instead of downloading and uploading it again. The
-# Windows leg is then a lookup, unless its runner archives differently (no zstd) and so needs
-# entries of its own.
+# Seeds the per-model SDK e2e cache (.github/actions/sdk-e2e-model-cache). PR legs only restore,
+# so this and a test-sdk.yml dispatch write entries. Each OS leg plans the whole catalog, probes
+# the cache and downloads and saves only what is missing. Legs run in sequence so a later one
+# reuses what an earlier one saved (Linux and Windows share entries; macOS adds Core ML sets).
 
 on:
   push:
     branches:
       - main
     paths:
-      # The model set: the shared resource table, which tests use which keys, the planner.
       - "packages/sdk-e2e/catalog/**"
       - "packages/sdk-e2e/qvac-test.config.js"
       - "packages/sdk-e2e/runners/js/shared/resource-manager.ts"
@@ -26,20 +17,16 @@ on:
       - "packages/sdk-e2e/runners/js/shared/bootstrap-deps.ts"
       - "packages/sdk-e2e/runners/js/shared/model-cache-plan.ts"
       - "packages/sdk-e2e/scripts/model-cache-*.mjs"
-      # The registry the constants resolve against. The e2e legs build inference from the
-      # branch, and so does this workflow.
       - "packages/inference/src/models/registry/**"
       - "packages/sdk/package.json"
       - "packages/sdk-e2e/package.json"
       - ".github/actions/sdk-e2e-model-cache/**"
       - ".github/workflows/on-merge-sdk-e2e-model-cache.yml"
-  # Every two days. The cache server prunes an entry once neither an upload nor a download
-  # has touched it for CACHE_CLEANUP_OLDER_THAN_DAYS (=5), and a lookup touches nothing. The
-  # scheduled run therefore restores every entry for real, which keeps the models only a
-  # full-suite run uses from ageing out between those runs.
+  # The cache server prunes entries untouched for 5 days and a lookup does not count, so the
+  # scheduled run restores every entry for real.
   schedule:
     - cron: "47 2 */2 * *"
-  # No workflow_call and no pull_request: either would put PR-head code on the save path.
+  # No workflow_call or pull_request: either would put PR code on the save path.
   workflow_dispatch:
     inputs:
       force_refresh:
@@ -61,9 +48,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/reusable-runner-names.yml
 
-  # The e2e legs run against inference packed from the branch (on-pr-test-sdk.yml passes
-  # inference-source: branch), so their checksums come from this commit's models.ts, not from
-  # the last published @qvac/inference. Seed the same registry.
+  # The e2e legs use inference packed from the branch, so seed this commit's registry too.
   prepare-inference:
     name: Pack inference from this commit
     runs-on: ubuntu-latest
@@ -118,7 +103,6 @@ jobs:
     needs: [runner_names, prepare-inference]
     strategy:
       fail-fast: false
-      # One after another, in this order; see the header.
       max-parallel: 1
       matrix:
         include:
@@ -131,10 +115,8 @@ jobs:
           - os: windows
             runner: win_2025_x64_gpu
             families: desktop,python,electron
-    # The e2e legs' own runner pools: they reach the cache server those legs restore from and
-    # load the same SDK addon prebuilds the bootstrap starts.
     runs-on: ${{ needs.runner_names.outputs[matrix.runner] }}
-    # A cold seed downloads the whole catalog (~70 GB) from the registry and uploads it again.
+    # A cold seed downloads and uploads the whole catalog (~70 GB).
     timeout-minutes: 240
     name: seed (${{ matrix.os }})
     permissions:
@@ -178,8 +160,7 @@ jobs:
           inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
           inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
 
-      # Same worker and cache directory as the e2e legs (test-node-sdk.yml): the bootstrap
-      # writes where the plan's paths point.
+      # Same worker and cache directory as test-node-sdk.yml, where the plan's paths point.
       - name: Bundle SDK worker (custom plugins)
         working-directory: packages/sdk-e2e
         run: npm run bundle:sdk
@@ -224,8 +205,7 @@ jobs:
           QVAC_E2E_BOOTSTRAP_MODELS: ${{ steps.models-cache.outputs.missing-models }}
         run: node scripts/model-cache-bootstrap.mjs --plan "$PLAN"
 
-      # Also after a failed download: every model that did arrive is worth keeping, and the
-      # action skips (and reports) any entry not complete on disk.
+      # Also after a failed download, to keep what arrived.
       - name: Save models cache
         if: ${{ !cancelled() && steps.models-cache.outcome == 'success' }}
         uses: ./.github/actions/sdk-e2e-model-cache

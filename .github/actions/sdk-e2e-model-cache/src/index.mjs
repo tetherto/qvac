@@ -1,5 +1,4 @@
-// Restore or save the SDK e2e models one cache entry per model, from a plan written by
-// packages/sdk-e2e/scripts/model-cache-plan.mjs. See action.yml for the contract.
+// See action.yml for the contract.
 import * as cache from '@actions/cache'
 import * as core from '@actions/core'
 import fs from 'node:fs'
@@ -15,20 +14,16 @@ import {
   validatePlan
 } from './entries.mjs'
 
-// Entries every later run restores are written from trusted triggers only, never from PR code
-// (A13 in .agents/skills/qv-devops-pr-review). The calling workflows gate the save step the same
-// way; this keeps a mis-wired caller from turning into a write.
+// Never save from PR code (A13). Callers gate the step too; this catches a mis-wired caller.
 const TRUSTED_EVENTS = new Set(['push', 'schedule', 'workflow_dispatch', 'merge_group'])
 
-// After saveCache returns -1, how long a seed keeps looking for an entry another job is still
-// finalizing. A test leg looks once: its save is best effort, and 40 s per entry across a cold
-// plan would cost it minutes when the server rejects writes outright.
+// After saveCache returns -1, a seed waits for another job finalizing the same entry; a test leg
+// checks once, so a server rejecting writes does not cost it minutes.
 const SEED_LOOKUP_ATTEMPTS = 3
 const LOOKUP_DELAY_MS = 20_000
 
 const label = (entry) => entry.models.join(',')
-// Restore state is per entry, not per key: two models with identical bytes at different paths
-// share a key but are separate entries.
+// Per entry, not per key: identical bytes at two paths share a key.
 const stateKey = (prefix, entry) => `${cacheKey(prefix, entry)}\n${entry.paths.join('\n')}`
 const statePath = (planPath) => `${planPath}.restore.json`
 const message = (error) => (error instanceof Error ? error.message : String(error))
@@ -47,7 +42,6 @@ async function restoreEntry(prefix, entry, lookupOnly) {
     const matched = await cache.restoreCache(cachePaths(entry), key, [], { lookupOnly }, true)
     if (!matched) return { hit: false }
     if (!lookupOnly && !isComplete(entry)) {
-      // Keys are immutable, so a damaged entry stays damaged until it is deleted.
       core.warning(
         `Restored ${label(entry)} is incomplete, downloading it again. If this repeats, ` +
           `delete the entry: gh cache delete ${key}`
@@ -56,7 +50,6 @@ async function restoreEntry(prefix, entry, lookupOnly) {
     }
     return { hit: true }
   } catch (error) {
-    // actions/cache only warns on a failed transfer; a throw here is the same thing.
     core.warning(`Restore of ${label(entry)} failed: ${message(error)}`)
     return { hit: false }
   }
@@ -78,7 +71,7 @@ async function restore(plan, planPath, prefix, concurrency, lookupOnly) {
   })
   fs.writeFileSync(statePath(planPath), `${JSON.stringify(state, null, 2)}\n`)
 
-  // Constants with no registry entry have no cache entry either; the bootstrap still fetches them.
+  // Unresolved constants have no entry; the bootstrap still fetches them.
   const toDownload = [...missing.flatMap((entry) => entry.models), ...plan.unresolved]
   const hits = plan.entries.length - missing.length
   const seconds = Math.round((Date.now() - started) / 1000)
@@ -120,7 +113,6 @@ async function restore(plan, planPath, prefix, concurrency, lookupOnly) {
   }
 }
 
-/** Whether an entry exists, waiting out another job that is still finalizing it. */
 async function entryExists(paths, key, attempts) {
   for (let attempt = 0; attempt < attempts; attempt++) {
     if (attempt > 0) await sleep(LOOKUP_DELAY_MS)
@@ -145,8 +137,7 @@ async function saveEntry(prefix, entry, previous, lookupAttempts) {
   const key = cacheKey(prefix, entry)
   const paths = cachePaths(entry)
   try {
-    // saveCache logs and swallows its own failures (a reservation another job holds, a server
-    // error) and returns -1, so a lookup decides whether the entry is now there.
+    // saveCache swallows its errors and returns -1; a lookup decides whether the entry exists.
     if ((await cache.saveCache(paths, key, {}, true)) !== -1) return 'saved'
     if (await entryExists(paths, key, lookupAttempts)) return 'present'
     core.warning(`Save of ${label(entry)} under ${key} did not create an entry`)

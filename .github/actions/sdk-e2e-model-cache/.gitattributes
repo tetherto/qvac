@@ -1,0 +1,2 @@
+# ncc copies CRLF lines from bundled deps; keep dist byte-identical to the build.
+dist/** -text
