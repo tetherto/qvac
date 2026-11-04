@@ -1,4 +1,8 @@
-import { InferenceCancelledError, RequestRejectedByPolicyError } from '@/errors/index'
+import {
+  EmbedFailedError,
+  InferenceCancelledError,
+  RequestRejectedByPolicyError
+} from '@/errors/index'
 import test from 'brittle'
 import fs from 'bare-fs'
 import os from 'bare-os'
@@ -7,11 +11,13 @@ import Buffer from 'bare-buffer'
 import { embedRequestSchema, embedParamsSchema } from '@/schemas/embed'
 import { embedConfigBaseSchema, embedConfigSchema } from '@/schemas/llamacpp-config'
 import { transformEmbedConfig } from '@/plugins/builtin/llamacpp-embedding/transform'
-import { embed } from '@/plugins/ops/embed'
+import { embed, markEmbeddingProjector } from '@/plugins/ops/embed'
 import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
 import { getRequestRegistry } from '@/runtime/index'
 import { ModelType } from '@/schemas/index'
 import { createFitRequest } from '@/model-fit/request/create'
+import { createErrorResponse } from '@/schemas/error'
+import { ERROR_CODES } from '@/schemas/errors'
 
 const media = { type: 'base64' as const, value: 'AQID' }
 
@@ -137,10 +143,16 @@ test('embed fit: refuses a projector rather than reporting text-only memory', (t
 })
 
 let nextId = 0
-function install(run: (input: unknown) => Promise<unknown>, cancel = async () => {}) {
+function install(
+  run: (input: unknown) => Promise<unknown>,
+  cancel = async () => {},
+  hasProjector = true
+) {
   const modelId = `embed-multimodal-test-${++nextId}`
+  const model = { run, addon: { cancel } } as unknown as AnyModel
+  if (hasProjector) markEmbeddingProjector(model)
   registerModel(modelId, {
-    model: { run, addon: { cancel } } as unknown as AnyModel,
+    model,
     modelType: ModelType.llamacppEmbedding,
     path: '/model.gguf',
     config: {}
@@ -168,11 +180,66 @@ test('embed op: mixed inputs return one normalized vector per input and retain s
 })
 
 test('embed op: one inputs item stays a batch, legacy text stays a single vector', async (t) => {
-  const modelId = install(async () => ({ await: async () => [[new Float32Array([0, 1])]] }))
+  const modelId = install(
+    async () => ({ await: async () => [[new Float32Array([0, 1])]] }),
+    async () => {},
+    false
+  )
   t.teardown(() => unregisterModel(modelId))
   t.alike((await embed({ modelId, inputs: ['query'] })).embedding, [[0, 1]])
+  t.alike((await embed({ modelId, inputs: [['qu', 'ery']] })).embedding, [[0, 1]])
   t.alike((await embed({ modelId, text: 'query' })).embedding, [0, 1])
   t.alike((await embed({ modelId, text: ['query'] })).embedding, [[0, 1]])
+})
+
+test('embed op: media without a projector fails before preparation or native work', async (t) => {
+  let runs = 0
+  let reads = 0
+  let decodes = 0
+  let cancels = 0
+  const modelId = install(
+    async () => {
+      runs++
+      throw new Error('Media without a projector must not reach the addon')
+    },
+    async () => {
+      cancels++
+    },
+    false
+  )
+  const readFile = fs.promises.readFile
+  const from = Buffer.from
+  t.teardown(() => {
+    fs.promises.readFile = readFile
+    Buffer.from = from
+    unregisterModel(modelId)
+  })
+  fs.promises.readFile = async () => {
+    reads++
+    throw new Error('Media without a projector must not be read')
+  }
+  Buffer.from = ((...args: unknown[]) => {
+    if (args[0] === media.value && args[1] === 'base64') decodes++
+    return Reflect.apply(from, Buffer, args)
+  }) as typeof Buffer.from
+
+  for (const source of [media, { type: 'filePath' as const, value: '/missing-media.wav' }]) {
+    try {
+      await embed({ modelId, inputs: ['query', ['', { media: source }]] })
+      t.fail('Media without a projector must reject')
+    } catch (error) {
+      t.ok(error instanceof EmbedFailedError)
+      const response = createErrorResponse(error)
+      t.is(response.code, ERROR_CODES.EMBED_FAILED)
+      t.is(response.name, 'EMBED_FAILED')
+      t.ok(response.message.includes('modelConfig.projectionModelSrc'))
+    }
+    t.is(getRequestRegistry().list().length, 0)
+  }
+  t.is(reads, 0)
+  t.is(decodes, 0)
+  t.is(runs, 0)
+  t.is(cancels, 0)
 })
 
 test('embed op: missing vectors fail and release the request', async (t) => {

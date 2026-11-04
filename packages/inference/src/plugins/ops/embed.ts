@@ -18,6 +18,12 @@ export interface EmbedResult {
   stats?: EmbedStats
 }
 
+const modelsWithProjector = new WeakSet<object>()
+
+export function markEmbeddingProjector(model: object) {
+  modelsWithProjector.add(model)
+}
+
 // Overloaded functions for embedding
 export async function embed(
   params: { modelId: string; text: string },
@@ -52,6 +58,15 @@ export async function embed(params: EmbedParams, requestId?: string): Promise<Em
   const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
   const model = getModel(modelId)
+
+  const hasMedia = parsed.inputs?.some(
+    (input) => Array.isArray(input) && input.some((part) => typeof part !== 'string')
+  )
+  if (hasMedia && !modelsWithProjector.has(model)) {
+    throw new EmbedFailedError(
+      'Media inputs require modelConfig.projectionModelSrc when loading the embedding model'
+    )
+  }
 
   const input =
     parsed.inputs !== undefined

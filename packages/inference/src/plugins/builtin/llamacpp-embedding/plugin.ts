@@ -16,7 +16,7 @@ import {
 } from '@/schemas/index'
 import { createStreamLogger, registerAddonLogger, getEngineLogger } from '@/logging/index'
 import { getFirstShardPath } from '@/utils/index'
-import { embed } from '@/plugins/ops/embed'
+import { embed, markEmbeddingProjector } from '@/plugins/ops/embed'
 import { forwardModelExecution } from '@/profiling/model-execution'
 import { isMobile } from '@/runtime/state'
 import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
@@ -73,6 +73,7 @@ function createEmbeddingsModel(
     logger,
     opts: { stats: true }
   })
+  if (projectionModelPath) markEmbeddingProjector(model)
 
   return { model }
 }
