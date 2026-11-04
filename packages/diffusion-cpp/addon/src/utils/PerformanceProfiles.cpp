@@ -80,7 +80,8 @@ void readHostMemory(ProfileDevice& device) {
 }
 } // namespace
 
-ProfileModel inspectProfileModel(const SdCtxConfig& config) {
+static ProfileModel
+inspectProfileModel(const SdCtxConfig& config, bool requireWeights) {
   if (config.performanceProfile == "off" ||
       !config.highNoiseDiffusionModelPath.empty() ||
       !config.uncondDiffusionModelPath.empty() || !config.taesdPath.empty())
@@ -88,39 +89,56 @@ ProfileModel inspectProfileModel(const SdCtxConfig& config) {
   const auto& path = config.diffusionModelPath;
   std::error_code error;
   const auto bytes = std::filesystem::file_size(path, error);
-  if (error || (bytes != 4300644928ULL && bytes != 11420663904ULL &&
-                bytes != 19388448416ULL))
+  if (error || (requireWeights && bytes != 4300644928ULL &&
+                bytes != 11420663904ULL && bytes != 19388448416ULL))
     return ProfileModel::Unknown;
   const gguf_init_params init{true, nullptr};
   const std::unique_ptr<gguf_context, decltype(&gguf_free)> metadata(
       gguf_init_from_file(path.c_str(), init), gguf_free);
   if (!metadata)
     return ProfileModel::Unknown;
-  if (bytes == 4300644928ULL && gguf_get_n_tensors(metadata.get()) == 149 &&
+  if (gguf_get_n_tensors(metadata.get()) == 149 &&
       hasTensor(
           metadata.get(),
           "double_blocks.0.img_attn.qkv.weight",
           GGML_TYPE_Q8_0) &&
-      fileSizeMatches(config.llmPath, 2497281312ULL) &&
-      fileSizeMatches(config.vaePath, 168120878ULL))
+      (!requireWeights || (bytes == 4300644928ULL &&
+                           fileSizeMatches(config.llmPath, 2497281312ULL) &&
+                           fileSizeMatches(config.vaePath, 168120878ULL))))
     return ProfileModel::Flux2Klein4BQ8;
-  if (bytes == 11420663904ULL &&
-      inspectVideoModelCapabilities(path).isMiniMaxH3 &&
-      fileSizeMatches(config.llmPath, 18218065024ULL) &&
-      fileSizeMatches(config.vaePath, 5207808496ULL) &&
-      fileSizeMatches(config.audioVaePath, 605254808ULL))
+  if (inspectVideoModelCapabilities(path).isMiniMaxH3 &&
+      (!requireWeights || (bytes == 11420663904ULL &&
+                           fileSizeMatches(config.llmPath, 18218065024ULL) &&
+                           fileSizeMatches(config.vaePath, 5207808496ULL) &&
+                           fileSizeMatches(config.audioVaePath, 605254808ULL))))
     return ProfileModel::MiniMaxH3FL2VAQ4;
-  if (bytes == 19388448416ULL && gguf_get_n_tensors(metadata.get()) == 4444 &&
+  if (gguf_get_n_tensors(metadata.get()) == 4444 &&
       hasTensor(
           metadata.get(),
           "transformer_blocks.0.attn1.to_gate_logits.weight",
           GGML_TYPE_Q6_K) &&
-      fileSizeMatches(config.embeddingsConnectorsPath, 2312144712ULL) &&
-      fileSizeMatches(config.llmPath, 7432229216ULL) &&
-      fileSizeMatches(config.vaePath, 1452256522ULL) &&
-      fileSizeMatches(config.audioVaePath, 364853140ULL))
+      (!requireWeights ||
+       (bytes == 19388448416ULL &&
+        fileSizeMatches(config.embeddingsConnectorsPath, 2312144712ULL) &&
+        fileSizeMatches(config.llmPath, 7432229216ULL) &&
+        fileSizeMatches(config.vaePath, 1452256522ULL) &&
+        fileSizeMatches(config.audioVaePath, 364853140ULL))))
     return ProfileModel::Ltx23Q5;
   return ProfileModel::Unknown;
+}
+
+ProfileModel inspectProfileModel(const SdCtxConfig& config) {
+  return inspectProfileModel(config, true);
+}
+
+bool hasUncertainPerformanceFit(
+    const SdCtxConfig& config, const ProfileDevice& device) {
+  if (inspectProfileModel(config) != ProfileModel::Unknown)
+    return false;
+  const auto profile = selectPerformanceProfile(
+      config, inspectProfileModel(config, false), device);
+  return profile.flashAttention || profile.h3LocalOps || profile.vaeGemm ||
+         profile.ltxF16;
 }
 
 ProfileDevice classifyProfileDevice(

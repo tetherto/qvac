@@ -29,6 +29,8 @@ struct PerformanceProfile {
 };
 
 ProfileModel inspectProfileModel(const SdCtxConfig& config);
+bool hasUncertainPerformanceFit(
+    const SdCtxConfig& config, const ProfileDevice& device);
 ProfileDevice
 profileDevice(const char* backend, sd_backend_preference_t preference);
 ProfileDevice classifyProfileDevice(

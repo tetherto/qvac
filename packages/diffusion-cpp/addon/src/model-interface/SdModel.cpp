@@ -595,7 +595,12 @@ SdModel::FitOutcome SdModel::assessFit(const FitWorkload& workload) const {
 
   // The planner cannot represent per-request profile fallbacks or the H3
   // graph toggle. Avoid a fit verdict for a different execution graph.
-  if (!workload.upscaleOnly && (ctx.profile.vaeGemm || ctx.profile.h3LocalOps))
+  if (!workload.upscaleOnly &&
+      (ctx.profile.vaeGemm || ctx.profile.h3LocalOps ||
+       qvac_lib_inference_addon_sd::hasUncertainPerformanceFit(
+           config_,
+           qvac_lib_inference_addon_sd::profileDevice(
+               ctx.params.backend, ctx.params.preferred_gpu_backend))))
     return {};
 
   // `sd_fit_params` answers any pinned placement with SD_FIT_FAILURE, and a

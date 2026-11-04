@@ -1,3 +1,8 @@
+#include <filesystem>
+#include <memory>
+
+#include <ggml.h>
+#include <gguf.h>
 #include <gtest/gtest.h>
 
 #include "handlers/SdVidGenHandlers.hpp"
@@ -193,4 +198,52 @@ TEST(SdPerformanceProfiles, VendorNameDoesNotSubstituteForApiOrGpu) {
   EXPECT_EQ(
       classifyProfileDevice("ROCm", "Radeon 8060S Graphics", 0, 0).gpu,
       ProfileGpu::StrixHalo);
+}
+
+TEST(SdPerformanceProfiles, MetadataOnlyFitCannotAssumeBaselineMemory) {
+  const auto path = std::filesystem::temp_directory_path() /
+                    "qvac-performance-fit-description.gguf";
+  for (const auto model :
+       {ProfileModel::Flux2Klein4BQ8,
+        ProfileModel::MiniMaxH3FL2VAQ4,
+        ProfileModel::Ltx23Q5}) {
+    const std::unique_ptr<ggml_context, decltype(&ggml_free)> tensors(
+        ggml_init({8 * 1024 * 1024, nullptr, true}), ggml_free);
+    const std::unique_ptr<gguf_context, decltype(&gguf_free)> metadata(
+        gguf_init_empty(), gguf_free);
+    ASSERT_TRUE(tensors);
+    ASSERT_TRUE(metadata);
+    const bool flux = model == ProfileModel::Flux2Klein4BQ8;
+    const bool h3 = model == ProfileModel::MiniMaxH3FL2VAQ4;
+    const int count = flux ? 149 : h3 ? 2 : 4444;
+    for (int i = 0; i < count; ++i) {
+      auto* tensor = ggml_new_tensor_1d(
+          tensors.get(), flux ? GGML_TYPE_Q8_0 : GGML_TYPE_Q6_K, 256);
+      std::string name = "fixture." + std::to_string(i);
+      if (h3)
+        name = i == 0 ? "model.diffusion_model.audio_patch_proj.weight"
+                      : "model.diffusion_model.video_patch_proj.weight";
+      else if (i == 0)
+        name = flux ? "double_blocks.0.img_attn.qkv.weight"
+                    : "transformer_blocks.0.attn1.to_gate_logits.weight";
+      ggml_set_name(tensor, name.c_str());
+      gguf_add_tensor(metadata.get(), tensor);
+    }
+    ASSERT_TRUE(
+        gguf_write_to_file(metadata.get(), path.string().c_str(), true));
+    SdCtxConfig config;
+    config.diffusionModelPath = path.string();
+    config.performanceMaxWidth = 512;
+    config.performanceMaxHeight = 320;
+    config.performanceMaxFrames = 97;
+    const auto gpu = h3 || flux
+                         ? device(ProfileApi::Cuda, ProfileGpu::Rtx5090)
+                         : device(ProfileApi::Metal, ProfileGpu::M3Ultra);
+    EXPECT_EQ(inspectProfileModel(config), ProfileModel::Unknown);
+    EXPECT_TRUE(hasUncertainPerformanceFit(config, gpu));
+    EXPECT_FALSE(hasUncertainPerformanceFit(config, {}));
+    config.performanceProfile = "off";
+    EXPECT_FALSE(hasUncertainPerformanceFit(config, gpu));
+    std::filesystem::remove(path);
+  }
 }

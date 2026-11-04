@@ -28,6 +28,9 @@ byte-identical; GEMM used about 4.2 GiB more VRAM in the RTX measurement.
 Fit probes return `unknown` for profiles with per-request GEMM changes
 or H3 graph changes: the current engine planner cannot represent those graphs.
 They never report a fit based on the smaller baseline workspace.
+Metadata-only registry descriptions also return `unknown` when their tensors
+could select a profile after downloading the full checkpoint. `off` retains
+baseline fit planning.
 
 H3's graph changes are local to its context. Explicit `flash_attn`/`fa` prevents
 automatic flash attention and the accompanying graph profile; disabling
