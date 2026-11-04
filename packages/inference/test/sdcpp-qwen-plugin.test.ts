@@ -1,9 +1,73 @@
 import test from 'brittle'
 import Buffer from 'bare-buffer'
-import { sdcppConfigSchema, type DiffusionStreamResponse } from '@/schemas/sdcpp-config'
+import {
+  sdcppConfigSchema,
+  diffusionRequestSchema,
+  diffusionStreamRequestSchema,
+  type DiffusionStreamResponse
+} from '@/schemas/sdcpp-config'
 import { loadModelSrcRequestSchema } from '@/schemas/load-model'
 import { sdcppFitRequest } from '@/plugins/builtin/sdcpp-generation/fit'
 import type { DiffusionFitRequest } from '@qvac/diffusion-cpp'
+
+const turboSigmas = [1, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0]
+const generation = { modelId: 'qwen-turbo', prompt: 'A red teapot.' }
+
+test('custom sigma schemas accept Turbo, one-step and float-boundary schedules without rewriting them', (t) => {
+  for (const schema of [diffusionRequestSchema, diffusionStreamRequestSchema]) {
+    for (const custom_sigmas of [turboSigmas, [14, 0], [3.4028234663852886e38, 2 ** -149, 0]]) {
+      const parsed = schema.parse({
+        ...generation,
+        type: 'diffusionStream',
+        steps: 30,
+        scheduler: 'karras',
+        custom_sigmas,
+        vae_tiling: true,
+        vae_tile_size: 64
+      })
+      t.alike(parsed.custom_sigmas, custom_sigmas)
+      t.is(parsed.steps, 30, 'the native addon owns the effective step count')
+      t.is(parsed.scheduler, 'karras', 'the addon applies schedule precedence')
+      t.is(parsed.vae_tile_size, 64)
+    }
+  }
+  const ordinary = diffusionRequestSchema.parse({ ...generation, steps: 30 })
+  t.is(ordinary.custom_sigmas, undefined)
+  t.is(ordinary.steps, 30)
+})
+
+test('custom sigma validation rejects malformed schedules before native execution', (t) => {
+  for (const custom_sigmas of [
+    null,
+    true,
+    '1,0',
+    [],
+    [0],
+    [1, 0.5],
+    [0, 0],
+    [1, 1, 0],
+    [0.5, 1, 0],
+    [1, -0.1, 0],
+    [NaN, 0],
+    [Infinity, 0],
+    [Number.MAX_VALUE, 0],
+    [3.4028235e38, 0],
+    [1, 1 - Number.EPSILON, 0],
+    [1, Number.MIN_VALUE, 0],
+    ['1', 0]
+  ]) {
+    const result = diffusionStreamRequestSchema.safeParse({
+      ...generation,
+      type: 'diffusionStream',
+      custom_sigmas
+    })
+    t.is(result.success, false)
+    if (!result.success) t.is(result.error.issues[0]?.path[0], 'custom_sigmas')
+  }
+  for (const vae_tile_size of [0, -1, '', false, Infinity]) {
+    t.is(diffusionRequestSchema.safeParse({ ...generation, vae_tile_size }).success, false)
+  }
+})
 
 const companions = {
   llmModelSrc: '/models/encoder.gguf',
@@ -184,6 +248,13 @@ test('diffusion handler passes ordered reference Buffers and output base64 throu
         modelId,
         prompt: 'A portrait.',
         img_cfg_scale: -1,
+        steps: 30,
+        scheduler: 'karras',
+        custom_sigmas: turboSigmas,
+        cfg_scale: 1,
+        sampling_method: 'euler',
+        vae_tiling: true,
+        vae_tile_size: 64,
         ...refs
       }) as AsyncGenerator<DiffusionStreamResponse>
       for await (const chunk of stream) {
@@ -197,7 +268,15 @@ test('diffusion handler passes ordered reference Buffers and output base64 throu
     }
     t.alike(received[0]?.['init_image'], Buffer.from([1, 2, 3]))
     t.alike(received[1]?.['init_images'], [Buffer.from([1, 2, 3]), Buffer.from([4, 5, 6])])
-    t.is(received[1]?.['scheduler'], undefined, 'leave native scheduling automatic')
+    for (const params of received) {
+      t.alike(params['custom_sigmas'], turboSigmas)
+      t.is(params['scheduler'], 'karras')
+      t.is(params['steps'], 30)
+      t.is(params['cfg_scale'], 1)
+      t.is(params['sampling_method'], 'euler')
+      t.is(params['vae_tiling'], true)
+      t.is(params['vae_tile_size'], 64)
+    }
   } finally {
     unregisterModel(modelId)
   }

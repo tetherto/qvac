@@ -13,7 +13,8 @@ progress, the finished images and the closing stats, which TypeScript receives
 as three separate channels.
 
 The defaults download pinned Hugging Face weights. Model overrides accept local
-paths or URLs.
+paths or URLs. Set QWEN_TURBO=1 and QWEN_TURBO_MODEL to your Turbo weights
+to use the fixed eight-step schedule with CFG 1.
 Model terms: https://huggingface.co/Qwen/Qwen-Image-2.1/blob/d26bb61231c349cf6b7896fa83353113880e1ba3/LICENSE
 
 RUN: python examples/diffusion_qwen_image_21.py <reference-a> <reference-b> [prompt] [output-dir] [model] [llm] [vae] [projector]
@@ -24,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import contextlib
+import os
 import sys
 from pathlib import Path
 
@@ -86,11 +88,23 @@ async def main() -> int:
         )
         return 0
 
+    turbo = os.environ.get("QWEN_TURBO") == "1"
+    turbo_model = os.environ.get("QWEN_TURBO_MODEL")
+    if turbo and not turbo_model:
+        print(
+            "✖ Set QWEN_TURBO_MODEL to the Turbo weights, as a path or URL",
+            file=sys.stderr,
+        )
+        return 1
+
     reference_path_a = sys.argv[1] if len(sys.argv) > 1 else None
     reference_path_b = sys.argv[2] if len(sys.argv) > 2 else None
     prompt = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else DEFAULT_PROMPT
     output_dir = Path(sys.argv[4]) if len(sys.argv) > 4 else Path(".")
     diffusion_model_src = sys.argv[5] if len(sys.argv) > 5 else DIFFUSION_MODEL_SRC
+    if turbo:
+        assert turbo_model is not None
+        diffusion_model_src = turbo_model
     llm_model_src = sys.argv[6] if len(sys.argv) > 6 else LLM_MODEL_SRC
     vae_model_src = sys.argv[7] if len(sys.argv) > 7 else VAE_MODEL_SRC
     projection_model_src = sys.argv[8] if len(sys.argv) > 8 else PROJECTION_MODEL_SRC
@@ -136,8 +150,25 @@ async def main() -> int:
                     "init_images": init_images,
                     "width": 512,
                     "height": 512,
-                    "steps": 30,
-                    "cfg_scale": 6,
+                    "steps": 8 if turbo else 30,
+                    "cfg_scale": 1 if turbo else 6,
+                    **(
+                        {
+                            "custom_sigmas": [
+                                1,
+                                0.978453,
+                                0.95418,
+                                0.926626,
+                                0.89508,
+                                0.845148,
+                                0.704534,
+                                0.414568,
+                                0,
+                            ]
+                        }
+                        if turbo
+                        else {}
+                    ),
                     "sampling_method": "euler",
                     "seed": 42,
                 }
@@ -156,7 +187,9 @@ async def main() -> int:
             if not images:
                 raise RuntimeError("Qwen-Image-2.1 returned no image.")
             for index, image in enumerate(images):
-                output_path = output_dir / f"qwen_image_21_{index}.png"
+                output_path = (
+                    output_dir / f"qwen_image_21{'_turbo' if turbo else ''}_{index}.png"
+                )
                 output_path.write_bytes(image)
                 print(f"▸ Saved {output_path}")
 

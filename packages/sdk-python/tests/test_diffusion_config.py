@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from tetherto.qvac_sdk._generated.models._internal import (
+    DiffusionStreamRequest,
     LoadModelSrcRequestSdcppGenerationModelConfig,
 )
 
@@ -55,3 +56,41 @@ def test_unknown_diffusion_options_are_ignored() -> None:
         {"backend": "cuda0", "unknown_option": True}
     )
     assert config.model_dump(exclude_unset=True) == {"backend": "cuda0"}
+
+
+def test_turbo_schedule_and_tile_size_round_trip() -> None:
+    payload = {
+        "type": "diffusionStream",
+        "modelId": "qwen-turbo",
+        "prompt": "A red ceramic teapot.",
+        "custom_sigmas": [
+            1,
+            0.978453,
+            0.95418,
+            0.926626,
+            0.89508,
+            0.845148,
+            0.704534,
+            0.414568,
+            0,
+        ],
+        "sampling_method": "euler",
+        "cfg_scale": 1,
+        "vae_tiling": True,
+        "vae_tile_size": 64,
+    }
+    request = DiffusionStreamRequest.model_validate(payload)
+    assert request.model_dump(mode="json", by_alias=True, exclude_unset=True) == payload
+
+
+@pytest.mark.parametrize("sigmas", [[], [0], [-1, 0], [1e39, 0]])
+def test_invalid_sigma_bounds_reject_before_rpc(sigmas: list[float]) -> None:
+    with pytest.raises(ValidationError, match="custom_sigmas"):
+        DiffusionStreamRequest.model_validate(
+            {
+                "type": "diffusionStream",
+                "modelId": "qwen-turbo",
+                "prompt": "A teapot.",
+                "custom_sigmas": sigmas,
+            }
+        )

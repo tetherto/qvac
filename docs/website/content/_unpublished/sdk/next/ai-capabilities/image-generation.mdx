@@ -27,7 +27,7 @@ For how to use each function, see [SDK — API reference](/sdk/reference/api/).
 Supported model families and their file layouts:
 
 - **FLUX.2-klein**: split layout — diffusion model `*.gguf` + LLM text encoder `*.gguf` (via `llmModelSrc`) + VAE `*.safetensors` (via `vaeModelSrc`).
-- **Qwen-Image-2.1** uses local diffusion weights as `modelSrc`, the matching Qwen3-VL encoder as `llmModelSrc`, and the 2.1 VAE as `vaeModelSrc`. Reference editing with the GGUF encoder also needs its vision projector as `projectionModelSrc`. QVAC provides no registry entry or model constant for these weights.
+- **Qwen-Image-2.1 and Qwen-Image-2.1-Turbo** use local diffusion weights as `modelSrc`, the matching Qwen3-VL encoder as `llmModelSrc`, and the 2.1 VAE as `vaeModelSrc`. Reference editing with the GGUF encoder also needs its vision projector as `projectionModelSrc`. QVAC provides no registry entry or model constant for these weights.
 - **Ideogram 4**: split layout — diffusion model `*.gguf` + unconditional diffusion model `*.gguf` (via `uncondModelSrc`) + LLM text encoder `*.gguf` (via `llmModelSrc`) + VAE `*.safetensors` (via `vaeModelSrc`).
 - **SD1.x, SD2.x**: single all-in-one `*.gguf` file. No companion files needed.
 - **SDXL, SD3**: may require separate CLIP/T5 text encoder files (`clipLModelSrc`, `clipGModelSrc`, `t5XxlModelSrc`) in `modelConfig` depending on the model variant.
@@ -77,7 +77,33 @@ The following script shows text-to-image generation using FLUX.2-klein with its 
 
 Qwen-Image-2.1 uses a split layout with a Qwen3-VL LLM text encoder (`llmModelSrc`), its vision projector (`projectionModelSrc`), and the 2.1 VAE (`vaeModelSrc`). Reference images are passed in order through `init_images`.
 
-The following script combines subjects from two reference images and requests an RGBA image with a transparent background. Pass the paths of the two reference images (PNG or JPEG) as the first two arguments; an optional third argument overrides the default prompt:
+Qwen-Image-2.1-Turbo reuses the same encoder, projector and VAE. Supply Turbo diffusion weights as `modelSrc`. Use Euler, `cfg_scale: 1`, and the fixed schedule through [`diffusion()`](/sdk/reference/api#diffusion):
+
+```ts
+diffusion({
+  modelId,
+  prompt: "A red ceramic teapot on a wooden table.",
+  width: 512,
+  height: 512,
+  sampling_method: "euler",
+  cfg_scale: 1,
+  custom_sigmas: [1, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0],
+  seed: 42,
+});
+```
+
+`custom_sigmas` includes the terminal zero and overrides `scheduler` and `steps`. The schedule above runs eight denoising steps, which `progressStream` reports. `stats.totalSteps` counts steps across all completed requests on the loaded model. Custom schedules need at least two finite, non-negative values that remain strictly decreasing at float precision and end in zero. Omitting the field preserves ordinary sampling.
+
+For Qwen outputs at 2048×2048 or larger, pass `vae_tiling: true` and `vae_tile_size: 64` to `diffusion()`. Tile sizes are in latent units. For Qwen-Image-2.1, 64 corresponds to 1024 output pixels; enabling tiling alone leaves the native default tile too large to split a 2K image.
+
+The following script combines two references into an RGBA image, with optional Qwen-Image-2.1-Turbo sampling. Pass the two reference image paths as the first two arguments and an optional prompt as the third:
+
+```sh
+QWEN_TURBO=1 QWEN_TURBO_MODEL=/absolute/path/to/qwen-image-2.1-turbo.gguf \
+  node --import tsx examples/diffusion-qwen-image-21.ts reference-a.png reference-b.png
+```
+
+The Python example accepts the same environment variables. `QWEN_TURBO_MODEL` accepts a local path or URL. Leave `QWEN_TURBO` unset to run the base model with 30 steps and CFG 6.
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>

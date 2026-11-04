@@ -309,3 +309,21 @@ test('contract finetune.response: validates terminal stats payload', (t) => {
   const contract = contractValidate('finetune.response', terminal)
   t.ok(contract.valid, `contract accepts terminal stats payload: ${contract.errors}`)
 })
+
+test('contract diffusion request carries custom schedules and VAE tile sizes', (t) => {
+  const request = {
+    type: 'diffusionStream',
+    modelId: 'qwen-turbo',
+    prompt: 'A red teapot.',
+    custom_sigmas: [1, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0],
+    cfg_scale: 1,
+    sampling_method: 'euler',
+    vae_tiling: true,
+    vae_tile_size: 64
+  }
+  t.ok(contractValidate('diffusionStream.request', request).valid)
+  for (const custom_sigmas of [[], [0], [-1, 0], [Number.MAX_VALUE, 0], ['1', 0]]) {
+    t.is(contractValidate('diffusionStream.request', { ...request, custom_sigmas }).valid, false)
+  }
+  t.is(contractValidate('diffusionStream.request', { ...request, vae_tile_size: 0 }).valid, false)
+})
