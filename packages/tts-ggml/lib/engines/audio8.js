@@ -121,7 +121,7 @@ function assertAudio8Options(setup) {
     }
     const audio8Only = (0, options_1.setOptionNames)({
         referenceText: setup.settings.referenceText,
-        greedy: setup.settings.greedy,
+        greedy: setup.engineType === engineIds_1.ENGINE_COSYVOICE3 ? undefined : setup.settings.greedy,
     });
     if (audio8Only.length > 0) {
         throw new Error(`tts-ggml: ${audio8Only.join(", ")} are audio8-only options ` +
