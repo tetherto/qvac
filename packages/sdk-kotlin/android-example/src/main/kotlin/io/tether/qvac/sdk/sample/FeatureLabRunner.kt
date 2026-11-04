@@ -16,10 +16,6 @@ import io.tether.qvac.sdk.QvacProgressEvent
 import io.tether.qvac.sdk.completion
 import io.tether.qvac.sdk.generated.ModelConstant
 import io.tether.qvac.sdk.generated.Models
-import io.tether.qvac.sdk.generated.schema.LoadModelRequest
-import io.tether.qvac.sdk.generated.schema.LoadModelSrcRequest
-import io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestGgmlClassification
-import io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestGgmlClassificationModelConfig
 import io.tether.qvac.sdk.embeddings
 import io.tether.qvac.sdk.loadModel
 import io.tether.qvac.sdk.models
@@ -193,43 +189,21 @@ class FeatureLabRunner(
         }
 
     private suspend fun runClassification(progress: (String) -> Unit): String {
-        progress("loading bundled MobileNetV3")
-        val weights = copyAssetToCache(
-            "qvac/classification/mobilenetv3_3class_v3_fp16.gguf",
-            "qvac-feature-lab-mobilenetv3.gguf",
-        )
         val image = createVisionImage()
-        var modelId: String? = null
         return try {
-            val load = client.loadModel(
-                LoadModelRequest.LoadModelSrcRequest(
-                    LoadModelSrcRequest.GgmlClassification(
-                        LoadModelSrcRequestGgmlClassification(
-                            modelConfig = LoadModelSrcRequestGgmlClassificationModelConfig(
-                                modelPath = weights.absolutePath,
-                            ),
-                            modelSrc = "",
-                            seed = false,
-                            withProgress = false,
-                        ),
-                    ),
-                ),
-            )
-            check(load.success) { load.error ?: "Classification model failed to load" }
-            modelId = requireNotNull(load.modelId)
-            val encoded = Base64.encodeToString(image.readBytes(), Base64.NO_WRAP)
-            val results = client.vision.classify(
-                imageBase64 = encoded,
-                modelId = requireNotNull(modelId),
-                topK = 3,
-            )
-            check(results.isNotEmpty()) { "Classification returned no labels" }
-            val best = results.first()
-            "${best.label} · ${(best.confidence * 100).toInt()}%"
+            withModel(Models.MOBILENETV3_3CLASS_V3_FP16, null, progress) { modelId ->
+                val encoded = Base64.encodeToString(image.readBytes(), Base64.NO_WRAP)
+                val results = client.vision.classify(
+                    imageBase64 = encoded,
+                    modelId = modelId,
+                    topK = 3,
+                )
+                check(results.isNotEmpty()) { "Classification returned no labels" }
+                val best = results.first()
+                "${best.label} · ${(best.confidence * 100).toInt()}%"
+            }
         } finally {
             image.delete()
-            weights.delete()
-            modelId?.let { runCatching { client.models.unload(it, clearStorage = false) } }
         }
     }
 

@@ -5,6 +5,7 @@ const QvacLogger = require("@qvac/logging");
 /* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
 const error_1 = require("./lib/error");
+const constants_1 = require("./lib/constants");
 const fit_1 = require("./lib/fit");
 const types_1 = require("./lib/types");
 const driver_1 = require("./engines/whisper/driver");
@@ -123,6 +124,8 @@ class ASRGgml {
     static ENGINE_PARAKEET = "parakeet";
     static ENGINE_MOSS_TRANSCRIBE = driver_3.ENGINE_MOSS_TRANSCRIBE;
     static ERR_CODES = error_1.ERR_CODES;
+    /** Chunk cadences (ms) Nemotron streaming accepts; see `runStreaming()`. */
+    static NEMOTRON_STREAMING_CHUNK_MS = constants_1.NEMOTRON_STREAMING_CHUNK_MS;
     static Error = error_1.QvacErrorAddonASRGgml;
     static inferenceManagerConfig = Object.freeze({
         noAdditionalDownload: true,

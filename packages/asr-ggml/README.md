@@ -475,6 +475,27 @@ bare examples/parakeet-streaming-metadata.js \
   ./examples/parakeet-samples/sample-16k.wav cpu
 ```
 
+Nemotron streams only at the cadences its cache-aware encoder was trained
+for: 80, 160, 320, 560 or 1120 ms. `runStreaming()` checks the cadence a run
+asks for (a positive run-level `chunkMs`; `0` or unset keeps the load-time
+`streamingChunkMs`, where `0` or unset is the 320 ms default) before it opens
+the session and rejects any other value with `INVALID_CONFIG` (24015) naming
+the supported ones, leaving the model usable. A load-time `streamingChunkMs`
+the model does not support never reaches `runStreaming()`: with
+`streaming: true` the engine refuses it when the model loads, and `load()`
+rejects with `FAILED_TO_ACTIVATE` (24006) carrying the engine's message. The
+list is exposed (frozen) for callers that want to validate or offer choices
+up front:
+
+```javascript
+const ASRGgml = require('@qvac/asr-ggml')
+ASRGgml.NEMOTRON_STREAMING_CHUNK_MS // [80, 160, 320, 560, 1120]
+```
+
+A session start the engine itself refuses (for any reason) rejects with
+`FAILED_TO_START_STREAMING` (6012, the shared code) carrying the engine's
+message.
+
 ### MOSS-Transcribe-Diarize — batch `run()` with hotwords
 
 ```javascript
@@ -1118,7 +1139,9 @@ The map spans **two ranges**, because no historical code was allowed to move:
   `MODEL_NOT_FOUND` 24009, `INVALID_AUDIO_FORMAT` 24010, `INVALID_CONFIG`
   24015, `INSTANCE_DESTROYED` 24018, `JOB_CANCELLED` 24019. Shared verbs
   raised *by the parakeet engine* also stay in `24xxx` (a parakeet append
-  failure is 24003, not 6003).
+  failure is 24003, not 6003), except `FAILED_TO_START_STREAMING`, which is
+  new in 0.11.x and has no historical parakeet number: both engines raise
+  6012.
 
 Every number from both historical tables is registered, so pre-merge codes
 still resolve to a name and message. See

@@ -40,13 +40,11 @@ double getStatValue(
     if (stat.first == key) {
       return std::visit(
           [](const auto& value) -> double {
-            if constexpr (std::is_same_v<
-                              std::decay_t<decltype(value)>,
-                              double>) {
+            if constexpr (
+                std::is_same_v<std::decay_t<decltype(value)>, double>) {
               return value;
-            } else if constexpr (std::is_same_v<
-                                     std::decay_t<decltype(value)>,
-                                     int64_t>) {
+            } else if constexpr (
+                std::is_same_v<std::decay_t<decltype(value)>, int64_t>) {
               return static_cast<double>(value);
             } else {
               return 0.0;
@@ -850,7 +848,7 @@ TEST_F(BertModelTest, ContextOverflowUsesRuntimeContextSizeForSequences) {
       { model.encodeHostF32Sequences(sequences); }, qvac_errors::StatusError);
 }
 
-TEST_F(BertModelTest, StreamingSingleGgufAppliesContextCap) {
+TEST_F(BertModelTest, DiskLoadKeepsTrainedContextCap) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
   }
@@ -859,16 +857,6 @@ TEST_F(BertModelTest, StreamingSingleGgufAppliesContextCap) {
   BertModel model(getValidModelPath(), config);
   model.initializeBackend(test_backends_dir);
 
-  std::unique_ptr<std::filebuf> filebuf = std::make_unique<std::filebuf>();
-  ASSERT_NE(
-      filebuf->open(getValidModelPath(), std::ios::in | std::ios::binary),
-      nullptr);
-  filebuf->pubseekpos(0, std::ios::in);
-  std::unique_ptr<std::basic_streambuf<char>> sb(std::move(filebuf));
-
-  const std::string filename =
-      fs::path(getValidModelPath()).filename().string();
-  model.setWeightsForFile(filename, std::move(sb));
   model.waitForLoadInitialization();
 
   ASSERT_TRUE(model.isLoaded());
