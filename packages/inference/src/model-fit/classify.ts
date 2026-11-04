@@ -1,12 +1,43 @@
 import type { NativeProbeFit, NativeProbeProjection, NativeProbeVerdict } from '@/schemas/index'
 import type { FitProbeResult } from '@/model-fit/run/engine'
 
-type SharedProbe = FitProbeResult extends infer Probe
+interface LegacySpeechResult {
+  status: 'fits' | 'does-not-fit' | 'error'
+  reason: string
+  deviceName: string
+  deviceBytes: number
+  hostBytes: number
+  deviceFreeBytes: number
+  deviceTotalBytes: number
+  report: string
+}
+
+interface LegacyBciProbe {
+  engine: 'bci-whispercpp'
+  result: LegacySpeechResult & {
+    weightsBytes: number
+    kvBytes: number
+    computeBytes: number
+  }
+}
+
+interface LegacyTtsProbe {
+  engine: 'tts-ggml'
+  result: LegacySpeechResult & {
+    weightsBytes: number
+    stateBytes: number
+    lmComputeBytes: number
+    codecComputeBytes: number
+  }
+}
+
+type CompatibleProbe = FitProbeResult | LegacyBciProbe | LegacyTtsProbe
+type SharedProbe = CompatibleProbe extends infer Probe
   ? Probe extends { result: { devices: { usedBytes: number }[]; stats: object } }
     ? Probe
     : never
   : never
-type LegacyProbe = Exclude<FitProbeResult, SharedProbe>
+type LegacyProbe = Exclude<CompatibleProbe, SharedProbe>
 type LlamaProbe = Extract<LegacyProbe, { engine: 'embed-llamacpp' }>
 
 /** The llama fitters append a host row after the devices they assigned to. */
@@ -97,6 +128,20 @@ function breakdownFor(probe: LegacyProbe): Breakdown {
       sumOf(result.weightsBytes, result.vadBytes),
       sumOf(result.kvBytes, result.decoderStateBytes),
       sumOf(result.computeBytes, result.encoderComputeBytes, result.decoderComputeBytes)
+    )
+  }
+
+  if (probe.engine === 'bci-whispercpp') {
+    const result = probe.result
+    return breakdown(result.weightsBytes, result.kvBytes, result.computeBytes)
+  }
+
+  if (probe.engine === 'tts-ggml') {
+    const result = probe.result
+    return breakdown(
+      result.weightsBytes,
+      result.stateBytes,
+      sumOf(result.lmComputeBytes, result.codecComputeBytes)
     )
   }
 
@@ -194,7 +239,7 @@ function planFor(probe: LegacyProbe): NativeProbeFit['plan'] {
   }
 }
 
-function isSharedProbe(probe: FitProbeResult): probe is SharedProbe {
+function isSharedProbe(probe: CompatibleProbe): probe is SharedProbe {
   return 'stats' in probe.result
 }
 
@@ -216,7 +261,7 @@ function classifySharedFit(
       ? {
           nCtx: stats.ctxSize as number,
           nGpuLayers: stats.gpuLayers as number,
-          nGpuDevices: gpuDevices.length
+          nGpuDevices: (stats.gpuLayers as number) > 0 ? gpuDevices.length : 0
         }
       : undefined
   const projection: NativeProbeProjection = {
@@ -240,7 +285,7 @@ function classifySharedFit(
 }
 
 export function classifyFit(
-  probe: FitProbeResult,
+  probe: CompatibleProbe,
   provenance: { basis: 'native-probe'; estimatorVersion: string }
 ): NativeProbeFit {
   if (isSharedProbe(probe)) return classifySharedFit(probe, provenance)
