@@ -1552,6 +1552,10 @@ The following OpenAI parameters are forwarded to the model on each request:
 | `presence_penalty` | `presence_penalty` | Penalize already-present tokens |
 | `reasoning_budget` | `reasoning_budget` | Boolean toggle for hybrid-thinking models: `true` keeps reasoning on, `false` disables it. Despite the name, it does not take a positive token cap — only the booleans (or their numeric equivalents `-1`/`0`). |
 
+#### Instructions (`system` and `developer`)
+
+`system` and `developer` messages are merged, in order, into one system message at the start of the conversation, wherever they appear. Many chat templates (e.g. Qwen3.5) reject a `developer` role or a system message after the first turn, and would otherwise render the prompt without the tools. `/v1/responses` treats `instructions` and `developer` input items the same way.
+
 #### Reasoning (`reasoning_content`)
 
 Models that emit `<think>…</think>` blocks (e.g. Qwen3.5) have their reasoning routed to the `reasoning_content` channel instead of leaking into `content`:

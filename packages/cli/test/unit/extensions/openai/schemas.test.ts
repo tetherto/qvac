@@ -10,7 +10,8 @@ import {
   extractGenerationParams,
   extractToolChoice,
   withToolChoice,
-  InvalidToolChoiceError
+  InvalidToolChoiceError,
+  hoistInstructions
 } from '@/serve/extensions/openai/schemas/common'
 import {
   openaiMessagesToHistory,
@@ -53,7 +54,61 @@ import {
 } from '@/serve/extensions/openai/schemas/completions'
 import type { VectorStoreMeta } from '@/serve/core/stores/vector-stores'
 
+describe('hoistInstructions', () => {
+  it('leaves a history with one leading system turn as is', () => {
+    const history = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'hi' }
+    ]
+    assert.equal(hoistInstructions(history), history)
+  })
+
+  it('merges developer and later system turns into one leading system turn', () => {
+    assert.deepEqual(
+      hoistInstructions([
+        { role: 'system', content: 'sys' },
+        { role: 'developer', content: 'dev 1' },
+        { role: 'user', content: 'hi' },
+        { role: 'assistant', content: 'hello' },
+        { role: 'developer', content: 'dev 2' },
+        { role: 'system', content: '' },
+        { role: 'user', content: 'next' }
+      ]),
+      [
+        { role: 'system', content: 'sys\n\ndev 1\n\ndev 2' },
+        { role: 'user', content: 'hi' },
+        { role: 'assistant', content: 'hello' },
+        { role: 'user', content: 'next' }
+      ]
+    )
+  })
+
+  it('turns a lone developer turn into the system turn', () => {
+    assert.deepEqual(
+      hoistInstructions([
+        { role: 'user', content: 'hi' },
+        { role: 'developer', content: 'dev' }
+      ]),
+      [
+        { role: 'system', content: 'dev' },
+        { role: 'user', content: 'hi' }
+      ]
+    )
+  })
+})
+
 describe('openaiMessagesToHistory', () => {
+  it('sends developer messages as the leading system turn', () => {
+    const messages: OpenAIMessage[] = [
+      { role: 'developer', content: 'Use the tools.' },
+      { role: 'user', content: 'hello' }
+    ]
+    assert.deepEqual(openaiMessagesToHistory(messages), [
+      { role: 'system', content: 'Use the tools.' },
+      { role: 'user', content: 'hello' }
+    ])
+  })
+
   it('converts simple user/assistant messages', () => {
     const messages: OpenAIMessage[] = [
       { role: 'user', content: 'hello' },
@@ -891,6 +946,21 @@ describe('openaiResponsesInputToHistory', () => {
     assert.deepEqual(h, [
       { role: 'system', content: 'sys' },
       { role: 'user', content: 'x' }
+    ])
+  })
+
+  it('merges instructions and developer items into the leading system turn', () => {
+    const h = openaiResponsesInputToHistory(
+      [
+        { type: 'message', role: 'developer', content: [{ type: 'input_text', text: 'dev' }] },
+        { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'a' }] },
+        { type: 'message', role: 'developer', content: [{ type: 'input_text', text: 'later' }] }
+      ],
+      'sys'
+    )
+    assert.deepEqual(h, [
+      { role: 'system', content: 'sys\n\ndev\n\nlater' },
+      { role: 'user', content: 'a' }
     ])
   })
 

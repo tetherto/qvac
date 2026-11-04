@@ -22,6 +22,7 @@ import {
 import {
   InvalidResponseFormatError,
   InvalidToolChoiceError,
+  hoistInstructions,
   nameToolResults,
   type GenerationParams,
   type ResponseFormat
@@ -174,8 +175,9 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           )
         }
         const prefix = historyPrefixFromStoredResponse(prev, (id) => openai.responsesStore.get(id))
-        // A result in this request can answer a call from the stored turns.
-        history = nameToolResults([...prefix, ...history])
+        // A result in this request can answer a call from the stored turns, and
+        // the stored turns can carry instructions of their own.
+        history = nameToolResults(hoistInstructions([...prefix, ...history]))
       }
 
       const params: HandlerParams = {

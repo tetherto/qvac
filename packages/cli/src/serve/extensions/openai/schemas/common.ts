@@ -113,6 +113,26 @@ export function parseToolCallArguments(raw: unknown): Record<string, unknown> {
     : {}
 }
 
+const INSTRUCTION_ROLES = new Set(['system', 'developer'])
+
+// Clients send instructions as `system` or `developer` turns anywhere in the
+// conversation, but strict chat templates (e.g. Qwen3.5) reject `developer` and
+// any system turn that is not first. A template that throws is rendered again
+// without the tools, so merge every instruction into one leading system turn.
+export function hoistInstructions<T extends { role: string; content: string }>(history: T[]): T[] {
+  const instructions = history.filter((msg) => INSTRUCTION_ROLES.has(msg.role))
+  if (instructions.length === 0) return history
+  if (instructions.length === 1 && history[0]!.role === 'system') return history
+  const content = instructions
+    .map((msg) => msg.content)
+    .filter((text) => text.length > 0)
+    .join('\n\n')
+  return [
+    { ...instructions[0]!, role: 'system', content },
+    ...history.filter((msg) => !INSTRUCTION_ROLES.has(msg.role))
+  ]
+}
+
 // A tool result carries only its call id; fill in the tool's name from the
 // call it answers, for chat templates that print it.
 export function nameToolResults<T extends { role: string } & ToolTurnFields>(history: T[]): T[] {

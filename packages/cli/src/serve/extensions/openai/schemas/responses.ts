@@ -11,6 +11,7 @@ import {
   extractToolChoice,
   withToolChoice,
   parseToolCallArguments,
+  hoistInstructions,
   nameToolResults,
   withParallelToolCalls,
   type GenerationParams,
@@ -288,7 +289,7 @@ export function openaiResponsesInputToHistory(
     }
   }
 
-  return nameToolResults(history)
+  return nameToolResults(hoistInstructions(history))
 }
 
 function flattenResponsesContent(content: unknown): string {

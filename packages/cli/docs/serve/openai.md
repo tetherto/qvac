@@ -290,6 +290,11 @@ Intentionally rejected with `400`: `conversation`, `background: true`, and
 built-in tools (`web_search`, `file_search`, `code_interpreter`).
 `function`-typed tools work normally.
 
+`instructions` and every `system` or `developer` input item are merged, in
+order, into one leading system message, so chat templates that reject a
+`developer` role or a late system turn still render the tools. Chat
+completions does the same with `system` and `developer` messages.
+
 ### Examples
 
 ```bash
