@@ -88,7 +88,7 @@ std::string renderWithQuestion(
     common_chat_templates_inputs inputs = makeSystemAndTools()) {
   inputs.messages.push_back(makeMessage("user", question));
   inputs.add_generation_prompt = true;
-  return common_chat_templates_apply(tmpls, inputs).prompt;
+  return common_chat_templates_apply(tmpls, inputs).prompt.str();
 }
 
 bool isTokenPrefixOf(
