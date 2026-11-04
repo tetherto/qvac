@@ -14,7 +14,11 @@ import {
   logCacheSave,
   logMessagesToAddon
 } from '@/plugins/builtin/llamacpp-completion/ops/cache-logger'
-import { extractSystemPrompt, getCurrentCacheInfo } from '@/plugins/ops/kv-cache-utils'
+import {
+  extractSystemPrompt,
+  getCurrentCacheInfo,
+  resolveCacheFilePath
+} from '@/plugins/ops/kv-cache-utils'
 import { getModel, getModelConfig, type AnyModel } from '@/runtime/model-registry'
 import { shouldCommitCachedTurn } from '@/plugins/builtin/llamacpp-completion/ops/kv-cache-state'
 import {
@@ -30,7 +34,12 @@ import { getResponseFormatJsonSchema } from '@/utils/response-format'
 import { buildAutoCacheSaveHistory, normalizeCacheMessage, type CacheMessage } from '@/utils/index'
 import { getEngineLogger } from '@/logging/index'
 import type { Logger } from '@/logging/types'
-import { AttachmentNotFoundError } from '@/errors/index'
+import {
+  AttachmentNotFoundError,
+  InvalidSeedFromParamsError,
+  KvCacheSeedSharingDisabledError,
+  KvCacheSeedSourceNotFoundError
+} from '@/errors/index'
 import { nowMs } from '@/profiling/index'
 import { buildStreamResult } from '@/profiling/model-execution'
 import type { LlmStats } from '@/utils/addon-responses'
@@ -94,7 +103,7 @@ export function withParallelToolCalls(
   }
 }
 
-type CompletionRunOptions = Pick<RunOptions, 'cacheKey' | 'prefill'> & {
+type CompletionRunOptions = Pick<RunOptions, 'cacheKey' | 'prefill' | 'baseCacheKey'> & {
   generationParams?: CompletionGenerationParams
 }
 
@@ -187,7 +196,7 @@ export function seedConfiguredSystemPrompt<T extends { role: string; content: st
   return [{ role: 'system', content: configured } as T, ...history]
 }
 
-type CacheRunOptions = Pick<RunOptions, 'cacheKey' | 'prefill'>
+type CacheRunOptions = Pick<RunOptions, 'cacheKey' | 'prefill' | 'baseCacheKey'>
 
 type CacheOwningModel = AnyModel & {
   saveCache?(cacheKey: string): Promise<void>
@@ -254,6 +263,9 @@ async function* processModelResponse(
     }),
     ...(cacheOptions?.prefill !== undefined && {
       prefill: cacheOptions.prefill
+    }),
+    ...(cacheOptions?.baseCacheKey !== undefined && {
+      baseCacheKey: cacheOptions.baseCacheKey
     })
   }
   const hasRunOptions = Object.keys(runOptions).length > 0
@@ -320,12 +332,19 @@ export async function* completion(
     modelId,
     kvCache,
     prefill,
+    seedFrom,
     tools,
     generationParams,
     responseFormat
   } = params
   const { signal, scope } = opts
   const requestLogger = opts.logger ?? logger
+
+  // A seed names which caller-managed cache to start which from, so both names
+  // are explicit: the auto key is never returned to the caller.
+  if (seedFrom !== undefined && (typeof kvCache !== 'string' || seedFrom === kvCache)) {
+    throw new InvalidSeedFromParamsError()
+  }
 
   const modelConfig = getModelConfig(modelId)
   const history = seedConfiguredSystemPrompt(requestHistory, modelConfig)
@@ -429,6 +448,15 @@ export async function* completion(
   })
   const configHash = generateConfigHash(extractSystemPrompt(history))
 
+  // The addon ignores `baseCacheKey` on a model loaded with sharing off; a
+  // caller who named a source wants to hear that it cannot be used.
+  if (
+    seedFrom !== undefined &&
+    (modelConfig as { cache_share_across_keys?: boolean }).cache_share_across_keys !== true
+  ) {
+    throw new KvCacheSeedSharingDisabledError(modelId)
+  }
+
   let turn: TurnHandle
   if (typeof kvCache === 'string') {
     turn = await session.beginTurn({
@@ -453,6 +481,21 @@ export async function* completion(
   let rollbackOnUnwind = false
   scope.defer(() => (rollbackOnUnwind ? session.rollback(turn) : session.releaseTurn(turn)))
 
+  // A seed starts a chat that has no cache yet; a chat that has one keeps it.
+  // The addon skips a missing source silently, so it is checked here first.
+  let baseCacheKey: string | undefined
+  if (seedFrom !== undefined && turn.createdCache) {
+    const sourcePath = resolveCacheFilePath(modelId, configHash, seedFrom)
+    try {
+      await fs.promises.access(sourcePath)
+    } catch {
+      throw new KvCacheSeedSourceNotFoundError(seedFrom, modelId)
+    }
+    baseCacheKey = sourcePath
+  } else if (seedFrom !== undefined) {
+    requestLogger.debug(`[kv-cache] seedFrom ignored: "${kvCache}" already has a cache`)
+  }
+
   logMessagesToAddon(prompt, 'PROMPT_SEND')
 
   const result = yield* processModelResponse(
@@ -460,7 +503,11 @@ export async function* completion(
     prompt,
     toolsToRender,
     mergedGenerationParams,
-    { cacheKey: turn.cachePath, ...(prefill !== undefined && { prefill }) },
+    {
+      cacheKey: turn.cachePath,
+      ...(prefill !== undefined && { prefill }),
+      ...(baseCacheKey !== undefined && { baseCacheKey })
+    },
     dialect,
     setActiveResponse
   )

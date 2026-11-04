@@ -69,6 +69,12 @@ type CompletionParams = Omit<CompletionClientParams, 'tools'> & {
  *
  *   Cannot be combined with `tools` (tools already constrain output via their parameter schema).
  * @param params.prefill - Evaluate the prompt and tools without generating an answer. Requires an enabled kvCache; cannot force tool_choice. Await final before sending the question with the same prefix.
+ * @param params.seedFrom - Optional name of another caller-managed cache to start this chat from, such as a
+ *   system prompt and tools primed with `prefill`. On the first turn of a chat whose `kvCache` key has no
+ *   cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is
+ *   processed; the source is never written. Ignored once the chat has a cache. Requires a string `kvCache`
+ *   other than `seedFrom`. Refused when no cache of that name exists for this model and system prompt, or
+ *   when the model was not loaded with `cache_share_across_keys: true`, which is off by default.
  * @param params.kvCache - Optional KV cache configuration. Cache files are organized hierarchically:
  *   - Structure: `{kvCacheKey}/{modelId}/{configHash}.bin`
  *   - The configHash includes model config + system prompt to ensure cache isolation
@@ -221,6 +227,7 @@ export function completion(params: CompletionParams): CompletionRun {
         history: params.history.map((message) => ({ ...message, content: message.content ?? '' })),
         kvCache: params.kvCache,
         prefill: params.prefill,
+        seedFrom: params.seedFrom,
         tools: allTools.length > 0 ? allTools : undefined,
         stream: params.stream ?? true,
         generationParams: params.generationParams,

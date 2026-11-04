@@ -51,7 +51,13 @@ export function generateCacheKey(messages: CacheMessage[], tools?: readonly Tool
   return hashString.substring(0, 16)
 }
 
-function resolveCacheFilePath(modelId: string, configHash: string, cacheKey: string): string {
+// Resolves the path without creating its directories, for a cache that may
+// not exist (a seed source).
+export function resolveCacheFilePath(
+  modelId: string,
+  configHash: string,
+  cacheKey: string
+): string {
   const cacheDir = getKVCacheDir()
   const sessionCacheDir = validateAndJoinPath(cacheDir, cacheKey)
   const modelCacheDir = validateAndJoinPath(sessionCacheDir, modelId)
