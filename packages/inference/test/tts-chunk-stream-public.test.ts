@@ -7,7 +7,7 @@ import { textToSpeech } from '@/api/text-to-speech'
 // Public-entry coverage: `textToSpeech()` through dispatch, the plugin handler
 // and the op, against a fake engine, so the lazy start, early close and error
 // paths of `chunkStream` are exercised where callers reach them.
-type Chunk = { outputArray: Float32Array; sampleRate: number; chunkIndex: number; isLast?: boolean }
+type Chunk = { outputArray: Int16Array; sampleRate: number; chunkIndex: number; isLast?: boolean }
 
 function fakeModel(opts: { chunks: Chunk[]; gate?: Promise<void>; fail?: Error }) {
   const calls: unknown[] = []
@@ -54,25 +54,25 @@ function withModel(modelId: string, model: unknown) {
 }
 
 const chunk = (samples: number[], chunkIndex: number, isLast = false): Chunk => ({
-  outputArray: Float32Array.from(samples),
+  outputArray: Int16Array.from(samples),
   sampleRate: 24000,
   chunkIndex,
   isLast
 })
 
-test('textToSpeech chunkStream yields one Float32Array per engine chunk and settles done', async (t) => {
+test('textToSpeech chunkStream yields one Int16Array per engine chunk and settles done', async (t) => {
   const modelId = 'tts-public-chunks'
-  const { model, calls } = fakeModel({ chunks: [chunk([0.1, -0.2], 0), chunk([0.5], 1, true)] })
+  const { model, calls } = fakeModel({ chunks: [chunk([100, -200], 0), chunk([500], 1, true)] })
   const cleanup = withModel(modelId, model)
   try {
     const run = textToSpeech({ modelId, text: 'Hi.' })
     t.is(calls.length, 0, 'nothing runs until a view is iterated')
-    const chunks: Float32Array[] = []
+    const chunks: Int16Array[] = []
     for await (const c of run.chunkStream) chunks.push(c)
     t.is(chunks.length, 2)
-    t.ok(chunks.every((c) => c instanceof Float32Array))
-    t.alike(Array.from(chunks[0]!), Array.from(Float32Array.from([0.1, -0.2])))
-    t.alike(Array.from(chunks[1]!), [0.5])
+    t.ok(chunks.every((c) => c instanceof Int16Array))
+    t.alike(Array.from(chunks[0]!), Array.from(Int16Array.from([100, -200])))
+    t.alike(Array.from(chunks[1]!), [500])
     t.is(await run.done, true)
     t.is(await run.sampleRate, 24000)
     t.is(await run.stopReason, 'completed')
@@ -126,7 +126,7 @@ test('an engine failure rejects chunkStream and done', async (t) => {
   const cleanup = withModel(modelId, model)
   try {
     const run = textToSpeech({ modelId, text: 'Hi.' })
-    const chunks: Float32Array[] = []
+    const chunks: Int16Array[] = []
     let caught: unknown
     try {
       for await (const c of run.chunkStream) chunks.push(c)

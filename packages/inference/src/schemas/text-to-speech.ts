@@ -1513,11 +1513,13 @@ export interface TextToSpeechStreamResult {
   text: Promise<string | undefined>
   bufferStream: AsyncGenerator<number>
   /**
-   * The PCM of `bufferStream` as one `Float32Array` per response frame.
-   * Shares the run with `bufferStream` in plain streaming mode, so iterate one
-   * of the two. Empty when `stream: false`.
+   * The PCM of `bufferStream` as one `Int16Array` per response frame: the
+   * engines' signed 16-bit mono samples, exact and half the size of a float
+   * view (scale by 1/32768 for Web Audio). Shares the run with `bufferStream`
+   * in plain streaming mode, so iterate one of the two. Empty when
+   * `stream: false`.
    */
-  chunkStream: AsyncGenerator<Float32Array>
+  chunkStream: AsyncGenerator<Int16Array>
   chunkUpdates?: AsyncGenerator<TtsSentenceChunkUpdate>
   buffer: Promise<number[]>
   done: Promise<boolean>

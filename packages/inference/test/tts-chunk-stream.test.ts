@@ -42,30 +42,30 @@ function createPushSource() {
 const frame = (buffer: number[], extra: Partial<TtsResponse> = {}): TtsResponse =>
   ({ type: 'textToSpeech', buffer, done: false, ...extra }) as TtsResponse
 
-test('chunkStream yields one Float32Array per audio frame and matches the sample stream', async (t) => {
+test('chunkStream yields one Int16Array per audio frame and matches the sample stream', async (t) => {
   const frames = [
-    frame([0.1, -0.2, 0.3], { sampleRate: 44100 }),
+    frame([100, -200, 300], { sampleRate: 44100 }),
     frame([]),
-    frame([0.5, 0.25]),
+    frame([500, 250]),
     frame([-1, 1, 0], { done: true, stats: { totalTimeMs: 1 } as never })
   ]
   async function* fixed() {
     yield* frames
   }
 
-  const chunks: Float32Array[] = []
+  const chunks: Int16Array[] = []
   for await (const c of pcmChunksOf(fixed())) chunks.push(c)
 
   t.is(chunks.length, 3, 'empty frames are skipped')
-  t.ok(chunks.every((c) => c instanceof Float32Array))
-  t.alike(Array.from(chunks[0] as Float32Array), Array.from(Float32Array.from([0.1, -0.2, 0.3])))
+  t.ok(chunks.every((c) => c instanceof Int16Array))
+  t.alike(Array.from(chunks[0] as Int16Array), Array.from(Int16Array.from([100, -200, 300])))
 
   const concatenated = chunks.flatMap((c) => Array.from(c))
   const samples: number[] = []
   for await (const s of samplesOf(pcmChunksOf(fixed()))) samples.push(s)
   t.alike(samples, concatenated, 'flattened chunks equal the per-sample stream')
 
-  const expected = Array.from(Float32Array.from(frames.flatMap((f) => f.buffer)))
+  const expected = Array.from(Int16Array.from(frames.flatMap((f) => f.buffer)))
   t.alike(concatenated, expected, 'chunks carry every sample of every frame, in order')
 })
 
@@ -74,7 +74,7 @@ test('chunkStream stops at the terminal frame', async (t) => {
     yield frame([1, 2], { done: true })
     yield frame([3, 4])
   }
-  const chunks: Float32Array[] = []
+  const chunks: Int16Array[] = []
   for await (const c of pcmChunksOf(fixed())) chunks.push(c)
   t.is(chunks.length, 1)
 })
@@ -84,14 +84,14 @@ test('the first chunk is delivered before later frames exist', async (t) => {
   const chunks = pcmChunksOf(source.iterable)
 
   const first = chunks.next()
-  source.push(frame([0.5, 0.5, 0.5], { sampleRate: 24000 }))
+  source.push(frame([500, 500, 500], { sampleRate: 24000 }))
   const got = await first
   t.is(got.done, false)
-  t.is((got.value as Float32Array).length, 3, 'first chunk arrives on the first frame alone')
+  t.is((got.value as Int16Array).length, 3, 'first chunk arrives on the first frame alone')
 
   const second = chunks.next()
-  source.push(frame([0.1], { done: true }))
-  t.is(((await second).value as Float32Array).length, 1)
+  source.push(frame([100], { done: true }))
+  t.is(((await second).value as Int16Array).length, 1)
   t.is((await chunks.next()).done, true)
   source.end()
 })
@@ -117,7 +117,7 @@ test('an un-iterated chunkStream does not pin the sentence-mode multicast queue'
   const mc = new TtsMulticast(source.iterable)
   const audio = sentenceAudioViews(mc.subscribe())
   const updates = mc.subscribe()
-  for (let i = 0; i < 100; i++) source.push(frame([i, i + 0.5], { done: i === 99 }))
+  for (let i = 0; i < 100; i++) source.push(frame([i, i + 1000], { done: i === 99 }))
   source.end()
 
   let samples = 0

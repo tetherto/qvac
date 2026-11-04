@@ -9,7 +9,7 @@ schemaType: HowTo
 
 Text-to-Speech uses [`@qvac/tts-ggml`](https://github.com/tetherto/qvac/tree/main/packages/tts-ggml) (GGML) as the inference engine. Load any supported model using `modelType: "tts"`. Then, provide `text` as input (with `inputType: "text"`) to generate speech audio. MOSS-SoundEffect also generates sound effects from descriptions, and MOSS-Speech accepts text or audio questions to generate a reply.
 
-`textToSpeech()` returns synchronously with `buffer`, `bufferStream`, `done`, `requestId`, `text`, `sampleRate`, `stats` and `stopReason`; see [Audio output](#audio-output), [Cancelling a run](#cancelling-a-run) and [Runtime statistics](#runtime-statistics) below.
+`textToSpeech()` returns synchronously with `buffer`, `bufferStream`, `chunkStream`, `done`, `requestId`, `text`, `sampleRate`, `stats` and `stopReason`; see [Audio output](#audio-output), [Cancelling a run](#cancelling-a-run) and [Runtime statistics](#runtime-statistics) below.
 
 ## Functions
 
@@ -24,6 +24,17 @@ For how to use each function, see [SDK — API reference](/sdk/reference/api/).
 ## Audio output
 
 The SDK returns raw, mono, signed 16-bit PCM samples as a plain `number[]`. With `stream: false`, the `buffer` promise resolves to the complete sample array and `bufferStream` is empty. With `stream: true`, `buffer` resolves to `[]` and `bufferStream` yields individual samples as they become available. The data has no WAV header or other container metadata; use the [example utility](#utils) to write it as a WAV file.
+
+`chunkStream` is the same audio one frame at a time: an `AsyncGenerator<Int16Array>` that yields one typed array of signed 16-bit samples per response frame (per sentence with `sentenceStream: true`), so a player can hand each chunk to an audio device without rebuilding it from single samples. The samples are integers in the int16 range, not floats; scale by `1 / 32768` for an API that expects `[-1, 1]`. `bufferStream` and `chunkStream` share one run in plain streaming mode, so iterate one of the two; with `stream: false` both are empty and `buffer` holds the audio.
+
+```ts
+const result = textToSpeech({ modelId, text: 'Hello.' })
+const sampleRate = await result.sampleRate
+for await (const chunk of result.chunkStream) {
+  // chunk: Int16Array, one per engine frame
+  player.write(chunk, sampleRate)
+}
+```
 
 `textToSpeech()` also returns a `sampleRate` promise, resolved from the first
 audio frame the engine emits. Prefer it over inferring the rate from the load

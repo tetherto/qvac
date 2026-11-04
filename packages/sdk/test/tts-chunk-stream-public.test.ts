@@ -52,21 +52,21 @@ function snapshot() {
   return { ...transport }
 }
 
-test('plain stream: chunkStream starts the run lazily and yields one Float32Array per audio frame', async () => {
+test('plain stream: chunkStream starts the run lazily and yields one Int16Array per audio frame', async () => {
   scripts.push({
-    frames: [audio([0.1, -0.2], { sampleRate: 24000 }), audio([]), audio([0.5]), terminal()]
+    frames: [audio([100, -200], { sampleRate: 24000 }), audio([]), audio([500]), terminal()]
   })
   const before = snapshot()
   const run = textToSpeech({ modelId: 'tts', text: 'Hi.' })
   assert.equal(transport.opened, before.opened, 'nothing is sent until a view is iterated')
 
-  const chunks: Float32Array[] = []
+  const chunks: Int16Array[] = []
   for await (const chunk of run.chunkStream) chunks.push(chunk)
 
   assert.equal(chunks.length, 2, 'empty frames are skipped')
-  assert.ok(chunks.every((c) => c instanceof Float32Array))
-  assert.deepEqual(Array.from(chunks[0]!), Array.from(Float32Array.from([0.1, -0.2])))
-  assert.deepEqual(Array.from(chunks[1]!), [0.5])
+  assert.ok(chunks.every((c) => c instanceof Int16Array))
+  assert.deepEqual(Array.from(chunks[0]!), Array.from(Int16Array.from([100, -200])))
+  assert.deepEqual(Array.from(chunks[1]!), [500])
   assert.equal(await run.done, true)
   assert.equal(await run.sampleRate, 24000)
   assert.equal(await run.stopReason, 'completed')
@@ -85,7 +85,7 @@ test('plain stream: bufferStream is the per-sample view of the same run', async 
 })
 
 test('plain stream: closing chunkStream early settles done=false and releases the transport', async () => {
-  scripts.push({ frames: [audio([0.25, 0.5]), audio([0.75])], holdOpen: true })
+  scripts.push({ frames: [audio([250, 500]), audio([750])], holdOpen: true })
   const before = snapshot()
   const run = textToSpeech({ modelId: 'tts', text: 'Hi.' })
   for await (const chunk of run.chunkStream) {
@@ -100,7 +100,7 @@ test('plain stream: a transport error rejects chunkStream and done', async () =>
   const failure = new Error('worker went away')
   scripts.push({ frames: [audio([1])], throwAfter: failure })
   const run = textToSpeech({ modelId: 'tts', text: 'Hi.' })
-  const chunks: Float32Array[] = []
+  const chunks: Int16Array[] = []
   await assert.rejects(
     (async () => {
       for await (const chunk of run.chunkStream) chunks.push(chunk)

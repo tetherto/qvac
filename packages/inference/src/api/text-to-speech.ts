@@ -196,7 +196,7 @@ function buildTextToSpeechStreamRequest(
  * - `stream: false` — collect all PCM samples and resolve once via
  *   `result.buffer` (`Promise<number[]>`). `bufferStream` is empty.
  * - `stream: true` (default) — yield PCM through `result.chunkStream`
- *   (`AsyncGenerator<Float32Array>`, one chunk per frame) or
+ *   (`AsyncGenerator<Int16Array>`, one chunk per frame) or
  *   `result.bufferStream` (`AsyncGenerator<number>`, one sample at a time).
  *   `buffer` resolves to an empty array.
  * - `stream: true, sentenceStream: true` — also exposes `result.chunkUpdates`
@@ -390,24 +390,22 @@ function sentenceStreamTts(
 // surface.
 export function sentenceAudioViews(subscription: AsyncGenerator<TtsResponse>): {
   bufferStream: AsyncGenerator<number>
-  chunkStream: AsyncGenerator<Float32Array>
+  chunkStream: AsyncGenerator<Int16Array>
 } {
   const chunkStream = pcmChunksOf(subscription)
   return { bufferStream: samplesOf(chunkStream), chunkStream }
 }
 
-export async function* pcmChunksOf(
-  source: AsyncIterable<TtsResponse>
-): AsyncGenerator<Float32Array> {
+export async function* pcmChunksOf(source: AsyncIterable<TtsResponse>): AsyncGenerator<Int16Array> {
   for await (const m of source) {
     if (m.buffer.length > 0) {
-      yield Float32Array.from(m.buffer)
+      yield Int16Array.from(m.buffer)
     }
     if (m.done) break
   }
 }
 
-export async function* samplesOf(chunks: AsyncIterable<Float32Array>): AsyncGenerator<number> {
+export async function* samplesOf(chunks: AsyncIterable<Int16Array>): AsyncGenerator<number> {
   for await (const chunk of chunks) {
     yield* chunk
   }
@@ -470,7 +468,7 @@ async function* plainTtsChunkStream(
   resolveDone: (value: boolean) => void,
   rejectDone: (err: unknown) => void,
   side: TtsSideChannel
-): AsyncGenerator<Float32Array> {
+): AsyncGenerator<Int16Array> {
   let settled = false
   try {
     for await (const response of streamRpc(request, options)) {
@@ -479,7 +477,7 @@ async function* plainTtsChunkStream(
       // the source of truth for this response shape.
       side.observe(response)
       if (response.buffer.length > 0) {
-        yield Float32Array.from(response.buffer)
+        yield Int16Array.from(response.buffer)
       }
       if (response.done) {
         settled = true
@@ -531,7 +529,7 @@ async function* emptyBufferStream(): AsyncGenerator<number> {
   // Non-streaming mode exposes no incremental buffer stream.
 }
 
-async function* emptyChunkStream(): AsyncGenerator<Float32Array> {}
+async function* emptyChunkStream(): AsyncGenerator<Int16Array> {}
 
 async function collectTtsBuffer(
   request: TtsRequest,
