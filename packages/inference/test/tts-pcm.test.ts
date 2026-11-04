@@ -1,23 +1,32 @@
 import test from 'brittle'
+import Buffer from 'bare-buffer'
 import { decodeTtsPcm, encodeTtsPcm, withDecodedTtsPcm } from '@/schemas/tts-pcm'
 
-test('int16 PCM survives the base64 round trip, with and without Buffer', (t) => {
+// `undefined` would select the default (global Buffer when present), so each
+// path is forced: `null` takes the atob/btoa branch, `Buffer` the Buffer one.
+const NO_BUFFER = null as never
+const WITH_BUFFER = Buffer as never
+
+test('int16 PCM survives the base64 round trip on both codec paths', (t) => {
   const samples = Int16Array.from([0, 1, -1, 32767, -32768, 12345, -12345, 7])
-  for (const buf of [undefined, (globalThis as { Buffer?: unknown }).Buffer] as const) {
-    const encoded = encodeTtsPcm(samples, buf as never)
-    const decoded = decodeTtsPcm(encoded, buf as never)
+  for (const buf of [NO_BUFFER, WITH_BUFFER]) {
+    const encoded = encodeTtsPcm(samples, buf)
+    const decoded = decodeTtsPcm(encoded, buf)
     t.alike(Array.from(decoded), Array.from(samples))
   }
-  t.is(encodeTtsPcm(new Int16Array(0)), '')
-  t.is(decodeTtsPcm('').length, 0)
+  t.is(encodeTtsPcm(new Int16Array(0), NO_BUFFER), '')
+  t.is(encodeTtsPcm(new Int16Array(0), WITH_BUFFER), '')
+  t.is(decodeTtsPcm('', NO_BUFFER).length, 0)
+  t.is(decodeTtsPcm('', WITH_BUFFER).length, 0)
 })
 
-test('encodeTtsPcm accepts a plain number[] and both encoders agree', (t) => {
+test('encodeTtsPcm accepts a plain number[] and the two codec paths agree', (t) => {
   const plain = [5, -5, 300, -300]
-  const a = encodeTtsPcm(plain, undefined as never)
-  const b = encodeTtsPcm(plain)
-  t.is(a, b)
-  t.alike(Array.from(decodeTtsPcm(a)), plain)
+  const a = encodeTtsPcm(plain, NO_BUFFER)
+  const b = encodeTtsPcm(plain, WITH_BUFFER)
+  t.is(a, b, 'identical base64 from both encoders')
+  t.alike(Array.from(decodeTtsPcm(a, WITH_BUFFER)), plain, 'atob-encoded, Buffer-decoded')
+  t.alike(Array.from(decodeTtsPcm(b, NO_BUFFER)), plain, 'Buffer-encoded, atob-decoded')
 })
 
 test('withDecodedTtsPcm fills buffer from pcm and leaves plain frames alone', (t) => {

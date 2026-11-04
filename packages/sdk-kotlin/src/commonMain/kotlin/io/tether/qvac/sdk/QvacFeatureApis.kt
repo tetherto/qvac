@@ -63,6 +63,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -124,11 +125,17 @@ class QvacSpeech internal constructor(private val client: QvacClient) {
         audio: Flow<ByteArray>,
     ): Flow<TranscribeStreamResponse> = client.transcribeStream(request, audio)
 
-    /** Text chunks are UTF-8 bytes. Collect concurrently with producing input. No result aggregation. */
+    /**
+     * Text chunks are UTF-8 bytes. Collect concurrently with producing input. No result aggregation.
+     * Frames arrive with their samples in `buffer`: audio the worker sent as base64 `pcm` is decoded here.
+     */
     fun synthesizeStream(
         request: TextToSpeechStreamRequest,
         text: Flow<ByteArray>,
-    ): Flow<TextToSpeechStreamResponse> = client.textToSpeechStream(request, text)
+    ): Flow<TextToSpeechStreamResponse> =
+        client.textToSpeechStream(request, text).map { frame ->
+            if (frame.pcm.isNullOrEmpty()) frame else frame.copy(buffer = ttsSamples(frame.buffer, frame.pcm), pcm = null)
+        }
 
     suspend fun transcribe(
         modelId: String,
