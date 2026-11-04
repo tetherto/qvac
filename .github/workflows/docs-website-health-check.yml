@@ -133,7 +133,6 @@ jobs:
                 labels: [label],
                 assignees: [
                   'BrunoCampana',
-                  'GSServita',
                   'costin-busioc',
                   'opaninakuffo',
                   'Proletter',

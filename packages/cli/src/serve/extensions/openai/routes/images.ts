@@ -21,12 +21,10 @@ import {
   InvalidImageStrengthError,
   UnsupportedImageOutputError
 } from '@/serve/extensions/openai/schemas/images'
-import type { EphemeralFilesStore } from '@/serve/core/stores/ephemeral-files'
 import type { QvacContext } from '@/serve/core/context'
+import { IMAGE_OUTPUT_FORMAT, buildImageData, buildSizeString } from '@/serve/lib/image-response'
 
 const SUPPORTED_RESPONSE_FORMATS = new Set(['b64_json', 'url'])
-const RESPONSE_OUTPUT_FORMAT = 'png' as const
-const RESPONSE_CONTENT_TYPE = 'image/png' as const
 
 function rejectIfUrlWithoutPublicBaseUrl(
   responseFormat: string,
@@ -67,43 +65,6 @@ function mapImageParamError(err: unknown): never {
   throw err
 }
 
-function buildImageData(
-  buffers: Uint8Array[],
-  responseFormat: string,
-  publicBaseUrl: string,
-  ephemeralFiles: EphemeralFilesStore
-): Array<{ b64_json: string } | { url: string; expires_at?: number }> {
-  if (responseFormat !== 'url') {
-    return buffers.map((buf) => ({ b64_json: Buffer.from(buf).toString('base64') }))
-  }
-  return buffers.map((buf, i) => {
-    const id = ephemeralFiles.put({
-      data: Buffer.from(buf),
-      fileName: `image-${Date.now()}-${i}.png`,
-      purpose: 'image_generation',
-      contentType: RESPONSE_CONTENT_TYPE
-    })
-    const url = `${publicBaseUrl}/v1/files/${id}/content`
-    const stored = ephemeralFiles.get(id)
-    if (stored !== null && stored.expiresAtMs !== null) {
-      return { url, expires_at: Math.floor(stored.expiresAtMs / 1000) }
-    }
-    return { url }
-  })
-}
-
-function buildSizeString(
-  paramW: number | undefined,
-  paramH: number | undefined,
-  statsW: number | undefined,
-  statsH: number | undefined
-): string | null {
-  const w = statsW ?? paramW
-  const h = statsH ?? paramH
-  if (typeof w === 'number' && typeof h === 'number' && w > 0 && h > 0) return `${w}x${h}`
-  return null
-}
-
 function sendStreamingResponse(
   reply: FastifyReply,
   buffers: Uint8Array[],
@@ -116,7 +77,7 @@ function sendStreamingResponse(
     sendSSE(raw, {
       type: 'image_generation.completed',
       created_at: createdAt,
-      output_format: RESPONSE_OUTPUT_FORMAT,
+      output_format: IMAGE_OUTPUT_FORMAT,
       ...(sizeStr ? { size: sizeStr } : {}),
       b64_json: Buffer.from(buf).toString('base64')
     })
@@ -179,13 +140,13 @@ async function runAndRespond(
 
   const data = buildImageData(
     buffers,
-    responseFormat,
-    ctx.serveConfig.publicBaseUrl ?? '',
-    ctx.files
+    responseFormat === 'url'
+      ? { publicBaseUrl: ctx.serveConfig.publicBaseUrl ?? '', files: ctx.files }
+      : undefined
   )
   reply.send({
     created: Math.floor(Date.now() / 1000),
-    output_format: RESPONSE_OUTPUT_FORMAT,
+    output_format: IMAGE_OUTPUT_FORMAT,
     ...(sizeStr ? { size: sizeStr } : {}),
     data
   })

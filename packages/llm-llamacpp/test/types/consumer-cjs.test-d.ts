@@ -39,6 +39,16 @@ const saved: Promise<void> = model.saveCache("/abs/session.bin");
 void saved;
 const discarded: Promise<void> = model.discardCache("/abs/session.bin");
 void discarded;
+const counted: Promise<number> = model.calcTokens({
+  text: "Weather in Paris?",
+  history: [{ role: "system", content: "You are a helpful assistant." }],
+  tools: [{ type: "function", name: "get_weather" }],
+});
+void counted;
+const calcInput: LlmLlamacpp.CalcTokensInput = { text: "Hello" };
+void calcInput;
+// @ts-expect-error - history takes Message[], not its JSON text
+void model.calcTokens({ history: "[]" });
 
 const config: LlmLlamacpp.LlamaConfig = {
   device: "gpu",
@@ -94,6 +104,7 @@ const runOptions: LlmLlamacpp.RunOptions = {
   prefill: false,
   generationParams,
   cacheKey: "k",
+  baseCacheKey: "base",
   ephemeral: false,
   rejectWhenBusy: true,
 };
@@ -102,6 +113,10 @@ void runOptions;
 // @ts-expect-error - saveCacheToDisk was removed; use saveCache(cacheKey)
 const removedSave: LlmLlamacpp.RunOptions = { saveCacheToDisk: true };
 void removedSave;
+
+// @ts-expect-error - baseCacheKey is a cacheKey file path
+const badBaseCacheKey: LlmLlamacpp.RunOptions = { baseCacheKey: 1 };
+void badBaseCacheKey;
 
 const messages: LlmLlamacpp.Message[] = [
   { role: "user", content: "hello" },

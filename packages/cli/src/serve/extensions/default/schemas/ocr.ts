@@ -1,13 +1,6 @@
 import { z } from 'zod'
 import { binaryInput } from '@/serve/lib/binary-input'
-
-// Multipart sends every text part as a string.
-function formBoolean() {
-  return z.preprocess(
-    (value) => (value === 'true' ? true : value === 'false' ? false : value),
-    z.boolean()
-  )
-}
+import { formBoolean } from '@/serve/lib/form-fields'
 
 /** Mirrors the SDK's `ocr()` arguments. */
 export const ocrBody = z.strictObject({

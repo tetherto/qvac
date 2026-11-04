@@ -645,7 +645,7 @@ await loadModel({
 
 ### Chatterbox
 
-The following script shows an example of Chatterbox TTS with voice cloning from a reference audio file. Use it with [`utils.js` / `utils.ts`](#utils):
+This example generates speech from text using Chatterbox. It clones the voice of a reference audio when you pass one, saves the speech to `tts-output.wav`, and plays it. Arguments: `[reference-audio]` (optional). Helper (JS/TS): [`utils`](#utils), in the same folder as the script.
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -667,11 +667,19 @@ The following script shows an example of Chatterbox TTS with voice cloning from 
 
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/text_to_speech_chatterbox.py title="text_to_speech_chatterbox.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Supertonic
 
-The following script shows an example of Supertonic TTS for general-purpose speech synthesis. Use it with [`utils.js` / `utils.ts`](#utils):
+This example generates speech from text using Supertonic. It saves the speech to `supertonic-output.wav` and plays it. Arguments: none. Helper (JS/TS): [`utils`](#utils), in the same folder as the script.
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -705,9 +713,7 @@ The following script shows an example of Supertonic TTS for general-purpose spee
 
 ### Parler-TTS
 
-The following TypeScript example loads the registry-hosted Parler Mini v1
-model, applies per-request emotion conditioning, saves the PCM output, and
-plays it:
+This example generates speech from text using Parler-TTS. It sets an emotion on the request, saves the speech to `parler-output.wav`, and plays it. Arguments: none. Helper (JS/TS): [`utils`](#utils), in the same folder as the script.
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -729,13 +735,19 @@ plays it:
 
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/text_to_speech_parler.py title="text_to_speech_parler.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### CosyVoice3
 
-The following script loads the registry-hosted CosyVoice3 model (the LLM GGUF
-downloads its flow/HiFT, voice, and tokenizer companions automatically),
-applies per-request emotion conditioning, saves the PCM output, and plays it:
+This example generates speech from text using CosyVoice3. It sets an emotion on the request, saves the speech to `cosyvoice3-output.wav`, and plays it. Arguments: none. Helper (JS/TS): [`utils`](#utils), in the same folder as the script.
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -757,13 +769,19 @@ applies per-request emotion conditioning, saves the PCM output, and plays it:
 
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/text_to_speech_cosyvoice3.py title="text_to_speech_cosyvoice3.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Audio8
 
-The following script loads the registry-hosted Audio8 LM together with its
-codec decoder, synthesizes 44.1 kHz audio with the default sampling settings,
-saves the PCM output, and plays it:
+This example generates speech from text using Audio8. It prints whether the codec ran on Core ML, saves the 44.1 kHz speech to `audio8-output.wav`, and plays it. Arguments: none. Helper (JS/TS): [`utils`](#utils), in the same folder as the script.
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -785,16 +803,21 @@ saves the PCM output, and plays it:
 
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/text_to_speech_audio8.py title="text_to_speech_audio8.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### MOSS
 
-The first script loads the registry-hosted MOSS-TTS backbone and codec,
-streams single-speaker speech — optionally in a voice cloned from a 24 kHz
-recording — and reports the time to first audio. The second synthesizes a
-two-speaker MOSS-TTSD dialogue from a local backbone and the registry codec.
-Both save the PCM output with
-[`utils.js` / `utils.ts`](#utils):
+The first example generates speech from text using MOSS-TTS. It streams the audio, prints the time to first audio, clones the voice of a 24 kHz reference recording when you pass one, saves the speech to `moss-output.wav`, and plays it. Arguments: `[reference-audio]` (optional). Helper (JS/TS): [`utils`](#utils), in the same folder as the script.
+
+The second example generates a two-speaker dialogue using MOSS-TTSD. It clones each speaker's voice from a 24 kHz reference recording and its exact transcript, saves the dialogue to `moss-dialogue-output.wav`, and plays it. Arguments: `<moss-ttsd-gguf> <speaker1-audio> "<speaker1-transcript>" <speaker2-audio> "<speaker2-transcript>"`. Helper (JS/TS): [`utils`](#utils), in the same folder as the script.
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -814,6 +837,14 @@ Both save the PCM output with
 
 ```
 
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/text_to_speech_moss.py title="text_to_speech_moss.py" lineNumbers
+```
 </WrapCode>
 </Tab>
 </Tabs>
@@ -838,11 +869,19 @@ Both save the PCM output with
 
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/text_to_speech_moss_dialogue.py title="text_to_speech_moss_dialogue.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### MOSS-SoundEffect
 
-The following script generates a two-second, 48 kHz sound effect with 20 diffusion steps and saves it as a WAV file:
+This example generates a sound effect from text using MOSS-SoundEffect. It saves the 2-second, 48 kHz clip to `moss-sound-effect-output.wav`. Arguments: none.
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -860,11 +899,19 @@ The following script generates a two-second, 48 kHz sound effect with 20 diffusi
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/text_to_speech_moss_sound_effect.py title="text_to_speech_moss_sound_effect.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### MOSS-SoundEffect controls
 
-The following script generates a sound effect using duration, negative-prompt, guidance and shift controls:
+This example generates a sound effect from text using MOSS-SoundEffect with generation controls. It adds a negative prompt, guidance, and shift, and saves the 3-second, 48 kHz clip to `moss-sound-effect-controls-output.wav`. Arguments: none.
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -882,11 +929,19 @@ The following script generates a sound effect using duration, negative-prompt, g
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/text_to_speech_moss_sound_effect_controls.py title="text_to_speech_moss_sound_effect_controls.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### MOSS-Speech text reply
 
-The following script asks a typed question and reads a text-only reply with an empty audio buffer:
+This example answers a typed question using MOSS-Speech. It prints a text-only reply. Arguments: none.
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -904,11 +959,19 @@ The following script asks a typed question and reads a text-only reply with an e
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/text_to_speech_moss_speech.py title="text_to_speech_moss_speech.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### MOSS-Speech audio reply
 
-The following script reads a WAV question, generates a 24 kHz spoken reply and saves it as a WAV file:
+This example answers a spoken question using MOSS-Speech. It reads the question from a WAV file (mono or stereo, PCM16 or float32, up to 60 seconds), prints any reply text, and saves the 24 kHz spoken reply to `moss-speech-audio-output.wav`. Arguments: `<question-wav>`.
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -926,11 +989,19 @@ The following script reads a WAV question, generates a 24 kHz spoken reply and s
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/text_to_speech_moss_speech_audio.py title="text_to_speech_moss_speech_audio.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Chatterbox with LavaSR enhancer
 
-The following script shows Chatterbox TTS with the LavaSR enhancer, which neurally bandwidth-extends the output to 48 kHz. Use it with [`utils.js` / `utils.ts`](#utils):
+This example generates speech from text using Chatterbox with the LavaSR enhancer. It clones the voice of a reference audio when you pass one, upsamples the speech to 48 kHz, saves it to `chatterbox-enhanced-output.wav`, and plays it. Arguments: `[reference-audio]` (optional). Helper (JS/TS): [`utils`](#utils), in the same folder as the script.
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -952,11 +1023,19 @@ The following script shows Chatterbox TTS with the LavaSR enhancer, which neural
 
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/text_to_speech_chatterbox_enhanced.py title="text_to_speech_chatterbox_enhanced.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Supertonic with LavaSR denoiser + enhancer
 
-The following script shows Supertonic TTS with the full LavaSR pipeline: the denoiser cleans the signal first, then the enhancer bandwidth-extends it to 48 kHz. Use it with [`utils.js` / `utils.ts`](#utils):
+This example generates speech from text using Supertonic with the LavaSR denoiser and enhancer. It cleans the speech, upsamples it to 48 kHz, saves it to `supertonic-enhanced-output.wav`, and plays it. Arguments: none. Helper (JS/TS): [`utils`](#utils), in the same folder as the script.
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -978,11 +1057,19 @@ The following script shows Supertonic TTS with the full LavaSR pipeline: the den
 
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/text_to_speech_supertonic_enhanced.py title="text_to_speech_supertonic_enhanced.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Utils
 
-The following helper script is used by the examples above to convert the raw PCM samples returned by `textToSpeech()` into a WAV file and play it back:
+The JS and TS examples above import these helpers to save the PCM samples as a WAV file and play it. Save the file in the same folder as the example. The Python examples include the same helpers inline. Playback requires `ffplay`, which ships with ffmpeg.
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>

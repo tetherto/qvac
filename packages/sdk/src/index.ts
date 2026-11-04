@@ -117,6 +117,7 @@ export {
   type EndOfTurnEvent,
   type TranscribeSegment,
   type TranscribeSpeakerSegment,
+  type TranscribeToken,
   ASR_BACKEND_IDS,
   type AsrBackendId,
   type BciConfig,
@@ -373,6 +374,7 @@ export type { InferenceCancelledPartial } from './utils/errors-server'
 export {
   ContextOverflowError,
   type ContextOverflowErrorSizes,
+  ModelRegistryModelNotFoundError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,

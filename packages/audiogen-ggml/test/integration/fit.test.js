@@ -10,7 +10,6 @@ const { ensureAudiogenModels, getBaseDir } = require('../utils/downloadModel')
 
 const TEST_TIMEOUT_MS = 1800000
 const VARIANT = 'turbo-q4'
-const MINIMAX_STAGES = ['lm', 'depth', 'cond', 'dit', 'vocoder']
 const MISSING_MINIMAX_LM = '/nonexistent/mm3-lm-q8_0.gguf'
 const MISSING_MINIMAX_SYNTH = '/nonexistent/mm3-synth-q8_0.gguf'
 const MINIMAX_MAX_PROMPT_TOKENS = 5000
@@ -28,9 +27,9 @@ function minimaxFit(request) {
   return assessFit({ engine: 'minimax', modelsDir: minimaxModelsDir, device: 'cpu', ...request })
 }
 
-function lmStage(fit) {
-  return fit.stages.find((stage) => stage.name === 'lm')
-}
+const isVerdict = (fit) => fit.status === 'fits' || fit.status === 'does-not-fit'
+const totalUsed = (fit) => fit.devices.reduce((total, row) => total + row.usedBytes, 0)
+const demand = (fit) => fit.devices.map((row) => [row.id, row.usedBytes])
 
 async function stagedModels(t) {
   const download = await ensureAudiogenModels({ targetDir: modelsDir(), variant: VARIANT })
@@ -47,33 +46,37 @@ test('a projection is internally consistent', { timeout: TEST_TIMEOUT_MS }, asyn
 
   const fit = await assessFit({ modelsDir: dir, durationSeconds: 10 })
 
-  t.comment(`status=${fit.status} reason=${fit.reason} device=${fit.deviceName}`)
-  t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', 'a verdict, not an error')
-  t.ok(fit.deviceTotalBytes > 0, 'the device reported its capacity')
-  t.ok(fit.deviceFreeBytes <= fit.deviceTotalBytes, 'device free never exceeds installed')
-  t.ok(fit.hostTotalBytes > 0, 'the host reported its capacity')
-  t.ok(fit.hostFreeBytes <= fit.hostTotalBytes, 'host free never exceeds installed')
-  t.ok(fit.deviceBytes > 0, 'the pipeline peak was measured')
-  t.ok(fit.modelName.length > 0, 'the model set was identified')
+  t.comment(JSON.stringify(fit))
+  t.ok(isVerdict(fit), 'a verdict')
+  t.ok(fit.devices.length >= 1, 'at least the host row')
+  t.is(fit.devices[fit.devices.length - 1].name, 'CPU', 'the host row is last')
+  t.ok(fit.devices[fit.devices.length - 1].unified, 'the host row is unified')
+  t.alike(fit.stats, {})
+  for (const row of fit.devices) {
+    t.ok(row.id.length > 0 && row.name.length > 0, `${row.name} is named`)
+    t.ok(row.totalBytes > 0, `${row.name} reported its capacity`)
+    t.ok(row.freeBytes <= row.totalBytes, `${row.name} free never exceeds installed`)
+  }
+  t.ok(totalUsed(fit) > 0, 'the pipeline peak was measured')
 })
 
-test('the stages account for the peak', { timeout: TEST_TIMEOUT_MS }, async (t) => {
+test('a CPU load is one host row', { timeout: TEST_TIMEOUT_MS }, async (t) => {
   const dir = await stagedModels(t)
   if (dir === null) return
 
-  const fit = await assessFit({ modelsDir: dir, durationSeconds: 10 })
-  if (fit.status === 'error') {
-    t.pass('this runner could not project the model set')
-    return
-  }
+  const fit = await assessFit({ modelsDir: dir, durationSeconds: 10, gpuLayers: 0 })
+  const offloaded = await assessFit({ modelsDir: dir, durationSeconds: 10, gpuLayers: 99 })
 
-  t.ok(fit.stages.length > 0, 'the pipeline was broken down')
-  for (const stage of fit.stages) {
-    t.ok(stage.name.length > 0, `${stage.name}: named`)
-    t.ok(stage.weightsBytes >= 0, `${stage.name}: weights measured`)
-  }
-  const peakStage = Math.max(...fit.stages.map((stage) => stage.weightsBytes + stage.computeBytes))
-  t.ok(fit.deviceBytes >= peakStage || fit.hostBytes >= peakStage, 'the peak covers a stage')
+  t.ok(isVerdict(fit), 'a verdict')
+  t.is(fit.devices.length, 1, 'one row')
+  t.ok(fit.devices[0].unified, 'the row is the host')
+  t.ok(fit.devices[0].usedBytes > 0, 'the pipeline peak was measured')
+  // The CPU pool is both the device and the host pool, so its peak is counted
+  // once: the staged pipeline needs about what it needs offloaded, never twice.
+  t.ok(
+    fit.devices[0].usedBytes < 1.5 * totalUsed(offloaded),
+    `the pool's peak counts once (${fit.devices[0].usedBytes} < 1.5 × ${totalUsed(offloaded)})`
+  )
 })
 
 test('a longer generation costs no less', { timeout: TEST_TIMEOUT_MS }, async (t) => {
@@ -82,12 +85,8 @@ test('a longer generation costs no less', { timeout: TEST_TIMEOUT_MS }, async (t
 
   const short = await assessFit({ modelsDir: dir, durationSeconds: 5 })
   const long = await assessFit({ modelsDir: dir, durationSeconds: 60 })
-  if (short.status === 'error' || long.status === 'error') {
-    t.pass('this runner could not project the model set')
-    return
-  }
 
-  t.ok(long.deviceBytes + long.hostBytes >= short.deviceBytes + short.hostBytes)
+  t.ok(totalUsed(long) >= totalUsed(short))
 })
 
 test('a fit keeps the event loop responsive', { timeout: TEST_TIMEOUT_MS }, async (t) => {
@@ -102,7 +101,7 @@ test('a fit keeps the event loop responsive', { timeout: TEST_TIMEOUT_MS }, asyn
   try {
     const fit = await assessFit({ modelsDir: dir, durationSeconds: 60 })
     pending = false
-    t.not(fit.status, 'error', 'a real native projection completed')
+    t.ok(isVerdict(fit), 'a real native projection completed')
     t.ok(ticks > 0, 'timers ran before the fit settled')
     t.comment(`${ticks} timer ticks before completion`)
   } finally {
@@ -123,41 +122,33 @@ test(
     request.durationSeconds = 60
     const second = assessFit(request)
     const missing = assessFit({ ditPath: '/nonexistent/dit.gguf' })
-    const [short, long, unreadable] = await Promise.all([first, second, missing])
-    if (short.status === 'error' || long.status === 'error') {
-      t.pass('this runner could not project the model set')
-      return
-    }
+    const [short, long, unreadable] = await Promise.allSettled([first, second, missing])
 
+    t.is(short.status, 'fulfilled', 'the first call was projected')
+    t.is(long.status, 'fulfilled', 'the second call was projected')
     const alone = await assessFit({ modelsDir: dir, durationSeconds: 5 })
-    t.is(short.deviceBytes, alone.deviceBytes, 'the first call kept its original duration')
-    t.is(short.hostBytes, alone.hostBytes, 'the first call kept its original duration')
-    t.ok(
-      long.deviceBytes + long.hostBytes >= short.deviceBytes + short.hostBytes,
-      'the second call kept its own duration'
-    )
-    t.is(unreadable.status, 'error', 'an error outcome does not strand the queued calls')
+    t.alike(demand(short.value), demand(alone), 'the first call kept its original duration')
+    t.ok(totalUsed(long.value) >= totalUsed(short.value), 'the second call kept its own duration')
+    t.is(unreadable.status, 'rejected', 'a rejection does not strand the queued calls')
   }
 )
 
-test('an engine with no fitter is an outcome, not a throw', async (t) => {
-  const fit = await assessFit({ engine: 'stable-audio', modelsDir: '/models/stable-audio' })
-
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'unsupported-engine')
-  t.is(fit.modelName, 'stable-audio')
-  t.alike(fit.stages, [])
+test('an engine with no fitter rejects', async (t) => {
+  await t.exception(
+    assessFit({ engine: 'stable-audio', modelsDir: '/models/stable-audio' }),
+    /stable-audio has no fitter/
+  )
 })
 
-test('a MiniMax pair that cannot be read is an outcome, not a throw', async (t) => {
-  const fit = await assessFit({
-    engine: 'minimax',
-    lmPath: MISSING_MINIMAX_LM,
-    synthPath: MISSING_MINIMAX_SYNTH
-  })
-
-  t.is(fit.status, 'error')
-  t.is(fit.reason, isMobile ? 'unsupported-engine' : 'model-unreadable')
+test('a MiniMax pair that cannot be read rejects', async (t) => {
+  await t.exception(
+    assessFit({
+      engine: 'minimax',
+      lmPath: MISSING_MINIMAX_LM,
+      synthPath: MISSING_MINIMAX_SYNTH
+    }),
+    isMobile ? /minimax has no fitter/ : /model-unreadable/
+  )
 })
 
 test('MiniMax takes a duration or a frame cap, not both', { skip: isMobile }, async (t) => {
@@ -193,24 +184,16 @@ test('a MiniMax duration too long to count in frames is refused', { skip: isMobi
 })
 
 test(
-  'a MiniMax projection covers its stages',
+  'a MiniMax projection on the CPU is one host row',
   { timeout: TEST_TIMEOUT_MS, skip: !minimaxModelsDir || isMobile },
   async (t) => {
     const fit = await minimaxFit({ maxFrames: 300 })
 
-    t.comment(`status=${fit.status} reason=${fit.reason} device=${fit.deviceName}`)
-    t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', 'a verdict, not an error')
-    t.ok(fit.deviceIsCpu, "device: 'cpu' projects the CPU")
-    t.alike(
-      fit.stages.map((stage) => stage.name),
-      MINIMAX_STAGES
-    )
-    t.ok(fit.stagesResident, 'MiniMax keeps its stages resident')
-    const resident = fit.stages.reduce(
-      (total, stage) => total + stage.weightsBytes + stage.stateBytes + stage.computeBytes,
-      0
-    )
-    t.ok(fit.deviceBytes >= resident, 'the peak covers every resident stage')
+    t.comment(JSON.stringify(fit))
+    t.ok(isVerdict(fit), 'a verdict')
+    t.is(fit.devices.length, 1, "device: 'cpu' projects the host alone")
+    t.ok(fit.devices[0].unified, 'the row is the host')
+    t.ok(fit.devices[0].usedBytes > 0, 'the resident stages were measured')
   }
 )
 
@@ -221,8 +204,7 @@ test(
     const short = await minimaxFit({ durationSeconds: 10 })
     const long = await minimaxFit({ durationSeconds: 120 })
 
-    t.ok(long.deviceBytes > short.deviceBytes, 'the LM cache grows with the frames')
-    t.ok(long.hostBytes > short.hostBytes, 'the waveform grows with the frames')
+    t.ok(totalUsed(long) > totalUsed(short), 'the LM cache and the waveform grow with the frames')
   }
 )
 
@@ -230,27 +212,26 @@ test(
   'a MiniMax prompt override reaches the LM projection',
   { timeout: TEST_TIMEOUT_MS, skip: !minimaxModelsDir || isMobile },
   async (t) => {
-    const short = lmStage(await minimaxFit({ promptTokens: MINIMAX_SHORT_PROMPT_TOKENS }))
-    const long = lmStage(await minimaxFit({ promptTokens: MINIMAX_MAX_PROMPT_TOKENS }))
+    const short = await minimaxFit({ promptTokens: MINIMAX_SHORT_PROMPT_TOKENS })
+    const long = await minimaxFit({ promptTokens: MINIMAX_MAX_PROMPT_TOKENS })
 
-    t.ok(long.stateBytes > short.stateBytes, 'the LM cache grows with the prompt')
-    t.ok(long.computeBytes > short.computeBytes, 'the prefill graph grows with the prompt')
+    t.ok(totalUsed(long) > totalUsed(short), 'the LM cache and prefill grow with the prompt')
   }
 )
 
 test(
-  'a MiniMax prompt over the checkpoint limit is too large',
+  'a MiniMax prompt over the checkpoint limit rejects',
   { timeout: TEST_TIMEOUT_MS, skip: !minimaxModelsDir || isMobile },
   async (t) => {
-    const fit = await minimaxFit({ promptTokens: MINIMAX_MAX_PROMPT_TOKENS + 1 })
-
-    t.is(fit.status, 'error')
-    t.is(fit.reason, 'workload-too-large')
+    await t.exception(
+      minimaxFit({ promptTokens: MINIMAX_MAX_PROMPT_TOKENS + 1 }),
+      /workload-too-large/
+    )
   }
 )
 
 test(
-  'a MiniMax prompt that leaves too little context for the frames is too large',
+  'a MiniMax prompt that leaves too little context for the frames rejects',
   { timeout: TEST_TIMEOUT_MS, skip: !minimaxModelsDir || isMobile },
   async (t) => {
     const framesLeft = MINIMAX_CONTEXT_LENGTH - MINIMAX_MAX_PROMPT_TOKENS
@@ -258,22 +239,17 @@ test(
       promptTokens: MINIMAX_MAX_PROMPT_TOKENS,
       maxFrames: framesLeft
     })
-    const overfilled = await minimaxFit({
-      promptTokens: MINIMAX_MAX_PROMPT_TOKENS,
-      maxFrames: framesLeft + 1
-    })
 
-    t.not(filled.status, 'error', 'a prompt and frames that fill the context exactly project')
-    t.is(overfilled.status, 'error')
-    t.is(overfilled.reason, 'workload-too-large')
+    t.ok(isVerdict(filled), 'a prompt and frames that fill the context exactly project')
+    await t.exception(
+      minimaxFit({ promptTokens: MINIMAX_MAX_PROMPT_TOKENS, maxFrames: framesLeft + 1 }),
+      /workload-too-large/
+    )
   }
 )
 
-test('a model set that cannot be read is an outcome, not a throw', async (t) => {
-  const fit = await assessFit({ ditPath: '/nonexistent/dit.gguf' })
-
-  t.is(fit.status, 'error')
-  t.ok(fit.reason.length > 0, 'the engine gave a reason')
+test('a model set that cannot be read rejects', async (t) => {
+  await t.exception(assessFit({ ditPath: '/nonexistent/dit.gguf' }), /assessFit: /)
 })
 
 test('a count that is not a count is refused', async (t) => {

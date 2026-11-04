@@ -26,11 +26,9 @@ interface RegistryResponse {
   error?: string | undefined
 }
 
-function validateRegistryResponse(response: RegistryResponse, fallbackError?: string): void {
+function validateRegistryResponse(response: RegistryResponse): void {
   if (!response.success) {
-    throw new ModelRegistryQueryFailedError(
-      response.error ?? fallbackError ?? 'Unknown registry error'
-    )
+    throw new ModelRegistryQueryFailedError(response.error ?? 'Unknown registry error')
   }
 }
 
@@ -85,7 +83,8 @@ async function modelRegistrySearch(
  * @param registryPath - Registry-relative path of the model to fetch.
  * @param registrySource - Registry source identifier (e.g., `"huggingface"`, `"local"`).
  * @returns A promise resolving to the matching `ModelRegistryEntry`.
- * @throws {ModelRegistryQueryFailedError} When the model cannot be located or the registry query fails.
+ * @throws {ModelRegistryModelNotFoundError} When the registry has no model at this source and path.
+ * @throws {ModelRegistryQueryFailedError} When the registry query fails.
  */
 async function modelRegistryGetModel(
   registryPath: string,
@@ -98,7 +97,7 @@ async function modelRegistryGetModel(
   }
 
   const response = (await send(request)) as ModelRegistryGetModelResponse
-  validateRegistryResponse(response, `Model not found: ${registrySource}/${registryPath}`)
+  validateRegistryResponse(response)
 
   return response.model!
 }

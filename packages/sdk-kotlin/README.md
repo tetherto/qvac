@@ -89,9 +89,11 @@ QVAC_DEVICE_TEST_SCOPE=feature-lab ./scripts/run-android-device-tests.sh
 
 ### Consume a published artifact
 
-Release automation publishes the KMP client and the self-contained Android AAR
-to the configured Maven repository. For GitHub Packages, configure the QVAC
-repository and use a package-read token:
+Each `sdk-v<version>` GitHub Release, from `sdk-v0.23.0` on, carries one Maven
+repository ZIP per Android runtime profile and one for the desktop JVM client.
+Download the profile the app needs, for example
+`qvac-sdk-android-llm-<version>-maven.zip`, extract it, and point a Gradle
+Maven repository at the extracted directory:
 
 ```kotlin
 // settings.gradle.kts
@@ -99,15 +101,11 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven {
-            url = uri("https://maven.pkg.github.com/tetherto/qvac")
-            credentials {
-                username = providers.gradleProperty("gpr.user").orNull
-                    ?: System.getenv("GITHUB_ACTOR")
-                password = providers.gradleProperty("gpr.key").orNull
-                    ?: System.getenv("GITHUB_TOKEN")
-            }
+        exclusiveContent {
+            forRepository { maven("https://jitpack.io") } // bare-rpc-kotlin
+            filter { includeGroupByRegex("com\\.github\\.holepunchto\\..*") }
         }
+        maven { url = uri("/absolute/path/to/extracted-qvac-repository") }
     }
 }
 ```
@@ -115,39 +113,54 @@ dependencyResolutionManagement {
 ```kotlin
 // app/build.gradle.kts
 dependencies {
-    implementation("io.tether:qvac-sdk-android:0.20.1")
+    implementation("io.tether:qvac-sdk-android-llm:<version>")
 }
 ```
 
-Replace `qvac-sdk-android` with `qvac-sdk-android-assistant`, `-llm`, `-speech`,
-`-vision`, `-media`, or `-robotics` when the app only needs that profile. The
-Kotlin API and import namespace remain identical across all artifacts.
+Replace `qvac-sdk-android-llm` with `qvac-sdk-android` (every capability),
+`-assistant`, `-speech`, `-vision`, `-media`, or `-robotics` to match the
+downloaded ZIP. The Kotlin API and import namespace remain identical across all
+artifacts. The archive includes the selected runtime and the Kotlin client
+modules it depends on, but not the Holepunch libraries from JitPack. Verify
+downloads against the release's `qvac-sdk-kotlin-<version>-SHA256SUMS` asset.
 
-Each `sdk-v<version>` GitHub Release also contains token-free Maven repository
-ZIPs for the seven Android profiles and the desktop JVM client. For example,
-download `qvac-sdk-android-llm-<version>-maven.zip`, extract it, and point a
-normal Gradle Maven repository at the extracted directory:
+The artifacts depend on `bare-rpc-kotlin`, which is compiled with Kotlin 2.4,
+so the consuming project needs a Kotlin 2.3 or newer compiler. AGP 9's built-in
+Kotlin compiles with the Kotlin Gradle plugin version on the classpath, and
+bundles 2.2 when none is declared, so such a project adds the plugin without
+applying it:
 
 ```kotlin
-dependencyResolutionManagement {
-    repositories {
-        google()
-        mavenCentral()
-        maven { url = uri("/absolute/path/to/extracted-qvac-repository") }
-    }
+// app/build.gradle.kts
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android") version "2.4.20" apply false
 }
 ```
 
-The archive includes the selected runtime and the Kotlin client modules it
-depends on, so the dependency declaration remains
-`implementation("io.tether:qvac-sdk-android-llm:<version>")`. Verify downloads
-against the release's `SHA256SUMS` asset. GitHub Packages or the configured
-public Maven repository remains the recommended path for normal dependency
-resolution and upgrades.
-
-To consume the artifacts without a remote repository, publish locally with
+To consume a checkout's artifacts the same way, publish locally with
 `./gradlew publishSdkToBuildRepository` and add
-`packages/sdk-kotlin/build/maven-repository` as a Maven repository.
+`packages/sdk-kotlin/build/maven-repository` as the Maven repository.
+
+### Build from a standalone checkout
+
+`scripts/install-local.sh` makes a sparse clone of `packages/sdk-kotlin` at a
+release tag or branch, builds every Android runtime profile against the
+`@qvac/sdk` version the checkout pins, and prints the local Maven repository
+path with the Gradle snippet that consumes it:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tetherto/qvac/sdk-v<version>/packages/sdk-kotlin/scripts/install-local.sh -o install-local.sh
+bash install-local.sh sdk-v<version>
+```
+
+Releases before `sdk-v0.23.0` do not build from a standalone checkout. The
+script checks for git, JDK 17, Node.js 22 and an Android SDK with NDK
+29.0.14206865 at `ANDROID_HOME` before cloning, names what is missing, and
+refuses a target directory that already exists. Without `packages/sdk` beside
+it the build skips the workspace worker build and bundles the installed
+`@qvac/sdk`, so the result matches the release assets built from the full
+monorepo.
 
 ### Consume the source checkout
 
@@ -190,9 +203,11 @@ Set `MAVEN_SIGNING_KEY` and `MAVEN_SIGNING_PASSWORD` to sign every publication
 with an in-memory PGP key. `./gradlew verifyMavenPublications` checks every current
 coordinate's documentation, sources, artifact presence and checksums.
 
-CI defaults to GitHub Packages; `KOTLIN_MAVEN_REPOSITORY_URL` and the matching
-`KOTLIN_MAVEN_*` secrets support other generic Maven repositories. Maven Central
-uses its dedicated deployment workflow, not a generic Maven URL:
+The SDK release (`publish-sdk.yml`) calls `publish-sdk-kotlin.yml` with the
+`release-assets` destination, which packages the Maven repository into the
+per-profile ZIPs and attaches them to the `sdk-v<version>` release. No Maven
+registry is published by default. Maven Central uses its dedicated deployment
+workflow, not a generic Maven URL:
 
 ```bash
 # Set Central user-token credentials (not account login credentials) securely:
@@ -209,10 +224,9 @@ deployments and Dokka generates the API documentation.
 
 For CI, configure the protected `release` environment with
 `KOTLIN_CENTRAL_USERNAME`, `KOTLIN_CENTRAL_PASSWORD`, `KOTLIN_MAVEN_SIGNING_KEY`
-and `KOTLIN_MAVEN_SIGNING_PASSWORD`. Select `central` in the manual workflow;
-it only stages unless `release_central` is explicitly enabled. For tag/lockstep
-release automation, set `KOTLIN_MAVEN_DESTINATION=central`; those release events
-publish publicly and wait for Central's `PUBLISHED` state. Namespace ownership
+and `KOTLIN_MAVEN_SIGNING_PASSWORD`. Select `central` as the destination when
+dispatching `publish-sdk-kotlin.yml` by hand; it only stages unless
+`release_central` is explicitly enabled. Namespace ownership
 and a discoverable production signing public key must be configured beforehand.
 Never run both staging and automatic publication for the same release blindly;
 finish or drop an existing deployment in the Portal before retrying.
@@ -250,6 +264,16 @@ collection cancels the service-side duplex request instead of merely sending EOF
 IPC reads/writes also run on the main thread. An in-flight frame finishes before
 cancellation releases the write lock; a write failure or 10-second write timeout
 closes the connection rather than letting later requests use a partial frame.
+
+`QvacWorkerService` is declared `android:exported="false"` in the library
+manifest and has no intent filter, so Android only lets components running
+under the owning application's UID bind it. There is no cross-application
+caller, so the Binder surface carries no authentication token; the
+per-session token described under Desktop JVM applies to the loopback TCP
+transport only. Keep `android:exported="false"` when merging the manifest
+(do not override it with `tools:replace`). Exporting the service, or sharing
+it across applications through a shared UID, would need an explicit caller
+check before dispatch, which the service does not implement.
 
 The committed `qvac.config*.json` files define the immutable published profiles.
 The Gradle `aio`, `assistant`, `llm`, `speech`, `vision`, `media`, and `robotics`
@@ -436,7 +460,9 @@ wire key `sample` internal. `serverLogs()` returns a cold log Flow;
 `subscribeServerLogs(scope, handler)` returns a caller-owned cancellable Job.
 `speech.transcribeStream(request, audioFlow)` and
 `speech.synthesizeStream(request, utf8TextFlow)` are duplex Flows: finish the
-input Flow to signal EOF and cancel collection to close the session. Neither
+input Flow to signal EOF and cancel collection to close the session. Cancelling
+ends the input stream, so the worker finishes the input it already holds; the
+cancel returns once the worker ends its reply, or after 5 seconds. Neither
 helper accumulates the audio result.
 `client.raw` remains available for a new plugin field or
 operation that has not reached the generated contract yet. The Android Feature
@@ -457,22 +483,26 @@ schema), and Kotlin compilation. Unsupported schema constructs fail generation
 instead of silently degrading to an empty DTO. The generated schema namespace
 is large by design; edit the exporter/generator, never generated DTOs.
 
-## Streaming resource limits
+## Bare-RPC
 
-Bare-RPC honors request-stream PAUSE/RESUME and sends response-stream flow
-control at byte/chunk watermarks. Queues are bounded even for empty chunks.
-An addressed oversized frame up to the discard safety limit is drained in
-64 KiB pieces and fails only its request with `BareRpcLimitException`; later
-RPCs remain usable. Unaddressable/malformed frames and frames beyond the safety
-limit close the connection. JSON lines have a separate bound, including lines
-split across frames. These are memory-safety limits, not generation cutoffs.
+Both transports speak bare-rpc through Holepunch's
+[`bare-rpc-kotlin`](https://github.com/holepunchto/bare-rpc-kotlin), published
+on JitPack, so a consuming project lists the JitPack repository next to Maven
+Central as the snippets above do. A frame over 16 MiB fails the call it belongs
+to with `QvacWorkerProtocolException` and leaves the connection usable: the
+transport splits frames before the library sees them, because the library
+would fail the whole connection. A JSON line over 16 MiB, including one split
+across frames, fails its call the same way. A stream buffering more than
+64 MiB ahead of its collector fails the connection; the worker's stream is
+paused once 16 KiB is buffered ahead of its collector and resumed once the
+collector takes that back below 16 KiB, so this is reached only if the worker
+ignores the pause. These are memory-safety limits, not generation cutoffs.
 
-Pass `rpcLimits = BareRpcLimits(...)` to `AndroidBareKitTransport.connect` or
-`JvmBareRpcTransport.connect/ connectResolved` when a capability needs larger
-individual frames/JSON lines. Defaults: 16 MiB frame and JSON line, 256 MiB
-discard ceiling, 32 MiB/1024 chunks per stream, pause at 1 MiB and resume below
-512 KiB. Account for device RAM before raising them. The isolated Android
-service uses the safe defaults.
+Pass `rpcLimits = RpcLimits(maxFrameBytes = ...)` to `JvmBareRpcTransport.connect`,
+`connectResolved` or `AndroidBareKitTransport.connect` for a call whose reply
+or stream chunk is larger than 16 MiB, such as a large `upscaleStream` image.
+The JSON line bound and the stream cap follow it. A frame is held in memory
+several times over while it is decoded, so account for device RAM.
 
 ## Local development
 
@@ -493,8 +523,7 @@ QVAC_RUN_CONFORMANCE=1 ./gradlew jvmTest --tests '*WorkerConformanceTest' --reru
 This downloads small models and tests generation, translation, embeddings,
 load/unload, cancellation, the tool loop, and TTS. Without the opt-in variable
 this test is explicitly skipped; ordinary JVM tests still exercise a live
-JavaScript Bare-RPC process and canonical bytes from the locked upstream
-encoder. CI runs real inference on `test-e2e-smoke`-labelled PRs or manual
+JavaScript bare-rpc peer. CI runs real inference on `test-e2e-smoke`-labelled PRs or manual
 dispatch. Publishing requires a release tag, explicit dispatch, or the SDK
 release workflow.
 

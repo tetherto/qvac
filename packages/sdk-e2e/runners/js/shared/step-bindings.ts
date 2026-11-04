@@ -67,13 +67,17 @@ const CALLS: Record<string, (params: never) => Promise<unknown>> = {
   /**
    * One transcription, bound under the name that says what came back: `metadata` swaps the flat
    * transcript for per-segment records, so a body that projected `text` off a metadata run would be
-   * reading segments under a field that promises a string.
+   * reading segments under a field that promises a string. The terminal engine statistics ride
+   * along as `stats` (undefined when the engine reports none), so a body can check where the work
+   * ran, as the Core ML checks do.
    */
   transcribe: async (params) => {
-    const result = await transcribe(params)
+    const call = transcribe(params)
+    const result = await call
+    const stats = await call.stats
     return (params as { metadata?: boolean }).metadata === true
-      ? { segments: result }
-      : { text: result }
+      ? { segments: result, stats }
+      : { text: result, stats }
   },
   bciTranscribe: async (params) => ({ text: await bciTranscribe(params) }),
   vla: (params) => vla(params),

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/diffusion-cpp",
-  "version": "0.31.0",
+  "version": "0.33.0",
   "description": "stable-diffusion.cpp addon for qvac image/video generation",
   "imports": {
     "#host-addon": {
@@ -36,6 +36,8 @@
     "example": "bare examples/load-model.js",
     "walk:world": "bare examples/world-walk-server.js",
     "generate": "bare examples/generate-image.js",
+    "generate:flux2-cuda": "bare examples/generate-image-flux2-cuda.js",
+    "generate:flux2-spark": "npm run generate:flux2-cuda",
     "generate:sd2": "bare examples/generate-image-sd2.js",
     "generate:esrgan": "bare examples/generate-image-esrgan-upscale.js",
     "generate:sdxl": "bare examples/generate-image-sdxl.js",
@@ -167,11 +169,11 @@
     "bare-path": "^3.0.0"
   },
   "optionalDependencies": {
-    "@qvac/diffusion-cpp-linux-x64": "0.31.0",
-    "@qvac/diffusion-cpp-linux-arm64": "0.31.0",
-    "@qvac/diffusion-cpp-darwin-arm64": "0.31.0",
-    "@qvac/diffusion-cpp-darwin-x64": "0.31.0",
-    "@qvac/diffusion-cpp-win32-x64": "0.31.0"
+    "@qvac/diffusion-cpp-linux-x64": "0.33.0",
+    "@qvac/diffusion-cpp-linux-arm64": "0.33.0",
+    "@qvac/diffusion-cpp-darwin-arm64": "0.33.0",
+    "@qvac/diffusion-cpp-darwin-x64": "0.33.0",
+    "@qvac/diffusion-cpp-win32-x64": "0.33.0"
   },
   "engines": {
     "bare": ">=1.24.0"

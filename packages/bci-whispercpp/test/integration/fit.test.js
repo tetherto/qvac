@@ -38,21 +38,11 @@ const SMALL_EMBEDDER_DESCRIPTION_PATH = testAssetPath(
   SMALL_EMBEDDER_DIR,
   'bci-embedder-small.fit.gguf'
 )
-const SMALL_EMBEDDER_HOST_BYTES = 332
-
-const PROJECTED_FIELDS = [
-  'status',
-  'modelType',
-  'deviceName',
-  'deviceTotalBytes',
-  'deviceBytes',
-  'weightsBytes',
-  'kvBytes',
-  'computeBytes',
-  'hostOverflowBytes',
-  'hostBytes',
-  'embedderBytes'
-]
+const isVerdict = (fit) => fit.status === 'fits' || fit.status === 'does-not-fit'
+const hostRow = (fit) => fit.devices[fit.devices.length - 1]
+// Every row but the trailing host row.
+const deviceRows = (fit) => fit.devices.slice(0, -1)
+const demand = (fit) => fit.devices.map((row) => [row.id, row.usedBytes])
 
 const hasModel = fs.existsSync(MODEL_PATH)
 const requireModel = os.hasEnv('BCI_REQUIRE_MODEL') && os.getEnv('BCI_REQUIRE_MODEL') === '1'
@@ -84,43 +74,41 @@ function copyIntoEmptyDirectory(t, filePath) {
   return copy
 }
 
-test('a projection is internally consistent', async (t) => {
-  if (skipWithoutModel(t)) return
+test('a projection lists the device it uses, the host last', async (t) => {
+  const fit = await assessFit({
+    modelPath: MODEL_DESCRIPTION_PATH,
+    embedderPath: EMBEDDER_DESCRIPTION_PATH
+  })
 
-  const fit = await assessFit({ modelPath: MODEL_PATH })
-
-  t.comment(`status=${fit.status} reason=${fit.reason} device=${fit.deviceName}`)
-  t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', 'a verdict, not an error')
-  t.ok(fit.deviceTotalBytes > 0, 'the device reported its capacity')
-  t.ok(fit.deviceFreeBytes <= fit.deviceTotalBytes, 'free never exceeds total')
-  t.ok(fit.weightsBytes > 0, 'the weights were measured')
-  t.ok(
-    fit.deviceBytes >= fit.weightsBytes || fit.hostBytes >= fit.weightsBytes,
-    'the weights are part of the demand'
-  )
+  t.comment(JSON.stringify(fit))
+  t.ok(isVerdict(fit), 'a verdict')
+  t.ok(fit.devices.length >= 1, 'at least the host row')
+  t.is(hostRow(fit).name, 'CPU', 'the host row is last')
+  t.ok(hostRow(fit).unified, 'the host row is unified')
+  t.alike(fit.stats, {})
+  for (const row of fit.devices) {
+    t.ok(row.id.length > 0 && row.name.length > 0, `${row.name} is named`)
+    t.ok(row.usedBytes > 0, `${row.name} has a demand`)
+    t.ok(row.freeBytes <= row.totalBytes, `${row.name} has free within total`)
+  }
 })
 
 test('the embedder is part of the host demand', async (t) => {
-  if (skipWithoutModel(t)) return
-  if (!fs.existsSync(EMBEDDER_PATH)) {
-    t.pass('no embedder on this runner')
-    return
-  }
+  const small = await assessFit({
+    modelPath: MODEL_DESCRIPTION_PATH,
+    embedderPath: SMALL_EMBEDDER_PATH
+  })
+  const full = await assessFit({
+    modelPath: MODEL_DESCRIPTION_PATH,
+    embedderPath: EMBEDDER_DESCRIPTION_PATH
+  })
 
-  const small = await assessFit({ modelPath: MODEL_PATH, embedderPath: SMALL_EMBEDDER_PATH })
-  const full = await assessFit({ modelPath: MODEL_PATH, embedderPath: EMBEDDER_PATH })
-
-  t.ok(full.embedderBytes > small.embedderBytes, 'the embedder weights were measured')
-  t.ok(
-    full.embedderBytes < fs.statSync(EMBEDDER_PATH).size,
-    'only what the embedder keeps, not the convolution weights it drops'
+  t.alike(
+    deviceRows(full).map((row) => row.usedBytes),
+    deviceRows(small).map((row) => row.usedBytes),
+    'the embedder is outside the device demand'
   )
-  t.is(full.deviceBytes, small.deviceBytes, 'the embedder is outside the device demand')
-  t.is(
-    full.hostBytes - small.hostBytes,
-    full.embedderBytes - small.embedderBytes,
-    'and inside the host demand'
-  )
+  t.ok(hostRow(full).usedBytes > hostRow(small).usedBytes, 'and inside the host demand')
 })
 
 test('with no embedder named, the one beside the model is measured', async (t) => {
@@ -133,15 +121,15 @@ test('with no embedder named, the one beside the model is measured', async (t) =
   const colocated = await assessFit({ modelPath: MODEL_PATH })
   const named = await assessFit({ modelPath: MODEL_PATH, embedderPath: EMBEDDER_PATH })
 
-  t.is(colocated.embedderBytes, named.embedderBytes)
-  t.is(colocated.hostBytes, named.hostBytes)
+  t.alike(demand(colocated), demand(named))
 })
 
-test('a model with no embedder beside it is an outcome, not a rejection', async (t) => {
-  const fit = await assessFit({ modelPath: copyIntoEmptyDirectory(t, MODEL_DESCRIPTION_PATH) })
-
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'embedder-unreadable', 'a load would not find the embedder either')
+test('a model with no embedder beside it rejects', async (t) => {
+  await t.exception(
+    assessFit({ modelPath: copyIntoEmptyDirectory(t, MODEL_DESCRIPTION_PATH) }),
+    /embedder-unreadable/,
+    'a load would not find the embedder either'
+  )
 })
 
 test('the registry descriptions project like the model and embedder they describe', async (t) => {
@@ -157,62 +145,35 @@ test('the registry descriptions project like the model and embedder they describ
     embedderPath: EMBEDDER_DESCRIPTION_PATH
   })
 
-  for (const field of PROJECTED_FIELDS) {
-    t.is(descriptions[field], files[field], `${field} matches`)
-  }
+  t.is(descriptions.status, files.status, 'the same verdict')
+  t.alike(demand(descriptions), demand(files), 'the same demand on the same devices')
 })
 
 test('an embedder description measures like the embedder file', async (t) => {
   const file = await assessFit({
-    modelPath: '/nonexistent/model.bin',
+    modelPath: MODEL_DESCRIPTION_PATH,
     embedderPath: SMALL_EMBEDDER_PATH
   })
   const description = await assessFit({
-    modelPath: '/nonexistent/model.bin',
+    modelPath: MODEL_DESCRIPTION_PATH,
     embedderPath: SMALL_EMBEDDER_DESCRIPTION_PATH
   })
 
-  t.is(
-    file.embedderBytes,
-    SMALL_EMBEDDER_HOST_BYTES,
-    'projections, session map and projection cache'
+  t.alike(demand(description), demand(file))
+})
+
+test('an embedder that cannot be read rejects', async (t) => {
+  await t.exception(
+    assessFit({ modelPath: MODEL_DESCRIPTION_PATH, embedderPath: '/nonexistent/embedder.bin' }),
+    /embedder-unreadable/
   )
-  t.is(description.embedderBytes, file.embedderBytes)
 })
 
-test('an embedder that cannot be read is an outcome, not a rejection', async (t) => {
-  if (skipWithoutModel(t)) return
-
-  const fit = await assessFit({ modelPath: MODEL_PATH, embedderPath: '/nonexistent/embedder.bin' })
-
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'embedder-unreadable')
-  t.is(fit.embedderBytes, 0)
-})
-
-test('a model that cannot be read is an outcome, not a rejection', async (t) => {
-  const fit = await assessFit({ modelPath: '/nonexistent/model.bin' })
-
-  t.is(fit.status, 'error')
-  t.ok(fit.reason.length > 0, 'the engine gave a reason')
-})
-
-test('every projected field is present on an unreadable model', async (t) => {
-  const fit = await assessFit({ modelPath: '/nonexistent/model.bin' })
-
-  for (const field of [
-    'deviceFreeBytes',
-    'deviceTotalBytes',
-    'deviceBytes',
-    'weightsBytes',
-    'kvBytes',
-    'computeBytes',
-    'hostOverflowBytes',
-    'hostBytes',
-    'embedderBytes'
-  ]) {
-    t.is(typeof fit[field], 'number', `${field} is a number`)
-  }
+test('a model that cannot be read rejects', async (t) => {
+  await t.exception(
+    assessFit({ modelPath: '/nonexistent/model.bin', embedderPath: SMALL_EMBEDDER_PATH }),
+    /assessFit: /
+  )
 })
 
 test('a count that is not a count is refused', async (t) => {
@@ -240,23 +201,23 @@ test('the event loop keeps running while a fit is projected', async (t) => {
   const fit = await assessFit({ modelPath, embedderPath: SMALL_EMBEDDER_PATH })
   pending = false
 
-  t.ok(fit.weightsBytes > 0, 'a real native projection completed')
+  t.ok(isVerdict(fit), 'a real native projection completed')
   t.ok(ticks > 0, 'the loop turned before the fit settled')
   t.comment(`${ticks} loop turns before completion`)
 })
 
 test('concurrent fits each keep their own request and all settle', async (t) => {
-  const request = { modelPath: '/nonexistent/model.bin', embedderPath: SMALL_EMBEDDER_PATH }
+  const request = { modelPath: MODEL_DESCRIPTION_PATH, embedderPath: SMALL_EMBEDDER_PATH }
   const first = assessFit(request)
   request.embedderPath = '/nonexistent/embedder.bin'
   const second = assessFit(request)
-  const third = assessFit({ modelPath: '/nonexistent/model.bin' })
+  const third = assessFit({ modelPath: MODEL_DESCRIPTION_PATH, embedderPath: SMALL_EMBEDDER_PATH })
 
-  const [a, b, c] = await Promise.all([first, second, third])
+  const [a, b, c] = await Promise.allSettled([first, second, third])
 
-  t.is(a.embedderBytes, SMALL_EMBEDDER_HOST_BYTES, 'the first call owns its original request')
-  t.is(b.embedderBytes, 0, 'the second call owns its changed request')
-  t.is(c.status, 'error', 'an error outcome does not strand the calls queued behind it')
+  t.is(a.status, 'fulfilled', 'the first call owns its original request')
+  t.is(b.status, 'rejected', 'the second call owns its changed request')
+  t.is(c.status, 'fulfilled', 'a rejection does not strand the calls queued behind it')
 })
 
 test(
@@ -276,7 +237,6 @@ test(
     await bci.destroy()
     const fit = await pending
 
-    t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', 'a verdict, not an error')
-    t.ok(fit.weightsBytes > 0, 'the projection outlived the instance')
+    t.ok(isVerdict(fit), 'the projection outlived the instance')
   }
 )

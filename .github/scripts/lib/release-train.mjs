@@ -1,9 +1,9 @@
 // Release trains: nx release groups that publish together from one
 // release-train-<train>-<x.y.z> branch. Group membership lives in nx.json;
 // .github/release-trains.json says which groups form a train, which group's or
-// project's version names the branch, which workspace packages the train
-// installs from npm, which package gets the GitHub release, and which checks
-// must pass before and after publishing.
+// project's version names the branch, which package gets the GitHub release,
+// and which checks must pass before and after publishing. Every workspace
+// package a train depends on outside itself comes from npm (outsideTrain).
 import { readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -59,10 +59,6 @@ export function loadTrain (name, catalog, nxJson) {
   } else {
     throw new Error(`Train '${name}': anchorGroup '${train.anchorGroup}' must be one of its groups and "fixed"`)
   }
-  const fromNpm = train.fromNpm ?? []
-  if (!Array.isArray(fromNpm) || fromNpm.some((dir) => typeof dir !== 'string' || !/^[\w.-]+(\/[\w.-]+)*$/.test(dir))) {
-    throw new Error(`Train '${name}': fromNpm must list package directories, such as "packages/sdk"`)
-  }
   if (train.githubRelease && !projects.includes(train.githubRelease.project)) {
     throw new Error(`Train '${name}': githubRelease project ${train.githubRelease.project} is not in the train`)
   }
@@ -78,7 +74,6 @@ export function loadTrain (name, catalog, nxJson) {
     name,
     projects,
     anchorProjects,
-    fromNpm,
     githubRelease: train.githubRelease ?? null,
     checks,
     packageChecks: train.packageChecks ?? null,
@@ -99,6 +94,57 @@ export function workspaceEntries (workspaceYaml) {
     if (match) entries.push(match[2])
   }
   return entries
+}
+
+const DIR_PATTERN = /^[\w.-]+(\/[\w.-]+)*$/
+
+// Every directory the workspace's include entries match. Exclusions are
+// ignored, so a package the train leaves out of the workspace is still found.
+// subdirs(parent) lists the directory names under parent.
+export function workspaceDirs (workspaceYaml, subdirs) {
+  const dirs = new Set()
+  for (const entry of workspaceEntries(workspaceYaml)) {
+    if (entry.startsWith('!')) continue
+    if (entry.endsWith('/*') && DIR_PATTERN.test(entry.slice(0, -2))) {
+      const parent = entry.slice(0, -2)
+      for (const name of subdirs(parent)) dirs.add(`${parent}/${name}`)
+    } else if (DIR_PATTERN.test(entry)) {
+      dirs.add(entry)
+    } else {
+      throw new Error(`pnpm-workspace.yaml entry "${entry}" is neither a directory nor <dir>/*`)
+    }
+  }
+  return [...dirs]
+}
+
+// The workspace packages the train's packages depend on, the train's own
+// aside. pnpm links each one whose version satisfies the range, and its
+// workspace copy can hold changes it has not released, so the train installs
+// them from npm. Development dependencies count: the build and typecheck run
+// against them. packages is [{ dir, manifest }], manifest null for a directory
+// without a package.json.
+export function outsideTrain (projects, packages) {
+  const byName = new Map()
+  for (const { dir, manifest } of packages) {
+    if (!manifest?.name) continue
+    if (byName.has(manifest.name)) {
+      throw new Error(`${manifest.name} is the name of both ${byName.get(manifest.name).dir} and ${dir}`)
+    }
+    byName.set(manifest.name, { dir, manifest })
+  }
+  const inTrain = new Set(projects)
+  const outside = new Map()
+  for (const project of projects) {
+    const own = byName.get(project)
+    if (!own) throw new Error(`No workspace package is named ${project}`)
+    for (const field of DEPENDENCY_FIELDS) {
+      for (const dep of Object.keys(own.manifest[field] ?? {})) {
+        if (inTrain.has(dep) || !byName.has(dep) || outside.has(dep)) continue
+        outside.set(dep, { name: dep, dir: byName.get(dep).dir })
+      }
+    }
+  }
+  return [...outside.values()].sort((a, b) => a.dir.localeCompare(b.dir))
 }
 
 // Adds a `!<dir>` entry for each directory the workspace still holds, after
@@ -184,7 +230,7 @@ export function rangeErrors (manifests, versions) {
   return errors
 }
 
-export function checkRelease ({ branch, train, moved, versionAtHead, changelogAt, versionPlans = [], manifests, workspace = '', fromNpm = [] }) {
+export function checkRelease ({ branch, train, moved, versionAtHead, changelogAt, versionPlans = [], manifests, workspace = '', outside = [] }) {
   // nx applies every plan file on disk, so a committed plan would bump the
   // next train again.
   const errors = versionPlans.map((path) => `${path} is committed; delete it, nx would apply it again`)
@@ -192,10 +238,8 @@ export function checkRelease ({ branch, train, moved, versionAtHead, changelogAt
   // so the train builds against an npm version only if the package is outside
   // the workspace.
   const entries = workspaceEntries(workspace)
-  for (const { dir, name } of fromNpm) {
-    if (!name) errors.push(`${dir}/package.json does not exist; fix fromNpm in the '${branch.train}' train`)
-    else if (train.projects.includes(name)) errors.push(`${name} is in the '${branch.train}' train, so it cannot come from npm`)
-    else if (!entries.includes(`!${dir}`)) {
+  for (const { dir, name } of outside) {
+    if (!entries.includes(`!${dir}`)) {
       errors.push(`${dir} is in the pnpm workspace, but the '${branch.train}' train installs ${name} from npm. ` +
         `Run \`node .github/scripts/release-train.mjs exclude ${branch.train}\` and \`pnpm install --lockfile-only\`, and commit both files`)
     }
@@ -222,15 +266,53 @@ export function checkRelease ({ branch, train, moved, versionAtHead, changelogAt
 
 // A version on npm was published from the commit in its gitHead. Publishing the
 // rest of the train from another commit would mix sources in one release.
+// gitHeadOf returns { found, value } for the version on npm.
 export function publishedElsewhere (moved, gitHeadOf, head) {
   const errors = []
   for (const project of moved) {
-    const gitHead = gitHeadOf(project)
-    if (gitHead && gitHead !== head) {
-      errors.push(`${project.name}@${project.version} was published from ${gitHead}, not ${head}; cut a new train branch`)
-    }
+    const { found, value: gitHead } = gitHeadOf(project)
+    if (!found || gitHead === head) continue
+    errors.push(gitHead
+      ? `${project.name}@${project.version} was published from ${gitHead}, not ${head}; cut a new train branch`
+      : `${project.name}@${project.version} is on npm without a gitHead, so it was not published from ${head}; cut a new train branch`)
   }
   return errors
+}
+
+// The commit a train release was published from: the gitHead npm records for
+// the anchor package at the branch version. gitHeadOf returns { found, value }.
+export function publishedCommit (train, version, gitHeadOf) {
+  const name = train.anchorProjects[0]
+  const { found, value } = gitHeadOf(name, version)
+  if (!found) throw new Error(`${name}@${version} is not on npm; the train has not published yet`)
+  if (!/^[0-9a-f]{40}$/.test(value ?? '')) throw new Error(`${name}@${version} has no commit as its gitHead on npm`)
+  return value
+}
+
+// The result of `npm view <spec> <field> --json`. E404 means both "no such
+// package" and "no such version", and also a version npm has accepted but does
+// not serve yet. `found` keeps that apart from a field the version does not
+// have, where `value` is null.
+export function parseNpmView ({ status, stdout, stderr }) {
+  if (status !== 0) {
+    let code
+    try {
+      code = JSON.parse(stdout).error?.code
+    } catch {}
+    if (code === 'E404') return { found: false, value: null }
+    throw new Error(`exit ${status}: ${stderr || stdout}`)
+  }
+  return { found: true, value: stdout.trim() ? JSON.parse(stdout) : null }
+}
+
+// Compares npm's sha1 only for the versions this run published. A version an
+// earlier run published was compared by that run, and a rebuild of the same
+// commit can pack different bytes than it did.
+export function shasumMismatches (moved, published, servedShasum, builtShasum) {
+  const publishedNames = new Set(published)
+  return moved
+    .filter((project) => publishedNames.has(project.name) && servedShasum(project) !== builtShasum(project))
+    .map((project) => `${project.name}@${project.version} on npm has sha1 ${servedShasum(project)}; the built tarball has ${builtShasum(project)}`)
 }
 
 // A consumer install that resolves every train package from its tarball, as it
@@ -260,12 +342,11 @@ export function parseLsRemote (output, tag) {
   return direct
 }
 
-// Each tag goes on the commit npm records as the version's gitHead.
-export function planTags (moved, { releaseProject, remoteCommit, gitHeadOf }) {
+// Each tag goes on the commit npm records as the version's gitHead, including
+// the tag the GitHub release is created on.
+export function planTags (moved, { remoteCommit, gitHeadOf }) {
   const plan = { create: [], existing: [], conflicts: [] }
   for (const project of moved) {
-    // create-github-release.yml makes this one.
-    if (project.name === releaseProject) continue
     const tag = tagFor(project.name, project.version)
     const target = gitHeadOf(project)
     const commit = remoteCommit(tag)
@@ -276,8 +357,8 @@ export function planTags (moved, { releaseProject, remoteCommit, gitHeadOf }) {
   return plan
 }
 
-// pnpm links a workspace sibling whenever its version satisfies the range, so
-// the build can compile against a version npm does not have yet.
+// After the install, a link to a package outside the train means the train
+// would build against workspace code instead of the version on npm.
 export function linkedOutsideTrain (projects, resolvedDeps) {
   const inTrain = new Set(projects)
   const linked = new Map()

@@ -69,8 +69,7 @@ protected:
     bitnetModel_ =
         MP("bitnet_b1_58-large-TQ2_0.gguf",
            "BITNET_MODEL_PATH",
-           MP::OnMissing::Skip,
-           "https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0");
+           MP::OnMissing::Skip);
 
     qwen3Model_ =
         MP("Qwen3-0.6B-Q8_0.gguf",

@@ -257,3 +257,30 @@ test('groupCompanionSets: groups Chatterbox MeCab dictionary files', (t) => {
     t.is(companion.isCompanionOnly, true, `${filename} is companion-only`)
   }
 })
+
+test('deduplicateModels: grouping preserves shared Core ML package weights in either order', (t) => {
+  const compiled = makeModel({
+    registryPath: 'acestep/vae-decoder.mlmodelc/weights/weight.bin',
+    sha256Checksum: 'shared-weights'
+  })
+  const source = makeModel({
+    registryPath: 'acestep/vae-decoder.mlpackage/Data/com.apple.CoreML/weights/weight.bin',
+    sha256Checksum: 'shared-weights'
+  })
+
+  for (const files of [
+    [compiled, source],
+    [source, compiled]
+  ]) {
+    const grouped = groupCompanionSets(files)
+    t.ok(
+      grouped.every((entry) => entry.isCompanionOnly),
+      'both paths are companion-only'
+    )
+    t.alike(
+      deduplicateModels(grouped, false).map((entry) => entry.registryPath),
+      files.map((entry) => entry.registryPath),
+      'both bundle layouts remain addressable'
+    )
+  }
+})

@@ -566,16 +566,29 @@ Call `TranslationNmtcpp.assessFit({ files, config, marginBytes? })` before
 constructing a model to estimate whether its weights can load with the memory
 free right now. `files` and `config` match the constructor; `files.model` must
 be an absolute path. It returns a Promise, and concurrent calls run one at a
-time within the addon. The result contains `status` (`fits`,
-`does-not-fit`, or `error`), `reason`, `backend`, `modelBytes`, `requiredBytes`,
-`freeBytes`, and a readable `report`. An unreadable model resolves with
-`status: 'error'`; a malformed request rejects. No model instance or weights are
-loaded.
+time within the addon. The result is `{ status, devices, stats }`: `status` is
+`fits`, `does-not-fit`, or `unknown`, and `devices` is
+`[{ id, name, unified, usedBytes, freeBytes, totalBytes }]`: the selected device,
+charged the allowance, then the host CPU. A discrete GPU's host row carries the
+model's source bytes, which the host stages while the weights load; a GPU that
+shares host memory has a host row carrying 0. A load on the CPU, which every
+Bergamot load is, is one row. `id` is the PCI bus ID when the backend reports
+one, and the device name otherwise. `unified` is true for memory the host owns:
+the CPU, an integrated GPU, a GPU that shares the host's memory, Android's
+OpenCL GPU, and a device that reports no memory of its own, which takes the
+host's figures. No model instance or weights are loaded.
 The estimate budgets four times the model file size plus 512 MiB for copies,
-tokenizers, and inference buffers; actual use varies by model. An indeterminate placement reports `error`
-with `reason: 'insufficient-evidence'`. IndicTrans `main-gpu` selection currently
-reports `unsupported-config`. Fit is a point-in-time estimate, so
-another load can consume memory before `load()` runs.
+tokenizers, and inference buffers; actual use varies by model. `fits` means
+every row's charge fits with `marginBytes` left free. `does-not-fit` means a CPU
+load whose source bytes alone do not fit. A placement between the two, memory
+that cannot be read, no CPU device for the host row, and IndicTrans `main-gpu`
+selection are `unknown`, with no rows. On an iOS device every unified row's free
+memory is capped at the app's own memory limit, `os_proc_available_memory()`,
+before the verdict, and a limit of 0 means the app has none left. A model or
+vocabulary that cannot be read, a requested GPU that is unavailable, or a
+malformed request rejects with an `InvalidArgument` error, and a CPU load on a
+host with no CPU device with an `InternalError`. Fit is a point-in-time estimate, so another
+load can consume memory before `load()` runs.
 
 ```js
 const fit = await TranslationNmtcpp.assessFit({
@@ -583,7 +596,10 @@ const fit = await TranslationNmtcpp.assessFit({
   config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans },
   marginBytes: 256 * 1024 * 1024
 })
-if (fit.status !== 'fits') console.log(fit.report)
+
+fit.status // 'fits' | 'does-not-fit' | 'unknown'
+fit.devices // [{ id, name, unified, usedBytes, freeBytes, totalBytes }]
+fit.stats // {}
 ```
 
 - `load(): Promise<void>` — loads the model (both stages for pivot setups);

@@ -12,6 +12,7 @@
 #include <common/common.h>
 #include <gtest/gtest.h>
 #include <inference-addon-cpp/Errors.hpp>
+#include <llama/mtmd/mtmd.h>
 #include <nlohmann/json.hpp>
 
 #include "model-interface/CacheLedger.hpp"
@@ -246,6 +247,43 @@ TEST_F(MtmdLlmContextTest, ProcessAndGetRuntimeStats) {
     auto stats = model->runtimeStats();
     EXPECT_GE(stats.size(), 0);
   });
+}
+
+// A text conversation counts what a fresh request decodes; media is rejected,
+// not counted.
+TEST_F(MtmdLlmContextTest, CalcTokensMatchesPromptTokensOfAFreshRun) {
+  if (!hasValidModel()) {
+    FAIL() << "Multimodal model or projection file not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  const std::string input =
+      R"([{"role": "user", "content": "Hello, how are you?"}])";
+  const size_t count = model->calcTokens({.history = input});
+  EXPECT_EQ(
+      model->calcTokens({.text = "Hello, how are you?", .history = "[]"}),
+      count);
+
+  LlamaModel::Prompt prompt;
+  prompt.input = input;
+  (void)model->processPrompt(prompt);
+  EXPECT_EQ(
+      static_cast<double>(count),
+      getStatValue(model->runtimeStats(), "promptTokens"));
+
+  try {
+    (void)model->calcTokens(
+        {.history = R"([{"role": "user", "type": "media", "content": ""},)"
+                    R"( {"role": "user", "content": "Describe it."}])"});
+    ADD_FAILURE() << "calcTokens counted a media message";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_NE(error.codeString().find("InvalidArgument"), std::string::npos)
+        << error.codeString() << " " << error.what();
+  }
 }
 
 TEST_F(MtmdLlmContextTest, LoadMediaBinary) {
@@ -1195,6 +1233,41 @@ TEST_F(MtmdLlmContextTest, LoadCacheRejectsRestoredMemoryMetadataMismatch) {
   fs::remove(cacheTokensMismatchPath);
 }
 
+// A batch call wipes the memory the single-prompt context kept, even when it
+// is refused: the context must stop counting its KV cells too, or the next
+// prompt is checked against cells that are gone.
+TEST_F(MtmdLlmContextTest, ABatchCallForgetsTheCellsItWipes) {
+  if (!hasValidModel()) {
+    FAIL() << "Multimodal model or projection file not found";
+  }
+
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  auto* ctx =
+      dynamic_cast<MtmdLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(ctx, nullptr) << "single-prompt context for a VLM must be MTMD";
+
+  LlamaModel::Prompt prompt;
+  prompt.input = R"([{"role": "user", "content": "Hello"}])";
+  prompt.prefill = true;
+  ASSERT_NO_THROW(model->processPrompt(prompt));
+  ASSERT_GT(ctx->getCacheTokens(), 0);
+
+  LlamaModel::Prompt batched;
+  batched.input = R"([{"role": "user", "content": "Hi"}])";
+  EXPECT_THROW(
+      model->processPromptBatch(std::vector<LlamaModel::Prompt>{batched}),
+      qvac_errors::StatusError)
+      << "test setup: parallel = 1 refuses a batch";
+
+  EXPECT_EQ(ctx->getNPast(), 0);
+  EXPECT_EQ(ctx->getCacheTokens(), 0)
+      << "the context still counts the KV cells the batch call wiped";
+}
+
 TEST_F(MtmdLlmContextTest, InvalidMedia) {
   if (!hasValidModel()) {
     FAIL() << "Multimodal model or projection file not found";
@@ -1514,6 +1587,124 @@ TEST_F(MtmdLlmContextTest, RejectMediaMarkerWithoutBuffer) {
   // prompt.media is empty - missing the buffer that the marker expects
 
   EXPECT_THROW({ model->processPrompt(prompt); }, qvac_errors::StatusError);
+}
+
+// An ordered `content` array keeps text and media in ONE user turn: each media
+// part leaves an mtmd marker at its own position, and a path-less part (the
+// placeholder the JS layer leaves after hoisting its bytes) plans a byte
+// buffer. Separate `type: "media"` messages cannot express this without
+// splitting the turn.
+TEST_F(MtmdLlmContextTest, OrderedPartsLoadDistinctImagesInMarkerOrder) {
+  auto model = createModel();
+  ASSERT_NE(model, nullptr);
+  auto* ctx =
+      dynamic_cast<MtmdLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(ctx, nullptr);
+  const auto mediaDir = multimodalTestImagePath().parent_path();
+  const std::vector<fs::path> images = {
+      mediaDir / "elephant.jpg",
+      mediaDir / "fruitPlate.png",
+      mediaDir / "news-paper.jpg"};
+  std::vector<std::vector<uint8_t>> bytes;
+  for (const auto& image : images) {
+    ASSERT_TRUE(fs::exists(image));
+    bytes.push_back(readBinaryFile(image));
+    ctx->loadMedia(bytes.back());
+  }
+  const auto expected = MtmdLlmContextTestPeer::loadedMediaHashes(*ctx);
+  ASSERT_EQ(expected.size(), 3u);
+  ASSERT_NE(expected[0], expected[1]);
+  ASSERT_NE(expected[1], expected[2]);
+  ASSERT_NE(expected[0], expected[2]);
+  ctx->resetMedia();
+
+  LlamaModel::Prompt prompt;
+  prompt.input =
+      nlohmann::json::array(
+          {{{"role", "user"},
+            {"content",
+             nlohmann::json::array(
+                 {{{"type", "text"}, {"text", "First:"}},
+                  {{"type", "media"}},
+                  {{"type", "text"}, {"text", "Second:"}},
+                  {{"type", "media"}, {"content", images[1].string()}},
+                  {{"type", "text"}, {"text", "Third:"}},
+                  {{"type", "media"}}})}}})
+          .dump();
+  prompt.media = {bytes[0], bytes[2]};
+  LlamaModelTestPeer::resolvePromptMedia(*model, prompt);
+  EXPECT_EQ(MtmdLlmContextTestPeer::loadedMediaHashes(*ctx), expected);
+  ctx->resetMedia();
+
+  // Swapping the uploaded bytes must change image identity at both markers.
+  prompt.media = {bytes[2], bytes[0]};
+  LlamaModelTestPeer::resolvePromptMedia(*model, prompt);
+  EXPECT_EQ(
+      MtmdLlmContextTestPeer::loadedMediaHashes(*ctx),
+      (std::vector<uint64_t>{expected[2], expected[1], expected[0]}));
+  ctx->resetMedia();
+}
+
+TEST_F(MtmdLlmContextTest, FormatPromptKeepsOrderedContentPartsInOneTurn) {
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  const std::string marker = mtmd_default_marker();
+  const ParsedPromptPayload parsed = LlamaModelTestPeer::formatPrompt(
+      *model,
+      R"([{"role":"user","content":[)"
+      R"({"type":"text","text":"Which image shows the same place as "},)"
+      R"({"type":"media","content":"/media/img1.jpg"},)"
+      R"({"type":"text","text":"?\nA. "},)"
+      R"({"type":"media"},)"
+      R"({"type":"text","text":"\nB. "},)"
+      R"({"type":"media","content":"/media/img3.jpg"})"
+      R"(]}])");
+
+  ASSERT_EQ(parsed.chatMsgs.size(), 1u);
+  EXPECT_EQ(
+      parsed.chatMsgs[0].content,
+      "Which image shows the same place as " + marker + "?\nA. " + marker +
+          "\nB. " + marker);
+  ASSERT_EQ(parsed.mediaPlan.size(), 3u);
+  EXPECT_EQ(parsed.mediaPlan[0].source, MediaSource::Path);
+  EXPECT_EQ(parsed.mediaPlan[0].path, "/media/img1.jpg");
+  EXPECT_EQ(parsed.mediaPlan[1].source, MediaSource::ByteBuffer);
+  EXPECT_EQ(parsed.mediaPlan[2].source, MediaSource::Path);
+  EXPECT_EQ(parsed.mediaPlan[2].path, "/media/img3.jpg");
+  ASSERT_EQ(parsed.mediaPaths.size(), 2u);
+}
+
+// Media parts are a user-turn construct: an assistant turn carrying one is
+// refused rather than rendering a marker the template cannot place.
+TEST_F(MtmdLlmContextTest, FormatPromptRejectsMediaPartOnAssistantTurn) {
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  EXPECT_THROW(
+      LlamaModelTestPeer::formatPrompt(
+          *model,
+          R"([{"role":"assistant","content":[{"type":"media","content":"/media/img1.jpg"}]}])"),
+      qvac_errors::StatusError);
+}
+
+// An unknown part type is a caller error, not something to drop silently: a
+// dropped image would reach the model as a prompt with a missing picture.
+TEST_F(MtmdLlmContextTest, FormatPromptRejectsUnknownContentPartType) {
+  auto model = createModel();
+  if (!model) {
+    FAIL() << "Model failed to load";
+  }
+
+  EXPECT_THROW(
+      LlamaModelTestPeer::formatPrompt(
+          *model,
+          R"([{"role":"user","content":[{"type":"image","path":"/media/img1.jpg"}]}])"),
+      qvac_errors::StatusError);
 }
 
 /// Regression for review comment #3451899281. On the continuous-batching path

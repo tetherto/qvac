@@ -481,6 +481,31 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: {}
   },
 
+  'parakeet-transcribepsy': {
+    constant: { $const: 'PARAKEET_TRANSCRIBEPSY_250M_Q8_0' },
+    type: 'parakeet-transcription',
+    config: {}
+  },
+
+  // The same GGUF with explicit 15 s long-form windows (188 encoder frames) and
+  // 1.28 s of context on each side, so a fixture longer than one window is
+  // encoded in pieces and stitched back together.
+  'parakeet-transcribepsy-windowed': {
+    constant: { $const: 'PARAKEET_TRANSCRIBEPSY_250M_Q8_0' },
+    type: 'parakeet-transcription',
+    config: { longFormWindowFrames: 188, longFormContextFrames: 16 }
+  },
+
+  // The Core ML distribution: an encoder-less GGUF whose encoder and decoder
+  // bundles the loader stages beside it on macOS and iOS. Anywhere else the
+  // load is refused, so the key exists only where it can load.
+  'parakeet-transcribepsy-coreml': {
+    on: ['desktop-macos', 'electron-macos', 'mobile-ios'],
+    constant: { $const: 'PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0' },
+    type: 'parakeet-transcription',
+    config: {}
+  },
+
   bci: {
     // Defined on every leg: `model-fit-bci` assesses the load without running it. Mobile
     // never loads it, so it must not pay for the weights.

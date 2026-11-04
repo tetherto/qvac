@@ -6,6 +6,7 @@ import { runConsumerDesktop } from './commands/run-consumer-desktop.js'
 import { runConsumerElectron } from './commands/run-consumer-electron.js'
 import { runConsumerSnap } from './commands/run-consumer-snap.js'
 import { runConsumerExternal } from './commands/run-consumer-external.js'
+import { routeRunLocal } from './utils/external-consumer.js'
 import { runBootstrap } from './commands/run-bootstrap.js'
 import { buildConsumerMobile } from './commands/build-consumer-mobile.js'
 import { buildConsumerElectron } from './commands/build-consumer-electron.js'
@@ -114,7 +115,9 @@ program
 
 program
   .command('run:consumer:external')
-  .description('Run a non-JS consumer over the stdin/stdout bridge (e.g., the Python runner)')
+  .description(
+    'Run a non-JS consumer: over the stdin/stdout bridge (e.g., the Python runner), or one that speaks MQTT itself'
+  )
   .requiredOption('--runId <id>', 'Unique run identifier (must match producer)')
   .requiredOption('--name <name>', 'Name of the external consumer in consumers.external')
   .option('--mqtt-broker <url>', 'MQTT broker URL (overrides config)')
@@ -253,8 +256,11 @@ addLocalOpts(program.command('run:local:desktop'))
   .action(runLocalDesktop)
 
 addLocalOpts(program.command('run:local:external'))
-  .description('Run producer + a configured external (non-JS) consumer locally')
+  .description(
+    'Run producer + a configured external (non-JS) consumer locally; also run:local:<name>'
+  )
   .requiredOption('--name <name>', 'Name of the external consumer in consumers.external')
+  .option('--skip-build', "Skip the consumer's prepare step (reuse what it built last time)")
   .action(runLocalExternal)
 
 addLocalOpts(program.command('run:local:python'))
@@ -293,4 +299,9 @@ addLocalOpts(program.command('run:local:ios'))
   .option('--device <udid>', 'Target specific iOS device')
   .action(runLocalIos)
 
-program.parse()
+program.parse(
+  routeRunLocal(
+    process.argv,
+    program.commands.map((command) => command.name())
+  )
+)

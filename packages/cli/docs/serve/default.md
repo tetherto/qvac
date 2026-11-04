@@ -9,15 +9,28 @@ described in [README.md](README.md) and applies here. Its own configuration live
 
 ## Endpoints
 
-| Method   | Path                       | Notes                                   |
-| -------- | -------------------------- | --------------------------------------- |
-| `POST`   | `/qvac/v1/chat/batch`      | Batch chat completion (LLM)             |
-| `DELETE` | `/qvac/v1/kv_cache`        | Reclaim automatic KV cache              |
-| `GET`    | `/qvac/v1/system`          | Host CPU, memory and GPU capacity       |
-| `POST`   | `/qvac/v1/models/fit`      | Whether models fit, before loading them |
-| `POST`   | `/qvac/v1/translate`       | Text translation (NMT model)            |
-| `POST`   | `/qvac/v1/ocr`             | Text recognition in an image            |
-| `POST`   | `/qvac/v1/classifications` | Image classification                    |
+| Method          | Path                                     | Notes                                   |
+| --------------- | ---------------------------------------- | --------------------------------------- |
+| `POST`          | `/qvac/v1/chat/batch`                    | Batch chat completion (LLM)             |
+| `DELETE`        | `/qvac/v1/kv_cache`                      | Reclaim automatic KV cache              |
+| `GET`           | `/qvac/v1/system`                        | Host CPU, memory and GPU capacity       |
+| `POST`          | `/qvac/v1/models/fit`                    | Whether models fit, before loading them |
+| `GET`           | `/qvac/v1/runtime/state`                 | Runtime lifecycle state                 |
+| `GET`           | `/qvac/v1/runtime/models`                | Loaded models                           |
+| `POST`          | `/qvac/v1/runtime/{suspend,resume}`      | Suspend or resume (admin-only)          |
+| `POST`          | `/qvac/v1/translate`                     | Text translation (NMT model)            |
+| `POST`          | `/qvac/v1/ocr`                           | Text recognition in an image            |
+| `POST`          | `/qvac/v1/classifications`               | Image classification                    |
+| `GET`           | `/qvac/v1/registry/models`               | Browse and search the model registry    |
+| `GET`           | `/qvac/v1/registry/models/lookup`        | One registry entry by source and path   |
+| `POST`          | `/qvac/v1/images/upscale`                | Image upscaling (ESRGAN model)          |
+| `POST`          | `/qvac/v1/audio/generations`             | Music generation job (audiogen model)   |
+| `POST`          | `/qvac/v1/audio/edits`                   | Music edit job (ACE-Step)               |
+| `GET`, `DELETE` | `/qvac/v1/audio/{generations,edits}/...` | Poll, download, list, delete jobs       |
+| `POST`          | `/qvac/v1/audio/understandings`          | Describe a recording (ACE-Step)         |
+| `POST`          | `/qvac/v1/world/scenes`                  | Create a world scene (experimental)     |
+| `GET`           | `/qvac/v1/world/scenes/{id}`             | A scene and whether it is still live    |
+| `POST`          | `/qvac/v1/world/scenes/{id}/steps`       | Walk a scene one block (experimental)   |
 
 ## Binary inputs
 
@@ -235,6 +248,87 @@ The example is trimmed; each CPU, memory and GPU object carries every field, eac
 | ---- | ------------------------- | --------------------------------------- |
 | 400  | `invalid_sample`          | `sample` is not `true` or `false`       |
 | 500  | `system_resources_failed` | The SDK could not read system resources |
+
+## Runtime: `/qvac/v1/runtime/*`
+
+The SDK runtime behind the server. Reading its state and its loaded models is open to every
+client that passes authentication. Suspending and resuming it acts on every client at once, so
+those two routes are **admin-only**: they answer `403 admin_disabled` unless the server was
+started with `--enable-admin` (or `"enableAdmin": true` under `serve`).
+
+`--enable-admin` on a non-loopback `--host` needs `--api-key` or `--api-key-file`;
+`--allow-unauthenticated` does not lift that. The API key is the same one every route uses.
+
+Admin routes also refuse a request whose `Origin` header is outside `--cors-origin` /
+`serve.cors.origins` with `403 origin_not_allowed`, so a web page cannot suspend a local server.
+Clients that send no `Origin`, such as `curl` or an SDK, are unaffected.
+
+While the runtime is `suspending`, `suspended` or `resuming`, every route except
+`GET /qvac/v1/runtime/state`, `suspend` and `resume` answers `503 runtime_suspended`.
+`/openapi.json`, `/docs` and `/qvac/identity` stay available.
+
+### `GET /qvac/v1/runtime/state`
+
+```bash
+curl -sS http://localhost:11434/qvac/v1/runtime/state
+```
+
+```json
+{ "object": "runtime.state", "state": "active" }
+```
+
+`state` is `active`, `suspending`, `suspended` or `resuming`.
+
+### `GET /qvac/v1/runtime/models`
+
+The `serve.models` aliases whose model is loaded, with the SDK's `getLoadedModelInfo()` for each.
+Configured aliases that are not loaded are left out; `GET /v1/models` lists those. The model's
+on-disk path is not returned.
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "object": "runtime.model",
+      "model": "qwen",
+      "modelId": "1a2b3c",
+      "modelType": "llm",
+      "handlers": ["completionStream"],
+      "addonPackage": "@qvac/llm-llamacpp",
+      "loadedAt": 1760870400000
+    }
+  ]
+}
+```
+
+### `POST /qvac/v1/runtime/suspend` and `POST /qvac/v1/runtime/resume`
+
+Admin-only. Suspend pauses P2P resources and gates every route except state, suspend and resume
+until resume. A request whose SDK call is already running finishes; one still waiting, on a model
+load say, gets `503 runtime_suspended`. Both are idempotent and return the state they leave the
+runtime in.
+
+```bash
+curl -sS -X POST http://localhost:11434/qvac/v1/runtime/suspend \
+  -H "Authorization: Bearer $QVAC_API_KEY"
+```
+
+```json
+{ "object": "runtime.state", "state": "suspended" }
+```
+
+### Errors
+
+| HTTP | `error.code`             | When                                                                |
+| ---- | ------------------------ | ------------------------------------------------------------------- |
+| 403  | `admin_disabled`         | Suspend or resume on a server started without `--enable-admin`      |
+| 403  | `origin_not_allowed`     | Suspend or resume from a browser origin outside the CORS allowlist  |
+| 503  | `runtime_suspended`      | Any route but state, suspend and resume while not `active`          |
+| 500  | `runtime_state_failed`   | The SDK could not report the lifecycle state                        |
+| 500  | `runtime_query_failed`   | The SDK could not describe a loaded model                           |
+| 500  | `runtime_suspend_failed` | A resource failed to pause; the runtime is suspended anyway, resume |
+| 500  | `runtime_resume_failed`  | A resource failed to restore; the runtime stays suspended, retry    |
 
 ## `POST /qvac/v1/models/fit`
 
@@ -526,3 +620,471 @@ The [binary input](#binary-inputs) errors apply to `image`, plus:
 An alias without `src` loads the addon's bundled MobileNetV3-Small, whose labels are `food`,
 `report` and `other`. Set `src` to the path of a GGUF classifier to use your own; its labels
 come from the GGUF metadata.
+
+## `GET /qvac/v1/registry/models`
+
+Browse and search the live QVAC model registry, backed by the SDK's `modelRegistrySearch()`.
+Read-only: nothing is downloaded or loaded.
+
+Filter with query params (all optional, combined with AND); with none, every entry is listed.
+
+| Param          | Meaning                                                                  |
+| -------------- | ------------------------------------------------------------------------ |
+| `search`       | Case-insensitive substring match on name, registry path, addon or engine |
+| `addon`        | Addon / capability category: `llm`, `whisper`, `embeddings`, `ocr`, …    |
+| `engine`       | Inference engine, e.g. `llamacpp-completion`                             |
+| `quantization` | e.g. `q4`                                                                |
+| `limit`        | Page size; omit for no limit (returns all matching entries)              |
+| `offset`       | Rows to skip (default 0)                                                 |
+
+Entries are registry models, not `serve.models` aliases. To call one, add an alias whose `src`
+is `registry://<registrySource>/<registryPath>`.
+
+The first request after start-up connects to the registry over P2P and can take several seconds.
+
+```bash
+curl -sS "http://localhost:11434/qvac/v1/registry/models?addon=llm&search=qwen3&limit=1"
+```
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "name": "Qwen3-0.6B-Q4_0",
+      "registryPath": "unsloth/Qwen3-0.6B-GGUF/blob/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q4_0.gguf",
+      "registrySource": "hf",
+      "modelId": "Qwen3-0.6B-Q4_0.gguf",
+      "addon": "llm",
+      "engine": "llamacpp-completion",
+      "quantization": "q4",
+      "params": "600M",
+      "expectedSize": 382156480,
+      "sha256Checksum": "33bcc57074ec7b6eada5a90651ee546ec0c2b271002c22baf9f1b2dd1e8f75cb",
+      "blobCoreKey": "4035e66388340ff7c1f291e7c0101855f5d0b2c7085f3ff62213573a2cd5dd17",
+      "blobBlockOffset": 380426,
+      "blobBlockLength": 5832,
+      "blobByteOffset": 24929383097
+    }
+  ],
+  "has_more": true
+}
+```
+
+### Errors
+
+| HTTP | `error.code`            | When                                         |
+| ---- | ----------------------- | -------------------------------------------- |
+| 400  | `invalid_addon`         | `addon` is not a registry addon              |
+| 400  | `invalid_limit`         | `limit` is not a positive integer            |
+| 400  | `invalid_offset`        | `offset` is not a non-negative integer       |
+| 502  | `registry_query_failed` | The registry could not be reached or queried |
+
+## `GET /qvac/v1/registry/models/lookup`
+
+Fetch one registry entry by the `registrySource` and `registryPath` a list row carries. Same
+shape as a list row. Both params are required.
+
+```bash
+curl -sS -G http://localhost:11434/qvac/v1/registry/models/lookup \
+  --data-urlencode registrySource=hf \
+  --data-urlencode registryPath=unsloth/Qwen3-0.6B-GGUF/blob/50968a4468ef4233ed78cd7c3de230dd1d61a56b/Qwen3-0.6B-Q4_0.gguf
+```
+
+### Errors
+
+| HTTP | `error.code`              | When                                         |
+| ---- | ------------------------- | -------------------------------------------- |
+| 400  | `invalid_registry_source` | `registrySource` is missing or empty         |
+| 400  | `invalid_registry_path`   | `registryPath` is missing or empty           |
+| 404  | `model_not_found`         | No registry entry has this source and path   |
+| 502  | `registry_query_failed`   | The registry could not be reached or queried |
+
+## Music: `/qvac/v1/audio/*`
+
+Generate, edit and describe music with an `audiogen` model, backed by the SDK's `audioGen()`,
+`audioEdit()` and `audioUnderstand()`. Request fields mirror those functions' arguments, with
+`model` naming the alias and each audio input in any [binary input](#binary-inputs) form.
+Editing and understanding need an ACE-Step model.
+
+Generations and edits run as async jobs, like `/v1/videos`: `POST` returns the job at once with
+`status: queued`, and the client polls it, then fetches the audio. Understanding answers in one
+response.
+
+Send JSON or `multipart/form-data`. In a multipart body, numbers and flags are text parts
+(`seed=42`, `simpleMode=true`), and `operations` and `audioCodes` are JSON text. Audio inputs take
+any format the SDK audio decoder reads (WAV, MP3, FLAC, ...); give the upload a file name or
+declare its type so the decoder can pick it.
+
+Ranges and combinations (a `cover-nofsq` task needs `sourceAudio`, `duration` excludes
+`maxFrames`, ...) are checked by the SDK and come back as `400 invalid_request` naming the rule.
+
+### `POST /qvac/v1/audio/generations`
+
+| Field                                | Type               | Required | Meaning                                                     |
+| ------------------------------------ | ------------------ | -------- | ----------------------------------------------------------- |
+| `model`                              | `string`           | Yes      | A `serve.models` alias with endpoint category `audiogen`    |
+| `caption`                            | `string`           | Yes      | What to generate                                            |
+| `lyrics`                             | `string`           | No       | Lyrics, or `[Instrumental]`                                 |
+| `duration`                           | `number`           | No       | Approximate length in seconds                               |
+| `seed`                               | `integer`          | No       | RNG seed; the seed used is in `stats.metadata.seed`         |
+| `taskType`                           | `string`           | No       | `text2music` (default), `cover-nofsq` or `lego`             |
+| `sourceAudio`                        | file, data URL, id | No       | Recording to re-render, for `cover-nofsq` and `lego`        |
+| `referenceAudio`                     | file, data URL, id | No       | Timbre reference                                            |
+| `audioCodes`                         | `integer[]`        | No       | Semantic codes to synthesize, e.g. from an understanding    |
+| `simpleMode`, `rewriteQuery`         | `boolean`          | No       | Let the LM write or rewrite the request                     |
+| `generateLrc`, `computeQualityScore` | `boolean`          | No       | Add `stats.lrc` / `stats.lyricsScore`, `stats.qualityScore` |
+
+The other `audioGen()` fields (`bpm`, `keyscale`, `timesignature`, `vocalLanguage`, `track`,
+`maxFrames`, `inferenceSteps`, `shift`, `cfgScale`, the `lm*` and `dcw*` controls, ...) are
+accepted under the same names.
+
+```bash
+curl -sS http://localhost:11434/qvac/v1/audio/generations \
+  -H 'Content-Type: application/json' \
+  -d '{ "model": "music", "caption": "calm lofi piano", "lyrics": "[Instrumental]", "duration": 30 }'
+```
+
+```json
+{
+  "id": "audiogen_6f1c...",
+  "object": "audio.generation",
+  "model": "music",
+  "status": "queued",
+  "progress": 0,
+  "stage": null,
+  "created_at": 1761500000,
+  "completed_at": null,
+  "error": null,
+  "stats": null
+}
+```
+
+### `POST /qvac/v1/audio/edits`
+
+Runs an ordered pipeline of `flow-edit` and `repaint` operations over `sourceAudio`.
+
+| Field            | Type               | Required | Meaning                                                                             |
+| ---------------- | ------------------ | -------- | ----------------------------------------------------------------------------------- |
+| `model`          | `string`           | Yes      | An ACE-Step `audiogen` alias                                                        |
+| `sourceAudio`    | file, data URL, id | Yes      | The recording to edit                                                               |
+| `operations`     | `object[]`         | Yes      | `flow-edit` (`from`, `to` prompts) or `repaint` (`caption`, `start`, `end` seconds) |
+| `referenceAudio` | file, data URL, id | No       | Timbre reference for every operation                                                |
+| `seed`           | `integer`          | No       | Seeds the first operation; each next one uses `seed + index`                        |
+
+`bpm`, `keyscale`, `timesignature`, `vocalLanguage`, `inferenceSteps`, `shift` and the `dcw*`
+controls apply to every operation.
+
+Known limitation: the SDK decodes an encoded source to mono, and a loud stereo source can mix
+above full scale; the job then fails with `audio_edit_failed` (`sourceAudio must contain samples
+in [-1, 1]`). Lowering the source's gain avoids it.
+
+```bash
+curl -sS http://localhost:11434/qvac/v1/audio/edits \
+  -F model=music \
+  -F sourceAudio=@song.wav \
+  -F 'operations=[{"type":"repaint","caption":"analog synth solo","start":10,"end":20}]'
+```
+
+### Jobs
+
+The same routes serve both job kinds, under `/qvac/v1/audio/generations` and
+`/qvac/v1/audio/edits`:
+
+| Method   | Path            | Returns                                         |
+| -------- | --------------- | ----------------------------------------------- |
+| `GET`    | `/`             | Jobs, newest first; `limit`, `order`, `after`   |
+| `GET`    | `/{id}`         | The job                                         |
+| `GET`    | `/{id}/content` | The audio                                       |
+| `DELETE` | `/{id}`         | Deletes the job, cancelling it if still running |
+
+`status` moves `queued` → `in_progress` → `completed` or `failed`. `progress` (0–100) is the
+progress of the engine stage named in `stage`, and restarts at each stage (an ACE-Step generation
+runs `lm`, then the longer DiT and VAE stages); it reads 100 once the job completes. Once completed,
+`stats` carries the SDK's run stats; for ACE-Step that includes `metadata`, what was rendered
+after the LM filled in unset fields, and `lrc`, `lyricsScore` and `qualityScore` when requested.
+A failed job carries `error.code` `audio_generation_failed` or `audio_edit_failed`.
+
+`/content` returns 16-bit PCM WAV at the engine's rate (48 kHz stereo for ACE-Step).
+`?format=mp3|flac|opus|aac` encodes it with the system `ffmpeg`.
+
+The job store is in memory: ids and audio are lost on restart, at most 256 jobs of each kind are
+kept, and the audio expires with the server's file store (1 hour).
+
+### `POST /qvac/v1/audio/understandings`
+
+Describes a recording: a caption, BPM, key, time signature, language and the recovered semantic
+codes, which a generation takes back as `audioCodes`. A client disconnect cancels it.
+
+| Field                               | Type               | Required | Meaning                         |
+| ----------------------------------- | ------------------ | -------- | ------------------------------- |
+| `model`                             | `string`           | Yes      | An ACE-Step `audiogen` alias    |
+| `sourceAudio`                       | file, data URL, id | Yes      | The recording to describe       |
+| `seed`                              | `integer`          | No       | Seeds the LM decode             |
+| `vocalLanguage`                     | `string`           | No       | Language forced into the result |
+| `lmTemperature`, `lmTopP`, `lmTopK` | `number`           | No       | LM sampling                     |
+
+```json
+{
+  "object": "audio.understanding",
+  "model": "music",
+  "description": {
+    "caption": "A calm lo-fi piano piece with soft keys.",
+    "bpm": 72,
+    "duration": 30,
+    "keyscale": "A minor",
+    "timesignature": "4/4",
+    "vocalLanguage": "unknown",
+    "audioCodes": [8123, 1022, 517],
+    "seed": 1
+  },
+  "stats": { "totalTimeMs": 5200 }
+}
+```
+
+### Errors
+
+The [binary input](#binary-inputs) errors apply to `sourceAudio` and `referenceAudio`, plus:
+
+| HTTP | `error.code`                 | When                                                        |
+| ---- | ---------------------------- | ----------------------------------------------------------- |
+| 400  | `invalid_json`               | Body is not valid JSON                                      |
+| 400  | `invalid_multipart`          | Multipart body could not be parsed                          |
+| 400  | `missing_model`              | `model` is missing                                          |
+| 400  | `missing_caption`            | Generation without a `caption`                              |
+| 400  | `missing_source_audio`       | Edit or understanding without `sourceAudio`                 |
+| 400  | `invalid_operations`         | `operations` is missing, empty or malformed                 |
+| 400  | `invalid_request`            | Unknown field, wrong type, or a combination the SDK refuses |
+| 400  | `invalid_model_type`         | Alias is not an `audiogen` model                            |
+| 404  | `model_not_found`            | Unknown alias                                               |
+| 404  | `audio_job_not_found`        | No job with that id                                         |
+| 409  | `audio_job_not_ready`        | `/content` before the job completed; see `Retry-After`      |
+| 409  | `audio_job_failed`           | `/content` of a failed job                                  |
+| 410  | `audio_expired`              | The audio has left the file store                           |
+| 413  | `request_too_large`          | Upload over 100 MB                                          |
+| 502  | `audio_understanding_failed` | The engine failed to describe the recording                 |
+| 502  | `transcode_failed`           | ffmpeg failed; `format=wav` still works                     |
+| 503  | `transcode_unavailable`      | An encoded `format` without ffmpeg on PATH                  |
+| 503  | `model_not_loaded`           | Model not loaded and lazy loading is disabled               |
+
+### Configuring a music model
+
+ACE-Step takes four weights. The alias's `model` is its DiT; `config` names all four:
+
+```json
+{
+  "serve": {
+    "models": {
+      "music": {
+        "model": "AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M",
+        "config": {
+          "textEncModelSrc": "AUDIOGEN_QWEN3_EMBEDDING_0_6B_Q8_0",
+          "lmModelSrc": "AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0",
+          "ditModelSrc": "AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M",
+          "vaeModelSrc": "AUDIOGEN_VAE_BF16",
+          "useGPU": true
+        }
+      }
+    }
+  }
+}
+```
+
+MiniMax-Music3 sets `"engine": "minimax"` with `lmModelSrc` and `synthModelSrc`, and serves
+generations only.
+
+## `POST /qvac/v1/images/upscale`
+
+Upscale an image with an ESRGAN model, backed by the SDK's `upscale()`.
+
+`model` names a `serve.models` alias whose endpoint category is `upscale`: an
+`sdcpp-generation` model with `config.mode: "upscale"`. Send JSON or
+`multipart/form-data`; `image` takes any of the [binary input](#binary-inputs) forms.
+
+| Field     | Type         | Required | Meaning                                                                            |
+| --------- | ------------ | -------- | ---------------------------------------------------------------------------------- |
+| `model`   | `string`     | Yes      | A `serve.models` alias with endpoint category `upscale`                            |
+| `image`   | binary input | Yes      | The PNG or JPEG to upscale                                                         |
+| `repeats` | `integer`    | No       | Passes to run, 1 to 4 (default 1); each multiplies both sides by the model's scale |
+
+The response has the `/v1/images` shape, with one PNG:
+
+```json
+{
+  "created": 1767225600,
+  "output_format": "png",
+  "size": "2048x2048",
+  "data": [{ "b64_json": "iVBORw0KGgo..." }]
+}
+```
+
+Upscaling cannot be cancelled: a client disconnect drops the result, but the
+image is still upscaled to the end.
+
+```bash
+curl -sS http://localhost:11434/qvac/v1/images/upscale \
+  -F model=upscaler -F image=@photo.png -F repeats=1
+```
+
+### Errors
+
+| HTTP | `error.code`               | When                                                                                |
+| ---- | -------------------------- | ----------------------------------------------------------------------------------- |
+| 400  | `invalid_json`             | Body is not valid JSON                                                              |
+| 400  | `missing_model`            | `model` is missing                                                                  |
+| 400  | `missing_image`            | `image` is missing                                                                  |
+| 400  | `unsupported_image_format` | `image` is not a PNG or JPEG                                                        |
+| 400  | `invalid_image`            | `image` has a PNG or JPEG header but cannot be decoded                              |
+| 400  | `image_too_large`          | `image`, or its upscaled output, is over the 16,384-pixel edge or pixel-count limit |
+| 400  | `invalid_repeats`          | `repeats` is not an integer from 1 to 4                                             |
+| 400  | `invalid_request`          | The body carries an unknown field                                                   |
+| 400  | `invalid_model_type`       | Alias is not an `upscale` model                                                     |
+| 404  | `model_not_found`          | Unknown alias                                                                       |
+| 503  | `model_not_loaded`         | Model not loaded and lazy loading is disabled                                       |
+
+`image` can also fail with the [binary input](#binary-inputs) codes.
+
+### Configuring an upscale model
+
+```json
+{
+  "serve": {
+    "models": {
+      "upscaler": {
+        "model": "REALESRGAN_X4PLUS",
+        "config": { "mode": "upscale", "upscaler": { "tile_size": 128 } }
+      }
+    }
+  }
+}
+```
+
+## World: `/qvac/v1/world/scenes` (experimental)
+
+> **Experimental.** The request and response shapes may change in a minor release.
+
+Walk an interactive world with an ABot-World model, backed by the SDK's `worldCreateScene()`
+and `worldStep()`. `model` names a `serve.models` alias whose endpoint category is `world`: an
+`sdcpp-generation` model with `config.mode: "world"`.
+
+A model holds one live scene. Creating a scene replaces the model's previous one and restarts
+the walk, so the older scene id answers `409 scene_replaced`. A model reload drops its scene
+too. Aliases with the same `type`, `src` and `config` share one model, and so one scene.
+Scene ids are kept in memory and are lost on restart.
+
+### `POST /qvac/v1/world/scenes`
+
+Create a scene from a prompt and a first frame. Send JSON or `multipart/form-data`; `image`
+takes any of the [binary input](#binary-inputs) forms.
+
+| Field        | Type         | Required | Meaning                                                                    |
+| ------------ | ------------ | -------- | -------------------------------------------------------------------------- |
+| `model`      | `string`     | Yes      | A `serve.models` alias with endpoint category `world`                      |
+| `prompt`     | `string`     | Yes      | Scene prompt, encoded verbatim                                             |
+| `image`      | binary input | Yes      | First frame, PNG or JPEG up to 3 MB, cover-scaled and cropped to the scene |
+| `width`      | `integer`    | No       | Multiple of 32 up to 4096 (default 832); `width` x `height` ≤ 1920x1088    |
+| `height`     | `integer`    | No       | Multiple of 32 up to 4096 (default 480)                                    |
+| `returnPack` | `boolean`    | No       | Return the 10+ MB scene pack base64 in `pack`                              |
+
+It answers `201`:
+
+```json
+{
+  "id": "scene_3f1c...",
+  "object": "world.scene",
+  "created": 1767225600,
+  "model": "abot-world",
+  "status": "active",
+  "width": 832,
+  "height": 480,
+  "scene_create_ms": 5400
+}
+```
+
+Scene creation cannot be cancelled: a client disconnect drops the response, but the scene is
+still created and replaces the previous one.
+
+### `GET /qvac/v1/world/scenes/{id}`
+
+The scene, with `status` `active` or `replaced`.
+
+### `POST /qvac/v1/world/scenes/{id}/steps`
+
+Generate the next block of frames.
+
+| Field    | Type       | Required | Meaning                                                              |
+| -------- | ---------- | -------- | -------------------------------------------------------------------- |
+| `keys`   | `string[]` | No       | Keys held for the block: `W` `A` `S` `D` move, `I` `J` `K` `L` steer |
+| `stream` | `boolean`  | No       | Send each frame as a server-sent event as it is decoded              |
+
+A block is 9 frames after the model loads and 12 after that at the default
+`world.numFramePerBlock`. Frames are PNG, or JPEG when the model sets
+`world.frameJpegQuality`. One block runs at a time per model; send the next step after the
+previous one returns. A failed or cancelled block ends the walk: the next step
+restarts it from the scene's first frame.
+
+```json
+{
+  "object": "world.step",
+  "scene_id": "scene_3f1c...",
+  "output_format": "jpeg",
+  "data": [{ "b64_json": "/9j/4AAQ..." }],
+  "stats": { "step_ms": 1800, "total_steps": 1, "total_frames": 9, "width": 832, "height": 480 }
+}
+```
+
+With `stream: true` the response is server-sent events: one `world.step.frame` event per frame
+(`index`, `output_format`, `b64_json`), then `world.step.completed` with `frames` and `stats`,
+then `[DONE]`. A block that fails after its first frame ends the stream with an `error`
+event and no `[DONE]`. A client disconnect cancels the block.
+
+```bash
+curl -sS http://localhost:11434/qvac/v1/world/scenes \
+  -F model=abot-world -F prompt='| unknown | A forest path' -F image=@first-frame.jpg
+curl -sS http://localhost:11434/qvac/v1/world/scenes/scene_3f1c.../steps \
+  -H 'Content-Type: application/json' -d '{"keys":["W"]}'
+```
+
+### Errors
+
+| HTTP | `error.code`                 | When                                                                                  |
+| ---- | ---------------------------- | ------------------------------------------------------------------------------------- |
+| 400  | `invalid_json`               | Body is not valid JSON                                                                |
+| 400  | `missing_model`              | `model` is missing                                                                    |
+| 400  | `missing_prompt`             | `prompt` is missing or empty                                                          |
+| 400  | `missing_image`              | `image` is missing                                                                    |
+| 400  | `unsupported_image_format`   | `image` is not a PNG or JPEG                                                          |
+| 400  | `image_too_large`            | `image` is over 3 MB                                                                  |
+| 400  | `invalid_dimensions`         | `width` or `height` is not a multiple of 32 up to 4096, or the area is over 1920x1088 |
+| 400  | `invalid_scene`              | The model refused the scene: unreadable or oversized first frame, missing encoders    |
+| 400  | `invalid_keys`               | `keys` holds something other than `W A S D I J K L`                                   |
+| 400  | `invalid_request`            | The body carries an unknown field                                                     |
+| 400  | `invalid_model_type`         | Alias is not a `world` model                                                          |
+| 404  | `model_not_found`            | Unknown alias                                                                         |
+| 404  | `scene_not_found`            | Unknown scene id                                                                      |
+| 409  | `scene_replaced`             | A newer scene was created on the model, or the model reloaded                         |
+| 429  | `request_rejected_by_policy` | A scene or step is already running on the model                                       |
+| 503  | `model_not_loaded`           | Model not loaded and lazy loading is disabled                                         |
+
+`image` can also fail with the [binary input](#binary-inputs) codes.
+
+### Configuring a world model
+
+```json
+{
+  "serve": {
+    "models": {
+      "abot-world": {
+        "model": "ABOT_WORLD_0_5B_Q8_0",
+        "config": {
+          "mode": "world",
+          "taehvModelSrc": "ABOT_WORLD_0_5B_LF_TAEHV_VAE",
+          "t5XxlModelSrc": "UMT5_XXL_ENC_Q8_0",
+          "vaeModelSrc": "ABOT_WORLD_0_5B_LF_WAN_VAE",
+          "world": { "kvCache": true, "frameJpegQuality": 85 }
+        }
+      }
+    }
+  }
+}
+```

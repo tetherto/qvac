@@ -12,8 +12,11 @@ fi
 
 mkdir -p "$output_directory"
 output_directory="$(cd "$output_directory" && pwd)"
+# The checksum file carries the package name: the sdk-v<version> release that
+# receives these assets also holds the Python wheels.
+checksums="qvac-sdk-kotlin-$version-SHA256SUMS"
 find "$output_directory" -maxdepth 1 -type f \
-  \( -name 'qvac-sdk-*-maven.zip' -o -name 'SHA256SUMS' \) -delete
+  \( -name 'qvac-sdk-*-maven.zip' -o -name '*SHA256SUMS' \) -delete
 
 copy_module() {
   local module="$1"
@@ -75,9 +78,9 @@ package_bundle \
 (
   cd "$output_directory"
   if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum ./*-maven.zip > SHA256SUMS
+    sha256sum ./*-maven.zip > "$checksums"
   else
-    shasum -a 256 ./*-maven.zip > SHA256SUMS
+    shasum -a 256 ./*-maven.zip > "$checksums"
   fi
 )
 

@@ -20,6 +20,19 @@ namespace vla_backend_selection {
 // is accepted and dropped, so it contributes no preference.
 std::vector<std::string> parseBackendOverride(const std::string& backendStr);
 
+// Trailing marker parseBackendRequest appends when the list also named 'auto'.
+inline constexpr std::string_view K_AUTO_FALLBACK = "auto";
+
+// parseBackendOverride, plus K_AUTO_FALLBACK at the end when the list named
+// 'auto' next to a GPU family, "auto,cuda" -> {"cuda", "auto"}. The loaders
+// read the marker through backendOverrideIsStrict: a list with 'auto' in it
+// keeps the CPU fallback, a list without it never ends on CPU.
+std::vector<std::string> parseBackendRequest(const std::string& backendStr);
+
+// True when the caller named GPU families and no 'auto', so the loaders must
+// throw rather than fall back to CPU.
+bool backendOverrideIsStrict(const std::vector<std::string>& backendOverride);
+
 // Extract the Adreno model number from a device description string.
 // Returns 0 for non-Adreno devices.
 //
@@ -87,5 +100,22 @@ struct DeviceInterface {
 ggml_backend_dev_t pickBestGpuDevice(
     const DeviceInterface& devI,
     const std::vector<std::string>& backendOverride);
+
+// The override as the caller wrote it, "cuda,vulkan", for log and error text.
+std::string
+describeBackendOverride(const std::vector<std::string>& backendOverride);
+
+// Why a loader could not honour a strict override (backendOverrideIsStrict).
+enum class StrictGpuFailure { NoDevice, DeviceInitFailed, WeightLoadFailed };
+
+// Error text the three loaders share for a strict override they refuse to
+// run on CPU. `deviceName` is used only for WeightLoadFailed.
+//
+// PUBLIC ERROR-CODE CONTRACT: the text must not contain "backend: "
+// (NATIVE_ERR_MARKERS.badBackend in src/index.ts), so the JS wrapper reports
+// it as FAILED_TO_LOAD_WEIGHTS, as the docs promise.
+std::string strictGpuRefusal(
+    StrictGpuFailure failure, const std::vector<std::string>& backendOverride,
+    const std::string& deviceName = "");
 
 } // namespace vla_backend_selection

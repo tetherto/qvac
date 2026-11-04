@@ -70,6 +70,7 @@ export type {
   EmbedFitDevice,
   EmbedFitRequest,
   EmbedFitResult,
+  EmbedFitStats,
   EmbedFitStatus
 } from "./fit";
 export type { QvacResponse };

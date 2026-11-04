@@ -32,6 +32,7 @@ on:
       - "cmake/qvac-addon/**"
       - ".github/workflows/**"
       - ".github/actions/stage-integration-models/**"
+      - ".github/bare-toolchain/package-lock.json"
 
 permissions:
   contents: read

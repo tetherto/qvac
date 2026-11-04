@@ -180,6 +180,115 @@ test('Unified desktop integration — English transcription', { timeout: 600000 
   }
 })
 
+test(
+  'Parakeet attributed transcription retains both models and supports standalone reload',
+  { timeout: 600000 },
+  async (t) => {
+    const asrPath = await loadGgufOrSkip(t, 'unified')
+    const diarizerPath = await loadGgufOrSkip(t, 'sortformer')
+    if (!asrPath || !diarizerPath) return
+    const audio = loadAudioSample()
+    t.ok(audio, 'the staged audio fixture is available')
+    if (!audio) return
+    const model = new ASRGgml({
+      files: { model: asrPath },
+      config: {
+        engine: 'parakeet',
+        parakeetConfig: {
+          backend: 'cpu',
+          useGPU: true,
+          speakerAttribution: {
+            modelPath: diarizerPath,
+            mergeSameSpeaker: false,
+            minSegmentMs: 0,
+            padSegmentMs: 80
+          }
+        }
+      }
+    })
+    try {
+      await model.load()
+      t.is(
+        model.getBackendInfo().backendDevice,
+        'CPU',
+        'explicit backend overrides the GPU preference'
+      )
+      const first = await transcribe(model, audio)
+      t.ok(first.length > 0, 'the attributed API returns transcription text')
+      t.ok(
+        first.every(
+          (segment) =>
+            Number.isInteger(segment.speakerId) &&
+            segment.speakerId >= 0 &&
+            segment.isFinal === true &&
+            segment.end >= segment.start
+        ),
+        'text carries the native speaker and turn times'
+      )
+      const second = await transcribe(model, audio)
+      t.alike(second, first, 'repeated runs reuse both models with stable output')
+      await model.reload({ parakeetConfig: { speakerAttribution: undefined } })
+      const plain = await transcribe(model, audio)
+      t.ok(plain.length > 0, 'standalone ASR works after removing attribution')
+      t.ok(
+        plain.every((segment) => segment.speakerId === undefined && segment.isFinal === undefined),
+        'plain batch output retains its original shape'
+      )
+    } finally {
+      await model.unload()
+    }
+  }
+)
+
+test(
+  'Parakeet explicit unavailable backend rejects without automatic CPU retry',
+  { timeout: 600000 },
+  async (t) => {
+    const modelPath = await loadGgufOrSkip(t, 'unified')
+    if (!modelPath) return
+    const model = new ASRGgml({
+      files: { model: modelPath },
+      config: {
+        engine: 'parakeet',
+        parakeetConfig: { backend: 'unavailable-test-device', useGPU: true }
+      }
+    })
+    try {
+      await t.exception(model.load(), 'unavailable explicit backend must reject')
+    } finally {
+      await model.unload()
+    }
+  }
+)
+
+test(
+  'Parakeet attribution rejects missing and incompatible model pairs',
+  { timeout: 600000 },
+  async (t) => {
+    const asrPath = await loadGgufOrSkip(t, 'unified')
+    const diarizerPath = await loadGgufOrSkip(t, 'sortformer')
+    if (!asrPath || !diarizerPath) return
+    for (const [modelPath, speakerModelPath] of [
+      [asrPath, asrPath],
+      [diarizerPath, diarizerPath],
+      [asrPath, asrPath + '.missing']
+    ]) {
+      const model = new ASRGgml({
+        files: { model: modelPath },
+        config: {
+          engine: 'parakeet',
+          parakeetConfig: { backend: 'cpu', speakerAttribution: { modelPath: speakerModelPath } }
+        }
+      })
+      try {
+        await t.exception(model.load(), 'both model families and files must be valid')
+      } finally {
+        await model.unload()
+      }
+    }
+  }
+)
+
 test('EOU desktop integration — streaming transcription', { timeout: 600000 }, async (t) => {
   const loggerBinding = setupJsLogger(binding)
   try {

@@ -143,6 +143,8 @@ void MinimaxModel::loadLocked() {
   options.lm_model_path = config_.lmModelPath;
   options.synth_model_path = config_.synthModelPath;
   options.n_threads = config_.threads;
+  options.coreml_profile_dir = config_.coremlProfileDir;
+  options.coreml_compute_units = config_.coremlComputeUnits;
   // Without an explicit device, "auto" keeps the addon's useGPU contract: take
   // a GPU when one is usable, otherwise fall back to CPU. An explicit "gpu"
   // makes creation fail instead. runtimeStats reports the backend in use.
@@ -250,10 +252,12 @@ qvac_lib_inference_addon_cpp::RuntimeStats MinimaxModel::runtimeStats() const {
   stats.emplace_back("totalTimeMs", totalTimeMs_);
   stats.emplace_back("realTimeFactor", realTimeFactor_);
   stats.emplace_back("audioDurationMs", audioDurationMs_);
-  stats.emplace_back("backendDevice", backendDeviceFromName(backendName_));
   stats.emplace_back("backendId", backendIdFromName(backendName_));
-  stats.emplace_back(
-      "gpuFallbackReason", gpuFallbackReasonCode(gpuFallbackReason_));
+  if (config_.coremlProfileDir.empty()) {
+    stats.emplace_back("backendDevice", backendDeviceFromName(backendName_));
+    stats.emplace_back(
+        "gpuFallbackReason", gpuFallbackReasonCode(gpuFallbackReason_));
+  }
   // Engine-side stage split of the last run; totalTimeMs above is the addon's
   // own wall clock (it also covers a lazy load and the PCM conversion).
   stats.emplace_back("emittedFrames", emittedFrames_);

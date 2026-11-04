@@ -1,5 +1,281 @@
 # Changelog
 
+## [0.18.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.18.0
+
+QVAC CLI 0.18.0 moves to `@qvac/sdk@^0.23.0`. The QVAC surface of `qvac serve` gains OCR, image classification, image upscaling, music generation and editing, and read access to the live model registry. Context overflow now returns a client error instead of a server error, and failed streams close cleanly.
+
+## Breaking Changes
+
+### Context overflow returns `400 context_length_exceeded`
+
+A request that does not fit the model's context used to fail as `500 internal_error`. It now returns `400 context_length_exceeded` with type `invalid_request_error`, so clients can tell a request that is too long from a server failure. A streaming response that overflows mid-stream sends the same envelope as an SSE error frame. Any other unexpected mid-stream error now reads `An internal error occurred.` instead of repeating the raw SDK message.
+
+**Before:**
+
+```json
+// HTTP 500
+{ "error": { "type": "server_error", "code": "internal_error", "message": "..." } }
+```
+
+**After:**
+
+```json
+// HTTP 400
+{
+  "error": {
+    "code": "context_length_exceeded",
+    "type": "invalid_request_error",
+    "message": "The request exceeds the model's context capacity. Shorten the input, start a new conversation, or increase ctx_size."
+  }
+}
+```
+
+### Paging errors have their own codes
+
+An invalid `limit` or `offset` on `/v1/models/catalog`, `/v1/videos` and the Responses `input_items` list returns `400 invalid_limit` or `400 invalid_offset` instead of `400 invalid_request`. Clients that match on `invalid_request` for these parameters need to match the new codes.
+
+### `/v1/images/edits` forwards every uploaded image
+
+With several `image` or `image[]` files, the server used to edit with the first and ignore the rest. It now forwards every file, in upload order, as SDK `init_images`, and the model must support multiple references. A single file still uses `init_image`, so send one image to a single-reference model.
+
+### Deferred tools with reserved or clashing names are not offered
+
+A deferred tool is no longer offered or loaded if its name is empty, is `auto`, `none` or `required`, or collides with an eager tool, `tool_search` or an earlier deferred tool once characters outside `A-Za-z0-9-` fold to `-`. Rename such tools.
+
+### Changes inherited from `@qvac/sdk` 0.23
+
+- **`pooling: "rank"` is rejected.** An embedding alias whose config sets `pooling: "rank"` now fails validation. Remove the field.
+- **Remote RPC servers must speak protocol 112.** An alias with `rpc-servers` works only with `@qvac/ggml-rpc-server` 0.7.x on the remote hosts. Protocol 111 servers are rejected.
+- **The model fit runs inside the worker.** Load-time fit checks and `POST /qvac/v1/models/fit` run in the SDK worker. If the fitter crashes, the worker and every model it holds go down with it.
+- **One image or video generation per model.** A second concurrent generation on the same alias is rejected with `429 request_rejected_by_policy`.
+
+## New APIs
+
+### OCR
+
+`POST /qvac/v1/ocr` reads text from a PNG, JPEG or BMP image sent as a multipart file, a base64 data URL or a `/v1/files` id. It returns text blocks with bounding boxes and confidence, and `stream: true` sends them as server-sent events.
+
+```bash
+curl -sS http://localhost:11434/qvac/v1/ocr -F model=ocr-en -F image=@receipt.png
+# { "object": "ocr", "model": "ocr-en", "blocks": [{ "text": "...", "bbox": [...], "confidence": 0.98 }], "stats": { ... } }
+```
+
+### Image classification
+
+`POST /qvac/v1/classifications` labels a PNG or JPEG image and returns the top results with their confidence. A `classification` alias can omit `src` to use the default classifier.
+
+```bash
+curl -sS http://localhost:11434/qvac/v1/classifications -F model=classifier -F image=@photo.jpg
+# { "object": "classification", "model": "classifier", "results": [{ "label": "food", "confidence": 0.93 }, ...] }
+```
+
+### Image upscaling
+
+`POST /qvac/v1/images/upscale` runs an ESRGAN upscaler over an image, up to four times, and answers in the `/v1/images` response shape.
+
+```bash
+curl -sS http://localhost:11434/qvac/v1/images/upscale \
+  -F model=upscaler -F image=@photo.png -F repeats=1
+```
+
+### Music generation, editing and understanding
+
+`/qvac/v1/audio/generations` and `/qvac/v1/audio/edits` start ACE-Step jobs that you can list, poll, download and delete. `/content` returns WAV, or mp3, flac, opus or aac when the system `ffmpeg` is available. `POST /qvac/v1/audio/understandings` describes a recording with a caption, tempo, key, time signature and language. Jobs are kept in memory, so they do not survive a restart.
+
+```bash
+curl -sS http://localhost:11434/qvac/v1/audio/generations -H 'Content-Type: application/json' \
+  -d '{ "model": "music", "caption": "calm lofi piano", "lyrics": "[Instrumental]", "duration": 30 }'
+
+curl -sS "http://localhost:11434/qvac/v1/audio/generations/audiogen_…/content?format=mp3" -o song.mp3
+```
+
+### Live model registry
+
+`GET /qvac/v1/registry/models` lists registry models with search, addon, engine and quantization filters and paging. `GET /qvac/v1/registry/models/lookup` fetches one entry by `registrySource` and `registryPath`, and returns `404 model_not_found` when the registry has no such model.
+
+```bash
+curl -sS "http://localhost:11434/qvac/v1/registry/models?addon=llm&search=qwen3&limit=1"
+```
+
+### Memory fit for ESRGAN and ABot world models
+
+Load-time fit checks and `POST /qvac/v1/models/fit` now cover ESRGAN upscalers and ABot world sessions. A world alias can set `world.fitSteps` (default 100) for the walk length the estimate assumes.
+
+### Multi-reference image edits
+
+Models with multi-reference support, such as FLUX.2 and Qwen-Image-2.1, take several reference images on `/v1/images/edits`.
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/images/edits \
+  -F "image[]=@reference-a.png" \
+  -F "image[]=@reference-b.png" \
+  -F "model=my-diffusion" \
+  -F "prompt=Place the referenced subjects together in one scene."
+```
+
+## Bug Fixes
+
+### Failed streams close cleanly
+
+Errors raised before a stream's headers are sent now return a normal HTTP error instead of a hung or closed socket, and nothing is written after the client disconnects.
+
+### Clearer model load failures
+
+`503 model_load_failed` now summarizes why the worker did not start: its exit code or signal, or that it did not connect before the startup timeout. The full chain, including the worker's stderr, stays in the server log.
+
+### Parameter values stay out of warnings
+
+The warnings `qvac serve` logs for unsupported parameters no longer print the values that were sent.
+
+### Tool search rounds use the tool grammar
+
+Tools loaded by `tool_search` are now declared in the next round's tools block, so that round's tool calls are constrained by the tool grammar.
+
+## [0.17.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.17.0
+
+QVAC CLI 0.17.0 depends on `@qvac/sdk@^0.22.0`, the same SDK line as 0.16.0. Decision models move from `--systemone` to an OpenAI-style `POST /v1/decisions` endpoint under `--openai`, and `qvac serve` now checks the `Host` header of every request. The QVAC surface reports host resources and model fit and runs batch chat completion, `/v1/audio/speech` can stream over SSE, and `/v1/videos` no longer fetches image URLs on private networks.
+
+## Breaking Changes
+
+### `--systemone` is replaced by `POST /v1/decisions`
+
+`--systemone` and `POST /v1/systemone` are removed. Decision aliases are served by `qvac serve --openai` at `POST /v1/decisions`. Questions are an ordered array instead of an object keyed by ID, and `noul` questions become `predicate` questions.
+
+**Before:**
+
+```bash
+qvac serve --systemone
+curl -sS http://127.0.0.1:11434/v1/systemone \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "laya",
+    "state": "Please refund my duplicate payment.",
+    "questions": {
+      "refund": { "type": "noul", "instructions": "A refund is requested." }
+    }
+  }'
+```
+
+**After:**
+
+```bash
+qvac serve --openai
+curl -sS http://127.0.0.1:11434/v1/decisions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "laya",
+    "input": "Please refund my duplicate payment.",
+    "questions": [
+      { "type": "predicate", "name": "refund", "instructions": "A refund is requested." }
+    ]
+  }'
+```
+
+### Host header check on `qvac serve`
+
+A page that rebinds its own domain to `127.0.0.1` could read `/openapi.json` and call the server, because CORS does not apply to a same-origin request. Every request now needs a `Host` that names a loopback host, an IP address, the bind host, the `--public-base-url` host or an allowed host. Anything else gets `403 host_not_allowed`. The port is ignored.
+
+Clients that dial `localhost`, `127.0.0.1`, `[::1]`, any IP address or the exact `--host` value are unaffected. A server reached by another hostname must allow that name.
+
+**Before:**
+
+```bash
+qvac serve --openai --host 0.0.0.0 --api-key-file ./key
+curl -H 'Authorization: Bearer …' http://gpu-box.lan:11434/v1/models   # 200
+```
+
+**After:**
+
+```bash
+qvac serve --openai --host 0.0.0.0 --api-key-file ./key --allowed-host gpu-box.lan
+curl -H 'Authorization: Bearer …' http://gpu-box.lan:11434/v1/models   # 200; 403 host_not_allowed without --allowed-host
+```
+
+## New APIs
+
+### OpenAI Decisions endpoint
+
+`POST /v1/decisions` answers predicate, choice and score questions with a configured local decision model. Input is text or a conversation. Answers keep the order of the questions, typed choice values and optional names. The response carries OpenAI-style token usage. The endpoint returns complete JSON; streaming, batch inputs, images and prompt caching are unsupported.
+
+```bash
+qvac configure --modality decision
+qvac serve --openai
+```
+
+```bash
+curl http://127.0.0.1:11434/v1/decisions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "laya-multilingual-322m-q8-0",
+    "input": "Charged twice",
+    "questions": [{
+      "type": "predicate",
+      "name": "urgent",
+      "instructions": "Does this need immediate attention?"
+    }]
+  }'
+```
+
+### Allowed hosts
+
+`--allowed-host <host>` is repeatable; a leading dot (`.corp.example`) covers subdomains. `serve.allowedHosts` sets the same list in config. `--allow-any-host`, or `"allowedHosts": true`, turns the check off.
+
+```bash
+qvac serve --openai --allowed-host qvac.internal --allowed-host .corp.example
+qvac serve --openai --allow-any-host
+```
+
+```json
+{ "serve": { "allowedHosts": ["qvac.internal"] } }
+```
+
+### System resources and model fit
+
+`GET /qvac/v1/system` reports the host's CPU, memory and GPUs; `?sample=true` adds current load and memory use. `POST /qvac/v1/models/fit` asks whether up to 16 models are likely to fit before loading them. Nothing is downloaded or loaded. An alias is assessed with the config it would load with, and `modelConfig` in the request is merged over it. The verdict is advisory: `likely-fits`, `likely-too-large` or `unknown`.
+
+```bash
+curl -sS "http://localhost:11434/qvac/v1/system?sample=true"
+
+curl -sS http://localhost:11434/qvac/v1/models/fit \
+  -H "Content-Type: application/json" \
+  -d '{"models":[{"model":"my-llm","modelConfig":{"ctx_size":8192}}]}'
+```
+
+### Batch chat completion
+
+`POST /qvac/v1/chat/batch` runs up to 64 chat prompts through one loaded LLM in a single request; the model decodes them together. Each prompt takes the `/v1/chat/completions` request fields, and results come back in prompt order with batch-level `stats`. The alias needs `config.parallel` of 2 or more, otherwise the request returns `400 batch_not_enabled`.
+
+```bash
+curl http://localhost:11434/qvac/v1/chat/batch \
+  -H "Content-Type: application/json" \
+  -d '{"model":"my-llm","prompts":[
+        {"id":"a","messages":[{"role":"user","content":"Reply with only the word CHERRY."}]},
+        {"id":"b","messages":[{"role":"user","content":"Reply with only the word BANANA."}]}]}'
+```
+
+### Streaming speech
+
+`POST /v1/audio/speech` with `stream_format: "sse"` streams `speech.audio.delta` events, one per synthesized sentence, and ends with `speech.audio.done`. It supports `pcm` and `wav`. Encoded formats return `400 unsupported_response_format`, and MOSS-SoundEffect and MOSS-Speech aliases return `400 unsupported_stream_format`. The default `stream_format: "audio"` still returns one body.
+
+```bash
+curl -N http://localhost:11434/v1/audio/speech -H "Content-Type: application/json" \
+  -d '{"model":"my-tts","input":"Hello.","response_format":"pcm","stream_format":"sse"}'
+```
+
+## Bug Fixes
+
+### Video image URLs on private networks
+
+`POST /v1/videos` fetched `input_reference.image_url` from any address, so a caller could make the server connect to loopback, private, link-local or cloud-metadata hosts. The server now fetches only public hosts. It checks every resolved address and every redirect hop. Every fetch failure except the 100 MB limit returns the same message. Data URIs, `file_id` and public HTTP(S) URLs work as before.
+
+### Endpoint categories for image-generation aliases
+
+Every `sdcpp-generation` alias was accepted by `/v1/images/*`, including upscaler and world-mode aliases. The category now comes from `config.mode`: `diffusion` (the default) is `image`, and `video`, `upscale` and `world` are their own categories. A route given an alias of another category returns `400 invalid_model_type`, and an unknown `mode` fails at startup.
+
 ## [0.16.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.16.0
