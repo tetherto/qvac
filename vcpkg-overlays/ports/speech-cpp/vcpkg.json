@@ -1,0 +1,127 @@
+{
+  "name": "speech-cpp",
+  "version-date": "2026-10-29",
+  "port-version": 2,
+  "description": "Umbrella port over the QVAC speech stack with one shared ggml dependency (the qvac-fabric port, the same ggml the LLM stack ships) and selectable whisper, parakeet, TTS, and audiogen engines.",
+  "homepage": "https://github.com/tetherto/qvac-fabric-speech.cpp",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "qvac-fabric",
+      "default-features": false,
+      "version>=": "11259.2.0#1"
+    },
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "default-features": [
+    {
+      "name": "metal",
+      "platform": "osx | ios"
+    },
+    {
+      "name": "opencl",
+      "platform": "android"
+    },
+    {
+      "name": "vulkan",
+      "platform": "windows | linux | android"
+    },
+    "whisper"
+  ],
+  "features": {
+    "audiogen": {
+      "description": "Build ACE-Step and MiniMax music generation from engines/audiogen, including the explicit MiniMax Core ML runtime on macOS (runtime requires macOS 15+). CMake package: find_package(audiogen-cpp CONFIG) + audiogen-cpp::audiogen-cpp."
+    },
+    "coreml": {
+      "description": "Enable the Apple Core ML (Neural Engine) sidecars of every enabled engine that has one: the Parakeet FastConformer encoder, the Nemotron 3 Diarization and Sortformer v2.1 whole-network diarizers, and the MOSS-Transcribe-Diarize audio encoder in parakeet (PARAKEET_COREML); the Audio8 codec synthesis stack, the Supertonic vocoder, the CosyVoice3 LM, flow frontend/decoder, F0 predictor and HiFT vocoder, the MOSS-TTS codec decoder, the MOSS-SoundEffect DiT and VAE, the MOSS-Speech speech tokenizer, and explicit LavaSR denoiser/enhancer models in tts (TTS_CPP_COREML); and the ACE-Step VAE decoder in audiogen (AUDIOGEN_COREML). Runtime model selection and fallback are engine-specific; LavaSR requires both an explicit compiled model path and a compute policy. Combine with the engine features you build; this feature no longer implies parakeet.",
+      "supports": "osx | ios"
+    },
+    "cuda": {
+      "description": "Enable CUDA GPU acceleration for all enabled engines (Linux / Windows on NVIDIA, via qvac-fabric[cuda-backend]). Needs nvcc on the build host; at runtime CUDA engages only where the NVIDIA driver and the CUDA runtime libraries resolve, and devices without compiled kernels are skipped in favor of Vulkan or CPU.",
+      "supports": "!osx & !ios & !android",
+      "dependencies": [
+        {
+          "name": "qvac-fabric",
+          "default-features": false,
+          "features": [
+            "cuda-backend"
+          ],
+          "platform": "!osx & !ios & !android"
+        }
+      ]
+    },
+    "metal": {
+      "description": "Enable Metal GPU acceleration for all enabled engines (macOS / iOS, via qvac-fabric[gpu-backends], which builds Metal on Apple platforms).",
+      "supports": "osx | ios",
+      "dependencies": [
+        {
+          "name": "qvac-fabric",
+          "default-features": false,
+          "features": [
+            "gpu-backends"
+          ],
+          "platform": "osx | ios"
+        }
+      ]
+    },
+    "opencl": {
+      "description": "Enable OpenCL GPU acceleration for all enabled engines (Android / Adreno, via qvac-fabric[gpu-backends], which builds OpenCL alongside Vulkan on Android).",
+      "supports": "android",
+      "dependencies": [
+        {
+          "name": "qvac-fabric",
+          "default-features": false,
+          "features": [
+            "gpu-backends"
+          ],
+          "platform": "android"
+        }
+      ]
+    },
+    "parakeet": {
+      "description": "Build the Parakeet engine (NVIDIA FastConformer ASR: CTC / TDT / EOU, Nemotron 3.5, Sortformer and Nemotron 3 diarization, plus MOSS-Transcribe-Diarize) from engines/parakeet. CMake package: find_package(qvac-parakeet CONFIG) + qvac::parakeet."
+    },
+    "tts": {
+      "description": "Build the TTS engine collection from engines/tts: Chatterbox, Supertonic, CosyVoice3, Parler-TTS, Pocket TTS, Audio8, MOSS Delay, MOSS-SoundEffect, MOSS-Speech and LavaSR speech enhancement, as one library. CMake package: find_package(tts-cpp CONFIG) + tts-cpp::tts-cpp.",
+      "dependencies": [
+        "mecab"
+      ]
+    },
+    "vulkan": {
+      "description": "Enable Vulkan GPU acceleration for all enabled engines (Linux / Windows / Android; Apple platforms use the metal feature instead, via qvac-fabric[gpu-backends]).",
+      "supports": "!osx & !ios",
+      "dependencies": [
+        {
+          "name": "qvac-fabric",
+          "default-features": false,
+          "features": [
+            "gpu-backends"
+          ],
+          "platform": "!osx & !ios"
+        }
+      ]
+    },
+    "webgpu": {
+      "description": "Enable the WebGPU (Dawn) GPU acceleration for all enabled engines, via qvac-fabric[webgpu]. Opt-in on every platform, selected at runtime with the engines' backend = \"webgpu\" option or a --backend webgpu CLI flag. See the qvac-fabric feature for the official-registry ports (dawn and its dependencies) a consumer has to import.",
+      "dependencies": [
+        {
+          "name": "qvac-fabric",
+          "default-features": false,
+          "features": [
+            "webgpu"
+          ]
+        }
+      ]
+    },
+    "whisper": {
+      "description": "Build the whisper engine from third_party/whisper.cpp (upstream whisper.cpp with the QVAC delta; upstream's bundled parakeet is gated off). CMake package: find_package(whisper CONFIG) + whisper::whisper."
+    }
+  }
+}

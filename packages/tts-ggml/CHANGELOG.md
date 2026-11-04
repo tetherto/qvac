@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Pocket GPU selection and metadata-only memory preflight with an optional byte budget.
-- Explicit native backend/device selection, opt-in WebGPU builds and stable accelerator stats.
+- Explicit native backend/device selection (WebGPU once the `@qvac/fabric` runtime provides it) and stable accelerator stats.
 - Independent MOSS text/audio sampling and configurable context/generation budgets.
 - Parler decoder Core ML, compute-policy and strict/fallback controls.
 - Supertonic precision, environment, in-memory voice tensors and callable warm-up.
@@ -32,6 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Run on the shared `@qvac/fabric` runtime: the module links the ggml that
+  `@qvac/fabric` ships instead of bundling its own, loads GPU backends from
+  the fabric platform package, and the native build takes ggml from the
+  `qvac-fabric` vcpkg port through `speech-cpp` `2026-10-29#2`.
 - Update the shared `speech-cpp` native dependency to `2026-10-29`
   ([#5420](https://github.com/tetherto/qvac/pull/5420),
   [#5447](https://github.com/tetherto/qvac/pull/5447)).
