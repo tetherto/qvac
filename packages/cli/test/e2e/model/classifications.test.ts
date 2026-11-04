@@ -7,11 +7,10 @@ import { assertStatusAndError, multipart } from '../helpers/http.js'
 const ALIAS = 'test-classifier'
 const ROUTE = '/qvac/v1/classifications'
 
-// No src: the addon's bundled MobileNetV3-Small, labels food / report / other.
 const CLASSIFICATION_CONFIG = {
   serve: {
     models: {
-      [ALIAS]: { type: 'ggml-classification', preload: true }
+      [ALIAS]: { model: 'MOBILENETV3_3CLASS_V3_FP16', preload: true }
     }
   }
 }
