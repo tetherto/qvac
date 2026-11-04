@@ -82,6 +82,19 @@ describe('hoistInstructions', () => {
     )
   })
 
+  it('keeps the attachments of every merged instruction', () => {
+    const [system] = hoistInstructions([
+      { role: 'system', content: 'sys', attachments: [{ path: 'a.png' }] },
+      { role: 'user', content: 'hi' },
+      { role: 'developer', content: 'dev', attachments: [{ path: 'b.png' }] }
+    ])
+    assert.deepEqual(system, {
+      role: 'system',
+      content: 'sys\n\ndev',
+      attachments: [{ path: 'a.png' }, { path: 'b.png' }]
+    })
+  })
+
   it('turns a lone developer turn into the system turn', () => {
     assert.deepEqual(
       hoistInstructions([
