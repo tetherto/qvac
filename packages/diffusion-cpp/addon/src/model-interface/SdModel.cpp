@@ -595,8 +595,7 @@ SdModel::FitOutcome SdModel::assessFit(const FitWorkload& workload) const {
 
   // The planner cannot represent per-request profile fallbacks or the H3
   // graph toggle. Avoid a fit verdict for a different execution graph.
-  if (!workload.upscaleOnly && (ctx.profile.vaeGemm || ctx.profile.h3LocalOps ||
-                                ctx.profile.ltxFullTemporal))
+  if (!workload.upscaleOnly && (ctx.profile.vaeGemm || ctx.profile.h3LocalOps))
     return {};
 
   // `sd_fit_params` answers any pinned placement with SD_FIT_FAILURE, and a
@@ -784,9 +783,7 @@ void SdModel::load() {
           ", h3_local_ops=" + std::to_string(performanceProfile_.h3LocalOps) +
           ", vae_gemm_candidate=" +
           std::to_string(performanceProfile_.vaeGemm) +
-          ", ltx_f16=" + std::to_string(performanceProfile_.ltxF16) +
-          ", ltx_full_temporal_candidate=" +
-          std::to_string(performanceProfile_.ltxFullTemporal));
+          ", ltx_f16=" + std::to_string(performanceProfile_.ltxF16));
 
   // LTX-2 is identified by the embeddings-connectors input, which no other
   // model family uses. Its temporal shape is used for per-job validation.
@@ -1381,21 +1378,6 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   qvac_lib_inference_addon_sd::applySdVidGenHandlers(
       vid, parsed.get<picojson::object>());
   const auto& paramsObject = parsed.get<picojson::object>();
-  if (vid.mode == "txt2vid" && vid.loraPath.empty() &&
-      vid.vaeExtraTilingArgs.empty() && job.initImageBytes.empty() &&
-      job.initImagesBytes.empty() && job.controlFramesBytes.empty() &&
-      job.referenceImagesBytes.empty() &&
-      qvac_lib_inference_addon_sd::useFullTemporalDecode(
-          performanceProfile_,
-          vid.width,
-          vid.height,
-          vid.videoFrames,
-          vid.vaeTiling,
-          paramsObject.contains("temporal_tiling")) &&
-      qvac_lib_inference_addon_sd::profileDevice(
-          performanceBackend_.c_str(), SD_BACKEND_PREF_GPU)
-              .freeBytes >= (uint64_t{8} << 30))
-    vid.vaeTemporalTiling = false;
   const bool isMiniMaxH3 = videoModelCapabilities_.isMiniMaxH3;
   const bool hasReferenceOptions =
       paramsObject.find("reference_attention_strength") != paramsObject.end() ||

@@ -26,7 +26,6 @@ struct PerformanceProfile {
   bool vaeGemm = false;
   bool vaeGemm512 = false;
   bool ltxF16 = false;
-  bool ltxFullTemporal = false;
 };
 
 ProfileModel inspectProfileModel(const SdCtxConfig& config);
@@ -37,9 +36,6 @@ ProfileDevice classifyProfileDevice(
     uint64_t totalBytes);
 PerformanceProfile selectPerformanceProfile(
     const SdCtxConfig& config, ProfileModel model, const ProfileDevice& device);
-bool useFullTemporalDecode(
-    const PerformanceProfile& profile, int width, int height, int frames,
-    bool spatialTiling, bool explicitTemporalTiling);
 bool useVaeGemm(
     const PerformanceProfile& profile, int width, int height, int batch,
     uint64_t freeBytes);

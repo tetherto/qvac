@@ -25,7 +25,7 @@ request rechecks its dimensions and free memory, so a later larger request
 returns to direct convolution. Reviewed output was visually identical, but not
 byte-identical; GEMM used about 4.2 GiB more VRAM in the RTX measurement.
 
-Fit probes return `unknown` for profiles with per-request GEMM/temporal changes
+Fit probes return `unknown` for profiles with per-request GEMM changes
 or H3 graph changes: the current engine planner cannot represent those graphs.
 They never report a fit based on the smaller baseline workspace.
 
@@ -61,12 +61,11 @@ callers still need to serialize workloads and handle allocation failures.
 
 ## LTX quality tradeoff and residency
 
-`performance_profile: 'allow-small-changes'` additionally allows full-temporal
-decoding on RTX 5090 CUDA for 512×320, 193-frame clips with spatial tiling and
-at least 8 GiB free memory. It improved latency by 7.2% in research, with small
-visible texture/contrast differences and exact audio. Explicit `temporal_tiling`
-always wins. The 97-frame and GB10 cases stay unchanged because their measured
-gain was below 5%.
+The addon already defaults to `temporal_tiling: false` (full-temporal decoding).
+Research measured a 7.2% RTX CUDA gain against an explicitly tiled 193-frame
+configuration, with small visible texture/contrast differences and exact audio.
+That is not an additional improvement over the existing addon default. Profiles
+leave temporal tiling unchanged, including explicit `temporal_tiling: true`.
 
 VAE weights already remain on the runtime GPU when no parameter-residency
 override is supplied. For an otherwise CPU-resident LTX configuration on RTX

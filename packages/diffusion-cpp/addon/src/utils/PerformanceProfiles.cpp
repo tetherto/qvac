@@ -249,17 +249,8 @@ PerformanceProfile selectPerformanceProfile(
         config.performanceMaxFrames > 0 && config.performanceMaxFrames <= 97 &&
         device.hostTotalBytes >= 96 * GIB && device.hostFreeBytes >= 76 * GIB &&
         device.freeBytes >= 64 * GIB;
-    result.ltxFullTemporal =
-        rtx && cuda && config.performanceProfile == "allow-small-changes";
   }
   return result;
-}
-
-bool useFullTemporalDecode(
-    const PerformanceProfile& profile, int width, int height, int frames,
-    bool spatialTiling, bool explicitTemporalTiling) {
-  return profile.ltxFullTemporal && !explicitTemporalTiling && spatialTiling &&
-         width == 512 && height == 320 && frames == 193;
 }
 
 bool useVaeGemm(

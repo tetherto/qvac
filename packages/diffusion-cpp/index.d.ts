@@ -37,7 +37,7 @@ export interface SdConfig {
     vae_tiling?: boolean;
     flash_attn?: boolean;
     /** Validated model/device profiles; explicit low-level options take precedence. */
-    performance_profile?: 'auto' | 'off' | 'allow-small-changes';
+    performance_profile?: 'auto' | 'off';
     /** Optional video output limits. Declare all three to permit bounded memory profiles. */
     performance_max_width?: NumericLike;
     performance_max_height?: NumericLike;

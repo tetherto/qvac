@@ -720,11 +720,10 @@ void applySdCtxHandlers(
     const std::unordered_map<std::string, std::string>& configMap) {
   if (const auto it = configMap.find("performance_profile");
       it != configMap.end()) {
-    if (it->second != "auto" && it->second != "off" &&
-        it->second != "allow-small-changes")
+    if (it->second != "auto" && it->second != "off")
       throw StatusError(
           general_error::InvalidArgument,
-          "performance_profile must be auto, off, or allow-small-changes");
+          "performance_profile must be auto or off");
     config.performanceProfile = it->second;
   }
   config.explicitFlashAttention = config.explicitFlashAttention ||

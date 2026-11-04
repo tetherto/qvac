@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include "handlers/SdVidGenHandlers.hpp"
 #include "utils/PerformanceProfiles.hpp"
 
 using namespace qvac_lib_inference_addon_sd;
@@ -120,24 +121,19 @@ TEST(
       applySdCtxHandlers(config, {{"performance_max_frames", "auto"}}));
 }
 
-TEST(SdPerformanceProfiles, QualityTradeoffRequiresOptInAndExactWorkload) {
+TEST(SdPerformanceProfiles, LtxKeepsExistingTemporalDefaultAndOverrides) {
   SdCtxConfig config;
   const auto gpu = device(ProfileApi::Cuda, ProfileGpu::Rtx5090);
-  EXPECT_FALSE(selectPerformanceProfile(config, ProfileModel::Ltx23Q5, gpu)
-                   .ltxFullTemporal);
-  applySdCtxHandlers(config, {{"performance_profile", "allow-small-changes"}});
-  const auto profile =
-      selectPerformanceProfile(config, ProfileModel::Ltx23Q5, gpu);
-  EXPECT_TRUE(useFullTemporalDecode(profile, 512, 320, 193, true, false));
-  EXPECT_FALSE(useFullTemporalDecode(profile, 512, 320, 97, true, false));
-  EXPECT_FALSE(useFullTemporalDecode(profile, 512, 320, 193, true, true));
-  EXPECT_FALSE(useFullTemporalDecode(profile, 512, 320, 193, false, false));
-  EXPECT_FALSE(useFullTemporalDecode(profile, 1024, 640, 193, true, false));
-  EXPECT_FALSE(selectPerformanceProfile(
-                   config,
-                   ProfileModel::Ltx23Q5,
-                   device(ProfileApi::Cuda, ProfileGpu::Gb10))
-                   .ltxFullTemporal);
+  EXPECT_FALSE(
+      selectPerformanceProfile(config, ProfileModel::Ltx23Q5, gpu).ltxF16);
+  SdVidGenConfig request;
+  EXPECT_FALSE(request.vaeTemporalTiling);
+  applySdVidGenHandlers(request, {{"temporal_tiling", picojson::value(true)}});
+  EXPECT_TRUE(request.vaeTemporalTiling);
+  applySdVidGenHandlers(request, {{"temporal_tiling", picojson::value(false)}});
+  EXPECT_FALSE(request.vaeTemporalTiling);
+  EXPECT_ANY_THROW(applySdCtxHandlers(
+      config, {{"performance_profile", "allow-small-changes"}}));
 }
 
 TEST(SdPerformanceProfiles, OptOutAndUnknownModelsKeepDefaults) {
@@ -173,7 +169,6 @@ TEST(SdPerformanceProfiles, ExplicitGraphAndMemoryPoliciesKeepDefaults) {
       EXPECT_FALSE(profile.h3LocalOps);
       EXPECT_FALSE(profile.vaeGemm);
       EXPECT_FALSE(profile.ltxF16);
-      EXPECT_FALSE(profile.ltxFullTemporal);
     }
   }
   for (const auto* value : {"true", "false"}) {
