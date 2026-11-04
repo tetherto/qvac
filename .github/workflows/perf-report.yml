@@ -24,10 +24,8 @@ on:
           - "On PR Trigger (nx)"
           - "PR build and test"
           - "Mobile tests"
-          - "Mobile Integration Tests (Parakeet)"
           - "Mobile Integration Tests (Diffusion CPP)"
           - "Benchmarks"
-          - "PR build and test"
       runs:
         description: "Number of recent runs to aggregate"
         type: number
