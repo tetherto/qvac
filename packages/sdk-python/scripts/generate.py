@@ -598,6 +598,7 @@ def render_methods_module(manifest_methods: list[dict]) -> str:
                 f"async def {func_name}(transport: Transport, params: {request_title}) -> {response_title}:"
             )
             lines.append(f"    payload = {dump}")
+            lines.append(f'    payload.setdefault("type", "{name}")')
             lines.append(
                 f"    return {response_title}.model_validate(await transport.call(payload))"
             )
@@ -606,6 +607,7 @@ def render_methods_module(manifest_methods: list[dict]) -> str:
                 f"async def {func_name}(transport: Transport, params: {request_title}) -> AsyncIterator[{response_title}]:"
             )
             lines.append(f"    payload = {dump}")
+            lines.append(f'    payload.setdefault("type", "{name}")')
             lines.append("    async for chunk in transport.call_stream(payload):")
             lines.append(f"        yield {response_title}.model_validate(chunk)")
         else:
@@ -615,6 +617,7 @@ def render_methods_module(manifest_methods: list[dict]) -> str:
                 f") -> AsyncIterator[{response_title}]:"
             )
             lines.append(f"    payload = {dump}")
+            lines.append(f'    payload.setdefault("type", "{name}")')
             lines.append("    async for chunk in transport.call_duplex(payload, up):")
             lines.append(f"        yield {response_title}.model_validate(chunk)")
         lines.append("")
@@ -650,6 +653,7 @@ def render_methods_module(manifest_methods: list[dict]) -> str:
                 "    # operation that doesn't support progress for this method)."
             )
             lines.append(f"    payload = {dump}")
+            lines.append(f'    payload.setdefault("type", "{name}")')
             lines.append("    payload['withProgress'] = True")
             lines.append("    async for chunk in transport.call_stream(payload):")
             lines.append(f"        if chunk.get('type') == {wire_type!r}:")
