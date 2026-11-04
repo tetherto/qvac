@@ -1,6 +1,6 @@
 import test from 'brittle'
 import { registerModel, unregisterModel } from '@/runtime/model-registry'
-import { hasPlugin, registerPlugin } from '@/plugins/registry'
+import { hasPlugin, registerPlugin, unregisterPlugin } from '@/plugins/registry'
 import { ttsPlugin } from '@/plugins/builtin/tts-ggml/plugin'
 import { textToSpeech } from '@/api/text-to-speech'
 
@@ -40,19 +40,24 @@ function fakeModel(opts: { chunks: Chunk[]; gate?: Promise<void>; fail?: Error }
   return { model, calls }
 }
 
-// Registered when each test starts, not at module load: the whole-suite run
-// shares one process, and other files' `clearPlugins()` calls run between this
-// file's import and its tests, which would leave dispatch with no plugin. The
-// registry rejects a second registration of the type, hence the guard.
+// The plugin registry is process-wide state shared with every other test file
+// in the whole-suite run: files such as the dispatch and clear-plugins tests
+// empty it, and the RPC-provider tests assert it is empty. So the plugin is
+// registered when a test starts (not at module load, which those sweeps would
+// undo) and removed again when the test ends, leaving the registry as found.
 function withModel(modelId: string, model: unknown) {
-  if (!hasPlugin(ttsPlugin.modelType)) registerPlugin(ttsPlugin)
+  const registeredHere = !hasPlugin(ttsPlugin.modelType)
+  if (registeredHere) registerPlugin(ttsPlugin)
   registerModel(modelId, {
     model: model as never,
     path: '/tmp/supertonic.gguf',
     config: { ttsEngine: 'supertonic' },
     modelType: 'tts-ggml'
   })
-  return () => unregisterModel(modelId)
+  return () => {
+    unregisterModel(modelId)
+    if (registeredHere) unregisterPlugin(ttsPlugin.modelType)
+  }
 }
 
 const chunk = (samples: number[], chunkIndex: number, isLast = false): Chunk => ({
