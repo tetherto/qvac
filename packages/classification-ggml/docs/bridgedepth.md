@@ -26,10 +26,13 @@ await model.destroy()
 
 `infer()` takes two JPEG/PNG buffers, or two packed RGB buffers with one shared
 `{ width, height, channels: 3 }`. Both views must have the same size, each side
-between 32 and 2048 pixels. Inputs are padded to a multiple of 16 on the top and
-the right by edge replication and the result is cropped back, as in the original
-`InputPadder`. The model authors recommend downsampling inputs above 720p; the
-graph memory grows with the pixel count.
+between 32 and 2048 pixels and at most about 2 MP in total: after padding to a
+multiple of 16, `(height / 8) * (width / 8)` must be at most 32767. 1920 x 1080
+fits, 2048 x 1088 does not. Larger inputs are rejected with an error, because
+ggml aborts the process on them on Metal, and on CUDA and Vulkan at 2048 x 2048.
+Inputs are padded on the top and the right by edge replication and the result is
+cropped back, as in the original `InputPadder`. The model authors recommend
+downsampling inputs above 720p; the graph memory grows with the pixel count.
 
 Backend selection, `backendsDir`, `load()`, `unload()`, `destroy()` and the
 runtime statistics behave as for [MegaLoc](megaloc.md). `cpu_fallback_nodes`

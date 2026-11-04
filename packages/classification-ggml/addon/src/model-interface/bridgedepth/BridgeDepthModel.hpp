@@ -14,9 +14,16 @@
 
 namespace classification_ggml::bridgedepth {
 
-// Largest accepted side. Graph memory grows with the pixel count; the model
+// Largest accepted side. MAX_GRID_CELLS bounds the pixel count; the model
 // authors recommend downsampling inputs above 720p.
 inline constexpr uint32_t MAX_SIDE = 2048;
+
+// Largest (H/8) * (W/8) after padding to a multiple of 16, about 2 MP. Above
+// it ggml aborts the process instead of returning an error: Metal past
+// INT16_MAX (2048x1088), CUDA and Vulkan at 65536 (2048x2048). 1920x1088 is
+// 32640.
+inline constexpr int64_t MAX_GRID_CELLS = 32767;
+int64_t gridCells(uint32_t width, uint32_t height);
 
 struct Config {
   std::string modelPath;

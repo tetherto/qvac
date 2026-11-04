@@ -113,6 +113,23 @@ TEST(BridgeDepthInput, RejectsSizesOutsideTheSupportedRange) {
         bd::toPlanarRgb(large, width, height);
       }).find("at most"),
       std::string::npos);
+  // 1080p pads to 1088 rows: 136 * 240 = 32640 cells, the largest common
+  // size under the limit. 2048x1088 is 34816 and aborts on Metal.
+  EXPECT_EQ(bd::gridCells(1920, 1080), 32640);
+  ImageInput fullHd;
+  fullHd.rawRgb = RawRgbDims{1920, 1080, 3};
+  fullHd.data.resize(static_cast<size_t>(1920) * 1080 * 3);
+  EXPECT_EQ(
+      bd::toPlanarRgb(fullHd, width, height).size(),
+      static_cast<size_t>(1920) * 1080 * 3);
+  ImageInput wide;
+  wide.rawRgb = RawRgbDims{2048, 1088, 3};
+  wide.data.resize(static_cast<size_t>(2048) * 1088 * 3);
+  EXPECT_NE(
+      expectThrows([&] {
+        bd::toPlanarRgb(wide, width, height);
+      }).find("too large"),
+      std::string::npos);
   ImageInput garbage;
   garbage.data = {1, 2, 3, 4};
   EXPECT_NE(

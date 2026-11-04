@@ -13,7 +13,8 @@ and this project adheres to
 
 - `BridgeDepth`: stereo disparity from a rectified left/right pair, with the
   Depth Anything V2 ViT-S mono branch. `infer(left, right)` returns
-  `{ width, height, disparity }`. Weights are converted locally with
+  `{ width, height, disparity }` for inputs up to about 2 MP (1920 x 1080
+  fits). Weights are converted locally with
   `scripts/convert-bridgedepth.py`; see `docs/bridgedepth.md`
   ([#5531](https://github.com/tetherto/qvac/pull/5531)).
 
