@@ -40,7 +40,7 @@ PerformanceProfile selectPerformanceProfile(
     const SdCtxConfig& config, ProfileModel model, const ProfileDevice& device);
 bool useVaeGemm(
     const PerformanceProfile& profile, int width, int height, int batch,
-    uint64_t freeBytes);
+    uint64_t freeBytes, bool vaeTiling = false);
 const char* ltxF16TensorRules();
 void validatePerformanceWorkload(
     const SdCtxConfig& config, int width, int height, int frames);

@@ -246,7 +246,8 @@ PerformanceProfile selectPerformanceProfile(
        (strix && hip))) {
     result.flashAttention = !config.explicitFlashAttention;
     result.h3LocalOps = rtx && (cuda || vulkan) && result.flashAttention &&
-                        config.diffusionFlashAttn;
+                        config.diffusionFlashAttn &&
+                        device.freeBytes >= 28 * GIB;
   }
   if (model == ProfileModel::Flux2Klein4BQ8 &&
       ((rtx && cuda) || (spark && cuda) || (strix && hip)) &&
@@ -273,8 +274,8 @@ PerformanceProfile selectPerformanceProfile(
 
 bool useVaeGemm(
     const PerformanceProfile& profile, int width, int height, int batch,
-    uint64_t freeBytes) {
-  return profile.vaeGemm && width == height &&
+    uint64_t freeBytes, bool vaeTiling) {
+  return profile.vaeGemm && !vaeTiling && width == height &&
          (width == 1024 || (width == 512 && profile.vaeGemm512)) &&
          batch == 1 && freeBytes >= 16 * GIB;
 }

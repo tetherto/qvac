@@ -20,7 +20,7 @@ graph-cut budgets and layer streaming retain current settings. HIP remains a
 source-build configuration; this change does not add a HIP release package.
 
 FLUX keeps direct convolution on Metal and Vulkan, where GEMM was slower.
-Automatic GEMM excludes reference/image conditioning, LoRA and batches. Each
+Automatic GEMM excludes reference/image conditioning, LoRA, tiling and batches. Each
 request rechecks its dimensions and free memory, so a later larger request
 returns to direct convolution. Reviewed output was visually identical, but not
 byte-identical; GEMM used about 4.2 GiB more VRAM in the RTX measurement.
@@ -36,6 +36,8 @@ H3's graph changes are local to its context. Explicit `flash_attn`/`fa` prevents
 automatic flash attention and the accompanying graph profile; disabling
 `diffusion_fa` also retains baseline behavior. The engine itself does not enable
 the graph changes by default.
+The RTX graph profile requires at least 28 GiB free at load. Below that threshold,
+only the independently validated flash-attention change is selected.
 
 ## Bounded LTX precision
 

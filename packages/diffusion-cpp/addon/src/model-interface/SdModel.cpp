@@ -906,7 +906,8 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
                           gen.width,
                           gen.height,
                           gen.batchCount,
-                          device.freeBytes);
+                          device.freeBytes,
+                          gen.vaeTiling);
     if (!sd_set_vae_conv_direct(sdCtx_.get(), !gemm))
       throw StatusError(
           general_error::InternalError,

@@ -59,6 +59,18 @@ TEST(SdPerformanceProfiles, ExplicitFalseAndAliasesWin) {
   }
 }
 
+TEST(SdPerformanceProfiles, H3GraphRequiresMemoryHeadroom) {
+  auto gpu = device(ProfileApi::Cuda, ProfileGpu::Rtx5090);
+  gpu.freeBytes = 28 * GIB;
+  EXPECT_TRUE(selectPerformanceProfile({}, ProfileModel::MiniMaxH3FL2VAQ4, gpu)
+                  .h3LocalOps);
+  gpu.freeBytes -= 1;
+  const auto profile =
+      selectPerformanceProfile({}, ProfileModel::MiniMaxH3FL2VAQ4, gpu);
+  EXPECT_FALSE(profile.h3LocalOps);
+  EXPECT_TRUE(profile.flashAttention);
+}
+
 TEST(SdPerformanceProfiles, FluxRequiresBoundedWorkloadAndFreeMemory) {
   SdCtxConfig config;
   auto gpu = device(ProfileApi::Cuda, ProfileGpu::Rtx5090);
@@ -67,6 +79,7 @@ TEST(SdPerformanceProfiles, FluxRequiresBoundedWorkloadAndFreeMemory) {
   };
   EXPECT_TRUE(select().vaeGemm);
   EXPECT_TRUE(useVaeGemm(select(), 1024, 1024, 1, 16 * GIB));
+  EXPECT_FALSE(useVaeGemm(select(), 1024, 1024, 1, 24 * GIB, true));
   EXPECT_FALSE(useVaeGemm(select(), 1024, 1024, 1, 16 * GIB - 1));
   EXPECT_FALSE(useVaeGemm(select(), 1024, 1024, 2, 24 * GIB));
   EXPECT_FALSE(useVaeGemm(select(), 2048, 512, 1, 24 * GIB));
