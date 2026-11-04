@@ -127,3 +127,5 @@ npx tsx examples/path/to/example.ts
 See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for building from source, commit and
 PR title format, and changelog generation, and [`TESTING.md`](./TESTING.md) for
 where new tests belong.
+
+<!-- sdk-e2e router proof: throwaway, never merged -->
