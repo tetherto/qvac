@@ -79,6 +79,46 @@ test('parseArgs forwards unrecognized flags to the fuzz binary', () => {
   })
 })
 
+test('space-separated binary flag values do not become a fuzz selector', () => {
+  assert.deepEqual(
+    buildFuzzArgs(parseArgs(['--continuous', '--fuzz_for', '30m', '--rss_limit_mb', '4096'])),
+    [`--fuzz=${DEFAULT_FUZZ_TEST}`, '--fuzz_for', '30m', '--rss_limit_mb', '4096']
+  )
+})
+
+test('an explicit fuzz selector can precede space-separated binary options', () => {
+  assert.deepEqual(buildFuzzArgs(parseArgs(['--continuous', 'Suite.Test', '--fuzz_for', '30m'])), [
+    '--fuzz=Suite.Test',
+    '--fuzz_for',
+    '30m'
+  ])
+})
+
+test('bounded mode preserves space-separated binary options', () => {
+  assert.deepEqual(buildFuzzArgs(parseArgs(['--gtest_filter', 'Suite.*'])), [
+    '--gtest_filter',
+    'Suite.*'
+  ])
+})
+
+test('the passthrough separator preserves runner-like flags and positional values', () => {
+  const parsed = parseArgs([
+    '--continuous',
+    'Suite.Test',
+    '--',
+    '--build-dir',
+    'binary-value',
+    '--continuous'
+  ])
+  assert.equal(parsed.buildDir, undefined)
+  assert.deepEqual(buildFuzzArgs(parsed), [
+    '--fuzz=Suite.Test',
+    '--build-dir',
+    'binary-value',
+    '--continuous'
+  ])
+})
+
 test('parseArgs does not forward its own flags to the fuzz binary', () => {
   const { fuzzerArgs } = parseArgs([
     '--continuous',
