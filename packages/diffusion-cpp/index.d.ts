@@ -70,6 +70,8 @@ export interface DiffusionFiles {
     t5Xxl?: string;
     llm?: string;
     llmVision?: string;
+    /** External tokenizer.json, required by MOSS-Image's Qwen3.5 encoder. */
+    tokenizer?: string;
     vae?: string;
     esrgan?: string;
     highNoiseDiffusionModel?: string;

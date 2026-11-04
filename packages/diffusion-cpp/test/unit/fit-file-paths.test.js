@@ -48,3 +48,22 @@ test('Qwen vision projector is distinct from CLIP vision for load and fit', asyn
   )
   await t.exception.all(() => assertFilePaths({ ...files, llmVision: '' }), /files.llmVision/)
 })
+
+test('MOSS tokenizer is mapped and validated for load and fit', async (t) => {
+  const { assertFilePaths } = require('../../file-paths.js')
+  const files = {
+    model: '/models/moss_image_sft_bf16.safetensors',
+    llm: '/models/Qwen3.5-9B-Q4_K_M.gguf',
+    vae: '/models/flux2-vae_small.safetensors',
+    tokenizer: '/models/tokenizer.json'
+  }
+  assertFilePaths(files)
+  const paths = toFilePaths(files)
+  t.is(paths.path, '')
+  t.is(paths.diffusionModelPath, files.model)
+  t.is(paths.tokenizerPath, files.tokenizer)
+  t.is(toFilePaths({ model: '/models/sd.gguf' }).tokenizerPath, '')
+  for (const tokenizer of ['', 'relative/tokenizer.json']) {
+    await t.exception.all(() => assertFilePaths({ ...files, tokenizer }), /files.tokenizer/)
+  }
+})

@@ -17,6 +17,7 @@ const COMPANION_FILE_KEYS = [
   't5Xxl',
   'llm',
   'llmVision',
+  'tokenizer',
   'vae',
   'esrgan',
   'highNoiseDiffusionModel',
@@ -59,6 +60,7 @@ export interface DiffusionFilePaths {
   t5XxlPath: string
   llmPath: string
   llmVisionPath: string
+  tokenizerPath: string
   vaePath: string
   clipVisionPath: string
   esrganPath: string
@@ -88,6 +90,7 @@ export function toFilePaths(files: DiffusionFiles & DiffusionVideoFiles): Diffus
     t5XxlPath: files.t5Xxl || '',
     llmPath: files.llm || '',
     llmVisionPath: files.llmVision || '',
+    tokenizerPath: files.tokenizer || '',
     vaePath: files.vae || '',
     clipVisionPath: files.clipVision || '',
     esrganPath: files.esrgan || '',

@@ -16,6 +16,7 @@ export interface VideoDiffusionFiles {
     t5Xxl?: string;
     llm?: string;
     llmVision?: string;
+    tokenizer?: string;
     vae?: string;
     clipVision?: string;
     audioVae?: string;

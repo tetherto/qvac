@@ -62,6 +62,33 @@ The package exposes four JS entry points:
 See [Qwen-Image-2.1](docs/qwen-image-21.md) for the native registry port,
 pinned downloads, text-to-image, ordered reference editing, and RGBA handling.
 
+## MOSS-Image setup
+
+Download the pinned SFT diffusion model, Qwen3.5 encoder, small FLUX.2 VAE,
+and external tokenizer with checksum verification:
+
+```bash
+bash scripts/download-model-moss.sh
+```
+
+The default directory is `models/moss-image`; override it with
+`MOSS_MODELS_DIR`. Pass absolute paths to the image constructor:
+
+```js
+const files = {
+  model: '/absolute/models/moss-image/moss_image_sft_bf16.safetensors',
+  llm: '/absolute/models/moss-image/Qwen3.5-9B-Q4_K_M.gguf',
+  vae: '/absolute/models/moss-image/flux2-vae_small.safetensors',
+  tokenizer: '/absolute/models/moss-image/tokenizer.json'
+}
+```
+
+`files.tokenizer` is passed to the native engine for both loading and fit
+assessment. Use Euler sampling, the discrete scheduler, CFG 3, and 50 steps
+as the initial SFT settings. Layout prompts can be supplied as a JSON string.
+This requires a native addon rebuilt with the `2026-11-01` registry ports;
+previously published native binaries do not expose the tokenizer option.
+
 ## Supported Platforms
 
 | Platform | Architecture | Status | GPU backend    |

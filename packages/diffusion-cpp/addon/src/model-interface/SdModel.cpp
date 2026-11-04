@@ -398,6 +398,7 @@ void SdModel::fillCtxParams(CtxParams& out) const {
   params.t5xxl_path = optPath(config_.t5XxlPath);
   params.llm_path = optPath(config_.llmPath);
   params.llm_vision_path = optPath(config_.llmVisionPath);
+  params.tokenizer = optPath(config_.tokenizerPath);
   params.vae_path = optPath(config_.vaePath);
   params.clip_vision_path = optPath(config_.clipVisionPath);
   params.taesd_path = optPath(config_.taesdPath);
