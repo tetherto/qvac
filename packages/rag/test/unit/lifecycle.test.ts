@@ -124,6 +124,28 @@ test('close waits for in-flight calls to finish', async (t) => {
   await reopened.close()
 })
 
+test('a second close waits for the first to drain', async (t) => {
+  const store = new Corestore(await tmp(t))
+  t.teardown(() => store.close())
+  const rag = createRag({ corestore: store })
+  await rag.ready()
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+
+  const documents = []
+  for (let i = 0; i < 20; i++) documents.push(doc(`d${i}`, spaceId, [[`text ${i}`, [1, 0, 0]]]))
+  let ingested = false
+  const ingesting = rag.ingest({ namespace: 'ns', documents }).then((result) => {
+    ingested = true
+    return result
+  })
+  const first = rag.close()
+  await rag.close()
+
+  t.ok(ingested, 'the ingest finished before the second close returned')
+  await first
+  await ingesting
+})
+
 test('close leaves the caller-owned corestore open', async (t) => {
   const store = new Corestore(await tmp(t))
   t.teardown(() => store.close())

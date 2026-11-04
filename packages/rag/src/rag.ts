@@ -65,6 +65,7 @@ export function createRag(options: CreateRagOptions): Rag {
   let db: HyperDBInstance | null = null
   let opening: Promise<void> | null = null
   let closed = false
+  let closing: Promise<void> | null = null
   const inflight = new Set<Promise<unknown>>()
 
   // A failed open is not cached, so ready() can be retried.
@@ -91,10 +92,17 @@ export function createRag(options: CreateRagOptions): Rag {
     db = instance
   }
 
-  // The Corestore belongs to the caller and stays open.
-  async function close(): Promise<void> {
-    if (closed) return
-    closed = true
+  // The Corestore belongs to the caller and stays open. Every caller gets the
+  // same promise, so a repeated close() also waits for the drain.
+  function close(): Promise<void> {
+    if (!closing) {
+      closed = true
+      closing = drain()
+    }
+    return closing
+  }
+
+  async function drain(): Promise<void> {
     if (opening) await opening.catch(() => {})
     await Promise.allSettled(inflight)
     if (db) await db.close()
