@@ -254,6 +254,13 @@ test('a plugin stream ignores the signal and runs to its end', async function (t
     release()
 
     t.is(tokenOf(await responses.next()), 'b', 'the stream keeps running after the abort')
+    const last = await responses.next()
+    t.is(
+      (last.value as unknown as { done: boolean }).done,
+      true,
+      'the stream ends with the handler'
+    )
+    t.ok((await responses.next()).done, 'nothing follows the done frame')
   } finally {
     unregisterModel('gated-model')
     await tearDown()

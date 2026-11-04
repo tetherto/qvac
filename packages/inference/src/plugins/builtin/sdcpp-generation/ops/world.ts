@@ -24,6 +24,7 @@ import type {
   WorldStepStats,
   WorldStepStreamResponse
 } from '@/schemas/sdcpp-config'
+import type { TrackedRequest } from '@/schemas/request-base'
 
 // A step is ~1.8s and a scene is bounded by its encoder loads, so anything past
 // this means the native job is not progressing. Warn only — see settleInFlight.
@@ -569,10 +570,11 @@ interface SceneResponseWithStats {
 }
 
 export async function* worldStep(
-  request: WorldStepRequest
+  request: WorldStepRequest & TrackedRequest
 ): AsyncGenerator<WorldStepStreamResponse> {
   await using ctx = await getRequestRegistry().begin({
     requestId: request.requestId ?? generateRandomRequestId(),
+    sessionId: request.sessionId,
     kind: 'world',
     modelId: request.modelId
   })
@@ -742,10 +744,11 @@ export async function* worldStep(
 }
 
 export async function* worldCreateScene(
-  request: WorldSceneRequest
+  request: WorldSceneRequest & TrackedRequest
 ): AsyncGenerator<WorldSceneStreamResponse> {
   await using ctx = await getRequestRegistry().begin({
     requestId: request.requestId ?? generateRandomRequestId(),
+    sessionId: request.sessionId,
     kind: 'world',
     modelId: request.modelId
   })

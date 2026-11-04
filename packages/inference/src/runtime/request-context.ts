@@ -71,6 +71,14 @@ export type RequestState = 'running' | 'cancelling' | 'completed' | 'failed' | '
  */
 export interface RequestContext {
   readonly requestId: string
+  /** Caller session the request belongs to; the owner session when the request named none. */
+  readonly sessionId: string
+  /**
+   * `(sessionId, requestId)` joined into the registry's storage key. Hand this,
+   * not `requestId`, to native code that keys jobs by id: two sessions may reuse
+   * one request id, and the addon has no session of its own to tell them apart.
+   */
+  readonly registryKey: string
   readonly kind: RequestKind
   readonly modelId: string | undefined
   readonly signal: AbortSignal

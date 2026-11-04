@@ -13,10 +13,11 @@ import {
 import type { LayaDecisions } from '@qvac/embed-llamacpp'
 
 export async function decide(request: DecideRequest) {
-  const { modelId, requestId } = request
+  const { modelId, requestId, sessionId } = request
   const nativeRequest = transformDecisionRequest(request)
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRandomRequestId(),
+    sessionId,
     kind: 'decision',
     modelId
   })

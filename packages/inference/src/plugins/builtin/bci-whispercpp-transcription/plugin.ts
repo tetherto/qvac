@@ -83,14 +83,16 @@ export const bciPlugin = definePlugin({
                 neuralData: request.neuralData,
                 metadata: true
               },
-              request.requestId
+              request.requestId,
+              request.sessionId
             )
           : bciTranscribe(
               {
                 modelId: request.modelId,
                 neuralData: request.neuralData
               },
-              request.requestId
+              request.requestId,
+              request.sessionId
             )
 
         try {
@@ -146,14 +148,16 @@ export const bciPlugin = definePlugin({
               inputStream,
               true,
               request.streamOpts,
-              request.requestId
+              request.requestId,
+              request.sessionId
             )
           : bciTranscribeStream(
               request.modelId,
               inputStream,
               false,
               request.streamOpts,
-              request.requestId
+              request.requestId,
+              request.sessionId
             )
 
         // Iterated by hand rather than with `for await` so the generator's

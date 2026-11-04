@@ -12,6 +12,7 @@ import {
 } from '@/runtime/logging-stream-registry'
 import { clearAllAddonLoggers, getEngineLogger, LOG_ID, ALL_LOG_ID } from '@/logging/index'
 import { clearPlugins } from '@/plugins/index'
+import { clearSessions } from '@/runtime/session-registry'
 import { acquireCacheLock, releaseCacheLock } from '@/runtime/cache-lock'
 import { nativeResourceCollectorDependencies } from '@/resources/native'
 import { destroyResourceCollector, initializeResourceCollector } from '@/resources/instance'
@@ -73,6 +74,9 @@ async function runCleanup(): Promise<void> {
   if (cleanupRan) return
   cleanupPromise = (async () => {
     destroyResourceCollector()
+    // Root shutdown ends every caller session; their models go with
+    // `unloadAllModels` below and their requests with the engine.
+    clearSessions()
     clearRegistries()
     await Promise.allSettled([
       disposeAllVectorIndexes(),

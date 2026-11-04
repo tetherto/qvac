@@ -71,7 +71,7 @@ const admittedFinetunes = new Set<string>()
 // handoff leaves a brief window where the request is in neither the wait queue nor the
 // active set — a broad cancel misses it, but cancel({ requestId }) covers it via the
 // cancel-before-begin tripwire.
-const finetuneRequestIds = new Map<string, string>()
+const finetuneRequestIds = new Map<string, { requestId: string; sessionId: string | undefined }>()
 
 // Models whose admitted finetune is mid-pause: model.pause() has been called but has
 // not settled. A new finetune is rejected during this window even if the runtime ref
@@ -82,9 +82,9 @@ const pausingModels = new Set<string>()
 // registry grant→register handoff window via the cancel-before-begin tripwire),
 // falling back to a broad cancel if the id is unknown.
 function cancelTrackedFinetune(modelId: string): void {
-  const requestId = finetuneRequestIds.get(modelId)
-  if (requestId !== undefined) getRequestRegistry().cancel({ requestId })
-  else getRequestRegistry().cancel({ modelId, kind: 'finetune' })
+  const tracked = finetuneRequestIds.get(modelId)
+  if (tracked !== undefined) getRequestRegistry().cancel(tracked)
+  else getRequestRegistry().cancel({ modelId, kind: 'finetune', allSessions: true })
 }
 
 export function getFinetuneStateFromCheckpoints(options: FinetuneOptions): FinetuneStatus {
@@ -161,7 +161,8 @@ export async function startFinetune(
   // observes RUNNING, not IDLE, and a concurrent start is rejected above. Released
   // on a failed begin() or on scope unwind below.
   registerRunningFinetune(request.modelId)
-  finetuneRequestIds.set(request.modelId, requestId)
+  const tracked = { requestId, sessionId: request.sessionId }
+  finetuneRequestIds.set(request.modelId, tracked)
 
   // Scope the run into the registry so cancel({ requestId }) and
   // cancel({ modelId, kind: "finetune" }) reach it; onAbort forwards to
@@ -169,12 +170,13 @@ export async function startFinetune(
   await using ctx = await getRequestRegistry()
     .begin({
       requestId,
+      sessionId: request.sessionId,
       kind: 'finetune',
       modelId: request.modelId
     })
     .catch((err: unknown) => {
       clearFinetuneRuntimeState(request.modelId)
-      if (finetuneRequestIds.get(request.modelId) === requestId) {
+      if (finetuneRequestIds.get(request.modelId) === tracked) {
         finetuneRequestIds.delete(request.modelId)
       }
       throw err
@@ -184,7 +186,7 @@ export async function startFinetune(
   // removes the listener first.
   ctx.scope.defer(() => {
     clearFinetuneRuntimeState(request.modelId)
-    if (finetuneRequestIds.get(request.modelId) === requestId) {
+    if (finetuneRequestIds.get(request.modelId) === tracked) {
       finetuneRequestIds.delete(request.modelId)
     }
   })

@@ -98,7 +98,7 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
     )
   }
 
-  await using ctx = await bindTtsCancel(model, modelId, request.requestId)
+  await using ctx = await bindTtsCancel(model, modelId, request.requestId, request.sessionId)
   if (ctx.signal.aborted) return { ...buildStreamResult(0), cancelled: true }
 
   const modelStart = nowMs()

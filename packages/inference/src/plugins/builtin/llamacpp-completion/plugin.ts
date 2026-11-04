@@ -208,6 +208,7 @@ export const llmPlugin = definePlugin({
         const parallel = getModelParallel(modelCfg as { parallel?: number })
         await using ctx = await getRequestRegistry().begin({
           requestId: request.requestId ?? generateRandomRequestId(),
+          sessionId: request.sessionId,
           kind: 'batchCompletion',
           modelId: request.modelId,
           maxConcurrentPerModel: parallel
@@ -384,6 +385,7 @@ export const llmPlugin = definePlugin({
         const parallel = getModelParallel(modelCfg as { parallel?: number })
         await using ctx = await getRequestRegistry().begin({
           requestId: request.requestId ?? generateRandomRequestId(),
+          sessionId: request.sessionId,
           kind: 'completion',
           modelId: request.modelId,
           maxConcurrentPerModel: parallel
@@ -536,7 +538,7 @@ export const llmPlugin = definePlugin({
       cancel: { scope: 'request', hard: true },
 
       handler: async function* (request) {
-        const stream = translate(request, request.requestId)
+        const stream = translate(request, request.requestId, request.sessionId)
         try {
           let result = await stream.next()
 

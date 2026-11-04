@@ -95,7 +95,8 @@ export const parakeetPlugin = definePlugin({
                 maxNewTokens: request.maxNewTokens,
                 metadata: true
               },
-              request.requestId
+              request.requestId,
+              request.sessionId
             )
           : transcribe(
               {
@@ -105,7 +106,8 @@ export const parakeetPlugin = definePlugin({
                 hotwords: request.hotwords,
                 maxNewTokens: request.maxNewTokens
               },
-              request.requestId
+              request.requestId,
+              request.sessionId
             )
 
         try {
@@ -172,7 +174,8 @@ export const parakeetPlugin = definePlugin({
               undefined,
               true,
               streamOpts,
-              request.requestId
+              request.requestId,
+              request.sessionId
             )
           : transcribeStream(
               request.modelId,
@@ -180,7 +183,8 @@ export const parakeetPlugin = definePlugin({
               undefined,
               false,
               streamOpts,
-              request.requestId
+              request.requestId,
+              request.sessionId
             )
 
         try {

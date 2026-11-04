@@ -121,7 +121,8 @@ export const embeddingsPlugin = definePlugin({
           request.inputs !== undefined
             ? { modelId: request.modelId, inputs: request.inputs }
             : { modelId: request.modelId, text: request.text },
-          request.requestId
+          request.requestId,
+          request.sessionId
         )
 
         return forwardModelExecution(

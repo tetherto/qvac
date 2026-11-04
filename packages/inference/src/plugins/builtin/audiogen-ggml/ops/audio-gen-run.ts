@@ -42,7 +42,7 @@ export type AudioGenRunResponse = Awaited<ReturnType<AudioGen['run']>>
 
 export interface AudioGenRunOptions<TType extends AudioGenRunType> {
   type: TType
-  request: { modelId: string; requestId?: string | undefined }
+  request: { modelId: string; requestId?: string | undefined; sessionId?: string | undefined }
   /**
    * Prepares the inputs and admits the native job once the request holds the
    * model slot. Preparation (decoding audio) can take real time, so the
@@ -70,6 +70,7 @@ export async function* streamAudioGenRun<TType extends AudioGenRunType>(
   const { type, request } = options
   await using ctx = await getRequestRegistry().begin({
     requestId: request.requestId ?? generateRequestId(),
+    sessionId: request.sessionId,
     kind: 'audiogen',
     modelId: request.modelId
   })

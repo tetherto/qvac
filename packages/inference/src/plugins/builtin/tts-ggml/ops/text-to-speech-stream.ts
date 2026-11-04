@@ -154,7 +154,12 @@ export async function* textToSpeechStream(
   const parlerJobOptions = getParlerJobOptions(request)
   assertParlerJobOptionsSupported(model, parlerJobOptions, 'textToSpeechStream')
 
-  await using ctx = await bindTtsCancel(model, request.modelId, request.requestId)
+  await using ctx = await bindTtsCancel(
+    model,
+    request.modelId,
+    request.requestId,
+    request.sessionId
+  )
   if (ctx.signal.aborted) return { ...buildStreamResult(0), cancelled: true }
 
   const modelStart = nowMs()

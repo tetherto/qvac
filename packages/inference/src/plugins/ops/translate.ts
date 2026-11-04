@@ -104,7 +104,8 @@ function shouldSkipPerCallSampling(modelName: string | undefined): boolean {
 
 export async function* translate(
   params: TranslateParams,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string
 ): AsyncGenerator<string, { modelExecutionMs: number; stats?: TranslationStats }, unknown> {
   const { modelId, text, modelType: inputModelType } = params
 
@@ -159,6 +160,7 @@ export async function* translate(
   // fine because the result is dropped either way.
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRandomRequestId(),
+    sessionId,
     kind: 'translate',
     modelId,
     // LLM translate joins the completion lane (its cap = the model's own

@@ -42,9 +42,15 @@ export async function cancelIfAborted(model: unknown, signal: AbortSignal): Prom
  * never owned the model slot, so cancelling then would interrupt the run that
  * does.
  */
-export async function bindTtsCancel(model: unknown, modelId: string, requestId?: string) {
+export async function bindTtsCancel(
+  model: unknown,
+  modelId: string,
+  requestId?: string,
+  sessionId?: string
+) {
   const ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRequestId(),
+    sessionId,
     kind: 'tts',
     modelId
   })

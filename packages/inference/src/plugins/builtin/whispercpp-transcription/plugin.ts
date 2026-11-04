@@ -100,7 +100,8 @@ export const whisperPlugin = definePlugin({
                 maxNewTokens: request.maxNewTokens,
                 metadata: true
               },
-              request.requestId
+              request.requestId,
+              request.sessionId
             )
           : transcribe(
               {
@@ -110,7 +111,8 @@ export const whisperPlugin = definePlugin({
                 hotwords: request.hotwords,
                 maxNewTokens: request.maxNewTokens
               },
-              request.requestId
+              request.requestId,
+              request.sessionId
             )
 
         try {
@@ -178,7 +180,8 @@ export const whisperPlugin = definePlugin({
               request.prompt,
               true,
               streamOpts,
-              request.requestId
+              request.requestId,
+              request.sessionId
             )
           : transcribeStream(
               request.modelId,
@@ -186,7 +189,8 @@ export const whisperPlugin = definePlugin({
               request.prompt,
               false,
               streamOpts,
-              request.requestId
+              request.requestId,
+              request.sessionId
             )
 
         try {

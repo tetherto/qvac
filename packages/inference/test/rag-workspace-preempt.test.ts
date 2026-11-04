@@ -4,6 +4,7 @@ import {
   setActiveRagRequest,
   clearActiveRagRequest
 } from '@/rag/rag-operation-manager'
+import { OWNER_SESSION_ID } from '@/runtime/session-id'
 
 // -----------------------------------------------------------------------------
 // RAG workspace → requestId map.
@@ -29,41 +30,59 @@ import {
 const WS = 'ws-test'
 const WS_OTHER = 'ws-other'
 
+const req = (requestId: string, sessionId: string = OWNER_SESSION_ID) => ({ requestId, sessionId })
+
 test('rag workspace map: get returns undefined before set', (t) => {
-  clearActiveRagRequest(WS, 'unused')
+  clearActiveRagRequest(WS, req('unused'))
   t.is(getActiveRagRequest(WS), undefined)
 })
 
 test('rag workspace map: set / get round-trip', (t) => {
-  setActiveRagRequest(WS, 'r-1')
-  t.is(getActiveRagRequest(WS), 'r-1')
-  clearActiveRagRequest(WS, 'r-1')
+  setActiveRagRequest(WS, req('r-1'))
+  t.alike(getActiveRagRequest(WS), req('r-1'))
+  clearActiveRagRequest(WS, req('r-1'))
   t.is(getActiveRagRequest(WS), undefined)
 })
 
 test('rag workspace map: set replaces (pre-emption write path)', (t) => {
-  setActiveRagRequest(WS, 'r-1')
-  setActiveRagRequest(WS, 'r-2')
-  t.is(getActiveRagRequest(WS), 'r-2', 'newer requestId replaces the older')
-  clearActiveRagRequest(WS, 'r-2')
+  setActiveRagRequest(WS, req('r-1'))
+  setActiveRagRequest(WS, req('r-2'))
+  t.alike(getActiveRagRequest(WS), req('r-2'), 'newer requestId replaces the older')
+  clearActiveRagRequest(WS, req('r-2'))
 })
 
 test('rag workspace map: clear is a no-op for stale requestId (still-mine guard)', (t) => {
-  setActiveRagRequest(WS, 'r-current')
+  setActiveRagRequest(WS, req('r-current'))
   // Older op's scope unwind fires after a newer op has already
   // installed its mapping. The stale clear must not stomp.
-  clearActiveRagRequest(WS, 'r-stale')
-  t.is(getActiveRagRequest(WS), 'r-current', 'stale clear leaves the current mapping intact')
-  clearActiveRagRequest(WS, 'r-current')
+  clearActiveRagRequest(WS, req('r-stale'))
+  t.alike(
+    getActiveRagRequest(WS),
+    req('r-current'),
+    'stale clear leaves the current mapping intact'
+  )
+  clearActiveRagRequest(WS, req('r-current'))
+})
+
+test('rag workspace map: the same requestId in another session is a different request', (t) => {
+  setActiveRagRequest(WS, req('r-1', 'A'))
+  clearActiveRagRequest(WS, req('r-1', 'B'))
+  t.alike(getActiveRagRequest(WS), req('r-1', 'A'), "B's clear leaves A's mapping intact")
+  clearActiveRagRequest(WS, req('r-1', 'A'))
+  t.is(getActiveRagRequest(WS), undefined)
 })
 
 test('rag workspace map: workspaces are isolated', (t) => {
-  setActiveRagRequest(WS, 'r-a')
-  setActiveRagRequest(WS_OTHER, 'r-b')
-  t.is(getActiveRagRequest(WS), 'r-a')
-  t.is(getActiveRagRequest(WS_OTHER), 'r-b')
-  clearActiveRagRequest(WS, 'r-a')
+  setActiveRagRequest(WS, req('r-a'))
+  setActiveRagRequest(WS_OTHER, req('r-b'))
+  t.alike(getActiveRagRequest(WS), req('r-a'))
+  t.alike(getActiveRagRequest(WS_OTHER), req('r-b'))
+  clearActiveRagRequest(WS, req('r-a'))
   t.is(getActiveRagRequest(WS), undefined)
-  t.is(getActiveRagRequest(WS_OTHER), 'r-b', 'clearing one workspace must not touch the other')
-  clearActiveRagRequest(WS_OTHER, 'r-b')
+  t.alike(
+    getActiveRagRequest(WS_OTHER),
+    req('r-b'),
+    'clearing one workspace must not touch the other'
+  )
+  clearActiveRagRequest(WS_OTHER, req('r-b'))
 })

@@ -17,6 +17,7 @@ import {
 } from '@/rag/index'
 import { getRequestRegistry, withRequestContext, type ManagedRequestContext } from '@/runtime/index'
 import { generateRandomRequestId } from '@/runtime/request-id'
+import { resolveSessionId } from '@/runtime/session-id'
 import { getEngineLogger } from '@/logging/index'
 import { profileReplyHandler, registerOperationMetrics } from '@/profiling/index'
 
@@ -97,20 +98,25 @@ function omitOnProgress<T extends Record<string, unknown>>(
  */
 async function beginRagContext(
   workspace: string,
-  requestId: string
+  request: { requestId?: string | undefined; sessionId?: string | undefined }
 ): Promise<ManagedRequestContext> {
   const registry = getRequestRegistry()
+  const requestId = request.requestId ?? generateRandomRequestId()
+  const sessionId = resolveSessionId(request)
+  const identity = { requestId, sessionId }
+  // A workspace is shared runtime state, so the pre-emption crosses sessions.
   const prev = getActiveRagRequest(workspace)
-  if (prev !== undefined && prev !== requestId) {
-    registry.cancel({ requestId: prev, reason: 'rag-workspace-preempt' })
+  if (prev !== undefined && (prev.requestId !== requestId || prev.sessionId !== sessionId)) {
+    registry.cancel({ ...prev, reason: 'rag-workspace-preempt' })
   }
   const ctx = await registry.begin({
     requestId,
+    sessionId,
     kind: 'rag'
   })
-  setActiveRagRequest(workspace, requestId)
+  setActiveRagRequest(workspace, identity)
   ctx.scope.defer(() => {
-    clearActiveRagRequest(workspace, requestId)
+    clearActiveRagRequest(workspace, identity)
   })
   return ctx
 }
@@ -141,8 +147,7 @@ async function handleRagInternal(
 
     case 'ingest': {
       const workspace = request.workspace ?? DEFAULT_WORKSPACE
-      const requestId = request.requestId ?? generateRandomRequestId()
-      await using ctx = await beginRagContext(workspace, requestId)
+      await using ctx = await beginRagContext(workspace, request)
       const log = withRequestContext(getEngineLogger(), ctx)
       log.debug('ingest start')
       const handlerOptions = createHandlerOptions('ingest', workspace, ctx.signal, onProgress)
@@ -159,8 +164,7 @@ async function handleRagInternal(
 
     case 'saveEmbeddings': {
       const workspace = request.workspace ?? DEFAULT_WORKSPACE
-      const requestId = request.requestId ?? generateRandomRequestId()
-      await using ctx = await beginRagContext(workspace, requestId)
+      await using ctx = await beginRagContext(workspace, request)
       const log = withRequestContext(getEngineLogger(), ctx)
       log.debug('saveEmbeddings start')
       const handlerOptions = createHandlerOptions(
@@ -200,8 +204,7 @@ async function handleRagInternal(
 
     case 'reindex': {
       const workspace = request.workspace ?? DEFAULT_WORKSPACE
-      const requestId = request.requestId ?? generateRandomRequestId()
-      await using ctx = await beginRagContext(workspace, requestId)
+      await using ctx = await beginRagContext(workspace, request)
       const log = withRequestContext(getEngineLogger(), ctx)
       log.debug('reindex start')
       const handlerOptions = createHandlerOptions('reindex', workspace, ctx.signal, onProgress)

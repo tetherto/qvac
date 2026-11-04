@@ -27,15 +27,25 @@ export function markEmbeddingProjector(model: object) {
 // Overloaded functions for embedding
 export async function embed(
   params: { modelId: string; text: string },
-  requestId?: string
+  requestId?: string,
+  sessionId?: string
 ): Promise<EmbedResult>
 export async function embed(
   params: { modelId: string; text: string[] },
-  requestId?: string
+  requestId?: string,
+  sessionId?: string
 ): Promise<EmbedResult>
-export async function embed(params: EmbedParams, requestId?: string): Promise<EmbedResult>
+export async function embed(
+  params: EmbedParams,
+  requestId?: string,
+  sessionId?: string
+): Promise<EmbedResult>
 
-export async function embed(params: EmbedParams, requestId?: string): Promise<EmbedResult> {
+export async function embed(
+  params: EmbedParams,
+  requestId?: string,
+  sessionId?: string
+): Promise<EmbedResult> {
   const parsed = embedParamsSchema.parse(params)
   const { modelId } = parsed
 
@@ -45,6 +55,7 @@ export async function embed(params: EmbedParams, requestId?: string): Promise<Em
   // id if the caller didn't send one.
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRandomRequestId(),
+    sessionId,
     kind: 'embeddings',
     modelId
   })

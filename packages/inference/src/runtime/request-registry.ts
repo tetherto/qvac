@@ -4,6 +4,7 @@ import type { RequestContext, RequestKind, RequestState } from '@/runtime/reques
 import { RequestIdConflictError, RequestRejectedByPolicyError } from '@/errors/index'
 import { getEngineLogger } from '@/logging/index'
 import type { Logger } from '@/logging/types'
+import { OWNER_SESSION_ID, requestRegistryKey } from '@/runtime/session-id'
 
 /**
  * Outcome the caller declares when terminating a request through
@@ -15,6 +16,12 @@ export type RequestOutcome = 'completed' | 'failed' | 'cancelled'
 export interface BeginOpts {
   /** Stable identity. Caller-provided so a `cancel` can target it by id. */
   requestId: string
+  /**
+   * Caller session the request belongs to. The registry keys every request by
+   * `(sessionId, requestId)`, so a cancel from another session never finds it.
+   * Defaults to the owner session.
+   */
+  sessionId?: string | undefined
   kind: RequestKind
   modelId?: string
   /**
@@ -40,16 +47,29 @@ export interface BeginOpts {
 
 export interface CancelByRequestId {
   requestId: string
+  /** Session the request belongs to. Defaults to the owner session. */
+  sessionId?: string | undefined
   reason?: string
 }
 
 export interface CancelByModelId {
   modelId: string
   kind?: RequestKind
+  /** Only this session's requests on the model. Defaults to the owner session. */
+  sessionId?: string | undefined
+  /** Every session's requests on the model. Set by the owner and by teardown. */
+  allSessions?: boolean
   reason?: string
 }
 
-export type CancelTarget = CancelByRequestId | CancelByModelId
+/** Every request of one session, on every model: the `closeSession` sweep. */
+export interface CancelBySession {
+  sessionId: string
+  allModels: true
+  reason?: string
+}
+
+export type CancelTarget = CancelByRequestId | CancelByModelId | CancelBySession
 
 /**
  * Per-kind admission rule. Kinds without a registered policy have no
@@ -175,8 +195,8 @@ export interface RequestRegistry {
    */
   policy(opts: ConcurrencyPolicy): void
 
-  /** Look up an in-flight request by id. */
-  get(requestId: string): RequestContext | null
+  /** Look up an in-flight request by id within a session (owner by default). */
+  get(requestId: string, sessionId?: string): RequestContext | null
 
   /**
    * Snapshot of currently-tracked requests. Useful for diagnostics /
@@ -185,6 +205,9 @@ export interface RequestRegistry {
    */
   list(): RequestContext[]
 
+  /** In-flight requests of one session. */
+  listBySession(sessionId: string): RequestContext[]
+
   /**
    * Cancel matching requests. Returns the number of contexts whose abort
    * was triggered by *this* call (already-cancelled contexts are skipped
@@ -192,7 +215,11 @@ export interface RequestRegistry {
    *
    * For `{ modelId }` and an optional `kind`, cancels every active
    * request that matches the predicate. This is the broad-cancel path
-   * the pre-registry `cancel({ modelId })` API maps to.
+   * the pre-registry `cancel({ modelId })` API maps to. Without
+   * `allSessions` it only reaches the target session's requests.
+   *
+   * For `{ sessionId, allModels: true }`, cancels every request the session
+   * owns, active or queued.
    */
   cancel(target: CancelTarget): number
 
@@ -215,11 +242,17 @@ export interface RequestRegistry {
   withModelDraining(modelId: string, teardown: () => Promise<void>): Promise<void>
 
   /**
+   * Cancel every request of a session, active or queued, and wait for the
+   * active ones to dispose. Returns the number of requests this call cancelled.
+   */
+  drainSession(sessionId: string, reason: string): Promise<number>
+
+  /**
    * Mark a request finished and dispose its scope. Equivalent to
    * `await ctx[Symbol.asyncDispose]()` with an explicit outcome.
    * Idempotent — calling `end` after a scope dispose is a no-op.
    */
-  end(requestId: string, outcome: RequestOutcome): Promise<void>
+  end(requestId: string, outcome: RequestOutcome, sessionId?: string): Promise<void>
 }
 
 interface RegistryEntry {
@@ -302,6 +335,9 @@ interface NormalizedPolicy {
  */
 interface SlotWaiter {
   requestId: string
+  sessionId: string
+  /** `requestRegistryKey(sessionId, requestId)`; the `waitersById` key. */
+  key: string
   kind: RequestKind
   modelId: string
   enqueuedAt: number
@@ -371,6 +407,9 @@ export function createRequestRegistry(options?: {
   /** Defaults to `getEngineLogger()`. Tests inject a stub. */
   logger?: Logger
 }): RequestRegistry {
+  // Every per-request map below is keyed by `requestRegistryKey(sessionId,
+  // requestId)`, so two sessions reusing one request id never collide and a
+  // cancel from one session cannot reach the other's request.
   const entries = new Map<string, RegistryEntry>()
   const policies = new Map<RequestKind, NormalizedPolicy>()
   const logger = options?.logger ?? getEngineLogger()
@@ -414,7 +453,7 @@ export function createRequestRegistry(options?: {
     durationMs?: number
   ): void {
     const modelId = ctx.modelId !== undefined ? ctx.modelId : '-'
-    const base = `[request-lifecycle] ${event} requestId=${ctx.requestId} kind=${ctx.kind} modelId=${modelId} state=${ctx.state}`
+    const base = `[request-lifecycle] ${event} sessionId=${ctx.sessionId} requestId=${ctx.requestId} kind=${ctx.kind} modelId=${modelId} state=${ctx.state}`
     const line = durationMs !== undefined ? `${base} durationMs=${durationMs}` : base
     // `failed` end emits at `warn` so log shippers can alert on
     // `level>=warn` for this prefix without parsing `state=failed`
@@ -457,29 +496,29 @@ export function createRequestRegistry(options?: {
     }
   }
 
-  function recordCancelBeforeBegin(requestId: string, reason: string | undefined): void {
+  function recordCancelBeforeBegin(key: string, reason: string | undefined): void {
     const now = Date.now()
     pruneCancelBeforeBeginExpired(now)
     // Re-canceling an id that is already tracked refreshes its TTL but
     // keeps the original reason — the first cancel "won" the race.
-    if (cancelledBeforeBegin.has(requestId)) {
-      const existing = cancelledBeforeBegin.get(requestId)!
-      cancelledBeforeBegin.delete(requestId)
-      cancelledBeforeBegin.set(requestId, { ...existing, at: now })
+    if (cancelledBeforeBegin.has(key)) {
+      const existing = cancelledBeforeBegin.get(key)!
+      cancelledBeforeBegin.delete(key)
+      cancelledBeforeBegin.set(key, { ...existing, at: now })
       return
     }
     if (cancelledBeforeBegin.size >= CANCEL_BEFORE_BEGIN_MAX_ENTRIES) {
       const oldest = cancelledBeforeBegin.keys().next().value
       if (oldest !== undefined) cancelledBeforeBegin.delete(oldest)
     }
-    cancelledBeforeBegin.set(requestId, reason !== undefined ? { at: now, reason } : { at: now })
+    cancelledBeforeBegin.set(key, reason !== undefined ? { at: now, reason } : { at: now })
   }
 
-  function consumeCancelBeforeBegin(requestId: string): CancelBeforeBeginEntry | undefined {
+  function consumeCancelBeforeBegin(key: string): CancelBeforeBeginEntry | undefined {
     pruneCancelBeforeBeginExpired()
-    const entry = cancelledBeforeBegin.get(requestId)
+    const entry = cancelledBeforeBegin.get(key)
     if (!entry) return undefined
-    cancelledBeforeBegin.delete(requestId)
+    cancelledBeforeBegin.delete(key)
     return entry
   }
 
@@ -502,7 +541,7 @@ export function createRequestRegistry(options?: {
       clearTimeout(waiter.timer)
       waiter.timer = undefined
     }
-    waitersById.delete(waiter.requestId)
+    waitersById.delete(waiter.key)
     const st = keyStates.get(key)
     if (!st) return
     const i = st.waiters.indexOf(waiter)
@@ -531,7 +570,9 @@ export function createRequestRegistry(options?: {
    * acquire/release race in the single-threaded event loop.
    */
   async function acquireSlot(
-    opts: BeginOpts
+    opts: BeginOpts,
+    sessionId: string,
+    registryKey: string
   ): Promise<{ slotKey: string | undefined; exclusive: boolean }> {
     if (opts.modelId === undefined) return { slotKey: undefined, exclusive: false }
     const policy = policies.get(opts.kind)
@@ -600,6 +641,8 @@ export function createRequestRegistry(options?: {
     const granted = await new Promise<boolean>((resolve, reject) => {
       const waiter: SlotWaiter = {
         requestId: opts.requestId,
+        sessionId,
+        key: registryKey,
         kind: opts.kind,
         modelId,
         enqueuedAt: Date.now(),
@@ -624,7 +667,7 @@ export function createRequestRegistry(options?: {
         }, timeoutMs)
       }
       queue.waiters.push(waiter)
-      waitersById.set(opts.requestId, { key, waiter })
+      waitersById.set(registryKey, { key, waiter })
     })
 
     return granted ? { slotKey: key, exclusive } : { slotKey: undefined, exclusive: false }
@@ -650,7 +693,7 @@ export function createRequestRegistry(options?: {
         if (st.readerCap === undefined) st.readerCap = head.cap
       }
       st.waiters.shift()
-      waitersById.delete(head.requestId)
+      waitersById.delete(head.key)
       if (head.timer !== undefined) {
         clearTimeout(head.timer)
         head.timer = undefined
@@ -690,13 +733,13 @@ export function createRequestRegistry(options?: {
     disposingEntries.add(entry)
     // Keep the id reserved across async teardown so a same-id begin can't
     // activate concurrently and a cancel can't strand a tripwire for a reuse.
-    disposingIds.add(entry.ctx.requestId)
+    disposingIds.add(entry.ctx.registryKey)
     entry.ctx.state = outcome
     entry.detachParent()
     logLifecycle('end', entry.ctx, Date.now() - entry.startedAt)
     // Pull the entry out before unwinding so observers (e.g. a `cancel(...)`
     // racing with dispose) don't see a half-disposed context.
-    entries.delete(entry.ctx.requestId)
+    entries.delete(entry.ctx.registryKey)
     try {
       await entry.scope[Symbol.asyncDispose]()
     } finally {
@@ -709,7 +752,7 @@ export function createRequestRegistry(options?: {
       if (entry.slotKey !== undefined) releaseSlot(entry.slotKey, entry.exclusive)
       disposingEntries.delete(entry)
       // The id is free for reuse only now that native teardown is complete.
-      disposingIds.delete(entry.ctx.requestId)
+      disposingIds.delete(entry.ctx.registryKey)
       // Signal any `cancelAndDrain` waiting on this request that its native
       // teardown is complete.
       entry.resolveDisposed()
@@ -717,6 +760,8 @@ export function createRequestRegistry(options?: {
   }
 
   async function begin(opts: BeginOpts): Promise<ManagedRequestContext> {
+    const sessionId = opts.sessionId ?? OWNER_SESSION_ID
+    const registryKey = requestRegistryKey(sessionId, opts.requestId)
     // A request id is reserved for its whole lifecycle: the time it spends
     // *queued* for an admission slot, while it is active, and while it is
     // tearing down. `waitersById` holds the still-queued begins (not yet in
@@ -726,21 +771,21 @@ export function createRequestRegistry(options?: {
     // and overwrite its `waitersById` index (unreachable by `cancel(...)`), or
     // activate while the prior request is still releasing its native context.
     if (
-      entries.has(opts.requestId) ||
-      waitersById.has(opts.requestId) ||
-      reservedIds.has(opts.requestId) ||
-      disposingIds.has(opts.requestId)
+      entries.has(registryKey) ||
+      waitersById.has(registryKey) ||
+      reservedIds.has(registryKey) ||
+      disposingIds.has(registryKey)
     ) {
       throw new RequestIdConflictError(opts.requestId)
     }
     // Reserve synchronously so a same-tick duplicate begin is rejected before
     // this one reaches `entries`/`waitersById`. Cleared on every exit below.
-    reservedIds.add(opts.requestId)
+    reservedIds.add(registryKey)
 
     // A request cancelled BEFORE begin must not queue for a slot on a saturated
     // lane: consume its marker first and skip admission, so it resolves at once
     // into an aborted context holding no slot instead of waiting for the holder.
-    let preCancel = consumeCancelBeforeBegin(opts.requestId)
+    let preCancel = consumeCancelBeforeBegin(registryKey)
 
     // Admission control runs before allocation so a rejected begin leaves no
     // controller / scope behind. This may await: a gated `(kind, modelId)` at
@@ -753,9 +798,9 @@ export function createRequestRegistry(options?: {
       // and observers still see the request registered on the same tick.
       let acquired: { slotKey: string | undefined; exclusive: boolean }
       try {
-        acquired = await acquireSlot(opts)
+        acquired = await acquireSlot(opts, sessionId, registryKey)
       } catch (err) {
-        reservedIds.delete(opts.requestId)
+        reservedIds.delete(registryKey)
         throw err
       }
       slotKey = acquired.slotKey
@@ -765,15 +810,15 @@ export function createRequestRegistry(options?: {
       // await above. A duplicate id could (astronomically unlikely) have landed
       // while we were queued — re-check and hand the just-acquired slot back
       // rather than stranding it on the conflicting throw.
-      if (entries.has(opts.requestId)) {
+      if (entries.has(registryKey)) {
         if (slotKey !== undefined) releaseSlot(slotKey, exclusive)
-        reservedIds.delete(opts.requestId)
+        reservedIds.delete(registryKey)
         throw new RequestIdConflictError(opts.requestId)
       }
 
       // A cancel that landed WHILE we were queued resolved acquireSlot with no
       // slot and recorded a marker; consume it so the context starts aborted.
-      preCancel = consumeCancelBeforeBegin(opts.requestId)
+      preCancel = consumeCancelBeforeBegin(registryKey)
     }
 
     // A begin arriving while its model is being torn down starts aborted — no
@@ -803,6 +848,8 @@ export function createRequestRegistry(options?: {
 
     const ctx: RequestContext = {
       requestId: opts.requestId,
+      sessionId,
+      registryKey,
       kind: opts.kind,
       modelId: opts.modelId,
       signal: controller.signal,
@@ -832,13 +879,19 @@ export function createRequestRegistry(options?: {
       disposed,
       resolveDisposed
     }
-    entries.set(opts.requestId, entry)
-    reservedIds.delete(opts.requestId)
+    entries.set(registryKey, entry)
+    reservedIds.delete(registryKey)
     logLifecycle('begin', ctx)
 
     return {
       get requestId() {
         return ctx.requestId
+      },
+      get sessionId() {
+        return ctx.sessionId
+      },
+      get registryKey() {
+        return ctx.registryKey
       },
       get kind() {
         return ctx.kind
@@ -864,12 +917,16 @@ export function createRequestRegistry(options?: {
     }
   }
 
-  function get(requestId: string): RequestContext | null {
-    return entries.get(requestId)?.ctx ?? null
+  function get(requestId: string, sessionId: string = OWNER_SESSION_ID): RequestContext | null {
+    return entries.get(requestRegistryKey(sessionId, requestId))?.ctx ?? null
   }
 
   function list(): RequestContext[] {
     return Array.from(entries.values(), (e) => e.ctx)
+  }
+
+  function listBySession(sessionId: string): RequestContext[] {
+    return list().filter((ctx) => ctx.sessionId === sessionId)
   }
 
   /**
@@ -880,7 +937,7 @@ export function createRequestRegistry(options?: {
    * a clean `cancelled` state rather than throwing.
    */
   function cancelQueuedWaiterGracefully(key: string, waiter: SlotWaiter, reason?: string): void {
-    recordCancelBeforeBegin(waiter.requestId, reason)
+    recordCancelBeforeBegin(waiter.key, reason)
     removeWaiter(key, waiter)
     waiter.resolve(false)
   }
@@ -888,7 +945,8 @@ export function createRequestRegistry(options?: {
   function cancel(target: CancelTarget): number {
     let cancelled = 0
     if ('requestId' in target) {
-      const entry = entries.get(target.requestId)
+      const registryKey = requestRegistryKey(target.sessionId ?? OWNER_SESSION_ID, target.requestId)
+      const entry = entries.get(registryKey)
       if (entry) {
         if (cancelEntry(entry, target.reason)) cancelled++
         return cancelled
@@ -899,7 +957,7 @@ export function createRequestRegistry(options?: {
       // Counted as one — unlike the pure race below, this targets a known
       // in-flight (queued) begin, so the Stop button feels responsive
       // instead of waiting for the slot to free first.
-      const queued = waitersById.get(target.requestId)
+      const queued = waitersById.get(registryKey)
       if (queued) {
         cancelQueuedWaiterGracefully(queued.key, queued.waiter, target.reason)
         return cancelled + 1
@@ -908,18 +966,27 @@ export function createRequestRegistry(options?: {
       // releasing its native context. There is nothing to cancel, and a
       // cancel-before-begin marker would wrongly abort a later begin that
       // reuses this id once teardown frees it.
-      if (disposingIds.has(target.requestId)) return cancelled
+      if (disposingIds.has(registryKey)) return cancelled
       // Stop-button race: the cancel beat its own
       // `begin(...)`. Record the cancel so the next matching `begin`
       // aborts immediately. The return value stays 0 — no in-flight
       // request was matched, which is still the truth — but the
       // *effective* cancel will land when the begin arrives.
-      recordCancelBeforeBegin(target.requestId, target.reason)
+      recordCancelBeforeBegin(registryKey, target.reason)
       return cancelled
     }
+    const matchesSession = (sessionId: string): boolean =>
+      'allModels' in target
+        ? sessionId === target.sessionId
+        : target.allSessions === true || sessionId === (target.sessionId ?? OWNER_SESSION_ID)
+    const matchesWork = (modelId: string | undefined, kind: RequestKind): boolean => {
+      if ('allModels' in target) return true
+      if (modelId !== target.modelId) return false
+      return !target.kind || kind === target.kind
+    }
     for (const entry of entries.values()) {
-      if (entry.ctx.modelId !== target.modelId) continue
-      if (target.kind && entry.ctx.kind !== target.kind) continue
+      if (!matchesSession(entry.ctx.sessionId)) continue
+      if (!matchesWork(entry.ctx.modelId, entry.ctx.kind)) continue
       if (cancelEntry(entry, target.reason)) cancelled++
     }
     // Queued waiters aren't in `entries`; drain the ones matching this
@@ -927,8 +994,8 @@ export function createRequestRegistry(options?: {
     // strand them behind a request that's being cancelled out from under
     // them. Snapshot first — `removeWaiter` mutates `waitersById`.
     for (const { key, waiter } of Array.from(waitersById.values())) {
-      if (waiter.modelId !== target.modelId) continue
-      if (target.kind && waiter.kind !== target.kind) continue
+      if (!matchesSession(waiter.sessionId)) continue
+      if (!matchesWork(waiter.modelId, waiter.kind)) continue
       cancelQueuedWaiterGracefully(key, waiter, target.reason)
       cancelled++
     }
@@ -994,8 +1061,36 @@ export function createRequestRegistry(options?: {
     }
   }
 
-  async function end(requestId: string, outcome: RequestOutcome): Promise<void> {
-    const entry = entries.get(requestId)
+  // Cancel every request a session owns and wait for the active ones to finish
+  // disposing. Queued waiters resume into aborted contexts that their handlers
+  // dispose on their own; a model release after this goes through
+  // `withModelDraining`, which waits for those too.
+  async function drainSession(sessionId: string, reason: string): Promise<number> {
+    let cancelled = 0
+    const draining: Array<Promise<void>> = []
+    for (const entry of entries.values()) {
+      if (entry.ctx.sessionId !== sessionId) continue
+      if (cancelEntry(entry, reason)) cancelled++
+      draining.push(entry.disposed)
+    }
+    for (const entry of disposingEntries) {
+      if (entry.ctx.sessionId === sessionId) draining.push(entry.disposed)
+    }
+    for (const { key, waiter } of Array.from(waitersById.values())) {
+      if (waiter.sessionId !== sessionId) continue
+      cancelQueuedWaiterGracefully(key, waiter, reason)
+      cancelled++
+    }
+    await Promise.all(draining)
+    return cancelled
+  }
+
+  async function end(
+    requestId: string,
+    outcome: RequestOutcome,
+    sessionId: string = OWNER_SESSION_ID
+  ): Promise<void> {
+    const entry = entries.get(requestRegistryKey(sessionId, requestId))
     if (!entry) return
     await disposeEntry(entry, outcome)
   }
@@ -1008,9 +1103,11 @@ export function createRequestRegistry(options?: {
     begin,
     get,
     list,
+    listBySession,
     cancel,
     cancelAll,
     withModelDraining,
+    drainSession,
     end,
     policy,
     // Test-only: lets the registry race tests assert the bound

@@ -9,9 +9,10 @@ import { rerankScoresSchema, type RerankRequest } from '@/schemas/index'
 import type { Reranker } from '@qvac/embed-llamacpp'
 
 export async function rerank(request: RerankRequest) {
-  const { modelId, requestId, query, documents } = request
+  const { modelId, requestId, sessionId, query, documents } = request
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRandomRequestId(),
+    sessionId,
     kind: 'rerank',
     modelId
   })
