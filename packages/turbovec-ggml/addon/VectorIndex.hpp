@@ -3,6 +3,8 @@
 // RAII C++ wrapper around fabric's `ggml_vec_index_t*` C handle. Provides
 // typed methods + status-aware accessors over the ggml-base vector-index C API.
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -49,9 +51,22 @@ public:
   // keeps for indexes loaded from turbovec 0.9 (v3) snapshots. Smaller first
   // batches leave the index uncalibrated.
   static constexpr int AUTO_CALIBRATE_MIN_ROWS = 1000;
-  // Rows a first-add calibration fits from: the whole batch up to this
-  // many, otherwise rows at an even stride across it.
+  // Rows a first-add calibration fits from: the whole batch up to
+  // `autoCalibrateSampleRows(dim)`, otherwise that many rows at an even
+  // stride across it. At most this many rows, and at most
+  // AUTO_CALIBRATE_MAX_SAMPLE_BYTES of them, so the sample stays bounded
+  // up to the 16384 dim cap (1024 rows there).
   static constexpr int AUTO_CALIBRATE_MAX_ROWS = 4096;
+  static constexpr size_t AUTO_CALIBRATE_MAX_SAMPLE_BYTES = size_t{64} << 20;
+  [[nodiscard]] static constexpr int autoCalibrateSampleRows(int dim) noexcept {
+    const size_t rows =
+        AUTO_CALIBRATE_MAX_SAMPLE_BYTES /
+        (static_cast<size_t>(dim > 0 ? dim : 1) * sizeof(float));
+    return static_cast<int>(std::clamp<size_t>(
+        rows,
+        static_cast<size_t>(AUTO_CALIBRATE_MIN_ROWS),
+        static_cast<size_t>(AUTO_CALIBRATE_MAX_ROWS)));
+  }
 
   // Adopt an already-opened native handle (used by static load).
   explicit VectorIndex(ggml_vec_index_t* handle) noexcept;

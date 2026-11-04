@@ -1,7 +1,9 @@
 #include "VectorIndex.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <new>
 #include <stdexcept>
@@ -15,6 +17,8 @@ namespace {
 constexpr int F32_BIT_WIDTH = 32;
 constexpr int Q8_BIT_WIDTH = 8;
 constexpr int Q4_BIT_WIDTH = 4;
+// Fabric rejects a TurboVec add with any component at or above this.
+constexpr float TURBOVEC_MAX_ABS = 1e16F;
 
 constexpr bool isTurboVec(VectorStorage storage) noexcept {
   return storage == VectorStorage::TurboVecQ4 ||
@@ -37,15 +41,28 @@ ggml_vec_index_t* createIndex(int dim, VectorStorage storage) {
   return nullptr;
 }
 
-// True when `ids` repeats an id, or when the check cannot allocate (the
-// caller then skips the optional work that depends on it).
-bool hasRepeatedId(const uint64_t* ids, int n) noexcept {
+// True when fabric's add will take this batch on an empty index: no reserved
+// or repeated id, and every component finite with abs below 1e16 (fabric's
+// TurboVec input bound). Calibration only sees a sample of the batch, so
+// without this a batch add rejects could still leave its calibration
+// behind. False when the id check cannot allocate, so the caller skips the
+// optional work that depends on it.
+bool firstBatchAddable(
+    const float* vectors, const uint64_t* ids, int n, size_t dim) noexcept {
+  const size_t values = static_cast<size_t>(n) * dim;
+  for (size_t i = 0; i < values; ++i) {
+    // Written negated so NaN fails too.
+    if (!(std::fabs(vectors[i]) < TURBOVEC_MAX_ABS)) {
+      return false;
+    }
+  }
   try {
     std::vector<uint64_t> sorted(ids, ids + n);
     std::sort(sorted.begin(), sorted.end());
-    return std::adjacent_find(sorted.begin(), sorted.end()) != sorted.end();
+    return sorted.back() != UINT64_MAX &&
+           std::adjacent_find(sorted.begin(), sorted.end()) == sorted.end();
   } catch (...) {
-    return true;
+    return false;
   }
 }
 
@@ -155,22 +172,25 @@ VectorIndex& VectorIndex::operator=(VectorIndex&& other) noexcept {
 int VectorIndex::add(
     const float* vectors, int n, const uint64_t* ids) noexcept {
   // The calibration commits before the add, so it runs only for a batch the
-  // add will take: fabric rejects a batch with a repeated id and leaves the
-  // index unchanged, and a calibration fit from it would outlive it.
+  // add will take: a rejected add leaves the index unchanged, and a
+  // calibration fit from that batch would outlive it.
   if (autoCalibrate_ && n >= AUTO_CALIBRATE_MIN_ROWS && vectors != nullptr &&
       ids != nullptr && ggml_vec_index_len(handle_) == 0 &&
       ggml_vec_index_turbovec_is_calibrated(handle_) == 0 &&
-      !hasRepeatedId(ids, n)) {
+      firstBatchAddable(
+          vectors, ids, n, static_cast<size_t>(ggml_vec_index_dim(handle_)))) {
     // Best effort: a sample fabric cannot fit (for example one whose fit is
     // the identity) leaves the index uncalibrated, and the add goes ahead.
-    const auto dim = static_cast<size_t>(ggml_vec_index_dim(handle_));
-    if (n <= AUTO_CALIBRATE_MAX_ROWS) {
+    const int dimInt = ggml_vec_index_dim(handle_);
+    const auto dim = static_cast<size_t>(dimInt);
+    const int sampleRowsInt = autoCalibrateSampleRows(dimInt);
+    if (n <= sampleRowsInt) {
       (void)ggml_vec_index_turbovec_calibrate(handle_, vectors, n);
     } else {
       // A batch can arrive in source order (documents, chunks), so take
       // rows across all of it rather than its first ones. Every element is
       // written below, so the buffer is not zero-filled first.
-      const auto sampleRows = static_cast<size_t>(AUTO_CALIBRATE_MAX_ROWS);
+      const auto sampleRows = static_cast<size_t>(sampleRowsInt);
       const std::unique_ptr<float[]> sample(
           new (std::nothrow) float[sampleRows * dim]);
       if (sample != nullptr) {
@@ -179,7 +199,7 @@ int VectorIndex::add(
           std::copy_n(vectors + row * dim, dim, sample.get() + i * dim);
         }
         (void)ggml_vec_index_turbovec_calibrate(
-            handle_, sample.get(), AUTO_CALIBRATE_MAX_ROWS);
+            handle_, sample.get(), sampleRowsInt);
       }
     }
   }

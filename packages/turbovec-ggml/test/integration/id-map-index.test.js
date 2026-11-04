@@ -954,6 +954,10 @@ test('IdMapIndex: TurboVec calibrates from a first add of 1000 rows', (t) => {
 })
 
 test('IdMapIndex: TurboVec staged search is off until turned on', (t) => {
+  if (!SUPPORTS_TURBOVEC) {
+    t.pass('TurboVec requires a 64-bit target')
+    return
+  }
   const file = tmpPath('id-map-index-turbovec-staged')
   const idx = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'turbovec-q4' })
   const plain = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'q8' })

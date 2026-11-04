@@ -2,6 +2,7 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <limits>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -330,6 +331,49 @@ TEST(VectorIndexTest, RejectedFirstAddLeavesIndexFresh) {
   EXPECT_TRUE(idx.calibrated());
 }
 
+// Fabric checks values only in the rows it calibrates from, but add checks
+// every row. A 4097-row batch samples rows 0..4095, so a bad last row is
+// seen by add alone.
+TEST(VectorIndexTest, FirstAddRejectedForItsValuesLeavesIndexFresh) {
+  if constexpr (!TURBOVEC_TARGET) {
+    GTEST_SKIP() << "TurboVec requires a 64-bit target";
+  }
+  const int n = VectorIndex::AUTO_CALIBRATE_MAX_ROWS + 1;
+  ASSERT_GT(n, VectorIndex::autoCalibrateSampleRows(DIM));
+  const auto lastValue = static_cast<size_t>(n) * DIM - 1;
+  const auto bad = {
+      std::numeric_limits<float>::quiet_NaN(),
+      std::numeric_limits<float>::infinity(),
+      1e16F};
+  for (const float value : bad) {
+    VectorIndex idx(DIM, VectorStorage::TurboVecQ4);
+    auto batch = gaussianBatch(n);
+    batch.vectors[lastValue] = value;
+    EXPECT_EQ(
+        idx.add(batch.vectors.data(), n, batch.ids.data()),
+        GGML_VEC_INDEX_E_INVALID_ARG)
+        << value;
+    EXPECT_EQ(idx.len(), 0) << value;
+    EXPECT_FALSE(idx.calibrated()) << value;
+
+    batch.vectors[lastValue] = 0.5F;
+    ASSERT_EQ(
+        idx.add(batch.vectors.data(), n, batch.ids.data()), GGML_VEC_INDEX_OK);
+    EXPECT_TRUE(idx.calibrated()) << value;
+  }
+
+  // The JS binding rejects a reserved id before it reaches the wrapper; a
+  // direct caller must get the same result.
+  const int rows = VectorIndex::AUTO_CALIBRATE_MIN_ROWS;
+  VectorIndex idx(DIM, VectorStorage::TurboVecQ4);
+  auto batch = gaussianBatch(rows);
+  batch.ids.back() = UINT64_MAX;
+  EXPECT_NE(
+      idx.add(batch.vectors.data(), rows, batch.ids.data()), GGML_VEC_INDEX_OK);
+  EXPECT_EQ(idx.len(), 0);
+  EXPECT_FALSE(idx.calibrated());
+}
+
 TEST(VectorIndexTest, EmptyFirstAddLeavesIndexFresh) {
   if constexpr (!TURBOVEC_TARGET) {
     GTEST_SKIP() << "TurboVec requires a 64-bit target";
@@ -375,7 +419,8 @@ TEST(VectorIndexTest, FirstAddCalibratesAtMaximumDimension) {
     GTEST_SKIP() << "TurboVec requires a 64-bit target";
   }
   constexpr int maxDim = 16384;
-  const int n = VectorIndex::AUTO_CALIBRATE_MIN_ROWS;
+  // One row past the sample, so the gathered-copy branch runs at this dim.
+  const int n = VectorIndex::autoCalibrateSampleRows(maxDim) + 1;
   std::mt19937 gen(5);
   std::normal_distribution<float> dist(0.0F, 1.0F);
   std::vector<float> vectors(static_cast<size_t>(n) * maxDim);
@@ -393,6 +438,16 @@ TEST(VectorIndexTest, FirstAddCalibratesAtMaximumDimension) {
   uint64_t id = 0;
   ASSERT_EQ(idx.search(vectors.data(), 1, 1, &score, &id), GGML_VEC_INDEX_OK);
   EXPECT_EQ(id, 1U);
+}
+
+TEST(VectorIndexTest, CalibrationSampleIsBoundedByDimension) {
+  EXPECT_EQ(VectorIndex::autoCalibrateSampleRows(DIM), 4096);
+  EXPECT_EQ(VectorIndex::autoCalibrateSampleRows(4096), 4096);
+  EXPECT_EQ(VectorIndex::autoCalibrateSampleRows(8192), 2048);
+  EXPECT_EQ(VectorIndex::autoCalibrateSampleRows(16384), 1024);
+  EXPECT_GE(
+      VectorIndex::autoCalibrateSampleRows(16384),
+      VectorIndex::AUTO_CALIBRATE_MIN_ROWS);
 }
 
 TEST(VectorIndexTest, MoveCarriesFreshTurboVecState) {
@@ -585,9 +640,9 @@ TEST(VectorIndexTest, StagedSearchSettingReachesFabric) {
   std::vector<float> scoresB(nq * k);
   std::vector<uint64_t> idsA(nq * k);
   std::vector<uint64_t> idsB(nq * k);
-  const auto compare = [&](const char* what) {
+  const auto compare = [&](const VectorIndex& idx, const char* what) {
     ASSERT_EQ(
-        wrapped.search(queries.data(), nq, k, scoresA.data(), idsA.data()),
+        idx.search(queries.data(), nq, k, scoresA.data(), idsA.data()),
         GGML_VEC_INDEX_OK);
     ASSERT_EQ(
         ggml_vec_index_search(
@@ -598,10 +653,20 @@ TEST(VectorIndexTest, StagedSearchSettingReachesFabric) {
 
   // Fabric's default is staged on; the wrapper's is off.
   ASSERT_EQ(ggml_vec_index_turbovec_set_staged(raw, 0), GGML_VEC_INDEX_OK);
-  compare("off by default matches fabric with staged search off");
+  compare(wrapped, "off by default matches fabric with staged search off");
+  // Fabric also turns staged search on for a loaded index, so the adopting
+  // constructor has to turn it off again.
+  {
+    const TempFile file("turbovec-ggml-unit-staged-load");
+    ASSERT_EQ(wrapped.write(file.path()), GGML_VEC_INDEX_OK);
+    int status = -1;
+    const VectorIndex loaded = VectorIndex::load(file.path(), &status);
+    ASSERT_EQ(status, GGML_VEC_INDEX_OK);
+    compare(loaded, "loaded matches fabric with staged search off");
+  }
   ASSERT_EQ(wrapped.setStaged(true), GGML_VEC_INDEX_OK);
   ASSERT_EQ(ggml_vec_index_turbovec_set_staged(raw, 1), GGML_VEC_INDEX_OK);
-  compare("turned on matches fabric with staged search on");
+  compare(wrapped, "turned on matches fabric with staged search on");
   ggml_vec_index_free(raw);
 }
 

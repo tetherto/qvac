@@ -83,8 +83,8 @@ export default class IdMapIndex {
     static load(path: string): IdMapIndex;
     /**
      * Load a v2 snapshot with read-only mmap-backed vectors. Legacy v1 and
-     * TurboVec (v3 and v8) snapshots are rejected. Requires a little-endian host and,
-     * on POSIX, a filesystem supporting flock(). Mutations are rejected.
+     * TurboVec (v3 and v8) snapshots are rejected. Requires a little-endian host
+     * and, on POSIX, a filesystem supporting flock(). Mutations are rejected.
      * Returns a subclass instance when called on a subclass, as `load()` does.
      */
     static loadMmap<T extends IdMapIndex>(this: IdMapIndexClass<T>, path: string): T;
@@ -164,8 +164,9 @@ export default class IdMapIndex {
     prepare(): void;
     /**
      * Persist a checksummed v2 snapshot for f32/q4/q8, or a v8 snapshot for
-     * TurboVec (v3 for an index loaded from a v3 snapshot). Delta-bound handles must use `compactDelta()`. A NotDurable error means
-     * replacement succeeded but parent-directory durability was not confirmed.
+     * TurboVec (v3 for an index loaded from a v3 snapshot). Delta-bound handles
+     * must use `compactDelta()`. A NotDurable error means replacement succeeded
+     * but parent-directory durability was not confirmed.
      */
     write(path: string): void;
     /**
@@ -184,17 +185,23 @@ export default class IdMapIndex {
     /**
      * Whether a TurboVec index holds a TQ+ calibration. A fresh TurboVec index
      * calibrates from its first `addWithIds()` batch when that batch has at
-     * least 1000 rows; other storages are never calibrated.
+     * least 1,000 rows; other storages are never calibrated.
      */
     get calibrated(): boolean;
-    /** Whether staged search is on. Off for every new or loaded index. */
+    /**
+     * Whether staged search is turned on. Off for every new or loaded index.
+     * Reports the setting, not whether a search runs in stages: see
+     * `setStagedSearch()`.
+     */
     get stagedSearch(): boolean;
     /**
      * Turn TurboVec staged search on or off. On, a search of 32,768 or more
      * vectors scans a compressed form first and scores only a shortlist: several
      * times faster per query, but it can miss some of the best matches,
-     * especially at small k. Throws for non-TurboVec storage. Not saved in
-     * snapshots.
+     * especially at small k. It applies only at a dimension divisible by 32, on
+     * hosts that support it, and never to an index loaded from a v3 snapshot;
+     * elsewhere the setting is kept but every search scans in full. Throws for
+     * non-TurboVec storage. Not saved in snapshots.
      */
     setStagedSearch(enabled: boolean): void;
     /** Release filters and native index resources. This operation is idempotent. */
