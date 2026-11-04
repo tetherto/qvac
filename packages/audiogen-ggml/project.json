@@ -21,7 +21,9 @@
           "artifactNamePrefix": "audiogen-ggml-",
           "linuxExtraPackages": "pkg-config libx11-dev libxcb1-dev libxkbcommon-dev",
           "includeVulkanSdk": true,
-          "setupPythonOnWindows": true
+          "setupPythonOnWindows": true,
+          "includeCuda": true,
+          "platformCmakeDefines": "linux-x64: -D ENABLE_CUDA=ON"
         }
       },
       "inputs": [
@@ -168,6 +170,7 @@
         "command": "echo 'orchestrated by on-merge-nx.yml'",
         "cwd": "packages/audiogen-ggml",
         "ci": {
+          "verifyGenerated": true,
           "nameTransform": "rename-prefix",
           "repoName": "audiogen-ggml",
           "testGateMode": "none",

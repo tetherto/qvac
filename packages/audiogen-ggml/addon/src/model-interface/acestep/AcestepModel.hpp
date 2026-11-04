@@ -6,6 +6,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -31,8 +32,33 @@ class AcestepModel
       public qvac_lib_inference_addon_cpp::model::IModelCancel,
       public qvac_lib_inference_addon_cpp::model::IModelAsyncLoad {
 public:
-  // Interleaved stereo 48 kHz PCM.
-  using Output = std::vector<int16_t>;
+  // The request the engine actually rendered (tts_cpp::acestep::
+  // GenerateMetadata): the LM-completed caption, lyrics and metadata, plus
+  // the resolved seed. An edit plan reports its base seed and the prompt
+  // metadata it was given.
+  struct GenerationMetadata {
+    std::string caption;
+    std::string lyrics;
+    std::string keyscale;
+    std::string vocalLanguage;
+    int bpm = 0;
+    int beatsPerBar = 0; // time-signature numerator (4 for "4/4"); 0 = unset
+    long long seed = 0;
+    int codeFrames = 0;
+    // Set only when the run requested computeQualityScore.
+    std::optional<std::string> qualityReport;
+  };
+
+  // One generation's audio plus what the engine reported alongside it. It
+  // travels through the output queue with the PCM, so the JS output handler
+  // never reads model state the next job may already be rewriting.
+  struct Output {
+    std::vector<int16_t> pcm; // interleaved stereo
+    int sampleRate = 0;
+    int channels = 0;
+    std::string lrc; // synchronized lyric timestamps; empty unless generateLrc
+    std::optional<GenerationMetadata> metadata;
+  };
 
   enum class AudioEditOperationType {
     FlowEdit,
@@ -102,6 +128,10 @@ public:
     float guidanceScale = 0.0F;
     float audioCoverStrength = 1.0F;
     float coverNoiseStrength = 0.0F;
+    // Per-run DiT schedule overrides; unset keeps the load-time config value.
+    // 0 = auto (turbo 8 steps / shift 3.0, base/sft 50 / 1.0).
+    std::optional<int> inferenceSteps;
+    std::optional<float> shift;
     std::vector<AudioEditOperationInput> editOperations;
     // Reverse pipeline: describe the sourceAudio instead of generating.
     bool understand = false;
@@ -117,6 +147,7 @@ public:
     std::string timesignature;
     std::string vocalLanguage;
     std::vector<int> audioCodes;
+    long long seed = 0; // the seed the LM decode used (resolved when random)
   };
 
   explicit AcestepModel(AcestepConfig config);
@@ -154,7 +185,6 @@ public:
 
   int sampleRate() const { return sampleRate_; }
   int channels() const { return channels_; }
-  std::string lrcText() const { return lrc_; }
 
 private:
   Output generate(const AnyInput& in);
@@ -177,7 +207,6 @@ private:
   double audioDurationMs_ = 0.0;
   int64_t totalSamples_ = 0;
   double realTimeFactor_ = 0.0;
-  std::string lrc_; // synchronized lyric timestamps of the last run
   double lyricsScore_ = 0.0;
   bool hasLyricsScore_ = false; // set per run; gates the lyricsScore stat
   double qualityScore_ = 0.0;

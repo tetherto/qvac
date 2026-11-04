@@ -73,7 +73,10 @@ export function audioGen(params: AudioGenClientParams): AudioGenResult {
  * array order. The source is interleaved stereo 48 kHz PCM — a file path
  * decoded server-side, or raw Float32 LE bytes in `[-1, 1]`.
  *
- * @param params - Loaded model ID, the source audio, the ordered `operations`, and an optional `seed`.
+ * @param params - Loaded model ID, the source audio, the ordered `operations`, and optional run
+ *   controls that apply to every operation: `seed`, a timbre `referenceAudio`, the prompt
+ *   metadata (`vocalLanguage`, `bpm`, `keyscale`, `timesignature`, `augmentCaptionWithMetadata`),
+ *   the Repaint DCW controls, and per-run `inferenceSteps` and `shift`.
  * @returns The same run shape as `audioGen()`: `requestId`, `progressStream`, `audio`, `stats`, and `diagnostics`.
  *
  * @example

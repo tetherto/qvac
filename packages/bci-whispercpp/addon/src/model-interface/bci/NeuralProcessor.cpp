@@ -10,11 +10,11 @@
 
 #include "addon/BCIErrors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
+#include "model-interface/bci/NeuralSignalParse.hpp"
 
 namespace qvac_lib_inference_addon_bci {
 
 namespace {
-constexpr size_t K_HEADER_BYTES = 8;
 constexpr uint32_t K_EMBEDDER_MAGIC = 0x42434945;
 
 constexpr uint32_t K_MIN_PARALLEL_TIMESTEPS = 64;
@@ -318,32 +318,6 @@ bool monthWeightsHaveExpectedSizes(const NeuralProcessor::EmbedderWeights& w) {
     }
   }
   return true;
-}
-
-std::vector<float> readNeuralFeatures(
-    const std::vector<uint8_t>& rawData, uint32_t& numTimesteps,
-    uint32_t& numChannels) {
-  if (rawData.size() < K_HEADER_BYTES) {
-    throw qvac_errors::bci_error::makeStatus(
-        qvac_errors::bci_error::Code::InvalidNeuralSignal,
-        "Neural signal buffer too small");
-  }
-
-  std::memcpy(&numTimesteps, rawData.data(), sizeof(uint32_t));
-  std::memcpy(
-      &numChannels, rawData.data() + sizeof(uint32_t), sizeof(uint32_t));
-
-  const size_t expectedBytes =
-      static_cast<size_t>(numTimesteps) * numChannels * sizeof(float);
-  if (rawData.size() < K_HEADER_BYTES + expectedBytes) {
-    throw qvac_errors::bci_error::makeStatus(
-        qvac_errors::bci_error::Code::InvalidNeuralSignal,
-        "Neural signal buffer truncated");
-  }
-
-  std::vector<float> features(static_cast<size_t>(numTimesteps) * numChannels);
-  std::memcpy(features.data(), rawData.data() + K_HEADER_BYTES, expectedBytes);
-  return features;
 }
 
 // whisper.cpp stores mel as data[mel_bin * n_len + frame] (mel-major) and

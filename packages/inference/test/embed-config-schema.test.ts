@@ -1,7 +1,7 @@
 import test from 'brittle'
 import { embedConfigBaseSchema } from '@/schemas/llamacpp-config'
 import { loadModelOptionsToRequestSchema, loadModelSrcRequestSchema } from '@/schemas/load-model'
-import { ModelType } from '@/schemas'
+import { ModelType, deviceConfigDefaultsSchema } from '@/schemas'
 
 const EMBED_BASE = {
   modelType: ModelType.llamacppEmbedding,
@@ -42,6 +42,46 @@ test("embedConfigBaseSchema: accepts mainGpu as 'integrated' or 'dedicated'", (t
 test('embedConfigBaseSchema: rejects mainGpu invalid string', (t) => {
   t.is(embedConfigBaseSchema.safeParse({ mainGpu: 'hello' }).success, false)
   t.is(embedConfigBaseSchema.safeParse({ mainGpu: '0' }).success, false)
+})
+
+test('embedConfigBaseSchema: accepts embedding pooling values', (t) => {
+  for (const pooling of ['none', 'mean', 'cls', 'last']) {
+    t.is(embedConfigBaseSchema.safeParse({ pooling }).success, true, pooling)
+  }
+})
+
+test("embedConfigBaseSchema: rejects 'rank' pooling", (t) => {
+  t.is(embedConfigBaseSchema.safeParse({ pooling: 'rank' }).success, false)
+})
+
+test("loadModelOptionsToRequestSchema: rejects 'rank' pooling for embed", (t) => {
+  t.is(
+    loadModelOptionsToRequestSchema.safeParse({
+      ...EMBED_BASE,
+      modelConfig: { pooling: 'rank' }
+    }).success,
+    false
+  )
+})
+
+test("loadModelSrcRequestSchema: rejects 'rank' pooling for embed", (t) => {
+  t.is(
+    loadModelSrcRequestSchema.safeParse({
+      type: 'loadModel',
+      ...EMBED_BASE,
+      modelConfig: { pooling: 'rank' }
+    }).success,
+    false
+  )
+})
+
+test("deviceConfigDefaultsSchema: rejects 'rank' pooling for embed", (t) => {
+  t.is(deviceConfigDefaultsSchema.safeParse({ embeddings: { pooling: 'rank' } }).success, false)
+  t.is(
+    deviceConfigDefaultsSchema.safeParse({ [ModelType.llamacppEmbedding]: { pooling: 'rank' } })
+      .success,
+    false
+  )
 })
 
 test('loadModelOptionsToRequestSchema: accepts splitMode for embed', (t) => {

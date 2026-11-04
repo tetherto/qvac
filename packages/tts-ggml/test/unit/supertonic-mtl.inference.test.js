@@ -102,7 +102,7 @@ test('Supertonic MTL: reload({ language }) swaps language without reloading weig
   await r1.await()
 
   await model.reload({ language: 'fr' })
-  t.is(model._config.language, 'fr', 'language updated to fr')
+  t.is(model._setup.config.language, 'fr', 'language updated to fr')
 
   const r2 = await model.run({ type: 'text', input: 'Bonjour' })
   await r2.await()

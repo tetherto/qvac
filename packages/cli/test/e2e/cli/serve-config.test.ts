@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { request } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { configuredServer, runCli } from '../helpers/cli.js'
@@ -192,5 +193,40 @@ describe('serve flags: --api-key-file', () => {
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
+  })
+})
+
+// fetch() drops a caller-supplied Host header, so send it with node:http.
+function statusForHost(port: number, host: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const req = request(
+      { host: '127.0.0.1', port, path: '/openapi.json', headers: { host } },
+      (res) => {
+        res.resume()
+        resolve(res.statusCode ?? 0)
+      }
+    )
+    req.on('error', reject)
+    req.end()
+  })
+}
+
+describe('serve flags: Host header check', () => {
+  it('rejects a foreign Host by default and accepts --allowed-host names', async (t) => {
+    const server = await configuredServer(t, MODELLESS_CONFIG, ['--allowed-host', 'qvac.internal'])
+    assert.equal(await statusForHost(server.port, `localhost:${server.port}`), 200)
+    assert.equal(await statusForHost(server.port, 'qvac.internal'), 200)
+    assert.equal(await statusForHost(server.port, `attacker.example:${server.port}`), 403)
+  })
+
+  it('accepts any Host with --allow-any-host', async (t) => {
+    const server = await configuredServer(t, MODELLESS_CONFIG, ['--allow-any-host'])
+    assert.equal(await statusForHost(server.port, 'attacker.example'), 200)
+  })
+
+  it('rejects a malformed --allowed-host', async () => {
+    const result = await runCli(['serve', 'openai', '--allowed-host', '*'], { timeoutMs: 5_000 })
+    assert.notEqual(result.code, 0)
+    assert.match(result.output, /Allowed host/)
   })
 })

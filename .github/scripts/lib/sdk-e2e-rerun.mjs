@@ -90,6 +90,13 @@ export function actionScript(actionDir, stepName) {
   })
 }
 
+export function actionStepRun(actionDir, stepName) {
+  return extractBlockScalar(readRepoFile(`.github/actions/${actionDir}/action.yml`), {
+    anchor: `- name: ${stepName}`,
+    key: 'run',
+  })
+}
+
 export function workflowStepRun(workflowFile, stepName) {
   return extractBlockScalar(readRepoFile(`.github/workflows/${workflowFile}`), {
     anchor: `- name: ${stepName}`,

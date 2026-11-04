@@ -100,6 +100,57 @@ console.log(response.stats) // RuntimeStats (populated when opts.stats: true)
 await ocr.unload()
 ```
 
+### Check model weight fit
+
+`assessFit` reads the detector and recognizer GGUF tensor metadata without
+loading their weights. It checks a conservative weight-load estimate against
+the selected backend's currently free memory. It does **not** assess image
+decoding, detection or recognition graphs, or the number of text regions in a
+future image. A `fits` result therefore covers model weights only; `unknown`
+means the check could not reach a reliable capacity verdict.
+
+```js
+const { assessFit } = require('@qvac/ocr-ggml')
+
+const fit = await assessFit({
+  pathDetector: '/abs/path/craft_mlt_25k.gguf',
+  pathRecognizer: '/abs/path/latin_g2.gguf',
+  backendDevice: 'cpu',
+  marginBytes: 1024 * 1024 * 1024
+})
+
+fit.status // 'fits' | 'does-not-fit' | 'unknown'
+fit.devices // [{ id, name, unified, usedBytes, freeBytes, totalBytes }]
+fit.stats // {}
+```
+
+`devices` holds the selected device, then the host CPU. The selected device
+carries the conservative weight-load estimate. For a discrete GPU the host row
+carries it too, since the host holds the GGUF staging copies while the weights
+load; for a GPU that shares host memory the host row carries 0, as the copies
+are the same memory. A load on the CPU is one row, and `unknown` has none. `id`
+is the PCI bus ID when the backend reports one, and the device name otherwise.
+`unified` is true for memory the host owns: the CPU, an integrated GPU, a GPU
+that shares the host's memory, Android's OpenCL GPU, and a device that reports
+no memory of its own, which takes the host's figures.
+
+`fits` means the estimate fits every row with `marginBytes` left free.
+`does-not-fit` means a CPU load whose source tensors alone do not fit. Anything
+between is `unknown`.
+
+On an iOS device every unified row's free memory is capped at the app's own
+memory limit, `os_proc_available_memory()`, before the verdict. A limit of 0
+means the app has none left.
+
+`assessFit` returns a Promise. Concurrent calls run one at a time. A model that
+cannot be read, or an invalid request, rejects with an `InvalidArgument` error,
+and a host with no backend device rejects with an `InternalError`.
+
+Use the same `pipelineType`, `backendDevice`, `gpuDevice`, and `main-gpu`
+settings intended for the eventual `OcrGgml` load. DocTR configurations that
+place stages on different devices are `unknown`, since the weight estimate
+covers a single device.
+
 The `doctr` pipeline is language-agnostic, so `langList` can be omitted
 entirely:
 
@@ -149,7 +200,7 @@ bare examples/backend-device.js --backend metal
 | `params.lowConfidenceThreshold` | `number` | | `0.4` | retry threshold (`easyocr` only) |
 | `params.recognizerBatchSize` | `number` | | `32` | recognizer batch size (`easyocr` only) |
 | `params.nThreads` | `number` | | `0` (auto) | CPU thread count for GGML; `<0` leaves the GGML default |
-| `params.backendsDir` | `string` | | fabric backends root | directory holding `libqvac-ggml-*.so` backend shared libs. On desktop, the root `@qvac/fabric/backends` resolves; on mobile, this package's `prebuilds/` |
+| `params.backendsDir` | `string` | | fabric's backends | directory holding `libqvac-ggml-*.so` backend shared libs. When omitted, the backends `@qvac/fabric` ships are loaded; fabric locates them next to its runtime on every platform |
 | `params.backendDevice` | `'cpu'` \| `'vulkan'` \| `'metal'` \| `'opencl'` | | `'cpu'` | ggml backend device. `'vulkan'` (Linux/Windows/Android), `'metal'` (Apple) and `'opencl'` (Android/Adreno) opt in to GPU inference with transparent CPU fallback — see [Backend device](#backend-device-cpu--vulkan--metal--opencl) |
 | `params.main-gpu` / `params.main_gpu` | `number` \| `string` | | _prefer dedicated_ | Raw ggml registry index or strict GPU class; requires GPU `backendDevice`. See below. |
 | `params.gpuDevice` | `number` | | _prefer discrete_ | 0-based index into the matching GPU/iGPU devices for `'vulkan'`/`'metal'`/`'opencl'`; out-of-range → CPU fallback — see [Selecting a specific GPU](#selecting-a-specific-gpu-gpudevice) |
@@ -234,7 +285,7 @@ Behaviour and expectations:
   `backendIsGpu` stat). It never silently does the wrong thing.
 - **Required backend libs.** Vulkan execution needs the `libggml-vulkan`
   backend shared library (`libggml-vulkan.so` / `.dll` / `.dylib`) present in
-  `backendsDir` (on desktop, the root `@qvac/fabric/backends` resolves; on mobile, this package's `prebuilds/<target>/`), plus a working
+  `backendsDir` (by default, the directory `@qvac/fabric` ships its backends in), plus a working
   Vulkan driver/ICD and a Vulkan-capable GPU on the host. **OpenCL** likewise
   needs the `libggml-opencl` backend shared library plus a working OpenCL
   runtime (`libOpenCL.so`); it is built primarily for **Android** (the `opencl`

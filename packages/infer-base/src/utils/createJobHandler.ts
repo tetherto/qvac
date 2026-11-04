@@ -7,7 +7,7 @@ interface CreateJobHandlerOptions {
 }
 
 interface JobHandler {
-  start(runOpts?: { signal?: QvacResponse.AbortSignalLike }): QvacResponse
+  start(runOpts?: { signal?: QvacResponse.AbortSignalLike; retainOutput?: boolean }): QvacResponse
   startWith(response: QvacResponse): QvacResponse
   output(data: any): void
   end(stats?: any, result?: any): void
@@ -42,7 +42,10 @@ function createJobHandler(opts: CreateJobHandlerOptions): JobHandler {
      * If a previous response is still active, it is failed with a stale-job error
      * before the new one is created.
      */
-    start(runOpts?: { signal?: QvacResponse.AbortSignalLike }): QvacResponse {
+    start(runOpts?: {
+      signal?: QvacResponse.AbortSignalLike
+      retainOutput?: boolean
+    }): QvacResponse {
       if (active) {
         active.failed(new Error('Stale job replaced by new run'))
         active = null
@@ -50,7 +53,8 @@ function createJobHandler(opts: CreateJobHandlerOptions): JobHandler {
 
       const response = new QvacResponse({
         cancelHandler: (() => opts.cancel()) as () => Promise<void>,
-        signal: runOpts?.signal
+        signal: runOpts?.signal,
+        retainOutput: runOpts?.retainOutput
       })
 
       active = response

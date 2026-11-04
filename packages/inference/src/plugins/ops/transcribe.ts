@@ -180,6 +180,22 @@ function mapTranscribeStats(stats: TranscribeResponse['stats']): TranscribeStats
     }),
     ...(stats?.encoderOnCoreml !== undefined && {
       encoderOnCoreml: stats.encoderOnCoreml
+    }),
+    ...(stats?.encoderUsedCoreml !== undefined && {
+      encoderUsedCoreml: stats.encoderUsedCoreml
+    }),
+    ...(stats?.aoscActive !== undefined && { aoscActive: stats.aoscActive }),
+    // MOSS-Transcribe-Diarize reports its counters under its own names. Its
+    // stage timings land on the shared encoder/decoder fields and its segment
+    // count on `totalSegments`; the token counts and prefill are MOSS-only.
+    ...(stats?.segments !== undefined && { totalSegments: stats.segments }),
+    ...(stats?.encodeMs !== undefined && { encoderTime: stats.encodeMs }),
+    ...(stats?.decodeMs !== undefined && { decoderTime: stats.decodeMs }),
+    ...(stats?.prefillMs !== undefined && { prefillTime: stats.prefillMs }),
+    ...(stats?.audioTokens !== undefined && { audioTokens: stats.audioTokens }),
+    ...(stats?.promptTokens !== undefined && { promptTokens: stats.promptTokens }),
+    ...(stats?.generatedTokens !== undefined && {
+      generatedTokens: stats.generatedTokens
     })
   }
 }
@@ -210,6 +226,19 @@ export async function* transcribe(
   const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
   const engineType = getEngineModelType(modelId)
+  const hasMossOptions = params.hotwords !== undefined || params.maxNewTokens !== undefined
+  if (engineType !== ModelType.mossTranscribe && hasMossOptions) {
+    throw new TranscriptionFailedError(
+      'hotwords and maxNewTokens require a MOSS-Transcribe-Diarize model'
+    )
+  }
+  if (
+    engineType === ModelType.mossTranscribe &&
+    params.prompt !== undefined &&
+    params.hotwords?.length
+  ) {
+    throw new TranscriptionFailedError('MOSS prompt cannot be combined with hotwords')
+  }
   assertMetadataSupported(modelId, engineType, metadata)
   const silenceMarker = SILENCE_MARKERS[engineType] ?? ''
   const audioFormat = getAudioFormat(modelId, engineType)
@@ -249,7 +278,15 @@ export async function* transcribe(
   const audioStream = await createAudioStream(params.audioChunk, audioFormat)
 
   const modelStart = nowMs()
-  const response = (await model.run(audioStream)) as unknown as TranscribeResponse
+  const runOptions =
+    engineType === ModelType.mossTranscribe
+      ? {
+          ...(params.prompt !== undefined && { prompt: params.prompt }),
+          ...(params.hotwords !== undefined && { hotwords: params.hotwords }),
+          ...(params.maxNewTokens !== undefined && { maxNewTokens: params.maxNewTokens })
+        }
+      : undefined
+  const response = (await model.run(audioStream, runOptions)) as unknown as TranscribeResponse
 
   for await (const output of response.iterate()) {
     if (ctx.signal.aborted) break

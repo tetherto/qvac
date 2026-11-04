@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -399,11 +400,13 @@ protected:
           [](const std::string& name) { return name.rfind("RPC", 0) == 0; });
     }
     return {
-        .resolveBackend = [selected](
-                              backend_selection::BackendType,
-                              const std::optional<backend_selection::MainGpu>&,
-                              const ModelMetaData&,
-                              bool) { return selected; },
+        .resolveBackend =
+            [selected](
+                backend_selection::BackendType,
+                const std::optional<backend_selection::MainGpu>&,
+                const ModelMetaData&,
+                bool,
+                const std::vector<std::string>&) { return selected; },
         .splitDevices = [devices]() { return devices; },
         .registerRpcDevices =
             [rpcRegistrations,
@@ -443,6 +446,155 @@ TEST_F(
     EXPECT_EQ(override.pattern, nullptr);
     EXPECT_EQ(override.buft, nullptr);
   }
+}
+
+TEST_F(LoadFitNormalizationTest, DefaultsCpuPollingToZero) {
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      baseConfig(),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+
+  EXPECT_EQ(result.params.cpuparams.poll, 0U);
+  EXPECT_EQ(result.params.cpuparams_batch.poll, 0U);
+}
+
+TEST_F(LoadFitNormalizationTest, ExplicitPollOverridesBothPoolDefaults) {
+  auto config = baseConfig();
+  config["poll"] = "50";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+
+  EXPECT_EQ(result.params.cpuparams.poll, 50U);
+  EXPECT_EQ(result.params.cpuparams_batch.poll, 50U);
+}
+
+TEST_F(LoadFitNormalizationTest, ExplicitBatchPollOverridesPrimaryPoll) {
+  auto config = baseConfig();
+  config["poll"] = "50";
+  config["poll-batch"] = "1";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+
+  EXPECT_EQ(result.params.cpuparams.poll, 50U);
+  EXPECT_EQ(result.params.cpuparams_batch.poll, 1U);
+}
+
+TEST_F(LoadFitNormalizationTest, RejectsPollLevelsOutsideZeroToHundred) {
+  for (const std::string key : {"poll", "poll-batch", "poll_batch"}) {
+    for (const std::string value : {"-1", "101", "4294967396", "", "5x"}) {
+      auto config = baseConfig();
+      config[key] = value;
+      EXPECT_THROW(
+          static_cast<void>(lfn::normalizeLoadForFit(
+              "/tmp/model.gguf",
+              std::move(config),
+              metadata_,
+              {},
+              backend({.type = backend_selection::GPU, .name = "none"}))),
+          qvac_errors::StatusError)
+          << key << "=" << value;
+    }
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, AcceptsPollLevelBounds) {
+  auto config = baseConfig();
+  config["poll"] = "100";
+  config["poll-batch"] = "0";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+
+  EXPECT_EQ(result.params.cpuparams.poll, 100U);
+  EXPECT_EQ(result.params.cpuparams_batch.poll, 0U);
+}
+
+TEST_F(LoadFitNormalizationTest, ThreadsBatchDoesNotOverrideGenerationThreads) {
+  auto config = baseConfig();
+  config["threads"] = "2";
+  config["threads-batch"] = "1";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+
+  EXPECT_EQ(result.params.cpuparams.n_threads, 2);
+  EXPECT_EQ(result.params.cpuparams_batch.n_threads, 1);
+}
+
+TEST(CpuTensorBufferOverrideTest, RewritesOnlyTheParsedCpuBufferIdentity) {
+  std::uint64_t parsedCpuMarker = 0;
+  std::uint64_t otherMarker = 0;
+  const auto parsedCpuBuft =
+      reinterpret_cast<ggml_backend_buffer_type_t>(&parsedCpuMarker);
+  const auto otherBuft =
+      reinterpret_cast<ggml_backend_buffer_type_t>(&otherMarker);
+  std::vector<llama_model_tensor_buft_override> overrides{
+      {"blk.0", parsedCpuBuft},
+      {"output", otherBuft},
+      {"blk.1", parsedCpuBuft},
+      {nullptr, nullptr}};
+
+  lfn::canonicalizeCpuTensorBufferOverrides(overrides, parsedCpuBuft);
+
+  EXPECT_EQ(overrides[0].buft, ggml_backend_cpu_buffer_type());
+  EXPECT_EQ(overrides[1].buft, otherBuft);
+  EXPECT_EQ(overrides[2].buft, ggml_backend_cpu_buffer_type());
+  EXPECT_EQ(overrides[3].buft, nullptr);
+  EXPECT_STREQ(overrides[0].pattern, "blk.0");
+  EXPECT_STREQ(overrides[1].pattern, "output");
+  EXPECT_STREQ(overrides[2].pattern, "blk.1");
+  EXPECT_EQ(overrides[3].pattern, nullptr);
+
+  overrides[0].buft = parsedCpuBuft;
+  lfn::canonicalizeCpuTensorBufferOverrides(overrides, nullptr);
+  EXPECT_EQ(overrides[0].buft, parsedCpuBuft);
+}
+
+TEST_F(LoadFitNormalizationTest, CanonicalizesParsedCpuTensorBufferOverrides) {
+  auto config = baseConfig();
+  config["override-tensor"] = "blk\\.0\\.ffn_(up|down|gate)_exps=CPU,"
+                              "blk\\.1\\.ffn_(up|down|gate)_exps=CPU";
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+
+  ASSERT_EQ(
+      result.params.tensor_buft_overrides.size(),
+      llama_max_tensor_buft_overrides());
+  EXPECT_STREQ(
+      result.params.tensor_buft_overrides[0].pattern,
+      "blk\\.0\\.ffn_(up|down|gate)_exps");
+  EXPECT_STREQ(
+      result.params.tensor_buft_overrides[1].pattern,
+      "blk\\.1\\.ffn_(up|down|gate)_exps");
+  EXPECT_EQ(
+      result.params.tensor_buft_overrides[0].buft,
+      ggml_backend_cpu_buffer_type());
+  EXPECT_EQ(
+      result.params.tensor_buft_overrides[1].buft,
+      ggml_backend_cpu_buffer_type());
+  EXPECT_EQ(result.params.tensor_buft_overrides[2].pattern, nullptr);
+  EXPECT_EQ(result.params.tensor_buft_overrides[2].buft, nullptr);
 }
 
 TEST_F(LoadFitNormalizationTest, ExplicitContextAndMinimumClampAreCanonical) {
@@ -507,6 +659,32 @@ TEST_F(
   ASSERT_EQ(result.params.devices.size(), 2U);
   EXPECT_NE(result.params.devices.front(), nullptr);
   EXPECT_EQ(result.params.devices.back(), nullptr);
+}
+
+TEST_F(LoadFitNormalizationTest, BackendOverrideWithSplitModeIsRejected) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["backend"] = "vulkan";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "cuda0"});
+
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies)),
+      qvac_errors::StatusError);
+}
+
+TEST_F(LoadFitNormalizationTest, BackendOverrideWithDevicesIsRejected) {
+  auto config = baseConfig();
+  config["devices"] = "vulkan0";
+  config["backend"] = "vulkan";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "cuda0"});
+
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies)),
+      qvac_errors::StatusError);
 }
 
 TEST_F(LoadFitNormalizationTest, SplitModeDerivesTraitsFromFinalDeviceSet) {
@@ -1940,6 +2118,69 @@ TEST_F(
       qvac_errors::StatusError);
 }
 
+TEST_F(LoadFitNormalizationTest, DeprecatedMmapAliasSelectsMmap) {
+  auto config = baseConfig();
+  config["mmap"] = "";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_EQ(result.params.load_mode, LLAMA_LOAD_MODE_MMAP);
+}
+
+TEST_F(LoadFitNormalizationTest, DeprecatedMlockAliasSelectsMlock) {
+  auto config = baseConfig();
+  config["mlock"] = "";
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "none"}));
+  EXPECT_EQ(result.params.load_mode, LLAMA_LOAD_MODE_MLOCK);
+}
+
+TEST_F(LoadFitNormalizationTest, DeprecatedAliasUnknownValueIsRejected) {
+  auto config = baseConfig();
+  config["no-mmap"] = "sometimes";
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::GPU, .name = "none"}))),
+      qvac_errors::StatusError);
+}
+
+TEST(DeprecatedLoadFlagModeTest, MapsEachFlagAndPolarity) {
+  EXPECT_EQ(lfn::deprecatedLoadFlagMode("mmap", ""), LLAMA_LOAD_MODE_MMAP);
+  EXPECT_EQ(lfn::deprecatedLoadFlagMode("mmap", "off"), LLAMA_LOAD_MODE_NONE);
+  EXPECT_EQ(lfn::deprecatedLoadFlagMode("no-mmap", ""), LLAMA_LOAD_MODE_NONE);
+  EXPECT_EQ(
+      lfn::deprecatedLoadFlagMode("no-mmap", "false"), LLAMA_LOAD_MODE_MMAP);
+  EXPECT_EQ(
+      lfn::deprecatedLoadFlagMode("direct-io", "on"),
+      LLAMA_LOAD_MODE_DIRECT_IO);
+  EXPECT_EQ(
+      lfn::deprecatedLoadFlagMode("no-direct-io", ""), LLAMA_LOAD_MODE_NONE);
+  EXPECT_EQ(lfn::deprecatedLoadFlagMode("mlock", "1"), LLAMA_LOAD_MODE_MLOCK);
+  EXPECT_EQ(lfn::deprecatedLoadFlagMode("load-mode", "mmap"), std::nullopt);
+  EXPECT_EQ(lfn::deprecatedLoadFlagMode("no_mmap", ""), std::nullopt);
+}
+
+TEST(DeprecatedLoadFlagModeTest, RejectsValuesTheFlagDoesNotTake) {
+  EXPECT_THROW(
+      static_cast<void>(lfn::deprecatedLoadFlagMode("mmap", "maybe")),
+      std::invalid_argument);
+  // mlock is valueless in llama, so it cannot be turned off.
+  EXPECT_THROW(
+      static_cast<void>(lfn::deprecatedLoadFlagMode("mlock", "off")),
+      std::invalid_argument);
+}
+
 TEST_F(LoadFitNormalizationTest, InvalidChatTemplateRemainsInvalid) {
   auto config = baseConfig();
   config["chat-template"] = "invalid_template_name_xyz123";
@@ -2161,6 +2402,25 @@ TEST_F(
   }
 }
 
+TEST_F(LoadFitNormalizationTest, ExplicitDevicesNamingOneCardTwiceAreRejected) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["devices"] = "CUDA0,Vulkan0";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "CUDA0"});
+  auto selection = splitSelection({"CUDA0", "Vulkan0"});
+  selection.devices[0].deviceId = "0000:01:00.0";
+  selection.devices[1].deviceId = "0000:01:00.0";
+  selection.dedupedTwins.push_back(selection.devices[1]);
+  selection.devices.pop_back();
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies)),
+      qvac_errors::StatusError);
+}
+
 TEST_F(LoadFitNormalizationTest, DefaultSplitModeAllowsOneExplicitDevice) {
   auto config = baseConfig();
   config["devices"] = "none";
@@ -2174,6 +2434,52 @@ TEST_F(LoadFitNormalizationTest, DefaultSplitModeAllowsOneExplicitDevice) {
 
   EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
   EXPECT_EQ(result.runtimeBackendDevice, 1);
+}
+
+TEST_F(LoadFitNormalizationTest, RawCudaDeviceNameKeepsKvGuardArmed) {
+  for (const auto& [splitMode, explicitDevice] :
+       std::vector<std::pair<std::string, bool>>{
+           {"none", false}, {"layer", false}, {"none", true}}) {
+    auto config = baseConfig();
+    config["split-mode"] = splitMode;
+    config["cache-type-k"] = "tbq4_0";
+    if (explicitDevice) {
+      config["devices"] = "CUDA0";
+    }
+
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend(
+              {.type = backend_selection::GPU, .name = "CUDA0"}, {"CUDA0"})));
+      FAIL() << "CUDA0 must reject TurboQuant in " << splitMode;
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(error.what(), ::testing::HasSubstr("CUDA backend"));
+    }
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, MixedSplitKeepsCudaKvGuardArmed) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["cache-type-v"] = "pq3_0";
+
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend(
+            {.type = backend_selection::GPU, .name = "Vulkan0"},
+            {"Vulkan0", "CUDA0"})));
+    FAIL() << "a participating CUDA device must reject PolarQuant";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("CUDA backend"));
+  }
 }
 
 TEST_F(
@@ -2409,7 +2715,8 @@ TEST_F(LoadFitNormalizationTest, RpcHeadlessNodePropagatesRegistrationFailure) {
           backend_selection::BackendType,
           const std::optional<backend_selection::MainGpu>&,
           const ModelMetaData&,
-          bool) {
+          bool,
+          const std::vector<std::string>&) {
         selectionAttempted = true;
         return lfn::SelectedBackend{
             .type = backend_selection::CPU, .name = "none"};

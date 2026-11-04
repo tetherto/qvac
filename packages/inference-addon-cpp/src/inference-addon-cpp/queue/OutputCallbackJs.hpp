@@ -3,6 +3,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <js.h>
+#include <uv.h>
 #include <memory>
 #include <mutex>
 #include <thread>

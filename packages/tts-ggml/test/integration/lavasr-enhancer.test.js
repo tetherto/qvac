@@ -34,6 +34,7 @@ const {
 const { resolveRefWavPath } = require('../utils/runChatterboxTTS')
 const { TTS_TEST_THREADS } = require('../utils/testThreads')
 const { GPU_ONLY_USE_GPU } = require('../utils/gpuOnly')
+const { assertDesktopGpuBackend } = require('../utils/desktopGpuBackend')
 
 const platform = os.platform()
 const isMobile = platform === 'ios' || platform === 'android'
@@ -42,11 +43,6 @@ const isMobile = platform === 'ios' || platform === 'android'
 // fallback from a failure to a warning (e.g. a Linux host with no Vulkan SDK).
 const NO_GPU = proc.env && proc.env.NO_GPU === 'true'
 const RELAX = proc.env && proc.env.QVAC_TTS_GPU_SMOKE_RELAX === '1'
-const GPU_BACKEND_IDS = { metal: 1, cuda: 2, vulkan: 3, opencl: 4 }
-// CI rows whose prebuild bundles more than one usable GPU backend (the linux
-// runners carry CUDA and Vulkan) pin the engine cascade through
-// TTS_CPP_GPU_BACKEND; the enhancer assertion expects whatever the row pinned
-// and falls back to the platform's cascade default when unset.
 const PINNED_GPU_BACKEND = (proc.env && proc.env.TTS_CPP_GPU_BACKEND) || ''
 
 const ENHANCED_RATE = 48000
@@ -92,10 +88,6 @@ function expectsGpu() {
   )
 }
 
-function expectedDesktopEnhancerBackendId() {
-  return GPU_BACKEND_IDS[PINNED_GPU_BACKEND] || GPU_BACKEND_IDS.vulkan
-}
-
 // Strict check that the LavaSR *enhancer* network engaged the GPU. Reads the
 // enhancer-specific backend surfaced by ChatterboxModel/SupertonicModel
 // runtimeStats (enhancerBackendDevice: -1 none / 0 CPU / 1 GPU;
@@ -134,12 +126,7 @@ function assertEnhancerGpuBackend(t, stats) {
   if (platform === 'darwin' || platform === 'ios') {
     t.is(id, 1, `enhancer/${platform}: expected Metal backendId=1, got ${backendIdToName(id)}`)
   } else if (platform === 'linux' || platform === 'win32') {
-    const expectedId = expectedDesktopEnhancerBackendId()
-    t.is(
-      id,
-      expectedId,
-      `enhancer/${platform}: expected ${backendIdToName(expectedId)} backendId=${expectedId}, got ${backendIdToName(id)}`
-    )
+    assertDesktopGpuBackend(t, `enhancer/${platform}`, dev, id, PINNED_GPU_BACKEND)
   } else if (platform === 'android') {
     t.ok(
       id === 3 || id === 4,

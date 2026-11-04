@@ -21,7 +21,7 @@ import { vlaGetHparams } from '@/plugins/builtin/ggml-vla/ops/vla-hparams'
 import { vlaSetEmbodiment } from '@/plugins/builtin/ggml-vla/ops/vla-set-embodiment'
 
 interface VlaLoadOptions {
-  backend?: 'auto' | 'cpu'
+  backend?: VlaModel.VlaBackendSelector
 }
 
 interface VlaModelWrapper {
@@ -68,7 +68,7 @@ export const vlaPlugin = definePlugin({
       opts: { stats: true }
     })
 
-    const backend = config.backend ?? 'auto'
+    const backend = config.backend?.join(',') ?? 'auto'
     const model = wrapVlaModel(inner, { backend })
     return { model }
   },

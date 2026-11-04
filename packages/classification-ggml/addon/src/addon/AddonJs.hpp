@@ -1,13 +1,14 @@
 #pragma once
 
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <limits>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include <js.h>
 #include <inference-addon-cpp/Errors.hpp>
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
@@ -17,8 +18,11 @@
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 #include <inference-addon-cpp/queue/OutputQueue.hpp>
+#include <js.h>
 
-#include "model-interface/ClassificationModel.hpp"
+#include "model-interface/ImagePreprocessor.hpp"
+#include "model-interface/megaloc/MegaLocModel.hpp"
+#include "model-interface/mobilenet/ClassificationModel.hpp"
 
 namespace classification_ggml::bindings {
 
@@ -71,8 +75,7 @@ struct JsClassifyOutputHandler
             }) {}
 };
 
-inline js_value_t* createInstance(
-    js_env_t* env, js_callback_info_t* info) try {
+inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   addon_cpp::JsArgsParser args(env, info);
 
   auto configObj = args.getJsObject(1, "config");
@@ -85,33 +88,83 @@ inline js_value_t* createInstance(
         "pointing at the FP16 GGUF weights file");
   }
 
-  auto model = std::make_unique<ClassificationModel>(modelPath);
-
-  auto innerConfig =
-      configObj.getOptionalProperty<jsu::Object>(env, "config");
+  auto modelTypeOpt =
+      configObj.getOptionalProperty<jsu::String>(env, "modelType");
+  const std::string modelType =
+      modelTypeOpt ? modelTypeOpt->as<std::string>(env) : "mobilenet";
+  std::string backendsDir;
+  megaloc::Config megaConfig{modelPath};
+  auto innerConfig = configObj.getOptionalProperty<jsu::Object>(env, "config");
   if (innerConfig.has_value()) {
     auto backendsDirOpt =
         innerConfig->getOptionalProperty<jsu::String>(env, "backendsDir");
     if (backendsDirOpt.has_value()) {
-      model->setBackendsDir(backendsDirOpt->as<std::string>(env));
+      backendsDir = backendsDirOpt->as<std::string>(env);
+    }
+    if (auto backend =
+            innerConfig->getOptionalProperty<jsu::String>(env, "backend")) {
+      megaConfig.backend = backend->as<std::string>(env);
+    }
+    if (auto threads =
+            innerConfig->getOptionalProperty<jsu::Number>(env, "threads")) {
+      const double value = threads->as<double>(env);
+      if (!std::isfinite(value) || value < 1 || value > 1024 ||
+          std::floor(value) != value)
+        throw StatusError(
+            InvalidArgument, "threads must be an integer between 1 and 1024");
+      megaConfig.threads = static_cast<int>(value);
     }
   }
+  std::unique_ptr<addon_cpp::model::IModel> model;
+  if (modelType == "mobilenet") {
+    auto classifier = std::make_unique<ClassificationModel>(modelPath);
+    classifier->setBackendsDir(backendsDir);
+    classifier->load();
+    model = std::move(classifier);
+  } else if (modelType == "megaloc") {
+    megaConfig.backendsDir = backendsDir;
+    auto embedding =
+        std::make_unique<megaloc::MegaLocModel>(std::move(megaConfig));
+    model = std::move(embedding);
+  } else {
+    throw StatusError(
+        InvalidArgument, "Unsupported vision modelType: " + modelType);
+  }
 
-  model->load();
-
-  addon_cpp::out_handl::OutputHandlers<addon_cpp::out_handl::JsOutputHandlerInterface>
+  addon_cpp::out_handl::OutputHandlers<
+      addon_cpp::out_handl::JsOutputHandlerInterface>
       outHandlers;
   outHandlers.add(std::make_shared<JsClassifyOutputHandler>());
+  outHandlers.add(
+      std::make_shared<
+          addon_cpp::out_handl::JsTypedArrayOutputHandler<float>>());
 
   auto callback = std::make_unique<addon_cpp::OutputCallBackJs>(
-      env, args.get(0, "jsHandle"), args.getFunction(2, "outputCallback"),
+      env,
+      args.get(0, "jsHandle"),
+      args.getFunction(2, "outputCallback"),
       std::move(outHandlers));
 
   auto addon = std::make_unique<addon_cpp::AddonJs>(
-      env, std::move(callback),
+      env,
+      std::move(callback),
       std::unique_ptr<addon_cpp::model::IModel>(std::move(model)));
 
   return addon_cpp::JsInterface::createInstance(env, std::move(addon));
+}
+JSCATCH
+
+inline js_value_t* activate(js_env_t* env, js_callback_info_t* info) try {
+  addon_cpp::JsArgsParser args(env, info);
+  auto& instance =
+      addon_cpp::JsInterface::getInstance(env, args.get(0, "instance"));
+  auto addon = instance.addonCpp;
+  if (dynamic_cast<megaloc::MegaLocModel*>(&addon->model.get())) {
+    return jsu::JsAsyncTask::run(env, [addon = std::move(addon)] {
+      dynamic_cast<megaloc::MegaLocModel&>(addon->model.get()).load();
+    });
+  }
+  return addon_cpp::JsInterface::activate(env, info);
 }
 JSCATCH
 
@@ -123,11 +176,12 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   auto inputObj = args.getJsObject(1, "inputObj");
   auto type =
       inputObj.getProperty<jsu::String>(env, "type").as<std::string>(env);
-  if (type != "image") {
+  if (type != "image" && type != "embedding") {
     throw StatusError(
         InvalidArgument,
-        "Classification addon accepts only 'image' input type, got '" + type +
-            "'");
+        "Classification addon accepts only 'image' or 'embedding' input types, "
+        "got '" +
+            type + "'");
   }
 
   ClassifyInput cppInput;
@@ -153,8 +207,7 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
   // means encoded JPEG/PNG, three present means raw RGB.
   auto widthOpt = inputObj.getOptionalProperty<jsu::Number>(env, "width");
   auto heightOpt = inputObj.getOptionalProperty<jsu::Number>(env, "height");
-  auto channelsOpt =
-      inputObj.getOptionalProperty<jsu::Number>(env, "channels");
+  auto channelsOpt = inputObj.getOptionalProperty<jsu::Number>(env, "channels");
   const int provided = (widthOpt.has_value() ? 1 : 0) +
                        (heightOpt.has_value() ? 1 : 0) +
                        (channelsOpt.has_value() ? 1 : 0);
@@ -162,48 +215,69 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     throw StatusError(
         InvalidArgument,
         "Raw RGB input requires all of 'width', 'height', and 'channels' "
-        "to be provided together; received " + std::to_string(provided) +
-        " of 3");
+        "to be provided together; received " +
+            std::to_string(provided) + " of 3");
   }
   if (provided == 3) {
-    // bare-runtime's `as<uint32_t>` static_casts negatives to ~4 billion;
-    // pull the int32_t view first to range-check meaningfully.
-    const int32_t w = widthOpt->as<int32_t>(env);
-    const int32_t h = heightOpt->as<int32_t>(env);
-    const int32_t c = channelsOpt->as<int32_t>(env);
-    if (w <= 0) {
+    // Preserve MobileNet's truncation; embedding dimensions are strict.
+    const bool embedding = type == "embedding";
+    const auto number = [embedding, env](jsu::Number value) {
+      const double raw = value.as<double>(env);
+      return embedding ? raw : std::trunc(raw);
+    };
+    const double w = number(*widthOpt);
+    const double h = number(*heightOpt);
+    const double c = number(*channelsOpt);
+    const double maximum = embedding ? preprocess::MAX_IMAGE_DIMENSION
+                                     : std::numeric_limits<int32_t>::max();
+    if (!std::isfinite(w) || w <= 0 || std::floor(w) != w || w > maximum) {
       throw StatusError(
           InvalidArgument,
           "Image 'width' must be a positive integer when passing raw RGB "
-          "bytes; got " + std::to_string(w));
+          "bytes; got " +
+              std::to_string(w));
     }
-    if (h <= 0) {
+    if (!std::isfinite(h) || h <= 0 || std::floor(h) != h || h > maximum) {
       throw StatusError(
           InvalidArgument,
           "Image 'height' must be a positive integer when passing raw RGB "
-          "bytes; got " + std::to_string(h));
+          "bytes; got " +
+              std::to_string(h));
     }
     if (c != 3) {
       throw StatusError(
           InvalidArgument,
           "Image 'channels' must be exactly 3 (RGB) when passing raw RGB "
-          "bytes; got " + std::to_string(c));
+          "bytes; got " +
+              std::to_string(c));
     }
     cppInput.rawRgb = RawRgbDims{
-        static_cast<uint32_t>(w), static_cast<uint32_t>(h),
+        static_cast<uint32_t>(w),
+        static_cast<uint32_t>(h),
         static_cast<uint32_t>(c)};
   }
 
   auto topKOpt = inputObj.getOptionalProperty<jsu::Number>(env, "topK");
+  if (type == "embedding" && topKOpt)
+    throw StatusError(
+        InvalidArgument, "topK is not supported for image embeddings");
   if (topKOpt.has_value()) {
-    const int32_t topK = topKOpt->as<int32_t>(env);
-    if (topK <= 0) {
+    const double topK = std::trunc(topKOpt->as<double>(env));
+    if (!std::isfinite(topK) || topK <= 0 ||
+        topK > std::numeric_limits<int32_t>::max()) {
       throw StatusError(
           InvalidArgument,
           "Image 'topK' must be a positive integer when provided; got " +
               std::to_string(topK));
     }
     cppInput.topK = static_cast<uint32_t>(topK);
+  }
+
+  if (type == "embedding") {
+    ImageInput image;
+    image.data = std::move(cppInput.data);
+    image.rawRgb = cppInput.rawRgb;
+    return instance.runJob(std::any(std::move(image)));
   }
 
   return instance.runJob(std::any(std::move(cppInput)));

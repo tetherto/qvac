@@ -10,6 +10,10 @@ async function runAddonTest (options = {}) { // eslint-disable-line no-unused-va
   return runIntegrationModule('../integration/addon.test.js', options)
 }
 
+async function runFitTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/fit.test.js', options)
+}
+
 async function runGpuSmokeTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/gpu-smoke.test.js', options)
 }
@@ -22,9 +26,15 @@ async function runMobilePerfGpuTest (options = {}) { // eslint-disable-line no-u
   return runIntegrationModule('../integration/mobile-perf-gpu.test.js', options)
 }
 
+async function runVulkanRegressionTest (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/vulkan-regression.test.js', options)
+}
+
 module.exports = {
   runAddonTest,
+  runFitTest,
   runGpuSmokeTest,
   runMobilePerfCpuTest,
-  runMobilePerfGpuTest
+  runMobilePerfGpuTest,
+  runVulkanRegressionTest
 }

@@ -15,6 +15,7 @@ const { createWriteStream, createReadStream } = require('fs')
 const cenc = require('compact-encoding')
 const crypto = require('crypto')
 const IdEnc = require('hypercore-id-encoding')
+const SwarmConnectionLogger = require('./swarm-connection-logger')
 
 /**
  * Derive a dedicated RPC discovery key from the autobase key.
@@ -109,6 +110,7 @@ class RegistryService extends ReadyResource {
     this.swarm = swarm
     this.config = config
     this.logger = opts.logger || console
+    this._connectionLogger = new SwarmConnectionLogger(this.logger)
 
     this.ackInterval = opts.ackInterval ?? 5000
     this.ackThreshold = opts.ackThreshold ?? 0
@@ -212,22 +214,7 @@ class RegistryService extends ReadyResource {
     await this.view.ready()
 
     this.swarm.on('connection', (conn, peerInfo) => {
-      const peerKey = peerInfo?.publicKey ? IdEnc.normalize(peerInfo.publicKey) : null
-
-      this.logger.info({ peer: peerKey || 'unknown' }, 'Swarm connection opened')
-      conn.on('error', (err) => {
-        this.logger.warn(
-          {
-            peer: peerKey || 'unknown',
-            error: err.message,
-            code: err.code
-          },
-          'Swarm connection error'
-        )
-      })
-      conn.on('close', () => {
-        this.logger.info({ peer: peerKey || 'unknown' }, 'Swarm connection closed')
-      })
+      this._connectionLogger.track(conn, peerInfo)
 
       this._setupRpc(conn)
 
@@ -387,6 +374,7 @@ class RegistryService extends ReadyResource {
 
   async _close() {
     this.logger.info('RegistryService: closing')
+    this._connectionLogger.close()
 
     if (this._totalsRefreshTimer) {
       clearInterval(this._totalsRefreshTimer)
@@ -911,7 +899,7 @@ class RegistryService extends ReadyResource {
 
       const { blobs, core } = await this._getOrCreateBlobsCore(this.activeBlobCoreLabel)
       const pointer = await this._uploadFileToHyperblobs(blobs, localPath)
-      const fitBlob = await this._uploadFitBlob(blobs, localPath, outputDir)
+      const fitBlob = await this._uploadFitBlob(blobs, localPath, outputDir, modelEntry.engine)
 
       await this._mirrorBlobCore(core)
 
@@ -1340,8 +1328,8 @@ class RegistryService extends ReadyResource {
     return writeStream.id
   }
 
-  async _uploadFitBlob(blobs, localPath, outputDir) {
-    const fitBlob = await writeFitBlob(localPath, outputDir)
+  async _uploadFitBlob(blobs, localPath, outputDir, engine) {
+    const fitBlob = await writeFitBlob(localPath, outputDir, engine)
     if (!fitBlob) {
       return null
     }
@@ -1512,7 +1500,7 @@ class RegistryService extends ReadyResource {
     const models = await this.listModels()
     const candidates = models.filter((model) => {
       if (model.fitBlobBinding && !force) return false
-      if (!supportsFitBlob(model.path)) return false
+      if (!supportsFitBlob(model.path, model.engine)) return false
       if (filter && !model.path.includes(filter)) return false
       return true
     })
@@ -1545,7 +1533,7 @@ class RegistryService extends ReadyResource {
         const origin = await this._loadArtifactForFill(model, localPath)
         if (origin === 'source') report.downloaded++
 
-        const fitBlob = await writeFitBlob(localPath, outputDir)
+        const fitBlob = await writeFitBlob(localPath, outputDir, model.engine)
         if (!fitBlob) {
           report.skipped.push({ path: model.path, reason: 'no metadata region' })
           continue

@@ -1,0 +1,11 @@
+import type { TTSConfigurationParams } from "../../tts";
+import type { EngineSetup, ModelPaths } from "../engineSetup";
+import { type NormalizedFiles } from "../modelFiles";
+export declare const SUPERTONIC_DEFAULT = "supertonic.gguf";
+export declare const SUPERTONIC_MTL = "supertonic2.gguf";
+export declare const SUPERTONIC_V3_RE: RegExp;
+export declare const SUPERTONIC_V3_QUANT_ORDER: string[];
+export declare function findSupertonicV3InDir(modelDir?: string): string | undefined;
+export declare function hasSupertonicModelDir(modelDir: string): boolean;
+export declare function resolveSupertonicModelPaths(files: NormalizedFiles): Pick<ModelPaths, "supertonicModelPath">;
+export declare function buildSupertonicParams(setup: EngineSetup): TTSConfigurationParams;

@@ -10,16 +10,67 @@ import {
 import { TTS_ENGINES, buildEntry } from '@/configure/presets'
 
 describe('configure: param-schemas', () => {
+  it('exposes GPU backend priorities for LLM, embeddings, and VLA', () => {
+    for (const addon of ['llm', 'embeddings', 'vla']) {
+      const schema = configSchemaForAddon(addon)
+      assert.ok(schema)
+      const backend = paramFields(schema).find((field) => field.name === 'backend')
+      assert.ok(backend, `${addon} backend is editable`)
+      assert.match(backend.type, /cuda.*vulkan.*\[\]$/)
+      assert.match(backend.description, /\['cuda', 'vulkan'\]/)
+      assert.equal(validateParam(backend, 'cuda,vulkan'), true)
+      assert.deepEqual(coerceParam('cuda,vulkan', backend), ['cuda', 'vulkan'])
+      assert.deepEqual(coerceParam(' cuda , vulkan ', backend), ['cuda', 'vulkan'])
+      assert.deepEqual(coerceParam('cuda', backend), ['cuda'])
+      assert.equal(validateParam(backend, '["cuda"]'), true)
+      assert.equal(validateParam(backend, ' cuda , vulkan '), true)
+      assert.equal(validateParam(backend, ''), true)
+      for (const invalid of [
+        'unknown',
+        'cuda,unknown',
+        'cuda,',
+        '[]',
+        '[1]',
+        '["unknown"]',
+        '["cuda"'
+      ]) {
+        assert.notEqual(validateParam(backend, invalid), true)
+      }
+      assert.equal(coerceParam('', backend), undefined)
+      const parsed = schema.parse({ backend: coerceParam('cuda,vulkan', backend) })
+      assert.ok(parsed && typeof parsed === 'object' && 'backend' in parsed)
+      assert.deepEqual(parsed.backend, ['cuda', 'vulkan'])
+    }
+  })
+
+  it('exposes the decision device and accepts the generated starter', () => {
+    const schema = configSchemaForAddon('llamacpp-decision')
+    assert.ok(schema)
+    assert.ok(schema.safeParse(buildEntry('decision').entry.config ?? {}).success)
+    const device = paramFields(schema).find((field) => field.name === 'device')
+    assert.ok(device)
+    assert.equal(device.required, false)
+    assert.equal(validateParam(device, 'cpu'), true)
+    assert.equal(validateParam(device, 'gpu'), true)
+    assert.notEqual(validateParam(device, 'cuda'), true)
+  })
+
   it('exposes and validates World memory controls in the nested editor', () => {
     const schema = configSchemaForAddon('diffusion')
     assert.ok(schema)
     const world = paramFields(schema).find((field) => field.name === 'world')
     assert.ok(world?.objectFields)
-    for (const name of ['paramsBackend', 'maxVram', 'streamLayers', 'verbosity']) {
+    for (const name of ['fitSteps', 'paramsBackend', 'maxVram', 'streamLayers', 'verbosity']) {
       const field = world.objectFields.find((field) => field.name === name)
       assert.ok(field, `${name} is editable`)
       assert.ok(field.description)
     }
+    const fitSteps = world.objectFields.find((field) => field.name === 'fitSteps')!
+    assert.equal(validateParam(fitSteps, '1'), true)
+    assert.equal(validateParam(fitSteps, '1000000'), true)
+    assert.notEqual(validateParam(fitSteps, '0'), true)
+    assert.notEqual(validateParam(fitSteps, '1.5'), true)
+    assert.notEqual(validateParam(fitSteps, '1000001'), true)
     const budget = world.objectFields.find((field) => field.name === 'maxVram')!
     assert.equal(validateParam(budget, '-1'), true)
     assert.equal(validateParam(budget, 'cuda0=2'), true)

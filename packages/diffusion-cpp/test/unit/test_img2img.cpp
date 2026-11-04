@@ -19,6 +19,7 @@
 #include "handlers/SdCtxHandlers.hpp"
 #include "model-interface/SdModel.hpp"
 #include "test_common.hpp"
+#include "utils/ReferenceImages.hpp"
 
 using namespace qvac_lib_inference_addon_sd;
 
@@ -164,6 +165,83 @@ protected:
 };
 
 std::unique_ptr<SdModel> SdImg2ImgTest::model = nullptr;
+
+// Exercise the production decoder without a model or GPU. Small configured
+// limits cover the same cumulative-budget boundary as the default 128 Mi limit.
+TEST(SdImageDecodeBudgetTest, RejectsMultiReferenceAboveBudget) {
+  const auto png = img2img_helpers::makeSolidPng(2, 2, 10, 20, 30);
+  for (auto channels :
+       {image_codec::DecodeChannels::RGB, image_codec::DecodeChannels::RGBA}) {
+    SCOPED_TRACE(static_cast<int>(channels));
+    auto exact = decodeReferenceImages({png, png}, 4, 8, channels);
+    ASSERT_EQ(exact->size(), 2u);
+    EXPECT_EQ(exact->at(0).channel, static_cast<uint32_t>(channels));
+    EXPECT_EQ(exact->at(1).data[0], 10);
+    try {
+      auto rejected = decodeReferenceImages({png, png, png}, 4, 8, channels);
+      FAIL() << "Expected the third reference to exceed the job budget";
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_NE(
+          std::string(error.what())
+              .find(
+                  "img2img: failed to decode init_images[2]: image exceeds "
+                  "remaining 8 job pixel budget"),
+          std::string::npos)
+          << error.what();
+    }
+  }
+}
+
+TEST(SdImageDecodeBudgetTest, PreservesReferenceOrderAndAlpha) {
+  std::vector<uint8_t> pixels = {10, 20, 30, 0, 40, 50, 60, 127};
+  sd_image_t input{2, 1, 4, pixels.data()};
+  const auto rgba = image_codec::encodeToPng(input);
+  const auto rgb = img2img_helpers::makeSolidPng(1, 1, 70, 80, 90);
+  auto images = decodeReferenceImages(
+      {rgba, rgb}, 2, 3, image_codec::DecodeChannels::RGBA);
+  ASSERT_EQ(images->size(), 2u);
+  EXPECT_EQ(images->at(0).width, 2u);
+  EXPECT_EQ(images->at(0).data[3], 0);
+  EXPECT_EQ(images->at(0).data[7], 127);
+  EXPECT_EQ(images->at(1).width, 1u);
+  EXPECT_EQ(images->at(1).data[0], 70);
+  EXPECT_EQ(images->at(1).data[3], 255);
+}
+
+TEST(SdImageDecodeBudgetTest, Sd2RejectsReferencesDespiteFluxFlag) {
+  const auto path = sd_test_helpers::getModelPath();
+  if (path.empty()) {
+    GTEST_SKIP() << "SD2.1 model not available";
+  }
+  SdCtxConfig config{};
+  config.modelPath = path;
+  config.prediction = V_PRED;
+  config.flux2Requested = true;
+  config.nThreads = sd_test_helpers::getTestThreads();
+  config.device = sd_test_helpers::getTestDevice();
+  SdModel model(std::move(config));
+  model.load();
+
+  auto png = img2img_helpers::makeSolidPng(2, 2, 0, 0, 0);
+  SdModel::GenerationJob job;
+  job.paramsJson = R"({
+    "mode": "img2img", "prompt": "test", "width": 512,
+    "height": 512, "steps": 1
+  })";
+  job.initImagesBytes = {png, png, png};
+  try {
+    model.process(std::any(job));
+    FAIL() << "Expected SD2 to reject reference editing";
+  } catch (const std::exception& error) {
+    EXPECT_NE(
+        std::string(error.what())
+            .find(
+                "img2img: init_images requires a model supporting reference "
+                "editing"),
+        std::string::npos)
+        << error.what();
+  }
+}
 
 // ── Diagnostic: print what stb_image sees for the headshot ───────────────────
 

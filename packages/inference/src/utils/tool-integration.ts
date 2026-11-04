@@ -1,6 +1,5 @@
 import type { Tool, ToolDialect } from '@/schemas/index'
-import { detectToolDialectFromName } from '@/utils/tools/index'
-import { getModelInfo } from '@/runtime/model-registry'
+import { getModelEntry } from '@/runtime/model-registry'
 
 interface HistoryMessage {
   role: string
@@ -26,8 +25,7 @@ export function prependToolsToHistory(
   return [...tools, ...history]
 }
 
+/** The tool-call dialect resolved when the model loaded. */
 export function detectToolDialect(modelId: string): ToolDialect {
-  const info = getModelInfo(modelId)
-  if (!info) return 'hermes'
-  return detectToolDialectFromName(info.name, info.path)
+  return getModelEntry(modelId)?.local.toolDialect ?? 'hermes'
 }

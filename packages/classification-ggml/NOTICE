@@ -21,6 +21,13 @@ limitations under the License.
 This product bundles the following third-party components:
 
 --------------------------------------------------------------------------------
+MegaLoc — visual place recognition model implementation
+Copyright (c) 2024 Gabriele Berton, Carlo Masone
+Licensed under the MIT License; see LICENSE-MegaLoc.
+Source: https://github.com/gmberton/MegaLoc
+Model weights are not included in this package.
+
+--------------------------------------------------------------------------------
 ggml — a tensor library for machine learning
 Copyright (c) 2022-2025 Georgi Gerganov
 Licensed under the MIT License.

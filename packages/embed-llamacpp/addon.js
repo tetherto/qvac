@@ -1,12 +1,76 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BertInterface = void 0;
+exports.toBertJobInput = toBertJobInput;
 exports.mapAddonEvent = mapAddonEvent;
-exports.resolveBackendsDir = resolveBackendsDir;
-/* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
-const fs = require("bare-fs");
-const path = require("bare-path");
-const fabricBackends = require("@qvac/fabric/backends");
+exports.pickPrimaryGgufPath = pickPrimaryGgufPath;
+function isMediaPart(part) {
+    return (part !== null &&
+        typeof part === "object" &&
+        part.media instanceof Uint8Array);
+}
+/** Maps ordered parts to native parts, merging adjacent text. */
+function toAddonParts(parts, where) {
+    const result = [];
+    for (const [i, part] of parts.entries()) {
+        if (typeof part === "string") {
+            const last = result[result.length - 1];
+            if (last?.type === "text") {
+                last.text += part;
+            }
+            else {
+                result.push({ type: "text", text: part });
+            }
+        }
+        else if (isMediaPart(part)) {
+            result.push({ type: "media", data: part.media });
+        }
+        else {
+            throw new TypeError(`${where}[${i}] must be a string or { media: Uint8Array }`);
+        }
+    }
+    return result;
+}
+/**
+ * Maps a `GGMLBert.run()` input to the native job. Inputs without media take
+ * the text path (`text` / `sequences`), so they need no projection model.
+ */
+function toBertJobInput(input) {
+    if (typeof input === "string") {
+        return { type: "text", input };
+    }
+    if (Array.isArray(input)) {
+        const unknownInput = input;
+        const notString = unknownInput.findIndex((item) => typeof item !== "string");
+        if (notString !== -1) {
+            throw new TypeError(isMediaPart(unknownInput[notString])
+                ? `input[${notString}]: media goes in { inputs: [...] }, where each input is a string or an array of parts; a bare array is one embedding per string`
+                : `input[${notString}] must be a string`);
+        }
+        return { type: "sequences", input };
+    }
+    if (input !== null &&
+        typeof input === "object" &&
+        Array.isArray(input.inputs)) {
+        const inputs = input.inputs.map((item, i) => {
+            if (typeof item === "string") {
+                return [{ type: "text", text: item }];
+            }
+            if (Array.isArray(item)) {
+                return toAddonParts(item, `inputs[${i}]`);
+            }
+            throw new TypeError(`inputs[${i}] must be a string or an array of parts`);
+        });
+        if (inputs.every((parts) => parts.every((part) => part.type === "text"))) {
+            return {
+                type: "sequences",
+                input: inputs.map((parts) => parts.map((part) => part.text).join("")),
+            };
+        }
+        return { type: "multimodal", input: inputs };
+    }
+    throw new TypeError("input must be a string, an array or { inputs: [...] }");
+}
 /**
  * Normalize a raw native event into `Output` / `Error` / `JobEnded`, mapping
  * `backendDevice` from `0/1` to `'cpu'/'gpu'`. Returns `null` for unknown
@@ -39,21 +103,14 @@ function mapAddonEvent(rawEvent, rawData, rawError) {
     }
     return null;
 }
-// The ggml compute backends ship next to the @qvac/fabric runtime
-// (<root>/<host>/qvac__fabric). We deliberately do not copy them into this
-// addon to avoid duplicating tens of MB per fabric consumer. On desktop,
-// @qvac/fabric/backends resolves that root in whichever package holds the
-// runtime. On mobile the package tree isn't resolvable at runtime (the worklet
-// runs from a packed bundle), so fall back to this addon's own prebuilds, where
-// the mobile packaging stages the backends. The native side appends
-// BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
-function resolveBackendsDir() {
-    // fabric's resolver only checks that the platform package resolves, not that
-    // its prebuilds are on disk.
-    const fabricRoot = fabricBackends.resolveBackendsDir();
-    if (fabricRoot !== null && fs.existsSync(fabricRoot))
-        return fabricRoot;
-    return path.join(__dirname, "prebuilds");
+/**
+ * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
+ * entry for single-file models. Matches the C++ shard-expansion contract
+ * in `GGUFShards::expandGGUFIntoShards`.
+ */
+function pickPrimaryGgufPath(files) {
+    const SHARD_REGEX = /-\d+-of-\d+\.gguf$/;
+    return files.find((p) => SHARD_REGEX.test(p)) || files[0];
 }
 /** An interface between the Bare C++ addon and the JS runtime. */
 class BertInterface {
@@ -61,9 +118,9 @@ class BertInterface {
     _handle;
     constructor(binding, configurationParams, outputCb) {
         this._binding = binding;
-        if (!configurationParams.backendsDir) {
-            configurationParams.backendsDir = resolveBackendsDir();
-        }
+        // createInstance reads the keys unconditionally.
+        configurationParams.backendsDir ??= "";
+        configurationParams.projectionPath ??= "";
         this._handle = this._binding.createInstance(this, configurationParams, outputCb);
     }
     /** Cancel current inference process. Resolves when the job has stopped. */
@@ -76,6 +133,7 @@ class BertInterface {
      * Processes new input.
      *   - `type: 'text'` for a single string input
      *   - `type: 'sequences'` for a string-array input
+     *   - `type: 'multimodal'` for inputs of ordered text and media parts
      * Resolves `true` if the job was accepted, `false` if busy.
      */
     async runJob(data) {

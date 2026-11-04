@@ -10,6 +10,7 @@ try {
   const pkgSlug = core.getInput('package-slug', { required: true })
   const pkgJsonPath = core.getInput('package-json-path', { required: true })
   const changelogPath = core.getInput('changelog-path', { required: true })
+  const strictSlug = core.getBooleanInput('strict-slug', { required: false })
 
   const isInitialPush = !baseSha || baseSha === ZERO_SHA
 
@@ -29,7 +30,11 @@ try {
     const branchPkg = match[1]
     branchVersion = match[2]
 
-    if (branchPkg !== pkgSlug) {
+    if (branchPkg !== pkgSlug && strictSlug) {
+      errors.push(
+        `Branch is for '${branchPkg}', not '${pkgSlug}' — expected: release-${pkgSlug}-x.y.z, actual: ${baseRef}`
+      )
+    } else if (branchPkg !== pkgSlug) {
       core.warning(
         `Package slug mismatch — branch targets '${branchPkg}', workflow expects '${pkgSlug}'. ` +
         `This is expected for short-name release branches (e.g. release-diffusion-x.y.z).`

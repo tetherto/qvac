@@ -1,3 +1,5 @@
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   finetune,
   loadModel,
@@ -9,6 +11,10 @@ import {
 } from '@qvac/sdk'
 
 const pauseResumeEnabled = process.argv.includes('--pause-resume')
+
+// The worker resolves dataset paths against the process working directory, so
+// derive them from this file's own folder instead.
+const datasetDir = path.dirname(fileURLToPath(import.meta.url))
 
 let modelId: string | undefined
 let exitCode = 0
@@ -39,10 +45,10 @@ try {
   const finetuneParams: FinetuneRunParams = {
     modelId: loadedModelId,
     options: {
-      trainDatasetDir: './examples/finetune/input/small_train_HF.jsonl',
+      trainDatasetDir: path.join(datasetDir, 'train.jsonl'),
       validation: {
         type: 'dataset',
-        path: './examples/finetune/input/small_eval_HF.jsonl'
+        path: path.join(datasetDir, 'eval.jsonl')
       },
       numberOfEpochs: 2,
       learningRate: 1e-4,
@@ -50,8 +56,8 @@ try {
       loraModules: 'attn_q,attn_k,attn_v,attn_o,ffn_gate,ffn_up,ffn_down',
       assistantLossOnly: true,
       checkpointSaveSteps: 2,
-      checkpointSaveDir: './examples/finetune/results/checkpoints',
-      outputParametersDir: './examples/finetune/results'
+      checkpointSaveDir: './finetune-output/checkpoints',
+      outputParametersDir: './finetune-output'
     }
   }
 

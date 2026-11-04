@@ -1,3 +1,4 @@
+import type { AddressInfo } from 'node:net'
 import type { FastifyInstance } from 'fastify'
 import closeWithGrace from 'close-with-grace'
 
@@ -6,12 +7,18 @@ import type { Logger } from '@/logger'
 import { findConfigFile, loadConfig } from '@/config'
 import { parseServeConfig, unknownServeKeys } from '@/serve/core/config'
 import { resolveServeApiKey } from '@/serve/core/api-key'
-import { checkNetworkExposure, validateServeStartup } from '@/serve/core/startup'
+import {
+  checkAdminExposure,
+  checkNetworkExposure,
+  validateServeStartup
+} from '@/serve/core/startup'
 import { createModelRegistry } from '@/serve/core/model-registry'
+import { createEphemeralFilesStore } from '@/serve/core/stores/ephemeral-files'
 import { createLoadManager, defaultLoadFn } from '@/serve/core/load-manager'
 import { preloadModels, shouldRefuseStart } from '@/serve/core/lifecycle'
 import type { QvacContext } from '@/serve/core/context'
 import { createCoreServer } from '@/serve/core/server'
+import { writeReadySignal } from '@/serve/core/ready-signal'
 import {
   extensionBanners,
   extensionSummary,
@@ -33,6 +40,12 @@ export interface StartServerOptions {
   allowUnauthenticated?: boolean | undefined
   cors?: boolean | undefined
   corsOrigins?: string[] | undefined
+  /** Hostnames accepted in the Host header beyond loopback, IP literals and the bind host. */
+  allowedHosts?: string[] | undefined
+  /** Accept any Host header, turning off the DNS-rebinding check. */
+  allowAnyHost?: boolean | undefined
+  /** Allow the admin-only routes, such as runtime suspend and resume. */
+  enableAdmin?: boolean | undefined
   publicBaseUrl?: string | undefined
   verbose?: boolean | undefined
   /** Silence the logger entirely. Useful when capturing the OpenAPI spec or
@@ -48,6 +61,8 @@ export interface StartServerOptions {
   /** Per-extension options, keyed by extension name, passed to its `setup`. */
   extensionOptions?: Record<string, unknown> | undefined
   loadModelOverride?: QvacContext['loadModelOverride']
+  /** Inherited descriptor that receives the bound port once the server listens. */
+  readyFd?: number | undefined
 }
 
 export async function buildServer(options: StartServerOptions): Promise<FastifyInstance> {
@@ -76,6 +91,7 @@ async function buildServerParts(
   // socket opens rather than after a preload that can run for minutes.
   const exposureWarning = checkNetworkExposure({ ...options, apiKey })
   if (exposureWarning !== undefined) logger.warn(exposureWarning)
+  checkAdminExposure({ host: options.host, apiKey, enableAdmin: serveConfig.enableAdmin })
   const registry = createModelRegistry()
 
   // The load fn resolves the override lazily via this ref, so the manager can be
@@ -96,7 +112,13 @@ async function buildServerParts(
     serveConfig,
     loadManager,
     logger,
+    files: createEphemeralFilesStore(undefined, {
+      onEvict: (id, reason) => {
+        logger.warn(`ephemeral file evicted id=${id} reason=${reason}`)
+      }
+    }),
     extensions: {},
+    runtime: { state: 'active', pending: 0, epoch: 0 },
     get loadModelOverride() {
       return overrideRef.current
     },
@@ -113,6 +135,8 @@ async function buildServerParts(
     apiKey,
     docs: options.docs,
     corsOrigins: serveConfig.cors.origins,
+    allowedHosts: serveConfig.allowedHosts,
+    publicBaseUrl: serveConfig.publicBaseUrl,
     extensions
   })
 
@@ -142,6 +166,11 @@ export async function startServer(options: StartServerOptions): Promise<FastifyI
   for (const banner of extensionBanners(app.qvac, extensions)) {
     app.qvac.logger.warn(banner)
   }
+  if (app.qvac.serveConfig.enableAdmin) {
+    app.qvac.logger.warn(
+      'admin endpoints enabled: any client that passes auth can suspend and resume the runtime'
+    )
+  }
 
   closeWithGrace({ delay: 10_000 }, async ({ signal }) => {
     app.log.info?.({ signal }, 'shutdown signal received')
@@ -149,7 +178,11 @@ export async function startServer(options: StartServerOptions): Promise<FastifyI
   })
 
   await app.listen({ port: options.port, host: options.host })
-  app.qvac.logger.info(`QVAC API server listening on http://${options.host}:${options.port}`)
+  const { port } = app.server.address() as AddressInfo
+  app.qvac.logger.info(`QVAC API server listening on http://${options.host}:${port}`)
+  if (options.readyFd !== undefined) {
+    writeReadySignal(options.readyFd, { port, pid: process.pid })
+  }
   app.qvac.logger.info(extensionSummary(extensions))
   logStartupSummary(app, app.qvac.logger)
   return app

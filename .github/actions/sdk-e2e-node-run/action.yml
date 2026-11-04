@@ -1,0 +1,282 @@
+name: SDK E2E node run
+description: >-
+  Run one runner-hosted SDK e2e leg: derive its runId from the job id, start
+  the consumer, run the producer against it, and exit with the combined status.
+  The caller supplies the consumer command, so each family keeps its own
+  arguments in its own workflow. Shared by test-node-sdk.yml and
+  test-snap-sdk.yml.
+
+# Composite steps cannot carry timeout-minutes; the calling step sets it.
+# Stopping a consumer that outlives the run is sdk-e2e-node-results' job, which
+# the caller runs under always() so it also covers a timed-out run.
+
+inputs:
+  family:
+    description: "SDK e2e family (desktop, electron, python, snap); names the job"
+    required: true
+  runner-label:
+    description: "Runner label the leg runs on (the matrix value); names the job"
+    required: true
+  platform:
+    description: "Platform key of the leg (linux, windows, macos)"
+    required: true
+  working-directory:
+    description: "Consumer / test runner directory"
+    required: true
+  consumer-command:
+    description: "qvac-test command that starts the consumer (e.g. run:consumer:desktop)"
+    required: true
+  consumer-args:
+    description: "Extra space-separated consumer flags (e.g. --skip-build)"
+    required: false
+    default: ""
+  consumer-timeout:
+    description: "Timeout in seconds for consumer connection"
+    required: false
+    default: "30"
+  filter:
+    description: "Effective test filter for the leg (comma-separated)"
+    required: false
+    default: ""
+  suite:
+    description: "Suite filter (e.g. 'smoke'). Empty = all tests."
+    required: false
+    default: ""
+  exclude-suite:
+    description: "Exclude suites (comma-separated)"
+    required: false
+    default: ""
+  include:
+    description: "Exact testIds to run on top of the suite/filter selection (comma-separated)"
+    required: false
+    default: ""
+
+outputs:
+  run-id:
+    description: "runId the consumer and producer used"
+    value: ${{ steps.runid.outputs.runId }}
+
+runs:
+  using: composite
+  steps:
+    - name: Generate runId
+      id: runid
+      shell: node {0}
+      env:
+        CONSUMER: ${{ inputs.family }}
+        RUNNER_LABEL: ${{ inputs.runner-label }}
+        PLATFORM: ${{ inputs.platform }}
+        PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+        CHECKOUT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        const fs = require('fs');
+        // Must match the calling job's `name:`, which both workflows spell as
+        // "[<family>] test (<runner label>)".
+        const expectedJobName = `[${process.env.CONSUMER}] test (${process.env.RUNNER_LABEL})`;
+
+        (async () => {
+        async function fetchJobs(page) {
+          const url =
+            `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}` +
+            `/actions/runs/${process.env.GITHUB_RUN_ID}` +
+            `/attempts/${process.env.GITHUB_RUN_ATTEMPT}/jobs?per_page=100&page=${page}`;
+          const res = await fetch(url, {
+            headers: {
+              Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+              Accept: 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+            },
+          });
+          if (!res.ok) {
+            throw new Error(`Failed to list workflow jobs: ${res.status} ${await res.text()}`);
+          }
+          return res.json();
+        }
+
+        const jobs = [];
+        for (let page = 1; ; page++) {
+          const data = await fetchJobs(page);
+          jobs.push(...(data.jobs || []));
+          if (!data.jobs || data.jobs.length < 100) break;
+        }
+
+        const matches = jobs.filter(
+          (job) => job.name === expectedJobName ||
+            job.name.endsWith(` / ${expectedJobName}`),
+        );
+        const runnerMatches = matches.filter((job) => job.runner_name === process.env.RUNNER_NAME);
+        const job = runnerMatches.length === 1 ? runnerMatches[0] : matches[0];
+        if (!job) {
+          throw new Error(`Could not resolve current job id for ${expectedJobName}`);
+        }
+
+        const sha = (process.env.CHECKOUT_SHA || process.env.GITHUB_SHA).substring(0, 7);
+        const refPart = process.env.PR_NUMBER ? `pr${process.env.PR_NUMBER}-${sha}` : sha;
+        const jobIdEncoded = BigInt(job.id).toString(36);
+        const runId = `${process.env.PLATFORM}-${refPart}-${jobIdEncoded}`;
+
+        fs.appendFileSync(process.env.GITHUB_OUTPUT, `runId=${runId}\n`, 'utf8');
+        console.log(`Generated runId: ${runId}`);
+        })().catch((err) => {
+          console.error(err);
+          process.exit(1);
+        });
+
+    - name: Run tests (consumer + producer)
+      shell: node {0}
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        RUN_ID: ${{ steps.runid.outputs.runId }}
+        CONSUMER_COMMAND: ${{ inputs.consumer-command }}
+        CONSUMER_ARGS: ${{ inputs.consumer-args }}
+        CONSUMER_TIMEOUT: ${{ inputs.consumer-timeout }}
+        TEST_FILTER: ${{ inputs.filter }}
+        SUITE: ${{ inputs.suite }}
+        EXCLUDE_SUITE: ${{ inputs.exclude-suite }}
+        INCLUDE_TESTS: ${{ inputs.include }}
+      run: |
+        (async () => {
+          const { spawn, spawnSync } = require('child_process');
+          const fs = require('fs');
+
+          // Both commands below are spawned with shell: true, so every value
+          // that reaches them is checked to be an argument and not a command.
+          const SAFE_LIST = /^[A-Za-z0-9._-]+(,[A-Za-z0-9._-]+)*$/;
+          function checked(name, value, pattern) {
+            if (value && !pattern.test(value)) {
+              console.log(`::error title=Invalid ${name} value::${name} does not match ${pattern}`);
+              process.exit(1);
+            }
+            return value;
+          }
+
+          // Normalised the way qvac-test parses a list: "a, b" and a trailing
+          // comma are typed into the dispatch form as often as "a,b".
+          const list = (name, value) => checked(
+            name,
+            (value || '').split(',').map((item) => item.trim()).filter(Boolean).join(','),
+            SAFE_LIST,
+          );
+
+          // Read via env: a rerun filter is a long comma-separated test-id list.
+          const filter = list('filter', process.env.TEST_FILTER);
+          const includeTests = list('include', process.env.INCLUDE_TESTS);
+          const suite = list('suite', process.env.SUITE);
+          const excludeSuite = list('exclude-suite', process.env.EXCLUDE_SUITE);
+          const consumerCommand = checked(
+            'consumer-command', process.env.CONSUMER_COMMAND || '', /^run:consumer:[a-z-]+$/
+          );
+          const consumerTimeout = checked(
+            'consumer-timeout', process.env.CONSUMER_TIMEOUT || '30', /^[0-9]+$/
+          );
+          const extraConsumerArgs = (process.env.CONSUMER_ARGS || '').split(/\s+/).filter(Boolean);
+          for (const arg of extraConsumerArgs) checked('consumer-args', arg, /^--[a-z-]+(=[A-Za-z0-9._-]+)?$/);
+          const runId = checked('runId', process.env.RUN_ID || '', /^[A-Za-z0-9-]+$/);
+          if (!consumerCommand || !runId) {
+            console.log('::error::consumer-command and runId are required');
+            process.exit(1);
+          }
+
+          const filterArgs = filter ? ['--filter=' + filter] : [];
+          const includeArgs = includeTests ? ['--include=' + includeTests] : [];
+          const suiteArgs = suite ? ['--suite=' + suite] : [];
+          const excludeSuiteArgs = excludeSuite ? ['--exclude-suite=' + excludeSuite] : [];
+
+          const consumerArgs = [
+            'qvac-test', consumerCommand,
+            '--runId=' + runId,
+            '--config=.',
+            ...extraConsumerArgs
+          ];
+          console.log('Consumer command: npx ' + consumerArgs.join(' '));
+
+          const consumer = spawn('npx', consumerArgs, { detached: false, shell: true, stdio: 'inherit' });
+
+          let consumerClosed = false;
+          let consumerExitCode = 0;
+
+          consumer.on('exit', (code, signal) => {
+            if (code !== 0 || signal) {
+              console.log(`❌ Consumer exited (code: ${code}, signal: ${signal})`);
+            }
+          });
+
+          const consumerDone = new Promise(resolve => {
+            consumer.on('close', (code, signal) => {
+              consumerClosed = true;
+              consumerExitCode = code ?? 0;
+              console.log(`Consumer closed (code: ${code}, signal: ${signal})`);
+              resolve();
+            });
+          });
+
+          fs.writeFileSync('consumer.pid', consumer.pid.toString(), 'utf8');
+
+          // Brief pause to let consumer initialize
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+          // Check if consumer is running
+          let consumerAlive = !consumer.killed;
+          try { process.kill(consumer.pid, 0); } catch (e) { consumerAlive = false; }
+
+          if (consumerAlive) {
+            console.log(`✅ Consumer running (PID: ${consumer.pid})`);
+          } else {
+            console.log('❌ Consumer died immediately');
+            process.exit(1);
+          }
+
+          // Run producer in foreground
+          console.log('Starting producer...');
+          const producerArgs = [
+            'qvac-test', 'run:producer',
+            '--runId=' + runId,
+            '--consumer-timeout=' + consumerTimeout,
+            '--config=.',
+            '--report-dir=./reports',
+            ...filterArgs,
+            ...suiteArgs,
+            ...excludeSuiteArgs,
+            ...includeArgs
+          ];
+          console.log('Producer command: npx ' + producerArgs.join(' '));
+
+          const producer = spawnSync('npx', producerArgs, { stdio: 'inherit', shell: true });
+
+          console.log(`Producer exited with status: ${producer.status}`);
+          let producerExit = producer.status || 0;
+
+          // Wait for consumer with timeout
+          console.log('Waiting for consumer to close...');
+          const timeout = new Promise(resolve => setTimeout(() => {
+            if (!consumerClosed) {
+              console.log('⚠️  Consumer did not close within 30s timeout, killing...');
+              try {
+                process.kill(consumer.pid, 'SIGTERM');
+                console.log('Sent SIGTERM to consumer');
+              } catch (e) {
+                console.log(`Failed to kill consumer: ${e.message}`);
+              }
+            }
+            resolve();
+          }, 30000));
+
+          await Promise.race([consumerDone, timeout]);
+
+          if (!consumerClosed) {
+            console.log('Waiting 5s for consumer to terminate...');
+            await Promise.race([
+              consumerDone,
+              new Promise(resolve => setTimeout(resolve, 5000))
+            ]);
+          }
+
+          const exitCode = producerExit || consumerExitCode;
+          if (exitCode !== 0) {
+            console.log(`❌ Tests failed with exit code: ${exitCode}`);
+            if (producerExit !== 0) console.log('   Producer failed');
+            if (consumerExitCode !== 0) console.log('   Consumer failed');
+          }
+          process.exit(exitCode);
+        })();

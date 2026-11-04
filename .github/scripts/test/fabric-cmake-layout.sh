@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # Configures a throwaway consumer against every @qvac/fabric install layout and
 # asserts which runtime qvac_addon_fabric_layout() + include_bare_module() link:
-# the meta package's own prebuilds/<host> when present (fabric <= 0.17, source
-# builds, the CI overlay), otherwise the host's platform package wherever the
-# package manager placed it. Without either, configure must fail naming the
-# package to install.
+# the host's platform package, @qvac/fabric-<suffix>, wherever the package
+# manager placed it, with qvac__fabric-<suffix>.bare and its backends at
+# prebuilds/<host>/. Without one, configure must fail naming the remedy.
 #
 # Usage: fabric-cmake-layout.sh <node_modules dir holding cmake-bare and cmake-npm>
 set -euo pipefail
@@ -15,29 +14,42 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 HOST="$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed -e 's/x86_64/x64/' -e 's/aarch64/arm64/')"
-# Layout boundaries, not the current release: the lookup never reads versions
-# except to name the pin in its missing-runtime warning.
-FAT_VERSION=0.17.1
-SPLIT_VERSION=0.18.0
+VERSION=0.21.0
 failures=0
 
-write_meta() { # dir version [with-host]
-  mkdir -p "$1/prebuilds/share"
-  printf '{"name":"@qvac/fabric","version":"%s","addon":true}\n' "$2" > "$1/package.json"
-  if [ "${3:-}" = with-host ]; then
-    mkdir -p "$1/prebuilds/$HOST/qvac__fabric"
-    : > "$1/prebuilds/$HOST/qvac__fabric.bare"
-    : > "$1/prebuilds/$HOST/qvac__fabric/libggml-cpu.so"
+suffix_of() { # host
+  case "$1" in ios-*) echo ios ;; *) echo "$1" ;; esac
+}
+
+# The meta package: headers, a CMake package exposing the host helpers, and,
+# for a source build, the runtime in its own prebuilds/<host>.
+write_meta() { # dir [source-build|pre-0.21]
+  local cmake="$1/prebuilds/share/qvac-fabric/cmake"
+  mkdir -p "$cmake"
+  printf '{"name":"@qvac/fabric","version":"%s"}\n' "$VERSION" > "$1/package.json"
+  if [ "${2:-}" = pre-0.21 ]; then
+    : > "$cmake/qvac-fabricConfig.cmake"
+    return
+  fi
+  cp "$REPO/packages/fabric/cmake/qvac-fabric-hosts.cmake" "$cmake/"
+  printf 'include("${CMAKE_CURRENT_LIST_DIR}/qvac-fabric-hosts.cmake")\n' > "$cmake/qvac-fabricConfig.cmake"
+  if [ "${2:-}" = source-build ]; then
+    local module="qvac__fabric-$(suffix_of "$HOST")"
+    mkdir -p "$1/prebuilds/$HOST/$module"
+    : > "$1/prebuilds/$HOST/$module.bare"
+    : > "$1/prebuilds/$HOST/$module/libggml-cpu.so"
   fi
 }
 
 write_slice() { # dir [host, default: the runner's]
-  local host="${2:-$HOST}"
-  mkdir -p "$1/addon/prebuilds/$host/qvac__fabric"
-  printf '{"name":"@qvac/fabric-%s","version":"%s"}\n' "$host" "$SPLIT_VERSION" > "$1/package.json"
-  printf '{"name":"@qvac/fabric","version":"%s","addon":true}\n' "$SPLIT_VERSION" > "$1/addon/package.json"
-  : > "$1/addon/prebuilds/$host/qvac__fabric.bare"
-  : > "$1/addon/prebuilds/$host/qvac__fabric/libggml-cpu.so"
+  local host="${2:-$HOST}" suffix module
+  suffix="$(suffix_of "$host")"
+  module="qvac__fabric-$suffix"
+  mkdir -p "$1/prebuilds/$host/$module"
+  printf '{"name":"@qvac/fabric-%s","version":"%s","addon":true}\n' "$suffix" "$VERSION" > "$1/package.json"
+  printf 'module.exports = require.addon()\n' > "$1/index.js"
+  : > "$1/prebuilds/$host/$module.bare"
+  : > "$1/prebuilds/$host/$module/libggml-cpu.so"
 }
 
 write_consumer() { # dir [cross-built host, default: the runner's]
@@ -48,7 +60,7 @@ write_consumer() { # dir [cross-built host, default: the runner's]
 get_target_property(location ${fabric_target}_module IMPORTED_LOCATION)'
   if [ -n "${2:-}" ]; then
     host_line="set(host $2)"
-    link_lines='set(location "${prebuilds}/${host}/qvac__fabric.bare")'
+    link_lines='set(location "${prebuilds}/${host}/${module}.bare")'
   fi
   mkdir -p "$1"
   cat > "$1/CMakeLists.txt" <<EOF
@@ -56,10 +68,13 @@ cmake_minimum_required(VERSION 3.25)
 find_package(cmake-bare REQUIRED PATHS "$MODULES/cmake-bare")
 project(consumer NONE)
 include("$REPO/cmake/qvac-addon/qvac-addon.cmake")
+set(qvac-fabric_DIR "\${CMAKE_CURRENT_SOURCE_DIR}/node_modules/@qvac/fabric/prebuilds/share/qvac-fabric/cmake")
+find_package(qvac-fabric CONFIG REQUIRED)
 $host_line
 qvac_addon_fabric_layout("\${host}" "\${CMAKE_CURRENT_SOURCE_DIR}" spec wd prebuilds)
+qvac_fabric_module_name("\${host}" module)
 $link_lines
-file(GLOB backends "\${prebuilds}/\${host}/qvac__fabric/*.so")
+file(GLOB backends "\${prebuilds}/\${host}/\${module}/*.so")
 message(STATUS "LAYOUT location=\${location}")
 message(STATUS "LAYOUT backends=\${backends}")
 EOF
@@ -81,7 +96,7 @@ expect() {
     *"$suffix") echo "ok   $name -> ${location#"$WORK"/}" ;;
     *) echo "::error::$name: linked $location, expected *$suffix"; failures=$((failures + 1)); return ;;
   esac
-  if [ "$backends" != "$(dirname "$location")/qvac__fabric/libggml-cpu.so" ]; then
+  if [ "$backends" != "${location%.bare}/libggml-cpu.so" ]; then
     echo "::error::$name: backends '$backends' are not next to the linked runtime"
     failures=$((failures + 1))
   fi
@@ -104,70 +119,88 @@ expect_fatal() {
   echo "ok   $name -> configure error names $*"
 }
 
+MODULE="qvac__fabric-$(suffix_of "$HOST")"
 cd "$WORK"
 
-write_consumer fat
-write_meta fat/node_modules/@qvac/fabric "$FAT_VERSION" with-host
-expect "fat meta (<= 0.17, source build)" fat "fat/node_modules/@qvac/fabric/prebuilds/$HOST/qvac__fabric.bare"
-
-write_consumer overlay
-write_meta overlay/node_modules/@qvac/fabric "$SPLIT_VERSION" with-host
-write_slice "overlay/node_modules/@qvac/fabric-$HOST"
-expect "overlay over a split install" overlay "overlay/node_modules/@qvac/fabric/prebuilds/$HOST/qvac__fabric.bare"
+# `npm run build` in packages/fabric ends with `npm run link:platform`, which
+# nests the platform package in the meta's own node_modules.
+write_consumer source
+write_meta source/node_modules/@qvac/fabric source-build
+write_slice "source/node_modules/@qvac/fabric/node_modules/@qvac/fabric-$HOST"
+expect "linked source build" source \
+  "source/node_modules/@qvac/fabric/node_modules/@qvac/fabric-$HOST/prebuilds/$HOST/$MODULE.bare"
 
 write_consumer pnpm
-store="pnpm/node_modules/.pnpm/@qvac+fabric@$SPLIT_VERSION/node_modules/@qvac"
-write_meta "$store/fabric" "$SPLIT_VERSION"
+store="pnpm/node_modules/.pnpm/@qvac+fabric@$VERSION/node_modules/@qvac"
+write_meta "$store/fabric"
 write_slice "$store/fabric-$HOST"
 mkdir -p pnpm/node_modules/@qvac
 ln -s "$WORK/$store/fabric" pnpm/node_modules/@qvac/fabric
-expect "pnpm isolated" pnpm "$store/fabric-$HOST/addon/prebuilds/$HOST/qvac__fabric.bare"
+expect "pnpm isolated" pnpm "$store/fabric-$HOST/prebuilds/$HOST/$MODULE.bare"
 
-# Cross-built slices are never fabric's optional deps: the consumer depends on
-# them directly, so pnpm links them into the consumer's node_modules only.
+# Consumers also declare the platform packages, so pnpm links them into the
+# consumer's node_modules too.
 write_consumer pnpm-direct
-meta_store="pnpm-direct/node_modules/.pnpm/@qvac+fabric@$SPLIT_VERSION/node_modules/@qvac"
-slice_store="pnpm-direct/node_modules/.pnpm/@qvac+fabric-$HOST@$SPLIT_VERSION/node_modules/@qvac"
-write_meta "$meta_store/fabric" "$SPLIT_VERSION"
+meta_store="pnpm-direct/node_modules/.pnpm/@qvac+fabric@$VERSION/node_modules/@qvac"
+slice_store="pnpm-direct/node_modules/.pnpm/@qvac+fabric-$HOST@$VERSION/node_modules/@qvac"
+write_meta "$meta_store/fabric"
 write_slice "$slice_store/fabric-$HOST"
 mkdir -p pnpm-direct/node_modules/@qvac
 ln -s "$WORK/$meta_store/fabric" pnpm-direct/node_modules/@qvac/fabric
 ln -s "$WORK/$slice_store/fabric-$HOST" "pnpm-direct/node_modules/@qvac/fabric-$HOST"
-expect "pnpm, slice as a direct dependency" pnpm-direct "pnpm-direct/node_modules/@qvac/fabric-$HOST/addon/prebuilds/$HOST/qvac__fabric.bare"
+expect "pnpm, slice as a direct dependency" pnpm-direct \
+  "pnpm-direct/node_modules/@qvac/fabric-$HOST/prebuilds/$HOST/$MODULE.bare"
 
 write_consumer hoisted
-write_meta hoisted/node_modules/@qvac/fabric "$SPLIT_VERSION"
+write_meta hoisted/node_modules/@qvac/fabric
 write_slice "hoisted/node_modules/@qvac/fabric-$HOST"
-expect "npm hoisted" hoisted "hoisted/node_modules/@qvac/fabric-$HOST/addon/prebuilds/$HOST/qvac__fabric.bare"
+expect "npm hoisted" hoisted "hoisted/node_modules/@qvac/fabric-$HOST/prebuilds/$HOST/$MODULE.bare"
 
 write_consumer nested
-write_meta nested/node_modules/@qvac/fabric "$SPLIT_VERSION"
+write_meta nested/node_modules/@qvac/fabric
 write_slice "nested/node_modules/@qvac/fabric/node_modules/@qvac/fabric-$HOST"
-expect "npm nested" nested "nested/node_modules/@qvac/fabric/node_modules/@qvac/fabric-$HOST/addon/prebuilds/$HOST/qvac__fabric.bare"
+expect "npm nested" nested \
+  "nested/node_modules/@qvac/fabric/node_modules/@qvac/fabric-$HOST/prebuilds/$HOST/$MODULE.bare"
 
 # A cross-built leg on a CI runner: npm installed only the runner's slice, and
 # the addon's exact-pinned devDependency supplies the target's.
 write_consumer cross android-arm64
-write_meta cross/node_modules/@qvac/fabric "$SPLIT_VERSION"
+write_meta cross/node_modules/@qvac/fabric
 write_slice "cross/node_modules/@qvac/fabric-$HOST"
 write_slice cross/node_modules/@qvac/fabric-android-arm64 android-arm64
-expect "cross-built slice as a devDependency" cross "cross/node_modules/@qvac/fabric-android-arm64/addon/prebuilds/android-arm64/qvac__fabric.bare"
+expect "cross-built slice as a devDependency" cross \
+  "cross/node_modules/@qvac/fabric-android-arm64/prebuilds/android-arm64/qvac__fabric-android-arm64.bare"
+
+write_consumer cross-ios ios-arm64-simulator
+write_meta cross-ios/node_modules/@qvac/fabric
+write_slice cross-ios/node_modules/@qvac/fabric-ios ios-arm64-simulator
+expect "every iOS host in @qvac/fabric-ios" cross-ios \
+  "cross-ios/node_modules/@qvac/fabric-ios/prebuilds/ios-arm64-simulator/qvac__fabric-ios.bare"
+
+write_consumer unlinked
+write_meta unlinked/node_modules/@qvac/fabric source-build
+expect_fatal "source build not linked" unlinked \
+  "no fabric runtime for $HOST" "npm run link:platform"
 
 write_consumer missing
-write_meta missing/node_modules/@qvac/fabric "$SPLIT_VERSION"
+write_meta missing/node_modules/@qvac/fabric
 expect_fatal "desktop runtime not installed" missing \
   "no fabric runtime for $HOST" "@qvac/fabric-$HOST is not installed" "--omit=optional"
 
 write_consumer missing-android android-arm64
-write_meta missing-android/node_modules/@qvac/fabric "$SPLIT_VERSION"
+write_meta missing-android/node_modules/@qvac/fabric
 write_slice "missing-android/node_modules/@qvac/fabric-$HOST"
 expect_fatal "cross-built runtime not installed (android)" missing-android \
-  "os/cpu filters; add \"@qvac/fabric-android-arm64\": \"^$SPLIT_VERSION\" to devDependencies."
+  "os/cpu filters; add \"@qvac/fabric-android-arm64\": \"$VERSION\" to devDependencies."
 
 write_consumer missing-ios ios-arm64-simulator
-write_meta missing-ios/node_modules/@qvac/fabric "$SPLIT_VERSION"
+write_meta missing-ios/node_modules/@qvac/fabric
 expect_fatal "cross-built runtime not installed (ios)" missing-ios \
-  "\"@qvac/fabric-ios\": \"^$SPLIT_VERSION\" to devDependencies"
+  "\"@qvac/fabric-ios\": \"$VERSION\" to devDependencies"
+
+write_consumer old
+write_meta old/node_modules/@qvac/fabric pre-0.21
+expect_fatal "fabric without platform-package helpers" old "@qvac/fabric >= 0.21"
 
 if [ "$failures" -gt 0 ]; then
   echo "::error::$failures fabric CMake layout case(s) failed"

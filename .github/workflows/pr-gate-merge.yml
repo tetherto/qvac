@@ -115,7 +115,6 @@ jobs:
               - "packages/ggml-rpc-server/**"
               - "packages/fabric/**"
               - "cmake/qvac-addon/**"
-              - ".github/workflows/prebuilds-ggml-rpc-server.yml"
             llm-llamacpp:
               - "packages/llm-llamacpp/**"
             model-fit:
@@ -126,6 +125,8 @@ jobs:
               - "packages/translation-nmtcpp/**"
             tts-ggml:
               - "packages/tts-ggml/**"
+            turbovec-ggml:
+              - "packages/turbovec-ggml/**"
             fabric:
               - "packages/fabric/**"
               - ".github/workflows/prebuilds-fabric.yml"
@@ -145,7 +146,7 @@ jobs:
           # Every package filter key above. Kept in step with that list.
           # One line: a folded scalar with a deeper indent keeps its newlines,
           # and $GITHUB_OUTPUT rejects a multiline value.
-          ALL_PACKAGES: '["asr-ggml","audiogen-ggml","bci-whispercpp","classification-ggml","decoder-audio","diffusion-cpp","embed-llamacpp","ggml-rpc-server","infer-base","llm-llamacpp","model-fit","ocr-ggml","translation-nmtcpp","tts-ggml","fabric","vla"]'
+          ALL_PACKAGES: '["asr-ggml","audiogen-ggml","bci-whispercpp","classification-ggml","decoder-audio","diffusion-cpp","embed-llamacpp","ggml-rpc-server","infer-base","llm-llamacpp","model-fit","ocr-ggml","translation-nmtcpp","tts-ggml","turbovec-ggml","fabric","vla"]'
         run: |
           CHANGED=$(echo "$CHANGES" | jq -c 'map(select(. != "pkg-any" and . != "shared-ci"))')
 
@@ -270,6 +271,21 @@ jobs:
           KIND: cpp-tests
         run: node .github/scripts/prebuild-status/verify.mjs
 
+  # Calls pr-checks-sdk-kotlin.yml via its workflow_call trigger, the same shape
+  # as sdk-pod-checks. The called workflow self-detects Kotlin-relevant changes
+  # from the base commit and is a fast no-op when none changed. Running it here
+  # (rather than reading a status the PR's own workflow posted) means the merge
+  # gate executes the checks itself from a base-trusted detect, so a PR cannot
+  # satisfy the gate without the build actually passing. No secrets are passed,
+  # so executing PR code is safe.
+  sdk-kotlin-checks:
+    needs: [authorize, fork-approval]
+    if: needs.authorize.outputs.allowed == 'true'
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/pr-checks-sdk-kotlin.yml
+
   # Calls pr-checks-sdk-pod.yml via its workflow_call trigger. No sdk-pod-any
   # pre-filter: the called workflow self-detects SDK pod changes and is a fast
   # no-op when none changed, so this stays graceful for addon-only / non-SDK PRs.
@@ -291,6 +307,7 @@ jobs:
         verify-prebuilds,
         verify-cpp-tests,
         sdk-pod-checks,
+        sdk-kotlin-checks,
       ]
     if: |
       always() && !cancelled() &&
@@ -303,10 +320,11 @@ jobs:
       # A skipped gated job maps to success ONLY when the PR was actually
       # authorized. Without this, an unapproved fork (fork-approval failed,
       # authorize skipped, or authorize returned allowed=false) would skip
-      # sanity-checks / verify-prebuilds / verify-cpp-tests / sdk-pod-checks and their
+      # sanity-checks / verify-prebuilds / verify-cpp-tests / sdk-pod-checks /
+      # sdk-kotlin-checks and their
       # skipped=success would green the required check. Require the full
       # authorization chain up front so those skips fail closed instead.
       sanity-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') }}
       build-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.verify-prebuilds.result == 'success' || needs.verify-prebuilds.result == 'skipped') }}
-      general-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped') }}
+      general-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped') && (needs.sdk-kotlin-checks.result == 'success' || needs.sdk-kotlin-checks.result == 'skipped') }}
       cpp-tests-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.verify-cpp-tests.result == 'success' || needs.verify-cpp-tests.result == 'skipped') }}

@@ -1,5 +1,1366 @@
 # Changelog
 
+## [0.23.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.23.0
+
+QVAC SDK 0.23.0 sits on `@qvac/inference@0.23.0`. It adds reranking with `rerank()` and a `llamacpp-rerank` model type, speculative decoding, prompt priming with `prefill`, finer prompt-cache control, TranscribePsy transcription, and Qwen-Image-2.1 generation and reference editing. Native addons move onto fabric 0.24, which changes the RPC protocol to 112, and bundling moves to bare-pack 3. The model fit runs inside the worker on every platform, and completions now allow parallel tool calls by default. The Python client gains `assess_model_fit` and `model_fit_policy` wrappers and pins `bare-rpc` below 0.1.
+
+It depends on `@qvac/inference` `^0.23.0`, and `tetherto-qvac-sdk` publishes at the same version.
+
+## Breaking Changes
+
+### Fabric 0.24 addon set
+
+The SDK now ships the fabric 0.24 addon set. It installs these addons itself; an app that also pins any of them must move to the same floor:
+
+| Package                     | 0.22.0 floor | 0.23.0 floor |
+| --------------------------- | ------------ | ------------ |
+| `@qvac/inference`           | `^0.22.0`    | `^0.23.0`    |
+| `@qvac/asr-ggml`            | `^0.10.0`    | `^0.11.1`    |
+| `@qvac/audiogen-ggml`       | `^0.8.0`     | `^0.9.0`     |
+| `@qvac/bci-whispercpp`      | `^0.12.0`    | `^0.14.0`    |
+| `@qvac/classification-ggml` | `^0.31.1`    | `^0.34.0`    |
+| `@qvac/diffusion-cpp`       | `^0.30.0`    | `^0.31.0`    |
+| `@qvac/embed-llamacpp`      | `^0.48.1`    | `^0.53.0`    |
+| `@qvac/ggml-rpc-server`     | `^0.5.1`     | `^0.7.0`     |
+| `@qvac/llm-llamacpp`        | `^0.61.1`    | `^0.65.0`    |
+| `@qvac/ocr-ggml`            | `^0.29.1`    | `^0.31.0`    |
+| `@qvac/translation-nmtcpp`  | `^0.21.1`    | `^0.23.0`    |
+| `@qvac/tts-ggml`            | `^0.13.0`    | `^0.14.0`    |
+| `@qvac/turbovec-ggml` (new) | none         | `^0.3.0`     |
+| `@qvac/vla-ggml`            | `^0.32.2`    | `^0.34.0`    |
+
+`@qvac/turbovec-ggml` now provides vector indexing, which moved out of `@qvac/embed-llamacpp`. Fresh installs currently resolve `@qvac/llm-llamacpp` 0.65.1, `@qvac/embed-llamacpp` 0.53.1 and `@qvac/ggml-rpc-server` 0.7.1, patches within these floors that run Fabric 0.25 with the same RPC protocol 112. The fabric-based addons at these floors declare their optional mobile peers `@qvac/fabric-ios` and `@qvac/fabric-android-arm64` at `^0.24.0`, and the current 0.65.1 and 0.53.1 patches declare `^0.25.0`, so a mobile app that pins those packages must move them to match the addon versions it resolves.
+
+RPC discovery now accepts only servers on protocol `112.0.x`; protocol 111 servers are no longer returned. Upgrade every remote RPC server together with the SDK.
+
+**Before:**
+
+```sh
+npm install @qvac/ggml-rpc-server@^0.5.1 # protocol 111
+```
+
+**After:**
+
+```sh
+npm install @qvac/ggml-rpc-server@^0.7.0 # protocol 112
+```
+
+### Bundling with bare-pack 3
+
+The SDK's bundler dependency moves from `bare-pack` `^2.0.1` to `^3.0.2`. `qvac bundle sdk`, the Expo plugin and the Electron Forge plugin run the bare-pack the SDK installs, with the same flags as before. A build that runs bare-pack 2 itself against SDK bundles, or pins it next to the SDK, should move to bare-pack 3.
+
+**Before:**
+
+```json
+{ "dependencies": { "bare-pack": "^2.0.1" } }
+```
+
+**After:**
+
+```json
+{ "dependencies": { "bare-pack": "^3.0.2" } }
+```
+
+### An explicit BCI `backendsDir` is scanned as given
+
+With `@qvac/bci-whispercpp` `^0.14.0`, an explicit `backendsDir` is the directory scanned for the ggml backend modules on Android and Linux; the addon no longer appends `<host>/<module name>`. Without `backendsDir`, it scans the directory next to the loaded addon module, so loads that do not set it are unaffected.
+
+**Before:**
+
+```typescript
+await loadModel({
+  modelType: 'bci-whispercpp-transcription',
+  modelSrc,
+  modelConfig: { backendsDir: '/path/to/prebuilds' } // scanned /path/to/prebuilds/<host>/<module name>
+})
+```
+
+**After:**
+
+```typescript
+await loadModel({
+  modelType: 'bci-whispercpp-transcription',
+  modelSrc,
+  modelConfig: { backendsDir: '/path/to/prebuilds/<host>/<module name>' } // scanned as given
+})
+```
+
+### Rank pooling is gone from embedding configs
+
+`pooling: 'rank'` never produced valid embeddings, and the embedding addon now refuses it. It fails validation with `REQUEST_VALIDATION_FAILED` (50010) in `loadModel()` and in `qvac.config` `deviceDefaults`. Use `'none'`, `'mean'`, `'cls'` or `'last'`, and load reranker models with the new `llamacpp-rerank` model type.
+
+**Before:**
+
+```typescript
+await loadModel({ modelSrc: MODEL, modelType: 'embeddings', modelConfig: { pooling: 'rank' } })
+```
+
+**After:**
+
+```typescript
+await loadModel({ modelSrc: MODEL, modelType: 'embeddings', modelConfig: { pooling: 'mean' } })
+```
+
+### The model fit runs inside the worker
+
+The engine fitter now runs in the SDK's Bare worker on every platform, so there is no separate fit process to bundle or locate. A fitter that crashes takes the worker down with it; restart the worker and reload the models it held. The next fit of the same request runs again; if that one does not finish either, later fits skip the fitter and answer `crashed` for 7 days. A fitter that hangs still answers `unknown` with reason `timeout` after 30 seconds, while its native work keeps running in the worker until it returns. Cancelling `loadModel` answers at once and stops the load before the model loads. `fitProbe.reason` no longer reports `unsupported-platform`, `spawn-failed` or `invalid-response`; without a fitter result it is `cancelled`, `crashed`, `invocation-error` or `timeout`.
+
+**Before:**
+
+```typescript
+await loadModel({ modelSrc, modelFitPolicy: 'log' })
+// Desktop: a crashing fitter killed only its child process; the load continued.
+```
+
+**After:**
+
+```typescript
+await loadModel({ modelSrc, modelFitPolicy: 'log' })
+// A crashing fitter takes down the worker; restart it and reload its models.
+```
+
+### Parallel tool calls are on by default
+
+`completion()` and `batchCompletion()` on llama.cpp models now default `generationParams.parallel_tool_calls` to `true`, matching `qvac serve`, so a response with tools may carry several tool calls. Set it to `false` to keep one.
+
+**Before:**
+
+```typescript
+const run = completion({ modelId, history, tools })
+// final.toolCalls: at most one call
+```
+
+**After:**
+
+```typescript
+const single = completion({
+  modelId,
+  history,
+  tools,
+  generationParams: { parallel_tool_calls: false }
+})
+// final.toolCalls: at most one call; leave it unset to allow several
+```
+
+### `executeToolSearch` no longer repeats loaded schemas
+
+Tools loaded by `tool_search` are now declared in the prompt's tools block, which is where the model looks for callable tools. The parsed `executeToolSearch` result therefore no longer carries a top-level `tools` array; read `tool_search.loaded` and look the tools up in your own inventory. After a load, `tool_choice` passes through unchanged and the tool grammar stays on. A deferred tool whose name clashes with another tool once characters outside `A-Z a-z 0-9 -` fold to `-` is no longer offered by the search, so give tools distinct names. A saved result that still has a `tools` array still loads its tools.
+
+**Before:**
+
+```typescript
+JSON.parse(executeToolSearch(tools, { query: 'issue' }, []))
+// { tool_search: { query, loaded, already_loaded }, tools: [{ ...schema }] }
+```
+
+**After:**
+
+```typescript
+JSON.parse(executeToolSearch(tools, { query: 'issue' }, []))
+// { tool_search: { query, loaded, already_loaded } }
+```
+
+### A missing registry model has its own error
+
+`modelRegistryGetModel()` now throws `ModelRegistryModelNotFoundError` (`QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND`, code 53951) when the registry has no model at the given source and path. Query failures still throw `ModelRegistryQueryFailedError` (53950). The new class does not extend the old one, so code that caught not-found through `ModelRegistryQueryFailedError` or code 53950 must handle the new class too.
+
+**Before:**
+
+```typescript
+try {
+  await modelRegistryGetModel('org/missing.gguf', 'hf')
+} catch (err) {
+  if (err instanceof ModelRegistryQueryFailedError) handleMissing()
+}
+```
+
+**After:**
+
+```typescript
+import { modelRegistryGetModel, ModelRegistryModelNotFoundError } from '@qvac/sdk'
+
+try {
+  await modelRegistryGetModel('org/missing.gguf', 'hf')
+} catch (err) {
+  if (err instanceof ModelRegistryModelNotFoundError)
+    handleMissing(err.registrySource, err.registryPath)
+}
+```
+
+### One image or video generation at a time per model
+
+Image and video generation now admit one active request per model. A `diffusion()` or `video()` call on a model that already has a generation running is rejected immediately with `RequestRejectedByPolicyError` rather than queued. Wait for the running generation, or cancel it, before starting the next one on the same model.
+
+**Before:**
+
+```typescript
+const a = diffusion({ modelId, prompt: 'a lighthouse at dusk' })
+const b = diffusion({ modelId, prompt: 'a harbour at dawn' })
+await Promise.all([a.outputs, b.outputs])
+```
+
+**After:**
+
+```typescript
+const first = await diffusion({ modelId, prompt: 'a lighthouse at dusk' }).outputs
+const second = await diffusion({ modelId, prompt: 'a harbour at dawn' }).outputs
+```
+
+### Python client
+
+#### `assess_model_fit` is now the keyword wrapper
+
+`tetherto.qvac_sdk.assess_model_fit` is now `assess_model_fit(transport, *, models, execution=None, policy=None)`, mirroring JS `assessModelFit`, so passing a request object positionally fails. Each candidate is a dict of `load_model`'s snake_case arguments (`model_src`, `model_type`, `model_config`, `transcription_workload`, `tts_workload`); any other key, including camelCase `modelSrc`, raises `RequestValidationError`, and a missing `model_type` is inferred from the source. The raw generated stub is still available as `tetherto.qvac_sdk.methods.assess_model_fit`.
+
+**Before:**
+
+```python
+request = AssessModelFitRequest.model_validate({"type": "assessModelFit", "models": [...]})
+result = await assess_model_fit(t, request)
+```
+
+**After:**
+
+```python
+result = await assess_model_fit(t, models=[{"model_src": QWEN3_600M_INST_Q4}])
+
+# The raw stub is still available:
+from tetherto.qvac_sdk.methods import assess_model_fit as assess_model_fit_stub
+```
+
+#### `pooling: "rank"` is rejected
+
+The Python client validates embedding configs before sending them, so `pooling: "rank"` raises `RequestValidationError` without reaching the worker. Use `"none"`, `"mean"`, `"cls"` or `"last"`, and load rerankers with `model_type="llamacpp-rerank"`.
+
+**Before:**
+
+```python
+await load_model(t, model_src=MODEL, model_type="llamacpp-embedding", model_config={"pooling": "rank"})
+```
+
+**After:**
+
+```python
+await load_model(t, model_src=MODEL, model_type="llamacpp-embedding", model_config={"pooling": "mean"})
+```
+
+#### `parallel_tool_calls` defaults to true
+
+The worker applies the new default, so Python completions with tools may also return several tool calls. Opt out per call with `generation_params`.
+
+**Before:**
+
+```python
+run = completion(t, model_id=model_id, history=history, tools=tools)
+# (await run.final).tool_calls: at most one call
+```
+
+**After:**
+
+```python
+run = completion(
+    t,
+    model_id=model_id,
+    history=history,
+    tools=tools,
+    generation_params={"parallel_tool_calls": False},
+)
+# (await run.final).tool_calls: at most one call
+```
+
+## New APIs
+
+### Reranking
+
+The new `llamacpp-rerank` model type runs reranker GGUFs, and `rerank()` scores documents against a query. It returns one raw score per document in input order, so compare scores within one model only. The model registry has no reranker yet: supply your own reranker GGUF as a path or URL. Each model runs one rerank at a time and queues up to 64 calls, and the returned promise carries a `requestId` for `cancel()`. The worker plugin is `@qvac/sdk/llamacpp-rerank/plugin` (`PLUGIN_RERANK`, part of `SDK_DEFAULT_PLUGINS`). The types `RerankParams`, `RerankScores` and `RerankConfig` are exported, as are `llamacppRerankConfigSchema` and `LlamacppRerankConfig` from `@qvac/sdk/schemas`. `qvac serve` has no rerank route yet.
+
+```typescript
+import { loadModel, rerank, unloadModel } from '@qvac/sdk'
+
+const modelId = await loadModel({ modelSrc: '/models/reranker.gguf', modelType: 'llamacpp-rerank' })
+const scores = await rerank({
+  modelId,
+  query: 'What is the capital of France?',
+  documents: ['Paris is the capital of France.', 'Plants convert sunlight into energy.']
+})
+await unloadModel({ modelId })
+```
+
+An app that lists its plugins in `qvac.config` adds the rerank plugin:
+
+```json
+{ "plugins": ["@qvac/sdk/llamacpp-rerank/plugin"] }
+```
+
+### Speculative decoding
+
+LLM loads can draft tokens with the model's own multi-token-prediction head, an external MTP head, or a DFlash draft model, and the model verifies every draft, so output keeps the distribution of plain decoding. The keys are `spec_type`, `spec_draft_n_max`, `spec_draft_n_min`, `spec_draft_p_min` and `draftModelSrc`, and completion stats report `draftTokens` and `draftAcceptedTokens`. The catalog adds MTP heads and DFlash draft models to pair with Qwen models.
+
+```typescript
+const modelId = await loadModel({
+  modelSrc: QWEN3_5_4B_MULTIMODAL_Q4_K_M,
+  modelType: 'llm',
+  modelConfig: {
+    spec_type: 'draft-dflash',
+    draftModelSrc: QWEN3_5_4B_DFLASH_Q8_0,
+    spec_draft_n_max: 15
+  }
+})
+
+const { stats } = await completion({ modelId, history }).final
+console.log(stats?.draftTokens, stats?.draftAcceptedTokens)
+```
+
+### Priming a prompt with `prefill`
+
+`prefill: true` evaluates the system prompt, history and tools into the KV cache without generating an answer, so the real question only processes its own tokens. It needs an enabled `kvCache` and cannot be combined with a forced `tool_choice`. Await `final` before sending the question.
+
+```typescript
+await completion({ modelId, history, tools, kvCache: 'chat', prefill: true }).final
+
+const answer = await completion({
+  modelId,
+  history: [...history, { role: 'user', content: 'What is the weather in Lugano?' }],
+  tools,
+  kvCache: 'chat'
+}).final
+```
+
+### Prompt-cache checkpoints and RAM cache
+
+LLM loads control how hybrid, recurrent and sliding-window models keep prompt-cache checkpoints, and how much host RAM holds conversations the model has switched away from: `cache_checkpoints`, `cache_checkpoints_max_bytes`, `cache_checkpoint_storage` (`'memory'` or `'disk'`), `cache_checkpoint_dir` and `cache_ram_mib`. Unset keys keep the addon defaults.
+
+```typescript
+await loadModel({
+  modelSrc: QWEN3_5_0_8B_MULTIMODAL_Q8_0,
+  modelConfig: {
+    cache_checkpoints: 2,
+    cache_checkpoint_storage: 'disk',
+    cache_checkpoint_dir: appCacheDir,
+    cache_ram_mib: 1024
+  }
+})
+```
+
+### TranscribePsy transcription
+
+Parakeet loads can run TranscribePsy, with a Core ML distribution that runs the encoder and decoder on the Neural Engine on macOS and iOS. Elsewhere the Core ML constant is refused before download and the error names the GGUF constant to use. `longFormWindowFrames` and `longFormContextFrames` (80 ms encoder frames) control how long recordings are split into overlapping windows.
+
+```typescript
+import { loadModel, transcribe, PARAKEET_TRANSCRIBEPSY_250M_Q8_0 } from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelSrc: PARAKEET_TRANSCRIBEPSY_250M_Q8_0,
+  modelType: 'parakeet-transcription',
+  modelConfig: { longFormWindowFrames: 375, longFormContextFrames: 47 }
+})
+const text = await transcribe({ modelId, audioChunk: 'session.wav' })
+```
+
+### Qwen-Image-2.1 generation and reference editing
+
+Diffusion loads accept `projectionModelSrc`, the vision projector for the LLM encoder, which Qwen-Image-2.1 reference editing requires alongside `llmModelSrc`. `init_images` takes ordered reference images for models that support reference editing, including FLUX.2 and Qwen-Image-2.1. Qwen-Image-2.1 needs width and height in multiples of 32, and the registry has no Qwen-Image-2.1 constants, so load the files from your own paths.
+
+```typescript
+const modelId = await loadModel({
+  modelSrc: '/models/qwen_image_2.1-Q4_K.gguf',
+  modelType: 'sdcpp-generation',
+  modelConfig: {
+    llmModelSrc: '/models/Qwen3VL-8B-Instruct-Q4_K_M.gguf',
+    projectionModelSrc: '/models/mmproj-Qwen3VL-8B-Instruct-F16.gguf',
+    vaeModelSrc: '/models/qwen_image_2.1_vae_bf16.safetensors'
+  }
+})
+
+const { outputs } = diffusion({
+  modelId,
+  prompt: 'Place the two referenced people together in one office.',
+  init_images: [refA, refB],
+  width: 512,
+  height: 512
+})
+```
+
+### CPU polling controls
+
+Completion, embedding, decision and rerank configs accept `poll` and `pollBatch`, integers from 0 to 100. The llama.cpp addons now default to sleeping CPU workers, so GPU inference no longer busy-spins CPU threads; raise the values to trade CPU for lower wake latency.
+
+These addon versions also change how CPU threads are split. `threads-batch` now applies only to steps that process several tokens (prompt processing, parallel decoding and speculative verification), and single-sequence generation uses `threads`. `cpu-mask` always applies to generation, and `cpu-mask-batch` inherits it when the batch thread count is unset. A config that set only `threads-batch` to size generation should set `threads` as well.
+
+```typescript
+await loadModel({
+  modelSrc: '/path/to/model.gguf',
+  modelType: 'llamacpp-completion',
+  modelConfig: { poll: 50, pollBatch: 0 }
+})
+```
+
+### Closing a log stream
+
+`loggingStream()` takes a `signal`. Aborting it ends the stream without an error, and the worker releases the subscription at once, even for a model that logs nothing more. `subscribeServerLogs()`'s `unsubscribe()` and `unloadModel()` release their subscriptions the same way. Other operations still stop with `cancel`.
+
+```typescript
+import { loggingStream } from '@qvac/sdk'
+
+const controller = new AbortController()
+for await (const log of loggingStream({ id: modelId }, { signal: controller.signal })) {
+  console.log(log.message)
+}
+
+// elsewhere
+controller.abort()
+```
+
+### Memory fit for ESRGAN and ABot-World
+
+The diffusion fitter now assesses ESRGAN upscalers and ABot-World loads. `world.fitSteps` (default 100) sets the walk length the fit covers; it does not limit generation or retained history.
+
+```typescript
+await loadModel({
+  modelSrc: ABOT_WORLD_0_5B_Q8_0,
+  modelConfig: {
+    mode: 'world',
+    taehvModelSrc: ABOT_WORLD_0_5B_LF_TAEHV_VAE,
+    sceneSrc: '/path/to/scene.safetensors',
+    world: { fitSteps: 200 }
+  }
+})
+```
+
+### Python client
+
+`assess_model_fit` now takes the same candidates as `load_model`, and `load_model` takes `model_fit_policy` (`"log"`, `"refuse"` or `"off"`) for a single load.
+
+```python
+from tetherto.qvac_sdk import assess_model_fit, load_model
+from tetherto.qvac_sdk.models import GPT_OSS_20B_INST_Q4_K_M, QWEN3_600M_INST_Q4
+
+result = await assess_model_fit(
+    t,
+    models=[{"model_src": QWEN3_600M_INST_Q4}, {"model_src": GPT_OSS_20B_INST_Q4_K_M}],
+    execution="concurrent",
+)
+model_id = await load_model(t, model_src=QWEN3_600M_INST_Q4, model_fit_policy="refuse")
+```
+
+Reranking is available only as the generated raw stub `rerank(transport, RerankRequest)`; there is no ergonomic wrapper yet. `RerankRequest` and `RerankResponse` are exported, and `load_model` accepts `model_type="llamacpp-rerank"`. Set `type="rerank"` on the request, as with the other generated requests.
+
+```python
+from tetherto.qvac_sdk import RerankRequest, load_model, rerank
+
+model_id = await load_model(t, model_src="/models/reranker.gguf", model_type="llamacpp-rerank")
+response = await rerank(
+    t,
+    RerankRequest(
+        type="rerank",
+        model_id=model_id,
+        query="What is the capital of France?",
+        documents=["Paris is the capital of France.", "Plants convert sunlight into energy."],
+    ),
+)
+print(response.scores)
+```
+
+`completion()` and `completion_orchestrate()` take `prefill`, with the same rules as JS.
+
+```python
+from tetherto.qvac_sdk import completion
+
+await completion(
+    t, model_id=model_id, history=history, tools=tools, kv_cache="chat", prefill=True
+).final
+```
+
+`model_registry_get_model()` raises `ModelRegistryModelNotFoundError` (code 53951, with `registry_source` and `registry_path`) when the registry has no such model.
+
+```python
+from tetherto.qvac_sdk import ModelRegistryModelNotFoundError, model_registry_get_model
+
+try:
+    await model_registry_get_model(t, "org/missing.gguf", "hf")
+except ModelRegistryModelNotFoundError as error:
+    print(error.registry_source, error.registry_path)
+```
+
+`load_model(model_config=...)` accepts the same new keys as JS: the prompt-cache keys, the speculative-decoding keys, `poll` and `pollBatch`, the TranscribePsy long-form keys, `projectionModelSrc` and `world.fitSteps`. Model constants are accepted wherever a config takes a model source.
+
+```python
+model_id = await load_model(
+    t,
+    model_src=QWEN3_5_4B_MULTIMODAL_Q4_K_M,
+    model_type="llamacpp-completion",
+    model_config={"spec_type": "draft-dflash", "draftModelSrc": QWEN3_5_4B_DFLASH_Q8_0},
+)
+```
+
+## Features
+
+The tool-call dialect is now detected from the model name first, then from the GGUF `general.architecture`, then falls back to `hermes`. A fine-tune whose name matches no known pattern gets the dialect of its architecture, so its tool calls parse; KAT-Coder-V2.5-Dev (`MOE_35B_INST_*`) moves from `hermes` to `qwen35`. The dialect is resolved once at load, `getLoadedModelInfo().toolDialect` reports it, and an explicit `toolDialect` still overrides it.
+
+Vector indexing runs on the standalone `@qvac/turbovec-ggml` addon, which the worker loads only when an index is created or loaded, so applications that never index do not load it.
+
+## Bug Fixes
+
+`TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0` no longer needs its companion files staged by hand. It now resolves a complete companion set (Q4 LLM, Q4 flow and F16 HiFT weights, plus the shared tokenizer and English voice), downloading 0.985 GiB instead of the 2.230 GiB of the Q8 set, which is unchanged.
+
+On Linux and other Unix systems, the Node client now creates its worker socket inside a fresh owner-only (0700) temp directory, so another local user can no longer connect to it before the worker does, whatever the umask. The directory is removed with the socket on every shutdown path. Windows keeps its named pipe.
+
+Loading a cached model again no longer rehashes every artifact. A digest is reused while the file's path, device, inode, size and timestamps are unchanged, and changed or replaced files are hashed again.
+
+Decoding audio input for transcription and audio generation no longer keeps a full copy of the decoded PCM in the decoder's response.
+
+After `tool_search` loads a deferred tool, small models such as Qwen3.5 0.8B and 4B now call the loaded tool instead of searching again, because the tool is declared in the tools block.
+
+The Expo config plugins no longer check whether `build.gradle` or `expo-device-info.js` exists before rewriting it, which removes a file-system race; the files they write are unchanged.
+
+### Python client
+
+`tetherto-qvac-sdk` 0.23.0 pins `bare-rpc>=0.0.1,<0.1`. `bare-rpc` 0.1.0, released on PyPI on 2026-10-28, removed `RPC(send=...)`, so a fresh install of `tetherto-qvac-sdk` 0.22.0, which required `bare-rpc>=0.0.1`, fails on connect with `TypeError: RPC.__init__() got an unexpected keyword argument 'send'`. Upgrade to 0.23.0, or on 0.22.0 install `bare-rpc<0.1` yourself.
+
+## Model Changes
+
+### Added
+
+Speculative-decoding draft models:
+
+```
+QWEN3_5_0_8B_MTP_Q4_K_M
+QWEN3_5_2B_MTP_Q4_K_M
+QWEN3_5_4B_MTP_Q4_K_M
+QWEN3_5_9B_MTP_Q4_K_M
+QWEN3_5_4B_DFLASH_Q8_0
+QWEN3_8_27B_DFLASH2_Q8_0
+QWEN3_8_FLASH_NEXT_177B_DFLASH2_Q8_0
+```
+
+Speech recognition (TranscribePsy):
+
+```
+PARAKEET_TRANSCRIBEPSY_250M_Q8_0
+PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0
+```
+
+### Updated
+
+```
+TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0
+```
+
+No model constants were removed. The Python catalog carries the same constants.
+
+## [0.22.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.22.0
+
+QVAC SDK 0.22.0 sits on `@qvac/inference@0.22.0`. `assessModelFit` now asks each engine's fitter instead of a shared coefficient table, a load can set `modelFitPolicy` for itself, and completions can issue parallel tool calls with nested JSON Schema still intact. MiniMax-H3 can start a video from a still, `decide()` answers typed Laya questions, and the catalog adds MOSS speech, Laya decisions, and Nemotron diarization. Native addons move onto fabric 0.22. Bundling needs Node `^22.21.0 || >=24.9.0`.
+
+The committed range is `^0.22.0`. `tetherto-qvac-sdk` publishes at the same version.
+
+## Breaking Changes
+
+### Node version for `qvac bundle` / bare-pack
+
+bare-pack needs Node `^22.21.0 || >=24.9.0`. Earlier 22.x (including 22.20.0) crashes the lexer. `qvac doctor` and `qvac bundle sdk` refuse those versions instead of native-crashing.
+
+**Before:**
+
+```json
+"engines": { "node": ">=18.0.0" }
+```
+
+**After:**
+
+```json
+"engines": { "node": "^22.21.0 || >=24.9.0" }
+```
+
+### `assessModelFit` uses engine fitters
+
+Every candidate is assessed by the engine that would run it. The `'calibration'` evidence class is gone, and so is `estimate` on the result and on each model. Under `'computed-only'`, `floorBytes` is the bound. A candidate the engine itself calls a fit can still come back `likely-too-large`: the `interactive-v1` reserve applies on top of the engine's own headroom.
+
+**Before:**
+
+```typescript
+const result = await assessModelFit({ models })
+result.evidence // 'calibration' | 'computed-only' | 'native-fit'
+result.estimate // { lowerBoundBytes, upperBoundBytes }
+result.models[0].estimate // same
+```
+
+**After:**
+
+```typescript
+const result = await assessModelFit({ models })
+result.evidence // 'computed-only' | 'native-fit'
+result.floorBytes // bound under 'computed-only'
+```
+
+### Per-load `modelFitPolicy`
+
+Skipping the fit probe was process-wide (`QVAC_ADVISORY_MODEL_FIT=0`) and also disabled the engine verdict for `assessModelFit`. The probe is now per load. `'log'` (default) still runs it and never blocks. `'off'` skips it for that load only. `'refuse'` fails a load the engine projects will not fit.
+
+**Before:**
+
+```typescript
+// Skipping the fit probe was process-wide, and also disabled the engine
+// verdict for assessModelFit.
+QVAC_ADVISORY_MODEL_FIT = 0
+```
+
+**After:**
+
+```typescript
+import { loadModel } from '@qvac/sdk'
+
+await loadModel({ modelSrc, modelType, modelFitPolicy: 'off' })
+```
+
+```json
+{ "modelFitPolicy": "off" }
+```
+
+```typescript
+await loadModel({
+  modelSrc: GPT_OSS_20B_INST_Q4_K_M,
+  modelConfig: { ctx_size: 131072, 'cache-type-k': 'f32', 'cache-type-v': 'f32' },
+  modelFitPolicy: 'refuse'
+})
+```
+
+```json
+{
+  "serve": {
+    "models": {
+      "big": { "model": "GPT_OSS_20B_INST_Q4_K_M", "modelFitPolicy": "refuse" }
+    }
+  }
+}
+```
+
+### Catalog constant names
+
+`PARAKEET_TDT_MODEL` is no longer a first-class catalog export. Load the GGUF constant instead.
+
+**Before:**
+
+```typescript
+import { PARAKEET_TDT_MODEL } from '@qvac/sdk'
+```
+
+**After:**
+
+```typescript
+import { loadModel, PARAKEET_TDT_0_6B_V3_F16 } from '@qvac/sdk'
+
+await loadModel({ modelSrc: PARAKEET_TDT_0_6B_V3_F16 })
+```
+
+### Split addons resolve `#host-addon` from the consumer manifest
+
+bare-link resolves `DT_NEEDED` replacements only from a package's own dependencies, so fabric platform packages must be declared on the native addon consumer (`llm-llamacpp`, `embed-llamacpp`, and the other engine addons), not on application manifests. `require('@qvac/fabric/backends')` is removed. A source-built fabric no longer serves its own `prebuilds/<host>`; run `npm run link:platform` to expose the build as `node_modules/@qvac/fabric-<suffix>`. `bundle` and `verify` accept both the previous and the current split-addon layouts.
+
+Native consumers stop passing `SUBDIR` into `qvac_addon_finalize` and load backends through fabric:
+
+**Before:**
+
+```cmake
+qvac_addon_finalize(${addon} SUBDIR "${BACKENDS_SUBDIR_VALUE}")
+```
+
+```cpp
+ggml_backend_load_all();
+```
+
+**After:**
+
+```cmake
+qvac_addon_finalize(${addon})
+```
+
+```cpp
+#include <qvac-fabric.h>
+qvac_fabric_load_backends();
+```
+
+### Cached turns send the full conversation
+
+Named KV-cache completions send the whole history every turn. `generationParams.remove_thinking_from_context` is gone. A changed tool set on a named key reuses the same cache file, trimmed where it differs. A deleted attachment now fails later cached turns, as it does uncached. `stats.promptTokens` on a cached turn counts only the tokens processed that turn; reused cache tokens are excluded.
+
+**Before:**
+
+```typescript
+completion({
+  modelId,
+  history,
+  kvCache: 'chat',
+  generationParams: { remove_thinking_from_context: true }
+})
+```
+
+**After:**
+
+```typescript
+completion({ modelId, history, kvCache: 'chat' })
+```
+
+### Mobile addons need bare-link 4
+
+Mobile hosts that link split addons need `react-native-bare-kit` `^0.16.0`.
+
+**Before:**
+
+```json
+{
+  "dependencies": {
+    "react-native-bare-kit": "^0.15.5"
+  }
+}
+```
+
+**After:**
+
+```json
+{
+  "dependencies": {
+    "react-native-bare-kit": "^0.16.0"
+  }
+}
+```
+
+### GPU backend selection on generated VLA configs
+
+Generated Kotlin VLA load configs take a backend name string instead of the `LoadModelSrcRequestGgmlVlaModelConfigBackend` enum.
+
+**Before:**
+
+```kotlin
+LoadModelSrcRequestGgmlVlaModelConfig(
+    backend = LoadModelSrcRequestGgmlVlaModelConfigBackend.CPU
+)
+```
+
+**After:**
+
+```kotlin
+LoadModelSrcRequestGgmlVlaModelConfig(backend = "cpu")
+```
+
+### Fabric 0.22 addon set
+
+This cut ships the fabric 0.22 addon set. `@qvac/ggml-rpc-server` moves from `^0.1.2` (0.21.1) to `^0.5.1`.
+
+## New APIs
+
+### Python client
+
+`tetherto-qvac-sdk` now validates `load_model` the same way the JS client does. An addon that ships its own weights still sends the empty-string `model_src` the wire union requires. A `model_config` key the model type does not define is refused with `REQUEST_VALIDATION_FAILED` instead of being dropped.
+
+```python
+from tetherto.qvac_sdk import load_model
+from tetherto.qvac_sdk.errors import RequestValidationError
+
+model_id = await load_model(transport, model_type="classification-ggml", model_config={})
+
+try:
+    await load_model(
+        transport,
+        model_src=OCR_LATIN,
+        model_type="ggml-ocr",
+        model_config={"detectorModelSrc": OCR_CRAFT, "nope": 1},
+    )
+except RequestValidationError as error:
+    print(error.code, error)
+```
+
+### Model fit
+
+Where the engine reports a placement, `assessModelFit` now carries `projection.devices`: one row per device with `name`, `totalBytes`, `freeBytes`, `weightsBytes`, `contextBytes`, and `computeBytes`.
+
+```typescript
+import { assessModelFit } from '@qvac/sdk'
+
+const result = await assessModelFit({ models: [load] })
+// projection.devices is present where the engine reports a placement per device
+// [{ name: 'MTL0', totalBytes, freeBytes, weightsBytes, contextBytes, computeBytes }]
+```
+
+OCR and translation loads go through their engine fitters, so a result can be `'native-fit'` instead of a computed floor.
+
+```typescript
+const result = await assessModelFit({
+  models: [
+    {
+      modelSrc: OCR_LATIN,
+      modelType: 'ggml-ocr',
+      modelConfig: { langList: ['en'], detectorModelSrc: OCR_CRAFT }
+    }
+  ]
+})
+// result.evidence === 'native-fit'
+```
+
+The resolved load, including LavaSR stage paths on TTS, is what the fitter sees. Diffusion video loads are projected instead of refused.
+
+### OCR GPU selection
+
+OCR loads can pick a ggml backend and, on multi-GPU hosts, a dedicated or integrated device.
+
+```typescript
+import { loadModel } from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelSrc: OCR_LATIN,
+  modelType: 'ggml-ocr',
+  modelConfig: { langList: ['en'], backendDevice: 'vulkan', mainGpu: 'dedicated' }
+})
+```
+
+### PCM-only bundles
+
+decoder-audio 0.8.0 lets a bundle omit FFmpeg when the app only streams PCM. Set `includeAudioDecoder` to `false` in config.
+
+```json
+{
+  "plugins": ["@qvac/sdk/whispercpp-transcription/plugin"],
+  "includeAudioDecoder": false
+}
+```
+
+### Parallel tool calls
+
+llama.cpp completions can return more than one tool call in a single response. Unset or `false` keeps one.
+
+```typescript
+await completion({
+  modelId,
+  history,
+  tools,
+  generationParams: { parallel_tool_calls: true }
+})
+```
+
+Nested JSON Schema on tool parameters is kept, including arrays of objects and union types.
+
+```typescript
+await completion({
+  modelId,
+  history,
+  tools: [
+    {
+      type: 'function',
+      name: 'plan_trip',
+      description: 'Plan a trip',
+      parameters: {
+        type: 'object',
+        properties: {
+          stops: {
+            type: 'array',
+            items: { type: 'object', properties: { name: { type: 'string' } } }
+          },
+          budget: { type: ['number', 'null'] }
+        },
+        required: ['stops']
+      }
+    }
+  ]
+})
+```
+
+Past tool calls can be replayed as structured history: an assistant message with `toolCalls`, then a `tool` message with `toolCallId` and `toolName`.
+
+```typescript
+await completion({
+  modelId,
+  history: [
+    { role: 'user', content: 'Weather in Paris?' },
+    {
+      role: 'assistant',
+      content: '',
+      toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: { city: 'Paris' } }]
+    },
+    { role: 'tool', content: '18C', toolCallId: 'call_1', toolName: 'get_weather' }
+  ],
+  tools
+})
+```
+
+### MiniMax-H3 image-to-video
+
+`video()` accepts `mode: 'img2vid'` with a first-frame `init_image`.
+
+```typescript
+const firstFrame = fs.readFileSync('first-frame.png')
+const { outputs } = video({
+  modelId,
+  mode: 'img2vid',
+  prompt: 'A sailboat glides across a calm bay.',
+  init_image: firstFrame,
+  width: 864,
+  height: 480,
+  video_frames: 22,
+  fps: 24,
+  cfg_scale: 1
+})
+```
+
+### Vision image size cap
+
+LLM vision loads accept `'image-max-megapixels'` in `modelConfig`. Larger images are rejected from the header before decode. Default 50.
+
+```typescript
+await loadModel({
+  modelSrc: SMOLVLM2_500M_MULTIMODAL_Q8_0,
+  modelConfig: {
+    projectionModelSrc: MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
+    'image-max-megapixels': 100
+  }
+})
+```
+
+### Typed decisions
+
+`decide()` answers typed questions (choice, score, or noul) about one state or a batch of states on a `llamacpp-decision` load. `qvac serve` can expose that as System One HTTP.
+
+```typescript
+import { decide, loadModel, LAYA_MULTILINGUAL_322M_Q8_0 } from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelSrc: LAYA_MULTILINGUAL_322M_Q8_0,
+  modelType: 'llamacpp-decision',
+  modelConfig: { device: 'cpu' }
+})
+const result = await decide({
+  modelId,
+  state: 'Please refund my duplicate payment.',
+  questions: { refund: { type: 'noul', instructions: 'A refund is requested.' } }
+})
+```
+
+### MOSS ASR and Nemotron diarization
+
+MOSS transcribe loads take `transcriptionWorkload` on `assessModelFit` (`audioSeconds`, optional `hotwords`) and can return speaker labels. Nemotron Sortformer diarization on a parakeet load returns overlapping `speakerSegments` with millisecond timestamps.
+
+```typescript
+import { loadModel, transcribe, assessModelFit, MOSS_TRANSCRIBE_DIARIZE_Q8_0 } from '@qvac/sdk'
+
+await assessModelFit({
+  models: [
+    {
+      modelSrc: MOSS_TRANSCRIBE_DIARIZE_Q8_0,
+      transcriptionWorkload: { audioSeconds: 300, hotwords: ['Erin'] }
+    }
+  ]
+})
+
+const moss = await loadModel({ modelSrc: MOSS_TRANSCRIBE_DIARIZE_Q8_0 })
+await transcribe({
+  modelId: moss,
+  audioChunk: 'meeting.wav',
+  metadata: true,
+  hotwords: ['Erin']
+})
+
+const nemotron = await loadModel({
+  modelSrc: './nemotron-diarization.gguf',
+  modelType: 'parakeet-transcription'
+})
+const segments = await transcribe({
+  modelId: nemotron,
+  audioChunk: 'meeting.wav',
+  metadata: true
+})
+// segments[].speakerSegments: { speakerId, startMs, endMs }[], preserving overlap.
+```
+
+### MOSS TTS 0.11 engines
+
+`tts-ggml` 0.11 adds `moss-sfx` (sound effects) and `moss-speech`. Sound-effect runs take `seconds` and `steps`.
+
+```typescript
+import { loadModel, textToSpeech, AUDIOGEN_MOSS_SFX_V2_Q8_0 } from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelSrc: AUDIOGEN_MOSS_SFX_V2_Q8_0.src,
+  modelType: 'tts-ggml',
+  modelConfig: { ttsEngine: 'moss-sfx', useGPU: true }
+})
+
+const run = textToSpeech({
+  modelId,
+  text: 'Heavy rain falling on a tin roof.',
+  stream: false,
+  seconds: 2,
+  steps: 20
+})
+const samples = await run.buffer
+const sampleRate = await run.sampleRate
+```
+
+### AudioGen 0.6.0
+
+MiniMax audiogen can be assessed before load and fails the load instead of falling back to CPU. ACE-Step runs accept per-run `shift` and return render metadata on `stats`. Edits take a timbre `referenceAudio` plus prompt metadata. `audioUnderstand` exposes the decoded `seed`.
+
+```typescript
+const fit = await assessModelFit({
+  models: [
+    {
+      modelType: 'audiogen',
+      modelConfig: { engine: 'minimax', lmModelSrc, synthModelSrc, device: 'gpu' }
+    }
+  ]
+})
+
+const run = audioGen({
+  modelId,
+  caption: 'a rainy-day lo-fi loop',
+  simpleMode: true,
+  shift: 1.5
+})
+const rendered = (await run.stats)?.metadata
+
+const edit = audioEdit({
+  modelId,
+  sourceAudio,
+  operations,
+  referenceAudio,
+  bpm: 120,
+  keyscale: 'C minor'
+})
+
+const { seed } = await audioUnderstand({ modelId, sourceAudio }).description
+```
+
+### GPU backend selection for LLM, embeddings, and VLA
+
+LLM, embedding, and VLA loads can name an ordered GPU backend list. Unset uses the native default order. Use `device: 'cpu'` for CPU.
+
+```typescript
+import { loadModel, ModelType } from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelType: ModelType.llamacppCompletion,
+  modelSrc: '/models/llm.gguf',
+  modelConfig: { backend: 'cuda,vulkan' }
+})
+```
+
+## Features
+
+The engine fitter now sees the same resolved load `loadModel` would run, including LavaSR enhancer and denoiser paths on TTS. Diffusion video is projected instead of refused up front.
+
+## Bug Fixes
+
+`safe-fetch` calls the http and https request paths separately, so mixed-scheme downloads no longer share one handler.
+
+Concurrent `assessModelFit` / `loadModel` probes await the engine fitter and share in-flight fit markers. Both probes still run; a `.running` marker this process holds is not treated as a crash.
+
+Python and Kotlin JVM workers authenticate on loopback TCP IPC. A worker whose `@qvac/sdk` `package.json` does not declare `"qvacIpcAuthentication": "token-v1"` is refused.
+
+## Model Changes
+
+### Added
+
+```
+AUDIOGEN_MOSS_SFX_V2_F16
+AUDIOGEN_MOSS_SFX_V2_Q8_0
+LAYA_421M_F16
+LAYA_421M_Q8_0
+LAYA_MULTILINGUAL_322M_F16
+LAYA_MULTILINGUAL_322M_Q8_0
+LAYA_TYPED_DECISIONS_421M_F16
+LAYA_TYPED_DECISIONS_421M_Q8_0
+MOSS_TRANSCRIBE_DIARIZE_F16
+MOSS_TRANSCRIBE_DIARIZE_Q5_0
+MOSS_TRANSCRIBE_DIARIZE_Q8_0
+PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0
+TTS_CODEC_MOSS_SPEECH_F16
+TTS_DIALOGUE_MULTILINGUAL_MOSS_TTSD_F16
+TTS_MOSS_SPEECH_BF16
+TTS_MOSS_SPEECH_Q8_0
+```
+
+### Removed
+
+```
+PARAKEET_TDT_MODEL
+```
+
+## [0.21.1]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.21.1
+
+Update native add-ons to include the latest fixes and allow compatible patch updates.
+
+Update your app lockfile and rebuild native bundles to apply the fixes.
+
+## [0.21.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.21.0
+
+QVAC SDK 0.21.0 sits on `@qvac/inference@0.21.0`. A model can split across machines through llama.cpp's RPC backend, Ternary Bonsai 2 27B runs in QVAC's engine, tools can defer their schemas behind `tool_search`, and TTS/ASR pick up MOSS plus Parakeet Core ML on Apple. Mobile bundles can auto-install addon platform packages, and `verifyBundle` checks `engines.bare` against the Bare runtime each host actually runs. Catalog constant names for BitNet, Llama tool-calling, and Indic Parakeet change. `assessModelFit` now takes `loadModel` fields instead of a separate workload object, infers `modelType` from `modelSrc` when omitted, and the load-time fit probe runs on every engine that ships a fitter.
+
+The committed range is `^0.21.0`. `tetherto-qvac-sdk` publishes at the same version.
+
+## Breaking Changes
+
+### `assessModelFit` uses loadModel parameters
+
+Candidates are described the same way as a load: `modelSrc`, `modelType`, and `modelConfig`. The old `model` / `workload` / `artifacts` object is rejected.
+
+**Before:**
+
+```typescript
+await assessModelFit({
+  models: [
+    {
+      model: LLAMA_3_2_1B,
+      workload: { kind: 'llm', contextTokens: 4096 },
+      artifacts: [MMPROJ_F16]
+    }
+  ]
+})
+```
+
+**After:**
+
+```typescript
+await assessModelFit({
+  models: [
+    {
+      modelSrc: LLAMA_3_2_1B,
+      modelType: 'llamacpp-completion',
+      modelConfig: { ctx_size: 4096, projectionModelSrc: MMPROJ_F16 }
+    }
+  ]
+})
+```
+
+`modelType` is optional and inferred from `modelSrc` when omitted, the same way `loadModel` infers it. Required only where the source names no engine. A load whose sources are all config fields may omit `modelSrc`. Audio `workload.windowMs` becomes `modelConfig.duration_ms`. `workload.batch` has no equivalent and is gone.
+
+### Flattened fit-probe projection
+
+`getLoadedModelInfo().fitProbe.projection` is a flat byte breakdown. `projection.devices` and `NativeProbeDevice` are gone. Totals are summed across devices; `deviceName` names the first.
+
+**Before:**
+
+```typescript
+info.fitProbe?.projection?.devices
+```
+
+**After:**
+
+```typescript
+info.fitProbe?.projection?.deviceBytes
+info.fitProbe?.projection?.hostBytes
+info.fitProbe?.projection?.weightsBytes
+info.fitProbe?.projection?.contextBytes
+info.fitProbe?.projection?.computeBytes
+info.fitProbe?.projection?.deviceName
+```
+
+### Catalog constant names
+
+BitNet instructed TQ2_0 exports are retagged as base. Llama tool-calling 1B moves from `Q4_K` to `Q4_K_M`. Indic Parakeet Conformer CTC constants are replaced by the 600M GGUFs.
+
+**Before:**
+
+```typescript
+import { BITNET_0_7B_INST_TQ2_0 } from '@qvac/sdk'
+import { LLAMA_TOOL_CALLING_1B_INST_Q4_K } from '@qvac/sdk'
+import { PARAKEET_INDIC_CONFORMER_CTC_Q4_0 } from '@qvac/sdk'
+```
+
+**After:**
+
+```typescript
+import { BITNET_0_7B_BASE_TQ2_0 } from '@qvac/sdk'
+import { LLAMA_TOOL_CALLING_1B_INST_Q4_K_M } from '@qvac/sdk'
+import { PARAKEET_INDIC_CONFORMER_600M_Q4_0 } from '@qvac/sdk'
+```
+
+## New APIs
+
+### Clustered inference over RPC
+
+`startRpcServer` starts a worker-owned llama.cpp RPC server. `discoverRpcServers` finds peers on a private topic and `getRpcDeviceMap` builds the `devices` string `loadModel` expects. One model splits across several machines, phones included, by layer or within a layer. Only the initiator needs the model file.
+
+```typescript
+import {
+  startRpcServer,
+  stopRpcServer,
+  discoverRpcServers,
+  getRpcDeviceMap,
+  loadModel,
+  unloadModel
+} from '@qvac/sdk'
+
+const server = await startRpcServer({
+  host: '10.0.0.2',
+  allowNonLoopbackHost: true,
+  discoveryTopic: 'my-private-rpc-group'
+})
+
+const selected = (await discoverRpcServers({ topic: 'my-private-rpc-group' }))
+  .sort((a, b) => a.url.localeCompare(b.url))
+  .slice(0, 2)
+const devices = getRpcDeviceMap(selected)
+const modelId = await loadModel({
+  modelSrc,
+  modelConfig: {
+    device: 'gpu',
+    'rpc-servers': selected.map((s) => s.url).join(','),
+    devices: devices.map((d) => d.alias).join(','),
+    'split-mode': 'layer',
+    'tensor-split': devices.map(() => '1').join(',')
+  }
+})
+await unloadModel({ modelId })
+await stopRpcServer({ serverId: server.serverId })
+```
+
+Workers bind to loopback unless `allowNonLoopbackHost` is set. The channel is unauthenticated. Prebuilds use TCP; RDMA needs client and worker rebuilt on Linux with RDMA enabled. The current limit is 16 devices.
+
+### Deferred tool loading
+
+A tool may set `deferLoading: true` (or an MCP client entry, to defer all its tools). The first prompt then carries only always-loaded tools and a built-in `tool_search` whose description lists the deferred tools by name and description. When the model calls `tool_search`, run `executeToolSearch()` and push its result as a `tool` message; the matching definitions are callable from the next turn. `completion()` stays stateless and reads the loaded set back from history, so keep that message. Tools without the flag are unchanged. `qvac serve` runs this loop itself.
+
+```typescript
+import { completion, executeToolSearch, TOOL_SEARCH_NAME } from '@qvac/sdk'
+
+const tools = [
+  { name: 'get_weather', description: '...', parameters },
+  {
+    name: 'create_issue',
+    description: 'Open a new issue on a repository',
+    parameters,
+    deferLoading: true,
+    group: 'github'
+  }
+]
+
+const run = completion({ modelId, history, tools })
+history.push({ role: 'assistant', content: (await run.final).raw.fullText })
+for (const call of await run.toolCalls) {
+  const content =
+    call.name === TOOL_SEARCH_NAME
+      ? executeToolSearch(tools, call.arguments, history)
+      : await runTool(call)
+  history.push({ role: 'tool', content })
+}
+
+// Defer every tool an MCP client exposes
+completion({ modelId, history, mcp: [{ client, deferLoading: true, group: 'github' }] })
+```
+
+New options: `deferLoading` and `group` on tools and on `McpClientInput`.
+New exports: `TOOL_SEARCH_NAME`, `executeToolSearch(tools, args, history)`, `loadedToolNames(history)`, `searchDeferredTools(deferred, query, limit?)`, `buildToolSearchTool(deferred)`.
+
+`tool_search` is reserved. `generationParams.tool_choice` cannot name a deferred tool; force `tool_search` or drop `deferLoading` from that tool.
+
+### MOSS TTS
+
+`tts-ggml` 0.10.0 adds the MOSS engine. MOSS-TTS-v1.5 is directable (explicit pause and duration, Pinyin/IPA, optional voice cloning). MOSS-TTSD synthesizes 1 to 5 speakers in one pass. The Delay engine streams chunks so playback can start while generation continues.
+
+```typescript
+import {
+  loadModel,
+  textToSpeech,
+  TTS_DELAY_LLM_MOSS_TTS_F16,
+  TTS_CODEC_DECODER_MOSS_TTS_F16,
+  TTS_CODEC_ENCODER_MOSS_TTS_F16
+} from '@qvac/sdk'
+
+const modelId = await loadModel({
+  modelSrc: TTS_DELAY_LLM_MOSS_TTS_F16,
+  modelType: 'tts',
+  modelConfig: {
+    ttsEngine: 'moss',
+    mossCodecDecoderModelSrc: TTS_CODEC_DECODER_MOSS_TTS_F16,
+    mossCodecEncoderModelSrc: TTS_CODEC_ENCODER_MOSS_TTS_F16,
+    referenceAudioSrc: '/voices/speaker-24k.wav',
+    streamChunkTokens: 25
+  }
+})
+```
+
+On Apple, Audio8 now stages its Core ML codec sidecar and reports `codecSidecarLoaded` / `codecOnCoreml` on synthesis stats.
+
+### ABot-World layer streaming
+
+World-mode `modelConfig.world` accepts `paramsBackend`, `maxVram`, `streamLayers`, and the rest of the placement fields so an ABot-World graph can stream layers the same way other diffusion loads do.
+
+### Mobile host prebuilds and Bare runtime checks
+
+`ensureHostPrebuilds` and `bundleSdk({ installMissingPrebuilds: true })` add the Android/iOS platform packages the split speech addons need, pinned to each addon's version. `qvac bundle sdk` installs by default; `--no-install` skips it.
+
+`verifyBundle` and `qvac doctor` compare each host's actual Bare runtime (from `react-native-bare-kit` on mobile) against `engines.bare`, and print the kit release or override to apply.
+
+### Loaded-model fit probe
+
+`getLoadedModelInfo` can include `fitProbe`: verdict, a flat projection (`deviceBytes`, `hostBytes`, and the breakdown fields the engine filled), and the placement the fitter resolved. The probe runs on every engine that ships a fitter. `assessModelFit` model results can carry `device` and `reasons`. `fitStubBudgetMs` on config (default 40000) budgets the registry fetch of the weightless description.
+
+### BCI stream placement and diagnostics
+
+`bciTranscribe` terminal frames can carry `diagnostics`. Streamed BCI segments expose `windowStartTimestep` so window-local timestamps can be placed on the stream timeline.
+
+## Features
+
+Ternary Bonsai 2 27B (PTQ1_0 at 5.95 GB, PQ2_0 at 7.21 GB) loads through the qvac-fabric engine with the matching rotation applied at run time.
+
+Parakeet GGUFs on Apple download their Core ML sidecars beside the weights. ACE-Step AudioGen packings and additional CosyVoice3 flow/hift/LLM constants are on the catalog.
+
+Llama `gpu_layers` is unset by default so qvac-fabric can place layers to free device memory. Setting `gpu_layers` still pins the count and aborts that fit.
+
+Hyperdrive model downloads stay inside the model cache. NMT `translate()` stats are per-request. Fused TTS export names come from registry tags. `bare-runtime` is `^1.30.3` so a retained lockfile cannot keep 1.24.x next to `engines.bare` `>=1.30.3`.
+
+## Bug Fixes
+
+Loaded deferred tools run under the tool-call grammar instead of text parsing on the search-to-call step.
+
+## Model Changes
+
+### Added
+
+```
+AUDIOGEN_ACESTEP_5HZ_LM_0_6B_BF16
+AUDIOGEN_ACESTEP_V15_BASE_Q4_K_M
+BITNET_0_7B_BASE_TQ2_0
+BITNET_1B_BASE_TQ2_0
+BITNET_B1_58_3B_BASE_TQ2_0
+LLAMA_TOOL_CALLING_1B_INST_Q4_K_M
+PARAKEET_INDIC_CONFORMER_600M_F16
+PARAKEET_INDIC_CONFORMER_600M_Q4_0
+PARAKEET_INDIC_CONFORMER_600M_Q8_0
+PARAKEET_TDT_1_1B_F16
+PARAKEET_TDT_1_1B_Q8_0
+TERNARY_BONSAI_2_27B_MULTIMODAL_PQ2_0
+TERNARY_BONSAI_2_27B_MULTIMODAL_PTQ1_0
+TTS_CODEC_DECODER_MOSS_TTS_F16
+TTS_CODEC_ENCODER_MOSS_TTS_F16
+TTS_COSYVOICE3_FLOW_COSYVOICE_BF16
+TTS_COSYVOICE3_FLOW_COSYVOICE_FP16
+TTS_COSYVOICE3_FLOW_COSYVOICE_Q4_0
+TTS_COSYVOICE3_FLOW_COSYVOICE_Q8_0
+TTS_COSYVOICE3_HIFT_COSYVOICE_FP16
+TTS_COSYVOICE3_LLM_COSYVOICE_FUSED_Q8_0
+TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0
+TTS_DELAY_LLM_MOSS_TTS_F16
+```
+
+### Removed
+
+```
+BITNET_0_7B_INST_TQ2_0
+BITNET_1B_INST_TQ2_0
+BITNET_B1_58_3B_INST_TQ2_0
+LLAMA_TOOL_CALLING_1B_INST_Q4_K
+PARAKEET_INDIC_CONFORMER_CTC_F16
+PARAKEET_INDIC_CONFORMER_CTC_Q4_0
+PARAKEET_INDIC_CONFORMER_CTC_Q8_0
+```
+
 ## [0.20.1]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/sdk/v/0.20.1

@@ -10,7 +10,15 @@ const { spawnSync } = require('node:child_process')
 
 const PACKAGE_ROOT = path.resolve(__dirname, '..', '..')
 const PACKAGE_JSON_PATH = path.join(PACKAGE_ROOT, 'package.json')
-const NPM_COMMAND = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+const NPM_COMMAND = process.platform === 'win32' ? process.execPath : 'npm'
+const NPM_PREFIX =
+  process.platform === 'win32'
+    ? [
+        process.env.npm_execpath?.endsWith('npm-cli.js')
+          ? process.env.npm_execpath
+          : path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
+      ]
+    : []
 const JAVASCRIPT_EXTENSIONS = new Set(['.cjs', '.js', '.mjs'])
 const IMPORT_PATTERNS = [
   /(?:require(?:\.resolve)?|import)\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
@@ -26,7 +34,8 @@ const RUNTIME_PROBES = [
 ]
 
 function runNpm(arguments_, cwd) {
-  const result = spawnSync(NPM_COMMAND, arguments_, { cwd, encoding: 'utf8' })
+  const result = spawnSync(NPM_COMMAND, [...NPM_PREFIX, ...arguments_], { cwd, encoding: 'utf8' })
+  if (result.error) throw result.error
   assert.equal(result.status, 0, `${result.stdout}${result.stderr}`)
   return result.stdout
 }
@@ -143,7 +152,13 @@ test('published files declare every external runtime module', () => {
 
   externalModules.forEach((moduleName) => assertModuleDeclared(packageJson, moduleName))
   assertPublishedTargetsExist(packageJson, packedPaths)
-  assert.ok(collectPublishedSpecifiers(packedFiles).includes('@qvac/fabric/backends'))
+  assert.ok(collectPublishedSpecifiers(packedFiles).includes('@qvac/fabric'))
+  assert.ok(!collectPublishedSpecifiers(packedFiles).includes('@qvac/fabric/backends'))
+  assert.ok(packedPaths.has('megaloc.js'))
+  assert.ok(packedPaths.has('megaloc.d.ts'))
+  assert.ok(packedPaths.has('scripts/convert-megaloc.py'))
+  assert.ok(packedPaths.has('LICENSE-MegaLoc'))
+  assert.ok(!packedFiles.some((file) => /megaloc.*\.gguf(?:\.bin)?$/i.test(file.path)))
 })
 
 test('production tarball install includes promoted runtime modules', () => {

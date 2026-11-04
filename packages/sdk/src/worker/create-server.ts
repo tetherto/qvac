@@ -13,6 +13,9 @@ export function createBareKitRPCServer() {
 
 export interface IPCClientOptions {
   onDisconnect?: () => void
+  // Written before any RPC frame on loopback TCP endpoints so the client can
+  // tell its own worker from another local process that dialed the same port.
+  authToken?: string | undefined
 }
 
 /**
@@ -54,6 +57,12 @@ export function createIPCClient(socketPath: string, options?: IPCClientOptions) 
     logger.warn('IPC socket closed — parent process likely terminated')
     options?.onDisconnect?.()
   })
+
+  // Pipe and Unix-socket clients have no reader for this line, so a token
+  // inherited from the parent's environment must not reach them.
+  if (options?.authToken && socketPath.startsWith('tcp://')) {
+    socket.write(options.authToken + '\n')
+  }
 
   return new RPC(socket, handleRequest)
 }

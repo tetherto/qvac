@@ -1,0 +1,13 @@
+{
+  "verifiers": ["current", "fabric-0.20"],
+  "addons": {
+    "@qvac/classification-ggml": [{ "below": "0.30.0", "verifier": "fabric-0.20" }],
+    "@qvac/vla-ggml": [{ "below": "0.32.0", "verifier": "fabric-0.20" }],
+    "@qvac/translation-nmtcpp": [{ "below": "0.20.0", "verifier": "fabric-0.20" }],
+    "@qvac/model-fit": [{ "below": "0.16.0", "verifier": "fabric-0.20" }],
+    "@qvac/ocr-ggml": [{ "below": "0.28.0", "verifier": "fabric-0.20" }],
+    "@qvac/embed-llamacpp": [{ "below": "0.47.0", "verifier": "fabric-0.20" }],
+    "@qvac/llm-llamacpp": [{ "below": "0.60.0", "verifier": "fabric-0.20" }],
+    "@qvac/ggml-rpc-server": [{ "below": "0.3.0", "verifier": "fabric-0.20" }]
+  }
+}

@@ -82,6 +82,14 @@ npm install
 VCPKG_ROOT=/path/to/vcpkg npm run build
 ```
 
+`ggml-speech` and `speech-cpp` are pinned with vcpkg `overrides` to the
+same versions in every speech addon (`@qvac/asr-ggml`,
+`@qvac/audiogen-ggml`, `@qvac/bci-whispercpp`, `@qvac/tts-ggml`), and
+`package.json` records the `ggml-speech` build as `qvac["ggml-speech"]`.
+The speech addons ship their ggml backends under the same file names, so
+an app that bundles several of them keeps one copy of each: use releases
+that record the same `ggml-speech`.
+
 **CUDA (Linux / Windows on NVIDIA)** needs `nvcc` on the build host, so it is
 gated behind the `ENABLE_CUDA` CMake option. The published linux-x64 prebuild
 does not enable it; build it yourself with `npm run build:cuda` (or
@@ -315,53 +323,57 @@ In streaming `delta` mode each segment is annotated with `windowStartTimestep`. 
 
 ## Assessing fit
 
-`assessFit` projects a load against the memory free right now. It reads model metadata and never weight data. The model ships as `.bin`, which the registry has no weightless form for, so the projection needs the file on disk. It is a module export, not an instance method — nothing is loaded to call it.
+`assessFit` projects a load against the memory free right now. It reads model metadata and never weight data. The model and the embedder ship as `.bin`; for each, the QVAC registry also publishes a weightless description (a GGUF holding the file's settings and array sizes, tens of KB), and passing it projects exactly as passing the file does, so a load can be assessed before it is downloaded. It is a module export, not an instance method — nothing is loaded to call it.
 
 ```js
 const { assessFit } = require('@qvac/bci-whispercpp')
 
-const fit = assessFit({
+const fit = await assessFit({
   modelPath: '/models/bci-whisper.bin',
-  embedderPath: '/models/embedder.gguf',
+  embedderPath: '/models/bci-embedder.bin',
   audioSeconds: 300,
   decoders: 5
 })
 
-fit.status // 'fits' | 'does-not-fit' | 'error'
-fit.reason // whisper's own wording, e.g. 'model-unreadable', 'no-backend-device'
-fit.modelType // 'tiny' … 'large v3'
-fit.deviceName
-fit.deviceBytes
-fit.weightsBytes
-fit.kvBytes
-fit.computeBytes
-fit.hostBytes
-fit.report
+fit.status // 'fits' | 'does-not-fit' | 'unknown'
+fit.devices // [{ id, name, unified, usedBytes, freeBytes, totalBytes }]
+fit.stats // {}
 ```
 
-This covers the whisper half of the load. `embedderFileBytes` reports the embedder's size on disk, 0 when no path was given. The embedder has no fitter, so that figure is a size on disk. It is counted in neither `deviceBytes` nor `hostBytes`.
+`devices` holds the device the load resolves to, then the host CPU, which holds the host-side buffers and the embedder. A load on the CPU is one row. `id` is the PCI bus ID when the backend reports one, so the same GPU matches across addons built on different backends, and the device name otherwise. `unified` is true for memory the host owns: the CPU, an integrated GPU, a GPU that shares the host's memory, Android's OpenCL GPU, and a device that reports no memory of its own, which takes the host's figures. `usedBytes` is what the load takes on that device.
+
+On an iOS device every unified row shares the app's own memory limit, `os_proc_available_memory()`. Each such row's free memory is capped at that limit, and a load whose unified rows together take more than the limit less the margin does not fit. A limit of 0 means the app has none left.
+
+The projection covers the whisper model and the embedder. The embedder's share of the host row is the RAM it keeps: its day and month projections, its session map and the dense projection it caches per day. On a device that shares system RAM it is part of the verdict.
 
 | Option | Description |
 | --- | --- |
-| `modelPath` | **Required.** Absolute path to the BCI model. |
-| `embedderPath` | Sized alongside the projection; reported as `embedderFileBytes`. |
+| `modelPath` | **Required.** Absolute path to the BCI model, or to its weightless description. |
+| `embedderPath` | The embedder, or its weightless description. Its host RAM is counted in the host row. Omitted, `bci-embedder.bin` next to `modelPath` is read, as a load reads it. |
 | `audioSeconds` | Longest single transcribe the projection must cover. |
 | `gpuLayers` | Greater than 0 requests the GPU stack, with the fallbacks a real load applies. Omitted, the projection runs on the GPU, matching what the load does. |
 | `gpuDevice` | As the load takes it. |
 | `decoders` | Worst-case resident decoders, the `best_of` or `beam_size` the run will use. The KV cache and decode graph grow with it. |
 | `marginBytes` | Free memory that must remain for the projection to count as fitting. Defaults to whisper's own headroom. |
-| `backendsDir` | Where the dynamically-loaded ggml backends live. Defaults to the directory a real load uses, since the native side registers backends once per process. |
+| `backendsDir` | Directory scanned as given for the dynamically-loaded ggml backends. Unset scans next to the loaded module, the directory a real load uses, since the native side registers backends once per process. |
 
-A model the fitter cannot read is `status: "error"`; a broken request, or a host with no native binding, throws.
+`assessFit` returns a Promise. Concurrent calls run one at a time.
+
+`status` is `unknown`, with no rows, for a load the fitter cannot measure. A model or embedder the fitter cannot read, or a broken request, rejects with an `InvalidArgument` error, and a host with no native binding rejects as well.
 
 ## Tests
+
+The consolidated C++ CI lane uses persistent vcpkg binaries, a package-specific
+compiler cache, and two build workers. C++ test failures block the merge guard.
+See [C++ CI configuration](../../docs/ci/nx-ci-consolidation.md#optionsci-cheat-sheet)
+for cache warming and resource settings.
 
 | Script | Purpose |
 |--------|---------|
 | `npm run test:unit` | JS unit tests (`brittle-bare test/unit/*.test.js`) — no model required |
 | `npm run test:integration` | JS integration tests against the native addon — requires `WHISPER_MODEL_PATH` |
 | `npm run test:integration:smoke` | Only the addon suite (`test/integration/addon.test.js`); the darwin-x64 CI leg runs this instead of the full suite |
-| `npm run test:cpp` | C++ unit tests (GoogleTest); `bare-make` rebuilds the addon with `BUILD_TESTING=ON` |
+| `npm run test:cpp` | C++ unit tests (GoogleTest); builds only the test binary with `BUILD_TESTING=ON` and leaves `prebuilds/` untouched |
 | `npm run test:dts` | Type-checks the published `index.d.ts` |
 | `npm test` | Runs `test:unit` + `test:integration` |
 
@@ -440,7 +452,7 @@ These keys back the `whisper_context`. Changing any of them between jobs forces 
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `backendsDir` | string | `<addon>/prebuilds` | **Android and Linux.** Overrides the folder used to locate dynamically-loaded ggml backend `.so` modules; a no-op on static builds and other platforms. Defaults to the in-package `prebuilds/` directory so mobile builds work out of the box (parity with `transcription-whispercpp 0.9.0`). |
+| `backendsDir` | string | next to the loaded module | **Android and Linux.** Directory scanned as given for the dynamically-loaded ggml backend `.so` modules; a no-op on static builds and other platforms. Unset, the addon scans the directory its native module was loaded from: `prebuilds/<host>/qvac__bci-whispercpp/` in an npm install, or the module's own directory where bare-link or the SDK worker bundle put the backends beside it. |
 
 ### streamOpts (passed to `transcribeStream()`)
 

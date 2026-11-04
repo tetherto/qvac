@@ -75,6 +75,9 @@ jobs:
     timeout-minutes: 120
     environment: release
     name: cpp-tests-${{ matrix.platform }}-${{ matrix.arch || 'x64' }}
+    permissions:
+      contents: read
+      id-token: write
 
     env:
       WORKDIR: ${{ inputs.workdir }}
@@ -157,6 +160,13 @@ jobs:
         run: |
           npm install
 
+      # Its bin directory goes first on PATH, so generate, the vcpkg toolchain's
+      # find_program(bare-make) and the coverage report's llvm-profdata and
+      # llvm-cov all come from the same LLVM.
+      - name: Install the locked bare toolchain
+        shell: bash
+        run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
+
       - name: Download fabric-prebuilds for overlay
         if: ${{ inputs.fabric-overlay-artifact != '' }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
@@ -166,7 +176,7 @@ jobs:
 
       - name: Overlay PR @qvac/fabric prebuilds
         if: ${{ inputs.fabric-overlay-artifact != '' }}
-        uses: tetherto/qvac/.github/actions/overlay-local-fabric@6620d695d3a07cafe3931182e7844dde376a23f8
+        uses: tetherto/qvac/.github/actions/overlay-local-fabric@10b5b0b0a410a116d81e0f76c4c5027fecda1a64
         with:
           workdir: ${{ env.WORKDIR }}
           prebuilds-root: ${{ runner.temp }}/fabric-prebuilds
@@ -175,9 +185,6 @@ jobs:
           # overlay-local-fabric concatenates `${PLATFORM}-${ARCH}` verbatim.
           platform: ${{ matrix.platform == 'windows' && 'win32' || matrix.platform }}
           arch: ${{ matrix.arch || 'x64' }}
-
-      - name: Install bare tooling
-        run: npm install -g --force bare bare-make
 
       - name: Cache C++ test models
         id: model-cache
@@ -190,10 +197,24 @@ jobs:
           # The C++ unit tests load none of the integration models.
           warm: 'false'
 
+      # bitnet_b1_58-large-TQ2_0.gguf is S3-hosted (scripts/download-unit-test-models.js).
+      - name: Configure AWS credentials via OIDC
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Ensure AWS CLI
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        uses: ./.github/actions/ensure-aws-cli
+
       - name: Download test models
         if: steps.model-cache.outputs.cache-hit != 'true'
         shell: bash
         working-directory: ${{ env.WORKDIR }}
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
         run: |
           npm run test:cpp:models:ci
 
@@ -344,3 +365,17 @@ jobs:
             cat build/test/unit/coverage-summary.txt >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi
+
+      # After coverage has harvested the BUILD_TESTING tree. fuzz:build
+      # reconfigures build/ with BUILD_FUZZING=ON and would otherwise wipe
+      # the coverage artefacts. Bounded unit-test mode; coverage-guided
+      # `--fuzz_for` is a later scheduled job. See docs/architecture/ADDON-FUZZING.md.
+      - name: Build fuzz targets
+        if: matrix.platform == 'linux' && steps.cpp-tests.outcome == 'success'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run fuzz:build
+
+      - name: Run fuzz targets (bounded)
+        if: matrix.platform == 'linux' && steps.cpp-tests.outcome == 'success'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run fuzz:run

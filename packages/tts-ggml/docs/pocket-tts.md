@@ -1,7 +1,11 @@
 # Pocket TTS
 
-Pocket is an English, CPU-only TTS engine implemented in the Fabric speech
-library. It streams PCM16 audio through the `@qvac/tts-ggml` addon. Python
+Pocket is an English TTS engine implemented in the Fabric speech library.
+The native library and `@qvac/tts-ggml` addon support CPU, Metal, CUDA,
+Vulkan and OpenCL. CPU remains the default; set `config.useGPU: true`
+or a nonzero `nGpuLayers` to request GPU inference. `config.backend`
+can select an exact registered device such as `MTL0`.
+It streams PCM16 audio through the addon. Python
 is used only to convert weights and benchmark the upstream reference; it is
 not needed for native synthesis. Inference plugin and public SDK integration
 will follow in a separate change after the addon release.
@@ -69,12 +73,38 @@ chunk with `isLast: true`; other engines may omit this metadata.
 
 ## Supported controls
 
-English only; CPU only; `threads` defaults to one per worker (two workers).
+English only; `threads` defaults to one per worker (two workers).
 `seed` accepts unsigned 32-bit integers. `temperature`, `steps`, `nCtx`,
 `maxTokens`, `noiseClamp`, `eosThreshold`, `framesAfterEos` and
 `outputSampleRate` are validated before native loading. Output resampling
-supports 8–192 kHz. Other engines' sampling, emotional, speed, GPU and
+supports 8–192 kHz. Other engines' sampling, emotional, speed and
 LavaSR settings are rejected instead of silently ignored.
+
+`config.useGPU` and `nGpuLayers` must agree when supplied together.
+Reloading preserves the selected backend unless it is explicitly changed.
+
+### Memory preflight
+
+`assessFit()` reads GGUF metadata and frontend/voice metadata without loading
+weights. Pass the same backend and workload that synthesis will use:
+
+```js
+const fit = await TTSGgml.assessFit({
+  engineType: 'pocket',
+  pocketFlowModelPath: '/models/pocket/flow-lm.gguf',
+  pocketMimiModelPath: '/models/pocket/mimi.gguf',
+  pocketFrontendPath: '/models/pocket/frontend.json',
+  pocketVoicePath: '/models/pocket/voice.gguf',
+  text: 'Hello from Pocket.',
+  useGPU: true
+})
+```
+
+`marginBytes` leaves the requested memory headroom. Optional
+`memoryBudgetBytes` applies an application ceiling to each memory pool;
+zero or omission retains the native telemetry-based budget. Results use
+the common `fits`, `does-not-fit` and `error` statuses. The projection
+does not load a model or change a synthesis setting.
 
 Fabric defaults to one sampling step, matching the native CLI and upstream
 reference. An explicit `steps: 4` (or
@@ -139,22 +169,22 @@ audio and broad subjective quality evaluations remain outside this coverage.
 
 ## Native dependencies and measured performance
 
-The manifest requires speech-cpp and ggml-speech `2026-09-15` without changing
-`vcpkg-configuration.json`. These registered versions select the merged source
-commits `a976c4d63195601fcff8bfc0c2cdf3ef36fba539` (speech-cpp) and
-`59a0ca2c2bcd7de36c27d930f79e0c94cc0c2ff3` (ggml-speech).
-[Registry #367](https://github.com/tetherto/qvac-registry-vcpkg/pull/367)
-contains these packages. Pocket resolves CPU memory planning through the
+The exact native dependency versions are declared in [vcpkg.json](../vcpkg.json).
+The Pocket GPU implementation comes from the merged
+[Fabric #338](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/338)
+change, registered in
+[registry #433](https://github.com/tetherto/qvac-registry-vcpkg/pull/433).
+Pocket resolves CPU memory planning through the
 backend registry, fixing the Linux/Android unresolved `ggml_graph_plan` import.
 The native fixes are merged in [ggml #92](https://github.com/tetherto/qvac-ext-ggml/pull/92)
 and [speech #251](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/251).
 
-Before the addon-only review revision, these exact native port trees passed
+Before the addon-only review revision, the original CPU-only native dependency versions passed
 [the full prebuild and integration run](https://github.com/tetherto/qvac/actions/runs/34975293366)
 at Fabric `49d864d2e1a2070a4cb9872cd0f62319fdb9e839`: nine platform prebuilds
 and seven desktop integration lanes covering CPU, Metal, Vulkan and CUDA.
 That run validates the native dependencies; it does not validate subsequent
-JavaScript review changes. The same native pins also passed all 10 Pocket
+JavaScript review changes. Those original native pins also passed all 10 Pocket
 CTests with upstream numerical fixtures, static/dynamic CPU planner tests,
 and 116 selected Supertonic Metal operations against CPU. Six paired
 old-versus-merged native audio cases produced bit-identical PCM; this is

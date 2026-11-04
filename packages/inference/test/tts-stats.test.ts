@@ -1,13 +1,15 @@
 import test from 'brittle'
-import { collectTtsStats, chunkMetadata } from '@/utils/tts-stats'
+import { appendPcm, collectTtsStats, chunkMetadata } from '@/utils/tts-stats'
 
-test('collectTtsStats: maps LavaSR enhancer backend stats', (t) => {
+test('collectTtsStats: maps LavaSR enhancer and denoiser backend stats', (t) => {
   const stats = collectTtsStats({
     stats: {
       audioDurationMs: 1200,
       totalSamples: 48000,
       enhancerBackendDevice: 1,
-      enhancerBackendId: 3
+      enhancerBackendId: 3,
+      denoiserBackendDevice: 1,
+      denoiserBackendId: 3
     }
   })
 
@@ -15,7 +17,27 @@ test('collectTtsStats: maps LavaSR enhancer backend stats', (t) => {
     audioDuration: 1200,
     totalSamples: 48000,
     enhancerBackendDevice: 1,
-    enhancerBackendId: 3
+    enhancerBackendId: 3,
+    denoiserBackendDevice: 1,
+    denoiserBackendId: 3
+  })
+})
+
+test('collectTtsStats: reports an unloaded LavaSR stage as -1', (t) => {
+  const stats = collectTtsStats({
+    stats: {
+      enhancerBackendDevice: 1,
+      enhancerBackendId: 2,
+      denoiserBackendDevice: -1,
+      denoiserBackendId: -1
+    }
+  })
+
+  t.alike(stats, {
+    enhancerBackendDevice: 1,
+    enhancerBackendId: 2,
+    denoiserBackendDevice: -1,
+    denoiserBackendId: -1
   })
 })
 
@@ -34,7 +56,9 @@ test('collectTtsStats: maps the whole addon RuntimeStats surface', (t) => {
       backendId: 1,
       gpuUnsupported: 0,
       enhancerBackendDevice: 0,
-      enhancerBackendId: 0
+      enhancerBackendId: 0,
+      denoiserBackendDevice: 0,
+      denoiserBackendId: 0
     }
   })
 
@@ -49,7 +73,9 @@ test('collectTtsStats: maps the whole addon RuntimeStats surface', (t) => {
     backendId: 1,
     gpuUnsupported: 0,
     enhancerBackendDevice: 0,
-    enhancerBackendId: 0
+    enhancerBackendId: 0,
+    denoiserBackendDevice: 0,
+    denoiserBackendId: 0
   })
 })
 
@@ -57,6 +83,18 @@ test('collectTtsStats: preserves zero-valued backend codes', (t) => {
   // `backendDevice: 0` means CPU, not "absent"; a truthiness check would drop it.
   const stats = collectTtsStats({ stats: { backendDevice: 0, backendId: 0, gpuUnsupported: 0 } })
   t.alike(stats, { backendDevice: 0, backendId: 0, gpuUnsupported: 0 })
+})
+
+test('collectTtsStats: forwards the Audio8 Core ML codec flags, zero included', (t) => {
+  // 0 is a real report (no sidecar, or this call fell back to ggml), not absence.
+  t.alike(collectTtsStats({ stats: { codecSidecarLoaded: 1, codecOnCoreml: 1 } }), {
+    codecSidecarLoaded: 1,
+    codecOnCoreml: 1
+  })
+  t.alike(collectTtsStats({ stats: { codecSidecarLoaded: 1, codecOnCoreml: 0 } }), {
+    codecSidecarLoaded: 1,
+    codecOnCoreml: 0
+  })
 })
 
 test('collectTtsStats: returns an empty object when the addon reported nothing', (t) => {
@@ -83,4 +121,12 @@ test('chunkMetadata: omits absent fields and empty sentence text', (t) => {
     { chunkIndex: 0 },
     'chunkIndex 0 is real; an empty sentenceChunk is not'
   )
+})
+
+test('appendPcm: appends each chunk in place, in order', (t) => {
+  const buffer: number[] = []
+  appendPcm(buffer, new Int16Array([1, -2, 3]))
+  appendPcm(buffer, [])
+  appendPcm(buffer, new Int16Array([32767, -32768]))
+  t.alike(buffer, [1, -2, 3, 32767, -32768])
 })

@@ -2,13 +2,13 @@ import {
   ERR_CODES_PARAKEET as ERR_CODES,
   QvacErrorAddonASRGgml,
 } from "../../lib/error";
-import { resolveBackendsDir } from "../../lib/backends";
 import {
   END_OF_INPUT,
   MAX_BUFFERED_BYTES,
 } from "../../lib/constants";
 import { mergeFloat32Chunks, pcmS16ToFloat32 } from "../../lib/audio";
 import type { BackendInfo } from "../../lib/types";
+import type { ParakeetSpeakerAttributionConfig } from "./options";
 
 export type { BackendInfo };
 
@@ -29,6 +29,9 @@ export interface ParakeetConfigurationParams {
   modelPath?: string;
   maxThreads?: number;
   useGPU?: boolean;
+  /** Native ggml backend selector. */
+  backend?: string;
+  speakerAttribution?: ParakeetSpeakerAttributionConfig;
   sampleRate?: number;
   channels?: number;
   captionEnabled?: boolean;
@@ -104,7 +107,7 @@ export type AudioInput =
 
 export type AppendData =
   | { type: "audio"; data?: ArrayBufferLike }
-  | { type: typeof END_OF_INPUT };
+  | { type: typeof END_OF_INPUT; job?: Record<string, unknown> };
 
 export type ParakeetOutputCallback = (
   addon: unknown,
@@ -224,18 +227,8 @@ export class ParakeetInterface {
     this._bufferedAudio = [];
     this._bufferedBytes = 0;
 
-    this._config = this._applyDefaults(configurationParams);
+    this._config = { ...configurationParams };
     this._createNativeInstance(this._config);
-  }
-
-  private _applyDefaults(
-    configurationParams: ParakeetConfigurationParams,
-  ): ParakeetConfigurationParams {
-    const out = { ...configurationParams };
-    if (!out.backendsDir) {
-      out.backendsDir = resolveBackendsDir();
-    }
-    return out;
   }
 
   private _setState(newState: ParakeetState): void {
@@ -304,6 +297,10 @@ export class ParakeetInterface {
       return eventStr;
     }
     if (isError || eventStr.includes("Error")) return "Error";
+    if (
+      data !== null && typeof data === "object" &&
+      (data as { type?: unknown }).type === "endOfTurn"
+    ) return "EndOfTurn";
     if (this._looksLikeVadEvent(data)) return "VadState";
     if (eventStr.includes("RuntimeStats")) return "JobEnded";
     if (eventStr.includes("Output")) return "Output";
@@ -410,7 +407,7 @@ export class ParakeetInterface {
   append(data: AppendData): Promise<number> {
     try {
       if (data?.type === END_OF_INPUT) {
-        return Promise.resolve(this._submitBufferedJob());
+        return Promise.resolve(this._submitBufferedJob(data.job));
       }
       if (data?.type === "audio") {
         return Promise.resolve(this._bufferAudioChunk(data.data));
@@ -429,13 +426,13 @@ export class ParakeetInterface {
     }
   }
 
-  private _submitBufferedJob(): number {
+  private _submitBufferedJob(job: Record<string, unknown> = {}): number {
     const currentJobId = this._nextJobId;
     const input = this._concatBufferedAudio();
     const previousState = this._state;
     let accepted = false;
     try {
-      accepted = this._binding.runJob(this._handle, { type: "audio", input });
+      accepted = this._binding.runJob(this._handle, { ...job, type: "audio", input });
     } catch (error) {
       this._setState(previousState);
       throw error;

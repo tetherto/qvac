@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { HttpError } from '@/serve/lib/http-error'
 
 // OpenAI's built-in speech voices. QVAC has no fixed catalog — these only
 // document the names OpenAI clients send; routing still goes through aliases.
@@ -30,16 +31,57 @@ export const speechVoice = z.union([
 
 export type SpeechVoice = z.infer<typeof speechVoice>
 
+// Multipart clients encode hotwords as a JSON array.
+const hotwords = z.preprocess(
+  (value) => {
+    if (typeof value !== 'string') return value
+    try {
+      return JSON.parse(value)
+    } catch {
+      return value
+    }
+  },
+  z
+    .array(
+      z
+        .string()
+        .min(1)
+        .refine((word) => Buffer.byteLength(word, 'utf8') <= 64)
+    )
+    .max(64)
+    .optional()
+)
+
 export const transcriptionsBody = z
   .object({
     model: z.string().min(1),
     file: z.instanceof(Buffer),
     response_format: z.string().optional(),
     prompt: z.string().optional(),
+    hotwords,
+    max_new_tokens: z.coerce.number().int().min(0).max(2147483647).optional(),
     language: z.string().optional(),
     temperature: z.coerce.number().optional()
   })
   .passthrough()
+
+/** Validate model-specific options before creating temporary audio files. */
+export function assertTranscriptionOptionsSupported(
+  body: Pick<z.infer<typeof transcriptionsBody>, 'prompt' | 'hotwords' | 'max_new_tokens'>,
+  modelType: string
+): void {
+  if (body.hotwords === undefined && body.max_new_tokens === undefined) return
+  if (modelType !== 'moss-transcribe') {
+    throw new HttpError(
+      400,
+      'unsupported_parameter',
+      'hotwords and max_new_tokens require MOSS transcription.'
+    )
+  }
+  if (body.hotwords?.length && body.prompt !== undefined) {
+    throw new HttpError(400, 'invalid_parameter', 'Use either prompt or hotwords, not both.')
+  }
+}
 
 export const translationsBody = z
   .object({
@@ -60,11 +102,14 @@ export const audioSpeechBody = z
     response_format: z.string().optional(),
     speed: z.union([z.number(), z.string()]).optional(),
     instructions: z.string().optional(),
-    stream_format: z.string().optional()
+    stream_format: z
+      .string()
+      .optional()
+      .describe('`audio` (default) returns the audio body; `sse` streams `speech.audio.*` events.')
   })
   .passthrough()
 
-export const SPEECH_UNSUPPORTED_PARAMS = ['speed', 'instructions', 'stream_format'] as const
+export const SPEECH_UNSUPPORTED_PARAMS = ['speed', 'instructions'] as const
 
 export const voiceObject = z.object({
   id: z.string(),

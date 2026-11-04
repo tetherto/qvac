@@ -3,6 +3,8 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <functional>
+#include <iostream>
 #include <iterator>
 #include <memory>
 #include <optional>
@@ -14,20 +16,21 @@
 #include <vector>
 
 #include <common/chat.h>
+#include <common/common.h>
 #include <gtest/gtest.h>
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama.h>
 
+#include "model-interface/CacheLedger.hpp"
 #include "model-interface/LlamaModel.hpp"
 #include "model-interface/MtmdLlmContext.hpp"
-#include "model-interface/ReasoningBlockCompactor.hpp"
 #include "model-interface/TextLlmContext.hpp"
 #include "test_common.hpp"
 #include "test_internal_peers.hpp"
-#include "utils/RecurrentStateSnapshot.hpp"
+#include "utils/SequenceStateSnapshot.hpp"
 
-// Tests for the cancel-rollback paths introduced alongside
-// `remove_thinking_from_context` for hybrid SSM models. Two layers of
+// Tests for the transactional cancel-rollback paths for hybrid SSM models.
+// Two layers of
 // coverage:
 //   1. Snapshot / restore primitive against a real `llama_context`
 //      (hybrid + pure-attention). Pins the foundational behaviour that
@@ -44,11 +47,38 @@
 
 namespace fs = std::filesystem;
 
-using qvac_lib_inference_addon_llama::utils::RecurrentStateSnapshot;
-using qvac_lib_inference_addon_llama::utils::restoreRecurrentState;
-using qvac_lib_inference_addon_llama::utils::snapshotRecurrentState;
+using qvac_lib_inference_addon_llama::utils::restoreSequenceState;
+using qvac_lib_inference_addon_llama::utils::SequenceStateSnapshot;
+using qvac_lib_inference_addon_llama::utils::sequenceStateSnapshotFilesWritten;
+using qvac_lib_inference_addon_llama::utils::snapshotSequenceState;
 
 namespace {
+
+/// Waits for a worker that was asked to cancel, and always joins it, so a
+/// timeout fails the test instead of destroying a joinable thread (which
+/// terminates the whole test binary). `recancel`, when set, is re-sent every
+/// 100 ms: on a slow runner one early cancel can land before the request has
+/// started and is then ignored. Only pass a cancel that is a no-op once the
+/// request has ended (`LlamaModel::cancel`), never a raw context stop, which
+/// would leave a stop flag for the next request.
+bool awaitCancelledWorker(
+    std::thread& worker, const std::atomic<bool>& done,
+    const std::function<void()>& recancel = {},
+    std::chrono::seconds limit = std::chrono::seconds(120)) {
+  const auto deadline = std::chrono::steady_clock::now() + limit;
+  auto nextCancel = std::chrono::steady_clock::now();
+  while (!done.load() && std::chrono::steady_clock::now() < deadline) {
+    if (recancel && std::chrono::steady_clock::now() >= nextCancel) {
+      recancel();
+      nextCancel =
+          std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  const bool finished = done.load();
+  worker.join();
+  return finished;
+}
 
 llama_pos seqPosMax(LlamaModel& model, llama_seq_id seqId = 0) {
   auto* mem = llama_get_memory(model.getContext());
@@ -144,7 +174,6 @@ LlamaModel::Prompt makeMtmdRecoveryPrompt() {
   LlamaModel::Prompt recovery;
   recovery.input =
       R"([{"role":"user","content":"Answer with exactly one word: ok"}])";
-  recovery.generationParams.remove_thinking_from_context = false;
   recovery.generationParams.reasoning_budget = 0;
   recovery.generationParams.n_predict = 32;
   return recovery;
@@ -214,8 +243,8 @@ TEST_F(CancelRollbackPrimitiveTest, SnapshotRestoreRoundtripQwen35Hybrid) {
   const llama_pos posBefore = seqPosMax(*model);
   ASSERT_GT(posBefore, 0) << "prefill must have advanced the cache";
 
-  RecurrentStateSnapshot snap;
-  ASSERT_TRUE(snapshotRecurrentState(
+  SequenceStateSnapshot snap;
+  ASSERT_TRUE(snapshotSequenceState(
       model->getContext(), /*seqId=*/0, posBefore + 1, snap));
   ASSERT_FALSE(snap.empty())
       << "hybrid model snapshot must be non-empty (recurrent state present)";
@@ -225,9 +254,260 @@ TEST_F(CancelRollbackPrimitiveTest, SnapshotRestoreRoundtripQwen35Hybrid) {
   ASSERT_EQ(seqPosMax(*model), -1)
       << "reset should fully clear the sequence memory";
 
-  ASSERT_TRUE(restoreRecurrentState(model->getContext(), /*seqId=*/0, snap));
+  ASSERT_TRUE(restoreSequenceState(model->getContext(), /*seqId=*/0, snap));
   EXPECT_EQ(seqPosMax(*model), posBefore)
       << "restore must return the cache to the snapshotted position";
+}
+
+// Same roundtrip with the memory backend: the bytes come from
+// `llama_state_seq_get_data`, go back through `llama_state_seq_set_data`,
+// and no file is written at any point.
+namespace {
+
+// Decodes `tokens[begin, end)` at their own positions on seq 0, asking for
+// logits on the last one when `wantLogits`.
+bool decodeRange(
+    llama_context* ctx, const std::vector<llama_token>& tokens, size_t begin,
+    size_t end, bool wantLogits) {
+  llama_batch batch = llama_batch_init(static_cast<int32_t>(end - begin), 0, 1);
+  for (size_t i = begin; i < end; ++i) {
+    common_batch_add(
+        batch,
+        tokens[i],
+        static_cast<llama_pos>(i),
+        {0},
+        wantLogits && i + 1 == end);
+  }
+  const bool ok = llama_decode(ctx, batch) == 0;
+  llama_batch_free(batch);
+  return ok;
+}
+
+// Greedy continuation of `count` tokens after a prefill that ended at `pos`.
+std::vector<llama_token> greedyTail(
+    llama_context* ctx, const llama_vocab* vocab, llama_pos pos, int count) {
+  std::vector<llama_token> out;
+  const int nVocab = llama_vocab_n_tokens(vocab);
+  for (int i = 0; i < count; ++i) {
+    const float* logits = llama_get_logits_ith(ctx, -1);
+    llama_token best = 0;
+    for (int t = 1; t < nVocab; ++t) {
+      if (logits[t] > logits[best]) {
+        best = t;
+      }
+    }
+    out.push_back(best);
+    llama_batch batch = llama_batch_init(1, 0, 1);
+    common_batch_add(batch, best, pos + i, {0}, true);
+    const bool ok = llama_decode(ctx, batch) == 0;
+    llama_batch_free(batch);
+    if (!ok) {
+      break;
+    }
+  }
+  return out;
+}
+
+} // namespace
+
+// The partial checkpoint contract on hybrid memory: a PARTIAL_ONLY state
+// holds only the recurrent part, and restoring it followed by trimming the
+// attention cache back to the same position must be indistinguishable from
+// restoring a full copy of the sequence.
+TEST_F(
+    CancelRollbackPrimitiveTest,
+    PartialRestorePlusTrimMatchesFullRestoreOnHybrid) {
+  auto model = loadTextModel(qwen35HybridModelPath());
+  if (!model) {
+    GTEST_SKIP() << "Qwen3.5 hybrid model not found";
+  }
+  llama_context* ctx = model->getContext();
+  const llama_vocab* vocab = llama_model_get_vocab(model->getModel());
+  auto* mem = llama_get_memory(ctx);
+  ASSERT_NE(mem, nullptr);
+  ASSERT_TRUE(llama_memory_seq_rm(mem, 0, -1, -1));
+
+  std::string text;
+  for (int i = 0; i < 40; ++i) {
+    text += "Line " + std::to_string(i) + " of a long shared history. ";
+  }
+  const std::vector<llama_token> tokens =
+      common_tokenize(ctx, text, true, true);
+  const size_t checkpointAt = tokens.size() / 2;
+  ASSERT_GT(checkpointAt, 16u);
+
+  ASSERT_TRUE(decodeRange(ctx, tokens, 0, checkpointAt, false));
+  llama_synchronize(ctx);
+  const size_t fullSize = llama_state_seq_get_size(ctx, 0);
+  std::vector<uint8_t> full(fullSize);
+  ASSERT_EQ(
+      llama_state_seq_get_data(ctx, full.data(), full.size(), 0), fullSize);
+  const size_t partialSize =
+      llama_state_seq_get_size_ext(ctx, 0, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+  std::vector<uint8_t> partial(partialSize);
+  ASSERT_EQ(
+      llama_state_seq_get_data_ext(
+          ctx,
+          partial.data(),
+          partial.size(),
+          0,
+          LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY),
+      partialSize);
+  EXPECT_LT(partialSize, fullSize);
+
+  // Run on past the checkpoint so both restores have something to undo.
+  ASSERT_TRUE(decodeRange(ctx, tokens, checkpointAt, tokens.size(), false));
+  llama_synchronize(ctx);
+  const size_t partialLater =
+      llama_state_seq_get_size_ext(ctx, 0, LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY);
+  EXPECT_EQ(partialLater, partialSize)
+      << "the recurrent state must not grow with the context";
+  EXPECT_GT(llama_state_seq_get_size(ctx, 0), fullSize);
+
+  constexpr int kTail = 12;
+  ASSERT_NE(llama_state_seq_set_data(ctx, full.data(), full.size(), 0), 0u);
+  ASSERT_TRUE(decodeRange(ctx, tokens, checkpointAt, tokens.size(), true));
+  const std::vector<llama_token> viaFull =
+      greedyTail(ctx, vocab, static_cast<llama_pos>(tokens.size()), kTail);
+
+  ASSERT_NE(
+      llama_state_seq_set_data_ext(
+          ctx,
+          partial.data(),
+          partial.size(),
+          0,
+          LLAMA_STATE_SEQ_FLAGS_PARTIAL_ONLY),
+      0u);
+  ASSERT_TRUE(
+      llama_memory_seq_rm(mem, 0, static_cast<llama_pos>(checkpointAt), -1))
+      << "trimming attention back to the partial checkpoint was refused";
+  EXPECT_EQ(
+      llama_memory_seq_pos_max(mem, 0) + 1,
+      static_cast<llama_pos>(checkpointAt));
+  ASSERT_TRUE(decodeRange(ctx, tokens, checkpointAt, tokens.size(), true));
+  const std::vector<llama_token> viaPartial =
+      greedyTail(ctx, vocab, static_cast<llama_pos>(tokens.size()), kTail);
+
+  EXPECT_EQ(viaPartial, viaFull);
+  std::cerr << "[partial-snapshot] tokens=" << tokens.size() << " full@"
+            << checkpointAt << "=" << fullSize << " partial=" << partialSize
+            << "\n";
+  llama_memory_seq_rm(mem, 0, -1, -1);
+}
+
+// One checkpoint when the config does not say; an explicit
+// `cache_checkpoints` wins.
+TEST_F(CancelRollbackPrimitiveTest, HybridDefaultsToOneCheckpoint) {
+  const std::string path = qwen35HybridModelPath();
+  if (!modelFileExists(path)) {
+    GTEST_SKIP() << "Qwen3.5 hybrid model not found";
+  }
+  for (const auto& [configured, expected] :
+       std::vector<std::pair<const char*, size_t>>{{nullptr, 1}, {"5", 5}}) {
+    std::unordered_map<std::string, std::string> config;
+    config["device"] = test_common::getTestDevice();
+    config["ctx_size"] = "2048";
+    config["gpu_layers"] = test_common::getTestGpuLayers();
+    config["backendsDir"] = test_common::getTestBackendsDir().string();
+    if (configured != nullptr) {
+      config["cache_checkpoints"] = configured;
+    }
+    std::string modelPath = path;
+    auto model = std::make_unique<LlamaModel>(
+        std::move(modelPath), std::string(), std::move(config));
+    model->waitForLoadInitialization();
+    ASSERT_TRUE(model->isLoaded());
+    EXPECT_EQ(LlamaModelTestPeer::checkpointPolicy(*model).maxCount, expected)
+        << (configured != nullptr ? configured : "default");
+  }
+}
+
+TEST_F(CancelRollbackPrimitiveTest, SnapshotRestoreRoundtripInMemoryHybrid) {
+  auto model = loadTextModel(qwen35HybridModelPath());
+  if (!model) {
+    GTEST_SKIP() << "Qwen3.5 hybrid model not found";
+  }
+
+  primeWithPrefill(*model, "Hello, this is the seed prompt.");
+  const llama_pos posBefore = seqPosMax(*model);
+  ASSERT_GT(posBefore, 0);
+  const uint64_t filesBefore = sequenceStateSnapshotFilesWritten();
+
+  SequenceStateSnapshot snap;
+  ASSERT_TRUE(snapshotSequenceState(
+      model->getContext(),
+      /*seqId=*/0,
+      posBefore + 1,
+      snap,
+      qvac_lib_inference_addon_llama::utils::SnapshotStorage::Memory));
+  ASSERT_FALSE(snap.empty());
+  EXPECT_TRUE(snap.hasBuffer());
+  EXPECT_FALSE(snap.hasFile());
+  EXPECT_GT(snap.bytes(), 0u);
+  EXPECT_EQ(sequenceStateSnapshotFilesWritten(), filesBefore)
+      << "a memory-backed capture must not write a file";
+
+  model->reset();
+  ASSERT_EQ(seqPosMax(*model), -1);
+
+  ASSERT_TRUE(restoreSequenceState(model->getContext(), /*seqId=*/0, snap));
+  EXPECT_EQ(seqPosMax(*model), posBefore)
+      << "restore from the host buffer must return the cache to the "
+         "snapshotted position";
+}
+
+// The load-time budget check measures one checkpoint's worst case on the
+// real context. The estimate must be an upper bound of a real capture, and a
+// budget that cannot hold the requested count must fail the load with
+// InvalidArgument instead of filling up silently later.
+TEST_F(CancelRollbackPrimitiveTest, EstimateBoundsRealSnapshotOnHybrid) {
+  auto model = loadTextModel(qwen35HybridModelPath());
+  if (!model) {
+    GTEST_SKIP() << "Qwen3.5 hybrid model not found";
+  }
+  const uint64_t worstCase =
+      qvac_lib_inference_addon_llama::utils::estimateMaxSequenceStateBytes(
+          model->getContext(),
+          llama_model_get_vocab(model->getModel()),
+          llama_n_ctx_seq(model->getContext()));
+  ASSERT_GT(worstCase, 0u) << "the probe must be able to run on an idle model";
+  ASSERT_EQ(seqPosMax(*model), -1) << "the probe must leave the sequence empty";
+
+  primeWithPrefill(*model, "Hello, this is the seed prompt.");
+  SequenceStateSnapshot snap;
+  ASSERT_TRUE(snapshotSequenceState(
+      model->getContext(),
+      /*seqId=*/0,
+      seqPosMax(*model) + 1,
+      snap,
+      qvac_lib_inference_addon_llama::utils::SnapshotStorage::Memory));
+  EXPECT_LE(snap.bytes(), worstCase)
+      << "a real snapshot must never exceed the load-time estimate";
+}
+
+TEST_F(CancelRollbackPrimitiveTest, TooSmallCheckpointBudgetFailsTheLoad) {
+  const std::string modelPath = qwen35HybridModelPath();
+  if (!fs::exists(modelPath)) {
+    GTEST_SKIP() << "Qwen3.5 hybrid model not found";
+  }
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "4096";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  config["cache_checkpoints"] = "4";
+  config["cache_checkpoints_max_bytes"] = "1024";
+
+  EXPECT_THROW(
+      {
+        std::string mp = modelPath;
+        std::string proj;
+        LlamaModel model(std::move(mp), std::move(proj), std::move(config));
+        model.waitForLoadInitialization();
+      },
+      qvac_errors::StatusError)
+      << "a 1 KiB budget cannot hold four checkpoints of a 4096-token "
+         "sequence; the load must fail early";
 }
 
 // Same roundtrip for a pure-attention model. The snapshot+restore primitive
@@ -243,15 +523,15 @@ TEST_F(
   const llama_pos posBefore = seqPosMax(*model);
   ASSERT_GT(posBefore, 0);
 
-  RecurrentStateSnapshot snap;
-  ASSERT_TRUE(snapshotRecurrentState(
+  SequenceStateSnapshot snap;
+  ASSERT_TRUE(snapshotSequenceState(
       model->getContext(), /*seqId=*/0, posBefore + 1, snap));
   ASSERT_FALSE(snap.empty());
 
   model->reset();
   ASSERT_EQ(seqPosMax(*model), -1);
 
-  ASSERT_TRUE(restoreRecurrentState(model->getContext(), /*seqId=*/0, snap));
+  ASSERT_TRUE(restoreSequenceState(model->getContext(), /*seqId=*/0, snap));
   EXPECT_EQ(seqPosMax(*model), posBefore);
 }
 
@@ -264,14 +544,14 @@ TEST_F(CancelRollbackPrimitiveTest, SnapshotEmptySequenceHybridIsRestorable) {
     GTEST_SKIP() << "Qwen3.5 hybrid model not found";
   }
 
-  RecurrentStateSnapshot snap;
-  ASSERT_TRUE(snapshotRecurrentState(
+  SequenceStateSnapshot snap;
+  ASSERT_TRUE(snapshotSequenceState(
       model->getContext(), /*seqId=*/0, /*nPastAt=*/0, snap));
   EXPECT_EQ(snap.nPast, 0);
 
   // Restoring an empty-sequence snapshot must succeed and leave the
   // cache empty.
-  ASSERT_TRUE(restoreRecurrentState(model->getContext(), /*seqId=*/0, snap));
+  ASSERT_TRUE(restoreSequenceState(model->getContext(), /*seqId=*/0, snap));
   EXPECT_EQ(seqPosMax(*model), -1);
 }
 
@@ -289,8 +569,8 @@ TEST_F(CancelRollbackPrimitiveTest, RestoreDropsLaterContentOnHybrid) {
   const llama_pos posAfterShort = seqPosMax(*model);
   ASSERT_GT(posAfterShort, 0);
 
-  RecurrentStateSnapshot snap;
-  ASSERT_TRUE(snapshotRecurrentState(
+  SequenceStateSnapshot snap;
+  ASSERT_TRUE(snapshotSequenceState(
       model->getContext(), /*seqId=*/0, posAfterShort + 1, snap));
 
   // Run a longer prefill that resets and grows the cache beyond the
@@ -304,7 +584,7 @@ TEST_F(CancelRollbackPrimitiveTest, RestoreDropsLaterContentOnHybrid) {
   ASSERT_GT(posAfterLong, posAfterShort)
       << "second prefill should have grown the cache beyond the snapshot";
 
-  ASSERT_TRUE(restoreRecurrentState(model->getContext(), /*seqId=*/0, snap));
+  ASSERT_TRUE(restoreSequenceState(model->getContext(), /*seqId=*/0, snap));
   EXPECT_EQ(seqPosMax(*model), posAfterShort)
       << "restore must drop the second prefill's tail and return to the "
          "snapshotted position";
@@ -406,15 +686,123 @@ TEST_F(
       << "post-cancel prefill must successfully decode tokens";
 }
 
-// `onCancel` on a hybrid driver with `remove_thinking_from_context: true`:
-// after prefill (which takes the prefill-entry AND reasoning-boundary
-// snapshots), calling `onCancel` directly must restore the
-// PREFILL-ENTRY snapshot — i.e. roll the cache back to the cursor that
+// A divergent turn on a hybrid model restores the end-of-history checkpoint
+// `c` (trimming the KV cache to `c`) before it prefills the new branch.
+// Cancelled in prefill, it must roll back to `c`, the state the KV cache, the
+// recurrent state and the ledger all agree on. The pre-request snapshot holds
+// only the recurrent state at the old cursor, so restoring it would leave the
+// ledger describing KV cells `[c, N_old)` that are gone. Hybrid `seq_pos_max`
+// is the lower of the two caches' ends, so it shows that gap.
+TEST_F(
+    TextLlmContextCancelTest,
+    DivergentHybridTurnCancelledInPrefillKeepsLedgerAndMemoryInStep) {
+  auto model = loadTextModel(qwen35HybridModelPath());
+  if (!model) {
+    GTEST_SKIP() << "Qwen3.5 hybrid model not found";
+  }
+  LlmModelContext shared = makeShared(*model);
+  auto* mem = llama_get_memory(shared.lctx);
+  ASSERT_NE(mem, nullptr);
+  llama_memory_seq_rm(mem, 0, -1, -1);
+  common_params params = model->getCommonParams();
+  TextLlmContext driver(params, shared, /*seqId=*/0);
+  driver.setCacheReconciliationEnabled(true);
+
+  // Turn 1 commits and leaves an end-of-history checkpoint at the end of the
+  // user message.
+  const auto quiet = [](const std::string&) {};
+  ASSERT_TRUE(driver
+                  .evalMessageWithTools(
+                      {makeMsg("user", "Name three colours of the rainbow.")},
+                      {},
+                      /*isCacheLoaded=*/false,
+                      /*prefill=*/false)
+                  .ok);
+  (void)driver.generateResponse(quiet);
+  const llama_pos oldCursor = driver.getNPast();
+  ASSERT_EQ(llama_memory_seq_pos_max(mem, 0) + 1, oldCursor);
+
+  // Turn 2 replaces turn 1's answer, so it diverges inside the resident
+  // history and restores the checkpoint. The stop lands on the first prefill
+  // check, after that restore.
+  driver.stop();
+  const LlmContext::EvalMessageResult cancelled = driver.evalMessageWithTools(
+      {makeMsg("user", "Name three colours of the rainbow."),
+       makeMsg("assistant", "Red, green and blue."),
+       makeMsg("user", "Which of them is warmest?")},
+      {},
+      /*isCacheLoaded=*/false,
+      /*prefill=*/false);
+  ASSERT_TRUE(cancelled.cancelled);
+  ASSERT_GT(driver.lastCacheReuseForTesting(), 0u)
+      << "turn 2 restored no checkpoint, so it does not exercise the "
+         "divergent hybrid path";
+
+  EXPECT_EQ(llama_memory_seq_pos_max(mem, 0) + 1, driver.getNPast())
+      << "after the rollback the driver's cursor (" << driver.getNPast()
+      << ", old cursor " << oldCursor
+      << ") does not match the end of live memory";
+  EXPECT_GT(driver.getNPast(), 0) << "the rollback lands on the checkpoint";
+  EXPECT_LT(driver.getNPast(), oldCursor)
+      << "the old cursor's KV cells are gone; the rollback cannot land there";
+  llama_memory_seq_rm(mem, 0, -1, -1);
+}
+
+// The same on the multimodal context, driven through the model's own context.
+TEST_F(
+    TextLlmContextCancelTest,
+    DivergentMtmdHybridTurnCancelledInPrefillKeepsLedgerAndMemoryInStep) {
+  auto model = loadMtmdModel(qwen35HybridModelPath(), qwen35MmprojPath());
+  if (!model) {
+    GTEST_SKIP() << "Qwen3.5 hybrid model or mmproj not found";
+  }
+  auto* mtmd =
+      dynamic_cast<MtmdLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(mtmd, nullptr);
+  auto* mem = llama_get_memory(mtmd->getCtx());
+  ASSERT_NE(mem, nullptr);
+  mtmd->setCacheReconciliationEnabled(true);
+
+  const auto quiet = [](const std::string&) {};
+  ASSERT_TRUE(mtmd->evalMessageWithTools(
+                      {makeMsg("user", "Name three colours of the rainbow.")},
+                      {},
+                      /*isCacheLoaded=*/false,
+                      /*prefill=*/false)
+                  .ok);
+  (void)mtmd->generateResponse(quiet);
+  const llama_pos oldCursor = mtmd->getNPast();
+  ASSERT_EQ(llama_memory_seq_pos_max(mem, 0) + 1, oldCursor);
+
+  mtmd->stop();
+  const LlmContext::EvalMessageResult cancelled = mtmd->evalMessageWithTools(
+      {makeMsg("user", "Name three colours of the rainbow."),
+       makeMsg("assistant", "Red, green and blue."),
+       makeMsg("user", "Which of them is warmest?")},
+      {},
+      /*isCacheLoaded=*/false,
+      /*prefill=*/false);
+  ASSERT_TRUE(cancelled.cancelled);
+  ASSERT_GT(mtmd->lastCacheReuseForTesting(), 0u)
+      << "turn 2 restored no checkpoint, so it does not exercise the "
+         "divergent hybrid path";
+
+  EXPECT_EQ(llama_memory_seq_pos_max(mem, 0) + 1, mtmd->getNPast())
+      << "after the rollback the cursor (" << mtmd->getNPast()
+      << ", old cursor " << oldCursor
+      << ") does not match the end of live memory";
+  EXPECT_GT(mtmd->getNPast(), 0);
+  EXPECT_LT(mtmd->getNPast(), oldCursor);
+}
+
+// Calling `onCancel` on a hybrid driver after prefill must restore the
+// pre-request snapshot — i.e. roll the cache back to the cursor that
 // existed BEFORE this request's prompt was submitted, matching the
-// "request never happened" cancel semantics. The reasoning-boundary
-// snapshot is reserved for normal thinking-block compaction and must
-// NOT be used for cancel.
-TEST_F(TextLlmContextCancelTest, OnCancelRestoresPreRequestSnapshotOnHybrid) {
+// "request never happened" cancel semantics.
+// `onCancel` after a completed prefill keeps the prompt resident: the request
+// is past the point where the caller received nothing, so it is settled like
+// a prediction-limit stop rather than rolled back. Cached or not.
+TEST_F(TextLlmContextCancelTest, OnCancelAfterPrefillKeepsPromptOnHybrid) {
   auto model = loadTextModel(qwen35HybridModelPath());
   if (!model) {
     GTEST_SKIP() << "Qwen3.5 hybrid model not found";
@@ -423,7 +811,6 @@ TEST_F(TextLlmContextCancelTest, OnCancelRestoresPreRequestSnapshotOnHybrid) {
   LlmModelContext shared = makeShared(*model);
   common_params params = model->getCommonParams();
   TextLlmContext driver(params, shared, /*seqId=*/0);
-  driver.setRemoveThinkingFromContext(true);
 
   // Pre-request cursor before any prompt is submitted. For a freshly
   // constructed driver this is 0; we capture it explicitly so the
@@ -441,35 +828,57 @@ TEST_F(TextLlmContextCancelTest, OnCancelRestoresPreRequestSnapshotOnHybrid) {
   ASSERT_GT(posAfterPrefill, preRequestNPast)
       << "prefill must advance the cursor for the test to be meaningful";
 
-  // Cancel after prefill but before any generation token is sampled.
-  // The pre-request checkpoint sits at `preRequestNPast`, so restore
-  // must wind the cursor BACK to that cursor — not leave it at the
-  // post-prefill position.
+  // Cancel after prefill but before any generation token is sampled. The
+  // prompt is complete, so the cursor stays at the post-prefill position
+  // and live memory matches it.
   EXPECT_TRUE(driver.onCancel([](const std::string&) {}))
-      << "onCancel must report rollback-ok when the recurrent restore succeeds";
+      << "onCancel after a completed prefill must report persistable state";
 
-  EXPECT_EQ(driver.getNPast(), preRequestNPast)
-      << "onCancel on hybrid must restore to the PRE-REQUEST cursor, not "
-         "the post-prefill cursor — cancel semantics is 'request never "
-         "happened'";
-  // `seq_pos_max` after a full pre-request restore: either -1 (sequence
-  // is now empty) or `preRequestNPast - 1` if there were prior turns.
-  // For this fresh driver pre-request was 0, so we expect -1.
-  if (preRequestNPast == 0) {
-    EXPECT_EQ(seqPosMax(*model), static_cast<llama_pos>(-1))
-        << "pre-request restore on a fresh driver must clear the sequence";
+  EXPECT_EQ(driver.getNPast(), posAfterPrefill)
+      << "onCancel after prefill must keep the prompt resident, not restore "
+         "the pre-request cursor";
+  EXPECT_EQ(seqPosMax(*model), posAfterPrefill - 1)
+      << "live memory must still hold exactly the prefilled prompt";
+}
+
+// The prefill stops at the end of the history only when a checkpoint will be
+// kept: with `cache_checkpoints: 0` there is no stop and no capture.
+TEST_F(TextLlmContextCancelTest, NoHistoryCheckpointStopWithZeroCheckpoints) {
+  auto model = loadTextModel(qwen35HybridModelPath());
+  if (!model) {
+    GTEST_SKIP() << "Qwen3.5 hybrid model not found";
+  }
+  LlmModelContext shared = makeShared(*model);
+  common_params params = model->getCommonParams();
+  for (const size_t count : {size_t{1}, size_t{0}}) {
+    llama_memory_seq_rm(llama_get_memory(shared.lctx), 0, -1, -1);
+    TextLlmContext driver(params, shared, /*seqId=*/0);
+    driver.setCacheReconciliationEnabled(true);
+    qvac_lib_inference_addon_llama::cache::CheckpointPolicy policy;
+    policy.maxCount = count;
+    driver.setCacheCheckpointPolicy(policy);
+    const PrefillPlan plan = driver.preparePrefill(
+        {makeMsg("user", "Name three colours of the rainbow.")},
+        /*tools=*/{},
+        /*media=*/{},
+        /*mediaPlan=*/{},
+        /*isCacheLoaded=*/false,
+        /*isPrefillOnlyRequest=*/false);
+    ASSERT_FALSE(plan.tokens.empty());
+    EXPECT_EQ(plan.checkpointAtTextTokens.has_value(), count > 0)
+        << "cache_checkpoints=" << count;
+    driver.onFailure([](const std::string&) {});
   }
 }
 
-// Pure-attention `onCancel` must now also roll back to the pre-request
-// cursor via `removeLastNTokens` (no recurrent snapshot is taken on
-// this path). The previous behavior — chain into `onGenerationFinished`
-// which leaves the cancelled prompt in the cache — violated the
-// "request never happened" cancel semantics and left an orphaned
-// `<think>` opener for templates that force-open the reasoning channel.
+// The scheduler decodes a sample only on the step after `onLogitsReady`
+// returned it. A cancel between the two must leave that sample out of the
+// ledger, or the committed cache describes one token more than live memory
+// and the saved file fails to load. Driven by hand so the cancel lands in
+// exactly that gap.
 TEST_F(
     TextLlmContextCancelTest,
-    OnCancelOnPureAttentionRollsBackToPreRequestCursor) {
+    BatchSampleCancelledBeforeDecodeStaysOutOfLedger) {
   auto model = loadTextModel(qwen3PureAttentionModelPath());
   if (!model) {
     GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
@@ -478,7 +887,68 @@ TEST_F(
   LlmModelContext shared = makeShared(*model);
   common_params params = model->getCommonParams();
   TextLlmContext driver(params, shared, /*seqId=*/0);
-  driver.setRemoveThinkingFromContext(true);
+  driver.setCacheReconciliationEnabled(true);
+
+  const PrefillPlan plan = driver.preparePrefill(
+      {makeMsg("user", "Hi")},
+      /*tools=*/{},
+      /*media=*/{},
+      /*mediaPlan=*/{},
+      /*isCacheLoaded=*/false,
+      /*isPrefillOnlyRequest=*/false);
+  ASSERT_FALSE(plan.tokens.empty());
+  const auto promptSize = static_cast<llama_pos>(plan.tokens.size());
+
+  llama_batch batch = llama_batch_init(promptSize, 0, 1);
+  for (llama_pos i = 0; i < promptSize; ++i) {
+    common_batch_add(batch, plan.tokens[i], i, {0}, i == promptSize - 1);
+  }
+  ASSERT_EQ(llama_decode(shared.lctx, batch), 0);
+  driver.onPrefillComplete(promptSize, plan.tokens.size());
+
+  // One sample the scheduler decodes on the next step, which confirms it...
+  driver.syncPosition(promptSize);
+  const SequenceStepResult first =
+      driver.onLogitsReady(promptSize - 1, 1, [](const std::string&) {});
+  ASSERT_FALSE(first.finished);
+  common_batch_clear(batch);
+  common_batch_add(batch, first.token, promptSize, {0}, true);
+  ASSERT_EQ(llama_decode(shared.lctx, batch), 0);
+  driver.syncPosition(promptSize + 1);
+
+  // ...and one the cancel lands on before it is ever fed.
+  const SequenceStepResult second =
+      driver.onLogitsReady(0, 2, [](const std::string&) {});
+  ASSERT_FALSE(second.finished);
+  llama_batch_free(batch);
+  ASSERT_TRUE(driver.onCancel([](const std::string&) {}));
+
+  const std::vector<llama_token> words = driver.cacheStateTokens();
+  qvac_lib_inference_addon_llama::cache::DecodedLedger saved;
+  ASSERT_NO_THROW(
+      saved = qvac_lib_inference_addon_llama::cache::deserialize(
+          words.data(), words.size()))
+      << "the committed ledger does not match the cache it describes";
+  EXPECT_EQ(saved.nPast, promptSize + 1);
+  EXPECT_EQ(saved.ledger.positions(), promptSize + 1)
+      << "the unfed sample reached the ledger";
+  EXPECT_EQ(seqPosMax(*model) + 1, promptSize + 1);
+}
+
+// Pure-attention counterpart: `onCancel` after a completed prefill keeps the
+// prompt resident. The next full-history render reconciles any template
+// scaffolding (such as a force-opened `<think>`) by prefix, so nothing is
+// orphaned.
+TEST_F(
+    TextLlmContextCancelTest, OnCancelAfterPrefillKeepsPromptOnPureAttention) {
+  auto model = loadTextModel(qwen3PureAttentionModelPath());
+  if (!model) {
+    GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
+  }
+
+  LlmModelContext shared = makeShared(*model);
+  common_params params = model->getCommonParams();
+  TextLlmContext driver(params, shared, /*seqId=*/0);
 
   const llama_pos preRequestNPast = driver.getNPast();
 
@@ -490,15 +960,15 @@ TEST_F(
   EXPECT_FALSE(prefillResult.cancelled);
   EXPECT_TRUE(prefillResult.rollbackOk);
   ASSERT_GT(driver.getNPast(), preRequestNPast);
+  const llama_pos posAfterPrefill = driver.getNPast();
 
-  bool rollbackOk = false;
-  EXPECT_NO_THROW(rollbackOk = driver.onCancel([](const std::string&) {}));
-  EXPECT_TRUE(rollbackOk) << "pure-attention onCancel must report rollback-ok "
-                             "(no recurrent restore involved)";
+  bool persistable = false;
+  EXPECT_NO_THROW(persistable = driver.onCancel([](const std::string&) {}));
+  EXPECT_TRUE(persistable)
+      << "onCancel after a completed prefill must report persistable state";
 
-  EXPECT_EQ(driver.getNPast(), preRequestNPast)
-      << "onCancel on pure-attention must roll the cache back to the "
-         "PRE-REQUEST cursor via `removeLastNTokens`, matching the "
+  EXPECT_EQ(driver.getNPast(), posAfterPrefill)
+      << "onCancel after prefill must keep the prompt resident, matching the "
          "hybrid cancel semantics";
 }
 
@@ -602,78 +1072,6 @@ TEST_F(
 }
 
 // ============================================================================
-// User-visible perf snapshot lifecycle on `TextLlmContext`
-// ============================================================================
-//
-// `compactThinkSpan` freezes the perf counters just before any recurrent
-// replay decode runs, so `runtimeStats()` can report the pre-replay
-// (user-visible) values rather than counters inflated by internal cache
-// maintenance. The capture is gated on
-// `needsRecurrentSnapshot_ && compactor_.hasOpenSpan()` because:
-//   * pure-attention compaction does not replay (no inflation to freeze
-//     against — the live read is already correct), and
-//   * capturing for pure-attention races against lazy GPU-side decode
-//     telemetry (the snapshot can lag the live counters by one token
-//     because the final `llama_synchronize()` happens later in
-//     `resetState`).
-// The base `LlmContext::takeUserVisiblePerfSnapshot` returns `nullopt`
-// by default; `TextLlmContext` overrides it to consume the captured
-// snapshot. Hybrid coverage (snapshot actually populated and consumed)
-// lives in the `reasoning.test.js` integration suite — driving a hybrid
-// inference with reasoning content from a unit test would require
-// reproducing a non-trivial chunk of the model harness.
-
-// Newly constructed driver: no snapshot. Guards the initial state — a
-// stray non-empty snapshot here would leak into the first inference's
-// `runtimeStats()` and report zeroed-out counters.
-TEST_F(TextLlmContextCancelTest, FreshDriverReportsNoUserVisiblePerfSnapshot) {
-  auto model = loadTextModel(qwen3PureAttentionModelPath());
-  if (!model) {
-    GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
-  }
-
-  LlmModelContext shared = makeShared(*model);
-  common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, /*seqId=*/0);
-
-  EXPECT_FALSE(driver.takeUserVisiblePerfSnapshot().has_value())
-      << "Newly constructed driver must report no user-visible perf snapshot";
-}
-
-// Every model replays now, pure attention included, so every compaction runs
-// `restore + llama_decode` over the kept tokens. Those are batch decodes and
-// they land in `n_p_eval` / `t_p_eval_ms`, which would show up to the caller
-// as prompt tokens it never sent. So `compactThinkSpan` must freeze the
-// user-visible prompt counters before replaying, on every memory kind. This
-// test pins that: a pure-attention inference that compacted must leave a
-// snapshot behind.
-TEST_F(
-    TextLlmContextCancelTest,
-    CompactThinkSpanCapturesPerfSnapshotForPureAttention) {
-  auto model = loadTextModel(qwen3PureAttentionModelPath());
-  if (!model) {
-    GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
-  }
-
-  LlmModelContext shared = makeShared(*model);
-  common_params params = model->getCommonParams();
-  TextLlmContext driver(params, shared, /*seqId=*/0);
-
-  std::vector<common_chat_msg> chatMsgs = {makeMsg("user", "Hi")};
-  const LlmContext::EvalMessageResult evalResult = driver.evalMessageWithTools(
-      chatMsgs, {}, /*isCacheLoaded=*/false, /*prefill=*/false);
-  ASSERT_TRUE(evalResult.ok);
-  EXPECT_FALSE(evalResult.cancelled);
-  EXPECT_TRUE(evalResult.rollbackOk);
-  ASSERT_TRUE(driver.generateResponse([](const std::string&) {}).ok);
-
-  EXPECT_TRUE(driver.takeUserVisiblePerfSnapshot().has_value())
-      << "pure-attention compaction replays through llama_decode now, so the "
-         "prompt-side counters must be frozen before those batch decodes "
-         "inflate them";
-}
-
-// ============================================================================
 // Layer 2b: MtmdLlmContext cancel paths via the high-level LlamaModel API
 // ============================================================================
 //
@@ -725,12 +1123,8 @@ TEST_F(MtmdLlmContextCancelTest, CancelDuringPrefillLeavesHybridMtmdUsable) {
   EXPECT_NO_THROW(model->cancel());
 
   // Wait for the worker to unwind.
-  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-  while (!done.load() && std::chrono::steady_clock::now() < deadline) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  }
-  ASSERT_TRUE(done.load()) << "worker did not unwind within 10s of cancel";
-  worker.join();
+  ASSERT_TRUE(awaitCancelledWorker(worker, done, [&] { model->cancel(); }))
+      << "worker did not unwind within 120s of cancel";
 
   // Recovery: the model must accept another inference cleanly.
   LlamaModel::Prompt recovery = makeMtmdRecoveryPrompt();
@@ -784,12 +1178,8 @@ TEST_F(
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
   EXPECT_NO_THROW(model->cancel());
 
-  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
-  while (!done.load() && std::chrono::steady_clock::now() < deadline) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  }
-  ASSERT_TRUE(done.load()) << "worker did not unwind within 15s of cancel";
-  worker.join();
+  ASSERT_TRUE(awaitCancelledWorker(worker, done, [&] { model->cancel(); }))
+      << "worker did not unwind within 120s of cancel";
 
   // Strong assertion: the snapshot must have rolled the cache back to
   // empty, including any image-chunk KV cells that were committed
@@ -843,15 +1233,70 @@ TEST_F(
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
   EXPECT_NO_THROW(model->cancel());
 
-  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-  while (!done.load() && std::chrono::steady_clock::now() < deadline) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  }
-  ASSERT_TRUE(done.load());
-  worker.join();
+  ASSERT_TRUE(awaitCancelledWorker(worker, done, [&] { model->cancel(); }));
 
   LlamaModel::Prompt recovery = makeMtmdRecoveryPrompt();
   EXPECT_NO_THROW({ (void)model->processPrompt(recovery); });
+}
+
+// A media chunk that fails after the reconciled text suffix was decoded by
+// hand rolls the request back. The rollback must drop the suffix's KV cells
+// too, although the context's cursor had not caught up with them yet.
+TEST_F(
+    MtmdLlmContextCancelTest,
+    FailedMediaChunkAfterReconciledSuffixDropsItsKvCells) {
+  const std::string smolvlmPath = test_common::BaseTestModelPath::get(
+      "SmolVLM-500M-Instruct-Q8_0.gguf", "SmolVLM-500M-Instruct.gguf");
+  const std::string smolvlmMmproj = test_common::BaseTestModelPath::get(
+      "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf",
+      "mmproj-SmolVLM-500M-Instruct.gguf");
+  auto model = loadMtmdModel(smolvlmPath, smolvlmMmproj);
+  if (!model) {
+    GTEST_SKIP() << "SmolVLM pure-attention multimodal model not found";
+  }
+  const fs::path imagePath = multimodalTestImagePath();
+  if (!fs::exists(imagePath)) {
+    GTEST_SKIP() << "Multimodal test image not found at " << imagePath;
+  }
+  auto* mtmd =
+      dynamic_cast<MtmdLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+  ASSERT_NE(mtmd, nullptr);
+  auto* mem = llama_get_memory(mtmd->getCtx());
+  ASSERT_NE(mem, nullptr);
+  const fs::path cacheFile =
+      fs::temp_directory_path() /
+      ("mtmd-failed-chunk-rollback-" +
+       std::to_string(
+           std::chrono::steady_clock::now().time_since_epoch().count()) +
+       ".bin");
+  fs::remove(cacheFile);
+
+  LlamaModel::Prompt first;
+  first.input =
+      R"([{"role":"user","content":"Name three colours of the rainbow."}])";
+  first.cacheKey = cacheFile.string();
+  ASSERT_NO_THROW((void)model->processPrompt(first));
+  const llama_pos afterFirst = mtmd->getNPast();
+  ASSERT_EQ(llama_memory_seq_pos_max(mem, 0) + 1, afterFirst);
+
+  // The replaced answer makes the history diverge inside the first text
+  // chunk, so the rest of it is decoded by hand before the image fails.
+  LlamaModel::Prompt second;
+  second.input =
+      R"([{"role":"user","content":"Name three colours of the rainbow."},)"
+      R"({"role":"assistant","content":"Red, green and blue."},)"
+      R"({"role":"user","type":"media","content":""},)"
+      R"({"role":"user","content":"What is in this image?"}])";
+  second.media.push_back(readBinaryFile(imagePath));
+  second.cacheKey = cacheFile.string();
+  mtmd->failNextMediaChunkForTesting();
+  EXPECT_THROW((void)model->processPrompt(second), qvac_errors::StatusError);
+
+  EXPECT_EQ(llama_memory_seq_pos_max(mem, 0) + 1, mtmd->getNPast())
+      << "the rollback left KV cells past the cursor (" << mtmd->getNPast()
+      << ")";
+  EXPECT_LE(mtmd->getNPast(), afterFirst);
+  fs::remove(cacheFile);
 }
 
 // ============================================================================
@@ -901,14 +1346,8 @@ TEST(
     longPrompt.input = R"([
       {"role":"user","content":"Write a long story about a dragon."}
     ])";
-    // `remove_thinking_from_context` does NOT gate the cancel-restore
-    // path anymore — that path now uses the `prefillEntry` snapshot,
-    // which is captured unconditionally for hybrid / recurrent models.
-    // We leave the flag enabled so this test also exercises the
-    // `reasoningBoundary` capture lifecycle alongside the cancel path,
-    // catching regressions where the two snapshots interfere with each
-    // other.
-    longPrompt.generationParams.remove_thinking_from_context = true;
+    // The pre-request snapshot is captured unconditionally for hybrid /
+    // recurrent models.
     longPrompt.outputCallback = [&](const std::string&) {
       const unsigned seen = callbackCount.fetch_add(1) + 1;
       if (seen >= 2 && !cancelIssued.exchange(true)) {
@@ -926,15 +1365,9 @@ TEST(
       generationDone.store(true);
     });
 
-    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
-    while (!generationDone.load() &&
-           std::chrono::steady_clock::now() < deadline) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-    ASSERT_TRUE(generationDone.load())
-        << "model did not unwind within 15s of callback cancel attempt "
+    ASSERT_TRUE(awaitCancelledWorker(gen, generationDone))
+        << "model did not unwind within 120s of callback cancel attempt "
         << attempt;
-    gen.join();
 
     if (!cancelIssued.load()) {
       continue;
@@ -959,7 +1392,6 @@ TEST(
     // Recovery: subsequent inference must succeed on the cancelled context.
     LlamaModel::Prompt shortPrompt;
     shortPrompt.input = R"([{"role":"user","content":"Hi"}])";
-    shortPrompt.generationParams.remove_thinking_from_context = false;
     EXPECT_NO_THROW({
       std::string output = model->processPrompt(shortPrompt);
       EXPECT_GT(output.length(), 0u);
@@ -970,9 +1402,13 @@ TEST(
          << kMaxAttempts << " attempts";
 }
 
+// A cancelled cached request commits what the caller already received: the
+// prompt suffix and every streamed token stay resident, and an explicit
+// `saveCache` persists them. On a hybrid model that means the cancel path
+// must not restore the pre-request snapshot.
 TEST(
     TextLlmContextCancelDuringGenerationTest,
-    SinglePromptHybridCancelRollbackFailureSkipsCacheSave) {
+    SinglePromptHybridCancelCommitsAndSavesCache) {
   const std::string modelPath = qwen35HybridModelPath();
   if (!fs::exists(modelPath)) {
     GTEST_SKIP() << "Qwen3.5 hybrid model not found";
@@ -994,7 +1430,7 @@ TEST(
 
   const fs::path cachePath =
       fs::temp_directory_path() /
-      ("single-cancel-rollback-" +
+      ("single-cancel-commit-" +
        std::to_string(
            std::chrono::steady_clock::now().time_since_epoch().count()) +
        ".ggsq");
@@ -1004,8 +1440,8 @@ TEST(
   seed.input = R"([{"role":"user","content":"Remember the clean baseline."}])";
   seed.prefill = true;
   seed.cacheKey = cachePath.string();
-  seed.saveCacheToDisk = true;
   ASSERT_NO_THROW(model->processPrompt(seed));
+  ASSERT_NO_THROW(model->saveCache(cachePath.string()));
   ASSERT_TRUE(fs::exists(cachePath));
   ASSERT_GT(fs::file_size(cachePath), 0u);
 
@@ -1014,57 +1450,57 @@ TEST(
 
   LlmContext* baseCtx = LlamaModelTestPeer::llmContext(*model);
   ASSERT_NE(baseCtx, nullptr);
-  auto* textCtx = dynamic_cast<TextLlmContext*>(baseCtx);
-  ASSERT_NE(textCtx, nullptr);
   const llama_pos preRequestNPast = baseCtx->getNPast();
   ASSERT_GT(preRequestNPast, 0);
 
-  std::atomic<bool> injectedFailure{false};
+  std::atomic<bool> cancelled{false};
   LlamaModel::Prompt cancellable;
   cancellable.input =
-      R"([{"role":"user","content":"Start answering, then cancel."}])";
+      R"([{"role":"user","content":"Remember the clean baseline."},)"
+      R"({"role":"user","content":"Start answering, then cancel."}])";
   cancellable.cacheKey = cachePath.string();
-  cancellable.saveCacheToDisk = true;
-  cancellable.generationParams.remove_thinking_from_context = true;
   cancellable.outputCallback = [&](const std::string&) {
-    if (injectedFailure.exchange(true)) {
+    if (cancelled.exchange(true)) {
       return;
     }
-    // Force the single-prompt cancel rollback restore to fail after the
-    // prefill-entry gate succeeds. The correct response is to return
-    // rollbackOk=false up to processPromptImpl(), which then skips
-    // saveCacheToDisk and preserves the existing cache file.
-    textCtx->seedPrefillEntryRollbackForTesting(preRequestNPast);
     baseCtx->stop();
   };
 
   ASSERT_NO_THROW(model->processPrompt(cancellable));
-  ASSERT_TRUE(injectedFailure.load())
-      << "test did not reach the streaming callback to inject rollback failure";
+  ASSERT_TRUE(cancelled.load())
+      << "test did not reach the streaming callback to cancel";
 
+  EXPECT_GT(baseCtx->getNPast(), preRequestNPast)
+      << "cancel must keep the decoded prompt suffix and streamed tokens "
+         "resident instead of restoring the pre-request snapshot";
+  ASSERT_NO_THROW(model->saveCache(cachePath.string()));
   const std::vector<uint8_t> after = readBinaryFile(cachePath);
-  EXPECT_EQ(after, before)
-      << "single-prompt cancel with failed recurrent rollback must leave the "
-         "last known-good on-disk cache untouched";
+  EXPECT_NE(after, before)
+      << "a cancelled cached request commits, so saveCache must persist the "
+         "committed state";
 
-  LlamaModel::Prompt uncached;
-  uncached.input = R"([{"role":"user","content":"Run after failed cancel."}])";
-  uncached.generationParams.remove_thinking_from_context = false;
-  ASSERT_NO_THROW(model->processPrompt(uncached));
-
-  const std::vector<uint8_t> afterUncachedTransition =
-      readBinaryFile(cachePath);
-  EXPECT_EQ(afterUncachedTransition, before)
-      << "failed rollback must also invalidate the active cache session; "
-         "otherwise a later prompt without cacheKey saves dirty live state "
-         "before clearing the cache";
+  // The committed state is a valid prefix for the next authoritative turn.
+  LlamaModel::Prompt followup;
+  followup.input =
+      R"([{"role":"user","content":"Remember the clean baseline."},)"
+      R"({"role":"user","content":"Start answering, then cancel."},)"
+      R"({"role":"assistant","content":"Sure."},)"
+      R"({"role":"user","content":"Now answer briefly."}])";
+  followup.cacheKey = cachePath.string();
+  ASSERT_NO_THROW(model->processPrompt(followup));
 
   fs::remove(cachePath);
 }
 
+// Cancelling a cached request during prefill rolls it back: the caller
+// received nothing, so nothing it added is kept and the on-disk file is
+// untouched. The seed ends with its generation prompt, which the second user
+// message replaces, so the request restores the seed's end-of-history
+// checkpoint first and the rollback lands there, short of the seed cursor:
+// those KV cells are gone, and memory must end where the cursor says.
 TEST(
     TextLlmContextCancelDuringGenerationTest,
-    SinglePromptHybridPrefillCancelRollbackFailureInvalidatesCacheSession) {
+    SinglePromptHybridPrefillCancelRollsBackToSeed) {
   const std::string modelPath = qwen35HybridModelPath();
   if (!fs::exists(modelPath)) {
     GTEST_SKIP() << "Qwen3.5 hybrid model not found";
@@ -1097,8 +1533,8 @@ TEST(
   seed.input = R"([{"role":"user","content":"Remember the clean baseline."}])";
   seed.prefill = true;
   seed.cacheKey = cachePath.string();
-  seed.saveCacheToDisk = true;
   ASSERT_NO_THROW(model->processPrompt(seed));
+  ASSERT_NO_THROW(model->saveCache(cachePath.string()));
   ASSERT_TRUE(fs::exists(cachePath));
 
   const std::vector<uint8_t> before = readBinaryFile(cachePath);
@@ -1106,20 +1542,21 @@ TEST(
 
   LlmContext* baseCtx = LlamaModelTestPeer::llmContext(*model);
   ASSERT_NE(baseCtx, nullptr);
-  auto* textCtx = dynamic_cast<TextLlmContext*>(baseCtx);
-  ASSERT_NE(textCtx, nullptr);
-  textCtx->forcePrefillEntryRestoreFailureForTesting(true);
+  const llama_pos preRequestNPast = baseCtx->getNPast();
+  ASSERT_GT(preRequestNPast, 0);
 
   std::string longBody;
   for (int i = 0; i < 220; ++i) {
-    longBody += "prefill cancellation rollback failure marker ";
+    longBody += "prefill cancellation rollback marker ";
   }
 
   LlamaModel::Prompt cancellable;
-  cancellable.input = R"([{"role":"user","content":")" + longBody + R"("}])";
+  cancellable.input =
+      R"([{"role":"user","content":"Remember the clean baseline."},)"
+      R"({"role":"user","content":")" +
+      longBody + R"("}])";
   cancellable.prefill = true;
   cancellable.cacheKey = cachePath.string();
-  cancellable.saveCacheToDisk = true;
 
   std::atomic<bool> done{false};
   std::thread worker([&] {
@@ -1134,30 +1571,27 @@ TEST(
   std::this_thread::sleep_for(std::chrono::milliseconds(25));
   baseCtx->stop();
 
-  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-  while (!done.load() && std::chrono::steady_clock::now() < deadline) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(5));
-  }
-  ASSERT_TRUE(done.load()) << "worker did not unwind within 10s of cancel";
-  worker.join();
+  ASSERT_TRUE(awaitCancelledWorker(worker, done))
+      << "worker did not unwind within 120s of cancel";
 
-  const std::vector<uint8_t> after = readBinaryFile(cachePath);
-  EXPECT_EQ(after, before)
-      << "prefill cancel with failed recurrent rollback must leave the "
-         "last known-good on-disk cache untouched";
+  EXPECT_GT(baseCtx->getNPast(), 0);
+  EXPECT_LE(baseCtx->getNPast(), preRequestNPast)
+      << "a cancelled cached prefill must keep nothing it decoded";
+  EXPECT_EQ(
+      llama_memory_seq_pos_max(llama_get_memory(baseCtx->getCtx()), 0) + 1,
+      baseCtx->getNPast())
+      << "the cursor must match the end of live memory";
+  EXPECT_EQ(readBinaryFile(cachePath), before)
+      << "a cancelled prefill must not rewrite the last known-good cache";
 
-  LlamaModel::Prompt uncached;
-  uncached.input =
-      R"([{"role":"user","content":"Run after failed prefill cancel."}])";
-  uncached.generationParams.remove_thinking_from_context = false;
-  ASSERT_NO_THROW(model->processPrompt(uncached));
-
-  const std::vector<uint8_t> afterUncachedTransition =
-      readBinaryFile(cachePath);
-  EXPECT_EQ(afterUncachedTransition, before)
-      << "prefill rollback failure must invalidate the active cache session; "
-         "otherwise a later prompt without cacheKey saves dirty live state "
-         "before clearing the cache";
+  // The restored seed must remain a usable base for the next request.
+  LlamaModel::Prompt followup;
+  followup.input = cancellable.input;
+  followup.prefill = true;
+  followup.cacheKey = cachePath.string();
+  ASSERT_NO_THROW(model->processPrompt(followup));
+  EXPECT_GT(baseCtx->getNPast(), preRequestNPast)
+      << "a fresh prefill after the rolled-back cancel must extend the seed";
 
   fs::remove(cachePath);
 }
@@ -1230,12 +1664,8 @@ TEST(
   std::this_thread::sleep_for(std::chrono::milliseconds(50));
   EXPECT_NO_THROW(model->cancel());
 
-  auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-  while (!done.load() && std::chrono::steady_clock::now() < deadline) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(5));
-  }
-  ASSERT_TRUE(done.load()) << "worker did not unwind within 10s of cancel";
-  worker.join();
+  ASSERT_TRUE(awaitCancelledWorker(worker, done, [&] { model->cancel(); }))
+      << "worker did not unwind within 120s of cancel";
 
   // Core assertion: the recurrent rollback must have fully rewound the
   // cache. Pre-prefill position on a fresh model is -1; any residual
@@ -1248,7 +1678,6 @@ TEST(
   // Recovery: a fresh prefill must succeed on the rolled-back cache.
   LlamaModel::Prompt recovery;
   recovery.input = R"([{"role":"user","content":"Hi"}])";
-  recovery.generationParams.remove_thinking_from_context = false;
   EXPECT_NO_THROW({
     std::string output = model->processPrompt(recovery);
     EXPECT_GT(output.length(), 0u);
@@ -1256,14 +1685,14 @@ TEST(
 }
 
 // ============================================================================
-// Layer 2c: TextLlmContext reasoning-compaction failure recovery
+// Layer 2c: cache-save failure recovery
 // ============================================================================
 
 namespace {} // namespace
 
 TEST(
     TextLlmContextCancelDuringGenerationTest,
-    ExplicitSaveFailureInvalidatesActiveCacheSession) {
+    ExplicitSaveFailureKeepsTheConversationForARetry) {
   const std::string modelPath = qwen3PureAttentionModelPath();
   if (!fs::exists(modelPath)) {
     GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
@@ -1295,16 +1724,213 @@ TEST(
   LlamaModel::Prompt failing;
   failing.input = R"([{"role":"user","content":"This save should fail."}])";
   failing.cacheKey = badCachePath.string();
-  failing.saveCacheToDisk = true;
-  failing.generationParams.remove_thinking_from_context = false;
-  EXPECT_THROW(model->processPrompt(failing), qvac_errors::StatusError);
+  ASSERT_NO_THROW(model->processPrompt(failing));
+  EXPECT_THROW(
+      model->saveCache(badCachePath.string()), qvac_errors::StatusError);
   EXPECT_FALSE(fs::exists(badCachePath));
 
-  LlamaModel::Prompt uncached;
-  uncached.input =
-      R"([{"role":"user","content":"Run after explicit save failure."}])";
-  uncached.generationParams.remove_thinking_from_context = false;
-  ASSERT_NO_THROW(model->processPrompt(uncached))
-      << "explicit save failure must invalidate the active cache session; "
-         "otherwise a later prompt without cacheKey retries the stale save";
+  // The conversation stays active and unsaved, so the same save succeeds
+  // once the directory exists, and the key still continues from memory.
+  fs::create_directories(missingParent);
+  ASSERT_NO_THROW(model->saveCache(badCachePath.string()));
+  EXPECT_TRUE(fs::exists(badCachePath));
+
+  LlamaModel::Prompt followup;
+  followup.input = R"([{"role":"user","content":"This save should fail."},)"
+                   R"({"role":"assistant","content":"Ok."},)"
+                   R"({"role":"user","content":"Continue."}])";
+  followup.cacheKey = badCachePath.string();
+  ASSERT_NO_THROW(model->processPrompt(followup));
+  EXPECT_GT(
+      test_common::getStatValue(model->runtimeStats(), "CacheTokens"), 0.0);
+  fs::remove_all(missingParent);
+}
+
+// A pure-attention model needs no full-state temp-file dump for an
+// append-only cached request: cancel commits the streamed tokens, and the
+// only rollback case (a failure) trims the KV tail. The dump is reserved for
+// a divergent history, where reconciliation discards resident state a trim
+// cannot bring back.
+TEST(
+    TextLlmContextCancelDuringGenerationTest,
+    PureAttentionAppendOnlyCachedCancelCommitsWithoutSnapshot) {
+  const std::string modelPath = qwen3PureAttentionModelPath();
+  if (!fs::exists(modelPath)) {
+    GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "4096";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "32";
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+
+  std::string mp = modelPath;
+  std::string proj;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(mp), std::move(proj), std::move(config));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
+
+  const fs::path cachePath =
+      fs::temp_directory_path() /
+      ("pure-attention-cancel-rollback-" +
+       std::to_string(
+           std::chrono::steady_clock::now().time_since_epoch().count()) +
+       ".ggsq");
+  fs::remove(cachePath);
+
+  LlamaModel::Prompt seed;
+  seed.input = R"([{"role":"user","content":"Remember the clean baseline."}])";
+  seed.prefill = true;
+  seed.cacheKey = cachePath.string();
+  ASSERT_NO_THROW(model->processPrompt(seed));
+  ASSERT_NO_THROW(model->saveCache(cachePath.string()));
+  ASSERT_TRUE(fs::exists(cachePath));
+
+  LlmContext* baseCtx = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(baseCtx, nullptr);
+  auto* textCtx = dynamic_cast<TextLlmContext*>(baseCtx);
+  ASSERT_NE(textCtx, nullptr);
+  const llama_pos preRequestNPast = baseCtx->getNPast();
+  ASSERT_GT(preRequestNPast, 0);
+
+  std::atomic<bool> observed{false};
+  std::atomic<bool> snapshotSeen{false};
+  LlamaModel::Prompt cancellable;
+  // Full-history continuation: the seed turn is a prefix, so reconciliation
+  // only appends and no resident state is discarded.
+  cancellable.input =
+      R"([{"role":"user","content":"Remember the clean baseline."},)"
+      R"({"role":"user","content":"Start answering, then cancel."}])";
+  cancellable.cacheKey = cachePath.string();
+  cancellable.outputCallback = [&](const std::string&) {
+    if (observed.exchange(true)) {
+      return;
+    }
+    snapshotSeen.store(textCtx->hasPreRequestCacheSnapshotForTesting());
+    baseCtx->stop();
+  };
+
+  ASSERT_NO_THROW(model->processPrompt(cancellable));
+  ASSERT_TRUE(observed.load())
+      << "test did not reach the streaming callback to inspect the request";
+  EXPECT_FALSE(snapshotSeen.load())
+      << "an append-only cached request on pure-attention memory must not "
+         "write a full-state snapshot";
+  const llama_pos afterCancelNPast = baseCtx->getNPast();
+  EXPECT_GT(afterCancelNPast, preRequestNPast)
+      << "cancel must commit the decoded suffix and streamed tokens";
+
+  // The committed sequence must still be a usable prefix for the next
+  // authoritative turn.
+  LlamaModel::Prompt followup;
+  followup.input =
+      R"([{"role":"user","content":"Remember the clean baseline."},)"
+      R"({"role":"user","content":"Answer briefly this time."}])";
+  followup.cacheKey = cachePath.string();
+  ASSERT_NO_THROW(model->processPrompt(followup));
+  EXPECT_GT(baseCtx->getNPast(), preRequestNPast);
+
+  fs::remove(cachePath);
+}
+
+// A cached request whose history diverges from the resident cache trims the
+// old tail before prefilling. On a pure-attention model that must not cost a
+// snapshot: a rollback lands on the shared prefix, the state a retry reuses,
+// so nothing is ever written to disk for these models.
+TEST(
+    TextLlmContextCancelDuringGenerationTest,
+    PureAttentionDivergentPrefillCancelRollsBackToSharedPrefixWithoutSnapshot) {
+  const std::string modelPath = qwen3PureAttentionModelPath();
+  if (!fs::exists(modelPath)) {
+    GTEST_SKIP() << "Qwen3-0.6B pure-attention model not found";
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["ctx_size"] = "4096";
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["n_predict"] = "8";
+  config["batch-size"] = "1";
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+
+  std::string mp = modelPath;
+  std::string proj;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(mp), std::move(proj), std::move(config));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
+
+  const fs::path cachePath =
+      fs::temp_directory_path() /
+      ("pure-attention-divergent-cancel-" +
+       std::to_string(
+           std::chrono::steady_clock::now().time_since_epoch().count()) +
+       ".ggsq");
+  fs::remove(cachePath);
+
+  // Seed a full turn so the cache holds a generated answer the next history
+  // will not reproduce verbatim.
+  LlamaModel::Prompt seed;
+  seed.input = R"([{"role":"user","content":"Remember the clean baseline."}])";
+  seed.cacheKey = cachePath.string();
+  ASSERT_NO_THROW(model->processPrompt(seed));
+
+  LlmContext* baseCtx = LlamaModelTestPeer::llmContext(*model);
+  ASSERT_NE(baseCtx, nullptr);
+  const llama_pos seededNPast = baseCtx->getNPast();
+  ASSERT_GT(seededNPast, 0);
+  const uint64_t filesBefore = sequenceStateSnapshotFilesWritten();
+
+  // Diverges right after the first user message: the seed's generated
+  // answer is replaced by a different assistant message.
+  std::string longBody;
+  for (int i = 0; i < 220; ++i) {
+    longBody += "divergent prefill cancellation marker ";
+  }
+  LlamaModel::Prompt divergent;
+  divergent.input =
+      R"([{"role":"user","content":"Remember the clean baseline."},)"
+      R"({"role":"assistant","content":"A different answer."},)"
+      R"({"role":"user","content":")" +
+      longBody + R"("}])";
+  divergent.prefill = true;
+  divergent.cacheKey = cachePath.string();
+
+  std::atomic<bool> done{false};
+  std::thread worker([&] {
+    try {
+      model->processPrompt(divergent);
+    } catch (...) {
+      // Treat any cancel-surface exception as a completed cancel for this test.
+    }
+    done.store(true);
+  });
+  std::this_thread::sleep_for(std::chrono::milliseconds(25));
+  baseCtx->stop();
+  ASSERT_TRUE(awaitCancelledWorker(worker, done))
+      << "worker did not unwind within 120s of cancel";
+
+  EXPECT_EQ(sequenceStateSnapshotFilesWritten(), filesBefore)
+      << "a pure-attention divergent request must not write a snapshot file";
+  const llama_pos afterCancelNPast = baseCtx->getNPast();
+  EXPECT_GT(afterCancelNPast, 0)
+      << "rollback must keep the prefix shared with the new prompt";
+  EXPECT_LT(afterCancelNPast, seededNPast)
+      << "rollback must land on the divergence point, not restore the seed's "
+         "generated answer";
+
+  // A retry of the same history starts from that shared prefix.
+  LlamaModel::Prompt retry;
+  retry.input = divergent.input;
+  retry.prefill = true;
+  retry.cacheKey = cachePath.string();
+  ASSERT_NO_THROW(model->processPrompt(retry));
+  EXPECT_GT(baseCtx->getNPast(), afterCancelNPast);
+  EXPECT_EQ(sequenceStateSnapshotFilesWritten(), filesBefore)
+      << "the retry must not write a snapshot file either";
+
+  fs::remove(cachePath);
 }

@@ -5,6 +5,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -16,6 +17,7 @@
 #include <TargetConditionals.h>
 #endif
 
+#include <ggml-backend.h>
 #include <inference-addon-cpp/Errors.hpp>
 
 #include "utils/BackendSelection.hpp"
@@ -239,6 +241,73 @@ void validateWorldPlacement(
   }
 }
 
+bool worldFitPlacementSupported(
+    const std::string& backend, const std::string& paramsBackend,
+    const std::string& maxVram) {
+  const auto available = [](std::string_view name) {
+    name = trim(name);
+    if (name.empty() || equalsIgnoreCase(name, "auto") ||
+        equalsIgnoreCase(name, "default")) {
+      return true;
+    }
+    for (std::size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+      const auto device = ggml_backend_dev_get(i);
+      const auto type = ggml_backend_dev_type(device);
+      if (equalsIgnoreCase(name, "gpu") &&
+          (type == GGML_BACKEND_DEVICE_TYPE_GPU ||
+           type == GGML_BACKEND_DEVICE_TYPE_IGPU)) {
+        return true;
+      }
+      const std::string_view registry =
+          ggml_backend_reg_name(ggml_backend_dev_backend_reg(device));
+      const std::string_view deviceName = ggml_backend_dev_name(device);
+      if (equalsIgnoreCase(name, registry) ||
+          (equalsIgnoreCase(name, "metal") &&
+           equalsIgnoreCase(registry, "MTL")) ||
+          (deviceName.size() >= name.size() &&
+           equalsIgnoreCase(name, deviceName.substr(0, name.size())))) {
+        return true;
+      }
+    }
+    return false;
+  };
+  bool supported = true;
+  const auto checkAssignment =
+      [&](std::string_view key, std::string_view value, bool params) {
+        if (!isWholeSpecDefaultKey(key) && !paramsBackendModuleIndex(key)) {
+          supported = false;
+        }
+        if (params) {
+          supported = supported &&
+                      (equalsIgnoreCase(value, "disk") || available(value));
+          return;
+        }
+        const bool list = value.find('&') != std::string_view::npos;
+        do {
+          const auto separator = value.find('&');
+          const auto name = trim(value.substr(0, separator));
+          if (list && (name.empty() || equalsIgnoreCase(name, "auto") ||
+                       equalsIgnoreCase(name, "default"))) {
+            supported = false;
+          }
+          supported = supported && available(name);
+          if (separator == std::string_view::npos)
+            break;
+          value.remove_prefix(separator + 1);
+        } while (true);
+      };
+  forEachSpecAssignment(backend, [&](auto key, auto value) {
+    checkAssignment(key, value, false);
+  });
+  forEachSpecAssignment(paramsBackend, [&](auto key, auto value) {
+    checkAssignment(key, value, true);
+  });
+  forEachSpecAssignment(maxVram, [&](auto key, auto) {
+    supported = supported && (isWholeSpecDefaultKey(key) || available(key));
+  });
+  return supported;
+}
+
 std::string
 effectiveParamsBackendSpec(const std::string& explicitSpec, bool offloadToCpu) {
   if (!offloadToCpu) {
@@ -281,6 +350,30 @@ static int parsePositiveInt(const std::string& v, const std::string& key) {
         key + " must be a positive integer, got: '" + v + "'");
   }
   return parsed;
+}
+
+static uint64_t parsePixelLimit(
+    const std::string& value, const std::string& key, uint64_t maximum) {
+  if (value.empty() ||
+      !std::all_of(value.begin(), value.end(), [](unsigned char c) {
+        return std::isdigit(c) != 0;
+      })) {
+    throw StatusError(
+        general_error::InvalidArgument, key + " must be a positive integer");
+  }
+  uint64_t pixels = 0;
+  try {
+    pixels = std::stoull(value);
+  } catch (...) {
+    throw StatusError(
+        general_error::InvalidArgument, key + " must be a positive integer");
+  }
+  if (pixels == 0 || pixels > maximum) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        key + " must be in [1, " + std::to_string(maximum) + "]");
+  }
+  return pixels;
 }
 
 static int
@@ -590,6 +683,17 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
     {"upscaler_threads",
      [](SdCtxConfig& c, const std::string& v) {
        c.upscalerThreads = parseAutoOrPositiveInt(v, "upscaler_threads");
+     }},
+
+    {"max_image_pixels",
+     [](SdCtxConfig& c, const std::string& v) {
+       c.maxImagePixels = parsePixelLimit(
+           v, "max_image_pixels", image_codec::MAX_CONFIGURED_IMAGE_PIXELS);
+     }},
+    {"max_job_pixels",
+     [](SdCtxConfig& c, const std::string& v) {
+       c.maxJobPixels = parsePixelLimit(
+           v, "max_job_pixels", std::numeric_limits<int>::max());
      }},
 
     // -- Backend loading

@@ -3,3 +3,4 @@ sentence-transformers>=4.1.0
 huggingface-hub>=0.23.0
 numpy>=1.24.0
 httpx>=0.28.0
+certifi>=2026.10.19

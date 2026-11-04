@@ -1,8 +1,3 @@
-/* eslint-disable @typescript-eslint/no-require-imports -- Bare modules expose CommonJS export shapes. */
-import fs = require("bare-fs");
-import path = require("bare-path");
-import fabricBackends = require("@qvac/fabric/backends");
-/* eslint-enable @typescript-eslint/no-require-imports */
 import type { FinetuneOptions, GenerationParams } from "./index";
 
 // Index-matched to the C++ GenerationStopReason enum (SequenceDriver.hpp).
@@ -29,7 +24,8 @@ export interface AddonMessage {
    */
   generationParams?: GenerationParams;
   cacheKey?: string;
-  saveCacheToDisk?: boolean;
+  ephemeral?: boolean;
+  baseCacheKey?: string;
 }
 
 export interface AddonMediaMessage {
@@ -94,6 +90,13 @@ export type AddonOutputCallback = (
   jobId: unknown,
 ) => void;
 
+/** `calcTokens` input as the native binding takes it: `history` and `tools` are JSON array text. */
+export interface AddonCalcTokensParams {
+  text?: string;
+  history?: string;
+  tools?: string;
+}
+
 export interface LlamaBinding {
   createInstance(
     owner: LlamaInterface,
@@ -108,6 +111,9 @@ export interface LlamaBinding {
   cancel(handle: unknown, savePauseCheckpoint: number): Promise<void> | void;
   cancelJob(handle: unknown, id: number): Promise<void> | void;
   finetune?(handle: unknown, params: FinetuneOptions): Promise<number | false> | number | false;
+  saveCache(handle: unknown, cacheKey: string): Promise<void>;
+  discardCache(handle: unknown, cacheKey: string): Promise<void>;
+  calcTokens(handle: unknown, params: AddonCalcTokensParams): Promise<number>;
   runJob(handle: unknown, data: AddonRunJobMessage[]): Promise<AddonRunJobResult>;
   runJob(handle: unknown, data: AddonBatchRunItem[]): Promise<AddonBatchRunResult>;
   destroyInstance(handle: unknown): void;
@@ -186,22 +192,6 @@ export function mapAddonEvent(
   return { type: type as string, data: rawData, error: rawError };
 }
 
-// The ggml compute backends ship next to the @qvac/fabric runtime
-// (<root>/<host>/qvac__fabric). We deliberately do not copy them into this
-// addon to avoid duplicating tens of MB per fabric consumer. On desktop,
-// @qvac/fabric/backends resolves that root in whichever package holds the
-// runtime. On mobile the package tree isn't resolvable at runtime (the worklet
-// runs from a packed bundle), so fall back to this addon's own prebuilds, where
-// the mobile packaging stages the backends. The native side appends
-// BACKENDS_SUBDIR ("<host>/qvac__fabric") to whichever root we return.
-export function resolveBackendsDir(): string {
-  // fabric's resolver only checks that the platform package resolves, not that
-  // its prebuilds are on disk.
-  const fabricRoot = fabricBackends.resolveBackendsDir();
-  if (fabricRoot !== null && fs.existsSync(fabricRoot)) return fabricRoot;
-  return path.join(__dirname, "prebuilds");
-}
-
 /**
  * An interface between Bare addon in C++ and JS runtime.
  */
@@ -218,10 +208,6 @@ export class LlamaInterface {
 
     if (!configurationParams.config) {
       configurationParams.config = {};
-    }
-
-    if (!configurationParams.config.backendsDir) {
-      configurationParams.config.backendsDir = resolveBackendsDir();
     }
 
     this._handle = this._binding.createInstance(this, configurationParams, outputCb, null);
@@ -288,6 +274,32 @@ export class LlamaInterface {
   }
 
   /**
+   * Write the conversation kept in memory for `cacheKey` to its file (see
+   * `LlmLlamacpp.saveCache`).
+   */
+  saveCache(cacheKey: string): Promise<void> {
+    if (!this._handle) return Promise.reject(new Error("Model is not loaded"));
+    return Promise.resolve(this._binding.saveCache(this._handle, cacheKey));
+  }
+
+  /**
+   * Drop the conversation kept in memory for `cacheKey` without writing it
+   * (see `LlmLlamacpp.discardCache`).
+   */
+  discardCache(cacheKey: string): Promise<void> {
+    if (!this._handle) return Promise.reject(new Error("Model is not loaded"));
+    return Promise.resolve(this._binding.discardCache(this._handle, cacheKey));
+  }
+
+  /**
+   * Tokens `params` takes on the loaded model (see `LlmLlamacpp.calcTokens`).
+   */
+  calcTokens(params: AddonCalcTokensParams): Promise<number> {
+    if (!this._handle) return Promise.reject(new Error("Model is not loaded"));
+    return Promise.resolve(this._binding.calcTokens(this._handle, params));
+  }
+
+  /**
    * Run finetuning when native binding provides support.
    */
   finetune(finetuningParams: FinetuneOptions): Promise<number | false> {
@@ -331,5 +343,4 @@ export class LlamaInterface {
 module.exports = {
   LlamaInterface,
   mapAddonEvent,
-  resolveBackendsDir,
 };

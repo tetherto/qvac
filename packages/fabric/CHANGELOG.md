@@ -1,6 +1,366 @@
 # Changelog
 
-## [0.18.1] - Unreleased
+## [unreleased]
+
+### Fixed
+
+- Linux CUDA, Jetson and HIP backend modules no longer leave libstdc++ symbols
+  undefined, so they load under hosts without libstdc++ in the global
+  namespace (such as `bare-sidecar`) instead of silently falling back to the
+  CPU. The CUDA modules link libstdc++ statically behind a version script, and
+  HIP host code builds against the libc++ fabric ships (`qvac-fabric`
+  `11259.2.0#2`).
+
+## [0.25.0] - 2026-10-28
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11259.1.0` -> `11259.2.0`. The `common`
+  structs change layout, so native consumers must be rebuilt against this
+  release (no source changes needed):
+  - `common_params` gains `coreml_max_inflight` and `coreml_model` in the
+    embedding section.
+  - `common_chat_msg` gains `extra_json`.
+  - The ggml op list and the RPC protocol (112) are unchanged, so RPC peers on
+    0.24.0 stay compatible.
+
+### Fixed
+
+- The PNG decoder bounds its zlib output to the size the image header
+  declares, so a tiny image with a large deflate stream no longer makes mtmd
+  allocate gigabytes.
+- The RPC server drops its cached graphs when a buffer is freed, keeping its
+  graph cache in step with the client.
+- CUDA: bitonic argsort handles rows wider than one block, the CCCL version
+  guard no longer breaks on a major version rollover, and CUB `DeviceTopK` is
+  used only from CCCL 3.4.3, which fixes its race condition.
+
+### Added
+
+- DeepSeek V4.1 Flash support, including its chat template's extra message keys.
+- `llama_supports_coreml` and `llama_set_coreml_model` for an optional Core ML
+  EmbeddingGemma 2 sidecar. This package does not build Core ML support, so
+  `llama_supports_coreml` returns `false`.
+
+### Changed
+
+- CUDA `TOP_K` picks bitonic sort, radix select or `DeviceTopK` by row shape,
+  so many long rows no longer take one launch per row.
+
+## [0.24.0] - 2026-10-26
+
+### Breaking
+
+- The RPC protocol major goes 111 -> 112: two ops join the ggml op enum
+  (`GGML_OP_COUNT` 125 -> 127). A `ggml-rpc-server` and its RPC client must
+  both run this fabric; a 111 peer refuses the connection.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `11259.0.1` -> `11259.1.0`. No `llama.h`,
+  `common/` or `mtmd` header changes; native consumers rebuild against the new
+  ggml op enum without source changes.
+
+### Added
+
+- Deferred gated delta net state commit for speculative decoding on Qwen3.5 and
+  Qwen3.5-MoE, opt-in with `LLAMA_GDN_DEFERRED=1`, with CPU, CUDA, Vulkan and
+  Metal kernels. The base state is replayed from the rows a draft kept instead
+  of a state snapshot per draft token. New ggml APIs
+  `ggml_gated_delta_net_deferred`, `ggml_gated_delta_net_rec_size` and
+  `ggml_gdn_conv_deferred`. Ignored on devices without the deferred ops, and
+  disabled on MUSA.
+- Hexagon speech kernels (convolution, layout, activation, matmul, attention and
+  `GET_ROWS` paths). This package does not build the Hexagon backend.
+
+## [0.23.1] - 2026-10-24
+
+### Fixed
+
+- Fit: a draft model that borrows tensors from the target is measured next to
+  it and sized at the target's context. A borrowed tensor of a different width
+  fails the fit and context creation with an error instead of a ggml assert.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `11259.0.0` -> `11259.0.1`. No API removals;
+  native consumers do not need source changes.
+- Backend modules loaded under `GGML_BACKEND_DL` (CUDA, Vulkan, CPU variants)
+  forward their logs to the process logger, so `ggml_log_set` /
+  `llama_log_set` verbosity applies to them instead of every level going to
+  stderr.
+- Faster Metal decode: few-row MMA mat-mul for the remaining quant types, a
+  faster MXFP4 mat-vec, fused `RMS_NORM`+`MUL` and residual `ADD` into
+  single-row Q4_0/MXFP4 mat-vecs, fused per-head `RMS_NORM`+`MUL`+`ROPE`
+  (+ K-cache `SET_ROWS`), and full-threadgroup unary/binary/GLU launches.
+
+### Added
+
+- OpenCL kernels for the speech ops `GRU`, `ZERO_UPSAMPLE`, `CHANNEL_SHUFFLE`,
+  `AFFINE_PRELU` and `SNAKE`.
+- `common_get_extra_device_memory_data` in `common/fit.h`, reporting the device
+  memory of a fit's extra (draft) model.
+
+## [0.23.0] - 2026-10-20
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11018.2.0` -> `11259.0.0`, a rebase onto
+  upstream llama.cpp b11259. The native API changes, so native consumers must
+  be rebuilt against this release:
+  - `mtmd_helper_post_decode_callback` takes a
+    `const mtmd_helper_embd_batch *` instead of a `llama_batch`.
+  - `llama_opt_params` gains `flash_attn`, default `false`: flash attention
+    during training is opt-in.
+  - In `common.h`, `common_params::hostname` becomes `hostnames`, the
+    `fs_get_*` helpers return `std::filesystem::path`,
+    `fs_create_directory_with_parents` and `string_from(ctx, llama_batch)` are
+    removed, and `string_split<T>` throws on a value it cannot parse.
+  - The ggml op list and the RPC protocol (111) are unchanged, so RPC peers on
+    0.22.0 stay compatible.
+
+### Fixed
+
+- CUDA: a ubatch without outputs no longer drops a node from the MoE graph, so
+  the scheduler no longer re-reserves the compute buffer at that ubatch's size.
+  With `GGML_SCHED_DEBUG_REALLOC=1` the next larger ubatch aborted.
+
+### Changed
+
+- `llama_decode` and `llama_encode` go through upstream's batch layer. A batch
+  may mix token and embedding rows on default contexts, and an embedding batch
+  with the wrong row width returns `-1`.
+- LoRA weights stay on the CPU, with a warning, when the GPU backend cannot run
+  `OPT_STEP_ADAMW` and `OPT_STEP_SGD`.
+- Faster Adreno OpenCL small-batch and decode paths: small-batch matmuls,
+  multi-column K-quant GEMVs, a PQ2_0 mat-vec, and GDN verify batches.
+- Faster Vulkan and HIP prefill on Strix Halo, including flash attention.
+
+### Added
+
+- Vulkan shaders for the speech ops `CONV_1D_DW_DIRECT`, `NORM_CHANNEL`,
+  `SCALE_RESIDUAL`, `BIAS_GELU`, `PAD_REPLICATE_1D`, `GRU`, `ZERO_UPSAMPLE`,
+  `CHANNEL_SHUFFLE`, `AFFINE_PRELU`, `SNAKE`, `LSTM_CELL`, `TDT_STEP` and
+  `SIGLU`.
+- Metal kernels for `CONV_1D_DW_DIRECT`, `NORM_CHANNEL`, `SCALE_RESIDUAL`,
+  `BIAS_GELU`, `PAD_REPLICATE_1D`, `LSTM_CELL`, `TDT_STEP` and `SIGLU`.
+- Flash-attention backward on Vulkan and CUDA.
+- The `llama_batch_ext_*` batch API with `llama_process`, plus
+  `llama_get_causal_attn` and `llama_adapter_lora_init_from_file_ptr`.
+- EmbeddingGemma 2 (`gemma-embedding2`) models and the Ling3-VL vision
+  projector.
+
+## [0.22.0] - 2026-10-14
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11018.1.0#1` -> `11018.2.0`, which changes
+  the native ABI and the RPC wire protocol:
+  - `GGML_MAX_NAME` is 128 (was 64), and `ggml_tensor::name` is an inline
+    array, so native consumers must be rebuilt against this release.
+  - The RPC protocol moves 109 -> 111. RPC clients and servers from earlier
+    releases fail the handshake.
+  - 13 new ggml ops shift `GGML_OP_COUNT` and `GGML_GLU_OP_COUNT`.
+
+### Fixed
+
+- Tensor names longer than 63 characters (ACE-Step DiT) load instead of being
+  truncated or rejected.
+- On Linux the RPC backend loads on hosts without libibverbs and uses TCP;
+  it previously failed to load even for TCP-only use.
+- The RPC server rejects a malformed endpoint port instead of binding a
+  different one (`:65536`, `:-1` and `:50052abc` bound 0, 65535 and 50052).
+
+### Added
+
+- `ggml_backend_rpc_server_get_port()` reports the port a server bound, and
+  `ggml_backend_rpc_rdma_supported()` reports whether new connections will
+  try RDMA.
+- ggml ops `CONV_1D_DW_DIRECT`, `NORM_CHANNEL`, `SCALE_RESIDUAL`, `BIAS_GELU`,
+  `PAD_REPLICATE_1D`, `GRU`, `ZERO_UPSAMPLE`, `CHANNEL_SHUFFLE`,
+  `AFFINE_PRELU`, `SNAKE`, `LSTM_CELL`, `TDT_STEP` and the `SIGLU` GLU op
+  (CPU implementations).
+- `common_fit_params_measured()` returns the measured memory of the fitted
+  parameters.
+
+## [0.21.1] - 2026-10-14
+
+### Fixed
+
+- On macOS and iOS the runtime no longer re-exports the `js_*` functions its
+  JS binding imports from the host. 0.21.0 re-exported them with a flat
+  lookup, so a consumer linked against it bound them to the runtime, and dyld
+  failed to load that consumer (`re-export ordinal -2 ... out of range for
+  _js_create_function`). Consumers built against 0.21.0 must be rebuilt.
+
+## [0.21.0] - 2026-10-14
+
+### Breaking
+
+- `binding.js` is now just `module.exports = require('#host-addon')`, so
+  `bare-pack` can follow it. The Bare module lexer only sees literal
+  specifiers, so the old loader's computed `require.addon()` calls left the
+  runtime out of every bundle. Each supported host maps to exactly one
+  platform package, with no fallback. A host whose platform package is not
+  installed fails at bundle time, and at require time names the package to
+  install. `addon-unavailable.js` now covers only unsupported hosts.
+- Platform packages are now ordinary addons. `@qvac/fabric-<suffix>` has
+  `addon: true` and a `require.addon()` entry, and carries
+  `prebuilds/<host>/qvac__fabric-<suffix>.bare` with the ggml backends in
+  `prebuilds/<host>/qvac__fabric-<suffix>/`. The inner `addon/` package is
+  gone. Every iOS host shares the `ios` suffix. The module's SONAME is
+  `qvac__fabric-<suffix>@<major>.bare`, so a consumer's `DT_NEEDED` names
+  its platform package and bare-link rewrites it like any other addon
+  dependency.
+- `@qvac/fabric/backends` is removed. Fabric locates its own backends:
+  `qvac_fabric_load_backends()` (new in `qvac-fabric.h`) loads them once per
+  process from `$QVAC_FABRIC_BACKENDS_DIR`, else
+  `qvac__fabric-<suffix>/` beside the loaded runtime, else the runtime's own
+  directory (where bare-link flattens them in a mobile app).
+  `qvac_fabric_backends_dir()` reports the directory it picked, and the JS
+  binding exposes both as `backendsDir()` and `loadBackends()`. The
+  `BACKENDS_SUBDIR` define and `qvac_addon_finalize(... SUBDIR ...)` are gone;
+  consumers call `qvac_fabric_load_backends()` unless a `backendsDir` was
+  passed explicitly.
+- Consumers must declare the platform packages themselves:
+  - the desktop ones as `optionalDependencies`;
+  - `@qvac/fabric-android-arm64` and `@qvac/fabric-ios` as optional
+    `peerDependencies`;
+  - the mobile ones also as exact-pinned `devDependencies` when the consumer
+    cross-builds.
+
+  bare-link resolves `DT_NEEDED` replacements only from a package's own
+  dependencies.
+- A source-built fabric no longer serves its own `prebuilds/<host>`. Run
+  `npm run link:platform` to expose the build as
+  `node_modules/@qvac/fabric-<suffix>` inside the package. The CMake template
+  resolves the platform package only, and requires `@qvac/fabric` >= 0.21.
+- Package names are now part of the native ABI (the `.bare` name is the
+  mangled package name). A renamed GitHub Packages dev build
+  (`@tetherto/fabric-mono`) is an unsliced archive for CI to assemble
+  platform packages from, not a runnable install.
+
+### Changed
+
+- The CI fabric overlay links the overlaid build's platform packages into
+  each overlaid meta, so consumers build and run against the PR's runtime.
+- Mobile CI installs or assembles the platform packages
+  (`install-platform-packages.mjs`) instead of overlaying prebuilds into the
+  meta package.
+
+### Notes
+
+- On Linux, desktop `bare-link` needs to keep the `vn_file` of a
+  `DT_VERNEED` it rewrites: fabric's exports carry the named version node
+  `QVAC_FABRIC_ABI_1`. Android uses an anonymous node and is unaffected.
+- pnpm consumers that run `bare-pack` need `nodeLinker: hoisted`.
+
+## [0.20.3] - 2026-10-09
+
+### Changed
+
+- `qvac-fabric` dependency bumped `11018.0.0#2` -> `11018.1.0#1`, with the same
+  port build options as `11018.0.0#2`, including its CUDA architecture lists:
+  - Fixed a Vulkan `TOP_K` hang (device lost) on rows that are all or mostly
+    `+inf` or NaN, which an MTP draft context's top-k sampler hits when its
+    logits are NaN, and wrong results for `k = 1` on negative values.
+  - Fixed an OpenCL abort (`CL_INVALID_KERNEL`) in argsort when a backend user
+    such as the RPC server runs it before `supports_op`.
+  - `stb_image.h` is installed with the exported stb target, so consumers that
+    check image headers before mtmd decodes them use the same parser as
+    `mtmd-helper`.
+  - Faster Metal decode and speculative verify for Ternary Bonsai 2 (`PQ2_0`)
+    weights, and faster Metal flash attention for few-row and GQA decode.
+  - Added a CPU flash-attention backward, `ggml_flash_attn_ext_back()`.
+
+### Removed
+
+- The unused `ggml_flash_attn_back()` is removed, and `GGML_OP_FLASH_ATTN_BACK`
+  is renamed `GGML_OP_FLASH_ATTN_EXT_BACK` at the same enum position. Native
+  code naming either must adapt; no in-tree consumer does.
+
+## [0.20.2] - 2026-10-08
+
+Supersedes 0.20.1, whose publish stopped at `@qvac/fabric-linux-arm64` (npm
+`413 Payload Too Large`). `@qvac/fabric` 0.20.1 was never published, so no
+release uses the platform packages that 0.20.1 did publish.
+
+### Changed
+
+- `qvac-fabric` dependency bumped `11018.0.0#1` -> `11018.0.0#2`, which narrows
+  the CUDA architectures so every platform package fits npm's size limit. Same
+  fabric source (`v11018.0.0`); no API change for this package.
+  - linux-x64 and win32-x64: the CUDA 13 module covers sm_75 (PTX),
+    sm_80/86/89, sm_90 (PTX) and sm_120a. It drops the DGX Spark arch, which
+    is arm64 only, and the sm_80 PTX, which no x64 GPU selects. Every x64 GPU
+    0.20.1 covered is still covered.
+  - linux-arm64: the CUDA 13 module is built for DGX Spark (GB10, sm_121a)
+    only. Other arm64 NVIDIA GPUs, such as Grace Hopper and Grace Blackwell
+    servers, skip it and use Vulkan or CPU.
+  - linux-arm64 also ships the CUDA 12 Jetson Orin module
+    (`libqvac-ggml-cuda-jetson.so`, sm_87), now with compressed kernels (141 to
+    52 MB). The release build enables `QVAC_CUDA_JETSON`, so the published
+    package carries it, unlike the 0.20.1 note below says.
+
+## [0.20.1] - 2026-10-08
+
+### Added
+
+- CUDA backend in the linux-x64 (`libqvac-ggml-cuda.so`) and win32-x64 builds,
+  via `qvac-fabric[cuda-backend]` (`11018.0.0` -> `11018.0.0#1`). On Linux it
+  loads alongside Vulkan, and a host without an NVIDIA driver skips it and
+  falls back to Vulkan or CPU. No API change for this package.
+- An opt-in `cuda-jetson` feature (`QVAC_CUDA_JETSON`) that builds the CUDA 12
+  Jetson module for linux-arm64. Off by default, so the published linux-arm64
+  package does not carry it.
+
+## [0.20.0] - 2026-10-06
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.5.0` -> `11018.0.0`, the rebase onto
+  upstream llama.cpp b11018:
+  - `common_fit_params` takes an extra-model argument, the common headers use
+    `common_json` instead of `nlohmann::ordered_json`, and the mtmd bitmap
+    helpers take an options argument. Native consumers must adapt.
+  - The `--mmap`, `--no-mmap` and `--direct-io` argument-parser flags are gone;
+    the load mode replaces them.
+  - RPC servers keep backend tensor extras.
+
+## [0.19.1] - 2026-10-07
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.5.0` -> `10549.5.3`. No API change for
+  this package:
+  - Fixed an OpenCL abort (`CL_INVALID_KERNEL`) in argsort when a backend user
+    such as the RPC server runs it before `supports_op`, which broke MoE expert
+    selection behind an RPC server.
+  - The RPC server keeps backend tensor extras, so OpenCL works behind an RPC
+    server.
+  - Fixed the `ggml-cpu` build with clang-cl.
+  - Added Laya decision model support.
+
+## [0.19.0] - 2026-09-30
+
+### Changed
+
+- `qvac-fabric` dependency bumped `10549.4.0` -> `10549.5.0`:
+  - Fixed CUDA fusion when cached weights overlap its inputs.
+  - Fixed Metal matmul GLU fusion when its output overlaps its inputs.
+  - Automatic MoE expert caching is now on by default only for CUDA. Other
+    backends except OpenCL opt in with `moe-cache-mib: auto`, so MoE fit
+    projections and loads on Metal and Vulkan no longer include an expert
+    cache by default.
+  - `common_fit_params` gains a defaulted `moe_cache_auto_explicit`
+    parameter. Direct calls still compile; code that takes the function's
+    address as a fixed-signature callable must adapt.
+  - Idle RPC RDMA and tensor-dispatch threads now sleep instead of spinning.
+  - Added GLM-5.3-Flash support and tensor-parallel execution for GLM-5
+    Next, which now also keeps its k-pool history across sequence edits and
+    rejects invalid metadata at load.
+
+## [0.18.1] - 2026-09-29
 
 ### Added
 
@@ -15,7 +375,7 @@
   fall back to TCP. Without it the RPC backend is skipped at load time and
   consumers report no RPC backend. Other backends are unaffected.
 
-## [0.18.0] - Unreleased
+## [0.18.0] - 2026-09-28
 
 ### Breaking
 

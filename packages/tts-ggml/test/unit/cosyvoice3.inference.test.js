@@ -45,9 +45,9 @@ function createMockedCosyvoiceModel({
 test('CosyVoice3: explicit engine option routes to cosyvoice3', (t) => {
   const model = createMockedCosyvoiceModel()
   t.is(model.getEngineType(), TTSGgml.ENGINE_COSYVOICE3, 'engine: cosyvoice3 detected')
-  t.is(model._cosyvoiceModelDir, './models/cosyvoice3')
-  t.absent(model._t3ModelPath, 'no chatterbox t3 path on cosyvoice3')
-  t.absent(model._supertonicModelPath, 'no supertonic path on cosyvoice3')
+  t.is(model._setup.paths.cosyvoiceModelDir, './models/cosyvoice3')
+  t.absent(model._setup.paths.t3ModelPath, 'no chatterbox t3 path on cosyvoice3')
+  t.absent(model._setup.paths.supertonicModelPath, 'no supertonic path on cosyvoice3')
 })
 
 test('CosyVoice3: cosyvoiceModelDir file input alone routes to cosyvoice3', (t) => {
@@ -83,7 +83,7 @@ test('CosyVoice3: modelDir auto-detects cosyvoice3-llm gguf', async (t) => {
       TTSGgml.ENGINE_COSYVOICE3,
       'modelDir with cosyvoice3-llm*.gguf detected'
     )
-    t.is(model._cosyvoiceModelDir, tmpRoot, 'cosyvoiceModelDir resolved from modelDir')
+    t.is(model._setup.paths.cosyvoiceModelDir, tmpRoot, 'cosyvoiceModelDir resolved from modelDir')
   } finally {
     try {
       fs.rmSync(tmpRoot, { recursive: true, force: true })
@@ -233,15 +233,12 @@ test('CosyVoice3: emotion and pace are forwarded canonically, not pre-rendered',
 // The determinism knobs the cosyvoice integration helper sets, pinned here
 // because the integration lane is the only other place that constructs with
 // them and it takes hours to tell you.
-test('CosyVoice3: seed is the determinism knob; greedy belongs to audio8', (t) => {
+test('CosyVoice3: seed and greedy reach the native decoding configuration', (t) => {
   const seeded = createMockedCosyvoiceModel({ extra: { seed: 42 } })
   t.is(seeded._buildTtsParams().seed, 42, 'seed reaches the native configurationParams')
 
-  t.exception(
-    () => createMockedCosyvoiceModel({ extra: { greedy: true } }),
-    /audio8-only/,
-    'greedy is not a cosyvoice3 option'
-  )
+  t.is(createMockedCosyvoiceModel({ extra: { greedy: true } })._buildTtsParams().greedy, true)
+  t.is(createMockedCosyvoiceModel({ extra: { greedy: false } })._buildTtsParams().greedy, false)
 })
 
 test('CosyVoice3: unsupported emotions and instruct keys are rejected', (t) => {

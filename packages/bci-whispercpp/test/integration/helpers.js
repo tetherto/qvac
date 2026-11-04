@@ -223,19 +223,21 @@ function recordBciStats(label, stats, extra) {
   }
 }
 
-// On mobile, the test framework copies test/mobile/testAssets/ into the
-// app bundle and exposes the on-device asset root via global.testDir
-// (writable scratch). Fall back to test/mobile/testAssets/ on disk so
-// the same code paths work when these tests are exercised from the
-// repo root (e.g. during local mobile dry-runs).
+// On a device, global.testDir is the app's writable directory; the bundled
+// assets are not in it (see getMobileAssetPath). Fall back to
+// test/mobile/testAssets/ on disk for local mobile dry-runs.
 function getMobileAssetsDir() {
   if (typeof global !== 'undefined' && global.testDir) return global.testDir
   return path.join(__dirname, '..', 'mobile', 'testAssets')
 }
 
 function getModelPath(filename) {
-  if (isMobile) return path.join(getMobileAssetsDir(), filename)
+  if (isMobile) return getMobileAssetPath(filename)
   return path.join(__dirname, '..', '..', 'models', filename)
+}
+
+function getFixturePath(filename) {
+  return path.join(__dirname, '..', 'fixtures', filename)
 }
 
 // Resolve a bundled test asset (model / embedder / fixture) to a real on-device
@@ -252,19 +254,15 @@ function getMobileAssetPath(filename) {
 }
 
 function getTestPaths() {
-  const fixturesDir = isMobile ? getMobileAssetsDir() : path.join(__dirname, '..', 'fixtures')
-  const manifestPath = path.join(fixturesDir, 'manifest.json')
+  const getSamplePath = isMobile ? getMobileAssetPath : getFixturePath
+  const manifestPath = getSamplePath('manifest.json')
 
   let manifest = { samples: [] }
   if (fs.existsSync(manifestPath)) {
     manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
   }
 
-  return {
-    fixturesDir,
-    manifest,
-    getSamplePath: (filename) => path.join(fixturesDir, filename)
-  }
+  return { manifest, getSamplePath }
 }
 
 function detectPlatform() {

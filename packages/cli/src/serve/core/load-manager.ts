@@ -4,8 +4,10 @@ import {
   cancel as sdkCancel
 } from '@qvac/sdk'
 import type { ModelConstant } from '@qvac/sdk'
+import type { ModelFitPolicy } from '@qvac/sdk/schemas'
 import type { ModelRegistry } from '@/serve/core/model-registry'
 import type { Logger } from '@/logger'
+import { isLifecycleBlockedError } from '@/serve/core/lifecycle'
 
 /** SDK loader, overridable in tests. `@qvac/sdk`'s `loadModel` is heavily
  * overloaded; this is the shape serve calls it with (free-form `modelType`
@@ -15,6 +17,7 @@ export type LoadModelFn = (opts: {
   modelSrc: string | ModelConstant
   modelType: string
   modelConfig: Record<string, unknown>
+  modelFitPolicy?: ModelFitPolicy
 }) => Promise<string>
 
 export const defaultLoadFn: LoadModelFn = (opts) => sdkLoadModel(opts)
@@ -143,14 +146,18 @@ export function createLoadManager(
       if (!entry) throw new Error(`Model "${alias}" not registered`)
       if (entry.state === registry.STATES.READY) return
 
-      const displaySrc = typeof entry.modelSrc === 'string' ? entry.modelSrc : entry.modelSrc.src
+      const displaySrc =
+        typeof entry.modelSrc === 'string'
+          ? entry.modelSrc || 'bundled weights'
+          : entry.modelSrc.src
       logger.info(`Loading model "${alias}" from ${displaySrc}...`)
       registry.setLoading(alias)
 
       const loaded = getLoadFn()({
         modelSrc: entry.modelSrc,
         modelType: entry.sdkType,
-        modelConfig: entry.config
+        modelConfig: entry.config,
+        ...(entry.modelFitPolicy !== undefined && { modelFitPolicy: entry.modelFitPolicy })
       }) as Promise<string> & { requestId?: string }
       rec.requestId = loaded.requestId ?? null
       // A cancel that raced ahead of the requestId: apply it now.
@@ -195,6 +202,9 @@ export function createLoadManager(
         registry.markUnloaded(alias)
       } else if (rec.cancelRequested) {
         logger.info(`Load of "${alias}" cancelled (client disconnected); left unloaded.`)
+        registry.markUnloaded(alias)
+      } else if (isLifecycleBlockedError(err)) {
+        logger.info(`Load of "${alias}" refused while the runtime is suspended; left unloaded.`)
         registry.markUnloaded(alias)
       } else {
         registry.setError(alias, err)

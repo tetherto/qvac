@@ -5,6 +5,7 @@ import { config as loadDotenv } from 'dotenv'
 import { loadConfig } from '../../utils/config-loader.js'
 import { buildConsumerElectron } from './build-consumer-electron.js'
 import { toForgePlatform } from '../utils/electron-utils.js'
+import { hostPlatform } from '../utils/host-platform.js'
 
 interface ConsumerElectronOptions {
   runId: string
@@ -152,7 +153,7 @@ export async function runConsumerElectron(options: ConsumerElectronOptions) {
       QVAC_TEST_RUN_ID: options.runId,
       QVAC_TEST_CONFIG_DIR: configDir,
       QVAC_TEST_CONSUMER_ENTRY: path.resolve(configDir, electron.entry),
-      QVAC_TEST_PLATFORM: 'electron'
+      QVAC_TEST_PLATFORM: hostPlatform('electron')
     }
 
     if (options.mqttBroker) {

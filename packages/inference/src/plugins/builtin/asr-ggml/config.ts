@@ -1,5 +1,5 @@
 import type ASRGgml from '@qvac/asr-ggml'
-import type { ParakeetConfig, WhisperConfig } from '@/schemas/index'
+import type { ParakeetConfig, WhisperConfig, MossTranscribeConfig } from '@/schemas/index'
 
 function omitUndefined<T extends Record<string, unknown>>(config: T) {
   return Object.fromEntries(Object.entries(config).filter(([, value]) => value !== undefined))
@@ -51,4 +51,11 @@ export function buildParakeetReloadConfig(config: ParakeetConfig) {
   return {
     parakeetConfig: omitUndefined(config)
   } satisfies ASRGgml.ASRGgmlReloadConfig
+}
+
+export function buildMossTranscribeEngineConfig(config: MossTranscribeConfig) {
+  return {
+    engine: 'moss-transcribe',
+    mossTranscribeConfig: omitUndefined(config)
+  } satisfies ASRGgml.MossTranscribeEngineConfig
 }

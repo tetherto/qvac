@@ -21,6 +21,23 @@ The backmerge PR carries the version bump + changelog metadata from the release 
 
 `@qvac/inference` and `@qvac/sdk` release separately, so a new major.minor produces two release branches and two backmerges: `release-inference-<x.y.z>` (engine version + changelog) and then `release-sdk-<x.y.z>` (SDK version + its `@qvac/inference` range + changelog + docs). Run this skill once per release branch.
 
+**On a release train** (`qv-release-train`), run it once for the whole train:
+read `release-train-<train>-<x.y.z>` wherever this skill says
+`release-<pkg>-<x.y.z>`, so the head is `backmerge/release-train-<train>-<x.y.z>`
+and the title names `release-train-<train>-<x.y.z>`. `pr-checks-sdk-pod.yml`
+recognises that head name and checks the published train: the commit npm
+records for it, with every package from npm. The checks pass only after the
+push run publishes.
+The source carries several manifests, changelogs and `pnpm-lock.yaml`; that is
+release metadata for the sanity check in "Resolve the cherry-pick source".
+Never carry a `.nx/version-plans/` file to `main`: if the cherry-pick brings
+one, `git rm` it before committing, or the next train applies it again. A train
+also takes the packages outside it out of `pnpm-workspace.yaml` on its release
+branch: keep `main`'s copy (`git checkout ORG_REMOTE/main --
+pnpm-workspace.yaml`) and regenerate `pnpm-lock.yaml` as the `pnpm-lock.yaml`
+rule in "Conflict triage" describes.
+`docs/ci/RELEASE-TRAIN.md` ("Making a release") says when to merge it.
+
 ## Inputs (resolve in priority order)
 
 1. **Active release-PR context** (when chained from `sdk-pr-create`): release PR number/URL, release branch, source head branch, ticket
@@ -54,7 +71,7 @@ In command examples below, `ORG_REMOTE` / `FORK_REMOTE` are placeholders — sub
 | Standalone with merged release PR     | The PR's merge/squash commit on `ORG_REMOTE/release-<pkg>-<x.y.z>` (`gh pr view <num> --json mergeCommit,headRefName`) |
 | Standalone with `--commit=<sha>`      | That single commit                                                                                               |
 
-**Sanity check:** the source range must reflect release metadata only (version bump, changelog files, NOTICE, optional model registry/history). If `git diff <range> --stat` shows broad unrelated changes (suggesting the branch was based off `main`, not the release branch), STOP and ASK how to proceed — do not silently cherry-pick unrelated work onto `main`.
+**Sanity check:** the source range must reflect release metadata only (version bump, changelog files, NOTICE, optional model registry/history, and the `packages/sdk-python` and `packages/sdk-kotlin` files `qv-sdk-inference-version` Steps 3 and 3b change). If `git diff <range> --stat` shows broad unrelated changes (suggesting the branch was based off `main`, not the release branch), STOP and ASK how to proceed — do not silently cherry-pick unrelated work onto `main`.
 
 ### Step 3: Detect no-op (main already aligned)
 
@@ -105,9 +122,13 @@ For a true merge commit (not squashed), add `-m 1`.
 
 Resolve `<pkg-dir>` with `scripts/sdk/package-paths.cjs` (`getPackageDir('<pkg>')`).
 
+On a release train, apply the rules to every package directory the release
+touched.
+
 **Auto-resolvable** (resolve, `git add`, then `git cherry-pick --continue`):
 
-- `<pkg-dir>/package.json` — version field conflict: take release-side.
+- `<pkg-dir>/package.json` — version and dependency-range conflicts: take
+  release-side.
   ```bash
   git checkout --theirs <pkg-dir>/package.json
   git add <pkg-dir>/package.json
@@ -117,8 +138,20 @@ Resolve `<pkg-dir>` with `scripts/sdk/package-paths.cjs` (`getPackageDir('<pkg>'
   node scripts/sdk/generate-changelog-sdk-pod.cjs --package=<pkg>
   git add <pkg-dir>/CHANGELOG.md
   ```
+- `pnpm-lock.yaml`: take `main`'s and regenerate, never a text merge.
+  ```bash
+  git checkout --ours pnpm-lock.yaml
+  pnpm install --lockfile-only --ignore-scripts
+  git add pnpm-lock.yaml
+  ```
+  A text merge leaves duplicate keys (`ERR_PNPM_BROKEN_LOCKFILE`), or a lockfile
+  that installs but resolves different versions.
 
 **Anything else → STOP. Hand control back to the user.** Do not force-resolve, skip, or abort the cherry-pick on the user's behalf.
+
+Never drop `pnpm-lock.yaml` from the cherry-pick: CI's `pnpm install
+--frozen-lockfile` fails on `main` when a manifest's range and the lockfile
+disagree.
 
 When stopping, print:
 
@@ -140,7 +173,17 @@ Re-verify that the cherry-pick produced commits that actually change `ORG_REMOTE
 git diff --stat ORG_REMOTE/main..HEAD
 ```
 
-If the output is empty, treat it as a late no-op and STOP (same handling as Step 3 — report and exit). Otherwise push to the **org remote** when write access allows:
+If the output is empty, treat it as a late no-op and STOP (same handling as Step 3 — report and exit).
+
+Then check the branch installs; do not push until it does:
+
+```bash
+pnpm install --frozen-lockfile --ignore-scripts
+```
+
+On `specifiers in the lockfile don't match`, regenerate (`pnpm install --lockfile-only --ignore-scripts`) and amend.
+
+Otherwise push to the **org remote** when write access allows:
 
 ```bash
 # Preferred — org-branch head (substitute real remote name for ORG_REMOTE):
@@ -213,11 +256,12 @@ Print the new PR URL as a clickable hyperlink. When chained from `sdk-pr-create`
 
 Before completing:
 
-- [ ] Branch name is exactly `backmerge/release-<pkg>-<x.y.z>`
+- [ ] Branch name is exactly `backmerge/release-<pkg>-<x.y.z>` (`backmerge/release-train-<train>-<x.y.z>` on a train)
 - [ ] Title contains `[skiplog]` tag (combined as `[skiplog|notask]` if tickless)
 - [ ] Body links the companion release PR
 - [ ] Cherry-pick used `-x` (so the original SHA is recorded in commit messages)
 - [ ] No conflicts remain; any non-trivial conflicts were resolved by the user, not the skill
+- [ ] `pnpm install --frozen-lockfile` passes on the branch
 - [ ] Head was pushed to the org remote when write access allows; fork path only as fallback
 - [ ] `gh pr view` confirms target is `tetherto/qvac:main` and head is the expected org branch (or `<fork>:backmerge/...` if fallback)
 
@@ -227,5 +271,5 @@ Before completing:
 - `.agents/skills/qv-sdk-changelog/SKILL.md` — changelog regeneration used during conflict resolution
 - `docs/gitflow.md` — title format and `[skiplog]` semantics
 - `.github/teams/sdk.json` — packages this skill applies to
-- `docs/gitflow.md` — release flow and "Keep main aligned" rules (still documents fork-first contribution; prefer org-branch heads per this skill until DevOps updates gitflow)
+- `docs/gitflow.md` — release flow, "Keep main aligned" rules, and org-branch preference with personal-fork fallback
 - Fork CI trust model: `docs/ci/LABELS.md` (fork-ci environment + `fork-approval`)

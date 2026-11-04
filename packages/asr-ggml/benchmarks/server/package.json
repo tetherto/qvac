@@ -26,7 +26,7 @@
     "bare-path": "^3.0.0",
     "bare-process": "^4.2.1",
     "bare-stream": "^2.6.5",
-    "bare-subprocess": "^5.0.4",
+    "bare-subprocess": "^6.2.1",
     "bare-url": "^2.1.6",
     "zod": "^3.24.4"
   }

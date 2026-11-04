@@ -6,7 +6,7 @@ import {
   type CompletionStats,
   QWEN3_1_7B_INST_Q4
 } from '@qvac/sdk'
-import { tools, toolSchemas, mockExecute } from './shared'
+import { tools, toolSchemas, mockExecute } from './shared.js'
 
 try {
   const modelId = await loadModel({

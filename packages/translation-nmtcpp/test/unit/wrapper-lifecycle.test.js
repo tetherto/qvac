@@ -318,3 +318,20 @@ test('legacy GPU aliases retain their original values without main-gpu', async (
   t.is(received.gpu_device, 1)
   await model.unload()
 })
+
+test('canonical GPU backend takes precedence even when empty', async (t) => {
+  const { model } = makeModel({
+    config: { gpu_backend: '', gpuBackend: 'opencl', gpu_device: 0, gpuDevice: 1 }
+  })
+  let received
+  model._createAddon = ({ config }) => {
+    received = config
+    return { activate: async () => {}, destroy: async () => {} }
+  }
+  await model.load()
+  t.is(received.gpu_backend, '')
+  t.is(received.gpu_device, 0)
+  t.is(received.gpuBackend, undefined)
+  t.is(received.gpuDevice, undefined)
+  await model.unload()
+})

@@ -3,6 +3,7 @@
 #include <any>
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -32,6 +33,7 @@ class Audio8Model
 public:
   using Input = std::string;
   using Output = std::vector<int16_t>;
+  using ChunkCallback = std::function<void(Output&&, int, bool)>;
 
   // Per-call overrides of the constructor's reference recording. Empty means
   // "keep the configured voice"; an audio path with no text is rejected.
@@ -43,6 +45,7 @@ public:
   struct AnyInput {
     std::string text;
     VoiceOverride voice;
+    ChunkCallback chunkCallback;
   };
 
   explicit Audio8Model(Audio8Config config);
@@ -115,6 +118,9 @@ private:
       const tts_cpp::audio8::SynthesisResult& result, double totalSeconds);
 
   Output synthesize(const AnyInput& input);
+  tts_cpp::audio8::SynthesisResult runEngine(
+      tts_cpp::audio8::Engine& engine, const AnyInput& input,
+      const VoiceOverride& voice) const;
 
   void loadLocked();
   void unloadLocked();

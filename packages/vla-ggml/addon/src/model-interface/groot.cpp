@@ -1403,7 +1403,8 @@ static GrootEmbodimentSelection grootResolveForModel(
 
 static std::unique_ptr<GrootModelInternal> grootLoadModel(
     const std::string& ggufPath, bool forceCpu, const std::string& backendsDir,
-    const VlaEmbodimentRequest& embodiment = {}) {
+    const VlaEmbodimentRequest& embodiment = {},
+    const std::vector<std::string>& backendOverride = {}) {
   vla_backend_selection::loadBackendsOnce(backendsDir);
   auto m = std::make_unique<GrootModelInternal>();
 
@@ -1421,8 +1422,14 @@ static std::unique_ptr<GrootModelInternal> grootLoadModel(
   m->backend_name = cpuName != nullptr ? cpuName : "CPU";
   m->has_gpu = false;
 
+  // Same rule as pi05LoadModel: a named backend never lands on CPU silently.
+  using vla_backend_selection::StrictGpuFailure;
+  using vla_backend_selection::strictGpuRefusal;
+  const bool strictGpu =
+      vla_backend_selection::backendOverrideIsStrict(backendOverride);
   if (!forceCpu) {
-    ggml_backend_dev_t gpu = vla_backend_selection::pickBestGpuDevice();
+    ggml_backend_dev_t gpu =
+        vla_backend_selection::pickBestGpuDevice(backendOverride);
     if (gpu != nullptr) {
       ggml_backend_t gpuBackend = ggml_backend_dev_init(gpu, nullptr);
       if (gpuBackend != nullptr) {
@@ -1436,7 +1443,16 @@ static std::unique_ptr<GrootModelInternal> grootLoadModel(
             std::string("grootLoadModel: using GPU backend: ") +
                 (bname != nullptr ? bname : "?") + " (" +
                 (ddesc != nullptr ? ddesc : "?") + ")");
+      } else if (strictGpu) {
+        throw std::runtime_error(
+            "grootLoadModel: " +
+            strictGpuRefusal(
+                StrictGpuFailure::DeviceInitFailed, backendOverride));
       }
+    } else if (strictGpu) {
+      throw std::runtime_error(
+          "grootLoadModel: " +
+          strictGpuRefusal(StrictGpuFailure::NoDevice, backendOverride));
     }
   }
 
@@ -1642,6 +1658,14 @@ static std::unique_ptr<GrootModelInternal> grootLoadModel(
     const int64_t nTensorsInGguf = gguf_get_n_tensors(m->gguf);
     if (!grootLoadWeightsAllocCopy(
             *m, ggufPath.c_str(), m->gguf, buft, dataOffset, nTensorsInGguf)) {
+      if (strictGpu) {
+        // ~GrootModelInternal frees bufs_w, the GPU backend, gguf and ctx_w.
+        throw std::runtime_error(
+            "grootLoadModel: " + strictGpuRefusal(
+                                     StrictGpuFailure::WeightLoadFailed,
+                                     backendOverride,
+                                     m->backend_name));
+      }
       QLOG_IF(
           Priority::WARNING,
           "grootLoadModel: GPU weight alloc failed — falling back to CPU");
@@ -2752,8 +2776,10 @@ struct ggml_tensor* grootBuildVisionBlockGraph(
 
 GrootModel::GrootModel(
     const std::string& ggufPath, bool forceCpu, const std::string& backendsDir,
-    const VlaEmbodimentRequest& embodiment)
-    : impl_(grootLoadModel(ggufPath, forceCpu, backendsDir, embodiment)) {
+    const VlaEmbodimentRequest& embodiment,
+    const std::vector<std::string>& backendOverride)
+    : impl_(grootLoadModel(
+          ggufPath, forceCpu, backendsDir, embodiment, backendOverride)) {
   hparams_.chunk_size = impl_->action_horizon;
   hparams_.action_dim = impl_->max_action_dim;
   hparams_.max_action_dim = impl_->max_action_dim;

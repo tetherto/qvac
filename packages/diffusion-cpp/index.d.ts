@@ -58,6 +58,8 @@ export interface SdConfig {
     upscaler_direct?: boolean;
     upscaler_offload_params_to_cpu?: boolean;
     upscaler_threads?: NumericLike;
+    max_image_pixels?: NumericLike;
+    max_job_pixels?: NumericLike;
     verbosity?: NumericLike;
     [key: string]: string | number | boolean | undefined;
 }
@@ -67,6 +69,7 @@ export interface DiffusionFiles {
     clipG?: string;
     t5Xxl?: string;
     llm?: string;
+    llmVision?: string;
     vae?: string;
     esrgan?: string;
     highNoiseDiffusionModel?: string;
@@ -82,6 +85,7 @@ export interface EsrganUpscalerConfig {
     upscaler_direct?: boolean;
     upscaler_offload_params_to_cpu?: boolean;
     upscaler_threads?: NumericLike;
+    max_image_pixels?: NumericLike;
     device?: 'cpu' | 'gpu';
     verbosity?: NumericLike;
     [key: string]: string | number | boolean | undefined;
@@ -120,6 +124,10 @@ export interface GenerationParams {
     sampling_method?: SamplerMethod;
     sampler?: SamplerMethod;
     scheduler?: ScheduleType;
+    /** Strictly decreasing finite non-negative sigmas ending in zero.
+     * Overrides scheduler and steps; the step count is array length minus one.
+     */
+    custom_sigmas?: number[];
     seed?: number;
     batch_count?: number;
     vae_tiling?: boolean;
@@ -234,7 +242,7 @@ export declare function applyFluxImg2ImgDimDefaults(params: GenerationParams, pr
 export type { VideoDiffusionFiles, VideoGenerationParams, VideoMode, VideoRuntimeStats, VideoStableDiffusionArgs } from './video';
 export type { QvacResponse };
 export { assessFit } from './fit';
-export type { DiffusionFitRequest, DiffusionFitResult, DiffusionFitStatus, DiffusionFitWorkload } from './fit';
+export type { DiffusionFitDevice, DiffusionFitRequest, DiffusionFitResult, DiffusionFitStats, DiffusionFitStatus, DiffusionFitWorkload, EsrganFitRequest, WorldFitRequest } from './fit';
 export type VideoStableDiffusion = InstanceType<typeof VideoStableDiffusionConstructor>;
 export declare const VideoStableDiffusion: typeof VideoStableDiffusionConstructor;
 export default ImgStableDiffusion;

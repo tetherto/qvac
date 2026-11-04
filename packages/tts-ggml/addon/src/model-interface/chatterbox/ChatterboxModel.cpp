@@ -124,25 +124,12 @@ tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) 
   if (cfg.minP.has_value())
     opts.min_p = *cfg.minP;
 
-  // Compose the actual backends-scan directory from the host-provided
-  // prebuilds root plus the cmake-bare per-target subdir
-  // (BACKENDS_SUBDIR, e.g. `android-arm64/qvac__tts-ggml`). Mirrors
-  // the exact shape qvac/packages/transcription-parakeet uses in
-  // ParakeetModel.cpp + qvac/packages/llm-llamacpp uses in
-  // LlamaLazyInitializeBackend.cpp so a host that already passes
-  // `path.join(__dirname, 'prebuilds')` gets identical resolution
-  // semantics across the three addons. Empty `backendsDir` -> leave
-  // `opts.backends_dir` empty so tts-cpp falls back to ggml's
-  // compile-time default search path (`ggml_backend_load_all()`
-  // rather than `..._from_path()`).
-  if (!cfg.backendsDir.empty()) {
-    std::filesystem::path backendsDirPath(cfg.backendsDir);
-#ifdef BACKENDS_SUBDIR
-    backendsDirPath =
-        (backendsDirPath / std::filesystem::path(BACKENDS_SUBDIR)).lexically_normal();
-#endif
-    opts.backends_dir = backendsDirPath.string();
-  }
+  // A configured `backendsDir` is scanned as given; otherwise the module's
+  // own backends directory. Empty only when the loader cannot locate the
+  // module, which leaves tts-cpp on ggml's default search
+  // (`ggml_backend_load_all()` rather than `..._from_path()`).
+  opts.backend = cfg.backend;
+  opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   // Forwarded as-is. Empty -> leave $GGML_OPENCL_CACHE_DIR alone
   // (the env-set-by-host path still wins). Only consumed on Android
   // by `tts_cpp::detail::set_opencl_cache_dir()`; other platforms
@@ -581,34 +568,37 @@ void ChatterboxModel::loadLocked() {
       engine_->gpu_unsupported() ||
       (wantsGpu && backendDevice_ == 0 && androidOffAllowlistGpuPresent());
 
-  // LavaSR enhancer: load when a GGUF path is set (empty path = disabled).
-  // Neural post-process; the ConvNeXt backbone + spec head run on the GPU when
-  // the engine does (Vulkan/Metal/CUDA/OpenCL), else on the scalar CPU core.
-  // Pass the engine's *resolved* device, not the requested switch: if the
-  // engine fell back to CPU (gpu_unsupported / off-allowlist), keep the
-  // enhancer on CPU too instead of forcing it onto the GPU. Shared with the
-  // other engines via loadEnhancer so the loaders can't drift.
-  LoadedEnhancer loaded = loadEnhancer(
-      cfg_.enhancerGgufPath,
-      backendDevice_ == kBackendDeviceGpu,
-      "ChatterboxModel::load: lavasr enhancer: ");
-  enhancer_ = std::move(loaded.enhancer);
-  enhancerBackendDevice_ = loaded.backendDevice;
-  enhancerBackendId_ = loaded.backendId;
+  try {
+    LoadedEnhancer loaded = loadEnhancer(
+        cfg_.enhancerGgufPath,
+        backendDevice_ == kBackendDeviceGpu,
+        "ChatterboxModel::load: lavasr enhancer: ",
+        0,
+        cfg_.enhancerCoreml);
+    enhancer_ = std::move(loaded.enhancer);
+    enhancerBackendDevice_ = loaded.backendDevice;
+    enhancerBackendId_ = loaded.backendId;
 
-  LoadedDenoiser denoiser = loadDenoiser(
-      cfg_.denoiserGgufPath,
-      backendDevice_ == kBackendDeviceGpu,
-      "ChatterboxModel::load: lavasr denoiser: ");
-  denoiser_ = std::move(denoiser.denoiser);
-  denoiserBackendDevice_ = denoiser.backendDevice;
-  denoiserBackendId_ = denoiser.backendId;
+    LoadedDenoiser denoiser = loadDenoiser(
+        cfg_.denoiserGgufPath,
+        backendDevice_ == kBackendDeviceGpu,
+        "ChatterboxModel::load: lavasr denoiser: ",
+        cfg_.denoiserCoreml);
+    denoiser_ = std::move(denoiser.denoiser);
+    denoiserBackendDevice_ = denoiser.backendDevice;
+    denoiserBackendId_ = denoiser.backendId;
+  } catch (...) {
+    unloadLocked();
+    throw;
+  }
 }
 
 void ChatterboxModel::unloadLocked() {
   engine_.reset();
   enhancer_.reset();
   denoiser_.reset();
+  enhancerBackendDevice_ = kBackendDeviceNone;
+  enhancerBackendId_ = kBackendIdNone;
   denoiserBackendDevice_ = -1;
   denoiserBackendId_ = -1;
 }

@@ -4,6 +4,7 @@
 #include <string>
 
 #include <llama.h>
+#include <qvac-fabric.h>
 
 #include "LlamaModel.hpp"
 #include "utils/LoggingMacros.hpp"
@@ -19,7 +20,19 @@ int LlamaLazyInitializeBackend::g_refCount = 0;
 bool LlamaLazyInitializeBackend::initialize(
     const std::string& backendsDir, const std::string& openclCacheDir) {
   std::lock_guard<std::mutex> lock(g_initMutex);
+  return initializeLocked(backendsDir, openclCacheDir);
+}
 
+void LlamaLazyInitializeBackend::acquire(
+    const std::string& backendsDir, const std::string& openclCacheDir) {
+  // Initialization and ownership must be atomic with the last model unloading.
+  const std::lock_guard<std::mutex> lock(g_initMutex);
+  initializeLocked(backendsDir, openclCacheDir);
+  ++g_refCount;
+}
+
+bool LlamaLazyInitializeBackend::initializeLocked(
+    const std::string& backendsDir, const std::string& openclCacheDir) {
   if (g_initialized) {
     if (!backendsDir.empty() && !g_recordedBackendsDir.empty() &&
         backendsDir != g_recordedBackendsDir) {
@@ -47,19 +60,15 @@ bool LlamaLazyInitializeBackend::initialize(
 #endif
 
   if (!backendsDir.empty()) {
-    std::filesystem::path backendsDirPath(backendsDir);
-#ifdef BACKENDS_SUBDIR
-    std::filesystem::path subdirPath(BACKENDS_SUBDIR);
-    backendsDirPath = backendsDirPath / subdirPath;
-    backendsDirPath = backendsDirPath.lexically_normal();
-#endif
     QLOG_IF(
-        Priority::INFO,
-        "Loading backends from directory: " + backendsDirPath.string());
-    ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
+        Priority::INFO, "Loading backends from directory: " + backendsDir);
+    ggml_backend_load_all_from_path(backendsDir.c_str());
   } else {
-    QLOG_IF(Priority::DEBUG, "Loading backends using default path");
-    ggml_backend_load_all();
+    QLOG_IF(
+        Priority::DEBUG,
+        std::string("Loading backends shipped with @qvac/fabric from: ") +
+            qvac_fabric_backends_dir());
+    qvac_fabric_load_backends();
   }
 
   llama_backend_init();
@@ -89,8 +98,7 @@ void LlamaLazyInitializeBackend::decrementRefCount() {
 LlamaBackendsHandle::LlamaBackendsHandle(
     const std::string& backendsDir, const std::string& openclCacheDir)
     : ownsHandle_(true) {
-  LlamaLazyInitializeBackend::initialize(backendsDir, openclCacheDir);
-  LlamaLazyInitializeBackend::incrementRefCount();
+  LlamaLazyInitializeBackend::acquire(backendsDir, openclCacheDir);
 }
 
 LlamaBackendsHandle::~LlamaBackendsHandle() {

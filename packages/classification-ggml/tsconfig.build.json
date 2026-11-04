@@ -8,5 +8,5 @@
     "rootDir": "src",
     "sourceMap": false
   },
-  "exclude": []
+  "exclude": ["test"]
 }

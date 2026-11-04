@@ -1,50 +1,40 @@
 cmake_minimum_required(VERSION 3.25)
 
+# Shared fuzz helpers. Unmigrated addons call qvac_addon_fuzz_manifest()
+# rather than qvac_addon_preproject() so overlay triplets and Android STL
+# stay as this listfile already sets them. See docs/architecture/ADDON-FUZZING.md.
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/qvac-addon/qvac-addon.cmake)
+
 option(ANDROID_STL "Android STL linkage" c++_shared)
 option(BUILD_TESTING "Build tests" OFF)
+qvac_addon_fuzz_manifest()
 if(BUILD_TESTING)
   list(APPEND VCPKG_MANIFEST_FEATURES "tests")
 endif()
 
-option(SD_CUDA "Enable CUDA GPU backend" OFF)
-if(SD_CUDA)
-  list(APPEND VCPKG_MANIFEST_FEATURES "cuda")
-
-  # nvcc defaults its host compiler to g++, which rejects the -stdlib=libc++
-  # that vcpkg-overlays/triplets/{x64,arm64}-linux.cmake put in
-  # VCPKG_CXX_FLAGS / VCPKG_LINKER_FLAGS. enable_language(CUDA) then fails its
-  # ABI check inside the port build with
-  #   g++: error: unrecognized command-line option '-stdlib=libc++'
-  # Export CUDAHOSTCXX for the vcpkg child process rather than setting
-  # CMAKE_CUDA_HOST_COMPILER in vcpkg-overlays/toolchains/linux-clang.cmake:
-  # that file's contents feed the vcpkg ABI hash of every package on the linux
-  # triplets, so editing it invalidates the binary cache for non-CUDA builds
-  # too and forces every port to rebuild from source. Windows and macOS keep
-  # their default host compiler (MSVC / clang), which already matches.
-  if(CMAKE_HOST_UNIX AND NOT CMAKE_HOST_APPLE AND NOT DEFINED ENV{CUDAHOSTCXX})
-    set(ENV{CUDAHOSTCXX} "clang++")
-  endif()
-endif()
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ConfigureCuda.cmake)
 
 option(SD_OPENCL "Enable OpenCL GPU backend (Android/Adreno)" OFF)
 if(SD_OPENCL)
   list(APPEND VCPKG_MANIFEST_FEATURES "opencl")
 endif()
 
-# Vulkan and Metal are auto-enabled via default-features in the ggml and
-# stable-diffusion-cpp registry ports.  CUDA requires a specific build machine
-# so it remains opt-in via SD_CUDA.
+# CUDA is opt-in through SD_CUDA; Linux release prebuilds enable it in CI.
+# Ordinary source, unit-test, coverage and fuzz builds need no CUDA toolkit.
+# Vulkan and Metal use the registry ports' platform-specific defaults.
 #
-# GGML_BACKEND_DL is ON on Android and desktop Linux (set in the ggml
-# portfile), mirroring qvac-fabric: GPU backends are dlopen'd MODULE .so files
-# shipped next to the addon, so the .bare itself never links
-# libvulkan/libOpenCL and loads on hosts without a graphics stack (QVAC-23767).
-# On macOS/iOS (Metal) and Windows GPU backends are statically linked.
+# GGML_BACKEND_DL is ON on Android, desktop Linux and Windows (set in the
+# ggml portfile), mirroring qvac-fabric: GPU backends are runtime-loaded
+# MODULE .so / .dll files shipped next to the addon, so the .bare itself never
+# links libvulkan/libOpenCL/vulkan-1 or the CUDA runtime and loads on hosts
+# without a graphics stack (QVAC-23767, QVAC-25560). On macOS/iOS (Metal) GPU
+# backends are statically linked.
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
 
 set(VCPKG_OVERLAY_TRIPLETS "${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/triplets;${VCPKG_OVERLAY_TRIPLETS}")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../vcpkg-overlays/toolchains/export-bare-make-env.cmake")
 
 project(inference-addon-sd C CXX)
 
@@ -62,6 +52,11 @@ configure_file(${VCPKG_INSTALLED_PATH}/share/lint-cpp/.clang-tidy
 find_path(PICOJSON_INCLUDE_DIRS "picojson/picojson.h")
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
 
+# Fuzz-only configure (BUILD_FUZZING without BUILD_TESTING): build just the
+# fuzz targets and skip engine find_package() + the .bare module so pure
+# parse/transform drivers keep full ASan + LSan.
+qvac_addon_fuzz_only_return()
+
 # stable-diffusion.cpp – uses the CMake config installed by the registry port
 find_package(stable-diffusion-cpp CONFIG REQUIRED)
 
@@ -75,17 +70,28 @@ if(WIN32)
   add_definitions(-DNOMINMAX -DWIN32_LEAN_AND_MEAN -DNOGDI)
 endif()
 
+# The module is named after the platform package that ships it,
+# qvac__diffusion-cpp-<suffix> (every iOS host shares `ios`), so that package
+# is an ordinary addon: require.addon(), bare-pack and bare-link all find
+# prebuilds/<host>/qvac__diffusion-cpp-<suffix>.bare there. cmake-bare installs
+# the dynamically loadable ggml backends to <host>/<module name>, the directory
+# the addon looks in next to itself (see ModuleBackendsDir.hpp); bare-link
+# flattens them next to the module in a mobile app instead. Keep the suffix in
+# sync with "#host-addon" in package.json and SLICE_DEFINITIONS in
+# scripts/ci/slice-platform-packages.mjs.
 bare_target(bare_target_value)
-bare_module_target("." unused_target NAME module_name VERSION unused_version)
-set(BACKENDS_SUBDIR_VALUE "${bare_target_value}/${module_name}")
-message("Building inference-addon-sd with BACKENDS_SUBDIR='${BACKENDS_SUBDIR_VALUE}'")
+if(bare_target_value MATCHES "^ios-")
+  set(module_name "qvac__diffusion-cpp-ios")
+else()
+  set(module_name "qvac__diffusion-cpp-${bare_target_value}")
+endif()
+message("Building inference-addon-sd module '${module_name}'")
 
-# On Android and desktop Linux with GGML_BACKEND_DL, install GPU backend .so
-# modules alongside the addon so ggml can dlopen them at runtime.  CPU
-# backends are statically linked (GGML_CPU_STATIC) and excluded from this
-# loop.
+# With GGML_BACKEND_DL, install GPU backend modules alongside the addon on
+# Android, Linux and Windows. CPU backends are statically linked
+# (GGML_CPU_STATIC) and excluded from this loop.
 set(BACKEND_DL_EXPORTS "")
-if(GGML_BACKEND_DL AND (ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
+if(GGML_BACKEND_DL AND (ANDROID OR WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
     if("${_backend}" MATCHES "^ggml-cpu")
       continue()
@@ -112,7 +118,15 @@ if(GGML_BACKEND_DL AND (ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
   endforeach()
 endif()
 
-add_bare_module(inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
+# Every Windows build loads its GPU backends from DLLs, so fail the configure
+# rather than ship a CPU-only Windows prebuild when none were packaged.
+if(GGML_BACKEND_DL AND WIN32 AND NOT BACKEND_DL_EXPORTS)
+  message(FATAL_ERROR "inference-addon-sd: GGML_BACKEND_DL is on but ggml "
+    "exports no GPU backend module; the prebuild would ship without GPU "
+    "backends")
+endif()
+
+add_bare_module(inference-addon-sd NAME ${module_name} EXPORTS ${BACKEND_DL_EXPORTS})
   set(ADDON_SOURCES
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/handlers/SdCtxHandlers.cpp
@@ -169,7 +183,37 @@ add_bare_module(inference-addon-sd EXPORTS ${BACKEND_DL_EXPORTS})
 
 target_compile_features(${inference-addon-sd} PRIVATE cxx_std_20)
 target_compile_definitions(${inference-addon-sd} PUBLIC JS_LOGGER)
-target_compile_definitions(${inference-addon-sd} PRIVATE BACKENDS_SUBDIR="${BACKENDS_SUBDIR_VALUE}")
+target_compile_definitions(${inference-addon-sd} PRIVATE
+  QVAC_ADDON_MODULE_NAME="${module_name}")
+
+if(WIN32)
+  # cmake-bare enables WINDOWS_EXPORT_ALL_SYMBOLS. Exporting addon internals
+  # makes them linker roots, preventing otherwise-unused code from being removed.
+  # This addon exposes its JS API through Bare's two registration entry points;
+  # no consumer links against its C++ implementation.
+  set_target_properties(${inference-addon-sd}_module PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS OFF)
+  target_sources(${inference-addon-sd}_module PRIVATE ${PROJECT_SOURCE_DIR}/addon/windows-exports.def)
+
+  if(MSVC)
+    # clang-cl and MSVC use the same COFF options. Preserve the existing compiler
+    # optimization level and debug settings; package functions/data separately
+    # so the release linker can discard unused sections and fold identical code.
+    target_compile_options(${inference-addon-sd} PRIVATE
+      "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:/Gy>"
+      "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:/Gw>")
+    target_link_options(${inference-addon-sd}_module PRIVATE
+      "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:/OPT:REF>"
+      "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:/OPT:ICF>")
+
+    # The registry ports enable upstream LTO for ggml and
+    # stable-diffusion. Optimize across those static-library boundaries at the
+    # final lld-link step, while retaining the existing optimization level.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+      target_compile_options(${inference-addon-sd} PRIVATE
+        "$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:-flto=thin>")
+    endif()
+  endif()
+endif()
 
 if(GGML_BACKEND_DL)
   target_compile_definitions(${inference-addon-sd} PRIVATE GGML_BACKEND_DL)
@@ -179,6 +223,8 @@ if(BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)
   include(GoogleTest)
   enable_testing()
+  add_test(NAME cuda-options
+    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/test/cmake/cuda-options.cmake)
   add_subdirectory(test/unit)
 endif()
 
@@ -191,3 +237,5 @@ endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_link_options(${inference-addon-sd}_module PRIVATE -Wl,--exclude-libs,ALL)
 endif()
+
+qvac_addon_add_fuzz_subdirectory()

@@ -11,7 +11,8 @@ Request::Request(
     uint32_t rid, PrefillPlan&& plan, unsigned maxTokens, llama_pos initialPos)
     : seqId(rid), pendingPrefillTokens(std::move(plan.tokens)),
       pendingMediaBarriers(std::move(plan.mediaBarriers)),
-      currentPos(initialPos), maxTokensPerSequence(maxTokens) {
+      pendingCheckpointAt(plan.checkpointAtTextTokens), currentPos(initialPos),
+      maxTokensPerSequence(maxTokens) {
   prefillTokenCount = pendingPrefillTokens.size();
   for (const auto& barrier : pendingMediaBarriers) {
     prefillTokenCount += static_cast<size_t>(barrier.nPos);
@@ -62,6 +63,16 @@ bool Request::isOptAwaitingMedia(const std::optional<Request>& slot) {
   return slot.has_value() && slot->isAwaitingMedia();
 }
 
+bool Request::isAwaitingCheckpoint() const {
+  return isPrefillPending() && pendingMediaBarriers.empty() &&
+         pendingCheckpointAt.has_value() &&
+         prefillFedCount >= *pendingCheckpointAt;
+}
+
+bool Request::isOptAwaitingCheckpoint(const std::optional<Request>& slot) {
+  return slot.has_value() && slot->isAwaitingCheckpoint();
+}
+
 bool Request::isGenerationIdle() const {
   return !isFinished() && isPrefillComplete() && !hasUnfedSample;
 }
@@ -79,7 +90,9 @@ bool Request::isOptGenerationPending(const std::optional<Request>& slot) {
 }
 
 bool Request::hasTokensToFeed() const {
-  return (isPrefillPending() && !isAwaitingMedia()) || isGenerationPending();
+  return (isPrefillPending() && !isAwaitingMedia() &&
+          !isAwaitingCheckpoint()) ||
+         isGenerationPending();
 }
 
 bool Request::isOptHasTokensToFeed(const std::optional<Request>& slot) {
@@ -88,26 +101,30 @@ bool Request::isOptHasTokensToFeed(const std::optional<Request>& slot) {
 
 unsigned Request::remainingToFeed() const {
   if (!isPrefillComplete()) {
-    // Text feeding stops at the head media barrier; the segment past it
-    // only unblocks once the scheduler completes the barrier.
-    const size_t feedLimit =
-        pendingMediaBarriers.empty()
-            ? pendingPrefillTokens.size()
-            : std::min(
-                  pendingPrefillTokens.size(),
-                  pendingMediaBarriers.front().afterTextTokens);
+    // Text feeding stops at the head media barrier, and at a checkpoint
+    // stop; the tokens past either only unblock once the scheduler has
+    // serviced it.
+    size_t feedLimit = pendingMediaBarriers.empty()
+                           ? pendingPrefillTokens.size()
+                           : std::min(
+                                 pendingPrefillTokens.size(),
+                                 pendingMediaBarriers.front().afterTextTokens);
+    if (pendingCheckpointAt.has_value()) {
+      feedLimit = std::min(feedLimit, *pendingCheckpointAt);
+    }
     return feedLimit > prefillFedCount
                ? static_cast<unsigned>(feedLimit - prefillFedCount)
                : 0u;
   }
-  return hasUnfedSample ? 1u : 0u;
+  return hasUnfedSample ? 1u + static_cast<unsigned>(draftTokens.size()) : 0u;
 }
 
 llama_token Request::tokenToFeedAt(llama_pos pos) const {
   if (!isPrefillComplete()) {
     return pendingPrefillTokens[prefillFedCount + static_cast<size_t>(pos)];
   }
-  return generatedTokens.back();
+  return pos == 0 ? generatedTokens.back()
+                  : draftTokens[static_cast<size_t>(pos) - 1];
 }
 
 bool Request::chunkConsumesAllUnfed(unsigned chunkSize) const {
@@ -118,8 +135,9 @@ bool Request::chunkConsumesAllUnfed(unsigned chunkSize) const {
     return true;
   }
   // Mid-prefill a chunk can also drain `remainingToFeed` by hitting a
-  // media barrier; logits belong only to the true end of the prompt.
-  return pendingMediaBarriers.empty() &&
+  // media barrier or a checkpoint stop; logits belong only to the true end
+  // of the prompt.
+  return pendingMediaBarriers.empty() && !pendingCheckpointAt.has_value() &&
          prefillFedCount + chunkSize >= pendingPrefillTokens.size();
 }
 
@@ -146,8 +164,8 @@ MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequestAt(
 
 MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequestAt(
     uint32_t seqId, PrefillPlan&& plan, llama_pos initialPos,
-    llama_pos initialKvCells) {
-  if (plan.tokens.empty() && plan.mediaBarriers.empty()) {
+    llama_pos initialKvCells, bool allowEmptyPlan) {
+  if (!allowEmptyPlan && plan.tokens.empty() && plan.mediaBarriers.empty()) {
     return AddStatus::ErrEmptyTokens;
   }
   const bool barriersValid =
@@ -156,7 +174,15 @@ MultiRequestBatcher::AddStatus MultiRequestBatcher::addRequestAt(
       std::ranges::all_of(plan.mediaBarriers, [&](const MediaBarrier& b) {
         return b.afterTextTokens <= plan.tokens.size() && b.nPos > 0;
       });
-  if (!barriersValid) {
+  // A checkpoint stop sits inside the final text run: before the last token
+  // (the prompt still needs its logits) and after every media barrier.
+  const bool checkpointValid =
+      !plan.checkpointAtTextTokens.has_value() ||
+      (*plan.checkpointAtTextTokens < plan.tokens.size() &&
+       (plan.mediaBarriers.empty() ||
+        plan.mediaBarriers.back().afterTextTokens <=
+            *plan.checkpointAtTextTokens));
+  if (!barriersValid || !checkpointValid) {
     return AddStatus::ErrInvalidPlan;
   }
   // M-RoPE media occupies more KV cells than positions, so both the
@@ -302,7 +328,26 @@ MultiRequestBatcher::fillBatch(LlamaBatch& batch) {
 
   std::ranges::fill(lastLogitIndices_, -1);
 
-  const FillResult bState = planChunksForActiveSeqs(batch);
+  FillResult bState = planChunksForActiveSeqs(batch);
+  // A draft is fed whole or not at all: verification needs the sample and
+  // every draft token. A slot granted less keeps only its sample.
+  std::fill(draftDropped_.begin(), draftDropped_.end(), false);
+  for (auto& slot : slots_ | views::filter(Request::isOptHasTokensToFeed)) {
+    Request& req = *slot;
+    req.draftLogitStart = -1;
+    if (req.draftTokens.empty() || !req.isPrefillComplete()) {
+      continue;
+    }
+    unsigned& granted = chunkSizes_[req.seqId];
+    if (granted < 1u + req.draftTokens.size()) {
+      req.draftTokens.clear();
+      draftDropped_[req.seqId] = true;
+      const unsigned kept = std::min(granted, 1u);
+      bState.totalTokens -= granted - kept;
+      bState.decodeTokens -= granted - kept;
+      granted = kept;
+    }
+  }
   // planChunksForActiveSeqs() zeroed every budget, so a fill that grants
   // nothing also clears any budget an earlier step left outstanding.
   budgetsPending_ = bState.totalTokens > 0;
@@ -317,10 +362,18 @@ MultiRequestBatcher::fillBatch(LlamaBatch& batch) {
     const unsigned granted = chunkSizes_[req.seqId];
     const auto chunk = static_cast<llama_pos>(granted);
     const bool wantLogitsOnLast = req.chunkConsumesAllUnfed(granted);
+    // Verification reads logits at the sample and at every draft token.
+    const bool feedsDraft =
+        req.isPrefillComplete() && !req.draftTokens.empty() && wantLogitsOnLast;
+    if (feedsDraft) {
+      req.draftLogitStart = static_cast<int>(batchIdx);
+      req.draftBasePos = req.currentPos;
+    }
 
     for (llama_pos i = 0; i < chunk; i++) {
       const int idx = static_cast<int>(batchIdx);
-      const bool wantLogits = wantLogitsOnLast && i == chunk - 1;
+      const bool wantLogits =
+          feedsDraft || (wantLogitsOnLast && i == chunk - 1);
 
       lBatch.token[idx] = req.tokenToFeedAt(i);
       lBatch.pos[idx] = req.currentPos + i;
@@ -406,6 +459,24 @@ MultiRequestBatcher::nextAwaitingMedia() const {
   return std::nullopt;
 }
 
+std::optional<MultiRequestBatcher::AwaitingCheckpoint>
+MultiRequestBatcher::nextAwaitingCheckpoint() const {
+  for (const auto& slot :
+       slots_ | views::filter(Request::isOptAwaitingCheckpoint)) {
+    return AwaitingCheckpoint{
+        .seqId = slot->seqId, .currentPos = slot->currentPos};
+  }
+  return std::nullopt;
+}
+
+bool MultiRequestBatcher::completeCheckpointStop(uint32_t seqId) {
+  if (!isValid(seqId) || !slots_[seqId]->pendingCheckpointAt.has_value()) {
+    return false;
+  }
+  slots_[seqId]->pendingCheckpointAt.reset();
+  return true;
+}
+
 bool MultiRequestBatcher::completeMediaBarrier(
     uint32_t seqId, llama_pos newPos,
     const PrefillCompleteFn& onPrefillComplete) {
@@ -476,6 +547,60 @@ void MultiRequestBatcher::sampleAndAppendIdle(const SamplerFn& samplerFn) {
     // window on it would stretch the window over one more gap than the count
     // has.
     slot->lastTokenAt = now;
+  }
+}
+
+void MultiRequestBatcher::setDraft(
+    uint32_t seqId, std::vector<llama_token> draft) {
+  if (isValid(seqId) && slots_[seqId]->isGenerationPending()) {
+    slots_[seqId]->draftTokens = std::move(draft);
+  }
+}
+
+bool MultiRequestBatcher::draftDropped(uint32_t seqId) const noexcept {
+  return seqId < draftDropped_.size() && draftDropped_[seqId];
+}
+
+void MultiRequestBatcher::verifyDrafted(const VerifyFn& verifyFn) {
+  for (auto& slot : slots_) {
+    if (!slot.has_value() || slot->draftLogitStart < 0) {
+      continue;
+    }
+    Request& req = *slot;
+    const int first = req.draftLogitStart;
+    req.draftLogitStart = -1;
+    req.draftTokens.clear();
+    DraftOutcome out = verifyFn(req.seqId, first, req.draftBasePos);
+    req.currentPos = out.newPos;
+    if (out.replay) {
+      req.draftTokens = std::move(out.draft);
+      req.hasUnfedSample = !req.isFinished();
+      continue;
+    }
+    // Same accounting as sampleAndAppendIdle, token by token: every streamed
+    // token is counted except one that ended the sequence for any reason
+    // other than the prediction limit. A context overflow stops before the
+    // next token, so every token it returns is ordinary content.
+    const auto now = std::chrono::steady_clock::now();
+    if (!out.tokens.empty() && !req.firstTokenAt.has_value()) {
+      req.firstTokenAt = now;
+    }
+    for (size_t i = 0; i < out.tokens.size(); ++i) {
+      const bool terminal = out.finished && i + 1 == out.tokens.size() &&
+                            out.stopReason != StopReason::PredictionLimit &&
+                            out.stopReason != StopReason::ContextOverflow;
+      if (terminal) {
+        break;
+      }
+      req.generatedTokens.push_back(out.tokens[i]);
+      req.lastTokenAt = now;
+    }
+    if (out.finished) {
+      markFinished(req.seqId, out.stopReason);
+      req.hasUnfedSample = false;
+    } else {
+      req.hasUnfedSample = !req.isFinished();
+    }
   }
 }
 

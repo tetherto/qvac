@@ -1,5 +1,69 @@
 # Changelog
 
+## [0.3.6]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/opencode-plugin/v/0.3.6
+
+This patch moves the OpenCode plugin onto `@qvac/cli` 0.18 and `@qvac/ai-sdk-provider` 0.11.0. Plugin behavior is unchanged.
+
+## Dependency Alignment
+
+Installs now resolve:
+
+- `@qvac/ai-sdk-provider@^0.11.0` for managed mode, whose optional CLI peer is `^0.18.0`
+- `@qvac/cli@^0.18.0` for the managed serve, which runs on `@qvac/sdk` 0.23
+
+The two move together. A 0.x caret range does not cross a minor, so `@qvac/cli@^0.17.0` would not install 0.18.
+
+## [0.3.5]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/opencode-plugin/v/0.3.5
+
+This patch moves the OpenCode plugin onto `@qvac/cli` 0.17 and `@qvac/ai-sdk-provider` 0.10.1. Plugin behavior is unchanged.
+
+## Dependency Alignment
+
+Installs now resolve:
+
+- `@qvac/ai-sdk-provider@^0.10.1` for managed mode, whose optional CLI peer is `^0.17.0`
+- `@qvac/cli@^0.17.0` for the managed serve
+
+The two move together. A 0.x caret range does not cross a minor, so `@qvac/cli@^0.16.0` would not install 0.17.
+
+## [0.3.4]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/opencode-plugin/v/0.3.4
+
+This patch moves the OpenCode plugin onto `@qvac/ai-sdk-provider` 0.10 and `@qvac/cli` 0.16, so managed installs resolve a provider and CLI that agree on the SDK 0.22 line.
+
+## Dependency Alignment
+
+Installs now resolve:
+
+- `@qvac/ai-sdk-provider@^0.10.0` for managed mode, which narrows its optional CLI peer to `^0.16.0`
+- `@qvac/cli@^0.16.0` for that serve
+
+The two floors have to move together. A 0.x caret range does not cross a minor, so `@qvac/cli@^0.15.0` will not install 0.16.
+
+Plugin behavior is unchanged. No plugin source changed in this release.
+
+## [0.3.3]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/opencode-plugin/v/0.3.3
+
+This patch moves the OpenCode plugin onto `@qvac/ai-sdk-provider` 0.9 and `@qvac/cli` 0.15, so managed installs resolve a provider and CLI that agree on the SDK 0.21 line.
+
+## Dependency Alignment
+
+Installs now resolve:
+
+- `@qvac/ai-sdk-provider@^0.9.0` for managed mode, which narrows its optional CLI peer to `^0.15.0`
+- `@qvac/cli@^0.15.0` for that serve
+
+The two floors have to move together. A 0.x caret range does not cross a minor, so `@qvac/cli@^0.14.0` will not install 0.15.
+
+Plugin behavior is unchanged. No plugin source changed in this release.
+
 ## [0.3.2]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/opencode-plugin/v/0.3.2

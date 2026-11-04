@@ -344,11 +344,20 @@ TEST_F(
     SdWanValidationTest, MiniMaxH3RejectsUnsupportedControlsAndPinnedSettings) {
   configureMiniMaxH3();
 
-  SdModel::GenerationJob imageConditioning;
-  imageConditioning.paramsJson = R"({
-    "mode": "img2vid", "prompt": "test", "video_frames": 124
+  SdModel::GenerationJob missingKeyframe;
+  missingKeyframe.paramsJson = R"({
+    "mode": "img2vid", "prompt": "test", "video_frames": 22
   })";
-  expectThrowContains(std::move(imageConditioning), "text-to-audio-video only");
+  expectThrowContains(
+      std::move(missingKeyframe), "img2vid: init_image is required");
+
+  SdModel::GenerationJob corruptKeyframe;
+  corruptKeyframe.paramsJson = R"({
+    "mode": "img2vid", "prompt": "test", "video_frames": 22
+  })";
+  corruptKeyframe.initImageBytes = {0x00, 0xFF, 0xAA, 0x01};
+  expectThrowContains(
+      std::move(corruptKeyframe), "processVideo: failed to decode init_image");
 
   SdModel::GenerationJob wanMoe;
   wanMoe.paramsJson = R"({
@@ -470,6 +479,20 @@ TEST_F(SdWanValidationTest, Img2VidRejectsCorruptControlFrame) {
       {0x00, 0xFF, 0xAA, 0x01, 0x02, 0x03, 0xDE, 0xAD, 0xBE, 0xEF, 0x11, 0x22});
   expectThrowContains(
       std::move(job), "processVideo: failed to decode control_frames[1]");
+}
+
+TEST_F(SdWanValidationTest, RejectsControlFramesAboveDecodedJobBudget) {
+  SdModel::GenerationJob job;
+  job.paramsJson = R"({
+    "mode": "txt2vid", "prompt": "test", "width": 8192,
+    "height": 8192, "video_frames": 5
+  })";
+  auto png = wan_helpers::makeSolidPng(8192, 8192, 0, 0, 0);
+  job.controlFramesBytes = {png, png, png};
+  expectThrowContains(
+      std::move(job),
+      "processVideo: failed to decode control_frames[2]: image exceeds "
+      "remaining 128 Mi job pixel budget");
 }
 
 // ---------------------------------------------------------------------------

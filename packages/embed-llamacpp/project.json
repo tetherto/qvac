@@ -50,6 +50,10 @@
           "linuxArmApt": ["mesa-vulkan-drivers"],
           "linuxArmGhCli": true,
           "modelCache": [{ "warm": "true" }],
+          "modelS3": [
+            { "src": "qvac_models_compiled/ggml/laya/2026-10-01/laya-multilingual-Q8_0.gguf", "dest": "models/laya/laya-multilingual-Q8_0.gguf" }
+          ],
+          "modelEnv": { "LAYA_TEST_MODEL": "{workspace}/{workdir}/models/laya/laya-multilingual-Q8_0.gguf" },
           "platforms": [
             { "os": "ubuntu-22.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2204-x64-gpu" },
             { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64-gpu" },
@@ -80,7 +84,7 @@
           "needsEmbedModel": true,
           "vulkan": { "os": "windows-2025", "shell": "powershell", "path": "C:\\VulkanSDK" },
           "platforms": [
-            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64" },
+            { "os": "ubuntu-24.04", "platform": "linux", "arch": "x64", "runner": "qvac-ubuntu2404-x64", "needsLayaS3Gguf": true },
             { "os": "macos-14", "platform": "darwin", "arch": "arm64", "runner": "qvac-macos26-arm64-gpu" },
             { "os": "macos-15-intel", "platform": "darwin", "arch": "x64" },
             { "os": "windows-2025", "platform": "win32", "arch": "x64", "runner": "qvac-win25-x64" }

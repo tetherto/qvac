@@ -79,11 +79,11 @@ function withTempDir(name, body) {
 test('Audio8: explicit engine option routes to audio8', (t) => {
   const model = createMockedAudio8Model()
   t.is(model.getEngineType(), TTSGgml.ENGINE_AUDIO8, 'engine: audio8 detected')
-  t.is(model._audio8LmPath, LM)
-  t.is(model._audio8CodecDecoderPath, DECODER)
-  t.absent(model._t3ModelPath, 'no t3 path on audio8')
-  t.absent(model._parlerModelPath, 'no parler path on audio8')
-  t.absent(model._supertonicModelPath, 'no supertonic path on audio8')
+  t.is(model._setup.paths.audio8LmPath, LM)
+  t.is(model._setup.paths.audio8CodecDecoderPath, DECODER)
+  t.absent(model._setup.paths.t3ModelPath, 'no t3 path on audio8')
+  t.absent(model._setup.paths.parlerModelPath, 'no parler path on audio8')
+  t.absent(model._setup.paths.supertonicModelPath, 'no supertonic path on audio8')
 })
 
 test('Audio8: audio8Lm file path alone routes to audio8', (t) => {
@@ -94,17 +94,21 @@ test('Audio8: audio8Lm file path alone routes to audio8', (t) => {
 test('Audio8: the codec decoder alone routes to audio8', (t) => {
   const model = new TTSGgml({ files: { audio8CodecDecoder: DECODER } })
   t.is(model.getEngineType(), TTSGgml.ENGINE_AUDIO8, 'audio8CodecDecoder file detected')
-  t.is(model._audio8CodecDecoderPath, DECODER)
+  t.is(model._setup.paths.audio8CodecDecoderPath, DECODER)
 })
 
 test('Audio8: the *Path file aliases detect and normalize the same way', (t) => {
   const fromLm = new TTSGgml({ files: { audio8LmPath: LM } })
   t.is(fromLm.getEngineType(), TTSGgml.ENGINE_AUDIO8, 'audio8LmPath detected')
-  t.is(fromLm._audio8LmPath, LM, 'the alias normalizes onto the same field')
+  t.is(fromLm._setup.paths.audio8LmPath, LM, 'the alias normalizes onto the same field')
 
   const fromDecoder = new TTSGgml({ files: { audio8CodecDecoderPath: DECODER } })
   t.is(fromDecoder.getEngineType(), TTSGgml.ENGINE_AUDIO8, 'audio8CodecDecoderPath detected')
-  t.is(fromDecoder._audio8CodecDecoderPath, DECODER, 'the alias normalizes onto the same field')
+  t.is(
+    fromDecoder._setup.paths.audio8CodecDecoderPath,
+    DECODER,
+    'the alias normalizes onto the same field'
+  )
 
   const full = new TTSGgml({
     files: {
@@ -113,7 +117,7 @@ test('Audio8: the *Path file aliases detect and normalize the same way', (t) => 
       audio8CodecEncoderPath: ENCODER
     }
   })
-  t.is(full._audio8CodecEncoderPath, ENCODER, 'the encoder alias normalizes too')
+  t.is(full._setup.paths.audio8CodecEncoderPath, ENCODER, 'the encoder alias normalizes too')
 })
 
 test('Audio8: modelDir auto-detect picks each half at the best quant tier', (t) => {
@@ -125,14 +129,14 @@ test('Audio8: modelDir auto-detect picks each half at the best quant tier', (t) 
 
     const model = new TTSGgml({ files: { modelDir: root } })
     t.is(model.getEngineType(), TTSGgml.ENGINE_AUDIO8, 'modelDir with audio8 GGUFs detected')
-    t.is(model._audio8LmPath, path.join(root, 'audio8-lm-q8_0.gguf'), 'q8_0 beats f32')
+    t.is(model._setup.paths.audio8LmPath, path.join(root, 'audio8-lm-q8_0.gguf'), 'q8_0 beats f32')
     t.is(
-      model._audio8CodecDecoderPath,
+      model._setup.paths.audio8CodecDecoderPath,
       path.join(root, 'audio8-codec-decoder-f16.gguf'),
       'the only decoder tier present is used'
     )
     t.is(
-      model._audio8CodecEncoderPath,
+      model._setup.paths.audio8CodecEncoderPath,
       path.join(root, 'audio8-codec-encoder-q8_0.gguf'),
       'the encoder is picked up when present'
     )
@@ -631,4 +635,31 @@ for (const method of ['runStream', 'runStreaming']) {
       await model.unload()
     })
   }
+}
+
+for (const method of ['runStream', 'runStreaming', 'streamOutput']) {
+  test(`Audio8: ${method} enables native PCM streaming without changing batch jobs`, async (t) => {
+    const binding = new RecordingBinding()
+    const model = createMockedAudio8Model({ binding })
+    await model.load()
+    const text = 'The first audio should arrive while the rest is generated.'
+    async function* source() {
+      yield text
+    }
+    const response =
+      method === 'runStream'
+        ? await model.runStream(text)
+        : method === 'runStreaming'
+          ? await model.runStreaming(source(), { accumulateSentences: false })
+          : await model.run({ input: text, streamOutput: true })
+    await response.onUpdate(() => {}).await()
+    t.ok(binding.jobs.length > 0)
+    t.ok(binding.jobs.every((job) => job.streamOutput === true))
+    binding.jobs.length = 0
+    const batch = await model.run({ input: text })
+    await batch.onUpdate(() => {}).await()
+    t.is(binding.jobs.length, 1)
+    t.absent(binding.jobs[0].streamOutput)
+    await model.unload()
+  })
 }

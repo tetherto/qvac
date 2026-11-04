@@ -94,13 +94,12 @@ This table is the **full roster**. The release set is this list minus `--exclude
 | `embed-llamacpp` | `@qvac/embed-llamacpp` | `on-merge-nx.yml` | `llamacpp-embed-v<ver>` |
 | `fabric` | `@qvac/fabric` | `on-merge-nx.yml` | `fabric-v<ver>` |
 | `llm-llamacpp` | `@qvac/llm-llamacpp` | `on-merge-nx.yml` | `llamacpp-llm-v<ver>` |
-| `model-fit` | `@qvac/model-fit` | **`on-merge-model-fit.yml`** ⚠️ | `model-fit-v<ver>` |
+| `model-fit` | `@qvac/model-fit` | `on-merge-nx.yml` | `model-fit-v<ver>` |
 | `ocr-ggml` | `@qvac/ocr-ggml` | `on-merge-nx.yml` | `ocr-ggml-v<ver>` |
 | `translation-nmtcpp` | `@qvac/translation-nmtcpp` | `on-merge-nx.yml` | `v<ver>` (bare) |
 | `vla-ggml` | `@qvac/vla-ggml` | `on-merge-nx.yml` | `vla-v<ver>` |
 
-The git-tag column is **not** uniform, and `model-fit` is the one consumer still
-published by its own workflow — see Restrictions & nuances.
+The git-tag column is **not** uniform. Use the package's entry when checking a release.
 
 `classification-ggml` is **not** in this list. It dropped the `qvac-fabric` vcpkg
 dependency and now consumes the published npm package `@qvac/fabric`, so it is not part
@@ -173,8 +172,7 @@ gh workflow run on-merge-nx.yml --repo tetherto/qvac \
   --ref release-<pkg>-<ver> -f package=<pkg>
 ```
 `package` is a required choice input and takes the package **directory** name, the same
-string the branch carries. `model-fit` is the exception and keeps its own workflow:
-`gh workflow run on-merge-model-fit.yml --repo tetherto/qvac --ref release-model-fit-<ver>`.
+string the branch carries.
 
 Pushing a fresh `release-*` branch usually does **not** auto-trigger (path filter sees no
 new commits), so the explicit dispatch is the trigger — but check
@@ -248,10 +246,9 @@ indistinguishable later from one that dropped a package by accident.
 
 ## Restrictions & nuances (hard-won)
 
-- **One workflow, one exception.** All consumers except `model-fit` publish from
-  `on-merge-nx.yml`, selected by the `package` input rather than by filename. `model-fit`
-  keeps `on-merge-model-fit.yml`. The old `on-merge-vla.yml` short-name quirk is gone:
-  both the `package` input and the `release-vla-ggml-<ver>` branch use the directory name.
+- All consumers publish from `on-merge-nx.yml`, selected by the `package` input.
+  Both the input and the release branch use the package directory name, including
+  `release-vla-ggml-<ver>`.
 - **The release branch name is load-bearing.** `detect` parses `release-<pkg>-<x.y.z>`,
   requires `packages/<pkg>/project.json` to exist, and refuses to publish unless the run
   selected exactly that package. A misnamed branch fails the run rather than publishing

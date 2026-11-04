@@ -1,6 +1,7 @@
 # @qvac/test-suite
 
-Distributed MQTT-based test orchestration for desktop, Electron, Snap, and mobile consumers.
+Distributed MQTT-based test orchestration for desktop, Electron, Snap, mobile and
+non-JS consumers.
 
 ## Features
 
@@ -8,6 +9,9 @@ Distributed MQTT-based test orchestration for desktop, Electron, Snap, and mobil
 - Electron packaged app consumers for `macos`, `windows`, and `linux`
 - Strict-confined Snap consumers for Linux
 - Mobile consumers for `ios` and `android`
+- External consumers: a client in any language, driven over stdin/stdout
+- Declarative test bodies (`steps`) any client can interpret, plus `pass` /
+  `fail` / `skipped` / `incomplete` outcomes
 - Typed config and message contracts with Zod
 - Producer/consumer lifecycle, reporting, and CI-friendly result comparison
 - Single-consumer one-shot queue delivery; the first registrant executes locally while preserving
@@ -226,12 +230,15 @@ qvac-test run:local:electron
 qvac-test run:local:snap
 qvac-test run:local:android
 qvac-test run:local:ios
+qvac-test run:local:<name>          # the consumers.external entry of that name
+qvac-test run:local:external --name=<name>   # the same, spelled out
 
 # Separate producer / consumer (advanced)
 qvac-test run:producer
 qvac-test run:consumer:desktop --runId=<id>
 qvac-test run:consumer:electron --runId=<id>
 qvac-test run:consumer:snap --runId=<id>
+qvac-test run:consumer:external --name=<name> --runId=<id>
 qvac-test run:bootstrap:desktop
 qvac-test run:bootstrap:electron
 qvac-test run:bootstrap:snap
@@ -242,25 +249,66 @@ qvac-test build:consumer:snap
 qvac-test build:consumer:android
 qvac-test build:consumer:ios
 
+# Catalog
+qvac-test catalog:validate --config=.
+
 # Result comparison
 qvac-test report:compare --baseline baseline.json --current current.json --output comparison.json
 qvac-test report:format --input comparison.json --format markdown --output comment.md
+qvac-test report:matrix --report desktop=reports/desktop.json --report python=reports/python.json
 ```
+
+## Non-JS clients
+
+An entry under `consumers.external` launches a client the framework does not
+build, in one of two modes:
+
+- `bridge`: the framework keeps MQTT, the queue, timeouts and reporting; the
+  client reads one definition at a time off stdin and answers with a verdict.
+- `mqtt`: the client speaks the consumer protocol to the broker itself, as an
+  app on a device must. The framework only starts the command with the run in
+  its environment (`QVAC_RUN_ID`, `QVAC_TEST_PLATFORM`, `QVAC_MQTT_BROKER_URL`,
+  and `QVAC_MQTT_USERNAME` / `QVAC_MQTT_PASSWORD` / `QVAC_MQTT_SESSION_EXPIRY`
+  when set), and the consumer lives as long as the command does.
+
+An optional `prepare` step (e.g. building the app) runs to completion before
+`run:local:<name>` starts the producer, whose consumer-registration window is
+too short for a build. `--skip-build` skips it.
+
+```js
+consumers: {
+  external: [
+    { name: 'python', platform: 'desktop-python', mode: 'bridge',
+      interpreter: '../sdk-python/.venv/bin/python',
+      args: ['-m', 'qvac_e2e.runner'], cwd: './runners/python' },
+    { name: 'kotlin-android', platform: 'kotlin-android', mode: 'mqtt',
+      prepare: { interpreter: 'node', args: ['runners/kotlin/scripts/device.mjs', 'prepare'] },
+      interpreter: 'node', args: ['runners/kotlin/scripts/device.mjs', 'run'] }
+  ]
+}
+```
+
+What such a client must do is specified in
+[`docs/conformance.md`](./docs/conformance.md),
+with the machine-readable shape in
+[`schema/test-definition.schema.json`](./schema/test-definition.schema.json).
 
 ## Config notes
 
-- `testDir` points to the directory containing `test-definitions.{js,ts}`
+- `testDir` points to the directory containing `test-definitions.{js,ts}`. A `catalog/`
+  directory of `.json` slices beside it is read instead, for clients with no TypeScript
+  toolchain — the mobile bundle carries the module form only, so do not keep both
 - Desktop consumers run their configured `entry` in place
 - Electron consumers package and launch the configured Electron Forge app. The packaged app receives
   `QVAC_TEST_*` environment variables and should import/start the configured `entry` from its main process.
 - Snap consumers build, install, and launch a Linux Snap whose packaged entry receives mounted
   `QVAC_TEST_*` paths.
 - Mobile consumers use the `@qvac/test-suite/mobile` runtime and generated Expo scaffolding
-- Mobile consumer manifests automatically declare the build target's prebuild package for
-  each split native addon installed in the config directory (`@qvac/<addon>-android-arm64`
-  for Android, `@qvac/<addon>-ios` for iOS), pinned to the addon's exact version. These
-  packages are cross-built, so a package manager can never select them from the build host
-  alone. Declaring one yourself overrides the selection.
+- Mobile consumer manifests do not declare the per-platform packages of split native addons
+  (`@qvac/<addon>-android-arm64`, `@qvac/<addon>-ios`). To have `expo prebuild` install the
+  ones the build target needs, pass `installMissingPrebuilds` to the SDK plugin:
+  `expoPlugins: [['@qvac/sdk/expo-plugin', { installMissingPrebuilds: true }]]`. Otherwise
+  declare them in the config directory's dependencies, pinned to the addon's exact version.
 - `.env` files are loaded automatically before config resolution
 
 ## Local development
@@ -275,8 +323,8 @@ npm run check
 npm run build
 ```
 
-Its in-repo consumer is `packages/sdk/e2e`, which holds the SDK's e2e test definitions and
-`qvac-test.config.js`.
+Its in-repo consumer is `packages/sdk-e2e`, which holds the SDK's e2e catalog, the JS and Python
+runners for it, and `qvac-test.config.js`.
 
 ## CI integration
 
@@ -287,7 +335,7 @@ In this monorepo that consumer is `.github/workflows/test-sdk.yml`, which builds
 desktop, Electron, Snap, Android, and iOS. Its `test-suite-source` input selects where this framework comes
 from for a given run:
 
-- `manifest` — whatever `packages/sdk/e2e/package.json` declares (the default)
+- `manifest` — whatever `packages/sdk-e2e/package.json` declares (the default)
 - `branch` — build and pack `packages/test-suite` from the checked-out ref, then install that tarball
 - `npm` — resolve a published version or dist-tag via `test-suite-version`
 

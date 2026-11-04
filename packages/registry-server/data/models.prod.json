@@ -763,6 +763,28 @@
     "notes": "tensors config"
   },
   {
+    "source": "https://huggingface.co/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/embeddinggemma-2-Q8_0.gguf",
+    "engine": "llamacpp-embedding",
+    "description": "EmbeddingGemma 2 text embedding model with 768-dimensional output",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["embedding", "embed", "embeddinggemma-2", "multimodal"],
+    "notes": "Use the matching mmproj for image and audio inputs.",
+    "link": "https://huggingface.co/ggml-org/embeddinggemma-2-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/mmproj-embeddinggemma-2-Q8_0.gguf",
+    "engine": "llamacpp-embedding",
+    "description": "EmbeddingGemma 2 image and audio projector",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["embedding", "embed", "mmproj-embeddinggemma-2", "multimodal", "mmproj"],
+    "notes": "Projection model for embeddinggemma-2-Q8_0.gguf.",
+    "link": "https://huggingface.co/ggml-org/embeddinggemma-2-GGUF"
+  },
+  {
     "source": "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300m-Q4_0.gguf",
     "engine": "@qvac/embed-llamacpp",
     "description": "Google multilingual embedding model, 768-dim output, 2048 token context",
@@ -2848,7 +2870,29 @@
     "notes": "Q8_0 GGUF conversion of nvidia/diar_sortformer_4spk-v1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/nemotron/2026-10-09/Nemotron-3-Diarization.q8_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/Nemotron-3-Diarization",
+    "description": "Nemotron 3 Diarization GGUF (up to 8 speakers, offline and streaming)",
+    "quantization": "q8_0",
+    "params": "99.2M",
+    "licenseId": "openmdw-1.1",
+    "tags": ["diarization", "parakeet", "nemotron", "streaming", "8spk", "gguf"],
+    "notes": "Q8_0 GGUF of nvidia/Nemotron-3-Diarization"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-22/Nemotron-3-Diarization.converted.q4_k.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/Nemotron-3-Diarization",
+    "description": "Nemotron 3 Diarization GGUF (up to 8 speakers, offline and streaming)",
+    "quantization": "q4_k",
+    "params": "99.2M",
+    "licenseId": "openmdw-1.1",
+    "tags": ["diarization", "parakeet", "nemotron", "streaming", "8spk", "gguf"],
+    "notes": "Q4_K GGUF conversion of nvidia/Nemotron-3-Diarization"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/diar_streaming_sortformer_4spk-v2.1.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1",
     "description": "Parakeet Streaming Sortformer 4SPK v2.1 GGUF",
@@ -2859,7 +2903,7 @@
     "notes": "F16 GGUF conversion of nvidia/diar_streaming_sortformer_4spk-v2.1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1",
     "description": "Parakeet Streaming Sortformer 4SPK v2.1 GGUF",
@@ -2870,7 +2914,7 @@
     "notes": "Q8_0 GGUF conversion of nvidia/diar_streaming_sortformer_4spk-v2.1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-20/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/diar_streaming_sortformer_4spk-v2.1.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1",
     "description": "Parakeet Streaming Sortformer 4SPK v2.1 GGUF",
@@ -2893,7 +2937,7 @@
     "notes": "Q8_0 GGUF conversion of nvidia/parakeet-ctc-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-tdt-0.6b-v3.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-0.6b-v3.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
     "description": "Parakeet TDT 0.6B v3 GGUF",
@@ -2905,7 +2949,7 @@
     "notes": "Q8_0 GGUF conversion of nvidia/parakeet-tdt-0.6b-v3"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-11/parakeet-eou-120m-v1.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet_realtime_eou_120m-v1.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1",
     "description": "Parakeet EOU 120M v1 GGUF",
@@ -2917,7 +2961,7 @@
     "notes": "Q8_0 GGUF conversion of nvidia/parakeet_realtime_eou_120m-v1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-eou-120m-v1.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet_realtime_eou_120m-v1.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1",
     "description": "Parakeet EOU 120M v1 GGUF",
@@ -2928,7 +2972,7 @@
     "notes": "Q4_0 GGUF conversion of nvidia/parakeet_realtime_eou_120m-v1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-05-27/parakeet-tdt-0.6b-v3.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-0.6b-v3.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
     "description": "Parakeet TDT 0.6B v3 GGUF",
@@ -2972,7 +3016,7 @@
     "notes": "Q4_0 GGUF conversion of nvidia/parakeet-ctc-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-eou-120m-v1.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet_realtime_eou_120m-v1.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet_realtime_eou_120m-v1",
     "description": "Parakeet EOU 120M v1 GGUF",
@@ -2983,7 +3027,117 @@
     "notes": "F16 GGUF conversion of nvidia/parakeet_realtime_eou_120m-v1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/parakeet-tdt-0.6b-v3.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic.gguf",
+    "engine": "parakeet-transcription",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
+    "description": "Parakeet Mosaic 0.6B GGUF",
+    "quantization": "q4_0/q8_0",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "ggml", "multilingual"],
+    "notes": "Mixed-precision GGUF conversion of nvidia/parakeet-tdt-0.6b-v3. Use the matching parakeet-mosaic-encoder.mlmodelc for optional Core ML acceleration."
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-encoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic 0.6B encoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-encoder.mlmodelc/coremldata.bin",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic 0.6B encoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-encoder.mlmodelc/model.mil",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic 0.6B encoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-encoder.mlmodelc/weights/weight.bin",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic 0.6B encoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact.gguf",
+    "engine": "parakeet-transcription",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
+    "description": "Parakeet Mosaic Compact 0.6B GGUF",
+    "quantization": "q4_0/q8_0/q3_k/iq3_s",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "ggml", "multilingual"],
+    "notes": "Mixed-precision GGUF conversion of nvidia/parakeet-tdt-0.6b-v3. Use the matching parakeet-mosaic-compact-encoder.mlmodelc for optional Core ML acceleration."
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact-encoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic Compact 0.6B encoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic-compact.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact-encoder.mlmodelc/coremldata.bin",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic Compact 0.6B encoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic-compact.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact-encoder.mlmodelc/model.mil",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic Compact 0.6B encoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic-compact.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact-encoder.mlmodelc/weights/weight.bin",
+    "engine": "parakeet-transcription",
+    "description": "Parakeet Mosaic Compact 0.6B encoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "mosaic", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component for parakeet-mosaic-compact.gguf; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-0.6b-v3.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3",
     "description": "Parakeet TDT 0.6B v3 GGUF",
@@ -2992,6 +3146,28 @@
     "licenseId": "CC-BY-4.0",
     "tags": ["transcription", "parakeet", "tdt", "ggml", "en"],
     "notes": "F16 GGUF conversion of nvidia/parakeet-tdt-0.6b-v3"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-1.1b.f16.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-1.1b",
+    "description": "Parakeet TDT 1.1B GGUF",
+    "quantization": "f16",
+    "params": "1.1B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "ggml", "en"],
+    "notes": "F16 GGUF conversion of nvidia/parakeet-tdt-1.1b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-tdt-1.1b.q8_0.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "link": "https://huggingface.co/nvidia/parakeet-tdt-1.1b",
+    "description": "Parakeet TDT 1.1B GGUF",
+    "quantization": "q8_0",
+    "params": "1.1B",
+    "licenseId": "CC-BY-4.0",
+    "tags": ["transcription", "parakeet", "tdt", "ggml", "en"],
+    "notes": "Q8_0 GGUF conversion of nvidia/parakeet-tdt-1.1b"
   },
   {
     "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-07-01/sortformer-4spk-v1.f16.gguf",
@@ -3005,7 +3181,7 @@
     "notes": "F16 GGUF conversion of nvidia/diar_sortformer_4spk-v1"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-unified-en-0.6b.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
     "description": "Parakeet Unified English 0.6B GGUF",
@@ -3016,7 +3192,7 @@
     "notes": "F16 GGUF conversion of nvidia/parakeet-unified-en-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-unified-en-0.6b.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
     "description": "Parakeet Unified English 0.6B GGUF",
@@ -3027,7 +3203,7 @@
     "notes": "Q4_0 GGUF conversion of nvidia/parakeet-unified-en-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-08-13/parakeet-unified-en-0.6b.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-unified-en-0.6b.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/parakeet-unified-en-0.6b",
     "description": "Parakeet Unified English 0.6B GGUF",
@@ -8736,6 +8912,116 @@
     "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/acestep-v15-turbo"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/acestep-v15-turbo-BF16.gguf",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step v1.5 Turbo audio generation model (GGUF)",
+    "quantization": "bf16",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "v1.5", "turbo", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/acestep-v15-turbo"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/acestep-v15-turbo-F16.gguf",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step v1.5 Turbo audio generation model (GGUF)",
+    "quantization": "fp16",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "v1.5", "turbo", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/acestep-v15-turbo"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlmodelc/coremldata.bin",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlmodelc/metadata.json",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: metadata.json",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlmodelc/model.mil",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlpackage/Data/com.apple.CoreML/model.mlmodel",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: Data/com.apple.CoreML/model.mlmodel",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Core ML model package component; preserve the .mlpackage directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlpackage/Data/com.apple.CoreML/weights/weight.bin",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: Data/com.apple.CoreML/weights/weight.bin",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Core ML model package component; preserve the .mlpackage directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/acestep/2026-10-28/vae-decoder.mlpackage/Manifest.json",
+    "engine": "@qvac/audiogen",
+    "description": "ACE-Step VAE decoder Core ML sidecar: Manifest.json",
+    "quantization": "",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["audio-generation", "acestep", "vae", "decoder", "coreml"],
+    "notes": "Core ML model package component; preserve the .mlpackage directory layout.",
+    "link": "https://huggingface.co/ACE-Step/Ace-Step1.5/tree/main/vae"
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/acestep/2026-07-22/vae-BF16.gguf",
     "engine": "@qvac/audiogen",
     "description": "ACE-Step variational autoencoder for audio generation (GGUF)",
@@ -9012,6 +9298,17 @@
     "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-10-28/audio8-lm-q4_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 DualAR language model (GGUF, multilingual)",
+    "quantization": "q4_0",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "lm", "multilingual", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
     "source": "s3:///qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-codec-decoder-f16.gguf",
     "engine": "@qvac/tts-ggml",
     "description": "Audio8 codec decoder / synthesis half (GGUF, multilingual)",
@@ -9031,6 +9328,61 @@
     "licenseId": "Apache-2.0",
     "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "gguf"],
     "notes": "",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/coremldata.bin",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/metadata.json",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder Core ML sidecar: metadata.json",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/model.mil",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/audio8/2026-09-30/audio8-codec-decoder.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/tts-ggml",
+    "description": "Audio8 codec decoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "0.6B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "audio8", "codec", "decoder", "multilingual", "coreml"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
     "link": "https://huggingface.co/Audio8/Audio8-TTS-Preview-0.6b"
   },
   {
@@ -9122,7 +9474,7 @@
     "link": "https://huggingface.co/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/indic-conformer-600m-multilingual.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual",
     "description": "Indic Conformer CTC 600M multilingual GGUF",
@@ -9133,7 +9485,7 @@
     "notes": "F16 GGUF conversion of ai4bharat/indic-conformer"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/indic-conformer-600m-multilingual.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual",
     "description": "Indic Conformer CTC 600M multilingual GGUF",
@@ -9144,7 +9496,7 @@
     "notes": "Q4_0 GGUF conversion of ai4bharat/indic-conformer"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/indic_conformer/2026-08-07/indic-conformer-ctc.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/indic-conformer-600m-multilingual.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual",
     "description": "Indic Conformer CTC 600M multilingual GGUF",
@@ -9331,7 +9683,7 @@
     "link": "https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.f16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.f16.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b",
     "description": "Nemotron 3.5 ASR Streaming 0.6B GGUF",
@@ -9342,7 +9694,7 @@
     "notes": "F16 GGUF conversion of nvidia/nemotron-3.5-asr-streaming-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.q4_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b",
     "description": "Nemotron 3.5 ASR Streaming 0.6B GGUF",
@@ -9353,7 +9705,7 @@
     "notes": "Q4_0 GGUF conversion of nvidia/nemotron-3.5-asr-streaming-0.6b"
   },
   {
-    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-08/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf",
     "engine": "@qvac/transcription-parakeet",
     "link": "https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b",
     "description": "Nemotron 3.5 ASR Streaming 0.6B GGUF",
@@ -9406,5 +9758,522 @@
     "tags": ["tts", "moss-tts", "delay", "llm", "multilingual", "gguf"],
     "notes": "",
     "link": "https://huggingface.co/OpenMOSS-Team/MOSS-TTS"
+  },
+  {
+    "source": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/b072e1d3b35a0a630cece372c2127528e0994386/Ternary-Bonsai-2-27B-PQ2_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Ternary Bonsai 2 27B PQ2_0 model",
+    "quantization": "pq2_0",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ternary-bonsai", "instruct"],
+    "notes": "Ternary weights stored in 2-bit slots (2.13 bits/weight); faster prompt processing than PTQ1_0. Pair with the Q8_0 mmproj entry for image input. Requires qvac-fabric >= 10549.4.0 (@qvac/fabric >= 0.18.0).",
+    "link": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf"
+  },
+  {
+    "source": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/b072e1d3b35a0a630cece372c2127528e0994386/Ternary-Bonsai-2-27B-PTQ1_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Ternary Bonsai 2 27B PTQ1_0 model",
+    "quantization": "ptq1_0",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ternary-bonsai", "instruct"],
+    "notes": "Densely packed ternary weights (1.75 bits/weight); smallest footprint. Pair with the Q8_0 mmproj entry for image input. Requires qvac-fabric >= 10549.4.0 (@qvac/fabric >= 0.18.0).",
+    "link": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf"
+  },
+  {
+    "source": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf/resolve/b072e1d3b35a0a630cece372c2127528e0994386/Ternary-Bonsai-2-27B-mmproj-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for Ternary Bonsai 2 27B",
+    "quantization": "q8_0",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "multimodal", "ternary-bonsai", "instruct"],
+    "notes": "Required for image input. Requires qvac-fabric >= 10549.4.0 (@qvac/fabric >= 0.18.0).",
+    "link": "https://huggingface.co/prism-ml/Ternary-Bonsai-2-27B-gguf"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-sfx-v2-f16.gguf",
+    "engine": "@qvac/audiogen-ggml",
+    "description": "MOSS-SoundEffect v2 text-to-sound model (GGUF)",
+    "quantization": "f16",
+    "params": "1.3B",
+    "licenseId": "Apache-2.0",
+    "tags": ["audio-generation", "sound-effects", "moss-sfx", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-SoundEffect-v2.0"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-sfx-v2-q8_0.gguf",
+    "engine": "@qvac/audiogen-ggml",
+    "description": "MOSS-SoundEffect v2 text-to-sound model (GGUF)",
+    "quantization": "q8_0",
+    "params": "1.3B",
+    "licenseId": "Apache-2.0",
+    "tags": ["audio-generation", "sound-effects", "moss-sfx", "gguf"],
+    "notes": "",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-SoundEffect-v2.0"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-speech-bf16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "MOSS-Speech speech-to-speech language model (GGUF)",
+    "quantization": "bf16",
+    "params": "9B",
+    "licenseId": "Apache-2.0",
+    "tags": ["speech-to-speech", "moss-speech", "gguf"],
+    "notes": "Requires the MOSS-Speech codec GGUF.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Speech"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-speech-codec-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "MOSS-Speech codec for speech-to-speech replies (GGUF)",
+    "quantization": "f16",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["speech-to-speech", "moss-speech", "codec", "gguf"],
+    "notes": "Pair with a MOSS-Speech language model GGUF.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Speech-Codec"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-speech-q8_0.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "MOSS-Speech speech-to-speech language model (GGUF)",
+    "quantization": "q8_0",
+    "params": "9B",
+    "licenseId": "Apache-2.0",
+    "tags": ["speech-to-speech", "moss-speech", "gguf"],
+    "notes": "Requires the MOSS-Speech codec GGUF.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Speech"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-transcribe-diarize-f16.gguf",
+    "engine": "@qvac/asr-ggml",
+    "description": "MOSS-Transcribe-Diarize speech transcription with speaker labels (GGUF)",
+    "quantization": "f16",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "diarization", "moss-transcribe", "gguf"],
+    "notes": "Select the moss-transcribe engine explicitly in asr-ggml.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-transcribe-diarize-q5_0.gguf",
+    "engine": "@qvac/asr-ggml",
+    "description": "MOSS-Transcribe-Diarize speech transcription with speaker labels (GGUF)",
+    "quantization": "q5_0",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "diarization", "moss-transcribe", "gguf"],
+    "notes": "Select the moss-transcribe engine explicitly in asr-ggml.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-transcribe-diarize-q8_0.gguf",
+    "engine": "@qvac/asr-ggml",
+    "description": "MOSS-Transcribe-Diarize speech transcription with speaker labels (GGUF)",
+    "quantization": "q8_0",
+    "params": "",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "diarization", "moss-transcribe", "gguf"],
+    "notes": "Select the moss-transcribe engine explicitly in asr-ggml.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/openmoss/2026-10-01/moss-ttsd-f16.gguf",
+    "engine": "@qvac/tts-ggml",
+    "description": "MOSS-TTSD multi-speaker dialogue backbone (GGUF)",
+    "quantization": "f16",
+    "params": "8B",
+    "licenseId": "Apache-2.0",
+    "tags": ["tts", "moss-ttsd", "dialogue", "multilingual", "gguf"],
+    "notes": "Requires MOSS-TTS codec decoder and encoder GGUFs for dialogue synthesis.",
+    "link": "https://huggingface.co/OpenMOSS-Team/MOSS-TTSD-v1.0"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-f16.gguf",
+    "engine": "llamacpp-decision",
+    "description": "Laya English decision model: answers typed questions about a text in one forward pass (GGUF)",
+    "quantization": "f16",
+    "params": "421M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "modernbert", "laya"],
+    "notes": "F16 GGUF conversion of convaiinnovations/laya. Requires qvac-fabric >= 10549.5.1.",
+    "link": "https://huggingface.co/convaiinnovations/laya"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-Q8_0.gguf",
+    "engine": "llamacpp-decision",
+    "description": "Laya English decision model: answers typed questions about a text in one forward pass (GGUF)",
+    "quantization": "q8_0",
+    "params": "421M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "modernbert", "laya"],
+    "notes": "Q8_0 GGUF conversion of convaiinnovations/laya. Requires qvac-fabric >= 10549.5.1.",
+    "link": "https://huggingface.co/convaiinnovations/laya"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-multilingual-f16.gguf",
+    "engine": "llamacpp-decision",
+    "description": "Laya multilingual decision model (100+ languages): answers typed questions about a text in one forward pass (GGUF)",
+    "quantization": "f16",
+    "params": "322M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "modernbert", "laya-multilingual"],
+    "notes": "F16 GGUF conversion of convaiinnovations/laya-multilingual. Requires qvac-fabric >= 10549.5.1.",
+    "link": "https://huggingface.co/convaiinnovations/laya-multilingual"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-multilingual-Q8_0.gguf",
+    "engine": "llamacpp-decision",
+    "description": "Laya multilingual decision model (100+ languages): answers typed questions about a text in one forward pass (GGUF)",
+    "quantization": "q8_0",
+    "params": "322M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "modernbert", "laya-multilingual"],
+    "notes": "Q8_0 GGUF conversion of convaiinnovations/laya-multilingual. Requires qvac-fabric >= 10549.5.1.",
+    "link": "https://huggingface.co/convaiinnovations/laya-multilingual"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-typed-decisions-f16.gguf",
+    "engine": "llamacpp-decision",
+    "description": "Laya decision model fine-tuned on typed-decisions data: answers typed questions about a text in one forward pass (GGUF)",
+    "quantization": "f16",
+    "params": "421M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "modernbert", "laya-typed-decisions"],
+    "notes": "F16 GGUF conversion of convaiinnovations/laya-typed-decisions. Requires qvac-fabric >= 10549.5.1.",
+    "link": "https://huggingface.co/convaiinnovations/laya-typed-decisions"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/laya/2026-10-01/laya-typed-decisions-Q8_0.gguf",
+    "engine": "llamacpp-decision",
+    "description": "Laya decision model fine-tuned on typed-decisions data: answers typed questions about a text in one forward pass (GGUF)",
+    "quantization": "q8_0",
+    "params": "421M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "modernbert", "laya-typed-decisions"],
+    "notes": "Q8_0 GGUF conversion of convaiinnovations/laya-typed-decisions. Requires qvac-fabric >= 10549.5.1.",
+    "link": "https://huggingface.co/convaiinnovations/laya-typed-decisions"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml-decoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU-sub decoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "coreml", "decoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml-decoder.mlmodelc/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU-sub decoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "coreml", "decoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml-decoder.mlmodelc/metadata.json",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU-sub decoder Core ML sidecar: metadata.json",
+    "quantization": "",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "coreml", "decoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml-decoder.mlmodelc/model.mil",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU-sub decoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "coreml", "decoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml-decoder.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU-sub decoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "coreml", "decoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml-encoder.mlmodelc/analytics/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU-sub encoder Core ML sidecar: analytics/coremldata.bin",
+    "quantization": "",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml-encoder.mlmodelc/coremldata.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU-sub encoder Core ML sidecar: coremldata.bin",
+    "quantization": "",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml-encoder.mlmodelc/metadata.json",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU-sub encoder Core ML sidecar: metadata.json",
+    "quantization": "",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml-encoder.mlmodelc/model.mil",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU-sub encoder Core ML sidecar: model.mil",
+    "quantization": "",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml-encoder.mlmodelc/weights/weight.bin",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU-sub encoder Core ML sidecar: weights/weight.bin",
+    "quantization": "",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "coreml", "encoder"],
+    "notes": "Compiled Core ML sidecar component; preserve the .mlmodelc directory layout.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU-sub Core ML companion GGUF",
+    "quantization": "q8_0",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "ggml", "coreml", "multilingual"],
+    "notes": "Encoder-less GGUF with vocabulary, mel filterbank and decoder weights. Requires Core ML support and the matching encoder and decoder .mlmodelc directories beside this file.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-coreml"
+  },
+  {
+    "source": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-gguf/resolve/92460e0a8e7dc20f2fb126198bdd9eebb9ba2dc7/transcribepsy-250m-eu-sub.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU-sub GGUF",
+    "quantization": "q8_0",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "ggml", "multilingual"],
+    "notes": "Q8_0 GGUF build of qvac/TranscribePsy-250M-EU-sub for Dutch, English, French, German, Italian, Polish, Portuguese and Spanish.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-gguf"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-0.8B-MTP-GGUF/resolve/cf8a611f6ed2c2060046219a19f12cd3d5ecd67c/Qwen3.5-0.8B-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.5 0.8B multimodal model with MTP layers",
+    "quantization": "q4_k_m",
+    "params": "0.8B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "mtp", "qwen3.5", "instruct"],
+    "notes": "Keeps the multi-token-prediction (MTP) layers, so it can load with spec_type draft-mtp for speculative decoding. Requires @qvac/llm-llamacpp >= 0.63.0.",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-0.8B-MTP-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-2B-MTP-GGUF/resolve/e05864f8066d874d5f85aaff007ae57a2a7d1efe/Qwen3.5-2B-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.5 2B multimodal model with MTP layers",
+    "quantization": "q4_k_m",
+    "params": "2B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "mtp", "qwen3.5", "instruct"],
+    "notes": "Keeps the multi-token-prediction (MTP) layers, so it can load with spec_type draft-mtp for speculative decoding. Requires @qvac/llm-llamacpp >= 0.63.0.",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-2B-MTP-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-4B-MTP-GGUF/resolve/86835bf9949e4d14d6860f7910b1340ad4f271a9/Qwen3.5-4B-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.5 4B multimodal model with MTP layers",
+    "quantization": "q4_k_m",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "mtp", "qwen3.5", "instruct"],
+    "notes": "Keeps the multi-token-prediction (MTP) layers, so it can load with spec_type draft-mtp for speculative decoding. Requires @qvac/llm-llamacpp >= 0.63.0.",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-4B-MTP-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/unsloth/Qwen3.5-9B-MTP-GGUF/resolve/9716a636ee4bddc3fed678220b7a33dd2a4160ae/Qwen3.5-9B-Q4_K_M.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Qwen 3.5 9B multimodal model with MTP layers",
+    "quantization": "q4_k_m",
+    "params": "9B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "mtp", "qwen3.5", "instruct"],
+    "notes": "Keeps the multi-token-prediction (MTP) layers, so it can load with spec_type draft-mtp for speculative decoding. Requires @qvac/llm-llamacpp >= 0.63.0.",
+    "link": "https://huggingface.co/unsloth/Qwen3.5-9B-MTP-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/AtomicChat/Qwen3.5-4B-DFlash-GGUF/resolve/50b43bb3a4c1c973dc65ed4460f74dc98878cc12/Qwen3.5-4B-DFlash.Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DFlash draft model for Qwen 3.5 4B",
+    "quantization": "q8_0",
+    "params": "4B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "dflash", "qwen3.5", "draft"],
+    "notes": "Speculative-decoding drafter, not a standalone model. Load a Qwen 3.5 4B entry with spec_type draft-dflash and this file as the draft model (draftModelSrc in the SDK). params is the target's size. Requires @qvac/llm-llamacpp >= 0.63.0.",
+    "link": "https://huggingface.co/AtomicChat/Qwen3.5-4B-DFlash-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/incoai/Qwen3.8-27B-DFlash2-GGUF/resolve/144eb06583b4fb0b6e54bc814b16a206a240f4d2/Qwen3.8-27B-DFlash2-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DFlash2 draft model for Qwen 3.8 27B",
+    "quantization": "q8_0",
+    "params": "27B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "dflash2", "qwen3.8", "draft"],
+    "notes": "Speculative-decoding drafter, not a standalone model. Load a Qwen 3.8 27B entry with spec_type draft-dflash and this file as the draft model (draftModelSrc in the SDK). params is the target's size. Requires @qvac/llm-llamacpp >= 0.63.0.",
+    "link": "https://huggingface.co/incoai/Qwen3.8-27B-DFlash2-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/incoai/Qwen3.8-Flash-Next-DFlash2-GGUF/resolve/4f5a39be8f0a9e9a573ac9824251830a8f4096d9/Qwen3.8-Flash-Next-DFlash2-Q8_0.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "DFlash2 draft model for Qwen3.8 Flash Next 177B",
+    "quantization": "q8_0",
+    "params": "177B",
+    "licenseId": "Apache-2.0",
+    "tags": ["generation", "dflash2", "qwen3.8-flash-next", "draft"],
+    "notes": "Speculative-decoding drafter, not a standalone model. Load a Qwen3.8 Flash Next entry with spec_type draft-dflash and this file as the draft model (draftModelSrc in the SDK). params is the target's size. Requires @qvac/llm-llamacpp >= 0.63.0.",
+    "link": "https://huggingface.co/incoai/Qwen3.8-Flash-Next-DFlash2-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/GLM-5.3-Flash-BF16-Q4_K_M/GLM-5.3-Flash-BF16-Q4_K_M-00001-of-00006.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "GLM-5.3 Flash 320B-A18B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "320B-A18B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "glm-5.3-flash", "instruct", "shard"],
+    "notes": "shard 1/6; pair with the BF16 mmproj entry for image input.",
+    "link": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/GLM-5.3-Flash-BF16-Q4_K_M/GLM-5.3-Flash-BF16-Q4_K_M-00002-of-00006.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "GLM-5.3 Flash 320B-A18B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "320B-A18B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "glm-5.3-flash", "instruct", "shard"],
+    "notes": "shard 2/6; pair with the BF16 mmproj entry for image input.",
+    "link": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/GLM-5.3-Flash-BF16-Q4_K_M/GLM-5.3-Flash-BF16-Q4_K_M-00003-of-00006.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "GLM-5.3 Flash 320B-A18B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "320B-A18B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "glm-5.3-flash", "instruct", "shard"],
+    "notes": "shard 3/6; pair with the BF16 mmproj entry for image input.",
+    "link": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/GLM-5.3-Flash-BF16-Q4_K_M/GLM-5.3-Flash-BF16-Q4_K_M-00004-of-00006.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "GLM-5.3 Flash 320B-A18B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "320B-A18B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "glm-5.3-flash", "instruct", "shard"],
+    "notes": "shard 4/6; pair with the BF16 mmproj entry for image input.",
+    "link": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/GLM-5.3-Flash-BF16-Q4_K_M/GLM-5.3-Flash-BF16-Q4_K_M-00005-of-00006.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "GLM-5.3 Flash 320B-A18B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "320B-A18B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "glm-5.3-flash", "instruct", "shard"],
+    "notes": "shard 5/6; pair with the BF16 mmproj entry for image input.",
+    "link": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/GLM-5.3-Flash-BF16-Q4_K_M/GLM-5.3-Flash-BF16-Q4_K_M-00006-of-00006.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "GLM-5.3 Flash 320B-A18B Q4_K_M model",
+    "quantization": "q4_k_m",
+    "params": "320B-A18B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "glm-5.3-flash", "instruct", "shard"],
+    "notes": "shard 6/6; pair with the BF16 mmproj entry for image input.",
+    "link": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF"
+  },
+  {
+    "source": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/mmproj-GLM-5.3-Flash-BF16-bf16.gguf",
+    "engine": "@qvac/llm-llamacpp",
+    "description": "Vision projector (mmproj) for GLM-5.3 Flash 320B-A18B",
+    "quantization": "bf16",
+    "params": "320B-A18B",
+    "licenseId": "MIT",
+    "tags": ["generation", "multimodal", "glm-5.3-flash", "instruct"],
+    "notes": "Required for image input with every GLM-5.3 Flash quantization.",
+    "link": "https://huggingface.co/bartowski/GLM-5.3-Flash-BF16-GGUF"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/mobilenetv3-3class/2026-10-28/mobilenetv3_3class_v3_fp16.gguf",
+    "engine": "ggml-classification",
+    "description": "MobileNetV3-Small 3-class image classifier (food / report / other), FP16 GGUF",
+    "quantization": "fp16",
+    "params": "2.5M",
+    "licenseId": "Apache-2.0",
+    "tags": ["classification", "mobilenetv3"],
+    "notes": "",
+    "link": "https://github.com/tetherto/qvac/tree/main/packages/classification-ggml"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-f16.gguf",
+    "engine": "ggml-image-embedding",
+    "description": "MegaLoc image embeddings, F16 weights, 8448-dimensional L2-normalized visual place descriptors",
+    "quantization": "f16",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["image-embedding", "visual-place-recognition", "megaloc"],
+    "notes": "Converted from the supported MegaLoc checkpoint. JPEG/PNG and packed RGB input. Requires the ggml-image-embedding plugin.",
+    "link": "https://huggingface.co/gberton/MegaLoc"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-mixed.gguf",
+    "engine": "ggml-image-embedding",
+    "description": "MegaLoc image embeddings, F16 body with a Q6_K final projection, 8448-dimensional L2-normalized visual place descriptors",
+    "quantization": "f16-q6_k",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["image-embedding", "visual-place-recognition", "megaloc"],
+    "notes": "Converted from the supported MegaLoc checkpoint. JPEG/PNG and packed RGB input. Requires the ggml-image-embedding plugin.",
+    "link": "https://huggingface.co/gberton/MegaLoc"
   }
 ]

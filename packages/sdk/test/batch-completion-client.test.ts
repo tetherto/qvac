@@ -96,6 +96,49 @@ test('batchCompletion client: byId is memoized and replays per-id events', async
   t.ok(rejectedUnknown, 'late unknown ids reject instead of hanging')
 })
 
+test('batchCompletion client: draft counters land in run.stats, not per-prompt finals', async (t) => {
+  const run = createRun([
+    { type: 'batchCompletionStream', ids: ['a', 'b'], events: [] },
+    {
+      type: 'batchCompletionStream',
+      done: true,
+      ids: ['a', 'b'],
+      events: [
+        { id: 'a', event: { type: 'contentDelta', seq: 0, text: 'A' } },
+        { id: 'a', event: { type: 'completionDone', seq: 1 } },
+        { id: 'b', event: { type: 'contentDelta', seq: 0, text: 'B' } },
+        { id: 'b', event: { type: 'completionDone', seq: 1 } }
+      ],
+      stats: { avgConcurrentSeq: 2, draftTokens: 0, draftAcceptedTokens: 0 }
+    }
+  ])
+
+  const results = await run.results
+  t.alike(await run.stats, { avgConcurrentSeq: 2, draftTokens: 0, draftAcceptedTokens: 0 })
+  t.alike(
+    results.map((result) => result.final.stats),
+    [undefined, undefined]
+  )
+})
+
+test('batchCompletion client: run.stats omits draft counters the addon did not report', async (t) => {
+  const run = createRun([
+    {
+      type: 'batchCompletionStream',
+      done: true,
+      ids: ['a', 'b'],
+      events: [
+        { id: 'a', event: { type: 'completionDone', seq: 0 } },
+        { id: 'b', event: { type: 'completionDone', seq: 0 } }
+      ],
+      stats: { avgConcurrentSeq: 2 }
+    }
+  ])
+
+  await run.results
+  t.alike(await run.stats, { avgConcurrentSeq: 2 })
+})
+
 test('batchCompletion client: cancelled done rejects results and stats', async (t) => {
   const run = createRun([
     {

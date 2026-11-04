@@ -27,9 +27,11 @@ VlaHparamsGeneric projectHparams(const SmolvlaHparams& hp) {
 } // namespace
 
 SmolvlaModelAdapter::SmolvlaModelAdapter(
-    const std::string& ggufPath, bool forceCpu, const std::string& backendsDir)
+    const std::string& ggufPath, bool forceCpu, const std::string& backendsDir,
+    const std::vector<std::string>& backendOverride)
     : model_(new SmolvlaModel()) {
-  if (!smolvlaLoadModel(ggufPath.c_str(), *model_, forceCpu, backendsDir)) {
+  if (!smolvlaLoadModel(
+          ggufPath.c_str(), *model_, forceCpu, backendsDir, backendOverride)) {
     std::string message = "failed to load SmolVLA model from: " + ggufPath;
     if (!model_->load_error.empty()) {
       message += ": " + model_->load_error;

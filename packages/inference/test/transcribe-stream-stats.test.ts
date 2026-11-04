@@ -15,7 +15,8 @@ const ADDON_STATS = {
   audioDurationMs: 1250,
   realTimeFactor: 0.4,
   encoderMs: 12,
-  decoderMs: 18
+  decoderMs: 18,
+  aoscActive: 1
 }
 
 function createStreamingModel(onAwait?: () => void) {
@@ -83,7 +84,8 @@ test('transcribeStream returns normalized terminal stats after awaiting the addo
     audioDuration: 1250,
     realTimeFactor: 0.4,
     encoderTime: 12,
-    decoderTime: 18
+    decoderTime: 18,
+    aoscActive: 1
   })
 })
 
@@ -104,7 +106,8 @@ test('parakeet duplex handler forwards stats on its terminal frame', async (t) =
     audioDuration: 1250,
     realTimeFactor: 0.4,
     encoderTime: 12,
-    decoderTime: 18
+    decoderTime: 18,
+    aoscActive: 1
   })
   t.is(frames.at(-1)?.done, true)
 })
@@ -126,7 +129,72 @@ test('whisper duplex handler forwards stats on its terminal frame', async (t) =>
     audioDuration: 1250,
     realTimeFactor: 0.4,
     encoderTime: 12,
-    decoderTime: 18
+    decoderTime: 18,
+    aoscActive: 1
   })
   t.is(frames.at(-1)?.done, true)
 })
+
+for (const metadata of [false, true]) {
+  test(`parakeet duplex handler forwards speaker VAD with metadata=${metadata}`, async (t) => {
+    const modelId = `parakeet-speaker-vad-${metadata}`
+    const model = {
+      async runStreaming() {
+        return {
+          async *iterate() {
+            yield {
+              type: 'vad',
+              speaking: true,
+              score: 0.9,
+              source: 'sortformer',
+              timestamp: 1.25,
+              speakerId: 0
+            }
+            yield { type: 'vad', speaking: false, score: 0.1, source: 'sortformer', speakerId: 7 }
+            yield { text: 'hello', startMs: 0, endMs: 100 }
+          },
+          async await() {}
+        }
+      }
+    } as unknown as AnyModel
+    registerStreamingModel(modelId, ModelType.parakeetTranscription, model)
+    t.teardown(() => unregisterModel(modelId))
+    const frames = await collectFrames(
+      parakeetPlugin.handlers.transcribeStream.handler(
+        {
+          type: 'transcribeStream',
+          modelId,
+          metadata,
+          parakeetStreamingConfig: { emitSpeakerVad: true }
+        },
+        emptyInput()
+      ) as unknown as AsyncIterable<TranscribeStreamResponse>
+    )
+    t.alike(
+      frames.slice(0, 2),
+      [
+        {
+          type: 'transcribeStream',
+          vad: {
+            speaking: true,
+            probability: 0.9,
+            source: 'sortformer',
+            timestamp: 1.25,
+            speakerId: 0
+          }
+        },
+        {
+          type: 'transcribeStream',
+          vad: { speaking: false, probability: 0.1, source: 'sortformer', speakerId: 7 }
+        }
+      ],
+      'activity frames preserve the full speaker range including speaker zero'
+    )
+    t.is(
+      metadata ? frames[2]?.segment?.text : frames[2]?.text,
+      'hello',
+      'transcription still reaches the caller'
+    )
+    t.is(frames.at(-1)?.done, true, 'terminal frame still reaches the caller')
+  })
+}

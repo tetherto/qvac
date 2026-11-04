@@ -14,6 +14,7 @@ export type {
 // nothing for the re-export.
 export {
   CliNotFoundError,
+  CliUpgradeRequiredError,
   DuplicateManagedModelError,
   MultipleDefaultManagedModelsError,
   PortAllocationFailedError,

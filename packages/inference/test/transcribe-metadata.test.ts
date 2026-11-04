@@ -276,6 +276,93 @@ test('toTranscribeSegment: omits the parakeet flags for whisper segments', (t) =
   t.is('startsWord' in segment, false, 'no startsWord key when the engine sent none')
 })
 
+test('toTranscribeSegment: carries the whisper-only segment fields', (t) => {
+  const segment = toTranscribeSegment({
+    text: ' Hello there.',
+    start: 0.5,
+    end: 1.75,
+    id: 2,
+    language: 'en',
+    noSpeechProb: 0.0125,
+    speakerTurnNext: true,
+    tokens: [
+      { text: ' Hello', start: 0.5, end: 0.9, probability: 0.98 },
+      { text: ' there', start: 0.9, end: 1.5, probability: 0.91 },
+      { text: '.', start: 1.5, end: 1.75, probability: 0.99 }
+    ]
+  })
+  t.is(segment.language, 'en', 'language survives')
+  t.is(segment.noSpeechProb, 0.0125, 'noSpeechProb survives')
+  t.is(segment.speakerTurnNext, true, 'speakerTurnNext survives')
+  t.alike(
+    segment.tokens,
+    [
+      { text: ' Hello', startMs: 500, endMs: 900, probability: 0.98 },
+      { text: ' there', startMs: 900, endMs: 1500, probability: 0.91 },
+      { text: '.', startMs: 1500, endMs: 1750, probability: 0.99 }
+    ],
+    'token timing is converted from seconds to milliseconds'
+  )
+  const parsed = transcribeSegmentSchema.safeParse(segment)
+  t.ok(parsed.success, 'still schema-valid')
+  if (parsed.success) t.alike(parsed.data, segment, 'the wire schema keeps every whisper field')
+})
+
+test('toTranscribeSegment: whisper fields are absent unless the engine sent them', (t) => {
+  const segment = toTranscribeSegment({
+    text: 'turn ends here',
+    start: 1,
+    end: 2,
+    isEndOfTurn: true,
+    speakerTurnNext: false
+  })
+  t.is('language' in segment, false, 'no language key when the engine sent none')
+  t.is('noSpeechProb' in segment, false, 'no noSpeechProb key when the engine sent none')
+  t.is('tokens' in segment, false, 'no tokens key when token_timestamps is off')
+  t.is(segment.speakerTurnNext, false, 'speakerTurnNext survives even when false')
+  t.alike(toTranscribeSegment({ text: '', tokens: [] }).tokens, [], 'an empty token list is kept')
+})
+
+test('transcribeSegmentSchema: bounds the whisper confidence fields', (t) => {
+  const base = { text: 'hi', startMs: 0, endMs: 10, append: false, id: 0 }
+  t.absent(
+    transcribeSegmentSchema.safeParse({ ...base, noSpeechProb: 1.5 }).success,
+    'noSpeechProb above 1 is rejected'
+  )
+  t.absent(
+    transcribeSegmentSchema.safeParse({
+      ...base,
+      tokens: [{ text: 'x', startMs: 0, endMs: 10, probability: -0.1 }]
+    }).success,
+    'token probability below 0 is rejected'
+  )
+  t.absent(
+    transcribeSegmentSchema.safeParse({ ...base, tokens: [{ text: 'x', probability: 0.5 }] })
+      .success,
+    'a token without timing is rejected'
+  )
+})
+
+test('transcribeStreamResponseSchema: round-trips whisper segment fields', (t) => {
+  const segment: TranscribeSegment = {
+    text: 'bonjour',
+    startMs: 0,
+    endMs: 800,
+    append: false,
+    id: 0,
+    language: 'fr',
+    noSpeechProb: 0.2,
+    speakerTurnNext: false,
+    tokens: [{ text: 'bonjour', startMs: 0, endMs: 800, probability: 0.75 }]
+  }
+  const parsed = transcribeStreamResponseSchema.safeParse({
+    type: 'transcribeStream' as const,
+    segment
+  })
+  t.ok(parsed.success, 'duplex wire frame with whisper fields is valid')
+  if (parsed.success) t.alike(parsed.data.segment, segment, 'whisper fields preserved')
+})
+
 test('assertMetadataSupported: throws for unknown / empty engine', (t) => {
   let caught: unknown
   try {
@@ -454,4 +541,58 @@ test('duplex metadata integration: line-delimited parser round-trips segment fra
   t.is(segments[0]!.text, 'first', 'first segment intact')
   t.is(segments[1]!.text, 'second', 'second segment intact')
   t.ok(sawDone, 'done frame observed')
+})
+
+test('diarization metadata: preserves MOSS labels and timestamps over the wire', (t) => {
+  const segment = toTranscribeSegment({
+    text: 'Hello',
+    start: 1.25,
+    end: 2.5,
+    speaker: 'S01',
+    speakerId: 0
+  })
+  const wire = transcribeResponseSchema.parse({ type: 'transcribe', segment })
+  t.is(wire.segment?.speaker, 'S01')
+  t.is(wire.segment?.speakerId, 0)
+  t.is(wire.segment?.startMs, 1250)
+  t.is(wire.segment?.endMs, 2500)
+  t.execution(() => assertMetadataSupported('moss', ModelType.mossTranscribe, true))
+})
+
+test('MOSS request options: accepts boundaries and rejects oversized UTF-8 hotwords', (t) => {
+  const request = {
+    type: 'transcribe',
+    modelId: 'moss',
+    audioChunk: { type: 'filePath', value: '/tmp/audio.wav' }
+  }
+  t.ok(transcribeRequestSchema.safeParse({ ...request, hotwords: [], maxNewTokens: 0 }).success)
+  t.ok(transcribeRequestSchema.safeParse({ ...request, hotwords: ['é'.repeat(32)] }).success)
+  t.absent(transcribeRequestSchema.safeParse({ ...request, hotwords: ['é'.repeat(33)] }).success)
+  t.absent(transcribeRequestSchema.safeParse({ ...request, hotwords: [''] }).success)
+  t.absent(
+    transcribeRequestSchema.safeParse({ ...request, hotwords: Array(65).fill('test') }).success
+  )
+  t.absent(transcribeRequestSchema.safeParse({ ...request, maxNewTokens: -1 }).success)
+})
+
+test('Nemotron diarization preserves eight overlapping speaker turns in batch metadata', (t) => {
+  const speakerSegments = Array.from({ length: 8 }, (_, speakerId) => ({
+    speakerId,
+    start: 0.25,
+    end: 1.75
+  }))
+  const segment = toTranscribeSegment({ text: 'Speaker activity', speakerSegments })
+  const wire = transcribeResponseSchema.parse({ type: 'transcribe', segment })
+  t.alike(
+    wire.segment?.speakerSegments,
+    speakerSegments.map((turn) => ({ speakerId: turn.speakerId, startMs: 250, endMs: 1750 }))
+  )
+  t.absent(toTranscribeSegment({ text: 'ordinary ASR' }).speakerSegments)
+  t.alike(toTranscribeSegment({ text: '', speakerSegments: [] }).speakerSegments, [])
+  t.absent(
+    transcribeSegmentSchema.safeParse({
+      ...segment,
+      speakerSegments: [{ speakerId: -1, startMs: 0, endMs: 1 }]
+    }).success
+  )
 })

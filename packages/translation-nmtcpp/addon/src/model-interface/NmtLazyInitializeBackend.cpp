@@ -5,6 +5,7 @@
 
 #include <ggml-backend.h>
 #include <ggml.h>
+#include <qvac-fabric.h>
 
 #include "nmt_utils.hpp"
 #include "inference-addon-cpp/Logger.hpp"
@@ -285,6 +286,15 @@ bool NmtLazyInitializeBackend::initializeLocked(
 #endif
 
   if (!g_backendsLoaded) {
+    // An explicit backendsDir overrides the backends @qvac/fabric ships; one
+    // that fails validation falls back to fabric's rather than to nothing.
+    const auto loadFabricBackends = [](const std::string& reason) {
+      QLOG(
+          Priority::WARNING,
+          reason + " — loading the @qvac/fabric backends from " +
+              sanitizePrintableAscii(qvac_fabric_backends_dir()));
+      qvac_fabric_load_backends();
+    };
     if (!backendsDir.empty()) {
       std::filesystem::path requested(backendsDir);
       bool validBackendsDir = requested.is_absolute();
@@ -296,70 +306,38 @@ bool NmtLazyInitializeBackend::initializeLocked(
           }
         }
       }
+      std::error_code errCode;
+      const std::filesystem::path backendsDirPath =
+          validBackendsDir ? std::filesystem::canonical(requested, errCode)
+                           : std::filesystem::path();
       if (!validBackendsDir) {
-        QLOG(
-            Priority::WARNING,
+        loadFabricBackends(
             "Rejecting suspicious backendsDir (must be absolute and free of "
             "'..' segments): " +
-                sanitizePrintableAscii(backendsDir) +
-                " — falling back to default backend loading");
-        ggml_backend_load_all();
+            sanitizePrintableAscii(backendsDir));
+      } else if (errCode) {
+        loadFabricBackends(
+            "backendsDir canonical() failed (" + errCode.message() +
+            "): " + sanitizePrintableAscii(backendsDir));
+#ifdef __ANDROID__
+      } else if (backendsDirPath.string().rfind("/data/", 0) != 0) {
+        loadFabricBackends(
+            "Rejecting backendsDir — resolved path outside /data/ prefix: " +
+            sanitizePrintableAscii(backendsDirPath.string()));
+#endif
       } else {
-        std::error_code errCode;
-        std::filesystem::path backendsDirPath =
-            std::filesystem::canonical(requested, errCode);
-        if (errCode) {
-          QLOG(
-              Priority::WARNING,
-              "backendsDir canonical() failed (" + errCode.message() +
-                  "): " + sanitizePrintableAscii(backendsDir) +
-                  " — falling back to default backend loading");
-          ggml_backend_load_all();
-        } else {
-          auto
-              resolvedStr = // NOLINT(bugprone-unused-local-non-trivial-variable)
-              backendsDirPath.string();
-#ifdef __ANDROID__
-          if (resolvedStr.rfind("/data/", 0) != 0) {
-            QLOG(
-                Priority::WARNING,
-                "Rejecting backendsDir — resolved path outside /data/ "
-                "prefix: " +
-                    sanitizePrintableAscii(resolvedStr) +
-                    " — falling back to default backend loading");
-            ggml_backend_load_all();
-          } else {
-#endif
-#ifdef BACKENDS_SUBDIR
-            std::filesystem::path subdirPath(BACKENDS_SUBDIR);
-            backendsDirPath = backendsDirPath / subdirPath;
-            backendsDirPath =
-                std::filesystem::canonical(backendsDirPath, errCode);
-            if (errCode) {
-              QLOG(
-                  Priority::WARNING,
-                  "backendsDir+subdir canonical() failed (" +
-                      errCode.message() +
-                      ") — falling back to default backend loading");
-              ggml_backend_load_all();
-            } else {
-#endif
-              QLOG(
-                  Priority::INFO,
-                  "Loading backends from directory: " +
-                      sanitizePrintableAscii(backendsDirPath.string()));
-              ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
-#ifdef BACKENDS_SUBDIR
-            }
-#endif
-#ifdef __ANDROID__
-          }
-#endif
-        }
+        QLOG(
+            Priority::INFO,
+            "Loading backends from directory: " +
+                sanitizePrintableAscii(backendsDirPath.string()));
+        ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
       }
     } else {
-      QLOG(Priority::DEBUG, "Loading backends using default path");
-      ggml_backend_load_all();
+      QLOG(
+          Priority::DEBUG,
+          "Loading the @qvac/fabric backends from " +
+              sanitizePrintableAscii(qvac_fabric_backends_dir()));
+      qvac_fabric_load_backends();
     }
     g_backendsLoaded = true;
   }

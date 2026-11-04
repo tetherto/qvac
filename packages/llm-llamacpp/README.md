@@ -14,6 +14,9 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
   - [4. Create Model Instance](#4-create-model-instance)
   - [5. Load Model](#5-load-model)
   - [6. Run Inference](#6-run-inference)
+    - [Tool calling](#tool-calling)
+    - [Ordered text and media](#ordered-text-and-media)
+    - [Batch inference](#batch-inference)
   - [7. Release Resources](#7-release-resources)
 - [API behavior by state](#api-behavior-by-state)
 - [Assessing fit](#assessing-fit)
@@ -23,6 +26,7 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
 - [Architecture](#architecture)
 - [Benchmarking](#benchmarking)
 - [Tests](#tests)
+  - [Fuzzing](#fuzzing)
 - [Glossary](#glossary)
 - [License](#license)
 
@@ -32,10 +36,25 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
 |----------|-------------|-------------|--------|-------------|
 | macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | Metal |
 | iOS | arm64 | 17.0+ | ✅ Tier 1 | Metal |
-| Linux | arm64, x64 | Ubuntu-22+ | ✅ Tier 1 | Vulkan |
+| Linux | arm64, x64 | Ubuntu-22+ | Tier 1 | CUDA (NVIDIA), Vulkan |
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno 700+) |
-| Windows | x64 | 10+ | ✅ Tier 1 | Vulkan |
+| Windows | x64 | 10+ | Tier 1 | CUDA (NVIDIA), Vulkan |
 
+
+**Note on CUDA (Linux and Windows, NVIDIA):**
+The CUDA backend ships as a dynamically loaded module alongside Vulkan, and is preferred over
+Vulkan when an NVIDIA device is present. On Windows it needs a CUDA 13 install: the runtime DLLs
+are loaded from `%CUDA_PATH%\bin\x64`, not from `PATH`.
+
+- If the CUDA module, driver, or required runtime DLL is missing, the device never registers and selection
+  falls through to Vulkan, then CPU. Nothing needs configuring for that.
+- `backend: "vulkan"` forces Vulkan on an NVIDIA machine. Setting `CUDA_VISIBLE_DEVICES=-1` in the
+  environment has the same effect without touching the load config.
+- TurboQuant / PolarQuant KV-cache types (`tbq3_0`, `tbq4_0`, `pq3_0`, `pq4_0`) are **not**
+  supported on CUDA and are rejected during model configuration. Use a Vulkan GPU or CPU for those.
+  Standard quantized types (`q4_0`, `q8_0`, …) work normally.
+- BitNet (TQ1_0 / TQ2_0) and some LoRA finetuning kernels are not yet available on CUDA. Use
+  `backend: "vulkan"` for those workloads until the kernels land.
 
 **Note — BitNet models (TQ1_0 / TQ2_0 quantization):**
 BitNet models require special backend handling on Adreno GPUs. When a BitNet model is detected and no explicit `main-gpu` is set:
@@ -163,6 +182,8 @@ const config = {
 | device            | `"gpu"` or `"cpu"`                          | — (required)                 | Device to run inference on                            |
 | gpu_layers        | integer                                     | 0                            | Number of model layers to offload to GPU              |
 | ctx_size          | 0 – model-dependent                         | 4096 (0 = loaded from model) | Context window size                                   |
+| poll              | integer 0 – 100                             | 0                            | Main GGML threadpool busy-wait level. `0` sleeps while idle; higher values can reduce wake latency but consume CPU during GPU work |
+| poll-batch        | integer 0 – 100                             | `poll`                       | Batch GGML threadpool busy-wait level                  |
 | lora              | string                                      | —                            | Path to LoRA adapter file                             |
 | temp              | 0.00 – 2.00                                 | 0.8                          | Sampling temperature                                  |
 | top_p             | 0 – 1                                       | 0.9                          | Top-p (nucleus) sampling                              |
@@ -176,14 +197,27 @@ const config = {
 | frequency_penalty | float                                       | 0                            | Frequency penalty for sampling                        |
 | tools             | `"true"` or `"false"`                       | `"false"`                    | Enable tool calling with jinja templating             |
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
+| image-max-megapixels | positive integer                            | 50                           | Maximum reported image pixel count in millions, checked before decode. Alias: `image_max_megapixels`. |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
+| backend           | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, or `auto` | N/A | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU. Cannot be combined with `split-mode` or `devices` |
 | split-mode        | `"none"`, `"layer"`, or `"tensor"` | `"none"`                     | How to split the model across GPUs. `"tensor"` is EXPERIMENTAL and desktop-only; `"row"` is rejected ([details](./docs/multi-gpu.md)) |
 | tensor-split      | comma-separated proportions (e.g. `"1,1"`)  | —                            | GPU split ratios for the multi-GPU split modes ([details](./docs/multi-gpu.md)) |
 | parallel          | integer                                     | 1                            | Concurrent sequence slots for continuous batching. Values `>= 2` enable batch `run()` and split the KV cache uniformly across slots ([details](./docs/continuous-batching.md)) |
+| cache_checkpoints | 0 – 1024                                    | 1                            | Per-sequence cap on process-local checkpoints kept for cached requests on hybrid / recurrent models, DeepSeek V4 and sliding-window models (Gemma 3/4, gpt-oss), one per committed request at the end of its history. Each holds only the state a tail trim cannot rebuild (about 20 MB on Qwen3.5-0.8B; on sliding-window models the window cells, which reach hundreds of MB on larger models). `1` serves the next turn and a regenerate; editing the user message k-th from the end (1 = the last) without reprocessing the whole conversation needs `k + 1`, so `2` for the last one; `0` disables them. The newest one is also saved in the `cacheKey` file, so a conversation loaded in a new process continues its next turn from it. Also accepted as `cache-checkpoints` ([details](./docs/cache-api.md), [how it works](./docs/cache-lifecycle.md)) |
+| cache_checkpoints_max_bytes | integer (bytes)                 | 0 (unlimited)                | Byte budget for those checkpoints, enforced before the count. The load fails with `InvalidArgument` when it cannot hold `cache_checkpoints` checkpoints of the largest size the context allows (on a sliding-window model, a full window). Also accepted as `cache-checkpoints-max-bytes` |
+| cache_checkpoint_storage | `"memory"` or `"disk"`             | `"memory"`                   | Where checkpoints and the per-request rollback snapshot live. `"memory"` keeps them in host RAM so a cached chat never touches the disk; `"disk"` writes them to a private directory inside `cache_checkpoint_dir`, which it requires. Also accepted as `cache-checkpoint-storage` |
+| cache_checkpoint_dir | directory path                              | none                         | **Required with `cache_checkpoint_storage: "disk"`**, and refused without it: where checkpoint files go, inside a private directory the addon creates in it (mode 0700; on Windows, the directory itself). On mobile, pass the app's cache directory. The load fails with `InvalidArgument` when it is missing, empty, or unusable. Also accepted as `cache-checkpoint-dir` |
+| cache_ram_mib | 0 – 1048576 (MiB)                               | 0 (off)                      | Host-RAM budget for conversations that are not running. A `cacheKey` switch or a batch slot eviction moves the conversation there instead of writing its file, and the next request on that key restores it; unless `cache_share_across_keys` is `"false"`, a request on another key that shares its prompt prefix starts from a copy of it. A write-back cache: unsaved turns reach the file on `saveCache()`, when the budget pushes the entry out, or at unload; ephemeral entries are dropped instead. Also accepted as `cache-ram-mib` ([details](./docs/cache-api.md#keep-switched-away-conversations-in-ram)) |
+| cache_share_across_keys | `"true"`/`"on"`/`"1"`, `"false"`/`"off"`/`"0"` | `"true"`                     | Whether a request on a decoder-only model may start from state another conversation left (keyless memory, another key's state, a `cacheKey` file the model used). `"false"` keeps every request to its own key's state, for callers who must not learn through `cacheTokens` or timing whether another conversation shares their prompt. Also accepted as `cache-share-across-keys` ([details](./docs/cache-api.md#keep-conversations-apart)) |
 | flash-attn        | `"on"`/`"enabled"`/`"true"`/`"1"`, `"off"`/`"disabled"`/`"false"`/`"0"`, or `"auto"` | `"on"`, except when finetuning or on a BitNet model, where it is forced off | Flash attention. The four truthy and four falsey spellings are equivalent; `"auto"` is a third state that defers to qvac-fabric's runtime capability probe. Lower-case only — matching is case-sensitive and any other value is rejected. Affects the KV-cache auto-default — see below. Also accepted as `flash_attn`; supplying both spellings is an error |
 | cache-type-k      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **key** quantization type. Unset = auto-default (see KV-cache type below) |
 | cache-type-v      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **value** quantization type. Quantizing V requires `flash-attn` on |
 | mmproj-use-gpu    | `"true"`/`"on"`/`"1"` or `"false"`/`"off"`/`"0"` | auto (see below)         | Run the multimodal projector (mmproj / vision encoder) on the GPU. Only honoured when a GPU backend is selected (ignored with a warning on CPU / GPU-fallback). Unset = auto-default (see mmproj backend below) |
+| spec-type         | `"none"`, `"draft-mtp"` or `"draft-dflash"` | `"none"`                     | Speculative decoding, as llama-server's `--spec-type`: `draft-mtp` drafts with the model's own multi-token-prediction head, `draft-dflash` with the DFlash model in `spec-draft-model` (see [Speculative decoding](#speculative-decoding-mtp-dflash) below). Also accepted as `spec_type` |
+| spec-draft-model  | absolute path                               | –                            | Draft model, as llama-server's `--spec-draft-model` (`-md`): the DFlash model, required by `spec-type: "draft-dflash"`, or an external MTP head for `spec-type: "draft-mtp"`. Placed like the model (`device`, `gpu-layers`). Also accepted as `spec_draft_model` |
+| spec-draft-n-max  | 1 – 64                                      | 3                            | Longest draft per step. Also accepted as `spec_draft_n_max` |
+| spec-draft-n-min  | 0 – `spec-draft-n-max`                      | 0                            | Drafts shorter than this are not verified. Also accepted as `spec_draft_n_min` |
+| spec-draft-p-min  | 0 – 1                                       | 0                            | Minimum draft-head probability for a token to extend the draft. Also accepted as `spec_draft_p_min` |
 
 
 #### KV-cache type & auto-default
@@ -192,7 +226,7 @@ The addon picks a safe KV-cache type when `cache-type-k`/`cache-type-v` are unse
 
 - **Auto-default:** on a **Metal / Vulkan GPU** (with flash attention on) both K and V default to **`q8_0`** — quality-neutral vs `f16` and ~47% smaller KV cache. **CPU** and **OpenCL (Adreno)** keep **`f16`** (ARM CPU `q8_0` has a quality/throughput cost; quantized KV is unsafe on OpenCL — see below). Finetuning manages its own KV types and is left untouched.
 - **`flash-attn: 'auto'` keeps `f16`.** "Flash attention on" above means a truthy `flash-attn` — `on`, `enabled`, `true` or `1`, or the `on` default when the key is unset. `'auto'` is deliberately excluded: quantizing the V cache forces qvac-fabric to promote AUTO to ENABLED, which skips the runtime capability probe that `'auto'` exists to run. So `'auto'` trades the ~47% KV-cache saving for letting qvac-fabric decide. To get both, set `cache-type-k`/`-v` explicitly alongside `'auto'`, or use `'on'`. **`split-mode: 'tensor'` is the exception:** qvac-fabric promotes AUTO to ENABLED unconditionally for that mode, so there is no probe to preserve and `'auto'` takes the q8_0 default there exactly as `'on'` does.
-- **OpenCL (Adreno) accepts only `f16`/`f32`/`bf16`:** any other cache type — quantized (`q8_0`, `q4_0`, `q4_1`, `q5_0`, …) or unrecognized — throws a `StatusError`. A quantized K or V cache aborts in `llama_kv_cache::update` on cache management (reasoning-block compaction, state restore) because ggml-opencl has no `F32→quantized` requantize kernel. Use `f16`/`f32`/`bf16`, or a Vulkan GPU / CPU.
+- **OpenCL (Adreno) accepts only `f16`/`f32`/`bf16`:** any other cache type — quantized (`q8_0`, `q4_0`, `q4_1`, `q5_0`, …) or unrecognized — throws a `StatusError`. A quantized K or V cache aborts in `llama_kv_cache::update` during state restore because ggml-opencl has no `F32→quantized` requantize kernel. Use `f16`/`f32`/`bf16`, or a Vulkan GPU / CPU.
 - **Mixed K≠V is a warning, not an error:** if K and V differ and at least one is quantized, the addon logs a warning (asymmetric quantized K/V falls off the fused flash-attention path — a notable GPU decode penalty — for no quality benefit, and is unsupported on Adreno OpenCL) but proceeds. Prefer a symmetric type. (This may be relaxed once qvac-fabric handles asymmetric quantized K/V efficiently.)
 
 
@@ -227,6 +261,23 @@ An explicit `mmproj-use-gpu` value always wins over the auto-default, in either 
 itself runs on the CPU backend (`device: "cpu"` or GPU fallback), the key is ignored with a warning and the
 projector runs on CPU. The resolved choice is logged at verbosity ≥ 2 as
 `[LlamaModel] multimodal projector backend: …`.
+
+
+#### Speculative decoding (MTP, DFlash)
+
+`spec-type: 'draft-mtp'` turns on llama-server's multi-token-prediction speculative decoding for models that ship their MTP layers (`blk.N.nextn.*`, e.g. Qwen3.5 / Qwen3.6 GGUFs that keep them; quantizations that strip them fail to load with this option unless an external head is given, see below). Every step the MTP head drafts up to `spec-draft-n-max` tokens from the model's own hidden states, the model verifies the sampled token and the draft in one decode, and the longest matching prefix plus one new token is kept. The sampler decides every kept token, so sampling settings, grammars and stop conditions behave as without speculation. The implementation follows llama-server step by step: the same draft limits, rollback by trimming or by a checkpoint for memory that cannot trim, and the same replay.
+
+For a model without MTP layers, give an external MTP head as `spec-draft-model` (llama-server's `--spec-type draft-mtp -md <head>`): a GGUF with MTP layers for the same model, such as the MTP quantization of it, or a Gemma 4 assistant for its Gemma 4 model. The head is loaded next to the model and placed like it (`device`, `gpu-layers`), and the load's fit and `assessFit` count its weights as well as its context. A head without MTP layers fails the load, and `assessFit` rejects it. A head for another model, with a different hidden width or vocabulary, also fails the load, and `assessFit` rejects it the same way. A Gemma 4 assistant reads the model's own tensors, so fabric measures it next to the model, as the load creates it.
+
+`spec-type: 'draft-dflash'` drafts with a separate DFlash model instead, given as `spec-draft-model` (an absolute path; llama-server's `-md`). The DFlash model reads the hidden states of the target layers it was trained on and denoises a whole block of draft tokens in one pass, so a step drafts up to its block size minus one tokens (`spec-draft-n-max` caps it further). It is loaded next to the model and placed like it (`device`, `gpu-layers`). The load's fit and `assessFit` count its weights and context, measured next to the model when the drafter borrows the model's embeddings and output head. A draft model fabric still cannot measure is left out of both, and fabric logs `failed to measure the memory of the extra model, fitting without it`. Everything else (verification, rollback, batching, caches, stats) is the same as for MTP.
+
+MTP and DFlash work on single prompts, multimodal prompts and continuous batching (`parallel >= 2`), together with `cacheKey` conversations: the draft context's state travels with checkpoints and the RAM tier, and a `cacheKey` file (target state only, like llama-server's slot files) restarts drafting from the next decoded token.
+
+- Runtime stats gain `draftTokens` and `draftAcceptedTokens` (llama-server's `draft_n` / `draft_n_accepted`); per-position acceptance rates are logged at debug level.
+- `spec-draft-n-max` is lowered at load, with a warning, so the sampled token and the draft fit one `ubatch-size` and each sequence's share of `batch-size` (`batch-size / parallel`); a batch too small for even one draft token fails the load.
+- `spec-draft-model` must be a regular local file.
+- Greedy output can differ from plain decoding where two tokens are nearly tied: the verification batch evaluates several positions at once, which changes floating-point rounding.
+- The gain depends on the device being bandwidth bound. On a Radeon 8060S, Qwen3.6-27B-MTP Q4_K_M decodes a single prompt at about 30 t/s instead of 13 t/s with 80% of the drafts accepted; with four concurrent sequences the larger verification batches cost more than they save, as they do in llama-server.
 
 ### 4. Create Model Instance
 
@@ -274,6 +325,50 @@ try {
 
 When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `TTFT`, `TPS`, token counters, and `backendDevice` (`"cpu"` or `"gpu"`). `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
 
+#### Tool calling
+
+Load with `config.tools: 'true'` and declare tools as `{ type: 'function', ... }` entries in the message array. The model answers a tool request with a tool-call block in its own format (`<tool_call>` for Qwen). To continue the conversation, put the call on an assistant turn as `tool_calls` and the result on a `tool` turn; the chat template renders both natively, so neither needs to be written into `content`.
+
+```javascript
+const response = await model.run([
+  {
+    type: 'function',
+    name: 'get_weather',
+    description: 'Get the weather for a city',
+    parameters: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] }
+  },
+  { role: 'user', content: 'Weather in Paris?' },
+  { role: 'assistant', content: '', tool_calls: [{ id: 'call_1', name: 'get_weather', arguments: { city: 'Paris' } }] },
+  { role: 'tool', content: '18C', tool_call_id: 'call_1', name: 'get_weather' }
+])
+```
+
+`arguments` is an object or the text of a JSON object, and `content` may be empty on the assistant turn. A malformed tool turn is rejected with `InvalidInputFormat`. [`examples/toolCalling.js`](./examples/toolCalling.js) shows a full round trip.
+
+The tool grammar holds the model to the order of `parameters`. Inside an object it accepts the required properties first, in declared order, then the optional ones, also in declared order. When the model writes a property out of that order, the call isn't rejected with an error: the model drops a field, writes a broken value or never finishes the call. Declare `required` properties before optional ones at every level, and declare each group in the order the model is likely to write it. This applies to nested objects, and to every argument in formats that write the arguments as one JSON object (Qwen3). Qwen3.5's top-level `<parameter=...>` arguments are less strict: up to six required arguments in any order, then the optional ones in any order. An optional argument before a required one is still rejected there.
+
+#### Ordered text and media
+
+A user message's `content` is either a string or an ordered array of parts. Use the array when the position of an image inside the text matters — multiple-choice options that are pictures, illustrated forms, steps — so the model sees the text and every image in one turn, in order:
+
+```javascript
+const response = await model.run([{
+  role: 'user',
+  content: [
+    { type: 'text', text: 'Which image shows the same place as ' },
+    { type: 'media', content: '/images/place.jpg' },
+    { type: 'text', text: '?\nA. ' },
+    { type: 'media', content: imageABytes }, // raw bytes work too
+    { type: 'text', text: '\nB. ' },
+    { type: 'media', content: '/images/option-b.jpg' }
+  ]
+}])
+```
+
+Each media part becomes an `<__media__>` marker at its own position in the rendered turn — the same prompt llama-server builds from an OpenAI content-parts request. A part's `content` is an absolute path or a `Uint8Array`; media parts are only valid on user messages, and an unknown part type is rejected with `InvalidInputFormat`.
+
+The alternative — one `{ role: 'user', type: 'media' }` message per part — keeps the order but renders each text part as its own user turn, so text that refers to "this image" ends up in a different turn from the image.
+
 #### Batch inference
 
 Load the model with `parallel >= 2`, then pass an array of prompts. Each chunk arrives tagged with the id of the sequence that produced it; `await()` returns results in input order.
@@ -313,6 +408,30 @@ const response = await model.run([
 ])
 ```
 
+#### Counting tokens
+
+`calcTokens` returns how many tokens an input takes on the loaded model, without running it:
+
+```javascript
+const raw = await model.calcTokens({ text: 'Hello, world!' })
+
+const prompt = await model.calcTokens({
+  history: [{ role: 'system', content: 'You are a helpful assistant.' }],
+  tools: [{ type: 'function', name: 'get_weather', parameters: { type: 'object', properties: { city: { type: 'string' } } } }],
+  text: 'Weather in Paris?'
+})
+```
+
+- `text` alone is counted raw, with no chat template and no BOS.
+- `history` takes the `Message[]` that `run()` takes, and `tools` takes tool definitions. Either one is rendered by the chat template as the opening request of a fresh conversation, with `text` (even empty) appended as the last user turn. The count includes BOS, and the generation prompt when the last turn is a user or tool turn, so it equals the `promptTokens` a fresh `run()` of the same conversation reports. Tools the template drops are not counted. On an encoder-decoder model `run()` encodes the prompt separately, so its `promptTokens` differs from this count.
+- `tools` needs `text` or `history`, as `run()` can't render tools without a message.
+- It never queues behind `run()`, so it answers while requests are generating.
+- Errors:
+  - A wrong-typed argument rejects with a `TypeError`.
+  - Before `load()` or after `unload()` it rejects with `Model is not loaded`.
+  - Other invalid input, media included, rejects with an error whose `code` is `InvalidArgument` and whose message starts with `calcTokens:`.
+  - A conversation the chat template cannot render at all fails as it would in `run()`.
+
 ### 7. Release Resources
 
 Unload the model when finished:
@@ -327,7 +446,7 @@ try {
 
 ### API behavior by state
 
-The following table describes the expected behavior of `run` and `cancel` depending on the current state (idle vs jobs running). The two cancel entry points have different scopes:
+The following table describes the expected behavior of `run`, `cancel` and `calcTokens` depending on the current state (idle vs jobs running). The two cancel entry points have different scopes:
 
 - `response.cancel()` — **targeted**: cancels only the job (or batch group) that `run()` call produced, leaving other concurrent jobs running.
 - `model.cancel()` — **global**: cancels every live job (in-flight and queued) at the moment of the call, plus any finetuning in progress.
@@ -340,6 +459,7 @@ The following table describes the expected behavior of `run` and `cancel` depend
 | busy, `parallel >= 2` (default `rejectWhenBusy: false`) | run | **Allowed** — the job is admitted concurrently (continuous batching) or queued until a slot frees; each call gets its own independent `QvacResponse` |
 | busy          | `response.cancel()` | **Allowed** — cancels only that response's job/group; Promise resolves when it has stopped |
 | busy          | `model.cancel()`    | **Allowed** — cancels all live jobs; Promise resolves when they have stopped |
+| idle or busy  | `calcTokens` | **Allowed** — counts without running and never queues behind a job; see [Counting tokens](#counting-tokens) |
 
 Admission is controlled by `rejectWhenBusy` (instance-level `opts.rejectWhenBusy`, overridable per call via `runOptions.rejectWhenBusy`). Its default follows `parallel`: `true` for `parallel: 1` (busy runs fail fast, preserving the historical single-job contract) and `false` for `parallel >= 2` (busy runs queue behind the pool and start as slots free). With `parallel >= 2`, separate top-level `run()` calls are batched together into the same decode loop — see [Continuous Batching](./docs/continuous-batching.md).
 
@@ -347,7 +467,7 @@ Admission is controlled by `rejectWhenBusy` (instance-level `opts.rejectWhenBusy
 
 #### Prefill (cache warming) with `parallel >= 2`
 
-A prefill-only run (`runOptions.prefill: true`) is admitted on a parallel model only when its product survives the slot teardown, i.e. it is *persistable*: `saveCacheToDisk: true` plus a `cacheKey`. A live-only prefill (no persistence) warms context state that no concurrent job could ever reach, so it is rejected with `InvalidArgument`; run it on a `parallel: 1` model instead. The same rule applies per item in batch runs. See [cache-api.md](./docs/cache-api.md).
+A prefill-only run (`runOptions.prefill: true`) is admitted on a parallel model only when its product survives the slot teardown, i.e. it has a `cacheKey`: the warmed conversation stays in its slot for the next request on that key. A keyless prefill warms state no later request can count on (at most parked anonymously, first to be evicted), so it is rejected with `InvalidArgument`; run it on a `parallel: 1` model instead. The same rule applies per item in batch runs. See [cache-api.md](./docs/cache-api.md).
 
 #### Cancelling a batch
 
@@ -368,27 +488,38 @@ Cancelling a queued job resolves immediately, whether or not the slots it was wa
 ```js
 const LlmLlamacpp = require('@qvac/llm-llamacpp')
 
-const fit = LlmLlamacpp.assessFit({
+const fit = await LlmLlamacpp.assessFit({
   modelPath: '/models/model.gguf',
-  params: { 'ctx-size': '4096' }
+  config: { device: 'gpu', 'ctx-size': '4096' }
 })
 
-fit.status // 'fits' | 'does-not-fit' | 'error'
-fit.reason // 'fits', 'does-not-fit', 'model-unreadable', 'no-backend-device' or 'unsupported-config'
-fit.gpuLayers // what fits, which is not always what the request asked for
-fit.ctxSize
-fit.devices // one row per device the model was assigned to, then a `host` row
-fit.deviceBytes // model, context and compute summed across the devices, host excluded
-fit.hostBytes // the same, for the trailing host row
+fit.status // 'fits' | 'does-not-fit' | 'unknown'
+fit.devices // one row per device the model is assigned to, then the host CPU
+fit.devices[0] // { id, name, unified, usedBytes, freeBytes, totalBytes }
+fit.stats // { ctxSize, gpuLayers }
 ```
 
-`params` takes the load in llama's own CLI spelling without the leading `--`, exactly as the loader takes it: `ctx-size`, `tensor-split`, `override-tensor`, `cpu-moe`, `no-kv-offload` and the rest. Each is dispatched through llama's argument table, so a placement pinned there reaches the projection. A setting llama does not recognise, or a flag asked to be off that can only assert itself, is `status: "error"` with `unsupported-config`.
+Each device row gives the memory the load takes on that device, as `usedBytes`, and the device's free and total memory. `id` is the PCI bus ID when the backend reports one, and the device name otherwise. `unified` is true for memory the host owns: the CPU, an integrated GPU, a GPU that shares the host's memory, Android's OpenCL GPU, and a device that reports no memory of its own, which takes the host's figures. With `load_mode: 'mmap'`, the host row leaves out the mapped weights, which the OS can evict.
 
-Pinning `gpu-layers` fixes the placement: the fitter refuses to move layers off a device the load claimed, so the answer is whether that exact placement fits, never a reduced one. Leave it unset for a projection that can place the model itself.
+On an iOS device every unified row shares the app's own memory limit, `os_proc_available_memory()`. Each such row's free memory is capped at that limit, and a load whose unified rows together take more than the limit less the margin does not fit. A limit of 0 means the app has none left.
 
-`minCtxSize` sets a floor the fitter may not reduce the context below, defaulting to llama's own `fit-ctx` of 4096. `marginBytes` is the memory to leave free on every device, defaulting to llama's `fit-target` of 1 GiB per device. `backendsDir` is where the dynamically-loaded ggml backends live.
+`stats` is the load as the fit resolved it. On `fits`, `ctxSize` and `gpuLayers` are the context and GPU layer count the fitter settled on, which can be smaller than the load asked for. On `does-not-fit` they are the ones the load asked for.
 
-A model the fitter cannot read is `status: "error"`; only a broken request throws.
+`status` is `unknown` for a load the fitter cannot project: one placed on the CPU, one with a LoRA adapter or a multimodal projector, one with `fit` turned off, or one the fitter cannot break down per device, the host CPU included. `devices` is then empty and `stats` is `{}`.
+
+The projection reads the model's vocabulary, and llama asserts on a vocabulary it finds inconsistent. An assert aborts the process instead of rejecting, so take the model from a source you trust, or call `assessFit` behind a process boundary.
+
+`config` is the load, exactly as `loadModel` takes it. The projection resolves it with the same code that load runs, so every setting reaches the fitter the way it would reach the engine, and a load the engine would refuse rejects here. A setting left out takes llama's default.
+
+With `spec-type: 'draft-mtp'` the MTP draft context is fitted next to the model, as the load fits it, and its memory is in the verdict and in the device rows; on a model or head without MTP layers the load fails, so the projection rejects. A DFlash draft model or a Gemma 4 assistant is fitted the same way, measured next to the model since it reads the model's tensors, and is in the verdict and the rows too (see [Speculative decoding](#speculative-decoding-mtp-dflash)).
+
+Pinning `gpu-layers` fixes the placement: the fitter keeps layers on the devices the load claimed, so the answer is for that exact placement. Leave it unset for a projection that can place the model itself.
+
+`minCtxSize` sets a floor the fitter may not reduce the context below, defaulting to llama's own `fit-ctx` of 4096. `marginBytes` is the memory to leave free on every device. The load's own `fit-target`, 1 GiB per device by default, applies too, and the larger of the two binds. `backendsDir` is where the dynamically-loaded ggml backends live.
+
+`assessFit` returns a Promise. Concurrent calls run one at a time within this addon.
+
+A model the fitter cannot read, an invalid request, or a machine with no backend device rejects with an error whose message starts with `assessFit:` and names the cause.
 
 ## Fine-tuning
 
@@ -628,7 +759,29 @@ npm run test:cpp:models:ci   # exactly what .github/workflows/cpp-tests-llm.yml
                              # downloads; matches what CI exercises
 ```
 
-First-run downloads pull several GB from Hugging Face. Every fixture is SHA256-verified against a digest pinned in `scripts/download-unit-test-models.js`; mismatched or partial files are re-downloaded automatically. Set `HF_TOKEN` if a repo requires authentication. Override paths with env vars such as `SHARDED_MODEL_FIRST_SHARD_PATH` (see `test/unit/test_common.hpp`).
+First-run downloads pull several GB, mostly from Hugging Face. Every fixture is SHA256-verified against a digest pinned in `scripts/download-unit-test-models.js`; mismatched or partial files are re-downloaded automatically. Set `HF_TOKEN` if a repo requires authentication. Fixtures pinned by `s3Path` (currently `bitnet_b1_58-large-TQ2_0.gguf`) are copied from the QVAC model registry bucket and need `MODEL_S3_BUCKET` plus AWS credentials; if either is missing or the copy fails, a local run skips the fixture with a warning and its tests skip, while `--ci` fails. Override paths with env vars such as `SHARDED_MODEL_FIRST_SHARD_PATH` or `BITNET_MODEL_PATH` (see `test/unit/test_common.hpp`).
+
+### Fuzzing
+
+`forLogMessage`, `toLowerAscii`, and `matchesAnyStopString` have a
+[Google FuzzTest][fuzztest] target, `llm-string-fuzz`. Fuzzing is Linux-only:
+it needs clang with libFuzzer and AddressSanitizer, CMake 3.25 or newer,
+[vcpkg](https://vcpkg.io/) (set `VCPKG_ROOT`) and `bare-make`. The target does
+not link `@qvac/fabric`, so it runs with full ASan and LeakSanitizer.
+
+```bash
+npm install
+npm run fuzz                     # bounded run of every FUZZ_TEST, as Linux CI does
+npm run fuzz:continuous          # coverage-guided, one FUZZ_TEST at a time
+npm run fuzz:continuous -- LlmStringFuzz.MatchesAnyStopNeverCrashes --fuzz_for=30m
+```
+
+Flags other than `--continuous` and `--build-dir` go to the fuzz binary. See
+[`docs/architecture/ADDON-FUZZING.md`](../../docs/architecture/ADDON-FUZZING.md)
+for the fuzzing design, the vcpkg-supplied FuzzTest stack, and how to add a
+target.
+
+[fuzztest]: https://github.com/google/fuzztest
 
 ## Glossary
 

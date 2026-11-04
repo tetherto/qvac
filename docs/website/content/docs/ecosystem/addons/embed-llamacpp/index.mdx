@@ -1,0 +1,370 @@
+---
+title: "@qvac/embed-llamacpp"
+titleStyle: code
+description: Text embeddings for semantic search and retrieval, and typed decisions with Laya checkpoints.
+schemaType: APIReference
+---
+
+## Overview
+
+[Bare module](https://bare.pears.com) that adds support for text embeddings, RAG, and Laya decisions in QVAC using [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp) as the inference engine. Use `GGMLBert` for embeddings and [`LayaDecisions`](#laya-decisions) for typed questions about a state.
+
+## Models
+
+`GGMLBert` loads [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible embedding models in GGUF format. `LayaDecisions` requires a Laya decision checkpoint in GGUF format. An embedding-only model cannot answer decision questions.
+
+## Requirement
+
+Bare `>= v1.24`
+
+## Installation
+
+```bash
+npm i @qvac/embed-llamacpp
+```
+
+`@qvac/embed-llamacpp` links the shared `@qvac/fabric` runtime. `@qvac/fabric`
+ships its native runtime and ggml backends for each desktop host through a
+version-locked, `os`/`cpu` filtered optional dependency:
+
+| Host                | Package                       |
+| ------------------- | ----------------------------- |
+| linux-x64 (glibc)   | `@qvac/fabric-linux-x64`      |
+| linux-arm64 (glibc) | `@qvac/fabric-linux-arm64`    |
+| darwin-arm64        | `@qvac/fabric-darwin-arm64`   |
+| darwin-x64          | `@qvac/fabric-darwin-x64`     |
+| win32-x64           | `@qvac/fabric-win32-x64`      |
+
+Do not depend on the desktop platform packages directly. Supported installers
+are npm 7+, pnpm, bun, and Yarn Berry; Yarn v1 and `--omit=optional` installs
+skip the platform package and fail at require time with an error naming it.
+
+Mobile targets are cross-built, so no install host ever matches their `os`,
+and optional-dependency filtering can never select them. Mobile applications
+must declare `@qvac/fabric` and the target's fabric platform package as direct
+dependencies at the same exact version, one that satisfies the `@qvac/fabric`
+range `@qvac/embed-llamacpp` declares:
+
+| Target                    | Package                      |
+| ------------------------- | ---------------------------- |
+| android-arm64             | `@qvac/fabric-android-arm64` |
+| ios (device + simulators) | `@qvac/fabric-ios`           |
+
+```json
+{
+  "dependencies": {
+    "@qvac/embed-llamacpp": "x.y.z",
+    "@qvac/fabric": "a.b.c",
+    "@qvac/fabric-android-arm64": "a.b.c"
+  }
+}
+```
+
+## Quickstart
+
+<Steps>
+
+<Step>
+If you don't have Bare runtime, install it:
+
+```bash
+npm i -g bare
+```
+</Step>
+
+<Step>
+Create a new project:
+
+```bash
+mkdir qvac-embed-quickstart
+cd qvac-embed-quickstart
+npm init -y
+```
+</Step>
+
+<Step>
+Install dependencies:
+
+```bash
+npm i @qvac/embed-llamacpp bare-path
+```
+</Step>
+
+<Step>
+Download a compatible model:
+
+```bash
+curl -L --create-dirs -o models/gte-large_fp16.gguf \
+  https://huggingface.co/ChristianAzinn/gte-large-gguf/resolve/main/gte-large_fp16.gguf
+```
+</Step>
+
+<Step>
+Create `index.js`:
+</Step>
+
+<WrapCode>
+
+```js title="index.js" lineNumbers
+'use strict'
+
+const path = require('bare-path')
+const GGMLBert = require('@qvac/embed-llamacpp')
+
+async function main () {
+  const modelName = 'gte-large_fp16.gguf'
+  const dirPath = path.resolve('./models')
+  const modelPath = path.join(dirPath, modelName)
+
+  // 1. Configuring model settings
+  const model = new GGMLBert({
+    files: { model: [modelPath] },
+    config: {
+      device: 'gpu',
+      gpu_layers: '25'
+    },
+    logger: console,
+    opts: { stats: true }
+  })
+
+  // 2. Loading model
+  await model.load()
+
+  try {
+    // 3. Generating embeddings
+    const query = 'Hello, can you suggest a game I can play with my 1 year old daughter?'
+    const response = await model.run(query)
+    const embeddings = await response.await()
+
+    console.log('Embeddings shape:', embeddings.length, 'x', embeddings[0].length)
+    console.log('First few values of first embedding:')
+    console.log(embeddings[0].slice(0, 5))
+  } catch (error) {
+    const errorMessage = error?.message || error?.toString() || String(error)
+    console.error('Error occurred:', errorMessage)
+    console.error('Error details:', error)
+  } finally {
+    // 4. Cleaning up resources
+    await model.unload()
+  }
+}
+
+main().catch(console.error)
+```
+</WrapCode>
+
+<Step>
+Run `index.js`:
+
+```bash
+bare index.js
+```
+</Step>
+</Steps>
+
+## Usage
+
+### 1. Import the Model Class
+
+```js
+const GGMLBert = require('@qvac/embed-llamacpp')
+```
+
+For decisions, import the named `LayaDecisions` class:
+
+```js
+const { LayaDecisions } = require('@qvac/embed-llamacpp')
+```
+
+### 2. Create Local Model Paths
+
+The addon reads GGUF files directly from disk. Download the model, then pass absolute local paths to `files.model`.
+
+```js
+const path = require('bare-path')
+
+const dirPath = path.resolve('./models')
+const modelName = 'gte-large_fp16.gguf'
+
+const modelPath = path.join(dirPath, modelName)
+```
+
+### 3. Create the `args` obj
+
+```js
+const args = {
+  files: { model: [modelPath] },
+  config: {
+    device: 'gpu',
+    gpu_layers: '25'
+  },
+  logger: console,
+  opts: { stats: true }
+}
+```
+
+The `args` obj contains the following properties:
+
+* `files.model`: An array of absolute paths to the model file(s) on disk. For sharded models, provide every shard in order.
+* `config`: A dictionary of hyper-parameters used to tweak the behaviour of the model.
+* `logger`: This property is used to create a `QvacLogger` instance, which handles all logging functionality.
+* `opts.stats`: This flag determines whether to calculate inference stats.
+
+### 4. Create `config`
+
+All values in `args.config` must be strings. The following load options are
+shared by `GGMLBert` and `LayaDecisions`. Multi-word keys accept underscores or
+hyphens, such as `batch_size` and `batch-size`, except `openclCacheDir`, which
+keeps its spelling.
+
+```js
+const config = {
+  device: 'gpu',
+  gpu_layers: '99',
+  batch_size: '1024'
+}
+```
+
+| Parameter         | Range / Type                                | Default                      | Description                                           |
+|-------------------|---------------------------------------------|------------------------------|-------------------------------------------------------|
+| device            | `"gpu"` or `"cpu"`                          | — (required)                 | Device to run inference on                            |
+| gpu_layers        | integer                                     | automatic                    | Number of layers to offload to GPU; unset fits available memory |
+| batch_size        | integer                                     | 2048                         | Tokens processed per batch                            |
+| threads           | integer                                     | one per physical core        | CPU threads; 0 uses every logical CPU                 |
+| threads-batch     | integer                                     | threads                      | CPU threads for batch processing                      |
+| poll              | integer 0 – 100                             | 0                            | CPU polling level                                     |
+| poll-batch        | integer 0 – 100                             | value of `poll`              | CPU polling level for batch processing                |
+| flash_attn        | `"on"`, `"off"`, or `"auto"`                | `"auto"`                     | Enable/disable flash attention; defaults to off on OpenCL |
+| main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
+| split-mode        | `"none"` or `"layer"`                       | `"none"`                     | Multi-GPU placement mode                              |
+| tensor-split      | comma-separated proportions, e.g. `"3,1"`   | —                            | GPU allocation proportions for multi-GPU placement    |
+| verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0 initially                  | Process-wide native logging verbosity; unset keeps the current level |
+| openclCacheDir    | directory path                              | —                            | Writable OpenCL kernel cache directory; set on Android for faster GPU startup |
+
+The following additional options apply to `GGMLBert`. Laya rejects them at load.
+
+| Parameter         | Range / Type                                | Default                      | Description                                           |
+|-------------------|---------------------------------------------|------------------------------|-------------------------------------------------------|
+| ctx_size          | 0 – model-dependent                         | model default                | Runtime context window; capped to the model's trained context size |
+| pooling           | `"none"`, `"mean"`, `"cls"`, or `"last"`    | model default                | Pooling type for embeddings                           |
+| attention         | `"causal"` or `"non-causal"`                | model default                | Attention type for embeddings                         |
+| embd_normalize    | integer                                     | 2                            | Embedding normalization (-1=none, 0=max abs int16, 1=taxicab, 2=euclidean, >2=p-norm) |
+| backend           | comma-separated backend names               | automatic                    | GPU backend priority: cuda, vulkan, metal, opencl, or auto; cannot be combined with split-mode |
+
+The shared options have these additional constraints when `LayaDecisions` is used:
+
+| Parameter              | Laya behavior                                                                                         |
+|------------------------|-------------------------------------------------------------------------------------------------------|
+| batch_size             | Also sets context size. Every question over one state must fit in a forward pass; attention cost grows with the square of this value |
+| threads, threads-batch | Values must be whole numbers. Positive counts must not exceed the device's CPU count; 0 or below uses every logical CPU |
+
+#### CPU polling defaults
+
+For both embeddings and Laya decisions, this addon defaults `poll` to `0`, compared with `50` in upstream llama.cpp. If `poll-batch` is omitted, it inherits the value of `poll`, so both use `0` when neither is set. At `0`, CPU workers sleep while idle. Higher values may reduce wake latency but consume more CPU during GPU work.
+
+#### IGPU/GPU  selection logic:
+
+| Scenario                       | main-gpu not specified                | main-gpu: `"dedicated"`             | main-gpu: `"integrated"`           |
+|---------------------------------|---------------------------------------|-------------------------------------|-------------------------------------|
+| Devices considered              | All GPUs (dedicated + integrated)     | Only dedicated GPUs                 | Only integrated GPUs                |
+| System with iGPU only           | ✅ Uses iGPU                          | ❌ Falls back to CPU                | ✅ Uses iGPU                        |
+| System with dedicated GPU only  | ✅ Uses dedicated GPU                 | ✅ Uses dedicated GPU               | ❌ Falls back to CPU                |
+| System with both                | ✅ Uses dedicated GPU (preferred)     | ✅ Uses dedicated GPU               | ✅ Uses integrated GPU              |
+
+
+### 5. Instantiate the model
+
+```js
+const model = new GGMLBert(args)
+```
+
+For a Laya GGUF, use the decision class with the same `args` object. See [Create `config`](#4-create-config) for its accepted load options:
+
+```js
+const model = new LayaDecisions(args)
+```
+
+### 6. Load the model
+
+```js
+await model.load()
+```
+
+`load()` reads the file(s) listed in `files.model` directly from disk and activates the model. The caller is responsible for ensuring the files already exist at those paths.
+
+### 7. Run inference
+
+`GGMLBert` outputs a vector for the input sequence:
+
+```js
+const query = 'Hello, can you suggest a game I can play with my 1 year old daughter?'
+const response = await model.run(query)
+const embeddings = await response.await()
+```
+
+#### Laya decisions
+
+`LayaDecisions.run()` answers typed questions about a state. It returns probabilities and typed answers without generating text. If you use the SDK, see [Decisions](/sdk/ai-capabilities/decisions) for `loadModel()` and `decide()` with `modelType: 'llamacpp-decision'`.
+
+```js
+const questions = {
+  department: {
+    type: 'choice',
+    instructions: 'Which team should handle this ticket?',
+    criteria: {
+      billing: 'payments, refunds, invoices',
+      technical: 'bugs, outages, errors'
+    }
+  },
+  urgency: {
+    type: 'score',
+    instructions: 'How urgent is this?',
+    criteria: ['not urgent', 'somewhat urgent', 'very urgent']
+  },
+  refund: {
+    type: 'noul',
+    instructions: 'The customer asks for a refund.'
+  }
+}
+
+const response = await model.run({
+  state: 'I was charged twice. Please refund the duplicate payment.',
+  questions
+})
+const [result] = await response.await()
+console.log(result.answers.department.choice)
+console.log(result.answers.urgency.score)
+console.log(result.answers.refund.noul)
+```
+
+| Parameter    | Type                                      | Description                                                                                        |
+|--------------|-------------------------------------------|----------------------------------------------------------------------------------------------------|
+| state        | String, number, boolean, object, or array | One state to evaluate. A conversation array has the newest turn last. Top-level `null` is rejected |
+| states       | Array of states                           | Several states to evaluate instead of `state`, with results in input order                         |
+| questions    | Object                                    | Questions keyed by your question IDs. Every question requires `type` and `instructions`            |
+| max_len      | Number                                    | Optional token budget per sequence, overriding the checkpoint's default                            |
+| head_max_len | Number                                    | Optional token budget for a question and its options, overriding the checkpoint's default          |
+
+| Question type | `criteria`                                               | Answer                                                                                                    |
+|---------------|----------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
+| choice        | Array of labels or object mapping labels to descriptions | `choice` and `probabilities` keyed by label                                                               |
+| score         | Array of level descriptions, lowest first                | Expected zero-based `score`, `probabilities`, and a `legend`. Three criteria give a score between 0 and 2 |
+| noul          | Optional object describing `true` and `false`            | `noul`, the probability that the statement holds, between 0 and 1                                         |
+
+Each question accepts `option_order`, a permutation of option indices that changes the order shown to the model. Answers still use your original order. A `noul` question also accepts `labels: { false: 'no', true: 'yes' }` to change the option labels.
+
+### 8. Release Resources
+
+Unload the model when finished:
+
+```javascript
+try {
+  await model.unload()
+} catch (error) {
+  console.error('Failed to unload model:', error)
+}
+```
+
+## More resources
+
+[Package at npm](https://www.npmjs.com/package/@qvac/embed-llamacpp)

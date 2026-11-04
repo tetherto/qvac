@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # DevOps Daily Update
 
-Composes a standup / EOD update in the team's standard Slack format and writes it to a temp file ready to paste. Sourced from the user's GitHub activity in `tetherto/qvac` plus optional Asana context.
+Composes a standup / EOD update in the team's standard Slack format and writes it to a temp file ready to paste. Sourced from the user's GitHub activity in `tetherto/qvac` and task context supplied by the user.
 
 The skill is read-only with respect to GitHub state and the local working tree. It NEVER posts the message — the user copies it manually. The canonical Slack form is documented in [Step 8](#8-assemble-the-output).
 
@@ -22,13 +22,11 @@ The skill is read-only with respect to GitHub state and the local working tree. 
 
 - `gh` CLI installed and authenticated (`gh auth status`)
 - User has access to `tetherto/qvac`
-- Optional: Asana MCP available — surfaces today's assigned tasks (degrades gracefully if not)
 
 ## Inputs
 
 - **Optional**: `--since <ISO date | Nd | Nw>` — defaults to yesterday 00:00 in the user's local timezone. The default 24-hour lookback works for both EOD posts (late evening) and morning standups; extend it for Monday-after-weekend (`--since 3d`) or post-holiday (`--since 1w`).
-- **Optional**: `--format slack | markdown` — defaults to `slack`. The Slack form is what gets pasted; Markdown is the chat preview form (`**bold**`, `[text](URL)`) and is also accepted by Asana rich-text comments.
-- **Optional**: `--no-asana` — skip the Asana lookup even if the MCP is available.
+- **Optional**: `--format slack | markdown` — defaults to `slack`. The Slack form is what gets pasted; Markdown is the chat preview form (`**bold**`, `[text](URL)`).
 
 If the user did not specify, default to yesterday 00:00 / `slack`.
 
@@ -37,14 +35,14 @@ If the user did not specify, default to yesterday 00:00 / `slack`.
 This skill is read-only. It does NOT:
 
 - Modify the user's working tree, branch, or any file under `~/.cache/`
-- Post to Slack, Asana, or GitHub
+- Post to Slack or GitHub
 - Write secrets to any output (the assembler runs a regex scrub before file write; see step 7)
 
 The skill MAY write its assembled output to `/tmp/devops-daily-update-<YYYY-MM-DD>.txt` so the user can `pbcopy < <path>`. The extension is `.txt` (not `.md`) because the canonical form is Slack mrkdwn, not GitHub-flavored Markdown.
 
 ## Efficiency rules
 
-Total shell calls per run: **≤ 6** (one per data source + one for the timestamp + one to write the temp file). Cache `gh api user` and reuse via Read for the rest of the session. If a data source errors (e.g., Asana MCP not configured), continue with that section's items missing from the aggregate rather than failing the whole skill — the canonical form does not have an "Asana" section, so missing Asana data only thins out the bullet pools, not the layout.
+Total shell calls per run: **≤ 6** (one per data source + one for the timestamp + one to write the temp file). Cache `gh api user` and reuse via Read for the rest of the session. If a data source errors, continue with that section's items missing from the aggregate rather than failing the whole skill.
 
 ## Workflow
 
@@ -119,20 +117,9 @@ gh run list \
 
 Filter client-side: keep runs where `headBranch` matches one of the user's PRs from steps 3 or 4. Failed runs feed `🚧 Blockers / risks` as `CI failing on #<num> — <workflowName>`. In-progress / queued runs are NOT surfaced (too noisy for a daily update).
 
-### 6. (Optional) Pull today's Asana tasks
+### 6. Run a secret-pattern scrub on every assembled string
 
-If the Asana MCP is available and `--no-asana` was not passed, call the appropriate tool (read the descriptor first per the agentic-automation rule) to fetch the user's tasks. Filter to:
-
-- Status = in-progress or due today/tomorrow → feed `📅 Planned for tomorrow` as `<TICKET>: <task title>`
-- Status = blocked → feed `🚧 Blockers / risks` as `<TICKET>: blocked — <reason from notes>`
-
-Asana tickets in the QVAC project follow the `QVAC-\d+` format and slot directly into the bullet shape.
-
-If Asana is unavailable or `--no-asana` is set, skip this step. The output will rely on GitHub-derived items only.
-
-### 7. Run a secret-pattern scrub on every assembled string
-
-Before writing `/tmp/devops-daily-update-<YYYY-MM-DD>.txt`, run a regex check on every PR title, branch name, run name, Asana task title, and any user-provided extras:
+Before writing `/tmp/devops-daily-update-<YYYY-MM-DD>.txt`, run a regex check on every PR title, branch name, run name, and any user-provided extras:
 
 ```
 (sk_live_|AIza[0-9A-Za-z\-_]{35}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|gho_|github_pat_|xoxb-|-----BEGIN [A-Z ]+ KEY-----)
@@ -140,7 +127,7 @@ Before writing `/tmp/devops-daily-update-<YYYY-MM-DD>.txt`, run a regex check on
 
 If any string matches, redact the matching span (`[REDACTED]`) and add a chat-only note: "Daily update redacted N suspicious tokens — review the source PRs/runs manually." Never include the raw matched string anywhere in the output, the chat preview, or the temp file.
 
-### 8. Assemble the output
+### 7. Assemble the output
 
 Build the message in two forms:
 
@@ -205,7 +192,7 @@ If the user requested `--format markdown`, save the Markdown form to the temp fi
 
 Do NOT pre-link ticket numbers via `<URL|TICKET>` — the workspace's Asana app handles auto-linking. Pre-linking conflicts with that and renders awkwardly.
 
-### 9. Print the result
+### 8. Print the result
 
 1. Print the Markdown form in a fenced code block in chat for the user to scan.
 2. Print the path to the Slack-form temp file with copy commands:

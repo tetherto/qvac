@@ -11,16 +11,14 @@ const { ensureAudio8Models } = require('../utils/downloadModel')
 const { recordTtsStats } = require('../utils/perf-helper')
 const { resolveRefWavPath } = require('../utils/runChatterboxTTS')
 const { TTS_TEST_THREADS } = require('../utils/testThreads')
+const { assertDesktopGpuBackend } = require('../utils/desktopGpuBackend')
 
 const AUDIO8_SAMPLE_RATE = 44100
 const AUDIO8_MAX_FRAMES = 16
 const AUDIO8_QUANT = 'q8_0'
 const CPU_TEST_TIMEOUT_MS = 900000
 const GPU_TEST_TIMEOUT_MS = 600000
-const GPU_DEVICE = 1
 const CPU_DEVICE = 0
-const CUDA_BACKEND = 2
-const VULKAN_BACKEND = 3
 const CPU_BACKEND = 0
 const REFERENCE_TEXT =
   'And so, my fellow Americans, ask not what your country can do for you, ask what you can do for your country.'
@@ -29,12 +27,7 @@ const platform = os.platform()
 const arch = os.arch()
 const isDesktopGpu = (platform === 'linux' || platform === 'win32') && arch === 'x64'
 const noGpu = proc.env && proc.env.NO_GPU === 'true'
-// CI rows that pin the engine's GPU cascade (linux prebuilds bundle CUDA and
-// Vulkan) export TTS_CPP_GPU_BACKEND; the desktop assertion expects the pinned
-// backend and defaults to Vulkan when unset.
 const pinnedGpuBackend = (proc.env && proc.env.TTS_CPP_GPU_BACKEND) || ''
-const expectedDesktopBackend = pinnedGpuBackend === 'cuda' ? CUDA_BACKEND : VULKAN_BACKEND
-const expectedDesktopBackendName = pinnedGpuBackend === 'cuda' ? 'CUDA' : 'Vulkan'
 
 function resolveAudio8Files(models, useModelDir) {
   if (useModelDir) return { modelDir: models.targetDir }
@@ -190,11 +183,12 @@ test(
       const started = Date.now()
       const result = await synthesize(model, 'Audio eight uses the GPU on this desktop.')
       assertAudio(t, 'Audio8 GPU', result)
-      t.is(result.stats.backendDevice, GPU_DEVICE, 'Audio8 GPU reports a GPU device')
-      t.is(
+      assertDesktopGpuBackend(
+        t,
+        'Audio8 GPU',
+        result.stats.backendDevice,
         result.stats.backendId,
-        expectedDesktopBackend,
-        `Audio8 GPU reports the ${expectedDesktopBackendName} backend`
+        pinnedGpuBackend
       )
       t.is(result.stats.gpuUnsupported, 0, 'Audio8 GPU does not report a GPU fallback')
       recordAudio8(t, 'audio8 gpu', result, Date.now() - started)

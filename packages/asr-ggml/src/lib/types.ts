@@ -20,7 +20,7 @@ export interface TranscriptionToken {
 }
 
 /**
- * A single transcription segment. Core fields are shared by both engines;
+ * A single transcription segment. Core fields are shared by every engine;
  * engine-specific extras pass through untouched via the index signature.
  */
 export interface TranscriptionSegment {
@@ -36,6 +36,14 @@ export interface TranscriptionSegment {
   isEndOfTurn?: boolean;
   /** Parakeet: segment begins a new SentencePiece word. */
   startsWord?: boolean;
+  /** Parakeet streaming: native token IDs for this segment. */
+  tokenIds?: number[];
+  /** Parakeet streaming: explicit native finality, including empty final markers. */
+  isFinal?: boolean;
+  /** Parakeet streaming: native chunk index. */
+  chunkIndex?: number;
+  /** Parakeet EOU streaming: native end-of-turn confidence. */
+  eotConfidence?: number;
   /** Parakeet Sortformer streaming: speaker of this diarization segment. */
   speakerId?: number;
   /**
@@ -43,6 +51,11 @@ export interface TranscriptionSegment {
    * `"Speaker N: start - end"` lines of `text`.
    */
   speakerSegments?: SpeakerSegment[];
+  /**
+   * MOSS-Transcribe-Diarize: the model's speaker label (`"S01"`, `"S02"`,
+   * ...); `speakerId` carries the same speaker 0-based.
+   */
+  speaker?: string;
   /** Whisper: language the window was decoded in (e.g. `"en"`). */
   language?: string;
   /** Whisper: probability that the segment's window holds no speech. */
@@ -69,6 +82,8 @@ export interface VadEvent {
   source: "silero" | "energy" | "sortformer";
   /** Parakeet: seconds from the start of the streaming session. */
   timestamp?: number;
+  /** Native chunk index; -1 when the native event has no chunk. */
+  chunkIndex?: number;
   /** Parakeet Sortformer: dominant speaker when speech starts. */
   speakerId?: number;
 }
@@ -79,6 +94,12 @@ export interface EndOfTurnEvent {
   /** Present for `source: "vad-silence"` only. */
   silenceDurationMs?: number;
   source: "vad-silence" | "model-eou";
+  /** Native Parakeet event time, in seconds from the streaming session start. */
+  timestamp?: number;
+  /** Native chunk index; -1 when unknown. */
+  chunkIndex?: number;
+  /** Native Parakeet end-of-turn confidence. */
+  confidence?: number;
 }
 
 export type ASRRunOutput = TranscriptionSegment[] | TranscriptionSegment;
@@ -112,14 +133,15 @@ export interface BackendInfo {
   encoderOnCoreml: boolean;
   /**
    * Loaded model family: `"whisper"`, or parakeet's detected type
-   * (`"ctc"`, `"tdt"`, `"rnnt"`, `"eou"`, `"nemotron"`, `"sortformer"`).
+   * (`"ctc"`, `"tdt"`, `"rnnt"`, `"eou"`, `"nemotron"`, `"sortformer"`,
+   * `"nemotron-diarization"`).
    */
   modelType?: string;
   gpuMemTotalMb?: number;
   gpuMemFreeMb?: number;
 }
 
-/** Runtime-statistics fields shared by both engines. */
+/** Runtime-statistics fields shared by the Whisper and Parakeet engines. */
 export interface RuntimeStatsCore {
   backendId: number;
   backendDevice: number;

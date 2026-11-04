@@ -7,6 +7,201 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- The default MobileNetV3-Small weights are no longer published in this
+  package. `ImageClassifier` requires `modelPath` or
+  `QVAC_CLASSIFICATION_MODEL_PATH`. The GGUF under `weights/` stays in the
+  repository for addon tests
+  ([#5432](https://github.com/tetherto/qvac/pull/5432)).
+
+### Pull Requests
+
+- [#5432](https://github.com/tetherto/qvac/pull/5432) - stop publishing the default classifier weights.
+
+## [0.34.1] - 2026-10-29
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.24.0` -> `^0.25.0`, which carries
+  `qvac-fabric` `11259.1.0` -> `11259.2.0`
+  ([#5435](https://github.com/tetherto/qvac/pull/5435)): a bound on the PNG
+  zlib decode, an RPC server graph-cache fix, DeepSeek V4.1 Flash and CUDA
+  top-k fixes. A caret on a `0.x` version locks the minor, so `^0.24.0` would
+  not have resolved `0.25.0` on its own. The mobile dev dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.25.0` with it.
+- `@qvac/fabric` 0.25.0 changes the layout of `common_params` and
+  `common_chat_msg`, so every addon loaded in one process must resolve the
+  same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.25.0` together.
+- None of these fabric changes touch this package's code paths; the bump keeps
+  it on the current shared runtime. No API change for this package.
+
+## [0.34.0] - 2026-10-27
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.23.1` -> `^0.24.0`, which carries
+  `qvac-fabric` `11259.0.1` -> `11259.1.0`
+  ([#5374](https://github.com/tetherto/qvac/pull/5374)): an opt-in deferred
+  gated delta net state commit for Qwen3.5 / Qwen3.5-MoE speculative decoding
+  and the two ggml ops it adds. A caret on a `0.x` version locks the minor, so
+  `^0.23.1` would not have resolved `0.24.0` on its own. The mobile dev
+  dependencies `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to
+  `^0.24.0` with it.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.24.0` together.
+- No API change for this package.
+
+## [0.33.1] - 2026-10-26
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.23.0` -> `^0.23.1`, which carries
+  `qvac-fabric` `11259.0.0` -> `11259.0.1`
+  ([#5339](https://github.com/tetherto/qvac/pull/5339)). `@qvac/fabric` 0.23.1
+  requires the matching `@qvac/fabric-android-arm64` / `@qvac/fabric-ios`, so
+  the mobile dev dependencies move to `^0.23.1`. They now take a caret, so a
+  later fabric patch no longer needs a manifest change.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.23.1` together.
+- No API change for this package.
+
+## [0.33.0] - 2026-10-21
+
+### Added
+
+- `MegaLoc` image embeddings for visual place recognition and image retrieval,
+  with `load`, `embed`, `unload` and `destroy` lifecycle methods. `embed` accepts
+  JPEG/PNG or packed RGB input and returns an L2-normalized `Float32Array(8448)`.
+  Inference uses Fabric CPU/GPU backends, with CPU fallback for unsupported GPU
+  operations. Loading runs on a native worker so the JS event loop stays responsive.
+- Local MegaLoc GGUF support: F16 by default, or an F16 body with a Q6_K final
+  projection. Includes a checkpoint-verified safetensors-to-GGUF converter,
+  conversion/usage documentation and original PyTorch parity tests on CPU/GPU.
+
+### Changed
+
+- MobileNet and MegaLoc implementations have separate native directories and
+  resources. The existing `ImageClassifier` API and bundled MobileNet default
+  are retained.
+- The package includes the MegaLoc entrypoint/declarations, converter,
+  documentation, MIT notice and reference test fixtures. Converted MegaLoc
+  GGUFs are excluded from the package; callers supply their own local files.
+
+### Fixed
+
+- Reject non-finite and out-of-range numeric arguments before native integer
+  conversion, while preserving MobileNet's in-range fractional-number truncation.
+
+### Pull Requests
+
+- [#5248](https://github.com/tetherto/qvac/pull/5248) - MegaLoc integration and CI prerequisites,
+  including [#5242](https://github.com/tetherto/qvac/pull/5242).
+
+## [0.32.0] - 2026-10-20
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.22.0` -> `^0.23.0`, which carries
+  `qvac-fabric` `11018.2.0` -> `11259.0.0`, a rebase onto upstream llama.cpp
+  b11259 ([#5171](https://github.com/tetherto/qvac/pull/5171)). A caret on a
+  `0.x` version locks the minor, so `^0.22.0` would not have resolved `0.23.0`
+  on its own. The native API changes, so the native addon is rebuilt against
+  the 0.23.0 headers.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.23.0` together.
+- No API change for this package.
+
+## [0.31.1] - 2026-10-15
+
+### Fixed
+
+- On Windows, the addon now binds the delay-loaded `@qvac/fabric` runtime
+  when it loads, so a first fabric call on a worker thread cannot fail with
+  `0xC06D007E` ([#5121](https://github.com/tetherto/qvac/pull/5121)). Loading throws an error naming the fabric
+  module if the bind fails.
+
+## [0.31.0] - 2026-10-14
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.21.1` -> `^0.22.0`, which carries
+  `qvac-fabric` `11018.1.0#1` -> `11018.2.0`
+  ([#5064](https://github.com/tetherto/qvac/pull/5064)). A caret on a `0.x`
+  version locks the minor, so `^0.21.1` would not have resolved `0.22.0` on
+  its own. `GGML_MAX_NAME` is now 128, so the native addon is rebuilt against
+  the 0.22.0 headers.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.22.0` together.
+- `@qvac/infer-base` dependency raised `^0.6.2` -> `^0.8.0`
+  ([#5067](https://github.com/tetherto/qvac/pull/5067)). `^0.6.2` never took 0.7.0 or 0.8.0; 0.8.0 adds an
+  optional `retainOutput: false` on `QvacResponse` and
+  `createJobHandler().start()` for consuming output events through
+  `onUpdate()` without keeping every chunk in memory ([#5028](https://github.com/tetherto/qvac/pull/5028)).
+  Retention stays enabled by default and this package does not pass the option, so there is no API or
+  runtime behaviour change for this package.
+- No API change for this package; it classifies on the CPU and none of the
+  0.22.0 changes affect it.
+
+## [0.30.0] - 2026-10-14
+
+### Breaking
+
+- An explicit `backendsDir` is scanned as given. It is no longer a prebuilds
+  root with `<host>/qvac__fabric` appended. Omit it and `@qvac/fabric` locates
+  the backends it ships, next to its runtime.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.20.0` -> `^0.21.1`, whose platform
+  packages are now ordinary addons. This package declares them itself: the
+  desktop ones as `optionalDependencies`, and `@qvac/fabric-android-arm64` and
+  `@qvac/fabric-ios` as optional `peerDependencies`.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.21.1` together.
+
+## [0.29.1] - 2026-10-13
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.4.0` -> `1.5.0`
+  ([#5030](https://github.com/tetherto/qvac/pull/5030)). The new library adds
+  `JsAsyncTask::run(env, work, marshal)`, which resolves a Promise with a value
+  marshalled on the JavaScript loop, and includes `<uv.h>` from headers that
+  use libuv types now that libjs no longer includes it from `<js.h>`.
+  Compile-time only; no API or runtime behaviour change for this package.
+
+## [0.29.0] - 2026-10-06
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.19.0` -> `^0.20.0`, which carries
+  `qvac-fabric` `10549.5.0` -> `11018.0.0`, the rebase onto upstream llama.cpp
+  b11018. This package consumes the shared runtime via npm rather than building
+  the vcpkg port, so the range bump is what picks up the new fabric. A caret on
+  a `0.x` version locks the minor, so `^0.19.0` would not have resolved `0.20.0`
+  on its own. No API change.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.20.0` together.
+
+## [0.28.1] - 2026-09-30
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.18.0` -> `^0.19.0`, which carries
+  `qvac-fabric` `10549.4.0` -> `10549.5.0` (CUDA and Metal fusion fixes, MoE
+  expert caching defaulting to CUDA only, GLM-5 Next support). This package
+  consumes the shared runtime via npm rather than building the vcpkg port, so
+  the range bump is what picks up the new fabric. A caret on a `0.x` version
+  locks the minor, so `^0.18.0` would not have resolved `0.19.0` on its own.
+  Classification runs on the CPU and uses none of those paths, so the bump
+  keeps it on the current shared runtime. No API change.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.19.0` together.
+
 ## [0.28.0] - 2026-09-28
 
 ### Changed

@@ -1,0 +1,7 @@
+{
+  "plugins": [
+    "@qvac/sdk/llamacpp-completion/plugin",
+    "@qvac/sdk/ggml-ocr/plugin",
+    "@qvac/sdk/ggml-classification/plugin"
+  ]
+}

@@ -12,8 +12,9 @@ class LlamaLazyInitializeBackend {
 public:
   /**
    * Initialize the backend lazily.
-   * @param backendsDir - path to the backends directory (optional).
-   *                      If empty, uses default backend loading.
+   * @param backendsDir - directory holding the ggml backend modules
+   *                      (optional override). If empty, @qvac/fabric loads
+   *                      the backends it ships (qvac_fabric_load_backends).
    * @param openclCacheDir - writable directory for OpenCL kernel cache
    * (optional).
    * @return true if initialization was successful, false if already
@@ -34,6 +35,11 @@ public:
   static void decrementRefCount();
 
 private:
+  friend class LlamaBackendsHandle;
+  static void
+  acquire(const std::string& backendsDir, const std::string& openclCacheDir);
+  static bool initializeLocked(
+      const std::string& backendsDir, const std::string& openclCacheDir);
   static std::mutex g_initMutex;
   static bool g_initialized;
   static std::string g_recordedBackendsDir;

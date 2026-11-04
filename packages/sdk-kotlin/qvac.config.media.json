@@ -1,0 +1,6 @@
+{
+  "plugins": [
+    "@qvac/sdk/audiogen-ggml/plugin",
+    "@qvac/sdk/sdcpp-generation/plugin"
+  ]
+}

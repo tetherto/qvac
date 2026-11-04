@@ -174,7 +174,7 @@ function packBranch(testSuiteDirectory, artifactDirectory) {
 
 function resolveCommand() {
   const source = requireSource(process.env.TEST_SUITE_SOURCE);
-  const projectDirectory = process.env.PROJECT_DIRECTORY || "packages/sdk/e2e";
+  const projectDirectory = process.env.PROJECT_DIRECTORY || "packages/sdk-e2e";
   const { currentSpec } = readManifest(projectDirectory);
   const testSuiteDirectory = path.resolve(
     process.env.TEST_SUITE_DIRECTORY || "packages/test-suite",
@@ -223,7 +223,7 @@ function applyCommand() {
   const source = requireSource(process.env.TEST_SUITE_SOURCE);
   const result = applyTestSuiteSource({
     source,
-    projectDirectory: process.env.PROJECT_DIRECTORY || "packages/sdk/e2e",
+    projectDirectory: process.env.PROJECT_DIRECTORY || "packages/sdk-e2e",
     dependencySpec: process.env.TEST_SUITE_DEPENDENCY_SPEC || "",
     artifactDirectory: process.env.TEST_SUITE_ARTIFACT_DIRECTORY || "",
   });

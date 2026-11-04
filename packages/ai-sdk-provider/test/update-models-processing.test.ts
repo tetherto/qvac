@@ -36,3 +36,58 @@ test('ONNX-era engine names stay resolvable as legacy aliases of ggml-ocr', () =
   assert.equal(resolveCanonicalEngine('@qvac/ocr-onnx'), 'ggml-ocr')
   assert.equal(resolveCanonicalEngine('onnx-ocr'), 'ggml-ocr')
 })
+
+for (const component of [
+  'analytics/coremldata.bin',
+  'coremldata.bin',
+  'metadata.json',
+  'model.mil',
+  'weights/weight.bin'
+]) {
+  test(`Core ML bundle component is not a standalone model: ${component}`, () => {
+    for (const prefix of ['', 'qvac_models_compiled/ggml/parakeet/']) {
+      const processed = processRegistryModel(
+        registryEntry({
+          path: `${prefix}parakeet-encoder.mlmodelc/${component}`,
+          engine: 'parakeet-transcription'
+        })
+      )
+      assert.equal(processed, null)
+    }
+  })
+}
+
+test('Core ML filtering preserves primary models and standalone binary models', () => {
+  for (const path of [
+    'qvac_models_compiled/ggml/parakeet/parakeet.f16.gguf',
+    'qvac_models_compiled/ggml/parakeet/encoder-model.onnx.data',
+    'qvac_models_compiled/ggml/parakeet/weights.bin',
+    'qvac_models_compiled/ggml/parakeet/encoder.mlmodelc.zip',
+    'qvac_models_compiled/ggml/acestep/vae-decoder.mlpackage.zip'
+  ]) {
+    const processed = processRegistryModel(
+      registryEntry({ path, engine: 'parakeet-transcription' })
+    )
+    assert.ok(processed, path)
+    assert.equal(processed.registryPath, path)
+    assert.equal(processed.addon, 'parakeet')
+  }
+})
+
+for (const component of [
+  'Manifest.json',
+  'Data/com.apple.CoreML/model.mlmodel',
+  'Data/com.apple.CoreML/weights/weight.bin'
+]) {
+  test(`Core ML source-package component is not a standalone model: ${component}`, () => {
+    for (const prefix of ['', 'qvac_models_compiled/ggml/acestep/']) {
+      const processed = processRegistryModel(
+        registryEntry({
+          path: `${prefix}vae-decoder.mlpackage/${component}`,
+          engine: 'audiogen-ggml'
+        })
+      )
+      assert.equal(processed, null)
+    }
+  })
+}

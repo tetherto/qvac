@@ -1,0 +1,84 @@
+---
+title: Decisions
+icon: ListChecks
+description: Answer choice, ordinal-score, and statement-probability questions about text for routing and evaluation.
+schemaType: HowTo
+---
+
+## Overview
+
+Decisions currently use [`@qvac/embed-llamacpp`](https://github.com/tetherto/qvac/tree/main/packages/embed-llamacpp) with the Fabric LLM inference engine. Load a compatible decision model using `modelType: 'llamacpp-decision'` and `modelConfig: { device: 'cpu' }` or `{ device: 'gpu' }`.
+
+[`decide()`](/sdk/reference/api#decide) answers typed questions about a state. Pass `state` for one result, or `states` for an array of results in input order. A state can be text, a number, a boolean, structured JSON, or a conversation array. Top-level `null` is not accepted.
+
+The result contains `answers`, keyed by your question IDs, and `usage` with token counts and truncation information. Each answer includes confidence information. `action.actProbability` currently carries no usable signal and must not drive application actions. Decisions return one aggregate result without a token stream.
+
+## Functions
+
+Use the following sequence of function calls:
+
+1. [`loadModel()`](/sdk/reference/api#loadmodel)
+2. [`decide()`](/sdk/reference/api#decide)
+3. [`unloadModel()`](/sdk/reference/api#unloadmodel)
+
+For how to use each function, see [SDK — API reference](/sdk/reference/api/).
+
+## Models
+
+Use a compatible decision checkpoint in GGUF format. The SDK exports these registry constants from `@qvac/sdk` and `@qvac/sdk/models`:
+
+- Laya: `LAYA_421M_F16` and `LAYA_421M_Q8_0`.
+- Laya multilingual: `LAYA_MULTILINGUAL_322M_F16` and `LAYA_MULTILINGUAL_322M_Q8_0`.
+- Laya typed decisions: `LAYA_TYPED_DECISIONS_421M_F16` and `LAYA_TYPED_DECISIONS_421M_Q8_0`.
+
+Pass a registry constant as `modelSrc` to `loadModel()`. Its `llamacpp-decision` engine selects the decision plugin automatically. The decision and embedding plugins share an addon package, but their descriptors are not interchangeable. The example below loads `LAYA_MULTILINGUAL_322M_Q8_0` by default.
+
+You can also pass a local GGUF path or another model source supported by [`loadModel()`](/sdk/reference/api#loadmodel) with explicit `modelType: 'llamacpp-decision'`. An embedding-only GGUF cannot answer decision questions. For checkpoints split into multiple GGUF files, see [Sharded models](/sdk/models/sharded-models).
+
+## Questions and token budgets
+
+Each entry in `questions` has a `type` and `instructions`:
+
+- `choice` selects a label from `criteria`, which can be an array of labels or an object mapping labels to descriptions. The answer contains `choice` and a probability per label.
+- `score` estimates an ordinal level from `criteria`, an array of descriptions ordered from lowest to highest. The answer contains the expected `score`, a `legend`, and probabilities.
+- `noul` estimates the probability that a statement holds. The answer contains `noul`. Optional `criteria` describe the true and false options, and `labels` change the text shown for them.
+
+`optionOrder` changes the order in which the model sees options. Answers still use the original option order. `maxLen` sets the token budget per sequence, and `headMaxLen` sets the budget for a question and its options. Omit them to use the checkpoint's budgets. Inspect `usage.truncated`, `usage.truncatedQuestions`, and `usage.stateTokensDropped` to detect truncation.
+
+The load-time `batch_size` controls tokens per forward pass; each sequence must fit within it. `threads`, `threads-batch`, `gpu_layers`, and `flash_attn` control execution. The decision backend fixes context size, pooling, and parallelism; these settings cannot be configured through the SDK.
+
+## Cancellation and concurrency
+
+The promise returned by [`decide()`](/sdk/reference/api#decide) exposes `requestId` before you await it. Pass that ID to [`cancel()`](/sdk/reference/api#cancel) to interrupt the request. Its promise rejects with `InferenceCancelledError` after the native response settles.
+
+Each loaded model runs one decision request at a time. Concurrent calls wait in a FIFO queue with up to 64 waiting requests per model. When the queue is full, additional calls reject with `RequestRejectedByPolicyError` without affecting active or queued requests. Cancelling a queued call by `requestId` rejects it with `InferenceCancelledError` before native work starts and leaves the active request running. Use `states` to evaluate several states in one request. See [Cancellation](/sdk/runtime/cancellation) for broad cancellation by model ID.
+
+## Example
+
+The following script loads the default registry checkpoint, or a local GGUF path passed as its first argument, and answers choice, urgency-score, and refund-probability questions about a support ticket:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/decisions.js title="decisions.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/decisions.ts title="decisions.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="info">
+The Python client supports this capability through the same worker. A dedicated Python example is not yet published. See the [Python SDK](/sdk/python-sdk) for the API surface.
+</Callout>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+</Callout>

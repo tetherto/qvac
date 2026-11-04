@@ -11,6 +11,7 @@ import {
   type LlamaFitDevice,
   type LlamaFitRequest,
   type LlamaFitResult,
+  type LlamaFitStats,
   type LlamaFitStatus
 } from "./fit";
 import type * as AddonModule from "./addon";
@@ -26,6 +27,7 @@ type InferQvacResponseOf<Output> = QvacResponse<Output>;
 /** Aliases so the class expression's body can name the namespace types below. */
 type BatchPrompt = LlmLlamacpp.BatchPrompt;
 type BatchResponse = LlmLlamacpp.BatchResponse;
+type CalcTokensInput = LlmLlamacpp.CalcTokensInput;
 type FinetuneHandle = LlmLlamacpp.FinetuneHandle;
 type FinetuneOptions = LlmLlamacpp.FinetuneOptions;
 type FinetuneProgressStats = LlmLlamacpp.FinetuneProgressStats;
@@ -35,6 +37,7 @@ type LlmLlamacppArgs = LlmLlamacpp.LlmLlamacppArgs;
 type Message = LlmLlamacpp.Message;
 type RunOptions = LlmLlamacpp.RunOptions;
 type UserMediaMessage = LlmLlamacpp.UserMediaMessage;
+type UserTextMessage = LlmLlamacpp.UserTextMessage;
 
 /** `exclusiveRunQueue()` is published as `Promise<any>`; keep it generic here. */
 type RunExclusive = <T>(fn: () => Promise<T>) => Promise<T>;
@@ -43,7 +46,8 @@ interface NormalizedRunOptions {
   prefill: boolean;
   generationParams: GenerationParams | undefined;
   cacheKey: string | undefined;
-  saveCacheToDisk: boolean;
+  ephemeral: boolean;
+  baseCacheKey: string | undefined;
   rejectWhenBusy: boolean | undefined;
 }
 
@@ -69,7 +73,8 @@ function normalizeRunOptions(runOptions: unknown): NormalizedRunOptions {
       prefill: false,
       generationParams: undefined,
       cacheKey: undefined,
-      saveCacheToDisk: false,
+      ephemeral: false,
+      baseCacheKey: undefined,
       rejectWhenBusy: undefined,
     };
   }
@@ -97,8 +102,20 @@ function normalizeRunOptions(runOptions: unknown): NormalizedRunOptions {
     throw new TypeError("cacheKey must be a string when provided");
   }
 
-  if (options.saveCacheToDisk !== undefined && typeof options.saveCacheToDisk !== "boolean") {
-    throw new TypeError("saveCacheToDisk must be a boolean when provided");
+  if ((options as { saveCacheToDisk?: unknown }).saveCacheToDisk !== undefined) {
+    throw new TypeError(
+      "saveCacheToDisk was removed: a cached conversation stays in memory and is written to " +
+        "its cacheKey file when it is set aside, evicted or the model unloads; call " +
+        "saveCache(cacheKey) to write it now, or set ephemeral: true to never write it",
+    );
+  }
+
+  if (options.ephemeral !== undefined && typeof options.ephemeral !== "boolean") {
+    throw new TypeError("ephemeral must be a boolean when provided");
+  }
+
+  if (options.baseCacheKey !== undefined && typeof options.baseCacheKey !== "string") {
+    throw new TypeError("baseCacheKey must be a string when provided");
   }
 
   if (options.rejectWhenBusy !== undefined && typeof options.rejectWhenBusy !== "boolean") {
@@ -109,10 +126,25 @@ function normalizeRunOptions(runOptions: unknown): NormalizedRunOptions {
     prefill: options.prefill === true,
     generationParams: normalizeGenerationParams(options.generationParams),
     cacheKey: options.cacheKey,
-    saveCacheToDisk: options.saveCacheToDisk === true,
+    ephemeral: options.ephemeral === true,
+    baseCacheKey: options.baseCacheKey,
     // Left undefined when unset so admission falls back to the instance default.
     rejectWhenBusy: options.rejectWhenBusy,
   };
+}
+
+// Malformed parts (null, non-objects) are not byte media: they pass through
+// untouched so the native validator rejects them with `InvalidInputFormat`.
+function isByteMediaPart(
+  part: unknown,
+): part is { type: "media"; content: Uint8Array } {
+  const candidate = part as { type?: unknown; content?: unknown } | null;
+  return (
+    candidate !== null &&
+    typeof candidate === "object" &&
+    candidate.type === "media" &&
+    candidate.content instanceof Uint8Array
+  );
 }
 
 function promptToAddonMessages(
@@ -123,9 +155,13 @@ function promptToAddonMessages(
     throw new TypeError("Prompt input must be Message[]");
   }
 
-  const { prefill, generationParams, cacheKey, saveCacheToDisk } = normalizeRunOptions(runOptions);
+  const { prefill, generationParams, cacheKey, ephemeral, baseCacheKey } =
+    normalizeRunOptions(runOptions);
 
-  const textMessages: Message[] = [];
+  // Only ever JSON-serialized into the addon's text message: a byte-buffer
+  // media part reaches the native side path-less, bound to the hoisted buffer
+  // by position, so the wire shape is wider than the public `Message` type.
+  const textMessages: unknown[] = [];
   const mediaItems: Uint8Array[] = [];
 
   for (const message of prompt) {
@@ -133,9 +169,28 @@ function promptToAddonMessages(
     if (media.role === "user" && media.type === "media" && media.content instanceof Uint8Array) {
       mediaItems.push(media.content);
       textMessages.push({ ...media, content: "" });
-    } else {
-      textMessages.push(message);
+      continue;
     }
+
+    // Ordered parts: hoist each media part's bytes next to the other media
+    // messages and leave a path-less part behind. The native side records the
+    // plan in marker order, so the bytes still bind to the right markers.
+    const text = message as UserTextMessage;
+    if (Array.isArray(text.content)) {
+      textMessages.push({
+        ...text,
+        content: text.content.map((part) => {
+          if (isByteMediaPart(part)) {
+            mediaItems.push(part.content);
+            return { type: "media" };
+          }
+          return part;
+        }),
+      });
+      continue;
+    }
+
+    textMessages.push(message);
   }
 
   const promptMessages: AddonModule.AddonRunJobMessage[] = [];
@@ -150,7 +205,8 @@ function promptToAddonMessages(
     prefill,
     generationParams,
     cacheKey,
-    saveCacheToDisk,
+    ephemeral,
+    baseCacheKey,
   });
 
   return promptMessages;
@@ -172,8 +228,8 @@ const GENERATION_PARAM_KEYS: ReadonlySet<string> = new Set([
   "grammar",
   "json_schema",
   "tool_choice",
+  "parallel_tool_calls",
   "reasoning_budget",
-  "remove_thinking_from_context",
 ]);
 
 // Normalizes the per-request `generationParams.json_schema` field. The
@@ -220,21 +276,19 @@ function normalizeGenerationParams(
   const sanitized = params as GenerationParams;
 
   if (
-    sanitized.remove_thinking_from_context !== undefined &&
-    typeof sanitized.remove_thinking_from_context !== "boolean"
-  ) {
-    throw new TypeError(
-      "generationParams.remove_thinking_from_context must be a boolean when provided",
-    );
-  }
-
-  if (
     sanitized.tool_choice !== undefined &&
     (typeof sanitized.tool_choice !== "string" || sanitized.tool_choice.length === 0)
   ) {
     throw new TypeError(
       'generationParams.tool_choice must be "auto", "none", "required" or a declared function name',
     );
+  }
+
+  if (
+    sanitized.parallel_tool_calls !== undefined &&
+    typeof sanitized.parallel_tool_calls !== "boolean"
+  ) {
+    throw new TypeError("generationParams.parallel_tool_calls must be a boolean when provided");
   }
 
   const hasGrammar = typeof sanitized.grammar === "string" && sanitized.grammar.length > 0;
@@ -367,6 +421,17 @@ function sanitizePromptForLog(prompt: Message[]): unknown {
     if (media && media.type === "media" && media.content instanceof Uint8Array) {
       return { ...media, content: `[Uint8Array byteLength=${media.content.byteLength}]` };
     }
+    const text = msg as UserTextMessage;
+    if (Array.isArray(text?.content)) {
+      return {
+        ...text,
+        content: text.content.map((part) =>
+          isByteMediaPart(part)
+            ? { ...part, content: `[Uint8Array byteLength=${part.content.byteLength}]` }
+            : part,
+        ),
+      };
+    }
     return msg;
   });
 }
@@ -405,6 +470,36 @@ interface LlmLlamacpp {
   cancel(): Promise<void>;
   pause(): Promise<void>;
   unload(): Promise<void>;
+  /**
+   * Write the conversation kept in memory for `cacheKey` to that file now.
+   * Waits for a request running on that key, not one still queued, so read a
+   * response to the end first. Writes only when the file lacks turns, and
+   * rejects when nothing is cached under the key or the write fails (the
+   * conversation then stays in memory, still unsaved).
+   */
+  saveCache(cacheKey: string): Promise<void>;
+  /**
+   * Drop the conversation kept in memory for `cacheKey` without writing it,
+   * so no later eviction or unload writes it. Waits for a request running on
+   * that key. The file, if one was written, is left alone: delete it too to
+   * remove the conversation from disk.
+   */
+  discardCache(cacheKey: string): Promise<void>;
+  /**
+   * Tokens `input` takes on the loaded model, without running it. `text`
+   * alone is counted raw, with no chat template and no BOS. With `history` or
+   * `tools` the conversation, `text` (even empty) appended as the last user
+   * turn, is rendered by the chat template as the opening request of a fresh
+   * conversation, with BOS and the generation prompt, as `run()` renders it.
+   * Tools the template leaves out are not counted. `tools` alone has no
+   * message to render and rejects, as `run()` does. Never queues behind
+   * `run()`: it reads only load-time state. A wrong-typed argument rejects
+   * with `TypeError`, and before `load()` it rejects with `Model is not
+   * loaded`. Other invalid input, a media message included, rejects with code
+   * `InvalidArgument`; a conversation the chat template cannot render fails
+   * as it would in `run()`.
+   */
+  calcTokens(input: CalcTokensInput): Promise<number>;
   getState(): { configLoaded: boolean };
 }
 
@@ -987,6 +1082,106 @@ const LlmLlamacpp: LlmLlamacppConstructor = class LlmLlamacpp {
     return (this.addon ? this.addon.activeJobs() : 0) > 0;
   }
 
+  /**
+   * Write the conversation kept in memory for `cacheKey` to that file now:
+   * the active single-prompt conversation, a batch conversation kept in its
+   * slot, or one in the RAM tier. Resolves once the file is written. When a
+   * request on that key is running it waits for it to finish, so the file
+   * always holds a committed state. A request still queued is not waited
+   * for: `run()` resolves when the request is accepted, so read its response
+   * to the end before saving when the file must hold that turn. Resolves without writing when the file
+   * already holds the conversation. Rejects when nothing is cached under the
+   * key and no file exists, or when the write fails (the conversation then
+   * stays in memory, still unsaved, so the call can be retried). Writes
+   * ephemeral conversations too.
+   */
+  async saveCache(cacheKey: string): Promise<void> {
+    if (typeof cacheKey !== "string" || cacheKey.length === 0) {
+      throw new TypeError("saveCache(cacheKey) requires a non-empty string");
+    }
+    if (!this.addon) {
+      throw new Error("Model is not loaded");
+    }
+    await this.addon.saveCache(cacheKey);
+  }
+
+  /**
+   * Drop the conversation kept in memory for `cacheKey` — the active
+   * single-prompt conversation, a batch conversation kept in its slot, its
+   * RAM-tier entry and its checkpoints — without writing it, so no later
+   * eviction or unload writes it. When a request on that key is running it
+   * waits for it to finish. The file, if one was written, is left alone:
+   * delete it as well to remove the conversation from disk. Resolves when
+   * nothing is kept for the key.
+   */
+  async discardCache(cacheKey: string): Promise<void> {
+    if (typeof cacheKey !== "string" || cacheKey.length === 0) {
+      throw new TypeError("discardCache(cacheKey) requires a non-empty string");
+    }
+    if (!this.addon) {
+      throw new Error("Model is not loaded");
+    }
+    await this.addon.discardCache(cacheKey);
+  }
+
+  /**
+   * Tokens `input` takes on the loaded model, without running it. `text`
+   * alone is counted raw, with no chat template and no BOS. With `history` or
+   * `tools` the conversation, `text` (even empty) appended as the last user
+   * turn, is rendered by the chat template as the opening request of a fresh
+   * conversation, with BOS and the generation prompt, as `run()` renders it.
+   * Tools the template leaves out are not counted. `tools` alone has no
+   * message to render and rejects, as `run()` does. Never queues behind
+   * `run()`: it reads only load-time state. A wrong-typed argument rejects
+   * with `TypeError`, and before `load()` it rejects with `Model is not
+   * loaded`. Other invalid input, a media message included, rejects with code
+   * `InvalidArgument`; a conversation the chat template cannot render fails
+   * as it would in `run()`.
+   */
+  async calcTokens(input: CalcTokensInput): Promise<number> {
+    if (input === null || typeof input !== "object") {
+      throw new TypeError("calcTokens(input) requires an object");
+    }
+    const text = input.text ?? undefined;
+    const history = input.history ?? undefined;
+    const tools = input.tools ?? undefined;
+    if (text !== undefined && typeof text !== "string") {
+      throw new TypeError("calcTokens: text must be a string");
+    }
+    if (history !== undefined && !Array.isArray(history)) {
+      throw new TypeError("calcTokens: history must be a Message[]");
+    }
+    if (tools !== undefined && !Array.isArray(tools)) {
+      throw new TypeError("calcTokens: tools must be an array of function definitions");
+    }
+    if (!this.addon) {
+      throw new Error("Model is not loaded");
+    }
+    const params: AddonModule.AddonCalcTokensParams = {};
+    if (text !== undefined) params.text = text;
+    // Media bytes are dropped rather than serialized: the native side rejects
+    // any media message or ordered media part by its type.
+    if (history !== undefined) {
+      params.history = JSON.stringify(
+        history.map((message) => {
+          if ((message as UserMediaMessage)?.type === "media") return { ...message, content: "" };
+          const textMessage = message as UserTextMessage;
+          if (Array.isArray(textMessage?.content)) {
+            return {
+              ...message,
+              content: textMessage.content.map((part) =>
+                isByteMediaPart(part) ? { type: "media" } : part,
+              ),
+            };
+          }
+          return message;
+        }),
+      );
+    }
+    if (tools !== undefined) params.tools = JSON.stringify(tools);
+    return this.addon.calcTokens(params);
+  }
+
   getState(): { configLoaded: boolean } {
     return this.state;
   }
@@ -1045,8 +1240,26 @@ namespace LlmLlamacpp {
 
   export interface LlamaConfig {
     device?: string;
+    /**
+     * Comma-separated GPU backend priority list, e.g. `'cuda,vulkan'`.
+     * Accepted names: cuda, vulkan, metal, opencl, plus
+     * `auto` for no preference. An unrecognised name is rejected; a recognised
+     * one with no device present is skipped. Use `device: 'cpu'` to run on CPU.
+     */
+    backend?: string;
     gpu_layers?: NumericLike;
     ctx_size?: NumericLike;
+    /**
+     * Main GGML threadpool busy-wait level, from 0 (sleep while idle) to 100
+     * (maximum polling). Defaults to 0. Values above 0 can reduce worker wake
+     * latency for CPU-heavy workloads, but consume CPU while GPU work runs.
+     */
+    poll?: NumericLike;
+    /**
+     * Batch GGML threadpool busy-wait level. Defaults to `poll`, or 0 when
+     * neither option is set.
+     */
+    "poll-batch"?: NumericLike;
     system_prompt?: string;
     lora?: string;
     temp?: NumericLike;
@@ -1151,6 +1364,10 @@ namespace LlmLlamacpp {
     devices?: string;
     "cache-type-k"?: string;
     "cache-type-v"?: string;
+    /** Maximum reported image pixel count in megapixels before decoding. Default: 50. */
+    "image-max-megapixels"?: string;
+    /** Alias for image-max-megapixels. Set only one spelling. */
+    image_max_megapixels?: string;
     /**
      * Run the multimodal projector (mmproj / vision encoder) on the GPU. Accepts
      * 'true'/'on'/'1' or 'false'/'off'/'0'. When unset, the backend is auto-selected
@@ -1193,6 +1410,119 @@ namespace LlmLlamacpp {
      * `InvalidArgument` naming both knobs.
      */
     parallel?: NumericLike;
+    /**
+     * Per-sequence cap on the process-local full-state checkpoints kept for
+     * cached requests on hybrid / recurrent models (Qwen3.5, Jamba,
+     * Granite-Hybrid, DeepSeek V4, ...). Such models cannot trim a KV tail,
+     * so a diverging history is served by restoring the longest checkpoint
+     * that is still a prefix of the new prompt. A committed cached request
+     * adds one, at the end of its history, holding only the state a tail
+     * trim cannot rebuild. The default is 1: the last one, which an ordinary
+     * next turn and a regenerate restore. `2` also keeps the one before it,
+     * which an edit of the last user message restores. Changing the user
+     * message k-th from the end (1 = the last) without reprocessing the whole
+     * conversation needs at least k + 1; with the default 1, editing the last
+     * user message reprocesses everything. `0` keeps and takes none (every
+     * divergent turn is a cold prefill), the maximum is 1024.
+     * Sliding-window models (Gemma 3/4, gpt-oss, without `swa_full`) take
+     * them too: their checkpoints hold the window cells, restored when a
+     * turn diverges behind the window. Ignored on other pure-attention
+     * models, which never take checkpoints.
+     * Also accepted as `cache-checkpoints`; supplying both is an error.
+     */
+    cache_checkpoints?: NumericLike;
+    /**
+     * Byte budget for the checkpoints kept per sequence, enforced before
+     * `cache_checkpoints`: the oldest checkpoints are dropped until the total
+     * payload fits. `0` (default) is unlimited. When set, the model load fails
+     * with `InvalidArgument` if the budget cannot hold `cache_checkpoints`
+     * checkpoints of the largest size the context allows (on a sliding-window
+     * model, a full window), so a misconfigured budget is reported up front
+     * rather than discovered mid-conversation.
+     * Also accepted as `cache-checkpoints-max-bytes`.
+     */
+    cache_checkpoints_max_bytes?: NumericLike;
+    /**
+     * Where checkpoints and the per-request rollback snapshot live:
+     * `'memory'` (default) keeps them in host RAM so a cached chat never
+     * touches the disk, `'disk'` writes them to files in
+     * `cache_checkpoint_dir`, which it requires. Each snapshot holds only the
+     * state a tail trim cannot rebuild, a size fixed by the model (about 20 MB
+     * on Qwen3.5-0.8B; on sliding-window models the window cells, which reach
+     * hundreds of MB on larger ones). Also accepted as
+     * `cache-checkpoint-storage`.
+     */
+    cache_checkpoint_storage?: "disk" | "memory";
+    /**
+     * Required with `cache_checkpoint_storage: 'disk'`, and refused without
+     * it: where checkpoint files go, inside a private directory the addon
+     * creates in it (mode 0700; on Windows, the directory itself). There is
+     * no default, because the OS temp directory is not usable on every
+     * platform (Android); on mobile, pass the app's cache directory. The load
+     * fails with `InvalidArgument` when it is missing, empty, or unusable.
+     * Also accepted as `cache-checkpoint-dir`.
+     */
+    cache_checkpoint_dir?: string;
+    /**
+     * Host-RAM budget, in MiB, for conversations that are not running: a
+     * `cacheKey` switch (single prompt) or a slot eviction (batch) moves the
+     * conversation there instead of writing its file, and the next request on
+     * that key restores it from there. A write-back cache: unsaved turns reach
+     * the file on `saveCache()`, when the budget pushes the entry out, or at
+     * unload; ephemeral entries are dropped instead. `0` (default) is off; the
+     * maximum is 1048576 (1 TiB). Also accepted as `cache-ram-mib`.
+     */
+    cache_ram_mib?: NumericLike;
+    /**
+     * Whether a request on a decoder-only model may start from state another
+     * conversation left: the memory a request without a `cacheKey` keeps,
+     * another key's state in a sequence or the RAM tier, or a `cacheKey` file
+     * the model has used. `'true'` (default) shares it, as llama-server's
+     * prompt cache does. `'false'` keeps every request to its own key's state,
+     * for a model serving callers who must not learn through `cacheTokens` or
+     * timing whether another conversation shares their prompt: a request
+     * without a key starts cold and is reset afterwards, a new key starts cold,
+     * and `baseCacheKey` has no effect. Also accepted as
+     * `cache-share-across-keys`.
+     */
+    cache_share_across_keys?: "true" | "false" | "on" | "off" | "1" | "0";
+    /**
+     * Speculative decoding, as llama-server's `--spec-type`. `'draft-mtp'`
+     * drafts with the model's own multi-token-prediction (MTP / NextN) head,
+     * or with the external MTP head given as `spec_draft_model`; the model or
+     * the head must ship MTP layers (`blk.N.nextn.*`), or the load fails.
+     * `'draft-dflash'` drafts with the DFlash model given as
+     * `spec_draft_model`. Either way the model verifies the draft, so the
+     * output keeps the distribution of plain decoding. `'none'` (default)
+     * decodes one token per step. Works on single prompts, multimodal
+     * prompts and continuous batching. Also accepted as `spec-type`.
+     */
+    spec_type?: "none" | "draft-mtp" | "draft-dflash";
+    /**
+     * Absolute path of the draft model, as llama-server's
+     * `--spec-draft-model` (`-md`): the DFlash model, required by
+     * `spec_type: 'draft-dflash'`, or an external MTP head for
+     * `spec_type: 'draft-mtp'`. The draft model is placed like the model
+     * (`device`, `gpu_layers`). Also accepted as `spec-draft-model`.
+     */
+    spec_draft_model?: string;
+    /**
+     * Longest draft per step (default 3, maximum 64), as
+     * `--spec-draft-n-max`. Requires `spec_type`. Also accepted as
+     * `spec-draft-n-max`.
+     */
+    spec_draft_n_max?: NumericLike;
+    /**
+     * Shortest draft worth verifying (default 0); shorter drafts are
+     * dropped. As `--spec-draft-n-min`. Also accepted as `spec-draft-n-min`.
+     */
+    spec_draft_n_min?: NumericLike;
+    /**
+     * Minimum draft-head probability for a token to extend the draft
+     * (default 0, between 0 and 1), as `--spec-draft-p-min`. Also accepted
+     * as `spec-draft-p-min`.
+     */
+    spec_draft_p_min?: NumericLike;
     [key: string]: string | number | boolean | string[] | undefined;
   }
 
@@ -1209,13 +1539,58 @@ namespace LlmLlamacpp {
     opts?: { stats?: boolean; rejectWhenBusy?: boolean };
   }
 
+  /**
+   * One ordered piece of a message's `content`. Media parts keep their place in
+   * the turn: a single user message can interleave text and media, which a
+   * string `content` plus separate `type: "media"` messages cannot express
+   * without splitting the turn.
+   */
+  export type UserContentPart =
+    | { type: "text"; text: string }
+    | {
+        type: "media";
+        /**
+         * Either an absolute path to the media file (`string`) or its raw bytes
+         * (`Uint8Array`), the same two forms a `type: "media"` message accepts.
+         */
+        content: string | Uint8Array;
+      };
+
   export interface UserTextMessage {
     // eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents -- the literals document the known roles; any string is accepted.
     role: "system" | "assistant" | "user" | "tool" | "session" | string;
-    content: string;
+    /**
+     * Plain text, or ordered text/media parts rendered as one turn. Media parts
+     * are only valid on user messages.
+     */
+    content: string | UserContentPart[];
+    /**
+     * An assistant turn's reasoning, separate from its answer in `content`, as
+     * in OpenAI-compatible APIs. Optional: an answer sent back with its
+     * reasoning inline (`<think>…</think>` first, as the model streamed it) is
+     * split into the two, using the reasoning markers the chat template
+     * reports, so the template can drop or place it. Ignored on other roles.
+     */
+    reasoning_content?: string;
     type?: undefined;
+    /**
+     * Tool calls this assistant turn made, rendered by the chat template in
+     * the model's own tool-call format. `arguments` is an object or the text
+     * of a JSON object. `content` may be empty on such a turn.
+     */
+    tool_calls?: ToolCallTurn[];
+    /** On a `tool` turn: the id of the call this result answers. */
+    tool_call_id?: string;
+    /** On a `tool` turn: the name of the tool that produced the result. */
+    name?: string;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- arbitrary caller-supplied fields ride along to the chat template.
     [key: string]: any;
+  }
+
+  export interface ToolCallTurn {
+    id?: string;
+    name: string;
+    arguments?: string | Record<string, unknown>;
   }
 
   export interface UserMediaMessage {
@@ -1238,6 +1613,16 @@ namespace LlmLlamacpp {
   }
 
   export type Message = UserTextMessage | UserMediaMessage | ChatFunctionDefinition;
+
+  /** What `calcTokens` counts. At least one field is required; `tools` needs `text` or `history`. */
+  export interface CalcTokensInput {
+    /** Counted raw on its own; with `history` or `tools`, the last user turn. */
+    text?: string;
+    /** A conversation in `run()`'s `Message[]` shape, tool definitions allowed. */
+    history?: Message[];
+    /** Tool definitions, as `run()` takes them. A name also in `history` rejects. */
+    tools?: ChatFunctionDefinition[];
+  }
 
   export interface GenerationParams {
     temp?: number;
@@ -1284,6 +1669,12 @@ namespace LlmLlamacpp {
     // the union collapsing to plain `string`.
     tool_choice?: "auto" | "none" | "required" | (string & {});
     /**
+     * Whether one response may carry more than one tool call. `true` lets the
+     * template and the tool-call grammar accept several; unset or `false`
+     * keeps one. Ignored when the prompt carries no tools.
+     */
+    parallel_tool_calls?: boolean;
+    /**
      * Per-request reasoning channel budget. `-1` keeps the model's reasoning
      * channel on; `0` disables it for this request; any positive integer caps
      * the reasoning channel at that many tokens. Equivalent to the load-time
@@ -1291,121 +1682,52 @@ namespace LlmLlamacpp {
      * value is restored afterwards.
      */
     reasoning_budget?: number;
-    /**
-     * When the model emits a reasoning block during generation (e.g.
-     * `<think>...</think>` for the Qwen3 family, `<|channel>thought ...
-     * <channel|>` for Gemma 4), drop those tokens from the KV cache at
-     * end-of-generation so subsequent turns do not accumulate reasoning
-     * history.
-     *
-     * Defaults to `false` for all models except the Qwen3 reasoning family
-     * (Qwen3, Qwen3.5, and Qwen3.6, including MoE variants), which defaults
-     * to `true`. Set this per-request `generationParams` value to override the
-     * model default. Set to `false` to preserve reasoning tokens in the KV / SSM
-     * cache across turns (e.g. chain-of-thought agents that want the next turn
-     * to attend to prior reasoning, interpretability tooling, or cache-reuse
-     * patterns that depend on the reasoning-inclusive state). Supported on both
-     * text and multimodal contexts. No-op for models without a recognised
-     * reasoning channel.
-     *
-     * Every model kind is handled the same way: the sequence is rewound to a
-     * boundary anchored BEFORE the reasoning span, and the tokens that sit
-     * outside the span, the pre-reasoning preamble and the answer tail, are
-     * replayed through the decoder. Only the anchor's form differs. Recurrent
-     * / hybrid-SSM models (Qwen3.5, Qwen3-Next, Jamba, Granite-Hybrid, ...)
-     * anchor a full-state snapshot, because the recurrent half cannot be
-     * rewound by dropping cells; pure-attention models anchor a bare position
-     * and rewind with a tail trim.
-     *
-     * No structural reasoning marker is seeded or replayed, so the compacted
-     * cache is preamble plus answer with no `<think>` / `</think>` scaffold
-     * left behind, and close-marker length decides nothing: a marker that
-     * tokenises to several pieces is supported like any other. Chat templates
-     * that force-open the reasoning channel during prefill and templates that
-     * let the model generate the opener are both supported; on the
-     * generated-opener path the sampled pieces that open the block are clipped
-     * out of the replay rather than rebuilt.
-     *
-     * Prefill-only (cache-warm) requests anchor nothing: they never enter
-     * generation and cannot emit reasoning tokens.
-     *
-     * Uniform hard-fail contract: any inability to remove the reasoning
-     * span from cache, whether the boundary anchor, the rewind, or the
-     * replay step, is surfaced to the caller as a `StatusError`. There is no
-     * soft-failure counter: if the feature is
-     * enabled and cache cleanup cannot complete, the final request result is
-     * failed rather than reported as a successful answer with the reasoning span
-     * still resident in cache.
-     *
-     * Streaming caveat: token callbacks (`outputCallback` / batch `onToken`) are
-     * invoked during generation, while reasoning-block compaction runs at
-     * end-of-generation. If compaction fails, streaming callers may already have
-     * received partial or complete text. Treat streamed text as tentative until
-     * the request completes successfully; non-streaming callers receive no
-     * successful returned answer on this failure path.
-     *
-     * Before throwing, the affected sequence is cleaned up so that the
-     * next request on the same context starts from a coherent state:
-     *   * Boundary-anchor failure: nothing has been rewound yet, so the
-     *     driver rolls back to its pre-prompt checkpoint (or clears the
-     *     sequence entirely on restore underflow) and resets positional
-     *     accounting, then rethrows.
-     *   * Rewind or replay failure: compaction rewinds before it replays,
-     *     so live KV has already been written to by this point and a tail
-     *     trim can no longer reach a coherent state. The compactor
-     *     best-effort wipes the sequence and the driver zeroes its
-     *     positional accounting to match, so subsequent turns cannot decode
-     *     into contaminated positions.
-     *
-     * On the continuous-batch path, the scheduler's error-recovery leg
-     * deliberately does NOT persist the failed slot's cache: when the
-     * request was configured with `cacheKey` + `saveCacheToDisk`, the
-     * last known-good on-disk cache is preserved rather than being
-     * overwritten with the post-failure state. The same skip-save rule
-     * applies to graceful cancels of hybrid / recurrent requests when
-     * rollback to the pre-request cursor cannot be completed (recurrent
-     * full-state restore refused, or no pre-request snapshot was captured
-     * yet the driver has advanced past the pre-request cursor). Cancels
-     * that can be rolled back cleanly still persist as usual.
-     */
-    remove_thinking_from_context?: boolean;
   }
 
   export interface RunOptions {
     /**
      * Run prefill only (cache warming): the prompt is evaluated but no tokens
-     * are generated. On a model loaded with `parallel >= 2` a prefill is
-     * admitted only when it is *persistable* (`saveCacheToDisk: true` plus a
-     * `cacheKey`) — a live-only prefill warms context state that no concurrent
-     * job could reach and is rejected with `InvalidArgument`; run live-only
+     * are generated. On a model loaded with `parallel >= 2` a prefill needs a
+     * `cacheKey` (the warmed conversation stays in its slot for the next
+     * request on that key) — a keyless prefill warms state no later request
+     * can count on and is rejected with `InvalidArgument`; run keyless
      * prefills on a `parallel: 1` model. The same rule applies per batch item.
      */
     prefill?: boolean;
     generationParams?: GenerationParams;
+    /**
+     * Enables addon-owned prompt caching at this path. Every cached request
+     * must resend the complete authoritative message history and tool list;
+     * delta-only continuations are not supported. The addon renders once and
+     * decodes only the suffix after the longest matching token/media prefix.
+     */
     cacheKey?: string;
     /**
-     * When `true` and `cacheKey` is set, the driver persists the sequence's
-     * KV / recurrent state to disk under `cacheKey` at end-of-generation so a
-     * later run keyed by the same string can resume without re-prefilling.
-     *
-     * The continuous-batch scheduler intentionally SKIPS the save on
-     * teardown legs where persistence could corrupt the last known-good
-     * on-disk cache:
-     *   - Any batch error-recovery path (e.g. decode failure, per-slot
-     *     failure with `SaveCachePolicy::Skip`, or a
-     *     `remove_thinking_from_context` hard-fail).
-     *   - Graceful cancel of a hybrid / recurrent request whose driver
-     *     cannot roll live memory back to the pre-request cursor —
-     *     either the recurrent full-state restore was refused, or no
-     *     pre-request snapshot exists yet the driver advanced past the
-     *     pre-request cursor. Cancels that roll back cleanly still save.
-     *
-     * On both skip paths the sequence's in-memory KV is still cleared, so
-     * subsequent requests decode from a coherent baseline; only the
-     * on-disk cache is untouched. Pure-attention drivers always roll back
-     * via `removeLastNTokens` and therefore save on cancel as usual.
+     * Keep this conversation in memory only. By default a cached
+     * conversation is written to its `cacheKey` file whenever it would
+     * otherwise be lost with turns the file lacks: when it is set aside for
+     * another key, evicted from its batch slot or from the RAM tier, or the
+     * model is reloaded or unloaded. With `ephemeral: true` each of those
+     * drops it instead, so its next request finds no state of its own (it
+     * still reuses any prefix it shares with what the model holds, except on
+     * encoder-decoder models). It still loads an existing file, and an
+     * explicit `saveCache(cacheKey)` still writes it.
+     * The flag belongs to the conversation's latest request.
      */
-    saveCacheToDisk?: boolean;
+    ephemeral?: boolean;
+    /**
+     * A `cacheKey` file to start from when nothing in memory serves more of
+     * the prompt, such as a system prompt and tools primed with `prefill`.
+     * It is read, never written: the request's own state goes to its
+     * `cacheKey`. A file that is missing or shares no prefix with the prompt
+     * is skipped. Once named, the file stays a source for later requests on
+     * this model, as any `cacheKey` file it used does, until files named
+     * or picked as a prompt's closest match more recently push it out (the
+     * model keeps the 256 most recent, as far as 64 MiB of memory holds
+     * their prompt records). No effect with `cache_share_across_keys:
+     * 'false'`.
+     */
+    baseCacheKey?: string;
     /**
      * Admission policy when the worker pool is full. `true` rejects before
      * submitting with an `Error` carrying `code === 'RUN_BUSY'` — branch on the
@@ -1467,15 +1789,6 @@ namespace LlmLlamacpp {
     generatedTokens: number;
     promptTokens: number;
     /**
-     * Number of `<think>` (or model-equivalent) reasoning blocks dropped
-     * from the KV cache at end-of-generation by the
-     * `remove_thinking_from_context` feature. Per-inference for single
-     * requests; summed across completed slots for batch requests. 0 when
-     * the model has no recognised reasoning channel, when the feature
-     * was disabled per-request, or when no reasoning blocks were emitted.
-     */
-    thinkingBlockDiscards: number;
-    /**
      * Number of prompt renders in this request that provably left the tool
      * definitions out — the template either rejected them, or supplying them
      * did not change the rendered prompt at all. Such a render has its tool
@@ -1505,6 +1818,13 @@ namespace LlmLlamacpp {
      */
     avgConcurrentSeq: number;
     backendDevice: "cpu" | "gpu";
+    /**
+     * Draft tokens proposed by speculative decoding, and how many of them
+     * the model accepted (llama-server's `draft_n` / `draft_n_accepted`).
+     * Present only when the model was loaded with `spec_type`.
+     */
+    draftTokens?: number;
+    draftAcceptedTokens?: number;
     /**
      * Why generation stopped. Per-sequence, so it is reported for a single
      * request on either path (sequential or one prompt on a parallel model).
@@ -1646,6 +1966,7 @@ namespace LlmLlamacpp {
   export type FitResult = LlamaFitResult;
   export type FitStatus = LlamaFitStatus;
   export type FitDevice = LlamaFitDevice;
+  export type FitStats = LlamaFitStats;
 }
 
 export = LlmLlamacpp;

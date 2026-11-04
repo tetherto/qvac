@@ -7,7 +7,6 @@ import test from 'node:test'
 import { ServeExitedError, ServeStartTimeoutError } from '../src/managed/errors.js'
 import { isProcessAlive } from '../src/managed/registry.js'
 import {
-  allocateFreePort,
   cliSupportsApiKeyFile,
   spawnServe,
   stopServe,
@@ -29,18 +28,16 @@ test(
     const fake = await makeFakeServe()
     setBehavior('healthy')
     try {
-      const port = await allocateFreePort('127.0.0.1')
       const serve = await spawnServe({
         apiKey: API_KEY,
         configPath: 'unused.json',
-        port,
         serveBinPath: fake.binPath,
         startTimeoutMs: 10_000
       })
 
-      assert.equal(serve.port, port)
+      assert.ok(serve.port > 0)
       assert.ok(serve.pid > 0)
-      assert.equal(serve.baseURL, `http://127.0.0.1:${port}/v1`)
+      assert.equal(serve.baseURL, `http://127.0.0.1:${serve.port}/v1`)
       assert.equal(isProcessAlive(serve.pid), true)
 
       const res = await fetch(`${serve.baseURL}/models`, {
@@ -68,11 +65,9 @@ test('spawnServe launches the serve with --openai --no-default', { skip }, async
   setBehavior('healthy')
   setArgvFile(argvFile)
   try {
-    const port = await allocateFreePort('127.0.0.1')
     const serve = await spawnServe({
       apiKey: API_KEY,
       configPath: 'unused.json',
-      port,
       serveBinPath: fake.binPath,
       startTimeoutMs: 10_000
     })
@@ -85,6 +80,9 @@ test('spawnServe launches the serve with --openai --no-default', { skip }, async
     assert.equal(argv[1], '--openai')
     assert.equal(argv[2], '--no-default')
     assert.equal(argv.includes('openai'), false)
+    // The serve picks its own port and reports it on the pipe we own.
+    assert.equal(argv[argv.indexOf('--port') + 1], '0')
+    assert.equal(argv[argv.indexOf('--ready-fd') + 1], '3')
 
     await stopServe(serve.child)
   } finally {
@@ -106,7 +104,6 @@ test(
         spawnServe({
           apiKey: API_KEY,
           configPath: 'unused.json',
-          port: await allocateFreePort('127.0.0.1'),
           serveBinPath: fake.binPath,
           startTimeoutMs: 600
         }),
@@ -134,7 +131,6 @@ test(
         spawnServe({
           apiKey: API_KEY,
           configPath: 'unused.json',
-          port: await allocateFreePort('127.0.0.1'),
           serveBinPath: fake.binPath,
           startTimeoutMs: 5_000
         }),
@@ -159,7 +155,6 @@ test('stopServe escalates to SIGKILL when SIGTERM is ignored', { skip }, async (
     const serve = await spawnServe({
       apiKey: API_KEY,
       configPath: 'unused.json',
-      port: await allocateFreePort('127.0.0.1'),
       serveBinPath: fake.binPath,
       startTimeoutMs: 10_000
     })
@@ -188,7 +183,6 @@ test(
       const serve = await spawnServe({
         apiKey: API_KEY,
         configPath: 'unused.json',
-        port: await allocateFreePort('127.0.0.1'),
         serveBinPath: fake.binPath,
         startTimeoutMs: 10_000
       })

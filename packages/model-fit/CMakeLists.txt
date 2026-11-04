@@ -11,8 +11,8 @@ qvac_addon_project_setup()
 # Header-only JS<->C++ marshalling helpers (JsArgsParser / jsu / JSCATCH).
 find_path(QVAC_LIB_INFERENCE_ADDON_CPP_INCLUDE_DIRS "inference-addon-cpp/JsInterface.hpp")
 
-# llama.cpp + ggml are supplied by @qvac/fabric's shared bare runtime. This
-# also derives BACKENDS_SUBDIR_VALUE from Fabric's companion backend directory.
+# llama.cpp + ggml are supplied by @qvac/fabric's shared bare runtime, which
+# also loads its ggml backends (qvac_fabric_load_backends).
 qvac_addon_use_fabric()
 
 add_bare_module(model-fit EXPORTS)
@@ -37,7 +37,7 @@ target_include_directories(
 # The fitter lives in Fabric's exported libcommon surface as well as its llama
 # ABI, so compile against Fabric headers and dynamically link its one runtime.
 qvac_addon_link_fabric(${model-fit} ${qvac_fabric_target})
-qvac_addon_finalize(${model-fit} SUBDIR "${BACKENDS_SUBDIR_VALUE}")
+qvac_addon_finalize(${model-fit})
 
 if(BUILD_TESTING)
   enable_testing()

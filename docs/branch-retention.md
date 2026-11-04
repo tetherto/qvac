@@ -17,7 +17,7 @@ for branch *types* and *naming*; this document only covers *retention*.
 - [Ad-hoc maintainer branches](#ad-hoc-maintainer-branches)
 - [Activity measurement](#activity-measurement)
 - [Enforcement](#enforcement)
-- [Adopting this policy in another qvac repo](#adopting-this-policy-in-another-qvac-repo)
+- [Other qvac repos](#other-qvac-repos)
 - [Note on the Assistant app](#note-on-the-assistant-app)
 - [Open question: reducing backmerge pain](#open-question-reducing-backmerge-pain)
 
@@ -142,132 +142,44 @@ above).
 
 ## Enforcement
 
-A scheduled GitHub Action runs **weekly** and operates in two phases so that nothing is
+A central DevOps bot enforces this policy weekly across the qvac repos. Nothing is
 deleted without warning:
 
 1. **Compute** the deletion candidates per the rules above.
-2. **Notify** — maintain a single tracking issue (labelled `branch-cleanup`) that lists
-   every current candidate together with the date it was **first flagged** and the
-   reason. The issue is the durable ledger between runs (GitHub Actions are otherwise
-   stateless).
-3. **Grace period** — a candidate is only deleted once it has been **continuously
-   flagged for ~7 days** *and* is still a candidate. If a branch stops being a candidate
-   in the meantime (new activity, a PR opens, it gets safelisted), it is removed from
-   the ledger ("reprieved") and the clock resets.
-4. **Delete** — eligible branches are deleted and recorded in the tracking issue, and a
-   run-summary comment is posted.
+2. **Notify**: every candidate is tracked on a ledger issue with the date it was first
+   flagged, and each weekly run reports what it flagged and deleted.
+3. **Grace period**: a candidate is deleted only once it has been flagged for at least
+   **7 days** and is still a candidate. A branch that stops being a candidate (new
+   activity, an open PR, a safelist match) leaves the ledger and its clock resets.
+4. **Delete**: eligible branches are deleted and each deletion is recorded with its SHA,
+   so a branch can be restored with `git push origin <sha>:refs/heads/<branch>`.
 
-**Maintainer ack** (optional, via comments on the tracking issue):
+**Maintainer acks** (comments on the ledger issue):
 
-- `keep: <branch>` — exempt a branch from cleanup (persisted in the ledger).
-- `delete-now: <branch>` — skip the remaining grace period for a branch.
+- `keep: tetherto/qvac#<branch>`: exempt a branch permanently.
+- `delete-now: tetherto/qvac#<branch>`: skip the rest of its grace period.
 
 **Safety rails:**
 
-- A **dry-run** mode performs every step *except* the deletion, for verification.
-- A **max-deletions-per-run** cap guards against a logic bug deleting many branches at
-  once.
-- Protected branches and `main` can never be selected, by construction.
-- **Issues must be enabled** (the tracking issue is the grace-period ledger). If Issues
-  are disabled in a repo, the workflow runs in **report-only mode** — it logs the
-  candidate list but deletes nothing.
+- `main`, the default branch and protected non-release branches are never selected.
+  Release branches are kept by the retention window above, protected or not.
+- A per-run deletion cap guards against a logic bug deleting many branches at once.
+- Every commit pinned by a published `qvac-registry-vcpkg` port version is tagged
+  (`vcpkg/<port>-<version>-pv<port-version>`) before anything is deleted, so pinned
+  commits outlive their branches.
 
-> **This repo runs a tighter window than the portable defaults.** The `tetherto/qvac`
-> caller overrides the reusable defaults to keep the latest **2 minor** release lines
-> per package (not 3), and to treat branches as stale sooner (`adhoc_inactivity_days:
-> 14`, `feature`/`tmp` `_inactivity_days: 30`). The reusable workflow keeps the looser
-> defaults documented above for other consuming repos. All overrides remain gated by
-> the ~7-day grace ledger, so owners still get a warning window before deletion.
-
-Implementation lives in:
-
-- [`.github/workflows/branch-cleanup.yml`](../.github/workflows/branch-cleanup.yml) —
-  this repo's scheduled caller.
-- [`.github/workflows/reusable-branch-cleanup.yml`](../.github/workflows/reusable-branch-cleanup.yml)
-  — the reusable (`workflow_call`) workflow other repos invoke.
-- [`.github/actions/branch-cleanup/`](../.github/actions/branch-cleanup/) — composite
-  action carrying the core logic (`branch-cleanup.mjs`). It is referenced as a
-  composite action so it resolves cross-repo via org action sharing, without needing
-  a cross-repo checkout token in the consuming repo.
+> **This repo runs a tighter window than the defaults:** the latest **2 minor** release
+> lines per package (not 3), ad-hoc branches stale after **14 days**, and
+> `feature-*`/`tmp-*` after **30 days**. These overrides are set in the bot's
+> configuration.
 
 ---
 
-## Adopting this policy in another qvac repo
+## Other qvac repos
 
-Other qvac repos do **not** copy the logic. They add a thin caller workflow that
-invokes the reusable workflow hosted here. Because a reusable workflow runs with the
-**caller's** repository context, all branch/PR/tag operations target the calling repo
-automatically.
-
-```yaml
-# .github/workflows/branch-cleanup.yml in the consuming repo
-name: Branch cleanup
-on:
-  schedule:
-    - cron: "0 8 * * 1" # weekly, Monday 08:00 UTC (09:00 CET)
-  workflow_dispatch:
-    inputs:
-      dry_run:
-        description: "Report only; do not delete"
-        type: boolean
-        default: true
-
-permissions:
-  contents: read
-
-concurrency:
-  group: branch-cleanup
-  cancel-in-progress: false
-
-jobs:
-  cleanup:
-    uses: tetherto/qvac/.github/workflows/reusable-branch-cleanup.yml@main
-    permissions:
-      contents: write
-      issues: write
-      pull-requests: read
-    with:
-      dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
-      single_package: true # single-package repos use release-<x.y.z> / v<x.y.z>
-```
-
-**Tunable inputs** (all optional, with the defaults below):
-
-| Input | Default | Meaning |
-|---|---|---|
-| `dry_run` | `false` | Report only; never delete. |
-| `single_package` | `false` | `true` for single-package repos (`release-<x.y.z>`, tag `v<x.y.z>`); `false` for the monorepo (`release-<pkg>-<x.y.z>`, tag `<pkg>-v<x.y.z>`). |
-| `grace_period_days` | `7` | Days a branch must stay flagged before deletion. |
-| `keep_majors` | `2` | Major lines retained per package. |
-| `keep_minors` | `3` | Minor lines retained per kept major. |
-| `keep_patches` | `1` | Patch lines retained per kept minor. |
-| `feature_inactivity_days` | `60` | `feature-*` inactivity threshold. |
-| `tmp_inactivity_days` | `60` | `tmp-*` inactivity threshold. |
-| `adhoc_inactivity_days` | `30` | ad-hoc branch inactivity threshold. |
-| `max_deletions_per_run` | `10` | Hard cap on deletions in a single run. |
-
----
-
-## Supply chain & versioning
-
-This is a **deliberate single mutable supply chain** anchored on `tetherto/qvac`:
-
-- Consuming repos call the reusable workflow `@main`, and the reusable workflow in turn
-  references the composite action `@main`. There is intentionally **no SHA pin** on the
-  inner action.
-- The rationale: `tetherto/qvac` is the single source of truth for the cleanup logic, and
-  every change to it is gated by this repo's **branch protection + PR review** (TIER1
-  approvals). That review gate — not a per-consumer pin — is the control point. A
-  SHA-pinned inner action would not change the consumer's exposure either, because the
-  consumer already floats on the reusable workflow `@main`.
-- The trade-off, made consciously: a merge to `tetherto/qvac` `main` immediately changes
-  the branch-deletion logic running in every consuming repo. This is acceptable because
-  (a) the logic is reviewed here before it can land, (b) the destructive surface is
-  bounded by the safelist, the ~7-day grace ledger, the `max_deletions_per_run` cap, and
-  dry-run/report-only fallbacks, and (c) deleted release branches are recoverable from
-  their tags.
-- A repo that wants an immutable pin instead can call the reusable workflow at a SHA/tag
-  (`...@<sha>`); it then opts out of automatic logic updates and owns bumping the ref.
+Coverage is managed centrally: a repo is added to the bot's scope, not given a workflow
+of its own. Don't add a caller for `reusable-branch-cleanup.yml`: it would run a second
+pruner with its own ledger and acks.
 
 ---
 

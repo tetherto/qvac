@@ -1,4 +1,13 @@
-import { loadModel, unloadModel, video } from '@qvac/sdk'
+import {
+  GEMMA_3_12B_Q4_K_XL,
+  loadModel,
+  LTX_2_3_22B_DISTILLED_EMBEDDINGS_CONNECTORS,
+  LTX_2_3_22B_Q5_K_M,
+  LTX_2_3_AUDIO_VAE,
+  LTX_2_3_VIDEO_VAE,
+  unloadModel,
+  video
+} from '@qvac/sdk'
 import fs from 'fs'
 import path from 'path'
 
@@ -10,33 +19,21 @@ import path from 'path'
 // This example needs powerful hardware: LTX-2.3 is a ~21B model, budget at
 // least 20+ GB of video / unified memory.
 //
-// No LTX-2 model constants ship in the SDK registry, so the model sources
-// default to public HuggingFace URLs (the SDK downloads http(s) sources
-// directly). Pass your own paths / URLs via argv to override.
-const HF = 'https://huggingface.co'
+// Pass your own paths / URLs via argv to override any of the five sources.
 const initImagePath = process.argv[2]
 const prompt =
   process.argv[3] || 'the subject slowly turns and smiles, soft natural lighting, cinematic'
 const outputDir = process.argv[4] || '.'
-const diffusionModelSrc =
-  process.argv[5] ||
-  `${HF}/QuantStack/LTX-2.3-GGUF/resolve/main/LTX-2.3-distilled-1.1/LTX-2.3-22B-distilled-1.1-Q5_K_M.gguf`
-const llmModelSrc =
-  process.argv[6] || `${HF}/unsloth/gemma-3-12b-it-GGUF/resolve/main/gemma-3-12b-it-UD-Q4_K_XL.gguf`
-const vaeModelSrc =
-  process.argv[7] ||
-  `${HF}/unsloth/LTX-2.3-GGUF/resolve/main/vae/ltx-2.3-22b-distilled_video_vae.safetensors`
-const audioVaeModelSrc =
-  process.argv[8] ||
-  `${HF}/unsloth/LTX-2.3-GGUF/resolve/main/vae/ltx-2.3-22b-distilled_audio_vae.safetensors`
-const embeddingsConnectorsModelSrc =
-  process.argv[9] ||
-  `${HF}/unsloth/LTX-2.3-GGUF/resolve/main/text_encoders/ltx-2.3-22b-distilled_embeddings_connectors.safetensors`
+const diffusionModelSrc = process.argv[5] || LTX_2_3_22B_Q5_K_M
+const llmModelSrc = process.argv[6] || GEMMA_3_12B_Q4_K_XL
+const vaeModelSrc = process.argv[7] || LTX_2_3_VIDEO_VAE
+const audioVaeModelSrc = process.argv[8] || LTX_2_3_AUDIO_VAE
+const embeddingsConnectorsModelSrc = process.argv[9] || LTX_2_3_22B_DISTILLED_EMBEDDINGS_CONNECTORS
 
 if (!initImagePath) {
   console.error('✖ init image path is required')
   console.error(
-    'Usage: bun run bare:example dist/examples/diffusion-img2vid-ltx.js ' +
+    'Usage: node dist/examples/diffusion-img2vid-ltx.js ' +
       '<initImagePath> [prompt] [outputDir] ' +
       '[diffusionModelSrc] [llmModelSrc] [vaeModelSrc] [audioVaeModelSrc] [embeddingsConnectorsModelSrc]'
   )

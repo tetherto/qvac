@@ -396,6 +396,11 @@ async function runCacheStateMachineTest (options = {}) { // eslint-disable-line 
   return runIntegrationModule('../integration/cache-state-machine.test.js', options)
 }
 
+async function runCalcTokensTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runCalcTokensTest')) return __FILTERED
+  return runIntegrationModule('../integration/calc-tokens.test.js', options)
+}
+
 async function runConfigParametersTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runConfigParametersTest')) return __FILTERED
   return runIntegrationModule('../integration/config-parameters.test.js', options)
@@ -481,6 +486,11 @@ async function runImageMmprojGpuTest (options = {}) { // eslint-disable-line no-
   return runIntegrationModule('../integration/image-mmproj-gpu.test.js', options)
 }
 
+async function runKvCacheExtendedTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runKvCacheExtendedTest')) return __FILTERED
+  return runIntegrationModule('../integration/kv-cache-extended.test.js', options)
+}
+
 async function runKvCacheTypeDefaultsTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runKvCacheTypeDefaultsTest')) return __FILTERED
   return runIntegrationModule('../integration/kv-cache-type-defaults.test.js', options)
@@ -514,6 +524,16 @@ async function runOcrPaddleTest (options = {}) { // eslint-disable-line no-unuse
 async function runOcrUnlimitedTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runOcrUnlimitedTest')) return __FILTERED
   return runIntegrationModule('../integration/ocr-unlimited.test.js', options)
+}
+
+async function runOrderedMediaPartsTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runOrderedMediaPartsTest')) return __FILTERED
+  return runIntegrationModule('../integration/ordered-media-parts.test.js', options)
+}
+
+async function runPrimeSystemToolsTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runPrimeSystemToolsTest')) return __FILTERED
+  return runIntegrationModule('../integration/prime-system-tools.test.js', options)
 }
 
 async function runQuantizedKvcacheTest (options = {}) { // eslint-disable-line no-unused-vars
@@ -559,6 +579,11 @@ async function runQwen35Test (options = {}) { // eslint-disable-line no-unused-v
 async function runReasoningTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runReasoningTest')) return __FILTERED
   return runIntegrationModule('../integration/reasoning.test.js', options)
+}
+
+async function runSpeculativeDecodingTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runSpeculativeDecodingTest')) return __FILTERED
+  return runIntegrationModule('../integration/speculative-decoding.test.js', options)
 }
 
 async function runToolCallingTest (options = {}) { // eslint-disable-line no-unused-vars

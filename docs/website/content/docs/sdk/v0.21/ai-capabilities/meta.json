@@ -1,0 +1,23 @@
+{
+  "title": "AI capabilities",
+  "pages": [
+    "text-generation",
+    "text-embeddings",
+    "rag",
+    "fine-tuning",
+    "multimodal",
+    "batch-processing",
+    "image-generation",
+    "video-generation",
+    "world-simulation",
+    "music-generation",
+    "transcription",
+    "text-to-speech",
+    "voice-assistant",
+    "translation",
+    "bci",
+    "vla",
+    "ocr",
+    "image-classification"
+  ]
+}

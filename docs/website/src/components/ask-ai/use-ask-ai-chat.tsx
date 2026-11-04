@@ -126,6 +126,15 @@ export interface UseAskAIChatOptions {
   /** Inkeep API key. When absent (e.g. env var unset during dev) the
    *  hook degrades to a no-op so the UI still renders. */
   apiKey: string | undefined;
+  /**
+   * Attribute filter restricting retrieval to the reader's documentation
+   * line. Sent as the `inkeep-filters` header, which is how Inkeep's own
+   * widget carries `filters` on this same OpenAI-compatible endpoint —
+   * verified in `@inkeep/cxkit-primitives`, whose chat hook stringifies the
+   * merged base and chat filters into that header. There is no body field
+   * for it, so a request path that cannot set headers could not be scoped.
+   */
+  filters?: unknown;
 }
 
 export interface UseAskAIChatResult {
@@ -194,7 +203,10 @@ function formatError(err: unknown): string {
  * (because the shell itself stays mounted). It does NOT persist
  * across full page reloads — that's deliberate for v1.
  */
-export function useAskAIChat({ apiKey }: UseAskAIChatOptions): UseAskAIChatResult {
+export function useAskAIChat({
+  apiKey,
+  filters,
+}: UseAskAIChatOptions): UseAskAIChatResult {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
@@ -223,6 +235,12 @@ export function useAskAIChat({ apiKey }: UseAskAIChatOptions): UseAskAIChatResul
   // mid-stream. Also used by the unmount cleanup so we don't leak a
   // dangling fetch when the user navigates away mid-response.
   const abortRef = useRef<AbortController | null>(null);
+
+  // Read at send time rather than closed over, so a conversation that
+  // outlives a navigation is answered from the line the reader is on now.
+  // The shell stays mounted across pages, and `send` is memoized.
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
 
   useEffect(() => {
     return () => {
@@ -295,6 +313,9 @@ export function useAskAIChat({ apiKey }: UseAskAIChatOptions): UseAskAIChatResul
         const requestHeaders: Record<string, string> = {};
         if (solutionHeader) {
           requestHeaders['X-INKEEP-CHALLENGE-SOLUTION'] = solutionHeader;
+        }
+        if (filtersRef.current) {
+          requestHeaders['inkeep-filters'] = JSON.stringify(filtersRef.current);
         }
 
         // Use the SDK's streaming method (same one Inkeep's widget

@@ -126,5 +126,25 @@ TEST_F(ModelMetadataTest, StreamingSingleFileMatchesDiskParse) {
   ASSERT_TRUE(streamCtx.has_value());
   EXPECT_EQ(*streamCtx, *diskCtx);
 
+  // The tensor table of a streamed model is not on disk to check.
+  EXPECT_FALSE(streamMeta.hasAnyTensor({"token_embd.weight"}).has_value());
+
   EXPECT_NO_THROW(firstFileFromGgufStream.reclaimUnique());
+}
+
+TEST_F(ModelMetadataTest, PoolingTypeAndTensorsFromDisk) {
+  if (!fs::exists(test_model_path_)) {
+    GTEST_SKIP() << "Test model not found at: " << test_model_path_;
+  }
+
+  ModelMetaData meta;
+  GGUFShards emptyShards;
+  meta.parse(test_model_path_, emptyShards, false /* isStreaming */, "Test");
+
+  // embeddinggemma pools by mean and has no classifier head.
+  EXPECT_EQ(meta.tryGetPoolingType(), 1U);
+  EXPECT_EQ(meta.hasAnyTensor({"token_embd.weight"}), true);
+  EXPECT_EQ(meta.hasAnyTensor({"cls.weight", "cls.output.weight"}), false);
+  // Any one match is enough, whichever position it is in.
+  EXPECT_EQ(meta.hasAnyTensor({"cls.weight", "token_embd.weight"}), true);
 }

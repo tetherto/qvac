@@ -70,11 +70,8 @@ export const ggufFactsSchema = z.object({
 })
 
 /**
- * Per-model data the pre-download resource estimators consume. Generated into
+ * Per-model facts the computed floor reads before download. Generated into
  * `models/registry/resource-profiles.ts` alongside the model catalog.
- *
- * Profiles hold facts only — no memory numbers — so re-calibrating an estimator
- * never requires regenerating the catalog.
  */
 export const modelResourceProfileSchema = z.object({
   schemaVersion: z.literal(1).describe('Bumped whenever the emitted profile shape changes.'),

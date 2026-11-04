@@ -46,6 +46,8 @@ _DONE = object()
 class VadEvent:
     speaking: bool
     probability: float
+    timestamp: float | None = None
+    """Parakeet: seconds from the start of the streaming session; whisper omits it."""
     type: str = "vad"
 
 
@@ -124,6 +126,10 @@ class DuplexSession(Generic[T]):
         self._consumed = False
         self._closed = False
         self.request_id = request_id
+        #: Whatever the terminal frame reported, or None if it carried none.
+        #: JS exposes `session.stats`, and a test that asks "how much audio did
+        #: this session actually process" has no other way to find out.
+        self.stats: Any = None
 
     def write(self, chunk: bytes | str) -> None:
         """Feed an upstream chunk. Text sessions (TTS) accept `str`, encoded
@@ -153,6 +159,10 @@ class DuplexSession(Generic[T]):
         process: Callable[[dict[str, Any]], Any],
     ) -> AsyncGenerator[T, None]:
         async for chunk in transport.call_duplex(wire, self._upstream.stream()):
+            # Read before `process`, which turns the terminal frame into a stop signal
+            # and drops everything it carried.
+            if chunk.get("stats") is not None:
+                self.stats = chunk["stats"]
             value = process(chunk)
             if value is _DONE:
                 return
@@ -211,6 +221,7 @@ def _process_conversation(wants_metadata: bool) -> Callable[[dict[str, Any]], An
             return VadEvent(
                 speaking=response.vad.speaking,
                 probability=response.vad.probability,
+                timestamp=response.vad.timestamp,
             )
         if response.end_of_turn is not None:
             source = response.end_of_turn.source

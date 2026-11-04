@@ -72,20 +72,20 @@ const GenerationParamHandlerList GENERATION_PARAM_HANDLERS = {
      [](js_env_t* env, js::Object& obj, GenerationParams& p) {
        readNonEmptyStrInto(env, obj, "tool_choice", p.tool_choice);
      }},
+    {"parallel_tool_calls",
+     [](js_env_t* env, js::Object& obj, GenerationParams& p) {
+       auto value = obj.getOptionalPropertyAs<js::Boolean, bool>(
+           env, "parallel_tool_calls");
+       if (value.has_value()) {
+         p.parallel_tool_calls = *value;
+       }
+     }},
     {"reasoning_budget",
      [](js_env_t* env, js::Object& obj, GenerationParams& p) {
        auto value = obj.getOptionalPropertyAs<js::Number, double>(
            env, "reasoning_budget");
        if (value.has_value()) {
          p.reasoning_budget = parsers::validateReasoningBudgetOverride(*value);
-       }
-     }},
-    {"remove_thinking_from_context",
-     [](js_env_t* env, js::Object& obj, GenerationParams& p) {
-       auto value = obj.getOptionalPropertyAs<js::Boolean, bool>(
-           env, "remove_thinking_from_context");
-       if (value.has_value()) {
-         p.remove_thinking_from_context = *value;
        }
      }},
 };

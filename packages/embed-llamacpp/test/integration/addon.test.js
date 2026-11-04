@@ -170,6 +170,71 @@ createDeviceModelTest(
   }
 )
 
+// Query i matches document i. Shape and determinism checks pass on embeddings
+// that have moved, so these check what the vectors mean.
+const RETRIEVAL_DOCS = [
+  'Titan, a moon of Saturn, has lakes and rain made of liquid methane.',
+  'Solar panels convert sunlight into electricity with photovoltaic cells.',
+  'Honeybees tell each other where flowers are with a waggle dance.',
+  'The Pacific is the largest and deepest ocean on Earth.'
+]
+const RETRIEVAL_QUERIES = [
+  'Which moon has methane rain?',
+  'How do photovoltaic panels make power?',
+  'How do bees share where food is?',
+  'What is the biggest ocean?'
+]
+
+async function embedRetrievalSet(t, modelName, device) {
+  const { inference } = await createEmbeddingsTestInstance(
+    t,
+    modelName,
+    device,
+    null,
+    DEFAULT_BATCH_SIZE
+  )
+  try {
+    const response = await inference.run([...RETRIEVAL_DOCS, ...RETRIEVAL_QUERIES])
+    return (await waitForCompletion(response))[0]
+  } finally {
+    await cleanupResources(inference)
+  }
+}
+
+createDeviceModelTest(
+  'Embeddings: each query ranks its matching document first',
+  async (t, modelName, modelConfig, device) => {
+    const embeddings = await embedRetrievalSet(t, modelName, device)
+    const docs = embeddings.slice(0, RETRIEVAL_DOCS.length)
+    const queries = embeddings.slice(RETRIEVAL_DOCS.length)
+
+    queries.forEach((query, i) => {
+      const scores = docs.map((doc) => cosineSimilarity(query, doc))
+      const best = scores.indexOf(Math.max(...scores))
+      const shown = scores.map((score) => score.toFixed(3)).join(', ')
+      t.is(best, i, `"${RETRIEVAL_QUERIES[i]}" ranks document ${i} first (scores: ${shown})`)
+    })
+  }
+)
+
+// The GPU backends run a different op graph than the CPU, so a backend that
+// mishandles one input-path op diverges from the CPU result.
+for (const { modelName } of getModelConfigs()) {
+  test(
+    `Embeddings: GPU matches CPU [${modelName}]`,
+    { timeout: TEST_TIMEOUT, skip: !DEVICES.includes('gpu') },
+    async (t) => {
+      const cpu = await embedRetrievalSet(t, modelName, 'cpu')
+      const gpu = await embedRetrievalSet(t, modelName, 'gpu')
+      t.is(gpu.length, cpu.length, 'same number of embeddings')
+      cpu.forEach((vector, i) => {
+        const similarity = cosineSimilarity(vector, gpu[i])
+        t.ok(similarity > 0.99, `input ${i}: GPU/CPU cosine similarity ${similarity.toFixed(6)}`)
+      })
+    }
+  )
+}
+
 createDeviceModelTest(
   'Model inference works correctly with long string exceeding context size',
   async (t, modelName, modelConfig, device) => {

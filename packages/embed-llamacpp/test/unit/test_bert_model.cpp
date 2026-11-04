@@ -782,6 +782,47 @@ TEST_F(BertModelTest, ContextOverflowUsesRuntimeContextSizeForPrompts) {
   EXPECT_THROW({ model.encodeHostF32(longString); }, qvac_errors::StatusError);
 }
 
+// A sequence limit above the batch aborts llama's context, so the unified
+// fallback has to size it from the batch.
+TEST_F(BertModelTest, SmallBatchLoadsWithClampedSequenceLimit) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {
+      {"device", "cpu"}, {"batch_size", "64"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_LE(llama_n_seq_max(model.getCtx()), 64U);
+
+  const auto embeddings =
+      model.encodeHostF32(std::vector<std::string>{"First", "Second", "Third"});
+  EXPECT_EQ(embeddings.size(), 3);
+}
+
+// More short prompts than the context admits sequence ids, in a batch whose
+// token budget would hold them all.
+TEST_F(BertModelTest, ManyShortPromptsSplitAtTheSequenceLimit) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config = {
+      {"device", "cpu"}, {"batch_size", "1024"}};
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  const std::size_t prompts = llama_n_seq_max(model.getCtx()) + 44;
+  const std::vector<std::string> input(prompts, "hi");
+  const auto embeddings = model.encodeHostF32(input);
+  EXPECT_EQ(embeddings.size(), prompts);
+}
+
 TEST_F(BertModelTest, ContextOverflowUsesRuntimeContextSizeForSequences) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
@@ -983,6 +1024,34 @@ TEST_F(BertModelTest, CommonParamsParseSplitModeRowRejected) {
         "effect on any shipped backend. Use 'layer' (accepted values: 'none', "
         "'layer').\n");
   }
+}
+
+// RANK pooling yields n_cls_out scores per sequence, not an n_embd vector, so
+// encoding read past the end of llama's output buffer. Rejected before the
+// weights load.
+TEST_F(BertModelTest, RankPoolingRejected) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["pooling"] = "rank";
+
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  try {
+    model.waitForLoadInitialization();
+    FAIL() << "pooling 'rank' must be rejected";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_EQ(error.codeString(), "[ GTE :: UnsupportedEmbeddings ]");
+    EXPECT_EQ(
+        std::string(error.what())
+            .rfind("configureParams: rank pooling returns classifier", 0),
+        0U)
+        << error.what();
+  }
+  EXPECT_FALSE(model.isLoaded());
 }
 
 TEST_F(BertModelTest, SplitDeviceSelectionPinsEligibleConsumerList) {
@@ -1363,6 +1432,153 @@ TEST_F(BertModelTest, CommonParamsParseSplitModeBothKeysRejects) {
         model.waitForLoadInitialization();
       },
       qvac_errors::StatusError);
+}
+
+// The split path does not apply `backend`, so the pair must fail the load
+// rather than run on another backend. The check runs before the model is read,
+// so no model file is needed.
+TEST_F(BertModelTest, BackendWithSplitModeRejected) {
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = "gpu";
+  config["backend"] = "cuda";
+  config["split-mode"] = "layer";
+
+  // Mobile rejects any split-mode earlier with its own message.
+#if defined(__ANDROID__) ||                                                    \
+    (defined(__APPLE__) && defined(TARGET_OS_IOS) && TARGET_OS_IOS)
+  const std::string expected = "not supported on mobile";
+#else
+  const std::string expected = "'backend' cannot be combined with 'split-mode'";
+#endif
+  try {
+    setupParams(getInvalidModelPath(), config);
+    FAIL() << "'backend' with 'split-mode' must be rejected";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_NE(std::string(error.what()).find(expected), std::string::npos)
+        << error.what();
+  }
+}
+
+TEST_F(BertModelTest, SetupParamsDefaultsCpuPollingToZero) {
+  const auto setup = setupParams(getInvalidModelPath(), {{"device", "cpu"}});
+
+  EXPECT_EQ(setup.params.cpuparams.poll, 0U);
+  EXPECT_EQ(setup.params.cpuparams_batch.poll, 0U);
+}
+
+TEST_F(BertModelTest, SetupParamsExplicitPollOverridesBothDefaults) {
+  const auto setup =
+      setupParams(getInvalidModelPath(), {{"device", "cpu"}, {"poll", "50"}});
+
+  EXPECT_EQ(setup.params.cpuparams.poll, 50U);
+  EXPECT_EQ(setup.params.cpuparams_batch.poll, 50U);
+}
+
+TEST_F(BertModelTest, SetupParamsExplicitBatchPollOverridesPrimaryPoll) {
+  const auto setup = setupParams(
+      getInvalidModelPath(),
+      {{"device", "cpu"}, {"poll", "50"}, {"poll-batch", "1"}});
+
+  EXPECT_EQ(setup.params.cpuparams.poll, 50U);
+  EXPECT_EQ(setup.params.cpuparams_batch.poll, 1U);
+}
+
+TEST_F(BertModelTest, SetupParamsAcceptsBatchPollUnderscoreAlias) {
+  const auto setup = setupParams(
+      getInvalidModelPath(),
+      {{"device", "cpu"}, {"poll", "50"}, {"poll_batch", "1"}});
+
+  EXPECT_EQ(setup.params.cpuparams.poll, 50U);
+  EXPECT_EQ(setup.params.cpuparams_batch.poll, 1U);
+}
+
+TEST_F(BertModelTest, SetupParamsRejectsPollLevelsOutsideZeroToHundred) {
+  for (const std::string key : {"poll", "poll-batch", "poll_batch"}) {
+    for (const std::string value : {"-1", "101", "4294967396", "", "5x"}) {
+      EXPECT_THROW(
+          static_cast<void>(setupParams(
+              getInvalidModelPath(), {{"device", "cpu"}, {key, value}})),
+          qvac_errors::StatusError)
+          << key << "=" << value;
+    }
+  }
+}
+
+TEST_F(BertModelTest, SetupParamsAcceptsPollLevelBounds) {
+  const auto setup = setupParams(
+      getInvalidModelPath(),
+      {{"device", "cpu"}, {"poll", "100"}, {"poll-batch", "0"}});
+
+  EXPECT_EQ(setup.params.cpuparams.poll, 100U);
+  EXPECT_EQ(setup.params.cpuparams_batch.poll, 0U);
+}
+
+TEST_F(BertModelTest, DeprecatedNoMmapAliasLoadsWithoutMmap) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["no-mmap"] = "";
+
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_EQ(model.getCommonParams().load_mode, LLAMA_LOAD_MODE_NONE);
+}
+
+TEST_F(BertModelTest, DeprecatedAliasPolarityFromValueIsHonoured) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["mmap"] = "off";
+
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_EQ(model.getCommonParams().load_mode, LLAMA_LOAD_MODE_NONE);
+}
+
+TEST_F(BertModelTest, DeprecatedAliasesSelectingDifferentModesAreRejected) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["no-mmap"] = "";
+  config["direct-io"] = "";
+
+  EXPECT_THROW(
+      {
+        BertModel model(getValidModelPath(), config);
+        model.initializeBackend(test_backends_dir);
+        model.waitForLoadInitialization();
+      },
+      qvac_errors::StatusError);
+}
+
+TEST_F(BertModelTest, LoadModeWinsOverDeprecatedAlias) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["load-mode"] = "none";
+  config["mmap"] = "";
+
+  BertModel model(getValidModelPath(), config);
+  model.initializeBackend(test_backends_dir);
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+  EXPECT_EQ(model.getCommonParams().load_mode, LLAMA_LOAD_MODE_NONE);
 }
 
 TEST_F(BertModelTest, CancelMidDecode_ThrowsJobCancelled) {

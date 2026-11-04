@@ -1,11 +1,26 @@
 import {
   assessModelFitInputSchema,
+  inferModelTypeFromModelSrc,
   type AssessModelFitInput,
   type AssessModelFitRequest,
   type AssessModelFitResult
 } from '@qvac/inference/surface'
 import { send } from '@/client/rpc/rpc-client'
-import { InvalidResponseError } from '@/utils/errors-client'
+import { InvalidResponseError, ModelTypeRequiredError } from '@/utils/errors-client'
+
+/**
+ * Names the engine a candidate omitted, from the source it carries.
+ *
+ * @throws {ModelTypeRequiredError} When the source names no engine either.
+ */
+function withModelType(candidate: AssessModelFitInput['models'][number]) {
+  if (candidate.modelType !== undefined) return candidate
+
+  const inferred = inferModelTypeFromModelSrc(candidate.modelSrc)
+  if (inferred === undefined) throw new ModelTypeRequiredError()
+
+  return { ...candidate, modelType: inferred }
+}
 
 /**
  * Assesses, before anything is downloaded, whether the given models are likely
@@ -16,11 +31,11 @@ import { InvalidResponseError } from '@/utils/errors-client'
  * the available evidence does not support a verdict either way, and callers
  * should treat it as "cannot say", not "no".
  *
- * For a single candidate it fetches the registry's weightless description of
- * every source that load names — tens of KB each, never the weights — and runs
- * the engine's own fitter against them, reported as `native-fit` evidence.
- * Where that is unavailable, and for a set of candidates, the calibrated
- * estimate stands.
+ * For each candidate it fetches the registry's weightless description of every
+ * source that load names — tens of KB each, never the weights — and runs the
+ * engine's own fitter against them, reported as `native-fit` evidence. Where
+ * that is unavailable the computed floor stands, which can refuse a model but
+ * never confirm one.
  *
  * @param input - Loads to assess in `loadModel`'s own parameters, the declared
  *   execution mode, and the headroom policy.
@@ -28,7 +43,10 @@ import { InvalidResponseError } from '@/utils/errors-client'
  *   from, plus every assumption that was made.
  */
 export async function assessModelFit(input: AssessModelFitInput): Promise<AssessModelFitResult> {
-  const parsed = assessModelFitInputSchema.parse(input)
+  const parsed = assessModelFitInputSchema.parse({
+    ...input,
+    models: input.models.map(withModelType)
+  })
 
   const request: AssessModelFitRequest = { type: 'assessModelFit', ...parsed }
 
@@ -46,7 +64,6 @@ export async function assessModelFit(input: AssessModelFitInput): Promise<Assess
     execution: response.execution,
     ...(response.evidence && { evidence: response.evidence }),
     ...(response.budget && { budget: response.budget }),
-    ...(response.estimate && { estimate: response.estimate }),
     ...(response.floorBytes !== undefined && { floorBytes: response.floorBytes }),
     models: response.models,
     reasons: response.reasons,

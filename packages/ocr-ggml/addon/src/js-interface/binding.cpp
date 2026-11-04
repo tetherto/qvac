@@ -1,5 +1,6 @@
 #include <bare.h>
 #include <opencv2/core.hpp>
+#include <qvac-addon/fabric-bind.h>
 
 #include "../addon/AddonJs.hpp"
 
@@ -16,6 +17,10 @@ struct OpenCVSingleThread {
 js_value_t*
 qvac_lib_infer_ocr_ggml_exports( // NOLINT(readability-identifier-naming)
     js_env_t* env, js_value_t* exports) {
+  if (!qvacAddonBindFabric()) {
+    js_throw_error(env, nullptr, "failed to bind " QVAC_FABRIC_MODULE_NAME);
+    return nullptr;
+  }
 
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
 #define V(name, fn)                                                            \
@@ -32,6 +37,7 @@ qvac_lib_infer_ocr_ggml_exports( // NOLINT(readability-identifier-naming)
   V("createInstance", qvac_lib_infer_ocr_ggml::createInstance)
   V("runJob", qvac_lib_infer_ocr_ggml::runJob)
   V("getBackendInfo", qvac_lib_infer_ocr_ggml::getBackendInfo)
+  V("assessFit", qvac_lib_infer_ocr_ggml::assessFit)
 
   V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
   V("activate", qvac_lib_inference_addon_cpp::JsInterface::activate)

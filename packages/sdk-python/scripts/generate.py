@@ -707,7 +707,8 @@ def sort_imports_with_ruff(path: Path) -> None:
     # datamodel-code-generator appends the --base-class import as a plain
     # trailing line rather than running it through isort, so the header
     # block it emits isn't reliably sorted -- fix up just the "I" (import
-    # sort) rules here rather than adding a whole extra lint pass.
+    # sort) rules here rather than adding a whole extra lint pass. UP006/F401
+    # cover the `typing.Dict` it writes for open objects' `__pydantic_extra__`.
     #
     # --config is explicit because the build renders into a temp dir; without
     # it ruff can't discover the package pyproject up the path, falls back to
@@ -722,7 +723,7 @@ def sort_imports_with_ruff(path: Path) -> None:
             "check",
             "--fix",
             "--select",
-            "I",
+            "I,UP006,F401",
             "--config",
             str(PACKAGE_ROOT / "pyproject.toml"),
             "--quiet",

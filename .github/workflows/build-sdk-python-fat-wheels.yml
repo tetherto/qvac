@@ -164,15 +164,12 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
           node-version: 22
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
-        with:
-          bun-version: latest
 
       - name: Install build tooling
         shell: bash
         run: python -m pip install --upgrade pip build
 
-      # All-public @qvac deps, no auth: bun install in ../sdk fetches the addon
+      # All-public @qvac deps, no auth: npm install in ../sdk fetches the addon
       # packages (with their published native prebuilds) and builds the worker.
       - name: Build worker
         shell: bash
@@ -184,6 +181,9 @@ jobs:
           WHEEL_PLATFORM: ${{ matrix.platform }}
         run: python scripts/build_wheel.py --out-dir dist --platform "$WHEEL_PLATFORM"
 
+      # A wheel records no commit and a rebuild is not byte-identical, so a
+      # re-run replaces the assets. Re-attaching to an existing release is what
+      # the dispatch trigger is for, and setup checks SDK_VERSION against the tag.
       - name: Upload wheel to release
         shell: bash
         env:

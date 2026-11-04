@@ -13,6 +13,8 @@ on:
     branches:
       - main
       - release-*
+      # release-train-* branches publish from release-train.yml.
+      - "!release-train-*"
       - feature-*
       - tmp-*
     paths:
@@ -114,14 +116,16 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+      - name: Setup Node and Bare
+        uses: ./.github/actions/setup-bare-tooling
         with:
-          bun-version: latest
+          node-version: 22
 
+      # --ignore-scripts also skips the package's own `prepare`; the build
+      # step below replaces it.
       - name: Install dependencies
         working-directory: ${{ env.WORKDIR }}
-        run: bun install
+        run: npm install --ignore-scripts
 
       - name: Build (compile + copy hyperspec)
         working-directory: ${{ env.WORKDIR }}
@@ -178,8 +182,10 @@ jobs:
       contents: write
       packages: write
       id-token: write
-    if: |-
-      (always() && needs.publish-logic.outputs.publish_release == 'true' && (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped'))
+    if: >-
+      !cancelled() && needs.build.result == 'success' &&
+      needs.publish-logic.outputs.publish_release == 'true' &&
+      (needs.release-merge-guard.result == 'success' || needs.release-merge-guard.result == 'skipped')
     runs-on: ubuntu-latest
     environment: npm
     outputs:

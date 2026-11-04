@@ -1,7 +1,7 @@
 ---
 name: orchestrate
 description: Run the full implement → test → CI → review → PR pipeline for a task. Coordinates implementer, test-writer, ci-validator, and code-reviewer agents.
-argument-hint: "<asana-task-id-or-url>"
+argument-hint: "<task-description-or-local-file>"
 disable-model-invocation: true
 ---
 
@@ -11,24 +11,16 @@ Run the complete agent pipeline for a task: branch setup, implement, test, CI va
 
 ## Usage
 
-`/orchestrate <asana-task-id-or-url>`
+`/orchestrate <task-description-or-local-file>`
 
-Accepts either:
-- Asana task ID: `1213560067347874`
-- Asana URL: `https://app.asana.com/0/1234567890/1213560067347874`
+Accept a task description in chat or a path to a local requirements file. Include the title, acceptance criteria, file scope, and ticket reference if known.
 
 ## Pipeline
 
 ### Phase 0: Setup
 
-1. **Parse the Asana task ID** from the argument:
-   - If it's a URL, extract the last numeric segment as the task ID
-   - If it's already a numeric ID, use it directly
-
-2. **Read the Asana task** to get:
-   - Task title
-   - Task description and acceptance criteria
-   - Any tags or custom fields (e.g., package name, ticket number)
+1. Read the task requirements supplied in chat or a local file.
+2. Identify the title, acceptance criteria, file scope, and ticket reference.
 
 3. **Create a feature branch** from main:
    - Pull latest main: `git checkout main && git pull origin main`
@@ -59,14 +51,13 @@ Before any implementation, create a plan for the user to approve:
 3. **Present the plan to the user** and wait for approval
    - If the user requests changes, update the plan and ask again
    - Do NOT proceed until the user explicitly approves
-4. **Comment on the Asana task** with the approved plan
 
 ### Phase 1: Implement
 
-Launch the **implementer** agent with the Asana task ID **and the approved plan**.
+Launch the **implementer** agent with the supplied requirements **and the approved plan**.
 
 ```
-Implement Asana task <task-id>. Follow this approved plan:
+Implement the supplied task requirements. Follow this approved plan:
 
 <paste the approved plan here>
 
@@ -77,7 +68,7 @@ Wait for completion. If the implementer reports failure (e.g., ambiguous require
 
 ### Phase 1.5: Determine test and CI requirements
 
-After implementation, analyze the changed files and the Asana task to decide what's needed next.
+After implementation, analyze the changed files and the supplied requirements to decide what's needed next.
 
 Run `git diff --name-only main...HEAD` and apply these rules:
 
@@ -96,19 +87,19 @@ If CI is needed, inform the user which packages will be validated and why.
 | New public API / exported functions added | Yes |
 | New feature with user-facing behavior | Yes |
 | Bug fix (regression test) | Yes |
-| Asana task acceptance criteria mention testable behavior | Yes |
+| Supplied task acceptance criteria mention testable behavior | Yes |
 | Refactoring with no behavior change | No |
 | Documentation / config / CI workflow only | No |
 | Changes already have corresponding test updates from implementer | No — skip |
 
-Read the Asana task acceptance criteria. If they describe specific behaviors or scenarios, those should become tests.
+Read the supplied task acceptance criteria. If they describe specific behaviors or scenarios, those should become tests.
 
 ### Phase 1.75: Write Tests
 
 If Phase 1.5 determined tests are needed, launch the **test-writer** agent:
 
 ```
-Write automated tests for the changes on the current branch. Task ID: <task-id>. Focus on new public APIs, new behavior, and edge cases. Match existing test patterns.
+Write automated tests for the changes on the current branch. Task requirements: <supplied requirements>. Focus on new public APIs, new behavior, and edge cases. Match existing test patterns.
 ```
 
 Wait for completion. If the test-writer discovers code bugs, launch the implementer again with the bug details before proceeding.
@@ -132,7 +123,7 @@ If CI is not needed, skip to Phase 3.
 Launch the **code-reviewer** agent:
 
 ```
-Review all changes on the current branch against main. Task ID: <task-id>. Check requirements match, bugs, conventions, security, scope, and test coverage. Fix issues directly and commit fixes.
+Review all changes on the current branch against main. Task requirements: <supplied requirements>. Check requirements match, bugs, conventions, security, scope, and test coverage. Fix issues directly and commit fixes.
 ```
 
 Wait for completion. Collect the review summary.
@@ -162,21 +153,21 @@ If no CI needed or no reviewer fixes, proceed to reporting.
    - **Body**: Generate based on PR type:
      - For addon packages: follow the format from `/qv-addon-pr-create`
      - For SDK packages: follow the format from `/qv-sdk-pr-create`
-     - Include: what changed, why, test plan, link to Asana task
+     - Include: what changed, why, test plan, task reference supplied by the user, if any
    - **Base**: `main`
    - Example:
      ```bash
      gh pr create --base main --title "QVAC-123 feat: add RAG support" --body "..."
      ```
 
-4. **Link the PR to the Asana task**: comment on the task with the PR URL.
+4. Report the PR URL in chat.
 
 ### Phase 6: Report
 
 Produce a final summary:
 
 ```
-Pipeline complete for task <task-id>:
+Pipeline complete for task <task-title>:
 
 Branch: <branch-name>
 PR: <pr-url>
@@ -202,9 +193,7 @@ Review:
 Status: [ready for human review / needs attention]
 ```
 
-Update the Asana task:
-- Add the final summary as a comment
-- If all phases passed, mark the task as complete
+Present the final summary and completion status in chat.
 
 ## Error handling
 
@@ -212,11 +201,10 @@ Update the Asana task:
 - If CI fails after 2 implement→CI loops: report the persistent failure and stop
 - If reviewer finds architectural concerns: report them and stop
 - If PR creation fails: report the error, the branch is still pushed
-- At any stop point, comment on the Asana task with current status
+- At any stop point, report the current status in chat
 
 ## Important notes
 
 - Phase 0 creates the branch automatically — user does not need to set up anything
-- The skill asks for confirmation before marking the Asana task complete
 - Each agent runs in isolation with fresh context
 - The pipeline can be resumed manually if interrupted — just re-run from the failed phase

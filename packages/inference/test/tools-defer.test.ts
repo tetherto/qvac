@@ -9,8 +9,7 @@ import {
   loadedToolNames,
   partitionTools,
   resolveDeferredTools,
-  searchDeferredTools,
-  withDeferredToolChoice
+  searchDeferredTools
 } from '@/utils/tools/defer'
 import { getMcpToolsWithHandlers } from '@/utils/mcp-adapter'
 import type { McpClient } from '@/schemas/mcp-adapter'
@@ -129,7 +128,6 @@ test('search honours the limit and clamps it', (t) => {
 test('a no-match search tells the model what to do instead of going quiet', (t) => {
   const parsed = JSON.parse(executeToolSearch(INVENTORY, { query: 'nothing here at all' }, [])) as {
     tool_search: { loaded: string[]; hint?: string }
-    tools: Tool[]
   }
   t.alike(parsed.tool_search.loaded, [])
   t.ok(parsed.tool_search.hint, 'a no-match result carries a hint')
@@ -147,51 +145,56 @@ test('a hit carries no hint', (t) => {
   t.absent(parsed.tool_search.hint)
 })
 
-test('Zod-schema tools are converted before they reach the model', (t) => {
+test('Zod-schema tools are searched and sized in their wire form', (t) => {
   // The ToolInput form a caller passes to `completion()`: `parameters` is a Zod
-  // object, not a JSON schema. Serialising it raw would hand the model Zod
-  // internals instead of a callable definition.
-  const zodTool = {
-    name: 'create_issue',
+  // object, not a JSON schema. Serialised raw, a Zod object drops `.describe()`
+  // text, so two tools whose JSON schemas overflow the size cap together would
+  // both fit if the cap measured the Zod objects.
+  const longText = 'x'.repeat(5 * 1024)
+  const zodTool = (name: string) => ({
+    name,
     description: 'Open a new issue on a repository',
-    parameters: z.object({ title: z.string().describe('Issue title') }),
+    parameters: z.object({ title: z.string().describe(longText) }),
     deferLoading: true
-  }
-
-  const parsed = JSON.parse(executeToolSearch([zodTool], { query: 'create_issue' }, [])) as {
-    tool_search: { loaded: string[] }
-    tools: Tool[]
-  }
-
-  t.alike(parsed.tool_search.loaded, ['create_issue'])
-  t.alike(
-    parsed.tools[0]?.parameters,
-    {
-      type: 'object',
-      properties: { title: { type: 'string', description: 'Issue title' } },
-      required: ['title']
-    },
-    'the model receives a JSON schema, not the Zod object'
+  })
+  t.ok(
+    JSON.stringify(zodTool('create_issue').parameters).length < 1024,
+    'a raw Zod object leaves the description out'
   )
-  t.absent(JSON.stringify(parsed).includes('_zod'), 'no Zod internals reach the model')
+
+  const parsed = JSON.parse(
+    executeToolSearch([zodTool('create_issue'), zodTool('open_issue')], { query: 'issue' }, [])
+  ) as { tool_search: { loaded: string[] } }
+
+  t.alike(parsed.tool_search.loaded, ['create_issue'], 'the cap measures the JSON schemas')
 })
 
-test('a search result names what it loaded and carries the full schemas', (t) => {
+test('a search result names what it loaded and carries no schema', (t) => {
   const content = executeToolSearch(INVENTORY, { query: 'create_issue' }, [])
-  const parsed = JSON.parse(content) as {
-    tool_search: { loaded: string[]; already_loaded: string[] }
-    tools: Tool[]
-  }
 
-  t.alike(parsed.tool_search.loaded, ['create_issue'])
-  t.alike(parsed.tool_search.already_loaded, [])
-  t.is(parsed.tools.length, 1)
-  t.alike(Object.keys(parsed.tools[0]!.parameters.properties), ['q'], 'the schema is there')
-  t.absent('deferLoading' in parsed.tools[0]!, 'registration-only fields do not reach the model')
-  t.absent('group' in parsed.tools[0]!, 'registration-only fields do not reach the model')
+  t.is(
+    content,
+    '{"tool_search":{"query":"create_issue","loaded":["create_issue"],"already_loaded":[]}}',
+    'the schema is declared in the tools block, not repeated in the result'
+  )
 })
 
-test('a loaded tool becomes callable and stays out of the prompt', (t) => {
+test('a search result from an earlier version, with schemas, still loads its tools', (t) => {
+  const earlier = JSON.stringify({
+    tool_search: { query: 'create_issue', loaded: ['create_issue'], already_loaded: [] },
+    tools: [{ type: 'function', name: 'create_issue', description: 'x', parameters: {} }]
+  })
+
+  t.alike(
+    resolveDeferredTools(INVENTORY, [{ role: 'tool', content: earlier }])?.toolsToRender.map(
+      (item) => item.name
+    ),
+    ['get_weather', TOOL_SEARCH_NAME, 'create_issue'],
+    'a reopened chat saved before the change declares the same tool'
+  )
+})
+
+test('a loaded tool is declared in the prompt', (t) => {
   const history = [
     { role: 'user', content: 'open an issue' },
     { role: 'assistant', content: '<call tool_search>' },
@@ -202,64 +205,139 @@ test('a loaded tool becomes callable and stays out of the prompt', (t) => {
 
   const resolved = resolveDeferredTools(INVENTORY, history)
   t.alike(
-    resolved?.callableTools.map((item) => item.name),
-    ['get_weather', TOOL_SEARCH_NAME, 'create_issue'],
-    'the parser accepts the loaded tool'
-  )
-  t.alike(
     resolved?.toolsToRender.map((item) => item.name),
-    ['get_weather', TOOL_SEARCH_NAME],
-    'the prompt block is unchanged, so the prefix in front of it still matches'
+    ['get_weather', TOOL_SEARCH_NAME, 'create_issue'],
+    'the loaded tool is rendered after tool_search, so the grammar and parser both accept it'
+  )
+  t.absent(
+    'deferLoading' in resolved!.toolsToRender[2]!,
+    'registration-only fields do not reach the model'
   )
 })
 
-test('the tool-call grammar is off only once a deferred tool is loaded', (t) => {
-  const fresh = [{ role: 'user', content: 'open an issue' }]
-  const loaded = [
-    ...fresh,
+test('loaded tools render in registration order, not load order', (t) => {
+  const first = executeToolSearch(INVENTORY, { query: 'list_prs' }, [])
+  const history = [
+    { role: 'user', content: 'list prs, then open an issue' },
     { role: 'assistant', content: '<call tool_search>' },
-    { role: 'tool', content: executeToolSearch(INVENTORY, { query: 'create_issue' }, []) }
+    { role: 'tool', content: first },
+    { role: 'assistant', content: '<call tool_search>' },
+    {
+      role: 'tool',
+      content: executeToolSearch(INVENTORY, { query: 'create_issue' }, [
+        { role: 'tool', content: first }
+      ])
+    }
   ]
 
-  const freshResolution = resolveDeferredTools(INVENTORY, fresh)
-  const loadedResolution = resolveDeferredTools(INVENTORY, loaded)
-
-  t.is(
-    withDeferredToolChoice(undefined, freshResolution),
-    undefined,
-    'nothing loaded yet: every callable name is in the grammar'
-  )
-  const params: { temp: number; tool_choice?: string } = { temp: 0 }
   t.alike(
-    withDeferredToolChoice(params, loadedResolution),
-    { temp: 0, tool_choice: 'none' },
-    'a loaded name is not in the grammar, so it must not be enforced'
+    resolveDeferredTools(INVENTORY, history)?.toolsToRender.map((item) => item.name),
+    ['get_weather', TOOL_SEARCH_NAME, 'create_issue', 'list_prs'],
+    'the block is the same for the same loaded set, whatever order the searches ran in'
   )
-  t.alike(
-    withDeferredToolChoice({ tool_choice: 'auto' }, loadedResolution),
-    { tool_choice: 'none' },
-    'an explicit "auto" is the default and gets the same treatment'
-  )
-  t.alike(
-    withDeferredToolChoice({ tool_choice: 'required' }, loadedResolution),
-    { tool_choice: 'required' },
-    'a stronger caller choice is kept'
-  )
-  t.is(withDeferredToolChoice(undefined, null), undefined, 'nothing defers')
 })
 
-test('loading the same tool twice appends no second definition', (t) => {
+// The addon rejects a prompt that declares a tool it cannot select (an empty
+// name or a `tool_choice` mode word) or two tools whose names fold to one
+// grammar rule (fabric turns every run outside [A-Za-z0-9-] into '-').
+const CLASHING: Tool[] = [
+  tool('search', 'Search the web'),
+  tool('search', 'Search the issue tracker', { deferLoading: true }),
+  tool('search-web', 'Search the web again', { deferLoading: true }),
+  tool('get-weather', 'Weather forecast', { deferLoading: true }),
+  tool('get_weather', 'Weather now'),
+  tool('tool-search', 'Search the docs', { deferLoading: true }),
+  tool('read.file', 'Read a file', { deferLoading: true }),
+  tool('read_file', 'Read a file again', { deferLoading: true }),
+  tool('none', 'Do nothing', { deferLoading: true }),
+  tool('', 'No name', { deferLoading: true }),
+  tool('list-prs', 'List pull requests', { deferLoading: true })
+]
+const UNDECLARABLE = ['search', 'get-weather', 'tool-search', 'read_file', 'none', '']
+
+test('a deferred tool the prompt could not declare is never offered', (t) => {
+  const resolved = resolveDeferredTools(CLASHING, [])
+  t.alike(
+    resolved?.deferred.map((item) => item.name),
+    ['search-web', 'read.file', 'list-prs'],
+    'the first registration of each grammar rule, after the always-loaded tools and tool_search'
+  )
+  const catalog = buildCatalog(resolved!.deferred)
+  for (const name of [
+    'Search the issue tracker',
+    'Weather forecast',
+    'Search the docs',
+    'Read a file again',
+    'Do nothing',
+    'No name'
+  ]) {
+    t.absent(catalog.includes(name), `the catalog does not list "${name}"`)
+  }
+
+  const reported = ['search', 'weather', 'docs', 'file', 'none', 'name', 'list'].flatMap(
+    (query) => {
+      const result = JSON.parse(executeToolSearch(CLASHING, { query }, [])) as {
+        tool_search: { loaded: string[]; already_loaded: string[] }
+      }
+      return [...result.tool_search.loaded, ...result.tool_search.already_loaded]
+    }
+  )
+  t.ok(
+    reported.includes('read.file') && reported.includes('list-prs'),
+    'declarable tools are found'
+  )
+  t.absent(
+    reported.some((name) => UNDECLARABLE.includes(name)),
+    'no search reports a tool the prompt could not declare'
+  )
+})
+
+test('a clashing name from legacy history stays loaded but is not declared', (t) => {
+  // Results naming every tool, as an older version or a hand-built history
+  // could hold, in reverse registration order.
+  const history = [...CLASHING].reverse().map((item) => ({
+    role: 'tool',
+    content: JSON.stringify({
+      tool_search: { query: item.name, loaded: [item.name], already_loaded: [] }
+    })
+  }))
+
+  const rendered = resolveDeferredTools(CLASHING, history)?.toolsToRender
+  t.alike(
+    [...loadedToolNames(history)],
+    [...new Set([...CLASHING].reverse().map((item) => item.name))],
+    'legacy results still contribute every loaded name'
+  )
+  t.alike(
+    rendered?.map((item) => item.name),
+    ['search', 'get_weather', TOOL_SEARCH_NAME, 'search-web', 'read.file', 'list-prs'],
+    'one tool per grammar rule, and no unselectable name'
+  )
+  t.alike(
+    rendered?.filter((item) => item.name !== TOOL_SEARCH_NAME).map((item) => item.description),
+    ['Search the web', 'Weather now', 'Search the web again', 'Read a file', 'List pull requests'],
+    'an always-loaded tool keeps its rule; among deferred tools the first registered does'
+  )
+})
+
+test('loading the same tool twice reports it as already loaded', (t) => {
   const first = executeToolSearch(INVENTORY, { query: 'create_issue' }, [])
   const history = [{ role: 'tool', content: first }]
 
   const second = JSON.parse(executeToolSearch(INVENTORY, { query: 'create_issue' }, history)) as {
     tool_search: { loaded: string[]; already_loaded: string[] }
-    tools: Tool[]
   }
 
-  t.alike(second.tools, [], 'no definition is repeated')
-  t.alike(second.tool_search.loaded, [])
+  t.alike(second.tool_search.loaded, [], 'nothing is loaded twice')
   t.alike(second.tool_search.already_loaded, ['create_issue'], 'the model is told it can call it')
+  t.alike(
+    resolveDeferredTools(INVENTORY, [
+      ...history,
+      { role: 'tool', content: JSON.stringify(second) }
+    ])?.toolsToRender.map((item) => item.name),
+    ['get_weather', TOOL_SEARCH_NAME, 'create_issue'],
+    'and it is declared once'
+  )
 })
 
 test('a reopened conversation resolves the same loaded set', (t) => {

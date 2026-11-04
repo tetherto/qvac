@@ -1,7 +1,7 @@
 /**
  * Microphone → Whisper streaming transcription with native VAD.
  *
- * Usage: bun run examples/asr/whispercpp-microphone-record.ts
+ * Usage: npx tsx examples/asr/whispercpp-microphone-record.ts
  *
  * Speak into your mic; transcriptions appear automatically when you pause.
  * Press Ctrl+C to quit.

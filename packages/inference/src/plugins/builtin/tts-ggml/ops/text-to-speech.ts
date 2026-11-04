@@ -1,19 +1,22 @@
+import { getMossJobOptions } from './moss-options'
 import type { AbortSignal } from 'bare-abort-controller'
 import { getModel } from '@/runtime/model-registry'
 import { ttsRequestSchema, type TtsRequest, type TtsStats } from '@/schemas/index'
 import { nowMs } from '@/profiling/index'
 import { buildStreamResult, hasDefinedValues } from '@/profiling/model-execution'
 import type { TtsResponse, TtsStats as AddonTtsStats } from '@/utils/addon-responses'
-import { TextToSpeechFailedError } from '@/errors/index'
+import { PluginRequestValidationFailedError, TextToSpeechFailedError } from '@/errors/index'
 import {
   type TtsStreamChunk,
   type TtsOpYield,
+  appendPcm,
   collectTtsStats,
   chunkMetadata
 } from '@/utils/tts-stats'
 import {
   assertParlerJobOptionsSupported,
   getParlerJobOptions,
+  getTtsEngineType,
   type ParlerJobOptions
 } from '@/plugins/builtin/tts-ggml/ops/parler-options'
 import { bindTtsCancel, cancelIfAborted } from '@/plugins/builtin/tts-ggml/ops/cancel-binding'
@@ -63,7 +66,7 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
   const request = ttsRequestSchema.parse(params)
   const {
     modelId,
-    text,
+    text = '',
     stream,
     sentenceStream,
     sentenceStreamLocale,
@@ -72,7 +75,28 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
   const parlerJobOptions = getParlerJobOptions(request)
 
   const model = getModel(modelId)
+  const mossJobOptions = getMossJobOptions(model, request)
   assertParlerJobOptionsSupported(model, parlerJobOptions, 'textToSpeech')
+
+  // MOSS streams natively: one job over the whole text, emitting a chunk every
+  // `streamChunkTokens` codec frames while the backbone is still generating.
+  // The sentence chunker behind `streamOutput` would restart the prompt per
+  // sentence, which a MOSS-TTSD dialogue cannot do (every job has to open
+  // with the reference transcripts, so the addon rejects it) and which would
+  // apply `durationTokens` to each sentence rather than to the text.
+  // `sentenceStream: true` still asks for the chunker explicitly.
+  const nativeStream = stream && !sentenceStream && getTtsEngineType(model) === 'moss'
+  // The chunker is what reads these, so on the native path they would be
+  // dropped without a trace.
+  if (
+    nativeStream &&
+    (sentenceStreamLocale !== undefined || sentenceStreamMaxChunkScalars !== undefined)
+  ) {
+    throw new PluginRequestValidationFailedError(
+      'textToSpeech',
+      'sentenceStreamLocale and sentenceStreamMaxChunkScalars need the sentence chunker; MOSS streams the whole text natively, so they only apply with sentenceStream: true'
+    )
+  }
 
   await using ctx = await bindTtsCancel(model, modelId, request.requestId)
   if (ctx.signal.aborted) return { ...buildStreamResult(0), cancelled: true }
@@ -100,7 +124,7 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
     const response = await model.runStream(text, streamOpts)
 
     if (!stream) {
-      let completeBuffer: number[] = []
+      const completeBuffer: number[] = []
       let sampleRate: number | undefined
       try {
         for await (const data of response.iterate()) {
@@ -108,7 +132,7 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
           // lunte-disable-next-line eqeqeq -- `!= null` intentionally matches null and undefined
           if (data.outputArray != null) {
             sampleRate ??= data.sampleRate
-            completeBuffer = completeBuffer.concat(Array.from(data.outputArray))
+            appendPcm(completeBuffer, data.outputArray)
           }
         }
       } catch (error) {
@@ -135,6 +159,10 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
     return finish(modelStart, response, ctx.signal.aborted)
   }
 
+  const engine = getTtsEngineType(model)
+  const batchEngine = engine === 'moss-sfx' || engine === 'moss-speech'
+  const sentenceChunked = stream && !nativeStream && !batchEngine
+
   const response = (await model.run({
     input: text,
     // The addon's job field is `type`, and its native layer accepts only
@@ -142,32 +170,41 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
     // it. Pin it here too, so the request's `inputType` (which the schema
     // does not constrain) behaves the same on every path.
     type: 'text',
-    ...(stream ? { streamOutput: true } : {}),
+    ...(sentenceChunked ? { streamOutput: true } : {}),
     // `run({ streamOutput: true })` runs the same chunker as `runStream()`, so
     // the chunking knobs apply here too — they used to be honoured only on the
     // sentenceStream path.
-    ...(stream && sentenceStreamLocale !== undefined ? { locale: sentenceStreamLocale } : {}),
-    ...(stream && sentenceStreamMaxChunkScalars !== undefined
+    ...(sentenceChunked && sentenceStreamLocale !== undefined
+      ? { locale: sentenceStreamLocale }
+      : {}),
+    ...(sentenceChunked && sentenceStreamMaxChunkScalars !== undefined
       ? { maxChunkScalars: sentenceStreamMaxChunkScalars }
       : {}),
-    ...parlerJobOptions
+    ...parlerJobOptions,
+    ...mossJobOptions
   })) as unknown as TtsResponse
 
-  if (!stream) {
-    let completeBuffer: number[] = []
+  if (!stream || batchEngine) {
+    const completeBuffer: number[] = []
     let sampleRate: number | undefined
+    let replyText: string | undefined
 
     try {
       for await (const data of response.iterate()) {
         if (await cancelIfAborted(model, ctx.signal)) continue
         sampleRate ??= data.sampleRate
-        completeBuffer = completeBuffer.concat(Array.from(data.outputArray))
+        if (data.text !== undefined) replyText = data.text
+        appendPcm(completeBuffer, data.outputArray)
       }
     } catch (error) {
       rethrowUnlessCancelled(error, ctx.signal)
     }
     if (ctx.signal.aborted) return finish(modelStart, response, true)
-    yield { buffer: completeBuffer, ...(sampleRate !== undefined ? { sampleRate } : {}) }
+    yield {
+      buffer: completeBuffer,
+      ...(sampleRate !== undefined ? { sampleRate } : {}),
+      ...(replyText !== undefined ? { text: replyText } : {})
+    }
     return finish(modelStart, response, false)
   }
 

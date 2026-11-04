@@ -8,9 +8,11 @@ export interface JobHandler {
      * Optionally accepts an abort signal forwarded into the response — typically the per-call
      * signal the addon received from `model.run(input, { signal })`. The abort `reason`
      * becomes the response error (passed through unchanged when it's an Error).
+     * Set retainOutput to false for onUpdate-only consumption without saved history.
      */
     start(runOpts?: {
         signal?: AbortSignalLike;
+        retainOutput?: boolean;
     }): QvacResponse;
     /** Registers a pre-built response (e.g. a custom subclass) as active. Fails any stale active response. */
     startWith(response: QvacResponse): QvacResponse;

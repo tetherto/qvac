@@ -7,6 +7,11 @@
 #include <llama.h>
 
 #include "addon/LlmErrors.hpp"
+#include "model-interface/CacheDonors.hpp"
+#include "model-interface/CacheFileIndex.hpp"
+#include "model-interface/CacheLedger.hpp"
+#include "model-interface/SequenceDriver.hpp"
+#include "model-interface/SlotStateCache.hpp"
 #include "utils/LoggingMacros.hpp"
 #include "utils/ScopeGuard.hpp"
 
@@ -17,11 +22,37 @@
 using namespace qvac_lib_inference_addon_llama::errors;
 using namespace qvac_lib_inference_addon_cpp::logger;
 using namespace qvac_lib_inference_addon_llama::logging;
+namespace cache = qvac_lib_inference_addon_llama::cache;
 
 CacheManager::CacheManager(
     LlmContext* llmContext, std::function<void(bool)> resetStateCallback)
     : llmContext_(llmContext),
-      resetStateCallback_(std::move(resetStateCallback)) {}
+      resetStateCallback_(std::move(resetStateCallback)) {
+  if (llmContext_ != nullptr) {
+    // The active key's own file was loaded already, or there is none.
+    llmContext_->setCacheSourceProvider([this](
+                                            const cache::Ledger& prompt,
+                                            llama_pos /*promptCells*/,
+                                            bool trimmable,
+                                            size_t minimum,
+                                            const cache::DonorAdopter& adopt) {
+      return cache::offerStoredState(
+          ramTier_.get(),
+          fileIndex_.get(),
+          sessionPath_,
+          prompt,
+          trimmable,
+          minimum,
+          adopt);
+    });
+  }
+}
+
+CacheManager::~CacheManager() {
+  if (llmContext_ != nullptr) {
+    llmContext_->setCacheSourceProvider({});
+  }
+}
 
 bool CacheManager::isFileInitialized(const std::filesystem::path& path) {
   std::error_code errorCode;
@@ -61,7 +92,7 @@ bool CacheManager::isParentDirectoryMissing(const std::filesystem::path& path) {
 bool CacheManager::handleCache(
     ParsedPromptPayload& parsedPrompt, const std::string& inputPrompt,
     std::function<ParsedPromptPayload(const std::string&)> formatPrompt,
-    const std::string& cacheKey) {
+    const std::string& cacheKey, bool ephemeral) {
 
   parsedPrompt = formatPrompt(inputPrompt);
 
@@ -80,13 +111,27 @@ bool CacheManager::handleCache(
     return false;
   }
 
+  if (fileIndex_) {
+    fileIndex_->note(cacheKey);
+  }
+
   if (!cacheDisabled_ && sessionPath_ == cacheKey) {
     if (discardActiveCacheIfBackingStoreMissing()) {
       cacheUsedInLastPrompt_ = false;
     } else {
       cacheUsedInLastPrompt_ = true;
+      activeCacheDirty_ = true;
+      activeEphemeral_ = ephemeral;
       return false;
     }
+  }
+
+  // Take the incoming conversation out of the RAM tier before the outgoing
+  // one goes in, so a tier that fits one conversation does not evict it.
+  std::optional<qvac_lib_inference_addon_llama::batching::SlotStateCacheEntry>
+      incoming;
+  if (ramTier_ && ramTier_->enabled()) {
+    incoming = ramTier_->take(cacheKey);
   }
 
   if (hasActiveCache() && sessionPath_ != cacheKey) {
@@ -97,7 +142,24 @@ bool CacheManager::handleCache(
             __func__,
             sessionPath_.c_str(),
             cacheKey.c_str()));
-    saveActiveCacheForTransition();
+    try {
+      saveActiveCacheForTransition();
+    } catch (...) {
+      if (incoming.has_value()) {
+        (void)ramTier_->insert(cacheKey, std::move(*incoming));
+      }
+      throw;
+    }
+  } else if (llmContext_->sharesCacheAcrossKeys()) {
+    // A request without a key left its conversation in place. It stays there
+    // for the prefix the incoming one may share with it, and goes to the RAM
+    // tier too, never to be written, in case the incoming key's own state
+    // replaces it.
+    if (llmContext_->getNPast() > 0) {
+      (void)copyActiveCacheToRamTier(
+          "", /*dirty=*/false, /*savedToDisk=*/false, /*ephemeral=*/true);
+    }
+    setAsideInPlace();
   } else {
     resetStateCallback_(true);
   }
@@ -113,12 +175,21 @@ bool CacheManager::handleCache(
           "%s: Cache enabled with key '%s'\n", __func__, sessionPath_.c_str()));
 
   try {
-    bool loaded = loadCache();
-    activeCacheSavedToDisk_ = loaded;
+    // RAM tier first (set by `restoreFromRamTier`), then the file.
+    bool loaded = restoreFromRamTier(std::move(incoming));
     if (!loaded) {
+      loaded = loadCache();
+      activeCacheSavedToDisk_ = loaded;
+    }
+    // Without a state of its own the key starts from the conversation set
+    // aside in place, reconciled down to the prefix they share.
+    if (!loaded && !llmContext_->sharesCacheAcrossKeys()) {
       resetStateCallback_(true);
     }
     cacheUsedInLastPrompt_ = true;
+    // The request about to run adds turns the file does not have.
+    activeCacheDirty_ = true;
+    activeEphemeral_ = ephemeral;
     return loaded;
   } catch (...) {
     resetStateCallback_(true);
@@ -134,7 +205,11 @@ bool CacheManager::loadCache() {
 
   auto* ctx = llmContext_->getCtx();
   size_t nTokenCount = 0;
-  SessionMetadata sessionMetadata;
+  // A ledger has at most one entry per context position (media occupies many
+  // positions but one entry). Leave a little headroom for the fixed header.
+  std::vector<llama_token> stateTokens(
+      cache::LEDGER_HEADER_WORDS +
+      cache::LEDGER_ENTRY_WORDS * (static_cast<size_t>(llama_n_ctx(ctx)) + 1));
 
   QLOG_IF(
       Priority::DEBUG,
@@ -150,13 +225,14 @@ bool CacheManager::loadCache() {
     return false;
   }
 
-  if (llama_state_seq_load_file(
-          ctx,
-          sessionPath_.c_str(),
-          llmContext_->getSeqId(),
-          sessionMetadata.data(),
-          sessionMetadata.size(),
-          &nTokenCount) == 0) {
+  const size_t loadedBytes = llama_state_seq_load_file(
+      ctx,
+      sessionPath_.c_str(),
+      llmContext_->getSeqId(),
+      stateTokens.data(),
+      stateTokens.size(),
+      &nTokenCount);
+  if (loadedBytes == 0) {
     std::string errorMsg = string_format(
         "%s: failed to load session file '%s'\n",
         __func__,
@@ -164,9 +240,29 @@ bool CacheManager::loadCache() {
     throw qvac_errors::StatusError(
         ADDON_ID, toString(UnableToLoadSessionFile), errorMsg);
   }
+  // Session files hold the target state only.
+  qvac_lib_inference_addon_llama::speculative::resetDraftSequence(
+      ctx, llmContext_->getSeqId());
 
   QLOG_IF(Priority::DEBUG, string_format("%s: loaded a session\n", __func__));
 
+  stateTokens.resize(nTokenCount);
+  const bool accepted = acceptLoadedState(stateTokens, sessionPath_);
+  if (accepted) {
+    activeCacheDirty_ = false;
+    // Accepting the state cleared the checkpoints; the file may carry the
+    // ones it was saved with.
+    if (auto* driver = dynamic_cast<SequenceDriver*>(llmContext_);
+        driver != nullptr) {
+      driver->adoptCheckpointsFromCacheFile(sessionPath_, loadedBytes);
+    }
+  }
+  return accepted;
+}
+
+bool CacheManager::acceptLoadedState(
+    std::vector<llama_token>& stateTokens, const std::string& source) {
+  auto* ctx = llmContext_->getCtx();
   // The load above already restored this sequence's KV cells. Any path that
   // rejects the session below (or returns false without accepting it) must roll
   // those cells back, otherwise a failed/declined load strands live KV under
@@ -176,35 +272,42 @@ bool CacheManager::loadCache() {
     if (auto* mem = llama_get_memory(ctx); mem != nullptr) {
       llama_memory_seq_rm(mem, llmContext_->getSeqId(), -1, -1);
     }
+    llmContext_->setNPast(0);
+    llmContext_->setCacheTokens(0);
+    llmContext_->clearCacheReconciliationState();
   });
 
-  if (nTokenCount > 1 && nTokenCount < sessionMetadata.size()) {
-    std::string errorMsg = string_format(
-        "%s: cache file '%s' uses an unsupported metadata layout with %zu "
-        "fields\n",
-        __func__,
-        sessionPath_.c_str(),
-        nTokenCount);
-    throw qvac_errors::StatusError(
-        ADDON_ID, toString(UnableToLoadSessionFile), errorMsg);
-  }
-
-  if (nTokenCount < sessionMetadata.size()) {
+  // Old addon files carried only positional metadata. They are valid state
+  // files but not self-describing, so reject them as a cold miss after
+  // clearing the state tentatively restored by llama.cpp.
+  if (!cache::hasMarker(stateTokens.data(), stateTokens.size())) {
+    llmContext_->clearCacheReconciliationState();
     return false;
   }
-  if (sessionMetadata.nPast() > llama_n_ctx(ctx)) {
+  try {
+    llmContext_->restoreCacheStateTokens(stateTokens);
+  } catch (const std::exception& ex) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(UnableToLoadSessionFile),
+        string_format(
+            "%s: cache file '%s' contains a malformed current-format "
+            "ledger: %s\n",
+            __func__,
+            source.c_str(),
+            ex.what()));
+  }
+  if (llmContext_->getNPast() > llama_n_ctx(ctx)) {
     std::string errorMsg = string_format(
         "%s: cache file '%s' contains %zu tokens, which exceeds the current "
         "context size of %d tokens\n",
         __func__,
-        sessionPath_.c_str(),
-        static_cast<size_t>(sessionMetadata.nPast()),
+        source.c_str(),
+        static_cast<size_t>(llmContext_->getNPast()),
         llama_n_ctx(ctx));
     throw qvac_errors::StatusError(
         ADDON_ID, toString(ContextLengthExeeded), errorMsg);
   }
-  sessionMetadata.applyTo(*llmContext_);
-
   auto* mem = llama_get_memory(ctx);
   if (mem == nullptr) {
     throw qvac_errors::StatusError(
@@ -213,12 +316,12 @@ bool CacheManager::loadCache() {
         string_format(
             "%s: llama memory is null after loading session file '%s'\n",
             __func__,
-            sessionPath_.c_str()));
+            source.c_str()));
   }
 
   const llama_pos restoredNPast =
       llama_memory_seq_pos_max(mem, llmContext_->getSeqId()) + 1;
-  const auto expectedNPast = static_cast<llama_pos>(sessionMetadata.nPast());
+  const auto expectedNPast = llmContext_->getNPast();
   if (restoredNPast != expectedNPast) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -227,14 +330,13 @@ bool CacheManager::loadCache() {
             "%s: cache file '%s' restored nPast=%d, but metadata expected "
             "nPast=%d\n",
             __func__,
-            sessionPath_.c_str(),
+            source.c_str(),
             restoredNPast,
             expectedNPast));
   }
   const llama_pos restoredCacheTokens = static_cast<llama_pos>(
       llama_memory_seq_token_count(mem, llmContext_->getSeqId()));
-  const auto expectedCacheTokens =
-      static_cast<llama_pos>(sessionMetadata.cacheTokens());
+  const auto expectedCacheTokens = llmContext_->getCacheTokens();
   if (restoredCacheTokens != expectedCacheTokens) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -243,11 +345,13 @@ bool CacheManager::loadCache() {
             "%s: cache file '%s' restored cacheTokens=%d, but metadata "
             "expected cacheTokens=%d\n",
             __func__,
-            sessionPath_.c_str(),
+            source.c_str(),
             restoredCacheTokens,
             expectedCacheTokens));
   }
-  llama_memory_seq_rm(mem, -1, sessionMetadata.nPast(), -1);
+  // Trim only this context's sequence: on a parallel model the others hold
+  // batch conversations kept for their next request.
+  llama_memory_seq_rm(mem, llmContext_->getSeqId(), expectedNPast, -1);
   restoredKvGuard.dismiss();
   return true;
 }
@@ -262,16 +366,52 @@ void CacheManager::saveCache() {
   }
   writeCacheFile(sessionPath_);
   activeCacheSavedToDisk_ = true;
+  activeCacheDirty_ = false;
 }
 
 void CacheManager::saveActiveCacheForTransition() {
   if (discardActiveCacheIfBackingStoreMissing()) {
     return;
   }
+  // Nothing committed (e.g. its only request rolled back): nothing to keep.
+  if (llmContext_->getNPast() == 0) {
+    resetStateCallback_(true);
+    return;
+  }
+  // Another conversation's state that no request on this key used (its
+  // first request failed before it ran): not this key's to keep.
+  if (llmContext_->holdsBorrowedState()) {
+    setAsideInPlace();
+    return;
+  }
+  // With the RAM tier on, the conversation moves there and its file is only
+  // written when the tier has to let it go or the model is unloaded.
+  if (copyActiveCacheToRamTier(
+          sessionPath_,
+          activeCacheDirty_,
+          activeCacheSavedToDisk_,
+          activeEphemeral_)) {
+    setAsideInPlace();
+    return;
+  }
+  // Never written automatically: dropped, but for the memory left in place,
+  // which the next request may share a prefix with.
+  if (activeEphemeral_) {
+    setAsideInPlace();
+    return;
+  }
+  // Nothing ran since the file was last written or loaded, and it is still
+  // there: it is current. A file replaced by anything else is saved again,
+  // so its failure is reported instead of the conversation being dropped.
+  if (!activeCacheDirty_ && activeCacheSavedToDisk_ &&
+      isFileInitialized(sessionPath_)) {
+    setAsideInPlace();
+    return;
+  }
 
   try {
     saveCache();
-    resetStateCallback_(true);
+    setAsideInPlace();
   } catch (...) {
     if (discardActiveCacheIfBackingStoreMissing()) {
       return;
@@ -280,6 +420,180 @@ void CacheManager::saveActiveCacheForTransition() {
     invalidate();
     throw;
   }
+}
+
+void CacheManager::setAsideInPlace() {
+  if (llmContext_->sharesCacheAcrossKeys()) {
+    llmContext_->resetStateKeepingMemory(true);
+  } else {
+    resetStateCallback_(true);
+  }
+}
+
+bool CacheManager::copyActiveCacheToRamTier(
+    const std::string& key, bool dirty, bool savedToDisk, bool ephemeral) {
+  if (!ramTier_ || !ramTier_->enabled()) {
+    return false;
+  }
+  try {
+    llama_context* ctx = llmContext_->getCtx();
+    const llama_seq_id seq = llmContext_->getSeqId();
+    qvac_lib_inference_addon_llama::batching::SlotStateCacheEntry entry;
+    const size_t size = llama_state_seq_get_size_ext(ctx, seq, 0);
+    // A state larger than the whole budget is refused by `insert`; skip the
+    // copy.
+    if (size == 0 || size > ramTier_->budget()) {
+      return false;
+    }
+    entry.state.resize(size);
+    if (llama_state_seq_get_data_ext(ctx, entry.state.data(), size, seq, 0) !=
+        size) {
+      return false;
+    }
+    entry.draft =
+        qvac_lib_inference_addon_llama::speculative::captureDraftSequenceState(
+            ctx, seq, 0);
+    entry.ledgerWords = llmContext_->cacheStateTokens();
+    entry.dirty = dirty;
+    entry.activeCacheSavedToDisk = savedToDisk;
+    entry.ephemeral = ephemeral;
+    auto* driver = dynamic_cast<SequenceDriver*>(llmContext_);
+    if (driver != nullptr) {
+      entry.checkpoints = driver->releaseCheckpoints();
+    }
+    if (ramTier_->insert(key, std::move(entry))) {
+      return true;
+    }
+    // Too large for the tier: give the checkpoints back and save normally.
+    if (driver != nullptr) {
+      driver->adoptCheckpoints(std::move(entry.checkpoints));
+    }
+    return false;
+  } catch (const std::bad_alloc&) {
+    return false;
+  }
+}
+
+bool CacheManager::restoreFromRamTier(
+    std::optional<qvac_lib_inference_addon_llama::batching::SlotStateCacheEntry>
+        entry) {
+  if (!entry.has_value()) {
+    return false;
+  }
+  if (entry->activeCacheSavedToDisk &&
+      persistedBackingStoreMissing(sessionPath_)) {
+    return false;
+  }
+  llama_context* ctx = llmContext_->getCtx();
+  const llama_seq_id seq = llmContext_->getSeqId();
+  resetStateCallback_(true);
+  if (llama_state_seq_set_data_ext(
+          ctx, entry->state.data(), entry->state.size(), seq, 0) == 0) {
+    resetStateCallback_(true);
+    qvac_lib_inference_addon_llama::batching::SlotStateCache::saveUnrestored(
+        sessionPath_, *entry, /*stateApplied=*/false);
+    return false;
+  }
+  qvac_lib_inference_addon_llama::speculative::restoreDraftSequenceState(
+      ctx, seq, entry->draft, 0);
+  try {
+    if (!acceptLoadedState(entry->ledgerWords, sessionPath_ + " (RAM)")) {
+      qvac_lib_inference_addon_llama::batching::SlotStateCache::saveUnrestored(
+          sessionPath_, *entry, /*stateApplied=*/true);
+      return false;
+    }
+  } catch (const std::exception& ex) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "%s: dropping RAM-tier state for '%s': %s\n",
+            __func__,
+            sessionPath_.c_str(),
+            ex.what()));
+    qvac_lib_inference_addon_llama::batching::SlotStateCache::saveUnrestored(
+        sessionPath_, *entry, /*stateApplied=*/true);
+    return false;
+  }
+  if (auto* driver = dynamic_cast<SequenceDriver*>(llmContext_);
+      driver != nullptr) {
+    driver->adoptCheckpoints(std::move(entry->checkpoints));
+  }
+  activeCacheSavedToDisk_ = entry->activeCacheSavedToDisk;
+  activeCacheDirty_ = entry->dirty;
+  return true;
+}
+
+bool CacheManager::hasTurnsToFlush() {
+  return hasActiveCache() && activeCacheDirty_ && !activeEphemeral_ &&
+         llmContext_->getNPast() != 0 && !llmContext_->holdsBorrowedState() &&
+         !discardActiveCacheIfBackingStoreMissing();
+}
+
+void CacheManager::saveBeforeReset() {
+  if (hasTurnsToFlush()) {
+    saveCache();
+  }
+}
+
+void CacheManager::flushForUnload() {
+  if (!hasTurnsToFlush()) {
+    return;
+  }
+  try {
+    saveCache();
+  } catch (const std::exception& ex) {
+    QLOG_IF(
+        Priority::WARNING,
+        string_format(
+            "%s: could not save '%s' at unload: %s\n",
+            __func__,
+            sessionPath_.c_str(),
+            ex.what()));
+  }
+}
+
+CacheManager::SaveOutcome
+CacheManager::saveForCaller(const std::string& cacheKey) {
+  if (!hasActiveCache() || sessionPath_ != cacheKey) {
+    return SaveOutcome::NotHere;
+  }
+  // Nothing committed (its only request rolled back or failed before it ran,
+  // or a rollback landed cold): nothing to write, and the file still holds
+  // the last commit.
+  if (llmContext_->getNPast() == 0 || llmContext_->holdsBorrowedState()) {
+    return SaveOutcome::NotHere;
+  }
+  if (!activeCacheDirty_ && activeCacheSavedToDisk_ &&
+      isFileInitialized(sessionPath_)) {
+    return SaveOutcome::Current;
+  }
+  saveCache();
+  return SaveOutcome::Written;
+}
+
+void CacheManager::discard(const std::string& cacheKey) {
+  if (hasActiveCache() && sessionPath_ == cacheKey) {
+    resetStateCallback_(true);
+    invalidate();
+  }
+  if (ramTier_) {
+    (void)ramTier_->take(cacheKey);
+  }
+}
+
+void CacheManager::setFileIndex(
+    std::shared_ptr<cache::CacheFileIndex> fileIndex) {
+  fileIndex_ = std::move(fileIndex);
+}
+
+void CacheManager::setRamTier(
+    std::shared_ptr<qvac_lib_inference_addon_llama::batching::SlotStateCache>
+        ramTier) {
+  ramTier_ = std::move(ramTier);
+}
+
+bool CacheManager::persistedBackingStoreMissing(const std::string& path) {
+  return isParentDirectoryMissing(path) || isFileMissingOrEmpty(path);
 }
 
 bool CacheManager::discardActiveCacheIfBackingStoreMissing() {
@@ -312,14 +626,14 @@ void CacheManager::writeCacheFile(const std::string& path) {
   QLOG_IF(
       Priority::DEBUG,
       string_format("%s: saving cache to '%s'\n", __func__, path.c_str()));
-  const SessionMetadata sessionMetadata =
-      SessionMetadata::capture(*llmContext_);
-  if (llama_state_seq_save_file(
-          ctx,
-          tmpPath.c_str(),
-          llmContext_->getSeqId(),
-          sessionMetadata.data(),
-          sessionMetadata.size()) == 0) {
+  const std::vector<llama_token> stateTokens = llmContext_->cacheStateTokens();
+  const size_t savedBytes = llama_state_seq_save_file(
+      ctx,
+      tmpPath.c_str(),
+      llmContext_->getSeqId(),
+      stateTokens.data(),
+      stateTokens.size());
+  if (!savedCompletely(tmpPath, savedBytes)) {
     std::error_code ec;
     std::filesystem::remove(tmpPath, ec);
     throw qvac_errors::StatusError(
@@ -330,7 +644,20 @@ void CacheManager::writeCacheFile(const std::string& path) {
             __func__,
             path.c_str()));
   }
+  if (const auto* driver = dynamic_cast<const SequenceDriver*>(llmContext_);
+      driver != nullptr) {
+    driver->appendCheckpointsToCacheFile(tmpPath);
+  }
   atomicPromoteFile(tmpPath, path);
+}
+
+bool CacheManager::savedCompletely(const std::string& path, size_t savedBytes) {
+  if (savedBytes == 0) {
+    return false;
+  }
+  std::error_code ec;
+  const auto size = std::filesystem::file_size(path, ec);
+  return !ec && size == savedBytes;
 }
 
 void CacheManager::atomicPromoteFile(
@@ -389,6 +716,7 @@ void CacheManager::atomicPromoteFile(
             renameEc.message().c_str()));
   }
 #endif
+  cache::CacheFileIndex::recordWrite();
 }
 
 void CacheManager::invalidate() {
@@ -396,6 +724,8 @@ void CacheManager::invalidate() {
   cacheDisabled_ = true;
   cacheUsedInLastPrompt_ = false;
   activeCacheSavedToDisk_ = false;
+  activeCacheDirty_ = false;
+  activeEphemeral_ = false;
 }
 
 bool CacheManager::isCacheDisabled() const { return cacheDisabled_; }

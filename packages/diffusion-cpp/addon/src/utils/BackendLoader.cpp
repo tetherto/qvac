@@ -10,12 +10,20 @@
 #include <ggml-backend.h>
 
 #include "utils/LoggingMacros.hpp"
+#include "utils/ModuleBackendsDir.hpp"
 #endif
 
 namespace qvac_lib_inference_addon_sd {
 namespace {
 
 #ifdef GGML_BACKEND_DL
+// ggml reads the backends dir with fs::u8path, and path::string() is ANSI on
+// Windows (it throws on characters the code page cannot map).
+std::string utf8(const std::filesystem::path& path) {
+  const auto u8 = path.u8string();
+  return {reinterpret_cast<const char*>(u8.data()), u8.size()};
+}
+
 std::string backendDeviceTypeToString(enum ggml_backend_dev_type type) {
   switch (type) {
   case GGML_BACKEND_DEVICE_TYPE_CPU:
@@ -83,6 +91,16 @@ void logBackendRegistrySnapshot() {
   }
 }
 
+// Module file naming follows ggml-backend-reg.cpp: no lib prefix and .dll
+// on Windows, lib prefix and .so elsewhere.
+#ifdef _WIN32
+constexpr const char* BACKEND_MODULE_PREFIX = "qvac-diffusion-ggml-";
+constexpr const char* BACKEND_MODULE_EXTENSION = ".dll";
+#else
+constexpr const char* BACKEND_MODULE_PREFIX = "libqvac-diffusion-ggml-";
+constexpr const char* BACKEND_MODULE_EXTENSION = ".so";
+#endif
+
 void logBackendModulePathSnapshot(
     const std::filesystem::path& backendsDirPath) {
   using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
@@ -92,7 +110,7 @@ void logBackendModulePathSnapshot(
   QLOG_IF(
       Priority::INFO,
       "Backend module path exists=" + std::string(exists ? "true" : "false") +
-          " path='" + backendsDirPath.string() + "'");
+          " path='" + utf8(backendsDirPath) + "'");
   if (ec) {
     QLOG_IF(
         Priority::WARNING,
@@ -126,9 +144,16 @@ void logBackendModulePathSnapshot(
           "Backend module path iteration error: " + ec.message());
       break;
     }
-    const auto filename = dirEntry.path().filename().string();
-    if (filename.rfind("libqvac-diffusion-ggml-", 0) == 0 &&
-        dirEntry.path().extension() == ".so") {
+    // MSVC's u8string() throws on a name that is not valid UTF-16; skip it
+    // rather than fail the model load from a log-only scan.
+    std::string filename;
+    try {
+      filename = utf8(dirEntry.path().filename());
+    } catch (const std::exception&) {
+      continue;
+    }
+    if (filename.rfind(BACKEND_MODULE_PREFIX, 0) == 0 &&
+        dirEntry.path().extension() == BACKEND_MODULE_EXTENSION) {
       entries.push_back(filename);
     }
   }
@@ -137,7 +162,7 @@ void logBackendModulePathSnapshot(
     QLOG_IF(
         Priority::WARNING,
         "No qvac diffusion GGML backend modules found under: " +
-            backendsDirPath.string());
+            utf8(backendsDirPath));
     return;
   }
 
@@ -161,17 +186,16 @@ void loadBackendModulesOnce(const std::string& backendsDir) {
   static std::once_flag backendsLoaded;
   std::call_once(backendsLoaded, [&backendsDir]() {
     using Priority = qvac_lib_inference_addon_cpp::logger::Priority;
-    if (!backendsDir.empty()) {
-      std::filesystem::path backendsDirPath(backendsDir);
-#ifdef BACKENDS_SUBDIR
-      backendsDirPath = backendsDirPath / BACKENDS_SUBDIR;
-      backendsDirPath = backendsDirPath.lexically_normal();
-#endif
+    // A configured directory is scanned as given. An empty one resolves to the
+    // directory next to this module (see ModuleBackendsDir.hpp).
+    const std::filesystem::path backendsDirPath =
+        resolveBackendsDir(backendsDir);
+    if (!backendsDirPath.empty()) {
       QLOG_IF(
           Priority::INFO,
-          "Loading GPU backends from: " + backendsDirPath.string());
+          "Loading GPU backends from: " + utf8(backendsDirPath));
       logBackendModulePathSnapshot(backendsDirPath);
-      ggml_backend_load_all_from_path(backendsDirPath.string().c_str());
+      ggml_backend_load_all_from_path(utf8(backendsDirPath).c_str());
     } else {
       QLOG_IF(Priority::INFO, "Loading GPU backends from default path");
       ggml_backend_load_all();

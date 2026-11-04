@@ -40,6 +40,25 @@ auto startGatedTask(js_env_t* env, js_callback_info_t* /*info*/) -> js_value_t* 
   });
 } JSCATCH
 
+/// startGatedTask with a result, which a terminated env must never marshal.
+auto startGatedValueTask(js_env_t* env, js_callback_info_t* /*info*/)
+    -> js_value_t* try {
+  return js::JsAsyncTask::run(
+      env,
+      []() {
+        gateStarted.store(1);
+        while (gateRelease.load() == 0) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        gateFinished.store(1);
+        return int32_t{1};
+      },
+      [](js_env_t* env, const int32_t& value) {
+        return js::Number::create(env, value);
+      });
+}
+JSCATCH
+
 auto releaseGate(js_env_t* /*env*/, js_callback_info_t* /*info*/) -> js_value_t* {
   gateRelease.store(1);
   return nullptr;
@@ -73,6 +92,74 @@ auto startFailingTask(js_env_t* env, js_callback_info_t* /*info*/) -> js_value_t
       env, []() { throw std::runtime_error("boom from JsAsyncTask worker"); });
 } JSCATCH
 
+auto startDoublingTask(js_env_t* env, js_callback_info_t* info)
+    -> js_value_t* try {
+  const auto args = js::getArguments(env, info);
+  if (args.size() != 1) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "Expected (value: number)");
+  }
+  int32_t value = 0;
+  JS(js_get_value_int32(env, args[0], &value));
+
+  return js::JsAsyncTask::run(
+      env,
+      [value]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        return value * 2;
+      },
+      [](js_env_t* env, const int32_t& doubled) {
+        return js::Number::create(env, doubled);
+      });
+}
+JSCATCH
+
+auto startFailingValueTask(js_env_t* env, js_callback_info_t* /*info*/)
+    -> js_value_t* try {
+  return js::JsAsyncTask::run(
+      env,
+      []() -> int32_t {
+        throw qvac_errors::StatusError(
+            qvac_errors::general_error::InvalidArgument,
+            "bad input for JsAsyncTask worker");
+      },
+      [](js_env_t* env, const int32_t& value) {
+        return js::Number::create(env, value);
+      });
+}
+JSCATCH
+
+/// Calls back into JS while marshalling, so a throw in the callback fails a
+/// js_* call inside marshal.
+auto startThrowingMarshalTask(js_env_t* env, js_callback_info_t* info)
+    -> js_value_t* try {
+  const auto args = js::getArguments(env, info);
+  if (args.size() != 1) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "Expected (callback: function)");
+  }
+  js_ref_t* ref;
+  JS(js_create_reference(env, args[0], 1, &ref));
+  std::shared_ptr<js_ref_t> callback(
+      ref, [env](js_ref_t* r) { js_delete_reference(env, r); });
+
+  return js::JsAsyncTask::run(
+      env,
+      []() { return int32_t{0}; },
+      [callback](js_env_t* env, const int32_t&) {
+        js_value_t* function;
+        JS(js_get_reference_value(env, callback.get(), &function));
+        js_value_t* receiver;
+        JS(js_get_undefined(env, &receiver));
+        js_value_t* result;
+        JS(js_call_function(env, receiver, function, 0, nullptr, &result));
+        return result;
+      });
+}
+JSCATCH
+
 } // namespace
 
 auto testJsAsyncTaskExports(js_env_t* env, js_value_t* exports) -> js_value_t* {
@@ -91,11 +178,15 @@ auto testJsAsyncTaskExports(js_env_t* env, js_value_t* exports) -> js_value_t* {
 
   V("resetGate", resetGate)
   V("startGatedTask", startGatedTask)
+  V("startGatedValueTask", startGatedValueTask)
   V("releaseGate", releaseGate)
   V("taskStarted", taskStarted)
   V("taskFinished", taskFinished)
   V("startTimedTask", startTimedTask)
   V("startFailingTask", startFailingTask)
+  V("startDoublingTask", startDoublingTask)
+  V("startFailingValueTask", startFailingValueTask)
+  V("startThrowingMarshalTask", startThrowingMarshalTask)
 #undef V
 
   return exports;

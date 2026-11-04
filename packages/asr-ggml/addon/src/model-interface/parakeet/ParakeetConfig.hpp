@@ -1,10 +1,19 @@
 #pragma once
 
+#include <optional>
 #include <string>
 
 #include "model-interface/ParakeetTypes.hpp"
 
 namespace qvac::asrggml::parakeet {
+
+struct SpeakerAttributionConfig {
+  std::string modelPath;
+  std::optional<bool> mergeSameSpeaker;
+  std::optional<int> minSegmentMs;
+  std::optional<int> padSegmentMs;
+  bool operator==(const SpeakerAttributionConfig&) const = default;
+};
 
 struct ParakeetConfig {
   static constexpr int DEFAULT_STREAMING_CHUNK_MS = 2000;
@@ -13,7 +22,7 @@ struct ParakeetConfig {
   static constexpr int DEFAULT_STREAMING_HISTORY_MS = 30000;
   static constexpr int DEFAULT_STREAMING_SPK_CACHE_LEN = 188;
   static constexpr int DEFAULT_STREAMING_FIFO_LEN = 188;
-  static constexpr int DEFAULT_STREAMING_CHUNK_LEFT_CONTEXT_MS = 80;
+  static constexpr int DEFAULT_STREAMING_CHUNK_LEFT_CONTEXT_MS = -1;
   static constexpr int DEFAULT_STREAMING_CHUNK_RIGHT_CONTEXT_MS = 560;
   static constexpr int DEFAULT_STREAMING_SPK_CACHE_UPDATE_PERIOD = 144;
   // speech-cpp's StreamingOptions energy-VAD defaults.
@@ -24,6 +33,8 @@ struct ParakeetConfig {
   // tuning: onset 0.641, minimum 0.511 s, which truncates to 510 ms).
   static constexpr float DEFAULT_DIARIZATION_THRESHOLD = 0.641F;
   static constexpr int DEFAULT_DIARIZATION_MIN_SEGMENT_MS = 510;
+  static constexpr float DEFAULT_NEMOTRON_DIARIZATION_THRESHOLD = 0.5F;
+  static constexpr int DEFAULT_NEMOTRON_DIARIZATION_MIN_SEGMENT_MS = 200;
   // speech-cpp's EngineOptions prewarm default.
   static constexpr float DEFAULT_PREWARM_AUDIO_SECONDS = 1.0F;
 
@@ -36,6 +47,8 @@ struct ParakeetConfig {
 
   int maxThreads = 4;
   bool useGPU = false;
+  std::string backend;
+  std::optional<SpeakerAttributionConfig> speakerAttribution;
   int sampleRate = 16000;
   int channels = 1;
   bool captionEnabled = false;
@@ -139,10 +152,10 @@ struct ParakeetConfig {
   // `.bare` module while the GPU backends ship as separately
   // dlopen()'d `.so` files (libqvac-speech-ggml-{vulkan,opencl}.so
   // plus the per-arch CPU variants under
-  // libqvac-speech-ggml-cpu-android_armv*_*.so). The JS layer
-  // resolves `backendsDir` to that prebuild folder at construction
-  // time so `ggml_backend_load_all_from_path()` finds them at
-  // runtime; `openclCacheDir` sets `$GGML_OPENCL_CACHE_DIR` for
+  // libqvac-speech-ggml-cpu-android_armv*_*.so). A set `backendsDir`
+  // is scanned as given; unset, the addon looks beside the loaded
+  // module, and `ggml_backend_load_all_from_path()` finds them at
+  // runtime. `openclCacheDir` sets `$GGML_OPENCL_CACHE_DIR` for
   // ggml-opencl's program-binary cache (Android-only, ignored
   // elsewhere). Both default to empty -> let parakeet-cpp fall back
   // to its own resolution (ggml's compile-time default search path
@@ -156,6 +169,8 @@ struct ParakeetConfig {
   bool operator==(const ParakeetConfig& other) const {
     return modelPath == other.modelPath && modelType == other.modelType &&
            maxThreads == other.maxThreads && useGPU == other.useGPU &&
+           backend == other.backend &&
+           speakerAttribution == other.speakerAttribution &&
            sampleRate == other.sampleRate && channels == other.channels &&
            captionEnabled == other.captionEnabled &&
            timestampsEnabled == other.timestampsEnabled && seed == other.seed &&

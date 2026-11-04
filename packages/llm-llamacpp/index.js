@@ -15,7 +15,8 @@ function normalizeRunOptions(runOptions) {
             prefill: false,
             generationParams: undefined,
             cacheKey: undefined,
-            saveCacheToDisk: false,
+            ephemeral: false,
+            baseCacheKey: undefined,
             rejectWhenBusy: undefined,
         };
     }
@@ -35,8 +36,16 @@ function normalizeRunOptions(runOptions) {
     if (options.cacheKey !== undefined && typeof options.cacheKey !== "string") {
         throw new TypeError("cacheKey must be a string when provided");
     }
-    if (options.saveCacheToDisk !== undefined && typeof options.saveCacheToDisk !== "boolean") {
-        throw new TypeError("saveCacheToDisk must be a boolean when provided");
+    if (options.saveCacheToDisk !== undefined) {
+        throw new TypeError("saveCacheToDisk was removed: a cached conversation stays in memory and is written to " +
+            "its cacheKey file when it is set aside, evicted or the model unloads; call " +
+            "saveCache(cacheKey) to write it now, or set ephemeral: true to never write it");
+    }
+    if (options.ephemeral !== undefined && typeof options.ephemeral !== "boolean") {
+        throw new TypeError("ephemeral must be a boolean when provided");
+    }
+    if (options.baseCacheKey !== undefined && typeof options.baseCacheKey !== "string") {
+        throw new TypeError("baseCacheKey must be a string when provided");
     }
     if (options.rejectWhenBusy !== undefined && typeof options.rejectWhenBusy !== "boolean") {
         throw new TypeError("rejectWhenBusy must be a boolean when provided");
@@ -45,16 +54,29 @@ function normalizeRunOptions(runOptions) {
         prefill: options.prefill === true,
         generationParams: normalizeGenerationParams(options.generationParams),
         cacheKey: options.cacheKey,
-        saveCacheToDisk: options.saveCacheToDisk === true,
+        ephemeral: options.ephemeral === true,
+        baseCacheKey: options.baseCacheKey,
         // Left undefined when unset so admission falls back to the instance default.
         rejectWhenBusy: options.rejectWhenBusy,
     };
+}
+// Malformed parts (null, non-objects) are not byte media: they pass through
+// untouched so the native validator rejects them with `InvalidInputFormat`.
+function isByteMediaPart(part) {
+    const candidate = part;
+    return (candidate !== null &&
+        typeof candidate === "object" &&
+        candidate.type === "media" &&
+        candidate.content instanceof Uint8Array);
 }
 function promptToAddonMessages(prompt, runOptions) {
     if (!Array.isArray(prompt)) {
         throw new TypeError("Prompt input must be Message[]");
     }
-    const { prefill, generationParams, cacheKey, saveCacheToDisk } = normalizeRunOptions(runOptions);
+    const { prefill, generationParams, cacheKey, ephemeral, baseCacheKey } = normalizeRunOptions(runOptions);
+    // Only ever JSON-serialized into the addon's text message: a byte-buffer
+    // media part reaches the native side path-less, bound to the hoisted buffer
+    // by position, so the wire shape is wider than the public `Message` type.
     const textMessages = [];
     const mediaItems = [];
     for (const message of prompt) {
@@ -62,10 +84,26 @@ function promptToAddonMessages(prompt, runOptions) {
         if (media.role === "user" && media.type === "media" && media.content instanceof Uint8Array) {
             mediaItems.push(media.content);
             textMessages.push({ ...media, content: "" });
+            continue;
         }
-        else {
-            textMessages.push(message);
+        // Ordered parts: hoist each media part's bytes next to the other media
+        // messages and leave a path-less part behind. The native side records the
+        // plan in marker order, so the bytes still bind to the right markers.
+        const text = message;
+        if (Array.isArray(text.content)) {
+            textMessages.push({
+                ...text,
+                content: text.content.map((part) => {
+                    if (isByteMediaPart(part)) {
+                        mediaItems.push(part.content);
+                        return { type: "media" };
+                    }
+                    return part;
+                }),
+            });
+            continue;
         }
+        textMessages.push(message);
     }
     const promptMessages = [];
     for (const mediaData of mediaItems) {
@@ -77,7 +115,8 @@ function promptToAddonMessages(prompt, runOptions) {
         prefill,
         generationParams,
         cacheKey,
-        saveCacheToDisk,
+        ephemeral,
+        baseCacheKey,
     });
     return promptMessages;
 }
@@ -97,8 +136,8 @@ const GENERATION_PARAM_KEYS = new Set([
     "grammar",
     "json_schema",
     "tool_choice",
+    "parallel_tool_calls",
     "reasoning_budget",
-    "remove_thinking_from_context",
 ]);
 // Normalizes the per-request `generationParams.json_schema` field. The
 // addon binding expects a string; callers commonly pass a plain object
@@ -137,13 +176,13 @@ function normalizeGenerationParams(generationParams) {
             params[key] = value;
     }
     const sanitized = params;
-    if (sanitized.remove_thinking_from_context !== undefined &&
-        typeof sanitized.remove_thinking_from_context !== "boolean") {
-        throw new TypeError("generationParams.remove_thinking_from_context must be a boolean when provided");
-    }
     if (sanitized.tool_choice !== undefined &&
         (typeof sanitized.tool_choice !== "string" || sanitized.tool_choice.length === 0)) {
         throw new TypeError('generationParams.tool_choice must be "auto", "none", "required" or a declared function name');
+    }
+    if (sanitized.parallel_tool_calls !== undefined &&
+        typeof sanitized.parallel_tool_calls !== "boolean") {
+        throw new TypeError("generationParams.parallel_tool_calls must be a boolean when provided");
     }
     const hasGrammar = typeof sanitized.grammar === "string" && sanitized.grammar.length > 0;
     const hasJsonSchema = sanitized.json_schema !== undefined &&
@@ -251,6 +290,15 @@ function sanitizePromptForLog(prompt) {
         const media = msg;
         if (media && media.type === "media" && media.content instanceof Uint8Array) {
             return { ...media, content: `[Uint8Array byteLength=${media.content.byteLength}]` };
+        }
+        const text = msg;
+        if (Array.isArray(text?.content)) {
+            return {
+                ...text,
+                content: text.content.map((part) => isByteMediaPart(part)
+                    ? { ...part, content: `[Uint8Array byteLength=${part.content.byteLength}]` }
+                    : part),
+            };
         }
         return msg;
     });
@@ -780,6 +828,102 @@ const LlmLlamacpp = class LlmLlamacpp {
     /// Sourced from the native scheduler's activeJobs() — no JS-side counter.
     get _hasActiveResponse() {
         return (this.addon ? this.addon.activeJobs() : 0) > 0;
+    }
+    /**
+     * Write the conversation kept in memory for `cacheKey` to that file now:
+     * the active single-prompt conversation, a batch conversation kept in its
+     * slot, or one in the RAM tier. Resolves once the file is written. When a
+     * request on that key is running it waits for it to finish, so the file
+     * always holds a committed state. A request still queued is not waited
+     * for: `run()` resolves when the request is accepted, so read its response
+     * to the end before saving when the file must hold that turn. Resolves without writing when the file
+     * already holds the conversation. Rejects when nothing is cached under the
+     * key and no file exists, or when the write fails (the conversation then
+     * stays in memory, still unsaved, so the call can be retried). Writes
+     * ephemeral conversations too.
+     */
+    async saveCache(cacheKey) {
+        if (typeof cacheKey !== "string" || cacheKey.length === 0) {
+            throw new TypeError("saveCache(cacheKey) requires a non-empty string");
+        }
+        if (!this.addon) {
+            throw new Error("Model is not loaded");
+        }
+        await this.addon.saveCache(cacheKey);
+    }
+    /**
+     * Drop the conversation kept in memory for `cacheKey` — the active
+     * single-prompt conversation, a batch conversation kept in its slot, its
+     * RAM-tier entry and its checkpoints — without writing it, so no later
+     * eviction or unload writes it. When a request on that key is running it
+     * waits for it to finish. The file, if one was written, is left alone:
+     * delete it as well to remove the conversation from disk. Resolves when
+     * nothing is kept for the key.
+     */
+    async discardCache(cacheKey) {
+        if (typeof cacheKey !== "string" || cacheKey.length === 0) {
+            throw new TypeError("discardCache(cacheKey) requires a non-empty string");
+        }
+        if (!this.addon) {
+            throw new Error("Model is not loaded");
+        }
+        await this.addon.discardCache(cacheKey);
+    }
+    /**
+     * Tokens `input` takes on the loaded model, without running it. `text`
+     * alone is counted raw, with no chat template and no BOS. With `history` or
+     * `tools` the conversation, `text` (even empty) appended as the last user
+     * turn, is rendered by the chat template as the opening request of a fresh
+     * conversation, with BOS and the generation prompt, as `run()` renders it.
+     * Tools the template leaves out are not counted. `tools` alone has no
+     * message to render and rejects, as `run()` does. Never queues behind
+     * `run()`: it reads only load-time state. A wrong-typed argument rejects
+     * with `TypeError`, and before `load()` it rejects with `Model is not
+     * loaded`. Other invalid input, a media message included, rejects with code
+     * `InvalidArgument`; a conversation the chat template cannot render fails
+     * as it would in `run()`.
+     */
+    async calcTokens(input) {
+        if (input === null || typeof input !== "object") {
+            throw new TypeError("calcTokens(input) requires an object");
+        }
+        const text = input.text ?? undefined;
+        const history = input.history ?? undefined;
+        const tools = input.tools ?? undefined;
+        if (text !== undefined && typeof text !== "string") {
+            throw new TypeError("calcTokens: text must be a string");
+        }
+        if (history !== undefined && !Array.isArray(history)) {
+            throw new TypeError("calcTokens: history must be a Message[]");
+        }
+        if (tools !== undefined && !Array.isArray(tools)) {
+            throw new TypeError("calcTokens: tools must be an array of function definitions");
+        }
+        if (!this.addon) {
+            throw new Error("Model is not loaded");
+        }
+        const params = {};
+        if (text !== undefined)
+            params.text = text;
+        // Media bytes are dropped rather than serialized: the native side rejects
+        // any media message or ordered media part by its type.
+        if (history !== undefined) {
+            params.history = JSON.stringify(history.map((message) => {
+                if (message?.type === "media")
+                    return { ...message, content: "" };
+                const textMessage = message;
+                if (Array.isArray(textMessage?.content)) {
+                    return {
+                        ...message,
+                        content: textMessage.content.map((part) => isByteMediaPart(part) ? { type: "media" } : part),
+                    };
+                }
+                return message;
+            }));
+        }
+        if (tools !== undefined)
+            params.tools = JSON.stringify(tools);
+        return this.addon.calcTokens(params);
     }
     getState() {
         return this.state;

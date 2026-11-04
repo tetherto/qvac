@@ -14,6 +14,7 @@ export interface ServeStartupOptions {
   readonly cors?: boolean | undefined
   readonly docs?: boolean | undefined
   readonly port: number
+  readonly readyFd?: number | undefined
 }
 
 export function validateServeStartup(
@@ -24,6 +25,16 @@ export function validateServeStartup(
     throw new ServeOptionsError(
       '--cors',
       '--cors requires at least one explicit origin from --cors-origin or serve.cors.origins'
+    )
+  }
+  // 0-2 are stdio; writing the signal there would mix it into logs or input.
+  if (
+    options.readyFd !== undefined &&
+    !(Number.isInteger(options.readyFd) && options.readyFd >= 3)
+  ) {
+    throw new ServeOptionsError(
+      '--ready-fd',
+      '--ready-fd must be an integer descriptor of 3 or more'
     )
   }
   // The docs allowlist is derived from the configured port, which is only known
@@ -57,5 +68,22 @@ export function checkNetworkExposure(options: NetworkExposureOptions): string | 
     '--host',
     `binding to non-loopback host "${options.host}" would expose an unauthenticated API to the network. ` +
       'Pass --api-key <key> or --api-key-file <path> to require authentication, or --allow-unauthenticated to accept the risk.'
+  )
+}
+
+export interface AdminExposureOptions {
+  readonly host: string
+  readonly apiKey?: string | undefined
+  readonly enableAdmin: boolean
+}
+
+// Unlike the plain exposure check, --allow-unauthenticated does not lift this:
+// admin routes act on the whole server, not on one request.
+export function checkAdminExposure(options: AdminExposureOptions): void {
+  if (!options.enableAdmin || isLoopbackHost(options.host) || options.apiKey) return
+  throw new ServeOptionsError(
+    '--enable-admin',
+    `--enable-admin on non-loopback host "${options.host}" requires --api-key or --api-key-file, ` +
+      'even with --allow-unauthenticated.'
   )
 }

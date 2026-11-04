@@ -14,6 +14,270 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+### Breaking
+
+- `assessFit` returns `{ status, devices, stats }`: the device the load
+  resolves to, then the host CPU. `status` is `fits`, `does-not-fit` or
+  `unknown`. An unreadable model or an invalid request rejects
+  ([#5471](https://github.com/tetherto/qvac/pull/5471)).
+- On an iOS device, `assessFit` checks the load and its margin against the
+  app's memory limit ([#5471](https://github.com/tetherto/qvac/pull/5471)).
+
+### Added
+
+- Parakeet backend selection through `parakeetConfig.backend` and `assessFit`.
+- Native speaker-attributed batch transcription with a separate diarization
+  model and merge, minimum-duration and padding options.
+- Parakeet streaming token IDs, finality, chunk indices and native end-of-turn
+  timing and confidence, including empty final markers. Transcript chunks are
+  delivered before their end-of-turn event in framework and duplex streaming.
+
+### Changed
+
+- Update the shared `speech-cpp` native dependency to `2026-10-29`
+  ([#5420](https://github.com/tetherto/qvac/pull/5420),
+  [#5447](https://github.com/tetherto/qvac/pull/5447)).
+- `assessFit` names the device by its ggml device name (`CPU`, `CUDA0`,
+  `MTL0`, `GPUOpenCL`), counts Android's OpenCL GPU as sharing host memory,
+  and gives a device that reports no memory of its own the host's free and
+  total figures ([#5447](https://github.com/tetherto/qvac/pull/5447)).
+
+## [0.11.2] - 2026-10-28
+
+### Added
+
+- `assessFit` reports `coremlBytes` for Parakeet models on macOS and iOS: the
+  memory of the Core ML diarizer sidecars a Nemotron 3 Diarization or
+  Sortformer v2.1 workload can load, which the verdict counts on unified
+  memory. It is 0 without sidecars and on other platforms
+  ([#5250](https://github.com/tetherto/qvac/pull/5250)).
+- `mossTranscribeConfig.backend` and the MOSS `assessFit` request accept
+  `metal`, which selects the Metal device
+  ([#5404](https://github.com/tetherto/qvac/pull/5404)).
+
+### Changed
+
+- MOSS-Transcribe-Diarize decodes 29-42% faster on Metal (M3 Ultra), with
+  identical transcripts ([#5404](https://github.com/tetherto/qvac/pull/5404),
+  [native #374](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/374)).
+- Use fused CPU encoder attention for MOSS-Transcribe-Diarize
+  ([#5368](https://github.com/tetherto/qvac/pull/5368)).
+- Align the shared native `speech-cpp` source to `2026-10-27` across the speech
+  addons ([#5397](https://github.com/tetherto/qvac/pull/5397)). Parakeet TDT
+  models with a Core ML decoder sidecar, TranscribePsy among them, use about
+  26 MiB less memory once loaded on macOS and iOS, measured on a Mac Studio
+  M3 Ultra
+  ([native #378](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/378)).
+- The shared native `ggml-speech` moves to `2026-10-27` across the speech
+  addons, which also speeds up single-query Metal softmax on long KV caches
+  ([#5392](https://github.com/tetherto/qvac/pull/5392)).
+
+### Fixed
+
+- Adreno GPUs (Android, OpenCL): matrix products on every quantized weight
+  type whose sums exceed the fp16 range no longer come back as infinity;
+  `ggml-speech` `2026-10-23` fixed q8_0 only
+  ([#5392](https://github.com/tetherto/qvac/pull/5392)).
+- Metal: a fused SwiGLU mat-vec whose output overlaps its inputs, and copies
+  into strided destinations, no longer produce wrong values; quantized matrix
+  products keep F32 activations
+  ([#5392](https://github.com/tetherto/qvac/pull/5392)).
+- Vulkan: tensor views not aligned for the speech ops fall back instead of
+  returning wrong data ([#5392](https://github.com/tetherto/qvac/pull/5392)).
+
+## [0.11.1] - 2026-10-23
+
+### Added
+
+- Core ML diarizer sidecars on macOS and iOS: Nemotron 3 Diarization and
+  Sortformer v2.1 run their whole network on the Neural Engine when a
+  `<model>-diarizer-<frames>.mlmodelc` sits beside the GGUF, and fall back to
+  ggml above its capacity or on failure
+  ([#5326](https://github.com/tetherto/qvac/pull/5326)).
+- Parakeet CTC loads the Mosaic and Mosaic Compact GGUFs, with their optional
+  Core ML encoder sidecar on macOS and iOS
+  ([#5326](https://github.com/tetherto/qvac/pull/5326)).
+
+### Changed
+
+- Move the shared native `speech-cpp` source pin from `2026-10-20#1` to
+  `2026-10-23#2` across the speech addons
+  ([#5326](https://github.com/tetherto/qvac/pull/5326)). Whisper's
+  `assessFit` sizes integrated and unified-memory GPUs that report no capacity
+  of their own against host RAM, and returns the reason
+  `memory-capacity-unavailable` when no capacity is known.
+
+### Fixed
+
+- Nemotron 3 Diarization loads again. The `speech-cpp` `2026-10-20#1` pin
+  rejected its GGUF as having no encoder weights
+  ([#5326](https://github.com/tetherto/qvac/pull/5326)).
+- Adreno GPUs (Android, OpenCL): long Parakeet recordings, TranscribePsy
+  among them, no longer lose most of their text after the first window, and
+  attention over 32 or more tokens with unpadded lengths is computed
+  correctly. The shared native `ggml-speech` moves to `2026-10-23` across the
+  speech addons ([#5326](https://github.com/tetherto/qvac/pull/5326)).
+
+## [0.11.0] - 2026-10-22
+
+### Added
+
+- TranscribePsy-250M-EU-sub (`transcribepsy-250m-eu-sub`): the 254M
+  FastConformer-TDT distilled from Parakeet-TDT-0.6B-v3 for eight European
+  languages loads as a TDT model ([#5245](https://github.com/tetherto/qvac/pull/5245)).
+  Long recordings use the 60 s / 25 % windows the model recommends when
+  `longFormWindowFrames` is 0, and on macOS and iOS its published Core ML
+  distribution (an encoder-less GGUF with encoder and decoder sidecars) runs
+  both on the Neural Engine. New example
+  `examples/parakeet-transcribepsy-transcribe.js`.
+- Bounded FuzzTest coverage for the untrusted s16le PCM decoder
+  (`decodeS16lePcm`) ([#4603](https://github.com/tetherto/qvac/pull/4603)).
+  Linux C++ CI runs the suite after unit tests. The decoder compiles without
+  whisper/parakeet, so ASan and LeakSanitizer stay at full strength. No
+  public addon API changes.
+
+### Changed
+
+- Align the shared native `speech-cpp` source pin to `2026-10-20#1` across
+  the speech addons ([#5245](https://github.com/tetherto/qvac/pull/5245)).
+  The pinned revision adds TranscribePsy, bounds the long-form encoder's
+  memory to one cached graph per windowed pass, balances automatic long-form
+  windows and runs the TDT decoder on the CPU backend under OpenCL.
+
+## [0.10.0] - 2026-10-14
+
+### Breaking
+
+- `assessFit` returns a Promise; the synchronous binding is removed
+  ([#5010](https://github.com/tetherto/qvac/pull/5010)). The fit runs on a worker thread so the JavaScript loop keeps
+  running, and concurrent calls run one at a time within the addon. A model
+  the fitter cannot read still resolves with `status: 'error'`; a malformed
+  request rejects instead of throwing. Change
+  `const fit = ASRGgml.assessFit(request)` to `const fit = await ASRGgml.assessFit(request)`.
+
+### Added
+
+- MOSS-Transcribe `backend` selector on `mossTranscribeConfig` and on
+  `assessFit({ engine: 'moss-transcribe', ... })`: `auto` (default), `cpu`,
+  `cuda`, `vulkan`, or an exact ggml device name such as `CUDA0`. An
+  explicit selection overrides `useGPU` (`gpuLayers` for fit) and fails at
+  load, or returns a fit error, when that device is unavailable;
+  `getBackendInfo()` reports the resolved backend after load ([#5001](https://github.com/tetherto/qvac/pull/5001)).
+
+### Changed
+
+- `@qvac/infer-base` dependency raised `^0.6.2` -> `^0.8.0`
+  ([#5076](https://github.com/tetherto/qvac/pull/5076)). `^0.6.2` never took 0.7.0 or 0.8.0; 0.8.0 adds an
+  optional `retainOutput: false` on `QvacResponse` and
+  `createJobHandler().start()` for consuming output events through
+  `onUpdate()` without keeping every chunk in memory ([#5028](https://github.com/tetherto/qvac/pull/5028)).
+  Retention stays enabled by default and this package does not pass the option, so there is no API or
+  runtime behaviour change for this package.
+- `speech-cpp` is pinned to `2026-10-12` port-version 1, the registry
+  revision that ships the merged MOSS CUDA/Vulkan backend source, the same
+  pin as the other speech addons ([#5001](https://github.com/tetherto/qvac/pull/5001)).
+
+### Fixed
+
+- The linux-x64 prebuild ships the CUDA backend again, next to Vulkan and
+  the CPU variants; releases 0.6.0 to 0.9.0 left it out. Where the NVIDIA
+  driver and the CUDA 13 runtime libraries (cudart, cuBLAS) resolve, GPU
+  requests run on CUDA instead of Vulkan; other hosts keep Vulkan or CPU
+  ([#4985](https://github.com/tetherto/qvac/pull/4985)).
+
+## [0.9.0] - 2026-10-14
+
+### Breaking
+
+- `binding.js` is now `module.exports = require('#host-addon')`, a specifier
+  the Bare module lexer can follow, so `bare-pack` bundles an app that
+  requires `@qvac/asr-ggml`. `#host-addon` maps each host to its platform
+  package alone, with no fallback.
+- The meta package is no longer an addon. Each platform package is an ordinary
+  one: its module is built as `qvac__asr-ggml-<suffix>` (every iOS host shares
+  `ios`) and sits at `prebuilds/<host>/qvac__asr-ggml-<suffix>.bare`, with its
+  ggml backends in `prebuilds/<host>/qvac__asr-ggml-<suffix>/`.
+- The addon finds its ggml backends itself, next to the loaded module, for
+  every engine and for `assessFit`. An explicit `backendsDir` is now scanned as
+  given rather than as a prebuilds root under which `<host>/<module>` is
+  appended. `resolveBackendsDir()` and `lib/backends.js` are removed.
+- A source build is loadable once `npm run link:platform` (part of
+  `build:native`) stages it as the host's platform package in `node_modules/`.
+
+## [0.8.1] - 2026-10-13
+
+### Added
+
+- `package.json` records the `ggml-speech` build the prebuilds ship as
+  `qvac["ggml-speech"]`. The speech addons ship their ggml backends under the
+  same file names, so an app that bundles several of them needs releases that
+  record the same build.
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.4.0` -> `1.5.0`
+  ([#5030](https://github.com/tetherto/qvac/pull/5030)). The new library adds
+  `JsAsyncTask::run(env, work, marshal)`, which resolves a Promise with a value
+  marshalled on the JavaScript loop, and includes `<uv.h>` from headers that
+  use libuv types now that libjs no longer includes it from `<js.h>`.
+  Compile-time only; no API or runtime behaviour change for this package.
+- Update `speech-cpp` to `2026-10-12` to keep the native speech source pin aligned across all speech addons.
+
+- Raise the `speech-cpp` floor to `2026-10-09`. On macOS and iOS,
+  MOSS-Transcribe-Diarize runs its audio encoder on a Core ML sidecar when
+  `moss-transcribe-diarize-encoder.mlmodelc` sits next to the GGUF; without
+  one nothing changes.
+- Pin `ggml-speech` to `2026-10-07#1` and `speech-cpp` to `2026-10-09`, the
+  same versions as the other speech addons, instead of taking at least those
+  versions.
+
+## [0.8.0] - 2026-10-09
+
+### Added
+
+- `assessFit` supports `engine: 'moss-transcribe'` with an explicit audio duration and the existing prompt, hotword and token options. It projects weights, encoder/decoder graphs, KV cache and host memory without loading model weights.
+
+- Whisper `assessFit` takes the registry's weightless descriptions of a
+  whisper model and its Silero VAD model as `modelPath` and `vadModelPath`,
+  and projects them exactly as it projects the files, so a whisper load can be
+  assessed before it is downloaded.
+- MOSS-Transcribe-Diarize engine (`engine: 'moss-transcribe'`, OpenMOSS
+  MOSS-Transcribe-Diarize): one pass over a whole recording returns
+  timestamped segments with the speaker label (`speaker: 'S01'`) and a 0-based
+  `speakerId`, validated for Spanish and Chinese. `run(audio, options)` takes
+  per-request `hotwords` (names and terms spelled as given), a custom
+  `prompt` and `maxNewTokens`; the other engines reject run options. There is
+  no streaming or reload for this engine.
+- Nemotron 3 Diarization GGUF support in the Parakeet engine for offline and
+  streaming speaker segments with up to eight speakers.
+
+### Changed
+
+- Raise the `ggml-speech` floor to `2026-10-02`. The speech ggml now includes
+  the ggml changes of the QVAC LLM stack, so both build from the same backend
+  code. Same models, same backends, no API change.
+- Update Whisper to v1.9.4 through `speech-cpp` 2026-09-29#1, preserving the
+  QVAC seed, BCI windowed-attention and streaming/VAD patches.
+- Raise the `speech-cpp` floor to `2026-10-05`, the revision that ships
+  Nemotron 3 Diarization and MOSS-Transcribe-Diarize with hotwords. Nemotron 3
+  Diarization now runs on CUDA, Vulkan, Metal and OpenCL. Offline inputs longer
+  than 90 s keep stable speakers: a single pass mixed speakers up past about
+  two minutes and failed past 400 s. `assessFit` no longer crashes on
+  Nemotron 3 Diarization models. Same models, same API.
+- Raise the `speech-cpp` floor to `2026-10-07#1`, whose whisper fitter reads
+  the registry's weightless descriptions. Transcription is unchanged.
+
+### Fixed
+
+- MOSS transcription memory-fit estimates count shared compute-buffer metadata once.
+- Nemotron 3 Diarization streaming preserves first-chunk predictions with left
+  context, applies the same peak gain as offline inference, and retains an
+  explicitly requested 80 ms left context.
+- Raise the `ggml-speech` floor to `2026-09-30`. On Metal, `assessFit` no longer
+  reports more free device memory than total once the process has allocated
+  past the GPU's recommended working set, which made a model that does not fit
+  report `fits`. Transcription is unchanged.
+
 ## [0.7.0] - 2026-09-29
 
 ### Added

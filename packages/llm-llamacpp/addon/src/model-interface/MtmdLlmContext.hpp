@@ -1,19 +1,22 @@
 #pragma once
 
 #include <atomic>
+#include <deque>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include <llama.h>
 #include <llama/mtmd/mtmd.h>
 
-#include "../utils/ReasoningRollbackState.hpp"
 #include "../utils/ReasoningUtils.hpp"
-#include "../utils/RecurrentStateSnapshot.hpp"
+#include "../utils/RequestRollbackState.hpp"
+#include "../utils/SequenceStateSnapshot.hpp"
 #include "../utils/UTF8TokenBuffer.hpp"
 #include "LlmContext.hpp"
-#include "ReasoningBlockCompactor.hpp"
 #include "SequenceDriver.hpp"
+#include "SpeculativeRuntime.hpp"
+#include "SpeculativeSequence.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 
 /// Positional span paired with the KV-cell count it occupies. The two diverge
@@ -22,16 +25,6 @@ struct ContextUsage {
   llama_pos pos = 0;
   llama_pos cacheTokens = 0;
 };
-
-/// A multimodal session cache is only safe to restore when its header carries
-/// the full four-field metadata contract (`SessionMetadataField`). The GGSQ
-/// loader restores the sequence KV before this check, so any other count — a
-/// truncated/legacy header (`< 4`) or an unexpected layout (`> 4`) — must be
-/// rejected and the restored KV cleared, never accepted with a defaulted
-/// `cacheTokens`. See `MtmdLlmContext::loadCache`.
-[[nodiscard]] inline bool mtmdSessionMetadataIsComplete(size_t tokenCount) {
-  return tokenCount == SESSION_METADATA_FIELD_COUNT;
-}
 
 /// Multimodal LLM context. Implements both the legacy `LlmContext` API
 /// (driven by the single-prompt path in `LlamaModel`) and the per-sequence
@@ -48,7 +41,12 @@ public:
    * @param _llama_init - The result of initializing/loading the model using
    * .gguf file(s)
    */
-  MtmdLlmContext(common_params& commonParams, common_init_result_ptr llamaInit);
+  MtmdLlmContext(
+      common_params& commonParams, common_init_result_ptr llamaInit,
+      uint64_t maxImagePixels,
+      std::unique_ptr<
+          qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+          speculative = nullptr);
 
   /// Per-slot driver constructor for the continuous-batching path. Does
   /// not own llama handles or the vision context; `sharedVision` must
@@ -56,12 +54,12 @@ public:
   MtmdLlmContext(
       const common_params& commonParams, const LlmModelContext& shared,
       mtmd_context* sharedVision, llama_seq_id seqId,
-      llama_pos perSeqCtxCeiling = -1);
+      llama_pos perSeqCtxCeiling, uint64_t maxImagePixels);
 
   /**
    * The destructor.
    */
-  ~MtmdLlmContext() override = default;
+  ~MtmdLlmContext() override;
   MtmdLlmContext(const MtmdLlmContext&) = delete;
   MtmdLlmContext& operator=(const MtmdLlmContext&) = delete;
   MtmdLlmContext(MtmdLlmContext&&) = delete;
@@ -124,6 +122,27 @@ public:
    * Access the underlying llama model pointer.
    */
   llama_model* getModel() override { return modelCtx_.model; }
+  [[nodiscard]] qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime*
+  getSpeculative() const override {
+    return modelCtx_.speculative;
+  }
+  [[nodiscard]] qvac_lib_inference_addon_llama::speculative::SpeculativeStats
+  speculativeStats() const override {
+    return spec_.stats();
+  }
+  [[nodiscard]] bool speculativeEnabled() const override {
+    return spec_.enabled();
+  }
+  bool prepareSpeculativeDraft(
+      llama_pos pos, llama_token sampled, unsigned generatedTokens) override;
+  void finishSpeculativeDraft() override { spec_.afterDraft(); }
+  [[nodiscard]] std::vector<llama_token> speculativeDraft() const override {
+    return spec_.draft();
+  }
+  void discardSpeculativeDraft() override { spec_.discardDraft(); }
+  DraftStepResult onDraftLogitsReady(
+      int firstLogitIdx, llama_pos posBefore, unsigned generatedBefore,
+      const std::function<void(const std::string&)>& outputCallback) override;
 
   /**
    * Access the mutable common parameters associated with this context.
@@ -152,15 +171,54 @@ public:
 
   void syncPosition(llama_pos currentPos) override;
 
+  void captureHistoryCheckpoint(llama_pos pos) override;
+
+  bool adoptResidentState(const std::vector<llama_token>& stateTokens) override;
+  [[nodiscard]] std::vector<llama_token> residentStateTokens() const override;
+
+  void adoptCheckpoints(
+      qvac_lib_inference_addon_llama::cache::Checkpoints checkpoints) override {
+    if (takesHistoryCheckpoints()) {
+      cacheCheckpoints_ = std::move(checkpoints);
+    }
+  }
+  qvac_lib_inference_addon_llama::cache::Checkpoints
+  releaseCheckpoints() override {
+    return std::exchange(cacheCheckpoints_, {});
+  }
+  void appendCheckpointsToCacheFile(const std::string& path) const override;
+  void adoptCheckpointsFromCacheFile(
+      const std::string& path, uint64_t offset) override;
+  [[nodiscard]] std::optional<
+      qvac_lib_inference_addon_llama::utils::ReasoningTags>
+  historyReasoningTags() const override {
+    return historyReasoningTags_;
+  }
+  [[nodiscard]] size_t countChatTokens(
+      const std::vector<common_chat_msg>& chatMsgs,
+      const std::vector<common_chat_tool>& tools) const override;
+
+  /// Entries the last prompt reconciliation kept resident (0 = cold).
+  /// Makes the next media chunk fail before it is encoded, as an image
+  /// encode running out of memory would, so a test can drive the failure
+  /// rollback in the middle of a prompt.
+  void failNextMediaChunkForTesting() noexcept {
+    failNextMediaChunkForTesting_ = true;
+  }
+  [[nodiscard]] size_t lastCacheReuseForTesting() const noexcept {
+    return pendingReuseEntries_;
+  }
+  /// Requests that started from another conversation's state.
+  [[nodiscard]] size_t donorAdoptionsForTesting() const noexcept {
+    return donorAdoptions_;
+  }
+
   [[nodiscard]] llama_pos getCacheTokens() const override;
   void setCacheTokens(llama_pos cacheTokens) override;
 
   [[nodiscard]] double getVisionEncodeMs() const override;
   [[nodiscard]] int32_t getVisionEncodeTiles() const override;
   void resetVisionEncodeMs() override;
-
-  [[nodiscard]] int32_t getThinkingBlockDiscards() const override;
-  void resetThinkingBlockDiscards() override;
 
   [[nodiscard]] int32_t getToolDefinitionsDropped() const override;
   void resetToolDefinitionsDropped() override;
@@ -169,14 +227,43 @@ public:
     renderOverrides_ = std::move(overrides);
   }
 
-  void setRemoveThinkingFromContext(bool value) override;
+  void setCacheReconciliationEnabled(bool enabled) override {
+    cacheReconciliationEnabled_ = enabled;
+  }
+  /// See TextLlmContext: the ledger, media entries included, describes the
+  /// memory exactly whichever request left it there.
+  [[nodiscard]] bool sharesCacheAcrossKeys() const override {
+    return cacheSharedAcrossKeys_ && !llama_model_has_encoder(modelCtx_.model);
+  }
+  void setSharesCacheAcrossKeys(bool shares) override {
+    cacheSharedAcrossKeys_ = shares;
+  }
+  void setCacheSourceProvider(
+      qvac_lib_inference_addon_llama::cache::CacheSourceProvider provider)
+      override {
+    cacheSourceProvider_ = std::move(provider);
+  }
+  void resetStateKeepingMemory(bool resetStats) override;
+  [[nodiscard]] bool holdsBorrowedState() const override {
+    return residentStateBorrowed_;
+  }
+  void setCacheCheckpointPolicy(
+      const qvac_lib_inference_addon_llama::cache::CheckpointPolicy& policy)
+      override {
+    cacheCheckpointPolicy_ = policy;
+    requestRollback_.setStorage(policy.storage, policy.directory);
+  }
+  [[nodiscard]] std::vector<llama_token> cacheStateTokens() const override;
+  void restoreCacheStateTokens(const std::vector<llama_token>& tokens) override;
+  void clearCacheReconciliationState() override;
+  [[nodiscard]] bool rollbackFailedRequest() override;
+  [[nodiscard]] bool shouldPersistAfterFinalize() const override {
+    return !cacheRequestRolledBack_;
+  }
 
   [[nodiscard]] GenerationStopReason getGenerationStopReason() const override {
     return generationStopReason_;
   }
-
-  [[nodiscard]] std::optional<llama_perf_context_data>
-  takeUserVisiblePerfSnapshot() override;
 
   /**
    * The load media method. It loads the media from memory buffer.
@@ -250,29 +337,18 @@ public:
 
   [[nodiscard]] bool onCancel(
       const std::function<void(const std::string&)>& outputCallback) override;
+  [[nodiscard]] bool onFailure(
+      const std::function<void(const std::string&)>& outputCallback) override;
 
-  /// Disk prompt-cache for a multimodal batch slot, round-tripping the full
-  /// four-field session metadata (see MtmdLlmContext.cpp). Returns false
-  /// (cache miss) on an empty key, a missing file, or a header that fails the
-  /// four-field metadata check.
-  [[nodiscard]] bool loadCache(const std::string& cacheKey) override;
+  /// Disk prompt-cache for a multimodal batch slot, embedding the versioned
+  /// token/media ledger in the sequence-state file.
+  [[nodiscard]] bool
+  loadCache(const std::string& cacheKey, bool adoptFileCheckpoints) override;
   void saveCache(const std::string& cacheKey) const override;
 
   void snapshotPreRequestCursor() override;
   void snapshotPreRequestRollbackAnchor() override;
 
-  /// Multimodal twin of `TextLlmContext`'s seam of the same name — see there
-  /// for why the EOS-inside-reasoning recovery cannot be driven through
-  /// `forcedTokens_`, and why the substitution waits for the reasoning block
-  /// to open. This context needs its own because the two duplicate the
-  /// recovery rather than sharing it, so a divergence between them is exactly
-  /// what a text-only test would miss. Applies to whichever of this context's
-  /// two sample sites runs first: `generateResponse` on the single-prompt
-  /// path, `onLogitsReady` under the scheduler.
-  void
-  forceNextSampledTokenInsideReasoningForTesting(llama_token token) noexcept {
-    forcedNextSampledTokenForTesting_ = token;
-  }
   /// The live sampler, for tests probing fabric-side sampler state — the
   /// reasoning-budget matcher's in particular. Null when a failed restore
   /// left the context without one.
@@ -285,10 +361,12 @@ private:
 
   /**
    * The check antiprompt method. It checks the antiprompt.
+   * See TextLlmContext::checkAntiprompt for `unemittedTail` / `emitted`.
    *
    * @return - true if the antiprompt is found, false otherwise.
    */
-  bool checkAntiprompt();
+  bool checkAntiprompt(
+      size_t unemittedTail = 0, llama_token emitted = LLAMA_TOKEN_NULL);
 
   /**
    * The tokenize chat method. It tokenizes the chat.
@@ -324,45 +402,84 @@ private:
   void initializeCommonState();
   [[nodiscard]] llama_pos ctxCeiling() const;
 
-  // Reasoning-block KV-cache compaction helpers. Single-block policy:
-  // at most one `<think>...</think>` block is tracked per inference.
-  // `setOpenThinkSpan` is a no-op once a span has been captured.
-  void setOpenThinkSpan(llama_pos start);
-  void capturePendingThinkClose();
-  void compactThinkSpan();
-  [[nodiscard]] bool shouldRollbackInterruptedReasoning() const;
+  // Reasoning-channel tracking is retained for output parsing and stop
+  // handling. Generated reasoning stays resident until reconciliation.
   // See TextLlmContext::configureReasoningTags: `fallbackTags` is the
   // model-family reasoning channel, resolved by the caller so the
   // reasoning-budget markers come from the same value.
   void configureReasoningTags(
       const std::string& thinkingStartTag, const std::string& thinkingEndTag,
-      const std::string& forcedOpenText,
       const std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>&
           fallbackTags);
 
-  // Delegates to `rollbackState_.recordPostReasoningToken` while the
-  // post-reasoning capture phase is active, which starts once the close
-  // marker is committed. Every model kind anchors a boundary, so this runs
-  // on pure attention too; it is a no-op only when the feature is off.
-  void recordPostReasoningTokenIfActive(llama_token tokenId);
+  using CacheCheckpoint = qvac_lib_inference_addon_llama::cache::Checkpoint;
+  void beginCacheRequest();
+  void capturePreRequestCacheSnapshot();
+  PrefillPlan reconcilePrompt(
+      PrefillPlan fullPlan,
+      const qvac_lib_inference_addon_llama::cache::Ledger& fullLedger,
+      bool isPrefillOnlyRequest);
+  qvac_lib_inference_addon_llama::cache::Ledger
+  ledgerFromChunks(const mtmd::input_chunks& chunks) const;
+  void rebuildSamplerFromLedger(
+      const qvac_lib_inference_addon_llama::cache::Ledger& ledger);
+  /// See TextLlmContext::adoptBestCacheSource. This, `adoptDonorState` and
+  /// `resetStateKeepingMemory` repeat TextLlmContext's: a change to one
+  /// belongs in both.
+  void adoptBestCacheSource(
+      const qvac_lib_inference_addon_llama::cache::Ledger& fullPrompt,
+      bool isPrefillOnlyRequest);
+  /// See TextLlmContext::adoptDonorState.
+  bool adoptDonorState(
+      const qvac_lib_inference_addon_llama::cache::DonorState& donor,
+      const qvac_lib_inference_addon_llama::cache::Ledger& prompt,
+      bool keepOwnOnFailure);
+  void commitCacheRequest();
+  bool restorePreRequestCacheState();
+  // Checks a state `loadCache` or `adoptResidentState` just put in memory
+  // against its ledger `stateTokens` and adopts the ledger; throws
+  // UnableToLoadSessionFile / ContextLengthExeeded naming `cacheKey`.
+  void acceptRestoredState(
+      const std::vector<llama_token>& stateTokens, const std::string& cacheKey);
+  void appendResidentToken(llama_token token);
+  /// Batch-path ledger bookkeeping. The scheduler decodes a sample only after
+  /// `onLogitsReady` returns it, and reports the decode through
+  /// `syncPosition`. A sample is held here until a synced position shows it
+  /// was decoded, so the ledger only ever describes decoded memory. A sample
+  /// that is never decoded (a terminal token, a cancel before the next step)
+  /// is discarded when the request commits or rolls back.
+  void holdPendingResidentToken(llama_token token, llama_pos sampledAt);
+  void confirmPendingResidentToken(llama_pos decodedPos);
+  void discardPendingResidentToken();
+  SequenceStepResult sampleFromLogits(
+      int logitIdx, unsigned generatedAfterAccept,
+      const std::function<void(const std::string&)>& outputCallback,
+      LlamaBatch* inlineDecodeBatch);
+  /// The part of `sampleFromLogits` after sampling; see
+  /// `TextLlmContext::emitSampledToken`.
+  SequenceStepResult emitSampledToken(
+      llama_token tokenId, unsigned generatedAfterAccept,
+      const std::function<void(const std::string&)>& outputCallback,
+      LlamaBatch* inlineDecodeBatch, size_t unemittedTail = 0);
+  /// Single-prompt speculative generation loop; see
+  /// `TextLlmContext::generateSpeculative`. `nRemain` follows the plain
+  /// loop's prediction budget.
+  void generateSpeculative(
+      const std::function<void(const std::string&)>& outputCallback,
+      int& nRemain);
+  /// See `TextLlmContext::processSpeculativeBatch`.
+  void processSpeculativeBatch(const llama_batch& batch);
+  /// Encodes and decodes an audio chunk like `mtmd_helper_eval_chunk_single`,
+  /// handing each decoded batch to the speculative state.
+  int32_t evalAudioChunkSpeculative(
+      const mtmd_input_chunk* chunk, llama_pos nPast, llama_seq_id seqId,
+      llama_pos* newNPast);
+  /// Advances both cursors over one decoded text token.
+  void advanceDecodedTextToken(llama_token token);
 
-  // Anchor the compaction boundary at `anchorPos`, unwinding to the pre-prompt
-  // checkpoint and rethrowing when the capture fails.
-  void captureReasoningBoundaryAt(llama_pos anchorPos);
-
-  // Anchor the compaction boundary for this request: a full-state snapshot
-  // on memory that cannot erase a partial tail, a bare position on pure
-  // attention. No-op unless compaction is relevant for this request. A
-  // capture failure throws rather than silently preserving reasoning in
-  // cache.
-  void snapshotForRecurrentRollback();
-
-  // Cancel-during-generation cleanup. On recurrent / hybrid memory,
-  // restores the reasoning-boundary snapshot to drop any partially decoded
-  // generation (including an in-flight reasoning span) from both
-  // attention KV and recurrent state. On pure-attention models or when
-  // no snapshot is available, only flushes the UTF-8 buffer. Used by
-  // the cancel exits in `generateResponse`.
+  // Cancel-during-generation cleanup. On recurrent / hybrid memory, restores
+  // the request-entry snapshot; pure-attention memory removes the decoded
+  // tail directly.
   // Returns `true` when the rollback (metadata + live memory) is
   // coherent with the pre-request cursor and any downstream cache save
   // is safe. Returns `false` when the recurrent full-state restore was
@@ -374,8 +491,20 @@ private:
   // `GenerateResponseResult::rollbackOk`.
   [[nodiscard]] bool cancelGenerationCleanup(
       const std::function<void(const std::string&)>& outputCallback);
+  // User cancel entry point: after prefill completed the request keeps its
+  // state (`commitCancelledRequest`), during prefill it rolls back
+  // (`cancelGenerationCleanup`).
+  [[nodiscard]] bool handleUserCancel(
+      const std::function<void(const std::string&)>& outputCallback);
+  [[nodiscard]] bool commitCancelledRequest(
+      const std::function<void(const std::string&)>& outputCallback);
 
   common_init_result_ptr llamaInit_;
+  /// Owned speculative state of the single-prompt context; declared after
+  /// `llamaInit_` so the draft context goes before the target context.
+  std::unique_ptr<
+      qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+      speculative_;
   mtmd::context_ptr ctxVision_;
   /// Non-owning vision context for per-slot batch drivers; null in
   /// single-prompt mode (where `ctxVision_` owns the mmproj).
@@ -384,6 +513,7 @@ private:
   CommonSamplerPtr smpl_;
 
   common_params params_;
+  uint64_t maxImagePixels_;
   common_chat_templates_ptr tmpls_;
   std::vector<llama_token> antipromptTokens_;
   // Per-request stop strings supplied by the chat template
@@ -394,12 +524,10 @@ private:
   // Lowercased copy of the caller-supplied antiprompts only; see
   // TextLlmContext for why `templateStops_` has no folded twin.
   std::vector<std::string> antipromptLower_;
-  llama_token forcedNextSampledTokenForTesting_ = LLAMA_TOKEN_NULL;
   // Renders in the current request where the template dropped the tools.
   int32_t toolDefinitionsDropped_ = 0;
   // Per-request `tool_choice` for the chat-template render.
   RenderOverrides renderOverrides_;
-  std::vector<llama_token> forcedTokens_;
 
   mtmd::bitmaps bitmaps_;
   /// Chunks staged by `preparePrefill` for the batch path; media barriers
@@ -417,6 +545,10 @@ private:
   // UTF-8 token buffer for handling incomplete emoji sequences
   qvac_lib_inference_addon_llama::UTF8TokenBuffer utf8Buffer_;
 
+  /// Speculative draft / verify state of this sequence; disabled when the
+  /// model has no speculative runtime.
+  qvac_lib_inference_addon_llama::speculative::SpeculativeSequence spec_;
+
   // GPT-OSS Harmony: <|call|> is a frame delimiter, not a stop signal
   bool isHarmonyModel_ = false;
   llama_token harmonyCallToken_ = LLAMA_TOKEN_NULL;
@@ -431,55 +563,73 @@ private:
   // tags when the active model has no recognised channel.
   qvac_lib_inference_addon_llama::utils::ReasoningState reasoningState_;
   bool reasoningEnabled_ = false;
+  // Reasoning markers of an earlier assistant turn, read from the template at
+  // load; see `historyReasoningTags`.
+  std::optional<qvac_lib_inference_addon_llama::utils::ReasoningTags>
+      historyReasoningTags_;
+  // See TextLlmContext: load-time render settings for `countChatTokens`.
+  bool loadUseJinja_ = false;
+  bool loadEnableThinking_ = false;
 
-  // True only for architectures in the Qwen3 reasoning family. Gates
-  // the EOS-inside-reasoning recovery (close-marker substitution),
-  // which is the historical Qwen3-specific workaround. Detection /
-  // span tracking / KV compaction stay family-agnostic via
-  // `reasoningEnabled_`. In practice no multimodal model is in the
-  // Qwen3 family today, so this gate keeps the recovery dormant on
-  // the multimodal path until a Qwen3-family vision model ships.
-  bool isQwen3ReasoningFamily_ = false;
+  // True when this model requires full-state snapshots for request rollback
+  // and divergent-history checkpoints. Decided once by
+  // `needsFullStateSnapshot` in ModelMemoryPolicy.hpp, shared with
+  // TextLlmContext so both contexts gate identically.
+  bool needsFullStateSnapshot_ = false;
+  // A sliding-window model: it trims for rollback but takes end-of-history
+  // checkpoints (see `takesSlidingWindowCheckpoints`).
+  bool slidingWindowCheckpoints_ = false;
 
-  // True when this context's model is recurrent or hybrid
-  // (`llama_model_is_recurrent || llama_model_is_hybrid`). Drives the
-  // snapshot + replay path in `compactThinkSpan`. See
-  // `TextLlmContext::needsRecurrentSnapshot_` for the full rationale.
-  bool needsRecurrentSnapshot_ = false;
+  [[nodiscard]] bool takesHistoryCheckpoints() const noexcept {
+    return needsFullStateSnapshot_ || slidingWindowCheckpoints_;
+  }
 
-  // Tracks whether the currently-prepared prefill is a cache-warm
-  // (prefill-only) request. Captured from `preparePrefill` on the
-  // batch path and `evalMessageWithTools` on the single-prompt path,
-  // then consulted by `snapshotForRecurrentRollback`: prefill-only
-  // requests never enter generation and cannot emit reasoning tokens,
-  // so there is no reasoning boundary to anchor. See
-  // `TextLlmContext::isPrefillOnlyRequest_` for the full rationale.
+  // Tracks whether the current request is prefill-only so the cache
+  // transaction can commit immediately after successful prefill.
   bool isPrefillOnlyRequest_ = false;
 
-  // Per-request toggle for post-generation thinking-block KV compaction.
-  // Default-off, except Qwen3-family models opt in during initialization;
-  // `generationParams` can always override it.
-  bool removeThinkingFromContext_ = false;
+  bool cacheReconciliationEnabled_ = false;
+  // `cache_share_across_keys`; see `sharesCacheAcrossKeys`.
+  bool cacheSharedAcrossKeys_ = true;
+  bool cacheRequestActive_ = false;
+  bool cacheRequestRolledBack_ = false;
+  // Request phase, reset at request entry and set by `onPrefillComplete`.
+  // A cancel before it rolls the request back to the pre-request state; a
+  // cancel after it keeps the prompt and streamed tokens, cached or not.
+  bool prefillComplete_ = false;
+  qvac_lib_inference_addon_llama::cache::Ledger residentLedger_;
+  // See `holdsBorrowedState`.
+  bool residentStateBorrowed_ = false;
+  llama_token pendingResidentToken_ = LLAMA_TOKEN_NULL;
+  // Scope of every rollback snapshot and checkpoint this context takes (see
+  // `untrimmableSnapshotScope`). Only meaningful when
+  // `needsFullStateSnapshot_`.
+  qvac_lib_inference_addon_llama::utils::SnapshotScope snapshotScope_ =
+      qvac_lib_inference_addon_llama::utils::SnapshotScope::Full;
+  llama_pos pendingResidentTokenPos_ = 0;
+  qvac_lib_inference_addon_llama::cache::Ledger pendingPromptLedger_;
+  qvac_lib_inference_addon_llama::cache::Ledger preRequestLedger_;
+  ContextUsage preRequestCacheUsage_;
+  qvac_lib_inference_addon_llama::utils::SequenceStateSnapshot
+      preRequestCacheSnapshot_;
+  qvac_lib_inference_addon_llama::cache::Checkpoints cacheCheckpoints_;
+  // See TextLlmContext: the end-of-history checkpoint of the request in
+  // flight, the generation prompt's token count in the last rendered prompt,
+  // and the ledger entries up to the end of the history (0 = none).
+  std::optional<CacheCheckpoint> pendingHistoryCheckpoint_;
+  size_t generationPromptTokens_ = 0;
+  size_t historyCheckpointEntries_ = 0;
+  qvac_lib_inference_addon_llama::cache::CheckpointPolicy
+      cacheCheckpointPolicy_;
+  size_t pendingReuseEntries_ = 0;
+  size_t donorAdoptions_ = 0;
+  qvac_lib_inference_addon_llama::cache::CacheSourceProvider
+      cacheSourceProvider_;
+  bool failNextMediaChunkForTesting_ = false;
 
-  // Shared rollback state for recurrent / hybrid SSM models. Owns the
-  // prefill-entry snapshot (cancel during prefill), the reasoning-boundary
-  // snapshot (compaction + cancel during generation), and the
-  // post-reasoning token replay buffer. Inactive on pure-attention
-  // models.
-  qvac_lib_inference_addon_llama::utils::ReasoningRollbackState rollbackState_;
-  // Reasoning-block tracker + compactor: owns the `<think>...</think>`
-  // span, close-capture flag, and the pure-attention + recurrent
-  // compaction paths plus their stats counters.
-  qvac_lib_inference_addon_llama::ReasoningBlockCompactor compactor_;
-
-  // Snapshot of `llama_perf_context()` taken at the start of
-  // `compactThinkSpan` — i.e. right after user-visible generation
-  // completes and before any replay decode runs. Consumed by
-  // `runtimeStats()` via `takeUserVisiblePerfSnapshot()` so the replay's
-  // `llama_decode` calls (which accumulate into `n_p_eval` /
-  // `t_p_eval_ms`) do not inflate user-facing prompt / TTFT / ppTPS.
-  // Reset at the start of each inference and on `resetState`.
-  std::optional<llama_perf_context_data> userVisiblePerf_;
+  // Generic request-entry snapshot for cancellation on memory that cannot
+  // remove an arbitrary decoded tail.
+  qvac_lib_inference_addon_llama::utils::RequestRollbackState requestRollback_;
 
   std::atomic<bool> stopGeneration_ = false;
 };

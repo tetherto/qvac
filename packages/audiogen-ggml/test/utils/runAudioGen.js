@@ -38,22 +38,36 @@ async function loadAudioGen({
 }
 
 // Drive one generation. Returns { data: { sampleCount, sampleRate, channels,
-// durationMs, chunkCount, stages, stats } }. `stages` is the set of progress
-// stage names seen (lm/dit/vae); `stats` is the terminal run stats.
+// durationMs, chunkCount, stages, stageTotals, stats } }. `stages` is the set of
+// progress stage names seen (lm/dit/vae); `stageTotals` maps each stage to the
+// last total it reported; `stats` is the terminal run stats.
 async function runAudioGen(gen, { caption, opts = {} } = {}) {
   const response = await gen.run(caption, opts)
   return collectAudioGenResponse(response)
 }
 
 async function collectAudioGenResponse(response) {
+  const [{ chunks, stages, stageTotals, sampleRate, channels }, stats] = await Promise.all([
+    collectAudioGenOutput(response),
+    response.await()
+  ])
+
+  return summarizeAudioGenOutput({ chunks, stages, stageTotals, sampleRate, channels, stats })
+}
+
+async function collectAudioGenOutput(response) {
   const chunks = []
   const stages = new Set()
+  const stageTotals = {}
   let sampleRate = 0
   let channels = 0
 
   for await (const item of response.iterate()) {
     if (item && item.progress) {
-      if (item.progress.stage) stages.add(item.progress.stage)
+      if (item.progress.stage) {
+        stages.add(item.progress.stage)
+        stageTotals[item.progress.stage] = item.progress.total
+      }
       continue
     }
     if (item && item.outputArray) {
@@ -63,8 +77,10 @@ async function collectAudioGenResponse(response) {
     }
   }
 
-  const stats = await response.await()
+  return { chunks, stages, stageTotals, sampleRate, channels }
+}
 
+function summarizeAudioGenOutput({ chunks, stages, stageTotals, sampleRate, channels, stats }) {
   let sampleCount = 0
   for (const chunk of chunks) sampleCount += chunk.length
 
@@ -94,6 +110,7 @@ async function collectAudioGenResponse(response) {
       durationMs,
       chunkCount: chunks.length,
       stages: [...stages],
+      stageTotals,
       peak: peakAbs,
       rms,
       chunks,

@@ -85,7 +85,11 @@ function asVideoModel(model: unknown, modelId: string): VideoStableDiffusion {
   throw new ModelOperationNotSupportedError(modelId, modelType, 'video', ['diffusion'], [])
 }
 
-export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamResponse> {
+export type VideoOpResult = { stats: VideoStats | undefined }
+
+export async function* video(
+  request: VideoRequest
+): AsyncGenerator<VideoStreamResponse, VideoOpResult> {
   await using ctx = await getRequestRegistry().begin({
     requestId: request.requestId ?? generateRandomRequestId(),
     kind: 'diffusion',
@@ -112,8 +116,9 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
     )
   }
 
+  let cancelPromise: Promise<void> | undefined
   const onAbort = () => {
-    model.cancel().catch((err: unknown) => {
+    cancelPromise ??= model.cancel().catch((err: unknown) => {
       requestLogger.warn(
         `[cancel] model.cancel() rejected during abort for modelId=${request.modelId}: ${err instanceof Error ? err.message : String(err)}`
       )
@@ -121,12 +126,12 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
   }
   ctx.signal.addEventListener('abort', onAbort, { once: true })
   if (ctx.signal.aborted) onAbort()
-  ctx.scope.defer(() => {
+  ctx.scope.defer(async () => {
     ctx.signal.removeEventListener('abort', onAbort)
+    await cancelPromise
   })
 
-  const response = await model.run({
-    mode: request.mode,
+  const runParams = {
     prompt: request.prompt,
     ...(request.negative_prompt !== undefined && {
       negative_prompt: request.negative_prompt
@@ -172,9 +177,6 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
     ...(request.vace_strength !== undefined && {
       vace_strength: request.vace_strength
     }),
-    ...(request.init_image !== undefined && {
-      init_image: Buffer.from(request.init_image, 'base64')
-    }),
     ...(request.strength !== undefined && {
       strength: request.strength
     }),
@@ -207,12 +209,32 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
     ...(request.cache_threshold !== undefined && {
       cache_threshold: request.cache_threshold
     })
+  }
+  const response =
+    request.mode === 'img2vid'
+      ? await model.run({
+          ...runParams,
+          mode: 'img2vid',
+          // parseVideoRequest requires this field for image-to-video requests.
+          init_image: Buffer.from(request.init_image!, 'base64')
+        })
+      : await model.run({ ...runParams, mode: 'txt2vid' })
+
+  let drained = false
+  ctx.scope.defer(async () => {
+    if (drained) return
+    onAbort()
+    try {
+      await response.await()
+    } catch {
+      // Preserve the stream's original failure or consumer exit.
+    }
   })
 
   let outputIndex = 0
 
   for await (const chunk of response.iterate()) {
-    if (ctx.signal.aborted) break
+    if (ctx.signal.aborted) continue
     if (chunk instanceof Uint8Array) {
       yield {
         type: 'videoStream',
@@ -235,11 +257,8 @@ export async function* video(request: VideoRequest): AsyncGenerator<VideoStreamR
       }
     }
   }
+  drained = true
 
   const responseWithStats = response as unknown as ResponseWithStats
-  yield {
-    type: 'videoStream',
-    done: true,
-    stats: toVideoStats(responseWithStats.stats)
-  }
+  return { stats: toVideoStats(responseWithStats.stats) }
 }

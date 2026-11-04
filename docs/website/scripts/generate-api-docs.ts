@@ -2,18 +2,10 @@
 /**
  * Generate the API summary MDX for one SDK version's minor series.
  *
- * Output target:
- *   - default: content/docs/reference/api/v<X.Y>.x.mdx (literal "x" —
- *              one permanent page per minor line, current-latest
- *              included)
- *   - --target=<file>: content/docs/reference/api/<file> (explicit override)
- *
- * Every minor line — including the current latest — lives at
- * `v<X.Y>.x.mdx`. The bare canonical URL `/reference/api` is served
- * by the shim `index.mdx`, which `<include>`s the current latest
- * series file via Fumadocs' `remarkInclude`. This generator therefore
- * never writes to `index.mdx` and never needs to know which minor is
- * latest.
+ * Output target: the API summary of the SDK's current documentation line,
+ * `content/docs/sdk/<current line>/reference/api.mdx`, resolved from the
+ * version manifest. A released line is never regenerated — it is what the
+ * site already serves — so there is one target and no way to name another.
  *
  * Patches never re-render or relabel the API summary: the public API is
  * frozen at the minor boundary, so a patch by definition adds nothing
@@ -24,25 +16,27 @@
  *   1. Extract: TypeDoc walks the SDK and writes api-data.json (signatures,
  *      top-level descriptions, throws, examples, deprecated, errors). Scope
  *      is restricted to functions re-exported from
- *      `packages/sdk/client/api/index.ts` plus the curated public singletons
- *      allow-listed in `scripts/api-docs/curated-singletons.ts`.
+ *      `packages/sdk/client/api/index.ts` plus the `profiler` object.
  *   2. Render: writes a single MDX through `single-page.njk`.
  *
  * Title-only mode (`--title-only`) skips extraction and the full render.
  * It opens the existing target MDX and rewrites only the frontmatter
- * `title:` line.
+ * `title:` line — used by the minor orchestrator to relabel a freshly
+ * frozen series snapshot (which inherits the outgoing `index.mdx` title
+ * verbatim, still carrying the `(latest)` marker) without touching the
+ * body.
+ *
+ * The title always marks the page as the latest, because the only line this
+ * can write to is the current one. A cut is what moves that marker, and a
+ * regeneration that dropped it would demote the line it just wrote into.
  *
  * Usage:
  *   bun run scripts/generate-api-docs.ts <version> [--force-extract]
- *   bun run scripts/generate-api-docs.ts <version> --target=<file>
- *   bun run scripts/generate-api-docs.ts <version> --title-only [--target=<file>]
+ *   bun run scripts/generate-api-docs.ts <version> --title-only
  *
  * Flags:
- *   --target=<file>   Override the output filename inside the API section
- *                     directory (e.g. `--target=v0.10.x.mdx`). Defaults
- *                     to `v<X.Y>.x.mdx` derived from the version arg.
  *   --title-only      Skip TypeDoc + render. Only rewrite the
- *                     frontmatter title of the existing target file.
+ *                     frontmatter title of the existing page.
  *   --force-extract   Bypass mtime-based extraction cache.
  *
  * SDK_PATH env: override the SDK source root (default: ../../../packages/sdk
@@ -59,9 +53,9 @@ import { fileURLToPath } from "node:url";
 import { extractApiData } from "./api-docs/extract.js";
 import { renderApiDocs } from "./api-docs/render.js";
 import {
+  apiPageFor,
   parseVersion,
   rewriteFrontmatterTitleLine,
-  seriesFileName,
   seriesName,
 } from "./lib/release-shared.js";
 
@@ -79,7 +73,6 @@ const SDK_PATH =
 interface GenerateOptions {
   forceExtract: boolean;
   titleOnly: boolean;
-  target: string | null;
 }
 
 async function generateApiDocs(version: string, options: GenerateOptions) {
@@ -92,23 +85,11 @@ async function generateApiDocs(version: string, options: GenerateOptions) {
   const parsed = parseVersion(version);
   const series = seriesName(parsed);
   // Series-only labels: patches don't change the API summary, so the
-  // title never carries a precise patch number — only the minor line.
-  // The "(latest)" marker lives on the shim `index.mdx`, not on any
-  // versioned file, so this label is uniform across all series pages.
-  const versionLabel = series;
+  // title never carries a precise patch number — only the minor line. The
+  // marker is unconditional: the target is the current line or there is none.
+  const versionLabel = `${series} (latest)`;
 
-  const apiDir = path.join(
-    DOCS_WEBSITE_DIR,
-    "content",
-    "docs",
-    "reference",
-    "api",
-  );
-
-  const outputFile = path.join(
-    apiDir,
-    options.target ?? seriesFileName(parsed.major, parsed.minor),
-  );
+  const outputFile = apiPageFor(parsed);
 
   if (options.titleOnly) {
     console.log(`📝 Title-only update for ${versionLabel}...`);
@@ -204,14 +185,11 @@ if (import.meta.main) {
   const versionArg = args.find((arg) => !arg.startsWith("--"));
   const forceExtract = args.includes("--force-extract");
   const titleOnly = args.includes("--title-only");
-  const targetFlag = args.find((arg) => arg.startsWith("--target="));
-  const target = targetFlag ? targetFlag.slice("--target=".length) : null;
 
-  if (args.includes("--latest")) {
+  if (args.some((arg) => arg.startsWith("--target="))) {
     console.error(
-      "❌ Error: --latest is no longer supported. Under the shim-based layout\n" +
-        "every series (including the current latest) lives at v<X.Y>.x.mdx. The\n" +
-        "default target already resolves to that filename; drop the flag.\n",
+      "❌ --target is gone: the API summary is one page per documentation " +
+        "line, written to the current line the manifest declares.",
     );
     process.exit(1);
   }
@@ -222,25 +200,21 @@ if (import.meta.main) {
     console.error("  bun run scripts/generate-api-docs.ts <version> [flags]\n");
     console.error("Flags:");
     console.error(
-      "  --target=<file>   Override output filename inside api/ (defaults to v<X.Y>.x.mdx)",
-    );
-    console.error(
       "  --title-only      Rewrite frontmatter title in-place (skips TypeDoc + render)",
     );
     console.error(
       "  --force-extract   Bypass mtime cache and re-run TypeDoc extraction\n",
     );
     console.error("Examples:");
-    console.error("  bun run scripts/generate-api-docs.ts 0.11.0");
+    console.error("  bun run scripts/generate-api-docs.ts 0.21.0");
     console.error(
-      "  bun run scripts/generate-api-docs.ts 0.10.2 --target=v0.10.x.mdx --title-only",
+      "  bun run scripts/generate-api-docs.ts 0.21.1 --title-only",
     );
     process.exit(1);
   } else {
     generateApiDocs(versionArg, {
       forceExtract,
       titleOnly,
-      target,
     }).catch((error) => {
       console.error("❌ Error generating API docs:", error.message);
       if (error.stack) console.error("\nStack trace:", error.stack);

@@ -46,9 +46,9 @@ function createMockedSupertonicModel({
 test('Supertonic: explicit engine option routes to supertonic', (t) => {
   const model = createMockedSupertonicModel()
   t.is(model.getEngineType(), TTSGgml.ENGINE_SUPERTONIC, 'engine: supertonic detected')
-  t.is(model._supertonicModelPath, './models/supertonic.gguf')
-  t.absent(model._t3ModelPath, 'no t3 path on supertonic')
-  t.absent(model._s3genModelPath, 'no s3gen path on supertonic')
+  t.is(model._setup.paths.supertonicModelPath, './models/supertonic.gguf')
+  t.absent(model._setup.paths.t3ModelPath, 'no t3 path on supertonic')
+  t.absent(model._setup.paths.s3genModelPath, 'no s3gen path on supertonic')
 })
 
 test('Supertonic: reload rejects an invalid output sample rate', async (t) => {
@@ -321,7 +321,7 @@ test('Supertonic: modelDir auto-detects supertonic.gguf', async (t) => {
     })
     t.is(model.getEngineType(), TTSGgml.ENGINE_SUPERTONIC, 'modelDir with supertonic.gguf detected')
     t.is(
-      model._supertonicModelPath,
+      model._setup.paths.supertonicModelPath,
       path.join(tmpRoot, 'supertonic.gguf'),
       'supertonic path resolved from modelDir'
     )

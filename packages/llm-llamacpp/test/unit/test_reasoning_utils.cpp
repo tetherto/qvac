@@ -1,6 +1,7 @@
 #include <filesystem>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include <gtest/gtest.h>
 #include <llama.h>
@@ -136,11 +137,6 @@ TEST_F(ReasoningUtilsTest, ReasoningStateDefaultInitialization) {
   EXPECT_FALSE(state.inside_reasoning);
   EXPECT_TRUE(state.tags.open.empty());
   EXPECT_TRUE(state.tags.close.empty());
-  EXPECT_EQ(state.openTokenCount, 0);
-  EXPECT_EQ(state.forcedOpenTokenCount, 0);
-  EXPECT_EQ(state.cached_close_tag_token, LLAMA_TOKEN_NULL);
-  EXPECT_EQ(state.cached_newline_token, LLAMA_TOKEN_NULL);
-  EXPECT_FALSE(state.close_is_single_token);
   EXPECT_TRUE(state.recent_output_buffer.empty());
   EXPECT_EQ(state.BUFFER_SIZE, 50);
 }
@@ -199,22 +195,13 @@ TEST_F(ReasoningUtilsTest, UpdateBufferStaysOutsideForUnrelatedContent) {
   EXPECT_FALSE(state.inside_reasoning);
 }
 
-// Regression guard for the recurrent-replay close-token seeding
-// invariant: on chat templates whose `state.tags.close` carries
+// Regression guard for padded close-tag detection: on chat templates whose
+// `state.tags.close` carries
 // surrounding whitespace padding (Qwen3's canonical form is
 // `"\n</think>\n\n"`), `updateReasoningBuffer` runs
 // `find(state.tags.close)` against the streamed piece buffer, so the
 // `inside_reasoning` flip fires only once the entire padded string is
 // present — i.e. on the LAST padding piece, not on `</think>` itself.
-//
-// `TextLlmContext` / `MtmdLlmContext` therefore must NOT seed the
-// recurrent replay buffer with the sampled token that tripped the
-// flip (that would be a trailing newline piece), and instead pass
-// `reasoningState_.cached_close_tag_token` — the canonical
-// single-vocab `</think>`. This test pins the flip-token semantics
-// on which that fix relies; if the detector ever moves to matching
-// the canonical close directly and the drivers regress to seeding
-// `tokenId`, one of the two must change together.
 TEST_F(
     ReasoningUtilsTest, UpdateBufferFlipDefersToTrailingPaddingOnPaddedClose) {
   ReasoningState state;
@@ -237,6 +224,56 @@ TEST_F(
   updateReasoningBuffer("\n", state);
   EXPECT_FALSE(state.inside_reasoning)
       << "flip fires only on the LAST padding token, so the sampled `tokenId` "
-         "at the flip site is a padding newline — not the canonical close. "
-         "Recurrent replay must seed `cached_close_tag_token`, never `tokenId`";
+         "at the flip site is a padding newline — not the canonical close";
+}
+
+// An answer sent back with its reasoning inline splits the way Qwen's
+// templates split it.
+TEST(ReasoningSplit, CutsTheReasoningBlockOutOfContent) {
+  const ReasoningTags think{.open = "<think>", .close = "</think>"};
+  const auto split = splitReasoningFromContent(
+      "<think>\nI reason here.\n</think>\n\nRed, green, blue.", think);
+  ASSERT_TRUE(split.has_value());
+  EXPECT_EQ(split->reasoning, "I reason here.");
+  EXPECT_EQ(split->content, "Red, green, blue.");
+
+  // Opened by the template rather than the model: only the close is present.
+  const auto forcedOpen =
+      splitReasoningFromContent("I reason.\n</think>\n\nBlue.", think);
+  ASSERT_TRUE(forcedOpen.has_value());
+  EXPECT_EQ(forcedOpen->reasoning, "I reason.");
+  EXPECT_EQ(forcedOpen->content, "Blue.");
+
+  const ReasoningTags gemma{.open = "<|channel>thought", .close = "<channel|>"};
+  const auto channel = splitReasoningFromContent(
+      "<|channel>thought\nHmm.<channel|>Green.", gemma);
+  ASSERT_TRUE(channel.has_value());
+  EXPECT_EQ(channel->reasoning, "Hmm.");
+  EXPECT_EQ(channel->content, "Green.");
+
+  EXPECT_FALSE(splitReasoningFromContent("Just an answer.", think).has_value());
+  EXPECT_FALSE(
+      splitReasoningFromContent("a</think>b", ReasoningTags{}).has_value());
+}
+
+// Only assistant turns without their own `reasoning_content` are split.
+TEST(ReasoningSplit, MovesReasoningOnlyOutOfAssistantContent) {
+  const ReasoningTags think{.open = "<think>", .close = "</think>"};
+  std::vector<common_chat_msg> messages(3);
+  messages[0].role = "user";
+  messages[0].content = "<think>not mine</think>Hi";
+  messages[1].role = "assistant";
+  messages[1].content = "<think>\nPlan.\n</think>\n\nAnswer.";
+  messages[2].role = "assistant";
+  messages[2].content = "<think>inline</think>Kept.";
+  messages[2].reasoning_content = "given";
+
+  moveReasoningOutOfContent(messages, think);
+
+  EXPECT_EQ(messages[0].content, "<think>not mine</think>Hi");
+  EXPECT_TRUE(messages[0].reasoning_content.empty());
+  EXPECT_EQ(messages[1].reasoning_content, "Plan.");
+  EXPECT_EQ(messages[1].content, "Answer.");
+  EXPECT_EQ(messages[2].reasoning_content, "given");
+  EXPECT_EQ(messages[2].content, "<think>inline</think>Kept.");
 }

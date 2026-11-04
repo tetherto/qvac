@@ -33,19 +33,36 @@ test('vlaConfigSchema: accepts empty config', (t) => {
   t.is(result.success, true)
 })
 
-test("vlaConfigSchema: accepts backend 'auto'", (t) => {
-  const result = vlaConfigSchema.safeParse({ backend: 'auto' })
-  t.is(result.success, true)
+test('vlaConfigSchema: accepts ordered backend names', (t) => {
+  for (const backend of [
+    ['auto'],
+    ['cpu'],
+    ['cuda'],
+    ['vulkan'],
+    ['cuda', 'vulkan'],
+    ['hip', 'rocm', 'sycl'],
+    ['metal', 'opencl']
+  ]) {
+    t.alike(vlaConfigSchema.parse({ backend }).backend, backend)
+  }
 })
 
-test("vlaConfigSchema: accepts backend 'cpu'", (t) => {
-  const result = vlaConfigSchema.safeParse({ backend: 'cpu' })
-  t.is(result.success, true)
-})
-
-test('vlaConfigSchema: rejects unknown backend', (t) => {
-  const result = vlaConfigSchema.safeParse({ backend: 'vulkan' })
-  t.is(result.success, false)
+test('vlaConfigSchema: rejects invalid backend arrays', (t) => {
+  for (const backend of [
+    '',
+    'cpu',
+    'cuda,vulkan',
+    1,
+    null,
+    [],
+    [''],
+    ['unknown'],
+    ['CUDA'],
+    [1],
+    ['cpu', 'cuda']
+  ]) {
+    t.is(vlaConfigSchema.safeParse({ backend }).success, false)
+  }
 })
 
 test('vlaConfigSchema: accepts verbosity integer', (t) => {
@@ -493,7 +510,7 @@ test('loadModelSrcRequestSchema: accepts vla request with canonical type', (t) =
     type: 'loadModel',
     modelType: ModelType.ggmlVla,
     modelSrc: 'smolvla.gguf',
-    modelConfig: { backend: 'cpu' }
+    modelConfig: { backend: ['cpu'] }
   })
   t.is(result.success, true)
   if (result.success) {
@@ -505,7 +522,7 @@ test('loadModelOptionsBaseSchema: accepts vla alias', (t) => {
   const result = loadModelOptionsBaseSchema.safeParse({
     modelSrc: 'smolvla.gguf',
     modelType: 'vla',
-    modelConfig: { backend: 'auto' }
+    modelConfig: { backend: ['auto'] }
   })
   t.is(result.success, true)
 })
@@ -514,7 +531,7 @@ test('loadModelOptionsBaseSchema: rejects vla config with unknown key (strict)',
   const result = loadModelOptionsBaseSchema.safeParse({
     modelSrc: 'smolvla.gguf',
     modelType: 'ggml-vla',
-    modelConfig: { backend: 'cpu', unknownKey: true }
+    modelConfig: { backend: ['cpu'], unknownKey: true }
   })
   t.is(result.success, false)
 })
