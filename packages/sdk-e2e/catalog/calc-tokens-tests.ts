@@ -1,5 +1,10 @@
 import type { TestDefinition } from '@qvac/test-suite'
 
+export interface CalcTokensPromptParams {
+  shortText: string
+  longText: string
+}
+
 export const calcTokensPrompt: TestDefinition = {
   testId: 'calc-tokens-llm-prompt',
   params: {
