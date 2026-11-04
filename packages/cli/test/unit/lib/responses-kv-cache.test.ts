@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createNamedKvCacheRetention } from '@/serve/lib/responses-kv-cache'
+import { createNamedKvCacheRetention, folderUsage } from '@/serve/lib/responses-kv-cache'
 
 const HOUR_MS = 60 * 60 * 1000
 const NOW = Date.UTC(2026, 10, 4)
@@ -147,6 +147,33 @@ describe('createNamedKvCacheRetention', () => {
     })
     await r.sweep()
     assert.deepEqual(deleted, ['responses-old'])
+  })
+
+  it('runs overlapping sweeps one after the other', async (t) => {
+    const dir = await cacheDir(t, { 'responses-old': { bytes: 10, ageMs: 30 * HOUR_MS } })
+    const log: string[] = []
+    const r = createNamedKvCacheRetention({
+      prefix: 'responses-',
+      dir,
+      idleTtlMs: 24 * HOUR_MS,
+      now: () => NOW,
+      deleteKey: async (key) => {
+        log.push(`start ${key}`)
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        log.push(`end ${key}`)
+      }
+    })
+    await Promise.all([r.sweep(), r.sweep({ all: true })])
+    assert.deepEqual(log, [
+      'start responses-old',
+      'end responses-old',
+      'start responses-old',
+      'end responses-old'
+    ])
+  })
+
+  it('skips a cache folder that disappears during the scan', async () => {
+    assert.equal(await folderUsage(join(tmpdir(), 'qvac-kv-retention-vanished')), null)
   })
 
   it('treats a missing cache directory as empty', async () => {

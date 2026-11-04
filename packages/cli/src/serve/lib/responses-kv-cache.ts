@@ -62,6 +62,9 @@ export function createNamedKvCacheRetention(
   const deleting = new Map<string, Promise<void>>()
   let lastSweepMs = Number.NEGATIVE_INFINITY
   let sweeping: Promise<number> | undefined
+  // Sweeps run one at a time: two overlapping ones could delete the same key,
+  // and the first to finish would clear its deletion while the other still runs.
+  let queue: Promise<unknown> = Promise.resolve()
 
   async function acquire(key: string): Promise<() => void> {
     while (deleting.has(key)) await deleting.get(key)!.catch(() => undefined)
@@ -88,12 +91,18 @@ export function createNamedKvCacheRetention(
     for (const dirent of dirents) {
       if (!dirent.isDirectory() || !dirent.name.startsWith(opts.prefix)) continue
       const usage = await folderUsage(join(dir, dirent.name))
-      out.push({ key: dirent.name, ...usage })
+      if (usage) out.push({ key: dirent.name, ...usage })
     }
     return out
   }
 
-  async function sweep({ all = false }: { all?: boolean } = {}): Promise<number> {
+  function sweep(opts: { all?: boolean } = {}): Promise<number> {
+    const run = queue.then(() => sweepNow(opts))
+    queue = run.catch(() => undefined)
+    return run
+  }
+
+  async function sweepNow({ all = false }: { all?: boolean }): Promise<number> {
     const caches = await entries()
     let total = caches.reduce((sum, entry) => sum + entry.bytes, 0)
     const idle = caches
@@ -138,22 +147,39 @@ export function createNamedKvCacheRetention(
   return { acquire, sweep, maybeSweep }
 }
 
-async function folderUsage(path: string): Promise<{ bytes: number; lastUsedMs: number }> {
+// A cache can be removed while it is scanned (a cancelled turn, another
+// cleanup); what disappeared is skipped rather than failing the whole sweep.
+export async function folderUsage(
+  path: string
+): Promise<{ bytes: number; lastUsedMs: number } | null> {
+  const dirents = await gone(() => readdir(path, { withFileTypes: true }))
+  if (!dirents) return null
   let bytes = 0
   let lastUsedMs = 0
-  for (const dirent of await readdir(path, { withFileTypes: true })) {
+  for (const dirent of dirents) {
     const child = join(path, dirent.name)
     if (dirent.isDirectory()) {
       const usage = await folderUsage(child)
+      if (!usage) continue
       bytes += usage.bytes
       lastUsedMs = Math.max(lastUsedMs, usage.lastUsedMs)
     } else if (dirent.isFile()) {
-      const info = await stat(child)
+      const info = await gone(() => stat(child))
+      if (!info) continue
       bytes += info.size
       lastUsedMs = Math.max(lastUsedMs, info.mtimeMs)
     }
   }
   return { bytes, lastUsedMs }
+}
+
+async function gone<T>(read: () => Promise<T>): Promise<T | null> {
+  try {
+    return await read()
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw err
+  }
 }
 
 export const responsesKvCacheRetention = createNamedKvCacheRetention({
