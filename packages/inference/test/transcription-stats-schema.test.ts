@@ -80,9 +80,33 @@ test('transcribeStatsSchema: accepts the full addon stats surface', (t) => {
     totalTranscriptions: 2,
     modelLoadMs: 250,
     totalEncodedFrames: 120,
-    encoderOnCoreml: 1
+    encoderOnCoreml: 1,
+    aoscActive: 1,
+    prefillTime: 40,
+    audioTokens: 750,
+    promptTokens: 32,
+    generatedTokens: 210
   })
   t.ok(result.success, 'every reported stats field is accepted')
+})
+
+test('transcribeStatsSchema: round-trips the MOSS counters and Sortformer aoscActive', (t) => {
+  const parsed = transcribeStatsSchema.parse({
+    totalSegments: 2,
+    encoderTime: 120,
+    prefillTime: 40,
+    decoderTime: 300,
+    audioTokens: 750,
+    promptTokens: 32,
+    generatedTokens: 210,
+    aoscActive: 1
+  })
+  t.is(parsed.prefillTime, 40)
+  t.is(parsed.audioTokens, 750)
+  t.is(parsed.promptTokens, 32)
+  t.is(parsed.generatedTokens, 210)
+  t.is(parsed.aoscActive, 1)
+  t.exception(() => transcribeStatsSchema.parse({ generatedTokens: '210' }))
 })
 
 test('transcribeStatsSchema: the newly surfaced fields survive a parse', (t) => {

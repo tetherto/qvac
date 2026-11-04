@@ -42,6 +42,16 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
   and gives a device that reports no memory of its own the host's free and
   total figures ([#5447](https://github.com/tetherto/qvac/pull/5447)).
 
+### Fixed
+
+- Nemotron `runStreaming()` with a run-level `chunkMs` the model was not
+  trained for (anything but 80, 160, 320, 560 or 1120 ms) is rejected before
+  the session opens, with `INVALID_CONFIG` naming the supported values; a
+  run-level `0` keeps the load-time cadence. A session start the engine
+  refuses now fails with `FAILED_TO_START_STREAMING` (6012) instead of
+  `FAILED_TO_APPEND`. `ASRGgml.NEMOTRON_STREAMING_CHUNK_MS` exposes the list
+  as a frozen array.
+
 ## [0.11.2] - 2026-10-28
 
 ### Added

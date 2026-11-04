@@ -183,6 +183,19 @@ function mapTranscribeStats(stats: TranscribeResponse['stats']): TranscribeStats
     }),
     ...(stats?.encoderUsedCoreml !== undefined && {
       encoderUsedCoreml: stats.encoderUsedCoreml
+    }),
+    ...(stats?.aoscActive !== undefined && { aoscActive: stats.aoscActive }),
+    // MOSS-Transcribe-Diarize reports its counters under its own names. Its
+    // stage timings land on the shared encoder/decoder fields and its segment
+    // count on `totalSegments`; the token counts and prefill are MOSS-only.
+    ...(stats?.segments !== undefined && { totalSegments: stats.segments }),
+    ...(stats?.encodeMs !== undefined && { encoderTime: stats.encodeMs }),
+    ...(stats?.decodeMs !== undefined && { decoderTime: stats.decodeMs }),
+    ...(stats?.prefillMs !== undefined && { prefillTime: stats.prefillMs }),
+    ...(stats?.audioTokens !== undefined && { audioTokens: stats.audioTokens }),
+    ...(stats?.promptTokens !== undefined && { promptTokens: stats.promptTokens }),
+    ...(stats?.generatedTokens !== undefined && {
+      generatedTokens: stats.generatedTokens
     })
   }
 }

@@ -24,11 +24,12 @@ API serves all three.
   Every sub-graph of all three models is parity-tested against a PyTorch
   reference at cos > 0.999.
 - **Cross-platform GPU acceleration** — Vulkan on Linux/Windows/Android-Mali,
-  Metal on Apple, OpenCL on Adreno 800+, CPU fallback everywhere else. On
-  Adreno the backend selector picks OpenCL (the path Qualcomm/qvac-fabric
-  actively maintain) and skips Vulkan because the Adreno Vulkan driver
-  produces numerically incorrect ggml output; older Adreno (< 800) falls
-  back to CPU. See `addon/src/utils/BackendSelection.cpp`.
+  Metal on Apple, OpenCL on Adreno 800+, CPU fallback everywhere else under
+  `'auto'`. On Adreno the backend selector picks OpenCL (the path
+  Qualcomm/qvac-fabric actively maintain) and skips Vulkan because the Adreno
+  Vulkan driver produces numerically incorrect ggml output; older Adreno
+  (< 800) falls back to CPU under `'auto'` and fails `load()` with a named
+  backend. See `addon/src/utils/BackendSelection.cpp`.
 - **Q8_0-quantized vision encoder** — vision-tower linear weights ship as Q8_0
   (~4× smaller than F32) with no measurable task-accuracy loss on LIBERO
   closed-loop eval. Other towers stay F32.
@@ -166,9 +167,12 @@ const { actions, stats } = await response.await()
 ```
 
 The example above is SmolVLA (2 cameras, continuous `state` vector). π₀.₅ takes
-up to 3 images and ignores the `state` argument — the caller instead encodes
-robot state as text inside the prompt (`Task: …, State: …;\nAction:`) before
-tokenising (see [Models](#models)). Check `hparams.numCameras` /
+1 to `hparams.numCameras` images, positionally the leading cameras, and ignores
+the `state` argument — the caller instead encodes robot state as text inside
+the prompt (`Task: …, State: …;\nAction:`) before tokenising (see
+[Models](#models)). A checkpoint fine-tuned with an empty camera slot, such as
+`lerobot/pi05_libero_finetuned_v044` with its `empty_camera_0` third view,
+runs by passing only the real views. Check `hparams.numCameras` /
 `hparams.stateInputMode` after `load()` rather than hard-coding the input shape.
 
 ## JavaScript API
@@ -196,8 +200,8 @@ Non-Adreno GPUs are accepted. On Adreno hardware:
   OpenCL 3.0 support, kernel-compile failures on several ggml ops, and
   shared-memory OOMs).
 
-When no acceptable GPU is found the addon falls back to CPU; to force CPU
-regardless, pass `backend: 'cpu'` to `load()`.
+Under `'auto'`, when no acceptable GPU is found the addon falls back to CPU;
+to force CPU regardless, pass `backend: 'cpu'` to `load()`.
 
 Among accepted devices the order is CUDA, then HIP/ROCm, then anything else
 (Vulkan or Metal). CUDA ships as a dynamically loaded module alongside Vulkan
@@ -214,6 +218,15 @@ device is absent is skipped and selection continues; an unrecognised name is
 rejected. The Adreno rules above still apply, so an override can never
 resurrect a device they rejected. Setting `CUDA_VISIBLE_DEVICES=-1` in the
 environment is an equivalent way to force Vulkan without touching the config.
+
+A GPU list never ends on CPU, unlike `'auto'`, unless it also names `auto`,
+as in `'cuda,auto'`. A named family that is absent still falls through to
+another accepted GPU, so `'cuda'` on a Mac runs on Metal; check
+`model.backendName` after `load()` for the device in use. If the host has no
+usable GPU at all, the backend fails to init, or the weights fail to load on
+the device (Jetson Orin 8GB, `cudaMalloc` of the 3.7 GB weight buffer fails
+with NvMap error 12), `load()` rejects with `FAILED_TO_LOAD_WEIGHTS` instead
+of running on CPU at 50x the latency.
 
 ## Built With
 

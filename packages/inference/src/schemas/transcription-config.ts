@@ -530,7 +530,15 @@ export const mossTranscribeConfigSchema = z
     useGPU: z
       .boolean()
       .optional()
-      .describe('Enable the linked GPU backend, including Metal. Default false.'),
+      .describe(
+        'Select a GPU automatically when `backend` is `auto`, including Metal. Default false.'
+      ),
+    backend: z
+      .string()
+      .optional()
+      .describe(
+        'Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `metal`, or an exact ggml device name such as `CUDA0`. An explicit selection overrides `useGPU` and the load fails if it is unavailable.'
+      ),
     backendsDir: z
       .string()
       .optional()
