@@ -4,12 +4,6 @@
 
 ### Breaking
 
-- `assessFit` returns `{ status, devices, stats }`: a row per device, then the
-  host CPU, and the resolved `ctxSize` and `gpuLayers`. `status` is `fits`,
-  `does-not-fit` or `unknown`. An unreadable model or an invalid request
-  rejects ([#5470](https://github.com/tetherto/qvac/pull/5470)).
-- On an iOS device, `assessFit` checks the load and its margin against the
-  app's memory limit ([#5470](https://github.com/tetherto/qvac/pull/5470)).
 - Removed model-weight streaming from `GGMLBert`, `LayaDecisions` and `Reranker`.
   `files.model` now accepts exactly one absolute disk path: a single GGUF or
   only its first shard. All shards must already be in the same directory.
@@ -24,6 +18,17 @@
   ([#5398](https://github.com/tetherto/qvac/pull/5398)).
 - Reranker classifier checks still inspect all disk shards, using the bounded
   shard count in the GGUF header ([#5398](https://github.com/tetherto/qvac/pull/5398)).
+
+## [0.54.0] - 2026-11-03
+
+### Breaking
+
+- `assessFit` returns `{ status, devices, stats }`: a row per device, then the
+  host CPU, and the resolved `ctxSize` and `gpuLayers`. `status` is `fits`,
+  `does-not-fit` or `unknown`. An unreadable model or an invalid request
+  rejects ([#5470](https://github.com/tetherto/qvac/pull/5470)).
+- On an iOS device, `assessFit` checks the load and its margin against the
+  app's memory limit ([#5470](https://github.com/tetherto/qvac/pull/5470)).
 
 ## [0.53.1] - 2026-10-29
 
