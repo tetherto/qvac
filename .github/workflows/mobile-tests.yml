@@ -51,9 +51,9 @@ on:
         type: string
         default: ""
       packages:
-        description: Comma-separated package names or directories; empty selects every package with test:mobile
+        description: The one package to test, by name or directory
+        required: true
         type: string
-        default: ""
 
 permissions: {}
 
@@ -68,7 +68,23 @@ env:
   DEVICES: ${{ inputs.devices_custom || (inputs.device != '(custom)' && inputs.device || '') }}
 
 jobs:
+  # One package per dispatch, as main's per-addon mobile workflows ran one addon each, so the per-package run cap in
+  # devicefarm-check-devices caps the whole dispatch.
+  one-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - shell: bash
+        env:
+          PACKAGES: ${{ inputs.packages }}
+        run: |
+          if [[ ! "$PACKAGES" =~ ^[[:space:]]*[@A-Za-z0-9._/-]+[[:space:]]*$ ]]; then
+            echo "::error::packages takes exactly one package name or directory, got '$PACKAGES'"
+            exit 1
+          fi
+
   select:
+    needs: one-package
     permissions:
       contents: read
     uses: ./.github/workflows/_select-projects.yml
