@@ -2029,7 +2029,8 @@ std::vector<float> BridgeDepthGraph::infer(
   const int per = cDim / m.costGroup;
   for (int g = 0; g < m.costGroup; ++g) {
     for (int c = 0; c < per; ++c)
-      avg[static_cast<size_t>(g) * cDim + g * per + c] = 1.0f / per;
+      avg[static_cast<size_t>(g) * cDim + static_cast<size_t>(g) * per + c] =
+          1.0f / per;
   }
   std::vector<float> arange(m.numDisp), offsets(9), freqs(15);
   for (int i = 0; i < m.numDisp; ++i)
@@ -2127,11 +2128,17 @@ std::vector<float> BridgeDepthGraph::infer(
     di.arange = in.add(ctx, "arange", arange, 1, m.numDisp);
     di.offsets = in.add(ctx, "offsets", offsets, 9);
     di.freqs = in.add(ctx, "freqs", freqs, 15);
-    di.maskCol = in.add(ctx, "mask_col", maskCol, h8 * nDim, h8 * nDim);
-    di.maskRow = in.add(ctx, "mask_row", maskRow, w8 * nDim, w8 * nDim);
+    const int64_t colSide = static_cast<int64_t>(h8) * nDim;
+    const int64_t rowSide = static_cast<int64_t>(w8) * nDim;
+    di.maskCol = in.add(ctx, "mask_col", maskCol, colSide, colSide);
+    di.maskRow = in.add(ctx, "mask_row", maskRow, rowSide, rowSide);
     if (seedsOverride)
-      di.seedsOverride =
-          in.add(ctx, "seeds_override", *seedsOverride, nDim, h8 * w8);
+      di.seedsOverride = in.add(
+          ctx,
+          "seeds_override",
+          *seedsOverride,
+          nDim,
+          static_cast<int64_t>(h8) * w8);
     T* avg32T = in.add(ctx, "avg32", avg32, cGw, gCorr);
     auto alignInputs = [&](const AlignHost& a,
                            int wGrid,
@@ -2155,7 +2162,7 @@ std::vector<float> BridgeDepthGraph::infer(
           a.T,
           a.T,
           1,
-          (a.wPad / win) * (a.hPad / win));
+          static_cast<int64_t>(a.wPad / win) * (a.hPad / win));
       for (size_t l = 0; l < a.idxReadout.size(); ++l) {
         const std::string sl = s + "_" + std::to_string(l);
         ai.idxReadout.push_back(in.addI32(
