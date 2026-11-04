@@ -141,7 +141,7 @@ test('RPC lookup bounds unique endpoints, concurrent probes and instance churn',
   let active = 0,
     maximum = 0,
     probes = 0
-  const result = discoverRpcEndpoints('shared', 400, ctx, {
+  const result = discoverRpcEndpoints('shared', 650, ctx, {
     createTransport: transport.factory,
     probe: async () => {
       probes++
@@ -307,4 +307,167 @@ test('RPC advertiser forwards active, suspended and failed state with the origin
   } finally {
     await withdraw()
   }
+})
+
+test('RPC sessions reset endpoint attempts and reject inventories from before suspension', async (t) => {
+  const registry = createRequestRegistry()
+  await using ctx = await registry.begin({ requestId: 'session-accounting', kind: 'rpcDiscovery' })
+  const transport = fakeTransport()
+  const counts = new Map<string, number>()
+  let finishOld: (value: typeof inventory) => void = () => {}
+  const result = discoverRpcEndpoints('shared', 900, ctx, {
+    createTransport: transport.factory,
+    probe: async (host) => {
+      const count = (counts.get(host) ?? 0) + 1
+      counts.set(host, count)
+      if (host === '10.0.0.3') {
+        return count === 1
+          ? new Promise((resolve) => {
+              finishOld = resolve
+            })
+          : undefined
+      }
+      return count === 1 ? undefined : inventory
+    }
+  })
+  transport.announce('10.0.0.2')
+  await new Promise<void>((resolve) => setTimeout(resolve, 550))
+  t.is(counts.get('10.0.0.2'), 2, 'scheduler retries without another announcement')
+  transport.announce('10.0.0.3')
+  await transport.resource.suspend()
+  await transport.resource.resume()
+  transport.announce('10.0.0.2')
+  transport.announce('10.0.0.3')
+  finishOld(inventory)
+  t.alike(await result, [{ url: '10.0.0.2:50052', ...inventory }])
+  t.is(counts.get('10.0.0.2'), 3, 'fresh session revalidates a previously healthy endpoint')
+  t.is(counts.get('10.0.0.3'), 2, 'late inventory cannot populate the resumed candidate')
+})
+
+test('RPC one source cannot reserve every candidate or probe slot with bogus ports', async (t) => {
+  const registry = createRequestRegistry()
+  await using ctx = await registry.begin({ requestId: 'source-fairness', kind: 'rpcDiscovery' })
+  const transport = fakeTransport()
+  const starts: string[] = []
+  const result = discoverRpcEndpoints('shared', 200, ctx, {
+    createTransport: transport.factory,
+    probe: async (host) => {
+      starts.push(host)
+      return host === '10.0.0.2' ? inventory : undefined
+    }
+  })
+  for (let port = 1; port <= 64; port++) transport.announce('10.0.0.1', frame('shared', port))
+  transport.announce('10.0.0.2')
+  t.alike(await result, [{ url: '10.0.0.2:50052', ...inventory }])
+  t.ok(starts.indexOf('10.0.0.2') <= 4, 'ready sources rotate when a probe slot opens')
+  t.ok(starts.filter((host) => host === '10.0.0.1').length <= 8)
+})
+
+test('RPC old probes count toward concurrency until their asynchronous cleanup settles', async (t) => {
+  const registry = createRequestRegistry()
+  await using ctx = await registry.begin({ requestId: 'probe-cleanup', kind: 'rpcDiscovery' })
+  const transport = fakeTransport()
+  const cleanups: Array<() => void> = []
+  let starts = 0,
+    active = 0,
+    maximum = 0
+  const result = discoverRpcEndpoints('shared', 250, ctx, {
+    createTransport: transport.factory,
+    probe: async (_host, _port, _timeout, _signal, scope) => {
+      starts++
+      active++
+      maximum = Math.max(maximum, active)
+      const old = starts <= 4
+      scope?.defer(async () => {
+        if (old) await new Promise<void>((resolve) => cleanups.push(resolve))
+        active--
+      })
+      return inventory
+    }
+  })
+  for (let i = 1; i <= 4; i++) transport.announce(`10.0.0.${i}`)
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  t.is(cleanups.length, 4)
+  await transport.resource.suspend()
+  await transport.resource.resume()
+  for (let i = 1; i <= 4; i++) transport.announce(`10.0.0.${i}`)
+  t.is(starts, 4, 'resumed work waits for old sockets to close')
+  cleanups[0]!()
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  t.ok(starts > 4)
+  for (const finish of cleanups.slice(1)) finish()
+  t.is((await result).length, 4)
+  t.is(maximum, 4)
+  t.is(active, 0)
+})
+
+test('RPC lifetime source and lookup probe budgets survive repeated suspension and instance churn', async (t) => {
+  const registry = createRequestRegistry()
+  await using ctx = await registry.begin({ requestId: 'lifetime-bounds', kind: 'rpcDiscovery' })
+  const transport = fakeTransport()
+  const counts = new Map<string, number>()
+  let starts = 0
+  const result = discoverRpcEndpoints('shared', 350, ctx, {
+    createTransport: transport.factory,
+    probe: async (host) => {
+      starts++
+      counts.set(host, (counts.get(host) ?? 0) + 1)
+      return undefined
+    }
+  })
+  for (let session = 1; session <= 20; session++) {
+    for (let host = 1; host <= 10; host++) {
+      for (let port = 1; port <= 20; port++) {
+        transport.announce(`10.0.0.${host}`, frame('shared', port, session))
+      }
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    await transport.resource.suspend()
+    await transport.resource.resume()
+  }
+  t.alike(await result, [])
+  t.is(starts, 128, 'lookup work stops at its original total allowance')
+  for (const count of counts.values()) {
+    t.ok(count <= 16, 'one source cannot consume the lookup budget')
+  }
+})
+
+test('RPC resident slots expire while endpoint cooldown and attempt limits survive eviction', async (t) => {
+  const registry = createRequestRegistry()
+  await using ctx = await registry.begin({ requestId: 'resident-reclaim', kind: 'rpcDiscovery' })
+  const transport = fakeTransport()
+  const counts = new Map<number, number>()
+  const result = discoverRpcEndpoints('shared', 3900, ctx, {
+    createTransport: transport.factory,
+    probe: async (_host, port) => {
+      counts.set(port, (counts.get(port) ?? 0) + 1)
+      return port === 50052 ? inventory : undefined
+    }
+  })
+  for (let port = 1; port <= 8; port++) transport.announce('10.0.0.1', frame('shared', port))
+  await new Promise<void>((resolve) => setTimeout(resolve, 550))
+  for (let id = 2; id < 100; id++) {
+    for (let port = 1; port <= 8; port++) transport.announce('10.0.0.1', frame('shared', port, id))
+  }
+  transport.announce('10.0.0.2')
+  await new Promise<void>((resolve) => setTimeout(resolve, 3100))
+  transport.announce('10.0.0.3')
+  t.alike(await result, [{ url: '10.0.0.3:50052', ...inventory }])
+  for (let port = 1; port <= 8; port++) {
+    t.is(counts.get(port), 2, 'instance churn cannot reset attempts')
+  }
+})
+
+test('RPC expired resident candidates release capacity for a fresh source', async (t) => {
+  const registry = createRequestRegistry()
+  await using ctx = await registry.begin({ requestId: 'expired-capacity', kind: 'rpcDiscovery' })
+  const transport = fakeTransport()
+  const result = discoverRpcEndpoints('shared', 3300, ctx, {
+    createTransport: transport.factory,
+    probe: async () => inventory
+  })
+  for (let i = 1; i <= 64; i++) transport.announce(`10.0.0.${i}`)
+  await new Promise<void>((resolve) => setTimeout(resolve, 3100))
+  transport.announce('10.0.0.65')
+  t.alike(await result, [{ url: '10.0.0.65:50052', ...inventory }])
 })

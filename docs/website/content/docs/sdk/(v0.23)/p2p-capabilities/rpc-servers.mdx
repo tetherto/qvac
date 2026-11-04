@@ -62,7 +62,11 @@ Both devices must share a multicast-capable local link and connected IPv4 subnet
 
 Advertisers send a 55-byte packet immediately and once per second. Packets contain a protocol version, topic hash, random instance identifier and RPC port. Stopping or suspending an advertiser closes its socket. Lookups expire its last announcement after three seconds. UDP can lose packets, so use the default five-second search budget for normal operation. A short search may find nothing.
 
-Each lookup admits at most 64 unique endpoints, runs at most four inventory probes concurrently, and tries each endpoint at most twice within its budget. It accepts at most 256 correctly sized datagrams per second before topic parsing. Oversized, malformed and unrelated-topic packets cannot create candidates. Every candidate still passes the native protocol and device inventory probe.
+Each lookup keeps at most 64 resident candidates, with at most eight from one packet source address. Expired candidates and exhausted failures release resident slots. A source address is an accounting key, not authenticated identity, and several RPC ports on the same host remain supported.
+
+A lookup runs at most four inventory probes concurrently, including probes still closing their sockets. Each endpoint gets at most two attempts per active session, with a 500-millisecond cooldown that survives candidate eviction and instance changes. Suspension cancels the session and clears its candidates, inventories and endpoint attempts together. Fresh announcements after resume require new inventory validation. Suspension does not extend the original lookup deadline or reset its lifetime limits of 16 probe starts per source and 128 starts in total. Accounting retains at most 128 source records and 128 endpoint attempt records. Discovery may return no new endpoints after these work allowances are exhausted.
+
+The receive transport accepts at most 256 correctly sized datagrams per second before topic parsing. Oversized, malformed and unrelated-topic packets cannot create candidates. Every candidate still passes the native protocol and device inventory probe.
 
 The transport checks interface addresses and netmasks before every send and accepted receive, and once per second while idle. A detected change closes its sockets and invalidates lookup results. A lookup reports an error. The native server remains owned and stoppable when advertising fails.
 

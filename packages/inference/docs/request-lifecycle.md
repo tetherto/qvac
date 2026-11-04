@@ -70,6 +70,18 @@ send failure stops advertising without failing runtime resume or losing native
 server ownership. Call `stopRpcServer` and start a new server to recover.
 Unexpected cleanup failures still reject the lifecycle transition.
 
+Each lookup keeps at most 64 resident candidates and eight per source address.
+Expired candidates and exhausted failures release slots. A source address is only
+an accounting key. The scheduler rotates ready sources and keeps four probes
+active at most, including asynchronous socket cleanup. Two attempts per endpoint
+and a 500-millisecond cooldown apply within a session, including after eviction
+or instance changes. Suspend aborts that session and clears its candidates,
+inventories and endpoint attempt history together. Old probes retain their
+concurrency slots until cleanup settles, and their results cannot enter the new
+session. The original deadline, 16 starts per source and 128 starts per lookup
+survive suspension. Source records and endpoint attempt records each remain
+bounded by 128.
+
 `rpcServerStatusStream` reports current owned servers and subsequent changes,
 including normal advertisement suspension, terminal failure, recovery action and
 structured errors with their original cause. Subscribe without a server ID before

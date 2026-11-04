@@ -10,6 +10,12 @@ import type { RpcServerCandidate } from '@/schemas/rpc-server'
 
 const LEASE_MS = 3000
 const MAX_CANDIDATES = 64
+const MAX_SOURCE_CANDIDATES = 8
+const MAX_SOURCES = 128
+const MAX_SOURCE_PROBES = 16
+const MAX_PROBES = 128
+const MAX_ACTIVE_PROBES = 4
+const MAX_ENDPOINT_ATTEMPTS = 2
 const PROBE_MS = 500
 const MAGIC = 'QVRP'
 
@@ -92,14 +98,18 @@ export async function discoverRpcEndpoints(
   interface Candidate {
     instance: string
     seen: number
-    attempts: number
-    tried: number
+    source: string
     probing: boolean
     inventory?: RpcInventory
   }
   const candidates = new Map<string, Candidate>()
-  const admitted = new Set<string>()
-  const attempts = new Map<string, number>()
+  interface Source {
+    starts: number
+    attempts: Map<string, { count: number; tried: number }>
+  }
+  const sources = new Map<string, Source>()
+  let probes = 0
+  let lastSource: string | undefined
   const pending = new Set<Promise<void>>()
   let session = new AbortController()
   const wait = new AbortController()
@@ -122,43 +132,80 @@ export async function discoverRpcEndpoints(
     await Promise.allSettled(pending)
   })
 
+  function reclaim() {
+    for (const [url, candidate] of candidates) {
+      const attempts = sources.get(candidate.source)?.attempts.get(url)?.count ?? 0
+      if (
+        Date.now() - candidate.seen >= LEASE_MS ||
+        (!candidate.inventory && !candidate.probing && attempts >= MAX_ENDPOINT_ATTEMPTS)
+      ) {
+        candidates.delete(url)
+      }
+    }
+  }
+
+  function next() {
+    const order = [...sources]
+    const previous = order.findIndex(([host]) => host === lastSource)
+    for (let i = 1; i <= order.length; i++) {
+      const [host, source] = order[(previous + i) % order.length]!
+      if (source.starts >= MAX_SOURCE_PROBES) continue
+      for (const [url, candidate] of candidates) {
+        const attempt = source.attempts.get(url)
+        if (
+          candidate.source === host &&
+          !candidate.inventory &&
+          !candidate.probing &&
+          (attempt?.count ?? 0) < MAX_ENDPOINT_ATTEMPTS &&
+          (!attempt || Date.now() - attempt.tried >= PROBE_MS)
+        ) {
+          lastSource = host
+          return { url, candidate, source, attempt }
+        }
+      }
+    }
+    return undefined
+  }
+
   function pump() {
-    if (transport.suspended || scope.disposed || ctx.signal.aborted || Date.now() >= deadline) {
+    if (
+      transport.suspended ||
+      session.signal.aborted ||
+      scope.disposed ||
+      ctx.signal.aborted ||
+      Date.now() >= deadline
+    ) {
       return
     }
-    for (const [url, candidate] of candidates) {
-      if (active >= 4) break
-      if (
-        candidate.inventory ||
-        candidate.probing ||
-        candidate.attempts >= 2 ||
-        Date.now() - candidate.seen >= LEASE_MS ||
-        Date.now() - candidate.tried < PROBE_MS
-      ) {
-        continue
-      }
+    reclaim()
+    while (active < MAX_ACTIVE_PROBES && probes < MAX_PROBES) {
+      const ready = next()
+      if (!ready) break
+      const { url, candidate, source, attempt } = ready
       const endpoint = privateEndpoint(url)!
       candidate.probing = true
-      candidate.attempts++
-      attempts.set(url, candidate.attempts)
-      candidate.tried = Date.now()
+      source.attempts.set(url, { count: (attempt?.count ?? 0) + 1, tried: Date.now() })
+      source.starts++
+      probes++
       active++
       const signal = session.signal
       const task = (async () => {
-        await using probeScope = createDisposableScope()
         try {
-          const inventory = await (deps.probe ?? queryRpcInventory)(
-            endpoint.host,
-            endpoint.port,
-            Math.max(1, Math.min(PROBE_MS, deadline - Date.now())),
-            signal,
-            probeScope
-          )
+          const inventory = await (async () => {
+            await using probeScope = createDisposableScope()
+            return await (deps.probe ?? queryRpcInventory)(
+              endpoint.host,
+              endpoint.port,
+              Math.max(1, Math.min(PROBE_MS, deadline - Date.now())),
+              signal,
+              probeScope
+            )
+          })()
           if (!signal.aborted && candidates.get(url) === candidate && inventory?.devices.length) {
             candidate.inventory = inventory
           }
         } catch {
-          /* Failed probes exclude this endpoint. Cancellation also closes the TCP socket. */
+          // Failed probes exclude this endpoint. The probe scope closes its TCP socket.
         } finally {
           active--
           candidate.probing = false
@@ -178,19 +225,31 @@ export async function discoverRpcEndpoints(
       if (session.signal.aborted) session = new AbortController()
       const url = `${host}:${announcement.port}`
       if (!privateEndpoint(url)) return
-      if (!admitted.has(url)) {
-        if (admitted.size >= MAX_CANDIDATES) return
-        admitted.add(url)
-      }
+      reclaim()
       let candidate = candidates.get(url)
       if (!candidate || candidate.instance !== announcement.instance) {
-        // One endpoint gets at most two probes per lookup, including restarts.
-        if ((attempts.get(url) ?? 0) >= 2) return
+        // Instance changes invalidate inventory without resetting endpoint work.
+        candidates.delete(url)
+        let source = sources.get(host)
+        if (!source) {
+          if (sources.size >= MAX_SOURCES) return
+          source = { starts: 0, attempts: new Map() }
+          sources.set(host, source)
+        }
+        if (
+          probes >= MAX_PROBES ||
+          source.starts >= MAX_SOURCE_PROBES ||
+          (source.attempts.get(url)?.count ?? 0) >= MAX_ENDPOINT_ATTEMPTS ||
+          candidates.size >= MAX_CANDIDATES ||
+          [...candidates.values()].filter((item) => item.source === host).length >=
+            MAX_SOURCE_CANDIDATES
+        ) {
+          return
+        }
         candidate = {
           instance: announcement.instance,
           seen: Date.now(),
-          attempts: attempts.get(url) ?? 0,
-          tried: 0,
+          source: host,
           probing: false
         }
         candidates.set(url, candidate)
@@ -199,8 +258,9 @@ export async function discoverRpcEndpoints(
       pump()
     },
     onstop(error) {
-      candidates.clear()
       session.abort(undefined)
+      candidates.clear()
+      for (const source of sources.values()) source.attempts.clear()
       if (error) {
         failure = error
         rejectFailure(error)
@@ -208,6 +268,8 @@ export async function discoverRpcEndpoints(
     }
   })
   scope.defer(() => transport.close())
+  const scheduler = setInterval(pump, 50)
+  scope.defer(() => clearInterval(scheduler))
   await transport.start(ctx.signal)
   await Promise.race([delay(Math.max(0, deadline - Date.now()), wait.signal), failed])
   throwIfAborted(ctx.signal)
