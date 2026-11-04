@@ -158,6 +158,42 @@ export class WorkerShutdownError extends QvacErrorBase {
   }
 }
 
+/**
+ * The session handle can no longer reach its worker-side session: the caller
+ * closed it, the owner shut the runtime down, or the worker exited. Raised
+ * locally, before any wire traffic.
+ */
+export class SessionInvalidatedError extends QvacErrorBase {
+  readonly sessionId: string
+  readonly reason: 'closed' | 'shutdown' | 'crashed'
+
+  constructor(sessionId: string, reason: 'closed' | 'shutdown' | 'crashed', cause?: unknown) {
+    super(
+      createErrorOptions(SDK_CLIENT_ERROR_CODES.SESSION_INVALIDATED, [sessionId, reason], cause)
+    )
+    this.sessionId = sessionId
+    this.reason = reason
+  }
+}
+
+/** A model id that a now-invalid session loaded; the model is gone with it. */
+export class ModelHandleInvalidatedError extends QvacErrorBase {
+  readonly modelId: string
+  readonly sessionId: string
+
+  constructor(modelId: string, sessionId: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_CLIENT_ERROR_CODES.MODEL_HANDLE_INVALIDATED,
+        [modelId, sessionId],
+        cause
+      )
+    )
+    this.modelId = modelId
+    this.sessionId = sessionId
+  }
+}
+
 // ============== Build/Bundle Errors ==============
 
 export class SDKNotFoundInNodeModulesError extends QvacErrorBase {

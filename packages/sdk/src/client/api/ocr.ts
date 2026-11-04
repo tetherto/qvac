@@ -3,9 +3,11 @@ import {
   type OCRStreamRequest,
   type OCRClientParams,
   type OCRTextBlock,
-  type OCRStats
+  type OCRStats,
+  type RPCOptions
 } from '@qvac/inference/surface'
 import { stream as streamRpc } from '@/client/rpc/rpc-client'
+import { generateClientRequestId } from '@/client/api/client-request-id'
 
 /**
  * Performs Optical Character Recognition (OCR) on an image to extract text.
@@ -15,7 +17,8 @@ import { stream as streamRpc } from '@/client/rpc/rpc-client'
  * @param params.image - Image input as either a file path (string) or image buffer
  * @param params.options - Optional OCR options (e.g., paragraph mode)
  * @param params.stream - Whether to stream blocks as they're detected (true) or return all at once (false). Defaults to false
- * @returns Object with blockStream generator, blocks promise, and stats promise
+ * @param options - Optional RPC options (timeout, profiling, force new connection).
+ * @returns Object with `requestId` (pass to `cancel({ requestId })`), blockStream generator, blocks promise, and stats promise
  * @example
  * ```typescript
  * // Load an OCR model first. Registry GGUF models resolve their pipeline
@@ -40,13 +43,19 @@ import { stream as streamRpc } from '@/client/rpc/rpc-client'
  * }
  * ```
  */
-export function ocr(params: OCRClientParams): {
+export function ocr(
+  params: OCRClientParams,
+  options?: RPCOptions
+): {
+  requestId: string
   blockStream: AsyncGenerator<OCRTextBlock[]>
   blocks: Promise<OCRTextBlock[]>
   stats: Promise<OCRStats | undefined>
 } {
+  const requestId = generateClientRequestId()
   const request: OCRStreamRequest = {
     type: 'ocrStream',
+    requestId,
     modelId: params.modelId,
     image:
       typeof params.image === 'string'
@@ -63,7 +72,7 @@ export function ocr(params: OCRClientParams): {
 
   if (params.stream) {
     const blockStream = (async function* () {
-      for await (const response of streamRpc(request)) {
+      for await (const response of streamRpc(request, options)) {
         if (response.type === 'ocrStream') {
           const streamResponse = ocrStreamResponseSchema.parse(response)
           if (streamResponse.blocks && streamResponse.blocks.length > 0) {
@@ -78,6 +87,7 @@ export function ocr(params: OCRClientParams): {
     })()
 
     return {
+      requestId,
       blockStream,
       blocks: Promise.resolve([]),
       stats: statsPromise
@@ -89,7 +99,7 @@ export function ocr(params: OCRClientParams): {
 
     const blocksPromise = (async () => {
       let allBlocks: OCRTextBlock[] = []
-      for await (const response of streamRpc(request)) {
+      for await (const response of streamRpc(request, options)) {
         if (response.type === 'ocrStream') {
           const streamResponse = ocrStreamResponseSchema.parse(response)
           if (streamResponse.blocks) {
@@ -105,6 +115,7 @@ export function ocr(params: OCRClientParams): {
     })()
 
     return {
+      requestId,
       blockStream,
       blocks: blocksPromise,
       stats: statsPromise
