@@ -43,6 +43,8 @@ function baseHandlerParams(rid: string): ResponsesHandlerParams {
 
 function fakeStreamCompletion(opts: {
   thinkingTokens?: string[]
+  /** Interleaved reasoning and text, emitted in order after `thinkingTokens` and `tokens`. */
+  steps?: Array<{ think: string } | { text: string }>
   tokens: string[]
   toolCalls: ToolCall[]
   text: string
@@ -55,6 +57,11 @@ function fakeStreamCompletion(opts: {
     let seq = 0
     for (const t of opts.thinkingTokens ?? []) yield { type: 'thinkingDelta', seq: seq++, text: t }
     for (const t of opts.tokens) yield { type: 'contentDelta', seq: seq++, text: t }
+    for (const step of opts.steps ?? []) {
+      yield 'think' in step
+        ? { type: 'thinkingDelta', seq: seq++, text: step.think }
+        : { type: 'contentDelta', seq: seq++, text: step.text }
+    }
     for (const call of opts.toolCalls) yield { type: 'toolCall', seq: seq++, call }
     if (opts.stats !== undefined) yield { type: 'completionStats', seq: seq++, stats: opts.stats }
     yield { type: 'completionDone', seq: seq++, stopReason: opts.stopReason ?? 'eos' }
@@ -301,6 +308,49 @@ describe('writeStreamingResponse: reasoning', () => {
   })
 })
 
+describe('writeStreamingResponse: reasoning after answer text', () => {
+  it('gives reasoning that follows answer text an item of its own', async () => {
+    const holder = createStreamResponse()
+    const result = fakeStreamCompletion({
+      tokens: [],
+      steps: [{ think: 'First.' }, { text: 'Partial ' }, { think: 'Second.' }, { text: 'answer.' }],
+      toolCalls: [],
+      text: 'Partial answer.'
+    })
+
+    const completed = await writeStreamingResponse(
+      holder.res,
+      baseHandlerParams('resp_reason_late'),
+      () => result
+    )
+    const events = parseSseJsonEvents(holder.raw) as Array<Record<string, unknown>>
+    const reasoningDeltas = events.filter((e) => e['type'] === 'response.reasoning_text.delta')
+    assert.deepEqual(
+      reasoningDeltas.map((e) => [e['delta'], e['output_index']]),
+      [
+        ['First.', 0],
+        ['Second.', 2]
+      ]
+    )
+    assert.deepEqual(
+      events
+        .filter((e) => e['type'] === 'response.output_text.delta')
+        .map((e) => e['output_index']),
+      [1, 1]
+    )
+
+    const output = completed['output'] as Array<Record<string, unknown>>
+    assert.deepEqual(
+      output.map((o) => o['type']),
+      ['reasoning', 'message', 'reasoning']
+    )
+    assert.equal(output[0]!['id'], reasoningDeltas[0]!['item_id'])
+    assert.equal(output[2]!['id'], reasoningDeltas[1]!['item_id'])
+    assert.deepEqual(output[2]!['content'], [{ type: 'reasoning_text', text: 'Second.' }])
+    assert.equal(completed['output_text'], 'Partial answer.')
+  })
+})
+
 describe('writeStreamingResponse: deferred tools', () => {
   const deferredTool = {
     type: 'function' as const,
@@ -362,5 +412,39 @@ describe('writeStreamingResponse: deferred tools', () => {
       'tool_search never reaches the client'
     )
     assert.ok(JSON.stringify(completed['output']).includes('Opened it.'))
+  })
+
+  it('keeps reasoning from the answer turn after a search preamble', async () => {
+    const holder = createStreamResponse()
+    const p = { ...baseHandlerParams('resp_defer_reason'), tools: [deferredTool] }
+    const turns = [
+      fakeStreamCompletion({
+        tokens: ['Looking that up. '],
+        toolCalls: [{ id: 'c1', name: 'tool_search', arguments: { query: 'create_issue' } }],
+        text: 'Looking that up. '
+      }),
+      fakeStreamCompletion({
+        thinkingTokens: ['The tool is loaded now.'],
+        tokens: ['Opened it.'],
+        toolCalls: [],
+        text: 'Opened it.'
+      })
+    ]
+    let turn = 0
+
+    const completed = await writeStreamingResponse(holder.res, p, () => turns[turn++]!)
+    const events = parseSseJsonEvents(holder.raw) as Array<Record<string, unknown>>
+    assert.deepEqual(
+      events.filter((e) => e['type'] === 'response.reasoning_text.delta').map((e) => e['delta']),
+      ['The tool is loaded now.']
+    )
+    const output = completed['output'] as Array<Record<string, unknown>>
+    assert.deepEqual(
+      output.map((o) => o['type']),
+      ['message', 'reasoning']
+    )
+    assert.deepEqual(output[1]!['content'], [
+      { type: 'reasoning_text', text: 'The tool is loaded now.' }
+    ])
   })
 })

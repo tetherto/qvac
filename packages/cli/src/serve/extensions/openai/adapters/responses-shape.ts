@@ -23,12 +23,19 @@ function randomId(): string {
   return crypto.randomUUID()
 }
 
+export interface ReasoningSegment {
+  id: string
+  text: string
+  /** Streamed after the message item opened, so it follows the message in `output`. */
+  afterMessage?: boolean
+}
+
 export interface BuildResponseObjectParams {
   id: string
   modelAlias: string
   text: string
-  /** Model reasoning, returned as a `reasoning` output item ahead of the message. */
-  reasoning?: string
+  /** Model reasoning, each segment returned as a `reasoning` output item. */
+  reasoning?: ReasoningSegment[]
   toolCalls: ToolCall[] | null | undefined
   createdAtSec: number
   metadata: Record<string, unknown> | null | undefined
@@ -40,8 +47,6 @@ export interface BuildResponseObjectParams {
   store: boolean
   /** When set (e.g. streaming), must match SSE item ids so finalized response matches the stream. */
   messageItemId?: string
-  /** When set, must match the streamed reasoning item id. */
-  reasoningItemId?: string
   /** When set, must align with `toolCalls` length; same ids as streamed function_call items. */
   functionCallItemIds?: string[]
   /** From SDK completion stats; `emittedTokens` / `generatedTokens` map to `usage.output_tokens`. */
@@ -66,8 +71,9 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
   const msgId = params.messageItemId ?? messageId()
   const output: unknown[] = []
 
-  if (params.reasoning) {
-    output.push(reasoningItem(params.reasoningItemId ?? reasoningItemId(), params.reasoning))
+  const reasoning = params.reasoning ?? []
+  for (const r of reasoning) {
+    if (!r.afterMessage) output.push(reasoningItem(r.id, r.text))
   }
 
   output.push({
@@ -77,6 +83,9 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
     role: 'assistant',
     content: [{ type: 'output_text', text: params.text || '', annotations: [] }]
   })
+  for (const r of reasoning) {
+    if (r.afterMessage) output.push(reasoningItem(r.id, r.text))
+  }
 
   const openaiCalls = sdkToolCallsToOpenai(params.toolCalls)
   if (hasToolCalls) {

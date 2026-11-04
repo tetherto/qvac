@@ -19,7 +19,8 @@ import {
   functionCallOutputItemId,
   messageId,
   reasoningItem,
-  reasoningItemId
+  reasoningItemId,
+  type ReasoningSegment
 } from '@/serve/extensions/openai/adapters/responses-shape'
 import {
   RESPONSES_DEFAULT_TTL_SEC,
@@ -75,9 +76,11 @@ export async function writeBlockingResponse(
   let turnHistory = p.history
   let drained
   let total: DrainedOpenAICompletion | undefined
+  const thoughts: string[] = []
   for (let round = 0; ; round++) {
     drained = await drainCompletion(runTurn(turnHistory))
     total = accumulateUsage(total, drained)
+    if (drained.thinking) thoughts.push(drained.thinking)
     if (round >= MAX_TOOL_SEARCH_ROUNDS) break
     const extended = foldToolSearch(
       p.tools,
@@ -88,14 +91,17 @@ export async function writeBlockingResponse(
     if (!extended) break
     turnHistory = extended
   }
-  const { text, thinking, toolCalls, toolErrors, stats, stopReason, completionTokens } =
-    stripToolSearchCalls(p.tools, total ?? drained)
+  const { text, toolCalls, toolErrors, stats, stopReason, completionTokens } = stripToolSearchCalls(
+    p.tools,
+    total ?? drained
+  )
+  const thinking = thoughts.join('\n\n')
 
   const responseObject = buildResponseObject({
     id: p.rid,
     modelAlias: p.modelAlias,
     text,
-    ...(thinking ? { reasoning: thinking } : {}),
+    ...(thinking ? { reasoning: [{ id: reasoningItemId(), text: thinking }] } : {}),
     toolCalls,
     createdAtSec: p.createdAtSec,
     metadata: p.metadata,
@@ -144,13 +150,12 @@ export async function writeStreamingResponse(
   runTurn: RunTurn
 ): Promise<Record<string, unknown>> {
   const msgId = messageId()
-  const rsId = reasoningItemId()
   let fullText = ''
-  let reasoningText = ''
   let nextOutputIndex = 0
-  let reasoningIndex: number | undefined
   let messageIndex: number | undefined
-  let reasoningOpen = false
+  type StreamedReasoning = ReasoningSegment & { outputIndex: number }
+  const reasoning: StreamedReasoning[] = []
+  let openReasoning: StreamedReasoning | undefined
 
   sendSSE(res, {
     type: 'response.created',
@@ -163,38 +168,39 @@ export async function writeStreamingResponse(
     }
   })
 
-  // Items open in the order the model produces them: reasoning (if any), then
-  // the message. Reasoning closes when the message opens.
+  // Items open in the order the model produces them. Each run of reasoning gets
+  // its own item, closed by the next answer text; the message opens once.
   const closeReasoning = () => {
-    if (!reasoningOpen) return
-    reasoningOpen = false
+    const r = openReasoning
+    if (!r) return
+    openReasoning = undefined
     sendSSE(res, {
       type: 'response.reasoning_text.done',
-      item_id: rsId,
-      output_index: reasoningIndex,
+      item_id: r.id,
+      output_index: r.outputIndex,
       content_index: 0,
-      text: reasoningText,
+      text: r.text,
       response_id: p.rid
     })
     sendSSE(res, {
       type: 'response.content_part.done',
-      item_id: rsId,
-      output_index: reasoningIndex,
+      item_id: r.id,
+      output_index: r.outputIndex,
       content_index: 0,
-      part: { type: 'reasoning_text', text: reasoningText },
+      part: { type: 'reasoning_text', text: r.text },
       response_id: p.rid
     })
     sendSSE(res, {
       type: 'response.output_item.done',
-      output_index: reasoningIndex,
-      item: reasoningItem(rsId, reasoningText),
+      output_index: r.outputIndex,
+      item: reasoningItem(r.id, r.text),
       response_id: p.rid
     })
   }
 
   const openMessage = (): number => {
-    if (messageIndex !== undefined) return messageIndex
     closeReasoning()
+    if (messageIndex !== undefined) return messageIndex
     messageIndex = nextOutputIndex++
     sendSSE(res, {
       type: 'response.output_item.added',
@@ -229,31 +235,40 @@ export async function writeStreamingResponse(
     })
 
   const sendReasoningDelta = (token: string) => {
-    // Reasoning after the message has opened has no item left to land in.
-    if (messageIndex !== undefined) return
-    if (reasoningIndex === undefined) {
-      reasoningIndex = nextOutputIndex++
-      reasoningOpen = true
+    if (!openReasoning) {
+      openReasoning = {
+        id: reasoningItemId(),
+        text: '',
+        outputIndex: nextOutputIndex++,
+        afterMessage: messageIndex !== undefined
+      }
+      reasoning.push(openReasoning)
       sendSSE(res, {
         type: 'response.output_item.added',
-        output_index: reasoningIndex,
-        item: { type: 'reasoning', id: rsId, status: 'in_progress', summary: [], content: [] },
+        output_index: openReasoning.outputIndex,
+        item: {
+          type: 'reasoning',
+          id: openReasoning.id,
+          status: 'in_progress',
+          summary: [],
+          content: []
+        },
         response_id: p.rid
       })
       sendSSE(res, {
         type: 'response.content_part.added',
-        item_id: rsId,
-        output_index: reasoningIndex,
+        item_id: openReasoning.id,
+        output_index: openReasoning.outputIndex,
         content_index: 0,
         part: { type: 'reasoning_text', text: '' },
         response_id: p.rid
       })
     }
-    reasoningText += token
+    openReasoning.text += token
     sendSSE(res, {
       type: 'response.reasoning_text.delta',
-      item_id: rsId,
-      output_index: reasoningIndex,
+      item_id: openReasoning.id,
+      output_index: openReasoning.outputIndex,
       content_index: 0,
       delta: token,
       response_id: p.rid
@@ -297,6 +312,7 @@ export async function writeStreamingResponse(
   )
   const hasToolCalls = toolCalls.length > 0
   const msgIndex = openMessage()
+  const firstCallIndex = nextOutputIndex
 
   sendSSE(res, {
     type: 'response.output_text.done',
@@ -333,7 +349,7 @@ export async function writeStreamingResponse(
     let i = 0
     for (const tc of openaiCalls ?? []) {
       const fcItemId = fcItemIds[i]!
-      const outputIndex = msgIndex + 1 + i
+      const outputIndex = firstCallIndex + i
       const argsStr = tc.function.arguments
       sendSSE(res, {
         type: 'response.output_item.added',
@@ -383,7 +399,15 @@ export async function writeStreamingResponse(
     id: p.rid,
     modelAlias: p.modelAlias,
     text: fullText,
-    ...(reasoningText ? { reasoning: reasoningText, reasoningItemId: rsId } : {}),
+    ...(reasoning.length > 0
+      ? {
+          reasoning: reasoning.map(({ id, text, afterMessage }) => ({
+            id,
+            text,
+            ...(afterMessage ? { afterMessage } : {})
+          }))
+        }
+      : {}),
     toolCalls,
     createdAtSec: p.createdAtSec,
     metadata: p.metadata,
