@@ -226,6 +226,45 @@ test('FFmpegDecoder - streaming response does not retain PCM chunks', async (t) 
   }
 })
 
+test('FFmpegDecoder - destroys native FFmpeg objects after each run', async (t) => {
+  const ffmpeg = require('bare-ffmpeg')
+  const destroyed = { IOContext: 0, InputFormatContext: 0, Resampler: 0, Packet: 0 }
+  const originals = {}
+  for (const name of Object.keys(destroyed)) {
+    originals[name] = ffmpeg[name].prototype.destroy
+    ffmpeg[name].prototype.destroy = function (...args) {
+      destroyed[name]++
+      return originals[name].apply(this, args)
+    }
+  }
+
+  try {
+    const decoder = await loadDecoder()
+    try {
+      await decoder.run(fs.createReadStream(sampleMp3())).await()
+    } finally {
+      await decoder.unload()
+    }
+    t.is(destroyed.InputFormatContext, 1, 'format context destroyed after a completed run')
+    t.ok(destroyed.IOContext >= 1, 'IO context (which pins the input buffer) destroyed')
+    t.is(destroyed.Resampler, 1, 'resampler destroyed')
+    t.is(destroyed.Packet, 1, 'packet destroyed')
+
+    for (const name of Object.keys(destroyed)) destroyed[name] = 0
+    const failing = await loadDecoder({ streamIndex: 99 })
+    try {
+      const response = failing.run(fs.createReadStream(sampleMp3()))
+      response.onError(() => {})
+      await t.exception(async () => await response.await())
+    } finally {
+      await failing.unload()
+    }
+    t.is(destroyed.InputFormatContext, 1, 'format context destroyed after a failed run')
+  } finally {
+    for (const name of Object.keys(originals)) ffmpeg[name].prototype.destroy = originals[name]
+  }
+})
+
 test('FFmpegDecoder - releases a completed retained response', async (t) => {
   const decoder = await loadDecoder()
   try {

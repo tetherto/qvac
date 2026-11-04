@@ -325,31 +325,36 @@ class FFmpegDecoder {
         const OUTPUT_SAMPLE_RATE = this.config.sampleRate;
         while (decoder.receiveFrame(raw)) {
             const output = new ffmpegRuntime.Frame();
-            output.channelLayout = OUTPUT_CHANNEL_LAYOUT;
-            output.format = OUTPUT_FORMAT;
-            output.sampleRate = OUTPUT_SAMPLE_RATE;
-            output.nbSamples = raw.nbSamples;
-            const samples = new ffmpegRuntime.Samples();
-            samples.fill(output);
-            const count = resampler.convert(raw, output);
-            // Handle encoder delay by skipping initial samples
-            if (run.samplesSkipped < run.totalSkipSamples) {
-                const samplesToSkip = Math.min(count, run.totalSkipSamples - run.samplesSkipped);
-                run.samplesSkipped += samplesToSkip;
-                if (this._activeRun === run)
-                    this.samplesSkipped = run.samplesSkipped;
-                if (samplesToSkip >= count)
-                    continue; // Skip entire frame
-                // Skip partial frame
-                const skipBytes = OUTPUT_FORMAT_BYTE_LENGTH * samplesToSkip * output.channelLayout.nbChannels;
-                const length = OUTPUT_FORMAT_BYTE_LENGTH * (count - samplesToSkip) * output.channelLayout.nbChannels;
-                const chunk = Buffer.from(samples.data.subarray(skipBytes, skipBytes + length));
-                await this._emitDecodedChunk(chunk, count - samplesToSkip, run);
+            try {
+                output.channelLayout = OUTPUT_CHANNEL_LAYOUT;
+                output.format = OUTPUT_FORMAT;
+                output.sampleRate = OUTPUT_SAMPLE_RATE;
+                output.nbSamples = raw.nbSamples;
+                const samples = new ffmpegRuntime.Samples();
+                samples.fill(output);
+                const count = resampler.convert(raw, output);
+                // Handle encoder delay by skipping initial samples
+                if (run.samplesSkipped < run.totalSkipSamples) {
+                    const samplesToSkip = Math.min(count, run.totalSkipSamples - run.samplesSkipped);
+                    run.samplesSkipped += samplesToSkip;
+                    if (this._activeRun === run)
+                        this.samplesSkipped = run.samplesSkipped;
+                    if (samplesToSkip >= count)
+                        continue; // Skip entire frame
+                    // Skip partial frame
+                    const skipBytes = OUTPUT_FORMAT_BYTE_LENGTH * samplesToSkip * output.channelLayout.nbChannels;
+                    const length = OUTPUT_FORMAT_BYTE_LENGTH * (count - samplesToSkip) * output.channelLayout.nbChannels;
+                    const chunk = Buffer.from(samples.data.subarray(skipBytes, skipBytes + length));
+                    await this._emitDecodedChunk(chunk, count - samplesToSkip, run);
+                }
+                else {
+                    const length = OUTPUT_FORMAT_BYTE_LENGTH * count * output.channelLayout.nbChannels;
+                    const chunk = Buffer.from(samples.data.subarray(0, length));
+                    await this._emitDecodedChunk(chunk, count, run);
+                }
             }
-            else {
-                const length = OUTPUT_FORMAT_BYTE_LENGTH * count * output.channelLayout.nbChannels;
-                const chunk = Buffer.from(samples.data.subarray(0, length));
-                await this._emitDecodedChunk(chunk, count, run);
+            finally {
+                output.destroy();
             }
         }
     }
@@ -400,21 +405,29 @@ class FFmpegDecoder {
         try {
             await this._processPacket(format, packet, raw, decoder, resampler, run);
             const output = new ffmpegRuntime.Frame();
-            output.channelLayout = OUTPUT_CHANNEL_LAYOUT;
-            output.format = OUTPUT_FORMAT;
-            output.sampleRate = OUTPUT_SAMPLE_RATE;
-            output.nbSamples = 1024;
-            const samples = new ffmpegRuntime.Samples();
-            samples.fill(output);
-            let flushCount;
-            while ((flushCount = resampler.flush(output)) > 0) {
-                const actualLength = OUTPUT_FORMAT_BYTE_LENGTH * flushCount * output.channelLayout.nbChannels;
-                const chunk = Buffer.from(samples.data.subarray(0, actualLength));
-                await this._emitDecodedChunk(chunk, flushCount, run);
+            try {
+                output.channelLayout = OUTPUT_CHANNEL_LAYOUT;
+                output.format = OUTPUT_FORMAT;
+                output.sampleRate = OUTPUT_SAMPLE_RATE;
+                output.nbSamples = 1024;
+                const samples = new ffmpegRuntime.Samples();
+                samples.fill(output);
+                let flushCount;
+                while ((flushCount = resampler.flush(output)) > 0) {
+                    const actualLength = OUTPUT_FORMAT_BYTE_LENGTH * flushCount * output.channelLayout.nbChannels;
+                    const chunk = Buffer.from(samples.data.subarray(0, actualLength));
+                    await this._emitDecodedChunk(chunk, flushCount, run);
+                }
+            }
+            finally {
+                output.destroy();
             }
         }
         finally {
             decoder.destroy();
+            resampler.destroy();
+            raw.destroy();
+            packet.destroy();
         }
     }
     async _collectStreamData(audioStream, run) {
@@ -486,18 +499,27 @@ class FFmpegDecoder {
             },
         });
         this.logger.debug("[FFmpegDecoder] IOContext created");
-        const format = new ffmpegRuntime.InputFormatContext(io);
-        this.logger.debug("[FFmpegDecoder] InputFormatContext created");
-        const streamIndex = this.config.streamIndex || 0;
-        const stream = format.streams[streamIndex];
-        if (stream === undefined) {
-            throw new error_1.QvacErrorDecoderAudio({
-                code: error_1.ERR_CODES.STREAM_INDEX_OUT_OF_BOUNDS,
-                adds: [streamIndex],
-            });
+        let format = null;
+        try {
+            format = new ffmpegRuntime.InputFormatContext(io);
+            this.logger.debug("[FFmpegDecoder] InputFormatContext created");
+            const streamIndex = this.config.streamIndex || 0;
+            const stream = format.streams[streamIndex];
+            if (stream === undefined) {
+                throw new error_1.QvacErrorDecoderAudio({
+                    code: error_1.ERR_CODES.STREAM_INDEX_OUT_OF_BOUNDS,
+                    adds: [streamIndex],
+                });
+            }
+            // Process the stream and generate decoded output
+            await this._processFFmpegStream(format, stream, run);
         }
-        // Process the stream and generate decoded output
-        await this._processFFmpegStream(format, stream, run);
+        finally {
+            // bare-ffmpeg handles have no GC finalizer: until destroyed, the IOContext
+            // holds strong refs to onread/onseek, which pin audioBuffer.
+            format?.destroy();
+            io.destroy();
+        }
         // Calculate final decode time
         run.stats.decodeTimeMs = Date.now() - startTime;
         this.logger.info("[FFmpegDecoder] Stream processing completed successfully");
