@@ -22160,6 +22160,7 @@
                 "audiogen-ggml",
                 "ggml-vla",
                 "ggml-classification",
+                "ggml-image-embedding",
                 "onnx-vad"
               ],
               "description": "Canonical inference engine identifier.",
@@ -22308,6 +22309,7 @@
                   "audiogen-ggml",
                   "ggml-vla",
                   "ggml-classification",
+                  "ggml-image-embedding",
                   "onnx-vad"
                 ],
                 "description": "Canonical inference engine identifier.",
@@ -22487,6 +22489,7 @@
                   "audiogen-ggml",
                   "ggml-vla",
                   "ggml-classification",
+                  "ggml-image-embedding",
                   "onnx-vad"
                 ],
                 "description": "Canonical inference engine identifier.",
