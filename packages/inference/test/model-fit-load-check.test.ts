@@ -22,50 +22,31 @@ const FIT_RESULT: FitProbeResult = {
   engine: 'llm-llamacpp',
   result: {
     status: 'fits',
-    reason: 'fits',
-    gpuLayers: 32,
-    ctxSize: 4096,
     devices: [
       {
+        id: 'Metal',
         name: 'Metal',
+        unified: false,
         totalBytes: 24 * 1024 ** 3,
         freeBytes: 20 * 1024 ** 3,
-        modelBytes: 4 * 1024 ** 3,
-        contextBytes: 1024 ** 3,
-        computeBytes: 0
+        usedBytes: DEVICE_BYTES
       },
       {
-        name: 'host',
+        id: 'CPU',
+        name: 'CPU',
+        unified: true,
         totalBytes: 0,
         freeBytes: 0,
-        modelBytes: HOST_BYTES,
-        contextBytes: 0,
-        computeBytes: 0
+        usedBytes: HOST_BYTES
       }
     ],
-    deviceBytes: DEVICE_BYTES,
-    hostBytes: HOST_BYTES,
-    trainCtxSize: 8192,
-    expertCount: 0
+    stats: { gpuLayers: 32, ctxSize: 4096 }
   }
 }
 
 const FIT_PROJECTION = {
   deviceBytes: DEVICE_BYTES,
   hostBytes: HOST_BYTES,
-  weightsBytes: 4 * 1024 ** 3,
-  contextBytes: 1024 ** 3,
-  computeBytes: 0,
-  devices: [
-    {
-      name: 'Metal',
-      totalBytes: 24 * 1024 ** 3,
-      freeBytes: 20 * 1024 ** 3,
-      weightsBytes: 4 * 1024 ** 3,
-      contextBytes: 1024 ** 3,
-      computeBytes: 0
-    }
-  ],
   deviceName: 'Metal',
   deviceFreeBytes: 20 * 1024 ** 3,
   deviceTotalBytes: 24 * 1024 ** 3
@@ -73,12 +54,9 @@ const FIT_PROJECTION = {
 
 type LlamaProbeResult = Extract<FitProbeResult, { engine: 'llm-llamacpp' }>['result']
 
-function withResultStatus(
-  status: LlamaProbeResult['status'],
-  reason: LlamaProbeResult['reason']
-): FitProbeResult {
+function withResultStatus(status: LlamaProbeResult['status']): FitProbeResult {
   const base = FIT_RESULT.result as LlamaProbeResult
-  return { engine: 'llm-llamacpp', result: { ...base, status, reason } }
+  return { engine: 'llm-llamacpp', result: { ...base, status } }
 }
 
 /** Every engine but diffusion takes a margin; the probes here are llama loads. */
@@ -189,7 +167,7 @@ test('advisory fit: reports a projected insufficiency', async (t) => {
   const { logger, records } = recordingLogger()
   const { runFit } = fitReturning({
     status: 'completed',
-    probe: withResultStatus('does-not-fit', 'does-not-fit')
+    probe: withResultStatus('does-not-fit')
   })
 
   const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
@@ -211,27 +189,22 @@ test('advisory fit: reports a projected insufficiency', async (t) => {
   t.ok(records[0]?.message.includes('device 5120 MiB'))
 })
 
-test('advisory fit: treats every engine error as absent evidence', async (t) => {
-  const reasons: LlamaProbeResult['reason'][] = [
-    'model-unreadable',
-    'no-backend-device',
-    'unsupported-config'
-  ]
-  for (const reason of reasons) {
-    const { logger } = recordingLogger()
-    const { runFit } = fitReturning({
-      status: 'completed',
-      probe: withResultStatus('error', reason)
-    })
+test('advisory fit: treats an unknown engine result as absent evidence', async (t) => {
+  const { logger } = recordingLogger()
+  const { runFit } = fitReturning({ status: 'completed', probe: withResultStatus('unknown') })
 
-    const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
-      residentModelBytes: zeroResident,
-      runFit,
-      logger
-    })
+  const outcome = await runAdvisoryFitCheck(COMPLETION_INPUT, {
+    residentModelBytes: zeroResident,
+    runFit,
+    logger
+  })
 
-    t.alike(outcome, { ...PROVENANCE, engine: 'llm-llamacpp', verdict: 'unknown', reason })
-  }
+  t.alike(outcome, {
+    ...PROVENANCE,
+    engine: 'llm-llamacpp',
+    verdict: 'unknown',
+    reason: 'unknown'
+  })
 })
 
 test('advisory fit: treats every run failure as absent evidence', async (t) => {

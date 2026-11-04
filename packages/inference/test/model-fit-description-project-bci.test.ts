@@ -19,10 +19,10 @@ import type { FitRunResult } from '@/model-fit/run/run'
  * The projection `assessModelFit` runs for a BCI load before download: the
  * registry's weightless descriptions, resolved through the BCI plugin, and the
  * request its fitter is handed. The fitter is the addon's, so a stand-in reports
- * what it was pointed at and answers the way `@qvac/bci-whispercpp` 0.11.0
+ * what it was pointed at and answers the way the current BCI addon
  * documents: with no `embedderPath` it reads `bci-embedder.bin` beside the
- * model, it counts the host RAM the embedder keeps in `hostBytes`, and an
- * embedder it cannot read is an `error` with reason `embedder-unreadable`.
+ * model, counts the host RAM the embedder keeps in the CPU device row, and
+ * reports an unreadable projection as unknown.
  */
 
 const EMBEDDER_FILENAME = 'bci-embedder.bin'
@@ -91,23 +91,28 @@ interface Seen {
 
 function bciResult(embedderReadable: boolean): BciFitResult {
   const embedderBytes = embedderReadable ? EMBEDDER_BYTES : 0
+  if (!embedderReadable) return { status: 'unknown', devices: [], stats: {} }
   return {
-    status: embedderReadable ? 'fits' : 'error',
-    reason: embedderReadable ? 'fits' : 'embedder-unreadable',
-    modelType: 'base',
-    deviceName: 'Metal',
-    deviceIsCpu: false,
-    deviceSharesHostMemory: true,
-    deviceFreeBytes: 8 * 1024 * MIB,
-    deviceTotalBytes: 16 * 1024 * MIB,
-    deviceBytes: DEVICE_BYTES,
-    weightsBytes: 200 * MIB,
-    kvBytes: 60 * MIB,
-    computeBytes: 40 * MIB,
-    hostOverflowBytes: 0,
-    hostBytes: WHISPER_HOST_BYTES + embedderBytes,
-    embedderBytes,
-    report: 'table'
+    status: 'fits',
+    devices: [
+      {
+        id: 'Metal',
+        name: 'Metal',
+        unified: false,
+        usedBytes: DEVICE_BYTES,
+        freeBytes: 8 * 1024 * MIB,
+        totalBytes: 16 * 1024 * MIB
+      },
+      {
+        id: 'CPU',
+        name: 'CPU',
+        unified: true,
+        usedBytes: WHISPER_HOST_BYTES + embedderBytes,
+        freeBytes: 8 * 1024 * MIB,
+        totalBytes: 16 * 1024 * MIB
+      }
+    ],
+    stats: {}
   }
 }
 
@@ -247,8 +252,8 @@ test('bci fit: an embedder with no description leaves the fitter without a verdi
   t.is(outcome.status, 'projected')
   if (outcome.status !== 'projected') return
   t.is(outcome.fit.verdict, 'unknown')
-  t.is(outcome.fit.reason, 'embedder-unreadable')
-  t.absent(outcome.fit.projection, 'an engine error carries no figures')
+  t.is(outcome.fit.reason, 'unknown')
+  t.absent(outcome.fit.projection, 'an unknown result carries no figures')
 })
 
 test('bci fit: a named embedder source is fitted from its own description', async (t) => {

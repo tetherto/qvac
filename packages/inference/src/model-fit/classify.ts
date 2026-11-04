@@ -1,7 +1,13 @@
 import type { NativeProbeFit, NativeProbeProjection, NativeProbeVerdict } from '@/schemas/index'
 import type { FitProbeResult } from '@/model-fit/run/engine'
 
-type LlamaProbe = Extract<FitProbeResult, { engine: 'llm-llamacpp' | 'embed-llamacpp' }>
+type SharedProbe = FitProbeResult extends infer Probe
+  ? Probe extends { result: { devices: { usedBytes: number }[]; stats: object } }
+    ? Probe
+    : never
+  : never
+type LegacyProbe = Exclude<FitProbeResult, SharedProbe>
+type LlamaProbe = Extract<LegacyProbe, { engine: 'embed-llamacpp' }>
 
 /** The llama fitters append a host row after the devices they assigned to. */
 const HOST_ROW = 'host'
@@ -9,15 +15,15 @@ const HOST_ROW = 'host'
 /** ggml's own name for the CPU backend device, which the fitter may assign to. */
 const CPU_DEVICE = 'CPU'
 
-function isLlama(probe: FitProbeResult): probe is LlamaProbe {
-  return probe.engine === 'llm-llamacpp' || probe.engine === 'embed-llamacpp'
+function isLlama(probe: LegacyProbe): probe is LlamaProbe {
+  return probe.engine === 'embed-llamacpp'
 }
 
 /**
  * `error` is the engine reporting it could not read the model or find a backend
  * device: absence of evidence, not evidence of insufficiency.
  */
-function verdictFor(status: 'fits' | 'does-not-fit' | 'error'): NativeProbeVerdict {
+function verdictFor(status: 'fits' | 'does-not-fit' | 'error' | 'unknown'): NativeProbeVerdict {
   if (status === 'fits') return 'fit'
   if (status === 'does-not-fit') return 'does-not-fit'
   return 'unknown'
@@ -39,7 +45,7 @@ function diffusionReason(result: {
   return result.changed ? `does-not-fit-as-configured (${result.backend})` : 'does-not-fit'
 }
 
-function reasonFor(probe: FitProbeResult): string {
+function reasonFor(probe: LegacyProbe): string {
   return probe.engine === 'diffusion-cpp' ? diffusionReason(probe.result) : probe.result.reason
 }
 
@@ -71,7 +77,7 @@ function breakdown(
  * The llama rows are summed over the same devices the engine's own
  * `deviceBytes` covers, which is every row but `host`.
  */
-function breakdownFor(probe: FitProbeResult): Breakdown {
+function breakdownFor(probe: LegacyProbe): Breakdown {
   if (isLlama(probe)) {
     const devices = probe.result.devices.filter((device) => device.name !== HOST_ROW)
     return breakdown(
@@ -91,20 +97,6 @@ function breakdownFor(probe: FitProbeResult): Breakdown {
       sumOf(result.weightsBytes, result.vadBytes),
       sumOf(result.kvBytes, result.decoderStateBytes),
       sumOf(result.computeBytes, result.encoderComputeBytes, result.decoderComputeBytes)
-    )
-  }
-
-  if (probe.engine === 'bci-whispercpp') {
-    const result = probe.result
-    return breakdown(result.weightsBytes, result.kvBytes, result.computeBytes)
-  }
-
-  if (probe.engine === 'tts-ggml') {
-    const result = probe.result
-    return breakdown(
-      result.weightsBytes,
-      result.stateBytes,
-      sumOf(result.lmComputeBytes, result.codecComputeBytes)
     )
   }
 
@@ -150,7 +142,7 @@ function llamaProjection(probe: LlamaProbe): NativeProbeProjection {
  * not divide into context and compute.
  */
 function nmtProjection(
-  result: Extract<FitProbeResult, { engine: 'translation-nmtcpp' }>['result']
+  result: Extract<LegacyProbe, { engine: 'translation-nmtcpp' }>['result']
 ): NativeProbeProjection {
   return {
     deviceName: result.backend,
@@ -161,7 +153,7 @@ function nmtProjection(
   }
 }
 
-function projectionFor(probe: FitProbeResult): NativeProbeProjection {
+function projectionFor(probe: LegacyProbe): NativeProbeProjection {
   if (probe.engine === 'diffusion-cpp') {
     return { deviceName: probe.result.backend, report: probe.result.report }
   }
@@ -188,7 +180,7 @@ function projectionFor(probe: FitProbeResult): NativeProbeProjection {
  * the CPU backend device, which the fitter assigns to like any other but whose
  * demand is host memory.
  */
-function planFor(probe: FitProbeResult): NativeProbeFit['plan'] {
+function planFor(probe: LegacyProbe): NativeProbeFit['plan'] {
   if (!isLlama(probe)) return undefined
 
   const assigned = probe.result.devices.filter(
@@ -202,10 +194,59 @@ function planFor(probe: FitProbeResult): NativeProbeFit['plan'] {
   }
 }
 
+function isSharedProbe(probe: FitProbeResult): probe is SharedProbe {
+  return 'stats' in probe.result
+}
+
+function classifySharedFit(
+  probe: SharedProbe,
+  provenance: { basis: 'native-probe'; estimatorVersion: string }
+): NativeProbeFit {
+  const verdict = verdictFor(probe.result.status)
+  const gpuDevices = probe.result.devices.filter(
+    (device) => device.name !== CPU_DEVICE && device.usedBytes > 0
+  )
+  const cpuDevices = probe.result.devices.filter((device) => device.name === CPU_DEVICE)
+  const selected = gpuDevices[0] ?? cpuDevices[0]
+  const deviceBytes = sumOf(...gpuDevices.map((device) => device.usedBytes))
+  const hostBytes = sumOf(...cpuDevices.map((device) => device.usedBytes))
+  const stats = probe.result.stats
+  const plan =
+    verdict === 'fit' && 'ctxSize' in stats && 'gpuLayers' in stats
+      ? {
+          nCtx: stats.ctxSize as number,
+          nGpuLayers: stats.gpuLayers as number,
+          nGpuDevices: gpuDevices.length
+        }
+      : undefined
+  const projection: NativeProbeProjection = {
+    ...((deviceBytes !== undefined || hostBytes !== undefined) && {
+      deviceBytes: deviceBytes ?? hostBytes
+    }),
+    ...(deviceBytes !== undefined && hostBytes !== undefined && { hostBytes }),
+    ...(selected !== undefined && {
+      deviceName: selected.name,
+      deviceFreeBytes: selected.freeBytes,
+      deviceTotalBytes: selected.totalBytes
+    })
+  }
+
+  return {
+    ...provenance,
+    engine: probe.engine,
+    verdict,
+    reason: probe.result.status,
+    ...(plan !== undefined && { plan }),
+    ...(verdict !== 'unknown' && { projection })
+  }
+}
+
 export function classifyFit(
   probe: FitProbeResult,
   provenance: { basis: 'native-probe'; estimatorVersion: string }
 ): NativeProbeFit {
+  if (isSharedProbe(probe)) return classifySharedFit(probe, provenance)
+
   const verdict = verdictFor(probe.result.status)
   const plan = verdict === 'fit' ? planFor(probe) : undefined
 

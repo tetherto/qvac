@@ -26,14 +26,8 @@ const FIT_RESULT: FitProbeResult = {
   engine: 'llm-llamacpp',
   result: {
     status: 'fits',
-    reason: 'fits',
-    gpuLayers: 32,
-    ctxSize: 4096,
     devices: [],
-    deviceBytes: 5 * 1024 ** 3,
-    hostBytes: 0,
-    trainCtxSize: 8192,
-    expertCount: 0
+    stats: { gpuLayers: 32, ctxSize: 4096 }
   }
 }
 
