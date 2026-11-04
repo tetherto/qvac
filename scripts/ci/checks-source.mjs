@@ -43,12 +43,12 @@ function resolve(env) {
 function install([source, dir, tarballs]) {
   if (!['npm', 'workspace', 'self', 'train', 'published'].includes(source) || !dir)
     throw new Error('usage: install <npm|workspace|self|train|published> <package-dir> [tarball-dir]')
+  // Its targets install what they need, such as a pin to a version only this commit builds; it may have no package.json.
+  if (source === 'self') return
   run('git', ['checkout', 'HEAD', '--', 'package.json'], { cwd: dir })
   rmSync(join(dir, 'node_modules'), { recursive: true, force: true })
   rmSync(join(dir, 'package-lock.json'), { force: true })
   if (source === 'workspace') return run('npm', ['run', 'sdk-source:workspace'], { cwd: dir })
-  // Its targets install what they need, such as a pin to a version only this commit builds.
-  if (source === 'self') return
   if (source === 'train') {
     if (!tarballs) throw new Error('the train source needs the tarball directory')
     run('node', [TRAIN, 'stage', dir, tarballs])
