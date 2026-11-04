@@ -1,4 +1,5 @@
 import {
+  ERR_CODES as SHARED_ERR_CODES,
   ERR_CODES_PARAKEET as ERR_CODES,
   QvacErrorAddonASRGgml,
 } from "../../lib/error";
@@ -681,9 +682,11 @@ export class ParakeetInterface {
       return Promise.resolve(currentJobId);
     } catch (error) {
       const normalized = normalizeError(error);
+      // New in 0.11.x with no historical parakeet number, so it carries the
+      // shared code (6012): one number per name across both engines.
       return Promise.reject(
         createParakeetError(
-          ERR_CODES.FAILED_TO_APPEND,
+          SHARED_ERR_CODES.FAILED_TO_START_STREAMING,
           normalized.message,
           error,
         ),
