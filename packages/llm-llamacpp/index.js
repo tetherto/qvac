@@ -16,6 +16,7 @@ function normalizeRunOptions(runOptions) {
             generationParams: undefined,
             cacheKey: undefined,
             ephemeral: false,
+            baseCacheKey: undefined,
             rejectWhenBusy: undefined,
         };
     }
@@ -43,6 +44,9 @@ function normalizeRunOptions(runOptions) {
     if (options.ephemeral !== undefined && typeof options.ephemeral !== "boolean") {
         throw new TypeError("ephemeral must be a boolean when provided");
     }
+    if (options.baseCacheKey !== undefined && typeof options.baseCacheKey !== "string") {
+        throw new TypeError("baseCacheKey must be a string when provided");
+    }
     if (options.rejectWhenBusy !== undefined && typeof options.rejectWhenBusy !== "boolean") {
         throw new TypeError("rejectWhenBusy must be a boolean when provided");
     }
@@ -51,15 +55,28 @@ function normalizeRunOptions(runOptions) {
         generationParams: normalizeGenerationParams(options.generationParams),
         cacheKey: options.cacheKey,
         ephemeral: options.ephemeral === true,
+        baseCacheKey: options.baseCacheKey,
         // Left undefined when unset so admission falls back to the instance default.
         rejectWhenBusy: options.rejectWhenBusy,
     };
+}
+// Malformed parts (null, non-objects) are not byte media: they pass through
+// untouched so the native validator rejects them with `InvalidInputFormat`.
+function isByteMediaPart(part) {
+    const candidate = part;
+    return (candidate !== null &&
+        typeof candidate === "object" &&
+        candidate.type === "media" &&
+        candidate.content instanceof Uint8Array);
 }
 function promptToAddonMessages(prompt, runOptions) {
     if (!Array.isArray(prompt)) {
         throw new TypeError("Prompt input must be Message[]");
     }
-    const { prefill, generationParams, cacheKey, ephemeral } = normalizeRunOptions(runOptions);
+    const { prefill, generationParams, cacheKey, ephemeral, baseCacheKey } = normalizeRunOptions(runOptions);
+    // Only ever JSON-serialized into the addon's text message: a byte-buffer
+    // media part reaches the native side path-less, bound to the hoisted buffer
+    // by position, so the wire shape is wider than the public `Message` type.
     const textMessages = [];
     const mediaItems = [];
     for (const message of prompt) {
@@ -67,10 +84,26 @@ function promptToAddonMessages(prompt, runOptions) {
         if (media.role === "user" && media.type === "media" && media.content instanceof Uint8Array) {
             mediaItems.push(media.content);
             textMessages.push({ ...media, content: "" });
+            continue;
         }
-        else {
-            textMessages.push(message);
+        // Ordered parts: hoist each media part's bytes next to the other media
+        // messages and leave a path-less part behind. The native side records the
+        // plan in marker order, so the bytes still bind to the right markers.
+        const text = message;
+        if (Array.isArray(text.content)) {
+            textMessages.push({
+                ...text,
+                content: text.content.map((part) => {
+                    if (isByteMediaPart(part)) {
+                        mediaItems.push(part.content);
+                        return { type: "media" };
+                    }
+                    return part;
+                }),
+            });
+            continue;
         }
+        textMessages.push(message);
     }
     const promptMessages = [];
     for (const mediaData of mediaItems) {
@@ -83,6 +116,7 @@ function promptToAddonMessages(prompt, runOptions) {
         generationParams,
         cacheKey,
         ephemeral,
+        baseCacheKey,
     });
     return promptMessages;
 }
@@ -256,6 +290,15 @@ function sanitizePromptForLog(prompt) {
         const media = msg;
         if (media && media.type === "media" && media.content instanceof Uint8Array) {
             return { ...media, content: `[Uint8Array byteLength=${media.content.byteLength}]` };
+        }
+        const text = msg;
+        if (Array.isArray(text?.content)) {
+            return {
+                ...text,
+                content: text.content.map((part) => isByteMediaPart(part)
+                    ? { ...part, content: `[Uint8Array byteLength=${part.content.byteLength}]` }
+                    : part),
+            };
         }
         return msg;
     });
@@ -863,9 +906,20 @@ const LlmLlamacpp = class LlmLlamacpp {
         if (text !== undefined)
             params.text = text;
         // Media bytes are dropped rather than serialized: the native side rejects
-        // any media message by its type.
+        // any media message or ordered media part by its type.
         if (history !== undefined) {
-            params.history = JSON.stringify(history.map((message) => message?.type === "media" ? { ...message, content: "" } : message));
+            params.history = JSON.stringify(history.map((message) => {
+                if (message?.type === "media")
+                    return { ...message, content: "" };
+                const textMessage = message;
+                if (Array.isArray(textMessage?.content)) {
+                    return {
+                        ...message,
+                        content: textMessage.content.map((part) => isByteMediaPart(part) ? { type: "media" } : part),
+                    };
+                }
+                return message;
+            }));
         }
         if (tools !== undefined)
             params.tools = JSON.stringify(tools);

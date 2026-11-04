@@ -47,6 +47,8 @@ export interface TtsStats {
   gpuUnsupported?: number
   enhancerBackendDevice?: number
   enhancerBackendId?: number
+  denoiserBackendDevice?: number
+  denoiserBackendId?: number
   /** Audio8 only, macOS / iOS: 1 while the Core ML codec sidecar is attached. */
   codecSidecarLoaded?: number
   /** Audio8 only: 1 when the synthesis ran its codec on that sidecar, 0 on ggml. */
@@ -87,7 +89,30 @@ export interface EmbedResponse {
   await(): Promise<Float32Array[][]>
 }
 
-export type TranscribeStats = Partial<ASRGgml.WhisperRuntimeStats & ASRGgml.ParakeetRuntimeStats>
+/**
+ * MOSS-Transcribe-Diarize runtime statistics. The addon types only the whisper
+ * and parakeet shapes, so these are the keys `MossTranscribeModel::runtimeStats()`
+ * emits, under its own names.
+ */
+export interface MossTranscribeRuntimeStats {
+  totalTime: number
+  realTimeFactor: number
+  audioDurationMs: number
+  /** Output segments of the run. */
+  segments: number
+  audioTokens: number
+  promptTokens: number
+  generatedTokens: number
+  encodeMs: number
+  prefillMs: number
+  decodeMs: number
+  backendDevice: number
+  backendId: number
+}
+
+export type TranscribeStats = Partial<
+  ASRGgml.WhisperRuntimeStats & ASRGgml.ParakeetRuntimeStats & MossTranscribeRuntimeStats
+>
 
 export type TranscribeAddonSegment = ASRGgml.TranscriptionSegment
 export type TranscribeAddonVadEvent = ASRGgml.VadEvent

@@ -1043,6 +1043,10 @@
             "backendId": {
               "type": "number"
             },
+            "gpuFallbackReason": {
+              "description": "Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
+              "type": "number"
+            },
             "emittedFrames": {
               "description": "MiniMax only: semantic frames the autoregressive stage emitted (25 per second). Below the frame cap when the song ended at the model end-of-sequence.",
               "type": "number"
@@ -1623,6 +1627,10 @@
             "backendId": {
               "type": "number"
             },
+            "gpuFallbackReason": {
+              "description": "Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
+              "type": "number"
+            },
             "emittedFrames": {
               "description": "MiniMax only: semantic frames the autoregressive stage emitted (25 per second). Below the frame cap when the song ended at the model end-of-sequence.",
               "type": "number"
@@ -2048,6 +2056,10 @@
               "type": "number"
             },
             "backendId": {
+              "type": "number"
+            },
+            "gpuFallbackReason": {
+              "description": "Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
               "type": "number"
             },
             "emittedFrames": {
@@ -3121,9 +3133,11 @@
               "type": "number"
             },
             "encoderTime": {
+              "description": "Parakeet encoder time, or the MOSS audio-encoder time, in ms.",
               "type": "number"
             },
             "decoderTime": {
+              "description": "Parakeet decoder time, or the MOSS decode time, in ms.",
               "type": "number"
             },
             "melSpecTime": {
@@ -3190,6 +3204,26 @@
             },
             "encoderUsedCoreml": {
               "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
+              "type": "number"
+            },
+            "aoscActive": {
+              "description": "Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.",
+              "type": "number"
+            },
+            "prefillTime": {
+              "description": "MOSS: prompt prefill time, in ms.",
+              "type": "number"
+            },
+            "audioTokens": {
+              "description": "MOSS: audio tokens fed to the decoder.",
+              "type": "number"
+            },
+            "promptTokens": {
+              "description": "MOSS: prompt tokens prefilled before decoding.",
+              "type": "number"
+            },
+            "generatedTokens": {
+              "description": "MOSS: tokens the decoder generated.",
               "type": "number"
             }
           },
@@ -3259,6 +3293,49 @@
             "startsWord": {
               "description": "Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
               "type": "boolean"
+            },
+            "language": {
+              "description": "Language the segment's window was decoded in, as an ISO 639-1 code such as `en`; the detected language under `language: 'auto'`. Whisper engine only.",
+              "type": "string"
+            },
+            "noSpeechProb": {
+              "description": "Probability (0–1) that the segment's window holds no speech, the value `no_speech_thold` is compared against. Whisper engine only.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "speakerTurnNext": {
+              "description": "A speaker turn follows this segment. Whisper engine only, with `tdrz_enable` on a tinydiarize model.",
+              "type": "boolean"
+            },
+            "tokens": {
+              "description": "Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "probability": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Decoder probability of the token (0–1)."
+                  }
+                },
+                "required": ["text", "startMs", "endMs", "probability"],
+                "additionalProperties": false,
+                "title": "BciTranscribeResponseSegmentTokensItem"
+              }
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -3452,9 +3529,11 @@
               "type": "number"
             },
             "encoderTime": {
+              "description": "Parakeet encoder time, or the MOSS audio-encoder time, in ms.",
               "type": "number"
             },
             "decoderTime": {
+              "description": "Parakeet decoder time, or the MOSS decode time, in ms.",
               "type": "number"
             },
             "melSpecTime": {
@@ -3521,6 +3600,26 @@
             },
             "encoderUsedCoreml": {
               "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
+              "type": "number"
+            },
+            "aoscActive": {
+              "description": "Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.",
+              "type": "number"
+            },
+            "prefillTime": {
+              "description": "MOSS: prompt prefill time, in ms.",
+              "type": "number"
+            },
+            "audioTokens": {
+              "description": "MOSS: audio tokens fed to the decoder.",
+              "type": "number"
+            },
+            "promptTokens": {
+              "description": "MOSS: prompt tokens prefilled before decoding.",
+              "type": "number"
+            },
+            "generatedTokens": {
+              "description": "MOSS: tokens the decoder generated.",
               "type": "number"
             }
           },
@@ -3590,6 +3689,49 @@
             "startsWord": {
               "description": "Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
               "type": "boolean"
+            },
+            "language": {
+              "description": "Language the segment's window was decoded in, as an ISO 639-1 code such as `en`; the detected language under `language: 'auto'`. Whisper engine only.",
+              "type": "string"
+            },
+            "noSpeechProb": {
+              "description": "Probability (0–1) that the segment's window holds no speech, the value `no_speech_thold` is compared against. Whisper engine only.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "speakerTurnNext": {
+              "description": "A speaker turn follows this segment. Whisper engine only, with `tdrz_enable` on a tinydiarize model.",
+              "type": "boolean"
+            },
+            "tokens": {
+              "description": "Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "probability": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Decoder probability of the token (0–1)."
+                  }
+                },
+                "required": ["text", "startMs", "endMs", "probability"],
+                "additionalProperties": false,
+                "title": "BciTranscribeStreamResponseSegmentTokensItem"
+              }
             },
             "windowStartTimestep": {
               "description": "Absolute index of the 20 ms timestep at which this segment's owning decode window began. Emitted with `emit: 'delta'` only: the segment's own timestamps are window-local, so add `windowStartTimestep * 20` ms to `startMs` / `endMs` to place them on the stream timeline.",
@@ -13047,6 +13189,10 @@
                       "description": "Initial prompt (context) prepended to the transcription.",
                       "type": "string"
                     },
+                    "carry_initial_prompt": {
+                      "description": "Prepend `initial_prompt` to every decode window instead of only the first. Default false.",
+                      "type": "boolean"
+                    },
                     "language": {
                       "description": "Transcription language (ISO 639-1) or `'auto'` to detect.",
                       "type": "string"
@@ -13165,8 +13311,27 @@
                           "type": "boolean"
                         },
                         "gpu_device": {
-                          "description": "GPU device index to use.",
+                          "description": "GPU device index to use (legacy GPU/IGPU ordinal). Cannot be combined with `main-gpu`.",
                           "type": "number"
+                        },
+                        "main-gpu": {
+                          "description": "GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 2147483647
+                            },
+                            {
+                              "type": "string",
+                              "pattern": "^\\d+$"
+                            },
+                            {
+                              "type": "string",
+                              "enum": ["dedicated", "integrated"],
+                              "title": "LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMainGpu"
+                            }
+                          ]
                         }
                       },
                       "title": "LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams"
@@ -13682,8 +13847,24 @@
                       "type": "boolean"
                     },
                     "streamingEnergyVad": {
-                      "description": "CTC/TDT/Nemotron-only energy-based voice-activity hint; affects speech segmentation but adds no new event types. For standalone VAD `speaking`/`probability` events, use the whisper engine. Default false.",
+                      "description": "Run the engine's RMS energy detector on CTC, TDT, RNN-T, and Nemotron streaming sessions and emit `{ type: 'vad', source: 'energy' }` events on each speech/silence transition. Tune it with `streamingEnergyVadThresholdDb`, `streamingEnergyVadWindowMs`, and `streamingEnergyVadHangoverMs`. Default false.",
                       "type": "boolean"
+                    },
+                    "streamingEnergyVadThresholdDb": {
+                      "description": "Energy-VAD speech threshold in dBFS RMS; audio above it counts as speech. Default -35.",
+                      "type": "number"
+                    },
+                    "streamingEnergyVadWindowMs": {
+                      "description": "Energy-VAD RMS window in ms; the engine caps it at 1000. Default 30.",
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "streamingEnergyVadHangoverMs": {
+                      "description": "Silence the energy VAD requires before leaving the speaking state, in ms. Default 200.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
                     },
                     "streamingLeftContextMs": {
                       "description": "ASR encoder left-context window in ms; omit to keep the model default (10000).",
@@ -13751,6 +13932,15 @@
                       "type": "integer",
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
+                    },
+                    "prewarm": {
+                      "description": "Run one synthetic encoder pass while loading so the first request does not pay the GPU shader or kernel compile; Nemotron 3 Diarization also runs one streaming chunk. Default false.",
+                      "type": "boolean"
+                    },
+                    "prewarmAudioSeconds": {
+                      "description": "Length of the prewarm pass in seconds of audio; must be greater than 0. Default 1.",
+                      "type": "number",
+                      "exclusiveMinimum": 0
                     },
                     "longFormWindowFrames": {
                       "description": "Offline encoder window for long recordings, in 80 ms encoder frames. `0` takes the window the model recommends (TranscribePsy: 750 frames, 60 s, with 94 frames of context on each side; other models: the engine's balanced automatic windows); a negative value encodes the whole input in one pass. Default 0.",
@@ -13847,8 +14037,12 @@
                       "maximum": 9007199254740991
                     },
                     "useGPU": {
-                      "description": "Enable the linked GPU backend, including Metal. Default false.",
+                      "description": "Select a GPU automatically when `backend` is `auto`, including Metal. Default false.",
                       "type": "boolean"
+                    },
+                    "backend": {
+                      "description": "Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `metal`, or an exact ggml device name such as `CUDA0`. An explicit selection overrides `useGPU` and the load fails if it is unavailable.",
+                      "type": "string"
                     },
                     "backendsDir": {
                       "description": "Directory containing dynamically loaded ggml backend libraries.",
@@ -21412,6 +21606,10 @@
                   "description": "Initial prompt (context) prepended to the transcription.",
                   "type": "string"
                 },
+                "carry_initial_prompt": {
+                  "description": "Prepend `initial_prompt` to every decode window instead of only the first. Default false.",
+                  "type": "boolean"
+                },
                 "language": {
                   "description": "Transcription language (ISO 639-1) or `'auto'` to detect.",
                   "type": "string"
@@ -21530,8 +21728,27 @@
                       "type": "boolean"
                     },
                     "gpu_device": {
-                      "description": "GPU device index to use.",
+                      "description": "GPU device index to use (legacy GPU/IGPU ordinal). Cannot be combined with `main-gpu`.",
                       "type": "number"
+                    },
+                    "main-gpu": {
+                      "description": "GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        {
+                          "type": "string",
+                          "pattern": "^\\d+$"
+                        },
+                        {
+                          "type": "string",
+                          "enum": ["dedicated", "integrated"],
+                          "title": "ReloadConfigRequestModelConfigContextParamsMainGpu"
+                        }
+                      ]
                     }
                   },
                   "title": "ReloadConfigRequestModelConfigContextParams"
@@ -21928,6 +22145,7 @@
                 "audiogen-ggml",
                 "ggml-vla",
                 "ggml-classification",
+                "ggml-image-embedding",
                 "onnx-vad"
               ],
               "description": "Canonical inference engine identifier.",
@@ -22076,6 +22294,7 @@
                   "audiogen-ggml",
                   "ggml-vla",
                   "ggml-classification",
+                  "ggml-image-embedding",
                   "onnx-vad"
                 ],
                 "description": "Canonical inference engine identifier.",
@@ -22255,6 +22474,7 @@
                   "audiogen-ggml",
                   "ggml-vla",
                   "ggml-classification",
+                  "ggml-image-embedding",
                   "onnx-vad"
                 ],
                 "description": "Canonical inference engine identifier.",
@@ -23748,6 +23968,14 @@
             "enhancerBackendId": {
               "type": "number"
             },
+            "denoiserBackendDevice": {
+              "description": "LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed.",
+              "type": "number"
+            },
+            "denoiserBackendId": {
+              "description": "LavaSR denoiser backend family, same codes as `backendId`.",
+              "type": "number"
+            },
             "codecSidecarLoaded": {
               "description": "Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired.",
               "type": "number"
@@ -23945,6 +24173,14 @@
             "enhancerBackendId": {
               "type": "number"
             },
+            "denoiserBackendDevice": {
+              "description": "LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed.",
+              "type": "number"
+            },
+            "denoiserBackendId": {
+              "description": "LavaSR denoiser backend family, same codes as `backendId`.",
+              "type": "number"
+            },
             "codecSidecarLoaded": {
               "description": "Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired.",
               "type": "number"
@@ -24085,9 +24321,11 @@
               "type": "number"
             },
             "encoderTime": {
+              "description": "Parakeet encoder time, or the MOSS audio-encoder time, in ms.",
               "type": "number"
             },
             "decoderTime": {
+              "description": "Parakeet decoder time, or the MOSS decode time, in ms.",
               "type": "number"
             },
             "melSpecTime": {
@@ -24154,6 +24392,26 @@
             },
             "encoderUsedCoreml": {
               "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
+              "type": "number"
+            },
+            "aoscActive": {
+              "description": "Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.",
+              "type": "number"
+            },
+            "prefillTime": {
+              "description": "MOSS: prompt prefill time, in ms.",
+              "type": "number"
+            },
+            "audioTokens": {
+              "description": "MOSS: audio tokens fed to the decoder.",
+              "type": "number"
+            },
+            "promptTokens": {
+              "description": "MOSS: prompt tokens prefilled before decoding.",
+              "type": "number"
+            },
+            "generatedTokens": {
+              "description": "MOSS: tokens the decoder generated.",
               "type": "number"
             }
           },
@@ -24223,6 +24481,49 @@
             "startsWord": {
               "description": "Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
               "type": "boolean"
+            },
+            "language": {
+              "description": "Language the segment's window was decoded in, as an ISO 639-1 code such as `en`; the detected language under `language: 'auto'`. Whisper engine only.",
+              "type": "string"
+            },
+            "noSpeechProb": {
+              "description": "Probability (0–1) that the segment's window holds no speech, the value `no_speech_thold` is compared against. Whisper engine only.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "speakerTurnNext": {
+              "description": "A speaker turn follows this segment. Whisper engine only, with `tdrz_enable` on a tinydiarize model.",
+              "type": "boolean"
+            },
+            "tokens": {
+              "description": "Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "probability": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Decoder probability of the token (0–1)."
+                  }
+                },
+                "required": ["text", "startMs", "endMs", "probability"],
+                "additionalProperties": false,
+                "title": "TranscribeResponseSegmentTokensItem"
+              }
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -24242,6 +24543,10 @@
               "type": "boolean"
             },
             "probability": {
+              "type": "number"
+            },
+            "timestamp": {
+              "description": "Parakeet: event time in seconds from the start of the streaming session.",
               "type": "number"
             },
             "source": {
@@ -24450,6 +24755,19 @@
             "emitEnergyVad": {
               "type": "boolean"
             },
+            "energyVadThresholdDb": {
+              "type": "number"
+            },
+            "energyVadWindowMs": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "energyVadHangoverMs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
             "emitSpeakerVad": {
               "type": "boolean"
             },
@@ -24537,9 +24855,11 @@
               "type": "number"
             },
             "encoderTime": {
+              "description": "Parakeet encoder time, or the MOSS audio-encoder time, in ms.",
               "type": "number"
             },
             "decoderTime": {
+              "description": "Parakeet decoder time, or the MOSS decode time, in ms.",
               "type": "number"
             },
             "melSpecTime": {
@@ -24606,6 +24926,26 @@
             },
             "encoderUsedCoreml": {
               "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
+              "type": "number"
+            },
+            "aoscActive": {
+              "description": "Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.",
+              "type": "number"
+            },
+            "prefillTime": {
+              "description": "MOSS: prompt prefill time, in ms.",
+              "type": "number"
+            },
+            "audioTokens": {
+              "description": "MOSS: audio tokens fed to the decoder.",
+              "type": "number"
+            },
+            "promptTokens": {
+              "description": "MOSS: prompt tokens prefilled before decoding.",
+              "type": "number"
+            },
+            "generatedTokens": {
+              "description": "MOSS: tokens the decoder generated.",
               "type": "number"
             }
           },
@@ -24675,6 +25015,49 @@
             "startsWord": {
               "description": "Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
               "type": "boolean"
+            },
+            "language": {
+              "description": "Language the segment's window was decoded in, as an ISO 639-1 code such as `en`; the detected language under `language: 'auto'`. Whisper engine only.",
+              "type": "string"
+            },
+            "noSpeechProb": {
+              "description": "Probability (0–1) that the segment's window holds no speech, the value `no_speech_thold` is compared against. Whisper engine only.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "speakerTurnNext": {
+              "description": "A speaker turn follows this segment. Whisper engine only, with `tdrz_enable` on a tinydiarize model.",
+              "type": "boolean"
+            },
+            "tokens": {
+              "description": "Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "probability": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Decoder probability of the token (0–1)."
+                  }
+                },
+                "required": ["text", "startMs", "endMs", "probability"],
+                "additionalProperties": false,
+                "title": "TranscribeStreamResponseSegmentTokensItem"
+              }
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -24694,6 +25077,10 @@
               "type": "boolean"
             },
             "probability": {
+              "type": "number"
+            },
+            "timestamp": {
+              "description": "Parakeet: event time in seconds from the start of the streaming session.",
               "type": "number"
             },
             "source": {

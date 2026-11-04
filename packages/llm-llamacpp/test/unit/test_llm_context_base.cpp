@@ -222,8 +222,13 @@ TEST_F(LlmContextBaseTest, ResetStateClearsCache) {
     std::string output2 = processPromptString(
         model, R"([{"role": "user", "content": "Another hello"}])");
     EXPECT_GE(output2.length(), 0);
+    // Nothing from before the reset is reused: the context holds exactly
+    // what this request decoded.
     auto statsAfterReset = model->runtimeStats();
-    EXPECT_EQ(getStatValue(statsAfterReset, "CacheTokens"), 0.0);
+    EXPECT_EQ(
+        getStatValue(statsAfterReset, "CacheTokens"),
+        getStatValue(statsAfterReset, "promptTokens") +
+            getStatValue(statsAfterReset, "generatedTokens"));
   });
 }
 

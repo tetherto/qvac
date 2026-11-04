@@ -423,3 +423,48 @@ test('Parler: reload merges description/template + sampling knobs', async (t) =>
   t.is(model._buildTtsParams().useGPU, true, 'reload({useGPU:true}) forwards useGPU')
   await model.unload()
 })
+
+test('Parler Core ML: load and reload forward complete config to the native interface', async (t) => {
+  const model = createMockedParlerModel({
+    extra: { coremlDecoder: true, coremlStrict: true, coremlComputeUnits: 'cpu_and_ane' }
+  })
+  const configs = []
+  model._createAddon = (params, outputCb) => {
+    configs.push({ ...params })
+    return new TTSInterface(new MockedBinding(), params, outputCb)
+  }
+  await model.load()
+  t.is(configs[0].coremlDecoder, true)
+  t.is(configs[0].coremlStrict, true)
+  t.is(configs[0].coremlComputeUnits, 'cpu_and_ane')
+  await model.reload({ coremlDecoder: false, coremlStrict: false })
+  t.is(configs[1].coremlDecoder, false)
+  t.is(configs[1].coremlStrict, false)
+  t.is(configs[1].coremlComputeUnits, 'cpu_and_ane')
+  await t.exception(model.reload({ coremlComputeUnits: 'ane' }), /coremlComputeUnits/)
+  t.is(configs.length, 2, 'invalid reload never recreates the addon')
+  const response = await model.run({ input: 'Still loaded.' })
+  await response.await()
+  await model.unload()
+})
+
+test('Parler Core ML: every job API rejects load-only options before dispatch', async (t) => {
+  const binding = new RecordingBinding()
+  const model = createMockedParlerModel({ binding })
+  await model.load()
+  for (const fields of [
+    { coremlDecoder: false },
+    { coremlStrict: false },
+    { coremlComputeUnits: 'cpu_only' }
+  ]) {
+    await t.exception(model.run({ input: 'x', ...fields }), /constructor or reload/)
+    await t.exception(
+      model.run({ input: 'x', streamOutput: true, ...fields }),
+      /constructor or reload/
+    )
+    await t.exception(model.runStream('x', fields), /constructor or reload/)
+    await t.exception(model.runStreaming(['x'], fields), /constructor or reload/)
+  }
+  t.is(binding.jobs.length, 0)
+  await model.unload()
+})

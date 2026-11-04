@@ -29,23 +29,6 @@ export class MobileOcrExecutor extends ModelAssetExecutor<typeof ocrTests> {
     super(resources)
   }
 
-  /**
-   * Force-evict OCR after every test. Unlike llama.cpp/whisper, ONNX Runtime
-   * with CoreML does not release compiled-model buffers between inference
-   * calls on the same session. Keeping the session alive across 12+ tests
-   * causes native memory to accumulate well past 2 GB, triggering iOS
-   * jetsam (OOM kill). Evicting here tears down the native session so the
-   * next ensureLoaded creates a fresh one with a clean allocation slate.
-   *
-   * Standard evictStale(5) never fires because OCR is "used" every test;
-   * evictExcept in setup also keeps OCR loaded (it IS the current dep).
-   * This explicit evict is the only path that actually unloads between tests.
-   */
-  override async teardown(testId: string, context: unknown): Promise<void> {
-    await super.teardown(testId, context)
-    await this.resources.evict('ocr')
-  }
-
   private async loadImageAssets() {
     if (!this.imageAssets) {
       // @ts-ignore - assets.ts is generated at consumer build time

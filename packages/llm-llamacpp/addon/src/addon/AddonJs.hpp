@@ -307,6 +307,10 @@ inline LlamaModel::Prompt parsePromptInputs(
     prompt.ephemeral =
         inputObj.getOptionalPropertyAs<js::Boolean, bool>(env, "ephemeral")
             .value_or(false);
+    prompt.baseCacheKey =
+        inputObj
+            .getOptionalPropertyAs<js::String, std::string>(env, "baseCacheKey")
+            .value_or("");
   };
 
   auto parseMedia = [&](js::Object& inputObj) {

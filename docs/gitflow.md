@@ -212,11 +212,11 @@ documented in [branch-retention.md](branch-retention.md):
   is preserved permanently by the release tag + npm artifact.
 - `feature-*` / `tmp-*` are deleted after 2 months of inactivity; ad-hoc branches after
   1 month.
-- A weekly GitHub Action flags candidates, waits a ~7-day grace period via a tracking
-  issue, then deletes — applied across all qvac repos.
+- A weekly central bot flags candidates on a ledger issue, waits a 7-day grace period,
+  then deletes, across all qvac repos.
 
-See [branch-retention.md](branch-retention.md) for the full rules, the safelist, and
-how to adopt the automation in another repo.
+See [branch-retention.md](branch-retention.md) for the full rules, the safelist and how
+enforcement works.
 
 ---
 

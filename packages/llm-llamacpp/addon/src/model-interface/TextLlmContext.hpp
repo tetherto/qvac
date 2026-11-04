@@ -43,7 +43,7 @@ public:
       llama_seq_id seqId, llama_pos perSeqCtxCeiling = -1);
 
   // Destructor
-  ~TextLlmContext() override = default;
+  ~TextLlmContext() override;
 
   /**
    * The eval message method. It evaluates the message and updates the context.
@@ -157,6 +157,24 @@ public:
   void setCacheReconciliationEnabled(bool enabled) override {
     cacheReconciliationEnabled_ = enabled;
   }
+  /// Every decoder-only text model, unless the load turned it off: the ledger
+  /// describes its memory exactly, whichever request left it there.
+  /// Encoder-decoder models encode each prompt afresh.
+  [[nodiscard]] bool sharesCacheAcrossKeys() const override {
+    return cacheSharedAcrossKeys_ && !llama_model_has_encoder(modelCtx_.model);
+  }
+  void setSharesCacheAcrossKeys(bool shares) override {
+    cacheSharedAcrossKeys_ = shares;
+  }
+  void setCacheSourceProvider(
+      qvac_lib_inference_addon_llama::cache::CacheSourceProvider provider)
+      override {
+    cacheSourceProvider_ = std::move(provider);
+  }
+  void resetStateKeepingMemory(bool resetStats) override;
+  [[nodiscard]] bool holdsBorrowedState() const override {
+    return residentStateBorrowed_;
+  }
   void setCacheCheckpointPolicy(
       const qvac_lib_inference_addon_llama::cache::CheckpointPolicy& policy)
       override {
@@ -252,6 +270,10 @@ public:
   void snapshotPreRequestCursor() override;
   void snapshotPreRequestRollbackAnchor() override;
 
+  /// Requests that started from another conversation's state.
+  [[nodiscard]] size_t donorAdoptionsForTesting() const noexcept {
+    return donorAdoptions_;
+  }
   /// Entries the last prompt reconciliation kept resident (0 = cold).
   [[nodiscard]] size_t lastCacheReuseForTesting() const noexcept {
     return lastCacheReuse_;
@@ -349,6 +371,22 @@ private:
       const std::vector<llama_token>& fullPrompt, bool isPrefillOnlyRequest);
   void rebuildSamplerFromLedger(
       const qvac_lib_inference_addon_llama::cache::Ledger& ledger);
+  /// Asks `cacheSourceProvider_` for a state that serves more of `fullPrompt`
+  /// than this sequence does, and starts the request from a copy of it.
+  /// `MtmdLlmContext` repeats this, `adoptDonorState` and
+  /// `resetStateKeepingMemory`: a change to one belongs in both.
+  void adoptBestCacheSource(
+      const qvac_lib_inference_addon_llama::cache::Ledger& fullPrompt,
+      bool isPrefillOnlyRequest);
+  /// Replaces this sequence's state with a copy of `donor`, cut back to a
+  /// checkpoint within the prefix it shares with `prompt` (on full-state
+  /// memory, the servable prompt) when the memory cannot be trimmed there.
+  /// False when the copy cannot be used: the sequence then holds what it held
+  /// if `keepOwnOnFailure`, and nothing otherwise.
+  bool adoptDonorState(
+      const qvac_lib_inference_addon_llama::cache::DonorState& donor,
+      const qvac_lib_inference_addon_llama::cache::Ledger& prompt,
+      bool keepOwnOnFailure);
   void commitCacheRequest();
   bool restorePreRequestCacheState();
   // Checks a state `loadCache` or `adoptResidentState` just put in memory
@@ -457,6 +495,8 @@ private:
   std::string thinkingForcedOpenText_;
 
   bool cacheReconciliationEnabled_ = false;
+  // `cache_share_across_keys`; see `sharesCacheAcrossKeys`.
+  bool cacheSharedAcrossKeys_ = true;
   bool cacheRequestActive_ = false;
   bool cacheRequestRolledBack_ = false;
   // Request phase, reset at `preparePrefill` and set by `onPrefillComplete`.
@@ -464,6 +504,8 @@ private:
   // cancel after it keeps the prompt and streamed tokens, cached or not.
   bool prefillComplete_ = false;
   qvac_lib_inference_addon_llama::cache::Ledger residentLedger_;
+  // See `holdsBorrowedState`.
+  bool residentStateBorrowed_ = false;
   llama_token pendingResidentToken_ = LLAMA_TOKEN_NULL;
   // Scope of every rollback snapshot and checkpoint this context takes (see
   // `untrimmableSnapshotScope`). Only meaningful when
@@ -486,6 +528,9 @@ private:
   // 0 when this request takes no end-of-history checkpoint.
   size_t historyCheckpointEntries_ = 0;
   size_t lastCacheReuse_ = 0;
+  size_t donorAdoptions_ = 0;
+  qvac_lib_inference_addon_llama::cache::CacheSourceProvider
+      cacheSourceProvider_;
   size_t fileCheckpointReads_ = 0;
   qvac_lib_inference_addon_llama::cache::CheckpointPolicy
       cacheCheckpointPolicy_;
