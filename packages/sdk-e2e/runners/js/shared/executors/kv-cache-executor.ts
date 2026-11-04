@@ -698,7 +698,7 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
     },
     _expectation: Expectation
   ): Promise<TestResult> {
-    const modelId = await this.resources.ensureLoaded('llm')
+    const modelId = await this.resources.ensureLoaded('llm-no-shared-cache')
     const cancelAfterTokens = params.cancelAfterTokens ?? 3
     const generationParams = params.generationParams as never
     const history: ChatMessage[] = [{ role: 'system', content: 'You are a helpful assistant.' }]

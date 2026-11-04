@@ -20,14 +20,15 @@ type LlamaProbeResult = Extract<FitProbeResult, { engine: 'llm-llamacpp' }>['res
 
 function llama(
   devices: ReturnType<typeof device>[],
-  status: LlamaProbeResult['status'] = 'fits'
+  status: LlamaProbeResult['status'] = 'fits',
+  gpuLayers = 32
 ): FitProbeResult {
   return {
     engine: 'llm-llamacpp',
     result: {
       status,
       devices,
-      stats: { gpuLayers: 32, ctxSize: 4096 }
+      stats: { gpuLayers, ctxSize: 4096 }
     }
   }
 }
@@ -40,6 +41,45 @@ function shared(
   devices: ReturnType<typeof device>[]
 ): FitProbeResult {
   return { engine, result: { status: 'fits', devices, stats: {} } } as never
+}
+
+function legacyTts() {
+  return {
+    engine: 'tts-ggml' as const,
+    result: {
+      status: 'fits' as const,
+      reason: 'fits',
+      deviceName: 'Metal',
+      deviceBytes: 2 * 1024 ** 3,
+      hostBytes: 128 * 1024 ** 2,
+      deviceFreeBytes: 20 * 1024 ** 3,
+      deviceTotalBytes: 24 * 1024 ** 3,
+      report: 'table',
+      weightsBytes: 1024 ** 3,
+      stateBytes: 64 * 1024 ** 2,
+      lmComputeBytes: 32 * 1024 ** 2,
+      codecComputeBytes: 16 * 1024 ** 2
+    }
+  }
+}
+
+function legacyBci() {
+  return {
+    engine: 'bci-whispercpp' as const,
+    result: {
+      status: 'fits' as const,
+      reason: 'fits',
+      deviceName: 'Metal',
+      deviceBytes: 2 * 1024 ** 3,
+      hostBytes: 128 * 1024 ** 2,
+      deviceFreeBytes: 20 * 1024 ** 3,
+      deviceTotalBytes: 24 * 1024 ** 3,
+      report: 'table',
+      weightsBytes: 1024 ** 3,
+      kvBytes: 64 * 1024 ** 2,
+      computeBytes: 32 * 1024 ** 2
+    }
+  }
 }
 
 test('a shared fit result keeps GPU and CPU demand separate', (t) => {
@@ -61,6 +101,13 @@ test('a device holding no weights is not counted', (t) => {
   )
 
   t.is(outcome.plan?.nGpuDevices, 1)
+})
+
+test('a shared llama result with no GPU layers spans no GPU', (t) => {
+  const outcome = classifyFit(llama([device('CUDA0', 256 * 1024 ** 2)], 'fits', 0), PROVENANCE)
+
+  t.is(outcome.plan?.nGpuLayers, 0)
+  t.is(outcome.plan?.nGpuDevices, 0)
 })
 
 // The fitter assigns to the CPU backend device like any other, but its demand
@@ -162,6 +209,22 @@ test('a speech projection carries the device the engine measured', (t) => {
     deviceFreeBytes: 20 * 1024 ** 3,
     deviceTotalBytes: 24 * 1024 ** 3
   })
+})
+
+test('published tts fit results keep their memory breakdown', (t) => {
+  const outcome = classifyFit(legacyTts(), PROVENANCE)
+
+  t.is(outcome.projection?.weightsBytes, 1024 ** 3)
+  t.is(outcome.projection?.contextBytes, 64 * 1024 ** 2)
+  t.is(outcome.projection?.computeBytes, 48 * 1024 ** 2)
+})
+
+test('published bci fit results keep their memory breakdown', (t) => {
+  const outcome = classifyFit(legacyBci(), PROVENANCE)
+
+  t.is(outcome.projection?.weightsBytes, 1024 ** 3)
+  t.is(outcome.projection?.contextBytes, 64 * 1024 ** 2)
+  t.is(outcome.projection?.computeBytes, 32 * 1024 ** 2)
 })
 
 test('an engine reporting only a total has no breakdown', (t) => {
