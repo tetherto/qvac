@@ -1,8 +1,14 @@
 import test from 'brittle'
 import net from 'bare-net'
 import { Buffer } from 'bare-buffer'
+import EventEmitter from 'bare-events'
 import { AbortController } from 'bare-abort-controller'
 import { queryRpcInventory } from '@/rpc/inventory'
+import { discoverRpcEndpoints } from '@/rpc/discovery'
+import { rpcTopic } from '@/rpc/network'
+import { createDisposableScope } from '@/runtime/disposable-scope'
+import { createRequestRegistry } from '@/runtime/request-context'
+import type { createLanDiscovery } from '@/rpc/lan'
 import { getRpcDeviceMap } from '@/rpc/device-map'
 import { InferenceCancelledError } from '@/errors/index'
 import { getEngineLogger, LOG_ID } from '@/logging/index'
@@ -338,4 +344,165 @@ test('RPC inventory bounds diagnostics for a huge declared length and excess tra
       kind === 'header-only' ? 'unexpected response size' : 'response exceeds frame limit'
     )
   }
+})
+
+function delayedCloseSockets(
+  mode: 'success' | 'timeout' | 'cancel' | 'error' | 'connect-throw' | 'dispose'
+) {
+  const original = Object.getOwnPropertyDescriptor(net, 'Socket')!
+  const sockets: Socket[] = []
+  let active = 0,
+    maximum = 0
+  const later = (work: () => void) => {
+    void Promise.resolve().then(work)
+  }
+  class Socket extends EventEmitter {
+    destroyed = false
+    closed = false
+    constructor() {
+      super()
+      sockets.push(this)
+      active++
+      maximum = Math.max(maximum, active)
+    }
+    connect() {
+      if (mode === 'connect-throw') throw new Error('connection rejected')
+      later(() =>
+        mode === 'error' ? this.emit('error', new Error('connection failed')) : this.emit('connect')
+      )
+    }
+    write(request: Buffer) {
+      if (mode !== 'success') return true
+      const command = request[0]
+      const payload = Buffer.alloc(command === 14 ? 28 : command === 15 ? 4 : 16)
+      if (command === 14) payload[0] = 112
+      else if (command === 15) payload.writeUInt32LE(1)
+      else {
+        payload.writeBigUInt64LE(1024n, 0)
+        payload.writeBigUInt64LE(2048n, 8)
+      }
+      const header = Buffer.alloc(8)
+      header.writeBigUInt64LE(BigInt(payload.length))
+      later(() => this.emit('data', Buffer.concat([header, payload])))
+      return true
+    }
+    destroy() {
+      this.destroyed = true
+    }
+    finishClose() {
+      if (this.closed) return
+      this.closed = true
+      active--
+      this.emit('close')
+    }
+  }
+  Object.defineProperty(net, 'Socket', { ...original, value: Socket })
+  return {
+    sockets,
+    get maximum() {
+      return maximum
+    },
+    get active() {
+      return active
+    },
+    [Symbol.dispose]() {
+      for (const socket of sockets) socket.finishClose()
+      Object.defineProperty(net, 'Socket', original)
+    }
+  }
+}
+
+test('RPC inventory completion and scope disposal wait for delayed socket close on every exit', async (t) => {
+  for (const mode of [
+    'success',
+    'timeout',
+    'cancel',
+    'error',
+    'connect-throw',
+    'dispose'
+  ] as const) {
+    using sockets = delayedCloseSockets(mode)
+    const scope = createDisposableScope()
+    const controller = new AbortController()
+    let settled = false,
+      disposed = false
+    const outcome = queryRpcInventory(
+      '10.0.0.2',
+      50052,
+      mode === 'timeout' ? 5 : 1000,
+      controller.signal,
+      scope
+    ).then(
+      (value) => {
+        settled = true
+        return { value }
+      },
+      (error: unknown) => {
+        settled = true
+        return { error }
+      }
+    )
+    if (mode === 'cancel') controller.abort(undefined)
+    await new Promise<void>((resolve) => setTimeout(resolve, 15))
+    const stopping = scope[Symbol.asyncDispose]().then(() => {
+      disposed = true
+    })
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    t.ok(sockets.sockets[0]!.destroyed, `${mode} starts socket shutdown`)
+    t.absent(settled, `${mode} retains the probe until close completes`)
+    t.absent(disposed, `${mode} retains scope cleanup until close completes`)
+    sockets.sockets[0]!.finishClose()
+    const result = await outcome
+    await stopping
+    if (mode === 'cancel') {
+      t.ok('error' in result && result.error instanceof InferenceCancelledError)
+    } else {
+      t.alike(result, {
+        value: mode === 'success' ? { devices: [device], rdmaAvailable: false } : undefined
+      })
+    }
+    t.is(sockets.active, 0)
+  }
+})
+
+test('RPC discovery keeps real inventory probes within four sockets until close finishes', async (t) => {
+  using sockets = delayedCloseSockets('error')
+  const registry = createRequestRegistry()
+  await using ctx = await registry.begin({
+    requestId: 'inventory-close-bound',
+    kind: 'rpcDiscovery'
+  })
+  let options: Parameters<typeof createLanDiscovery>[0]
+  const result = discoverRpcEndpoints('close-bound', 150, ctx, {
+    createTransport: (opts) => {
+      options = opts
+      return {
+        suspended: false,
+        start: () => Promise.resolve(),
+        send: () => Promise.resolve(),
+        suspend: () => Promise.resolve(),
+        resume: () => Promise.resolve(),
+        close() {
+          options.onstop?.()
+          return Promise.resolve()
+        }
+      }
+    }
+  })
+  const frame = Buffer.alloc(55)
+  frame.write('QVRP')
+  frame[4] = 1
+  rpcTopic('close-bound').copy(frame, 5)
+  frame.writeUInt16BE(50052, 53)
+  for (let host = 1; host <= 12; host++) options!.onmessage?.(frame, `10.0.0.${host}`)
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  t.is(sockets.sockets.length, 4, 'closing sockets retain all four scheduler slots')
+  for (let batch = 0; batch < 3; batch++) {
+    for (const socket of sockets.sockets.filter((socket) => !socket.closed)) socket.finishClose()
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  }
+  t.alike(await result, [])
+  t.is(sockets.sockets.length, 12)
+  t.is(sockets.maximum, 4)
+  t.is(sockets.active, 0)
 })

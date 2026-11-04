@@ -36,6 +36,7 @@ export function queryRpcInventory(
   throwIfAborted(signal)
   return new Promise((resolve, reject) => {
     const socket = new net.Socket()
+    const closed = new Promise<void>((resolve) => socket.once('close', resolve))
     const devices: RpcDevice[] = []
     let pending = Buffer.alloc(0)
     let command = HELLO
@@ -46,13 +47,16 @@ export function queryRpcInventory(
     const timer = setTimeout(() => finish(), timeoutMs)
     const abort = () => finish(undefined, new InferenceCancelledError('rpc'))
     function finish(result?: RpcInventory, error?: Error) {
-      if (finished) return
+      if (finished) return closed
       finished = true
       clearTimeout(timer)
       signal.removeEventListener('abort', abort)
       socket.destroy()
-      if (error) reject(error)
-      else resolve(result)
+      void closed.then(() => {
+        if (error) reject(error)
+        else resolve(result)
+      })
+      return closed
     }
     function rejectHello(reason: string, chunk = Buffer.alloc(0)) {
       // Read only the length and version prefix, even for an oversized chunk.
