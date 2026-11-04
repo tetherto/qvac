@@ -121,6 +121,36 @@ describe('responses: Codex tool loop', () => {
   })
 })
 
+describe('responses: Codex tool loop over stored turns', () => {
+  it('answers from the tool result when the next turn chains previous_response_id', async () => {
+    const first = await responses({
+      input: [developer, question],
+      tool_choice: 'required',
+      store: true
+    })
+    assert.equal(first.statusCode, 200, first.body)
+    const firstBody = first.json() as any
+    const call = functionCalls(firstBody)[0]
+    assert.ok(call, 'first turn requested a tool call')
+
+    const res = await responses({
+      previous_response_id: firstBody.id,
+      input: [
+        message('developer', 'Answer in one sentence.'),
+        {
+          type: 'function_call_output',
+          call_id: call.call_id,
+          output: '{\n  "name": "acme-widgets",\n  "version": "1.2.0"\n}'
+        }
+      ]
+    })
+    assert.equal(res.statusCode, 200, res.body)
+    const body = res.json() as any
+    assert.equal(body.status, 'completed')
+    assert.match(body.output_text, /acme-widgets/)
+  })
+})
+
 describe('responses: Codex tool shapes', () => {
   // Codex groups MCP tools in `namespace` tools and adds built-ins like web_search.
   const codexTools = [
