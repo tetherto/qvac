@@ -57,8 +57,8 @@ on:
 
 permissions: {}
 
-# One manual run per branch; a fresh dispatch cancels the one in flight so Device Farm runs never stack.
-# One run per branch, package and platform, so an Android and an iOS dispatch of one package run side by side.
+# One manual run per branch, package and platform, as main's per-addon workflows had; a fresh dispatch cancels the
+# one in flight so Device Farm runs never stack, while an Android and an iOS dispatch of one package run side by side.
 concurrency:
   group: mobile-tests-${{ github.ref }}-${{ inputs.packages }}-${{ inputs.platform }}
   cancel-in-progress: true
