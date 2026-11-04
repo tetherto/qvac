@@ -14,7 +14,11 @@ export const kvCacheWorkerRestart: TestDefinition = {
     generationParams: { temp: 0, top_k: 1, seed: 42, predict: 256 }
   },
   expectation: { validation: 'function', fn: () => true },
-  metadata: { category: 'lifecycle', dependency: 'llm', estimatedDurationMs: 90000 },
+  metadata: {
+    category: 'lifecycle',
+    dependency: 'llm-no-shared-cache',
+    estimatedDurationMs: 90000
+  },
   skip: {
     reason: 'Bare worker process lifecycle is desktop-only (mobile uses an in-process Worklet)',
     platforms: ['mobile-ios', 'mobile-android']
