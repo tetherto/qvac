@@ -363,6 +363,29 @@ describe('writeStreamingResponse: reasoning after answer text', () => {
   })
 })
 
+describe('writeStreamingResponse: reasoning without answer text', () => {
+  it('finishes the reasoning item before the empty message', async () => {
+    const holder = createStreamResponse()
+    const result = fakeStreamCompletion({
+      thinkingTokens: ['Need to list files.'],
+      tokens: [],
+      toolCalls: [{ id: 'call_ls', name: 'shell', arguments: { cmd: 'ls' } }],
+      text: ''
+    })
+
+    await writeStreamingResponse(holder.res, baseHandlerParams('resp_reason_only'), () => result)
+    const events = parseSseJsonEvents(holder.raw) as Array<Record<string, unknown>>
+    const lifecycle = events
+      .filter(
+        (e) =>
+          e['type'] === 'response.output_item.added' || e['type'] === 'response.output_item.done'
+      )
+      .map((e) => `${e['type'] === 'response.output_item.added' ? '+' : '-'}${e['output_index']}`)
+    assert.deepEqual(lifecycle, ['+0', '-0', '+1', '-1', '+2', '-2'])
+    assert.ok(events.some((e) => e['type'] === 'response.reasoning_text.done'))
+  })
+})
+
 describe('writeStreamingResponse: deferred tools', () => {
   const deferredTool = {
     type: 'function' as const,
@@ -372,7 +395,7 @@ describe('writeStreamingResponse: deferred tools', () => {
     parameters: { type: 'object' as const, properties: { title: { type: 'string' as const } } }
   }
 
-  it('streams both turns live and keeps only the answer in the response object', async () => {
+  it('streams both turns live and keeps tool_search out of the response object', async () => {
     const holder = createStreamResponse()
     const p = { ...baseHandlerParams('resp_defer'), tools: [deferredTool] }
 
@@ -415,8 +438,7 @@ describe('writeStreamingResponse: deferred tools', () => {
     assert.equal(second.at(-1)!.role, 'tool')
     assert.ok(second.at(-1)!.content.includes('"create_issue"'))
 
-    // The stored answer is the answering turn only, and carries no tool call
-    // the client would have to run.
+    // The response carries no tool call the client would have to run.
     assert.equal(completed['status'], 'completed')
     assert.equal(
       JSON.stringify(completed['output']).includes('tool_search'),
@@ -426,7 +448,7 @@ describe('writeStreamingResponse: deferred tools', () => {
     assert.ok(JSON.stringify(completed['output']).includes('Opened it.'))
   })
 
-  it('keeps reasoning from the answer turn after a search preamble', async () => {
+  it('keeps every streamed item at its streamed position across a search round', async () => {
     const holder = createStreamResponse()
     const p = { ...baseHandlerParams('resp_defer_reason'), tools: [deferredTool] }
     const turns = [
@@ -450,15 +472,16 @@ describe('writeStreamingResponse: deferred tools', () => {
       events.filter((e) => e['type'] === 'response.reasoning_text.delta').map((e) => e['delta']),
       ['The tool is loaded now.']
     )
-    // The search turn's preamble was streamed but is not part of the answer.
     const output = completed['output'] as Array<Record<string, unknown>>
     assert.deepEqual(
       output.map((o) => o['type']),
-      ['reasoning', 'message']
+      ['message', 'reasoning', 'message']
     )
-    assert.deepEqual(output[0]!['content'], [
-      { type: 'reasoning_text', text: 'The tool is loaded now.' }
-    ])
-    assert.equal(completed['output_text'], 'Opened it.')
+    // Each finished item sits in `output` at the index it streamed under.
+    for (const e of events.filter((e) => e['type'] === 'response.output_item.done')) {
+      const item = e['item'] as Record<string, unknown>
+      assert.equal(output[e['output_index'] as number]!['id'], item['id'])
+    }
+    assert.equal(completed['output_text'], 'Looking that up. Opened it.')
   })
 })

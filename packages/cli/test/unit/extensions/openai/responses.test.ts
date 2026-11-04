@@ -444,7 +444,7 @@ describe('writeBlockingResponse: item order matches streaming', () => {
     assert.equal(parsed.output_text, 'Partial answer.')
   })
 
-  it('keeps only the answering turn after a search preamble', async () => {
+  it('keeps the search preamble, as streaming does', async () => {
     const { res, body } = captureRes()
     const deferredTool = {
       type: 'function' as const,
@@ -470,9 +470,9 @@ describe('writeBlockingResponse: item order matches streaming', () => {
     assert.equal(turn, 2)
     assert.deepEqual(
       parsed.output.map((o: { type: string }) => o.type),
-      ['reasoning', 'message']
+      ['message', 'reasoning', 'message']
     )
-    assert.equal(parsed.output_text, 'Opened it.')
+    assert.equal(parsed.output_text, 'Looking that up. Opened it.')
   })
 })
 

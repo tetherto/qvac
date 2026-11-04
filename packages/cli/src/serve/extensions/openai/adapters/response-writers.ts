@@ -71,9 +71,9 @@ type SendEvent = (event: Record<string, unknown>) => void
 interface OutputTimeline {
   text: (token: string) => void
   reasoning: (token: string) => void
-  /** Drops the items so far from the answer; a `tool_search` round streamed them. */
-  newTurn: () => void
-  /** Closes the open item and returns the answer's items, always with a message. */
+  /** Ends a generation round; the next round's output starts new items. */
+  endRound: () => void
+  /** Closes the open item and returns every item, always with a message. */
   finish: () => { items: OutputSegment[]; nextOutputIndex: number }
 }
 
@@ -84,9 +84,10 @@ function createOutputTimeline(send?: SendEvent): OutputTimeline {
   type Open = OutputSegment & { outputIndex: number }
   let nextOutputIndex = 0
   let open: Open | undefined
-  let turn: Open[] = []
+  const turn: Open[] = []
 
   function start(type: OutputSegment['type']): Open {
+    close()
     const item: Open = {
       type,
       id: type === 'message' ? messageId() : reasoningItemId(),
@@ -144,11 +145,7 @@ function createOutputTimeline(send?: SendEvent): OutputTimeline {
   }
 
   function add(type: OutputSegment['type'], token: string): void {
-    let item = open
-    if (item?.type !== type) {
-      close()
-      item = start(type)
-    }
+    const item = open?.type === type ? open : start(type)
     item.text += token
     send?.({
       type: type === 'message' ? 'response.output_text.delta' : 'response.reasoning_text.delta',
@@ -162,10 +159,7 @@ function createOutputTimeline(send?: SendEvent): OutputTimeline {
   return {
     text: (token) => add('message', token),
     reasoning: (token) => add('reasoning', token),
-    newTurn: () => {
-      close()
-      turn = []
-    },
+    endRound: close,
     finish: () => {
       if (!turn.some((item) => item.type === 'message')) start('message')
       close()
@@ -197,8 +191,7 @@ export async function writeBlockingResponse(
   let total: DrainedOpenAICompletion | undefined
   const timeline = createOutputTimeline()
   for (let round = 0; ; round++) {
-    // As in streaming, only the answering turn's items belong in the response.
-    if (round > 0) timeline.newTurn()
+    if (round > 0) timeline.endRound()
     drained = await drainCompletion(runTurn(turnHistory), timeline.text, timeline.reasoning)
     total = accumulateUsage(total, drained)
     if (round >= MAX_TOOL_SEARCH_ROUNDS) break
@@ -290,9 +283,9 @@ export async function writeStreamingResponse(
   let drained
   let total: DrainedOpenAICompletion | undefined
   for (let round = 0; ; round++) {
-    // Only the answering turn's items belong in the final response object; a
-    // search turn's preamble was streamed but is not part of the answer.
-    if (round > 0) timeline.newTurn()
+    // A search turn's preamble stays in the response object: it was streamed at
+    // its own output_index, which must match its position in `output`.
+    if (round > 0) timeline.endRound()
     drained = await drainCompletion(runTurn(turnHistory), timeline.text, timeline.reasoning)
     total = accumulateUsage(total, drained)
 
