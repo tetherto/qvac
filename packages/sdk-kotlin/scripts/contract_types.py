@@ -54,6 +54,20 @@ def fingerprint(schema, path):
     return json.dumps({"path": path, "shape": untitled(schema)}, sort_keys=True)
 
 
+# Handwritten completion APIs import these generated public DTO names. When a
+# shorter method later reuses the same wire shape, keep the established name
+# instead of silently renaming the public Kotlin surface.
+PUBLIC_TYPE_PREFIXES = ("CompletionStreamRequest",)
+
+
+def preferred_name(names):
+    for prefix in PUBLIC_TYPE_PREFIXES:
+        compatible = [candidate for candidate in names if candidate.startswith(prefix)]
+        if compatible:
+            return min(compatible, key=lambda n: (len(n), n))
+    return min(names, key=lambda n: (len(n), n))
+
+
 @dataclass
 class Definition:
     name: str
@@ -80,7 +94,7 @@ class TypeGraph:
         self.preferred = {}
         for key, value in self.defs.items():
             self.resolve(value, value.get("title", key), root=True)
-        self.preferred = {shape: min(names, key=lambda n: (len(n), n))
+        self.preferred = {shape: preferred_name(names)
                           for shape, names in self.candidates.items()}
         self.surveying = False
         self.types, self.by_shape = {}, {}

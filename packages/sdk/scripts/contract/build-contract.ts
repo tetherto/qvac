@@ -162,6 +162,40 @@ function flattenAllOfWithUnion(json: JsonSchema, defName: string): JsonSchema {
   return flattened
 }
 
+/**
+ * Collapses compatible `allOf` fragments left inside a schema after the
+ * object-plus-union normalization above. Zod emits this shape when a shared
+ * array field is constrained with `minItems` in one union arm. The Kotlin
+ * generator deliberately rejects unnormalised `allOf`, so merge fragments
+ * whose keys are disjoint or identical and leave genuinely conflicting
+ * compositions untouched.
+ */
+function flattenCompatibleAllOf(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(flattenCompatibleAllOf)
+  if (!isSchemaObject(node)) return node
+
+  const normalized: JsonSchema = {}
+  for (const [key, value] of Object.entries(node)) {
+    normalized[key] = flattenCompatibleAllOf(value)
+  }
+
+  const allOf = normalized['allOf']
+  if (!Array.isArray(allOf)) return normalized
+  if (allOf.some((part) => !isSchemaObject(part) || unionArmsOf(part) !== undefined)) {
+    return normalized
+  }
+
+  const merged: JsonSchema = { ...normalized }
+  delete merged['allOf']
+  for (const part of allOf as JsonSchema[]) {
+    for (const [key, value] of Object.entries(part)) {
+      if (key in merged && JSON.stringify(merged[key]) !== JSON.stringify(value)) return normalized
+      merged[key] = value
+    }
+  }
+  return merged
+}
+
 function isSchemaObject(node: unknown): node is JsonSchema {
   return node !== null && typeof node === 'object' && !Array.isArray(node)
 }
@@ -342,6 +376,50 @@ function needsOwnTitle(node: unknown): boolean {
   return (isEnum || isObject) && !hasConst
 }
 
+function namesFromDistinctRequiredFields(arms: JsonSchema[], namePrefix: string) {
+  const requiredByArm = arms.map(function (arm) {
+    return Array.isArray(arm['required'])
+      ? arm['required'].filter(function (key): key is string {
+          return typeof key === 'string'
+        })
+      : []
+  })
+  if (
+    requiredByArm.some(function (required) {
+      return required.length === 0
+    })
+  ) {
+    return undefined
+  }
+
+  const common =
+    requiredByArm[0]?.filter(function (key) {
+      return requiredByArm.every(function (required) {
+        return required.includes(key)
+      })
+    }) ?? []
+  const distinct = requiredByArm.map(function (required) {
+    return required.filter(function (key) {
+      return !common.includes(key)
+    })
+  })
+  if (
+    distinct.some(function (required) {
+      return required.length !== 1
+    })
+  ) {
+    return undefined
+  }
+
+  const keys = distinct.map(function (required) {
+    return required[0] as string
+  })
+  if (new Set(keys).size !== arms.length) return undefined
+  return keys.map(function (key) {
+    return `${namePrefix}${toPascalCase(key)}`
+  })
+}
+
 /**
  * Names each arm of a union: by the shared discriminator's value when the
  * arms have one in common; else, if at most one arm actually needs a title
@@ -364,6 +442,8 @@ function nameUnionArms(arms: JsonSchema[], namePrefix: string): string[] {
         return namePrefix
       })
     }
+    const requiredFieldNames = namesFromDistinctRequiredFields(arms, namePrefix)
+    if (requiredFieldNames) return requiredFieldNames
     return arms.map(function (_arm, index) {
       return `${namePrefix}${index + 1}`
     })
@@ -507,7 +587,8 @@ export function toWireJsonSchema(
   delete json['$schema']
   const expanded = expandPrimitiveTypeArrays(json) as JsonSchema
   const flattened = flattenAllOfWithUnion(expanded, defName)
-  const collapsed = collapseSingleMemberUnions(flattened) as JsonSchema
+  const compatible = flattenCompatibleAllOf(flattened) as JsonSchema
+  const collapsed = collapseSingleMemberUnions(compatible) as JsonSchema
   assertNoRefs(collapsed, defName)
   return collapsed
 }

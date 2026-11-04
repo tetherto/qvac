@@ -68,7 +68,7 @@ internal object AnyRequestSerializer : KSerializer<AnyRequest> {
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"prompts\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"prompts\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"history\"]}},\"stream\":{\"type\":\"boolean\"},\"captureThinking\":{\"type\":\"boolean\"},\"emitRawDeltas\":{\"type\":\"boolean\"},\"toolDialect\":{\"type\":\"string\",\"enum\":[\"hermes\",\"pythonic\",\"json\",\"harmony\",\"qwen35\",\"gemma4\",\"dsml\"]},\"requestId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"batchCompletionStream\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"neuralData\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"metadata\":{\"type\":\"boolean\"},\"neuralData\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"base64\"},\"value\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"filePath\"},\"value\":{\"type\":\"string\"}}}]},\"type\":{\"type\":\"string\",\"const\":\"bciTranscribe\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"metadata\":{\"type\":\"boolean\"},\"type\":{\"type\":\"string\",\"const\":\"bciTranscribeStream\"},\"streamOpts\":{\"type\":\"object\",\"properties\":{\"windowTimesteps\":{\"type\":\"integer\"},\"hopTimesteps\":{\"type\":\"integer\"},\"emit\":{\"type\":\"string\",\"enum\":[\"delta\",\"full\"]}}},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"text\":{\"type\":\"string\"},\"history\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"role\"]}},\"tools\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"type\",\"name\",\"description\",\"parameters\"]}},\"type\":{\"type\":\"string\",\"const\":\"calcTokens\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"anyOf\":[{\"type\":\"object\",\"required\":[\"modelId\",\"type\",\"text\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"text\":{\"type\":\"string\"},\"history\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"role\"]}},\"tools\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"type\",\"name\",\"description\",\"parameters\"]}},\"type\":{\"type\":\"string\",\"const\":\"calcTokens\"}}},{\"type\":\"object\",\"required\":[\"modelId\",\"type\",\"history\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"text\":{\"type\":\"string\"},\"history\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"role\"]}},\"tools\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"type\",\"name\",\"description\",\"parameters\"]}},\"type\":{\"type\":\"string\",\"const\":\"calcTokens\"}}}]}").jsonObject,
         Json.parseToJsonElement("{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"operation\",\"requestId\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"cancel\"},\"operation\":{\"type\":\"string\",\"const\":\"request\"},\"requestId\":{\"type\":\"string\"},\"clearCache\":{\"type\":\"boolean\"}}},{\"type\":\"object\",\"required\":[\"type\",\"operation\",\"modelId\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"cancel\"},\"operation\":{\"type\":\"string\",\"const\":\"broad\"},\"modelId\":{\"type\":\"string\"},\"kind\":{\"type\":\"string\",\"enum\":[\"completion\",\"batchCompletion\",\"embeddings\",\"decision\",\"rerank\",\"transcribe\",\"translate\",\"diffusion\",\"world\",\"audiogen\",\"tts\",\"ocr\",\"vla\",\"finetune\",\"loadModel\",\"downloadAsset\",\"rpcServer\",\"rpcDiscovery\",\"rag\"]}}}]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"image\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"image\":{\"type\":\"string\"},\"topK\":{\"type\":\"integer\"},\"width\":{\"type\":\"integer\"},\"height\":{\"type\":\"integer\"},\"channels\":{\"type\":\"number\",\"const\":3},\"type\":{\"type\":\"string\",\"const\":\"classify\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"history\",\"modelId\",\"stream\",\"type\"],\"properties\":{\"history\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"role\"]}},\"modelId\":{\"type\":\"string\"},\"kvCache\":{\"anyOf\":[{\"type\":\"boolean\"},{\"type\":\"string\"}]},\"prefill\":{\"type\":\"boolean\"},\"tools\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"type\",\"name\",\"description\",\"parameters\"]}},\"stream\":{\"type\":\"boolean\"},\"generationParams\":{\"type\":\"object\",\"properties\":{\"temp\":{\"type\":\"number\"},\"top_p\":{\"type\":\"number\"},\"top_k\":{\"type\":\"number\"},\"predict\":{\"type\":\"number\"},\"seed\":{\"type\":\"number\"},\"frequency_penalty\":{\"type\":\"number\"},\"presence_penalty\":{\"type\":\"number\"},\"repeat_penalty\":{\"type\":\"number\"},\"reasoning_budget\":{\"type\":\"integer\"},\"tool_choice\":{\"type\":\"string\"},\"parallel_tool_calls\":{\"type\":\"boolean\"}}},\"captureThinking\":{\"type\":\"boolean\"},\"emitRawDeltas\":{\"type\":\"boolean\"},\"toolDialect\":{\"type\":\"string\",\"enum\":[\"hermes\",\"pythonic\",\"json\",\"harmony\",\"qwen35\",\"gemma4\",\"dsml\"]},\"responseFormat\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"}}},{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"json_object\"}}},{\"type\":\"object\",\"required\":[\"type\",\"json_schema\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"json_schema\"},\"json_schema\":{\"type\":\"object\",\"required\":[\"name\",\"schema\"]}}}]},\"requestId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"completionOrchestrate\"},\"maxToolTurns\":{\"type\":\"integer\"}}}").jsonObject,
@@ -984,40 +984,111 @@ enum class BciTranscribeStreamRequestStreamOptsEmit {
     @SerialName("full") `FULL`,
 }
 
+@Serializable(with = CalcTokensRequestSerializer::class)
+sealed class CalcTokensRequest {
+    data class Text(val value: io.tether.qvac.sdk.generated.schema.CalcTokensRequestText) : CalcTokensRequest()
+    data class History(val value: io.tether.qvac.sdk.generated.schema.CalcTokensRequestHistory) : CalcTokensRequest()
+}
+internal object CalcTokensRequestSerializer : KSerializer<CalcTokensRequest> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("CalcTokensRequest")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"type\",\"text\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"text\":{\"type\":\"string\"},\"history\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"role\"]}},\"tools\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"type\",\"name\",\"description\",\"parameters\"]}},\"type\":{\"type\":\"string\",\"const\":\"calcTokens\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"type\",\"history\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"text\":{\"type\":\"string\"},\"history\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"role\"]}},\"tools\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"type\",\"name\",\"description\",\"parameters\"]}},\"type\":{\"type\":\"string\",\"const\":\"calcTokens\"}}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): CalcTokensRequest {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> CalcTokensRequest.Text(input.json.decodeFromJsonElement(serializer<CalcTokensRequestText>(), element))
+            1 -> CalcTokensRequest.History(input.json.decodeFromJsonElement(serializer<CalcTokensRequestHistory>(), element))
+            else -> throw SerializationException("No matching CalcTokensRequest variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: CalcTokensRequest) {
+        when (value) {
+            is CalcTokensRequest.Text -> encoder.encodeSerializableValue(serializer<CalcTokensRequestText>(), value.value)
+            is CalcTokensRequest.History -> encoder.encodeSerializableValue(serializer<CalcTokensRequestHistory>(), value.value)
+        }
+    }
+}
+
 @Serializable
-data class CalcTokensRequest(
+data class CalcTokensRequestText(
     @SerialName("modelId") val `modelId`: String,
-    @SerialName("text") val `text`: String? = null,
-    @SerialName("history") val `history`: List<CalcTokensRequestHistoryItem>? = null,
-    @SerialName("tools") val `tools`: List<CalcTokensRequestToolsItem>? = null,
+    @SerialName("text") val `text`: String,
+    @SerialName("history") val `history`: List<CalcTokensRequestTextHistoryItem>? = null,
+    @SerialName("tools") val `tools`: List<CalcTokensRequestTextToolsItem>? = null,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "calcTokens",
 )
 
 @Serializable
-data class CalcTokensRequestHistoryItem(
+data class CalcTokensRequestTextHistoryItem(
     @SerialName("role") val `role`: String,
     @SerialName("content") val `content`: String? = null,
-    @SerialName("attachments") val `attachments`: List<CalcTokensRequestHistoryItemAttachmentsItem>? = null,
-    @SerialName("toolCalls") val `toolCalls`: List<CalcTokensRequestHistoryItemToolCallsItem>? = null,
+    @SerialName("attachments") val `attachments`: List<CalcTokensRequestTextHistoryItemAttachmentsItem>? = null,
+    @SerialName("toolCalls") val `toolCalls`: List<CalcTokensRequestTextHistoryItemToolCallsItem>? = null,
     @SerialName("toolCallId") val `toolCallId`: String? = null,
     @SerialName("toolName") val `toolName`: String? = null,
 )
 
 @Serializable
-data class CalcTokensRequestHistoryItemAttachmentsItem(
+data class CalcTokensRequestTextHistoryItemAttachmentsItem(
     @SerialName("path") val `path`: String,
 )
 
 @Serializable
-data class CalcTokensRequestHistoryItemToolCallsItem(
+data class CalcTokensRequestTextHistoryItemToolCallsItem(
     @SerialName("id") val `id`: String? = null,
     @SerialName("name") val `name`: String,
     @SerialName("arguments") val `arguments`: Map<String, JsonElement>,
 )
 
 @Serializable
-data class CalcTokensRequestToolsItem(
+data class CalcTokensRequestTextToolsItem(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("type") val `type`: String = "function",
+    @SerialName("name") val `name`: String,
+    @SerialName("description") val `description`: String,
+    @SerialName("deferLoading") val `deferLoading`: Boolean? = null,
+    @SerialName("group") val `group`: String? = null,
+    @SerialName("parameters") val `parameters`: JsonObject,
+)
+
+@Serializable
+data class CalcTokensRequestHistory(
+    @SerialName("modelId") val `modelId`: String,
+    @SerialName("text") val `text`: String? = null,
+    @SerialName("history") val `history`: List<CalcTokensRequestHistoryHistoryItem>,
+    @SerialName("tools") val `tools`: List<CalcTokensRequestHistoryToolsItem>? = null,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("type") val `type`: String = "calcTokens",
+)
+
+@Serializable
+data class CalcTokensRequestHistoryHistoryItem(
+    @SerialName("role") val `role`: String,
+    @SerialName("content") val `content`: String? = null,
+    @SerialName("attachments") val `attachments`: List<CalcTokensRequestHistoryHistoryItemAttachmentsItem>? = null,
+    @SerialName("toolCalls") val `toolCalls`: List<CalcTokensRequestHistoryHistoryItemToolCallsItem>? = null,
+    @SerialName("toolCallId") val `toolCallId`: String? = null,
+    @SerialName("toolName") val `toolName`: String? = null,
+)
+
+@Serializable
+data class CalcTokensRequestHistoryHistoryItemAttachmentsItem(
+    @SerialName("path") val `path`: String,
+)
+
+@Serializable
+data class CalcTokensRequestHistoryHistoryItemToolCallsItem(
+    @SerialName("id") val `id`: String? = null,
+    @SerialName("name") val `name`: String,
+    @SerialName("arguments") val `arguments`: Map<String, JsonElement>,
+)
+
+@Serializable
+data class CalcTokensRequestHistoryToolsItem(
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "function",
     @SerialName("name") val `name`: String,
@@ -1112,11 +1183,11 @@ data class ClassifyRequest(
 
 @Serializable
 data class CompletionOrchestrateRequest(
-    @SerialName("history") val `history`: List<CalcTokensRequestHistoryItem>,
+    @SerialName("history") val `history`: List<CompletionStreamRequestHistoryItem>,
     @SerialName("modelId") val `modelId`: String,
     @SerialName("kvCache") val `kvCache`: CompletionStreamRequestKvCache? = null,
     @SerialName("prefill") val `prefill`: Boolean? = null,
-    @SerialName("tools") val `tools`: List<CalcTokensRequestToolsItem>? = null,
+    @SerialName("tools") val `tools`: List<CompletionStreamRequestToolsItem>? = null,
     @SerialName("stream") val `stream`: Boolean,
     @SerialName("generationParams") val `generationParams`: CompletionStreamRequestGenerationParams? = null,
     @SerialName("captureThinking") val `captureThinking`: Boolean? = null,
@@ -1127,6 +1198,28 @@ data class CompletionOrchestrateRequest(
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "completionOrchestrate",
     @SerialName("maxToolTurns") val `maxToolTurns`: Long? = null,
+)
+
+@Serializable
+data class CompletionStreamRequestHistoryItem(
+    @SerialName("role") val `role`: String,
+    @SerialName("content") val `content`: String? = null,
+    @SerialName("attachments") val `attachments`: List<CompletionStreamRequestHistoryItemAttachmentsItem>? = null,
+    @SerialName("toolCalls") val `toolCalls`: List<CompletionStreamRequestHistoryItemToolCallsItem>? = null,
+    @SerialName("toolCallId") val `toolCallId`: String? = null,
+    @SerialName("toolName") val `toolName`: String? = null,
+)
+
+@Serializable
+data class CompletionStreamRequestHistoryItemAttachmentsItem(
+    @SerialName("path") val `path`: String,
+)
+
+@Serializable
+data class CompletionStreamRequestHistoryItemToolCallsItem(
+    @SerialName("id") val `id`: String? = null,
+    @SerialName("name") val `name`: String,
+    @SerialName("arguments") val `arguments`: Map<String, JsonElement>,
 )
 
 @Serializable(with = CompletionStreamRequestKvCacheSerializer::class)
@@ -1156,6 +1249,17 @@ internal object CompletionStreamRequestKvCacheSerializer : KSerializer<Completio
         }
     }
 }
+
+@Serializable
+data class CompletionStreamRequestToolsItem(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("type") val `type`: String = "function",
+    @SerialName("name") val `name`: String,
+    @SerialName("description") val `description`: String,
+    @SerialName("deferLoading") val `deferLoading`: Boolean? = null,
+    @SerialName("group") val `group`: String? = null,
+    @SerialName("parameters") val `parameters`: JsonObject,
+)
 
 @Serializable
 data class CompletionStreamRequestGenerationParams(
@@ -1244,11 +1348,11 @@ data class CompletionStreamRequestResponseFormatJsonSchemaJsonSchema(
 
 @Serializable
 data class CompletionStreamRequest(
-    @SerialName("history") val `history`: List<CalcTokensRequestHistoryItem>,
+    @SerialName("history") val `history`: List<CompletionStreamRequestHistoryItem>,
     @SerialName("modelId") val `modelId`: String,
     @SerialName("kvCache") val `kvCache`: CompletionStreamRequestKvCache? = null,
     @SerialName("prefill") val `prefill`: Boolean? = null,
-    @SerialName("tools") val `tools`: List<CalcTokensRequestToolsItem>? = null,
+    @SerialName("tools") val `tools`: List<CompletionStreamRequestToolsItem>? = null,
     @SerialName("stream") val `stream`: Boolean,
     @SerialName("generationParams") val `generationParams`: CompletionStreamRequestGenerationParams? = null,
     @SerialName("captureThinking") val `captureThinking`: Boolean? = null,

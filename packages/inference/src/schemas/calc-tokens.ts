@@ -7,30 +7,26 @@ const text = z.string().describe('Raw text, or the final user turn when history 
 const history = z
   .array(historyMessageSchema)
   .describe('Conversation to render with the loaded model chat template.')
+const nonEmptyHistory = z
+  .array(historyMessageSchema)
+  .min(1)
+  .describe('Conversation to render with the loaded model chat template.')
 const tools = z.array(toolSchema).optional().describe('Tools to include in the rendered prompt.')
 
-const textFields = {
+const fields = {
   modelId,
-  text,
+  text: text.optional(),
   history: history.optional(),
   tools
 }
-const historyFields = {
-  modelId,
-  text: text.optional(),
-  history: history.min(1),
-  tools
-}
+const requiredInput = z.union([z.object({ text }), z.object({ history: nonEmptyHistory })])
 
-export const calcTokensParamsSchema = z.union([
-  z.object(textFields).strict(),
-  z.object(historyFields).strict()
-])
+export const calcTokensParamsSchema = z.object(fields).strict().and(requiredInput)
 
-export const calcTokensRequestSchema = z.union([
-  z.object({ ...textFields, type: z.literal('calcTokens') }).strict(),
-  z.object({ ...historyFields, type: z.literal('calcTokens') }).strict()
-])
+export const calcTokensRequestSchema = z
+  .object({ ...fields, type: z.literal('calcTokens') })
+  .strict()
+  .and(requiredInput)
 
 export const calcTokensResponseSchema = z.object({
   type: z.literal('calcTokens'),

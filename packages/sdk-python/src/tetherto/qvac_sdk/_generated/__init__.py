@@ -26,7 +26,6 @@ from .models import (
     BciTranscribeResponse,
     BciTranscribeStreamRequest,
     BciTranscribeStreamResponse,
-    CalcTokensRequest,
     CalcTokensResponse,
     CancelResponse,
     ClassifyRequest,
@@ -119,6 +118,7 @@ from .models import (
     WorldStepStreamRequest,
     WorldStepStreamResponse,
 )
+from .models.calcTokens import Request as CalcTokensRequest
 from .models.cancel import Request as CancelRequest
 from .models.decide import Request as DecideRequest
 from .models.deleteCache import Request as DeleteCacheRequest
