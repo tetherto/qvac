@@ -125,18 +125,13 @@ export class DeferredToolsExecutor extends AbstractModelExecutor<typeof deferred
     })
     const text = await result.text
     const toolCalls = ((await result.toolCalls) ?? []) as ToolCallLike[]
-    const stats = (await result.stats) as
-      { promptTokens?: number; cacheTokens?: number } | undefined
+    const stats = (await result.stats) as { promptTokens?: number } | undefined
     const final = (await result.final) as { raw?: { fullText?: string } }
-    const promptTokens =
-      typeof stats?.promptTokens === 'number'
-        ? stats.promptTokens + (stats.cacheTokens ?? 0)
-        : undefined
     return {
       text,
       rawText: final.raw?.fullText ?? text,
       toolCalls,
-      promptTokens
+      promptTokens: stats?.promptTokens
     }
   }
 
