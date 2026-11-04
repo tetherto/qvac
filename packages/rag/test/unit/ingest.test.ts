@@ -319,3 +319,30 @@ test('a document that fails mid-batch keeps its old generation and the next writ
   const deleted = await reopened.deleteDocuments({ namespace: 'ns', documentIds: ['a'] })
   t.alike(deleted.deleted, ['a'], 'the next transaction gets the lock')
 })
+
+test('metadata that cannot be stored as JSON is rejected before any write', async (t) => {
+  const { rag, spaceId } = await openRag(t)
+  const circular: Record<string, unknown> = {}
+  circular.self = circular
+
+  for (const [label, metadata] of [
+    ['bigint', { sourceId: 1n }],
+    ['circular', circular]
+  ] as const) {
+    await rejectsWithCode(
+      t,
+      rag.ingest({
+        namespace: 'ns',
+        documents: [
+          doc('first', spaceId, [['ok', [1, 0, 0]]]),
+          { ...doc('second', spaceId, [['bad', [1, 0, 0]]]), metadata }
+        ]
+      }),
+      ERR_CODES.INVALID_INPUT,
+      label
+    )
+  }
+
+  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], k: 10 })
+  t.is(hits.length, 0, 'the valid first document was not committed either')
+})

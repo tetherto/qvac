@@ -83,6 +83,23 @@ export function toVector(value: Float32Array | number[], label: string): Float32
   return vector
 }
 
+// Metadata is stored as JSON, so anything JSON can't encode is rejected before
+// the first write rather than failing midway through the batch.
+function toJsonMetadata(
+  id: string,
+  metadata: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined {
+  if (metadata === undefined) return undefined
+  try {
+    return JSON.parse(JSON.stringify(metadata)) as Record<string, unknown>
+  } catch (error) {
+    throw new QvacErrorRAG({
+      code: ERR_CODES.INVALID_INPUT,
+      adds: `document '${id}' metadata is not JSON-serializable: ${error instanceof Error ? error.message : String(error)}`
+    })
+  }
+}
+
 export function parseIngest(params: unknown): { namespace: string; documents: ValidDocument[] } {
   const parsed = ingestSchema.safeParse(params)
   if (!parsed.success) throw invalidInput(parsed.error)
@@ -112,7 +129,7 @@ export function parseIngest(params: unknown): { namespace: string; documents: Va
         spaceId: chunk.spaceId
       }
     })
-    return { id: doc.id, metadata: doc.metadata, chunks }
+    return { id: doc.id, metadata: toJsonMetadata(doc.id, doc.metadata), chunks }
   })
   return { namespace: parsed.data.namespace, documents }
 }
