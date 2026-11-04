@@ -241,7 +241,11 @@
         "timeoutMinutes": 30,
         "secrets": [
           "QASE_API_TOKEN"
-        ]
+        ],
+        "perfReport": {
+          "title": "OCR-GGML Performance Report (All Platforms)",
+          "exclude": "full-suite|canvasSize lab_results"
+        }
       }
     },
     "test:mobile": {
