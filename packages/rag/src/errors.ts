@@ -2,12 +2,13 @@ import { QvacErrorBase, addCodes, type ErrorCodesMap } from '@qvac/error'
 
 export class QvacErrorRAG extends QvacErrorBase {}
 
-// Codes retired in 1.0 are not reused.
+// Codes retired in 0.10 are not reused.
 export const ERR_CODES = Object.freeze({
   INVALID_INPUT: 14008,
   DUPLICATE_DOCUMENT_ID: 14010,
   DB_OPERATION_FAILED: 14014,
   DEPENDENCY_REQUIRED: 14015,
+  OPERATION_CANCELLED: 14016,
   EMBEDDING_DIMENSION_MISMATCH: 14018,
   NOT_READY: 14019,
   NAMESPACE_NOT_FOUND: 14020,
@@ -34,6 +35,10 @@ const definitions: ErrorCodesMap = {
   [ERR_CODES.DEPENDENCY_REQUIRED]: {
     name: 'DEPENDENCY_REQUIRED',
     message: (message) => `Required dependency missing: ${message}`
+  },
+  [ERR_CODES.OPERATION_CANCELLED]: {
+    name: 'OPERATION_CANCELLED',
+    message: 'Operation was cancelled'
   },
   [ERR_CODES.EMBEDDING_DIMENSION_MISMATCH]: {
     name: 'EMBEDDING_DIMENSION_MISMATCH',
@@ -69,4 +74,4 @@ const definitions: ErrorCodesMap = {
   }
 }
 
-addCodes(definitions, { name: '@qvac/rag', version: '1.0.0' })
+addCodes(definitions, { name: '@qvac/rag', version: '0.10.0' })

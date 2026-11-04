@@ -88,6 +88,30 @@ test('a HyperDB that fails to open is closed before ready() retries', async (t) 
   await rag.close()
 })
 
+test('close waits for in-flight calls to finish', async (t) => {
+  const store = new Corestore(await tmp(t))
+  t.teardown(() => store.close())
+  const rag = createRag({ corestore: store })
+  await rag.ready()
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+
+  const documents = []
+  for (let i = 0; i < 20; i++) documents.push(doc(`d${i}`, spaceId, [[`text ${i}`, [1, 0, 0]]]))
+  const ingesting = rag.ingest({ namespace: 'ns', documents })
+  const searching = rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], k: 1 })
+  await rag.close()
+
+  const result = await ingesting
+  t.is(result.documents.length, 20, 'every document committed before close returned')
+  t.ok(Array.isArray(await searching), 'the search started before close completed')
+
+  const reopened = createRag({ corestore: store })
+  await reopened.ready()
+  const hits = await reopened.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], k: 50 })
+  t.is(hits.length, 20)
+  await reopened.close()
+})
+
 test('close leaves the caller-owned corestore open', async (t) => {
   const store = new Corestore(await tmp(t))
   t.teardown(() => store.close())

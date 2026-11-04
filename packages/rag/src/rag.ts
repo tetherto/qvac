@@ -65,6 +65,7 @@ export function createRag(options: CreateRagOptions): Rag {
   let db: HyperDBInstance | null = null
   let opening: Promise<void> | null = null
   let closed = false
+  const inflight = new Set<Promise<unknown>>()
 
   // A failed open is not cached, so ready() can be retried.
   function ready(): Promise<void> {
@@ -95,8 +96,19 @@ export function createRag(options: CreateRagOptions): Rag {
     if (closed) return
     closed = true
     if (opening) await opening.catch(() => {})
+    await Promise.allSettled(inflight)
     if (db) await db.close()
     db = null
+  }
+
+  // close() waits for every call started before it. Each call checks
+  // database() before its first await, so nothing starts once close() runs.
+  function track<T>(run: () => Promise<T>): Promise<T> {
+    const pending = run()
+    inflight.add(pending)
+    const settle = () => inflight.delete(pending)
+    pending.then(settle, settle)
+    return pending
   }
 
   function database(): HyperDBInstance {
@@ -179,8 +191,8 @@ export function createRag(options: CreateRagOptions): Rag {
 
   // A direct caller names documents explicitly, so an unknown one is an error.
   async function search(params: SearchParams): Promise<SearchHit[]> {
-    const { scope, vector, k } = parseSearch(params)
-    return await runSearch(parseScope(scope), vector, k, true)
+    const { scope, vector, k, signal } = parseSearch(params)
+    return await runSearch(parseScope(scope), vector, k, { strict: true, signal })
   }
 
   // A handle's documents are granted, not chosen per request: an ID the
@@ -190,8 +202,8 @@ export function createRag(options: CreateRagOptions): Rag {
     const bound = parseScope(scope)
     return {
       async search(params: ScopedSearchParams): Promise<SearchHit[]> {
-        const { scope: request, vector, k } = parseSearch({ scope: undefined, ...params })
-        return await runSearch(intersectScope(bound, request), vector, k, false)
+        const { scope: request, vector, k, signal } = parseSearch({ scope: undefined, ...params })
+        return await runSearch(intersectScope(bound, request), vector, k, { strict: false, signal })
       }
     }
   }
@@ -200,15 +212,26 @@ export function createRag(options: CreateRagOptions): Rag {
     scope: SearchScope,
     vector: Float32Array,
     k: number,
-    strict: boolean
+    options: { strict: boolean; signal?: AbortSignal }
   ): Promise<SearchHit[]> {
     return withSnapshot(database(), async (reader) => {
       const { space } = await readNamespace(reader, scope.namespace)
-      return scanSearch(reader, space, scope, vector, k, { strict })
+      return scanSearch(reader, space, scope, vector, k, options)
     })
   }
 
-  return { ready, close, createNamespace, ingest, deleteDocuments, search, scoped }
+  return {
+    ready,
+    close,
+    createNamespace: (params) => track(() => createNamespace(params)),
+    ingest: (params) => track(() => ingest(params)),
+    deleteDocuments: (params) => track(() => deleteDocuments(params)),
+    search: (params) => track(() => search(params)),
+    scoped: (scope) => {
+      const handle = scoped(scope)
+      return { search: (params) => track(() => handle.search(params)) }
+    }
+  }
 }
 
 async function commitDocument(

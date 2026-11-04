@@ -55,7 +55,13 @@ const searchSchema = z
   .object({
     scope: z.unknown(),
     vector: vectorSchema,
-    k: z.number().int().positive()
+    k: z.number().int().positive(),
+    signal: z
+      .custom<AbortSignal>(
+        (value) => typeof (value as { aborted?: unknown } | null)?.aborted === 'boolean',
+        'signal must be an AbortSignal'
+      )
+      .optional()
   })
   .strict()
 
@@ -143,13 +149,21 @@ export function parseDelete(params: unknown): DeleteDocumentsParams {
   }
 }
 
-export function parseSearch(params: unknown): { scope: unknown; vector: Float32Array; k: number } {
+export interface ValidSearch {
+  scope: unknown
+  vector: Float32Array
+  k: number
+  signal?: AbortSignal
+}
+
+export function parseSearch(params: unknown): ValidSearch {
   const parsed = searchSchema.safeParse(params)
   if (!parsed.success) throw invalidInput(parsed.error)
   return {
     scope: parsed.data.scope,
     vector: toVector(parsed.data.vector, 'vector'),
-    k: parsed.data.k
+    k: parsed.data.k,
+    signal: parsed.data.signal
   }
 }
 

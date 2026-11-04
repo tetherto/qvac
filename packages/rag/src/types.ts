@@ -81,6 +81,8 @@ export interface SearchParams {
   scope: SearchScope
   vector: Float32Array | number[]
   k: number
+  // Checked between scan batches; an aborted search fails with OPERATION_CANCELLED.
+  signal?: AbortSignal
 }
 
 export interface ScopedSearchParams {
@@ -88,6 +90,7 @@ export interface ScopedSearchParams {
   scope?: Partial<SearchScope>
   vector: Float32Array | number[]
   k: number
+  signal?: AbortSignal
 }
 
 export interface SearchHit {

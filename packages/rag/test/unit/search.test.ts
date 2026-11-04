@@ -213,3 +213,39 @@ test('reusing an input buffer after the call does not change what was stored', a
   const [hit] = await searching
   t.is(hit.score, 1, 'both the stored vector and the query kept their values')
 })
+
+test('an aborted signal cancels the search', async (t) => {
+  const { rag, spaceId } = await openRag(t)
+  const chunks: Array<[string, number[]]> = []
+  for (let i = 0; i < SCAN_BATCH_SIZE * 2; i++) chunks.push([`chunk ${i}`, [1, 0, 0]])
+  await rag.ingest({ namespace: 'ns', documents: [doc('big', spaceId, chunks)] })
+  const query = { scope: { namespace: 'ns' }, vector: [1, 0, 0], k: 1 }
+
+  await rejectsWithCode(
+    t,
+    rag.search({ ...query, signal: { aborted: true } as AbortSignal }),
+    ERR_CODES.OPERATION_CANCELLED,
+    'already aborted'
+  )
+
+  // Aborts on the second check, i.e. between scan batches.
+  let checks = 0
+  const midScan = {
+    get aborted() {
+      return ++checks > 1
+    }
+  } as AbortSignal
+  await rejectsWithCode(
+    t,
+    rag.scoped({ namespace: 'ns' }).search({ vector: [1, 0, 0], k: 1, signal: midScan }),
+    ERR_CODES.OPERATION_CANCELLED,
+    'aborted between batches'
+  )
+
+  await rejectsWithCode(
+    t,
+    rag.search({ ...query, signal: 'stop' as never }),
+    ERR_CODES.INVALID_INPUT,
+    'a non-signal is rejected'
+  )
+})

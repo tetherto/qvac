@@ -61,7 +61,7 @@ See [`examples/quickstart.ts`](examples/quickstart.ts) for a runnable version.
 
 ### `createRag({ corestore })`
 
-Creates a RAG instance on a caller-owned Corestore. `close()` closes the RAG's HyperDB but leaves the Corestore open. Call `ready()` before any other method.
+Creates a RAG instance on a caller-owned Corestore. `close()` waits for calls already in progress, then closes the RAG's HyperDB but leaves the Corestore open; calls made after it fail with `NOT_READY`. Call `ready()` before any other method.
 
 ### `createNamespace({ name, space })`
 
@@ -84,9 +84,9 @@ Returns `{ documents: [{ id, generation, chunkCount }], revision }`.
 
 Deletes the documents and their chunks in one batch. Unknown IDs are ignored. Returns `{ deleted, revision }`.
 
-### `search({ scope, vector, k })`
+### `search({ scope, vector, k, signal? })`
 
-Returns up to `k` hits `{ namespace, documentId, chunkId, ordinal, content, metadataJson?, score }`, best first. The score is the dot product, or the cosine similarity for `cosine` spaces.
+Returns up to `k` hits `{ namespace, documentId, chunkId, ordinal, content, metadataJson?, score }`, best first. The score is the dot product, or the cosine similarity for `cosine` spaces. An aborted `signal` stops the scan between batches with `OPERATION_CANCELLED`.
 
 `scope` is `{ namespace, documentIds? }`. Only chunks inside the scope are read and ranked, so a restricted search fills its top `k` from allowed documents. Search fails closed:
 

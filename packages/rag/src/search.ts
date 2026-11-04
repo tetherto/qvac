@@ -26,8 +26,9 @@ export async function scanSearch(
   scope: SearchScope,
   query: Float32Array,
   k: number,
-  options: { strict: boolean }
+  options: { strict: boolean; signal?: AbortSignal }
 ): Promise<SearchHit[]> {
+  throwIfAborted(options.signal)
   if (query.length !== space.dimensions) {
     throw new QvacErrorRAG({
       code: ERR_CODES.EMBEDDING_DIMENSION_MISMATCH,
@@ -45,6 +46,7 @@ export async function scanSearch(
   const top: Ranked[] = []
 
   function scoreBatch() {
+    throwIfAborted(options.signal)
     for (let row = 0; row < batch.length; row++) {
       const offset = row * dims
       let score = dot(query, vectors, offset)
@@ -106,6 +108,10 @@ async function resolveRanges(
     ranges.push({ gte: key, lte: key })
   })
   return ranges
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new QvacErrorRAG({ code: ERR_CODES.OPERATION_CANCELLED })
 }
 
 function offer(top: Ranked[], k: number, score: number, chunk: ChunkRecord): void {
