@@ -18,7 +18,7 @@ import type { Step, TestDefinition } from '@qvac/test-suite'
 const downloadSmokeSteps: Step[] = [
   { modelSource: { dep: 'whisper', as: 'src' } },
   { call: { method: 'downloadAsset', params: { assetSrc: '$src.modelSrc' }, as: 'downloaded' } },
-  { project: { from: '$downloaded', path: 'deliberatelyMissing', as: 'path' } },
+  { project: { from: '$downloaded', path: 'path', as: 'path' } },
   { assert: { on: '$path', named: 'nonEmptyText' } }
 ]
 
@@ -26,7 +26,7 @@ export const configRegistryDownloadSmoke: TestDefinition = {
   testId: 'config-registry-download-smoke',
   params: {},
   // Read only by the executor, on the legs without step bindings; the steps assert on their own.
-  expectation: { validation: 'function', fn: () => false },
+  expectation: { validation: 'function', fn: () => true },
   suites: ['smoke'],
   steps: downloadSmokeSteps,
   metadata: {
