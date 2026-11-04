@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update the shared `speech-cpp` native dependency to `2026-10-29`
   ([#5420](https://github.com/tetherto/qvac/pull/5420),
   [#5447](https://github.com/tetherto/qvac/pull/5447)).
+- Update the shared `speech-cpp` native dependency to `2026-11-03`
+  ([registry #474](https://github.com/tetherto/qvac-registry-vcpkg/pull/474)).
 - `assessFit` names the device and each stage's device by its ggml device name
   (`CPU`, `CUDA0`, `MTL0`, `GPUOpenCL`), counts Android's OpenCL GPU as sharing
   host memory, and gives a device that reports no memory of its own the
