@@ -60,6 +60,7 @@ export interface ResponsesHandlerParams {
   maxOutputTokens: number | undefined
   parallelToolCalls: boolean
   previousResponseId: string | null
+  kvCached?: boolean
 }
 
 export async function writeBlockingResponse(
@@ -104,6 +105,7 @@ export async function writeBlockingResponse(
     parallelToolCalls: p.parallelToolCalls,
     previousResponseId: p.previousResponseId,
     store: p.storeEnabled,
+    ...(p.kvCached ? { kvCached: true } : {}),
     completionTokens,
     ...(stopReason !== undefined ? { stopReason } : {}),
     ...(stats !== undefined ? { stats } : {})
@@ -312,6 +314,7 @@ export async function writeStreamingResponse(
     parallelToolCalls: p.parallelToolCalls,
     previousResponseId: p.previousResponseId,
     store: p.storeEnabled,
+    ...(p.kvCached ? { kvCached: true } : {}),
     messageItemId: msgId,
     completionTokens,
     ...(hasToolCalls ? { functionCallItemIds: fcItemIds } : {}),

@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
-import type { IncomingHttpHeaders } from 'node:http'
 import { z } from 'zod'
 import type { Tool } from '@qvac/sdk'
+import { RESPONSES_KV_CACHE_PREFIX } from '@/serve/lib/responses-kv-cache'
 import {
   responseFormat,
   toolDef,
@@ -89,25 +89,46 @@ export class InvalidResponsesBackgroundError extends Error {
 }
 
 export class InvalidResponsesKvCacheKeyError extends Error {
-  constructor() {
-    super('KV cache key must be a nonempty string of at most 512 UTF-8 bytes.')
+  constructor(message = 'KV cache key must be a nonempty string of at most 512 UTF-8 bytes.') {
+    super(message)
     this.name = 'InvalidResponsesKvCacheKeyError'
   }
 }
 
+function headerValues(rawHeaders: readonly string[], name: string): string[] {
+  const values: string[] = []
+  for (let i = 0; i + 1 < rawHeaders.length; i += 2) {
+    if (rawHeaders[i]!.toLowerCase() === name) values.push(rawHeaders[i + 1]!)
+  }
+  return values
+}
+
 function responsesKvCacheKey(
-  headers: IncomingHttpHeaders,
+  rawHeaders: readonly string[],
   body: ResponsesBody
 ): string | undefined {
-  // A supplied header takes precedence; metadata is only a fallback. Validate
-  // before trimming/hashing so padding and multibyte strings cannot bypass the limit.
-  const key: unknown = headers['x-qvac-kv-cache-key'] ?? body.metadata?.['qvac_kv_cache_key']
+  // Node joins a repeated header into "a, b", which would hash to an unrelated session.
+  const fromHeader = headerValues(rawHeaders, 'x-qvac-kv-cache-key')
+  if (fromHeader.length > 1) {
+    throw new InvalidResponsesKvCacheKeyError('Send the X-QVAC-KV-Cache-Key header only once.')
+  }
+  // Header first, then metadata, then OpenAI's `prompt_cache_key` (Codex sends
+  // one per conversation). A source that is present but invalid is rejected,
+  // not skipped. Validate before trimming/hashing so padding and multibyte
+  // strings cannot bypass the limit.
+  const fromMetadata = body.metadata?.['qvac_kv_cache_key']
+  const key: unknown =
+    fromHeader.length > 0
+      ? fromHeader[0]
+      : fromMetadata !== undefined
+        ? fromMetadata
+        : (body as Record<string, unknown>)['prompt_cache_key']
   if (key === undefined) return undefined
   if (typeof key !== 'string' || Buffer.byteLength(key, 'utf8') > 512 || key.trim().length === 0) {
     throw new InvalidResponsesKvCacheKeyError()
   }
   // Never give an opaque caller key to the SDK's filesystem cache layout.
-  return `responses-${crypto.createHash('sha256').update(key).digest('hex')}`
+  return `${RESPONSES_KV_CACHE_PREFIX}${crypto.createHash('sha256').update(key).digest('hex')}`
 }
 
 export function validateResponsesStatefulOptions(body: Record<string, unknown>): {
@@ -428,7 +449,7 @@ export interface SdkResponsesArgs {
 
 export function toSdkResponsesArgs(
   body: ResponsesBody,
-  headers: IncomingHttpHeaders = {}
+  rawHeaders: readonly string[] = []
 ): SdkResponsesArgs {
   const { previousResponseId, storeEnabled } = validateResponsesStatefulOptions(
     body as Record<string, unknown>
@@ -451,7 +472,7 @@ export function toSdkResponsesArgs(
     typeof body.parallel_tool_calls === 'boolean' ? body.parallel_tool_calls : undefined
 
   return {
-    kvCache: responsesKvCacheKey(headers, body),
+    kvCache: responsesKvCacheKey(rawHeaders, body),
     history,
     tools,
     generationParams: withParallelToolCalls(

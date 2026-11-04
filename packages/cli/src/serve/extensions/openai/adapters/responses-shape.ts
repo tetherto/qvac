@@ -50,6 +50,8 @@ export interface BuildResponseObjectParams {
    * tool calls take precedence with `requires_action`.
    */
   stopReason?: string
+  /** The request named a KV cache session; only then is `qvac_cache_tokens` reported. */
+  kvCached?: boolean
 }
 
 export function buildResponseObject(params: BuildResponseObjectParams): Record<string, unknown> {
@@ -94,7 +96,10 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
   const cacheTokens = params.stats?.cacheTokens
   const usage = {
     input_tokens: inputTokens,
-    ...(typeof cacheTokens === 'number' && Number.isFinite(cacheTokens) && cacheTokens >= 0
+    ...(params.kvCached &&
+    typeof cacheTokens === 'number' &&
+    Number.isFinite(cacheTokens) &&
+    cacheTokens >= 0
       ? { qvac_cache_tokens: cacheTokens }
       : {}),
     output_tokens: outputTokens,

@@ -3,6 +3,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion } from '@qvac/sdk'
 import type { Tool } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
+import { responsesKvCacheRetention } from '@/serve/lib/responses-kv-cache'
 import { initSSE } from '@/serve/lib/sse'
 import { requireModel } from '@/serve/core/plugins/require-model'
 import { logUnsupported } from '@/serve/core/plugins/log-unsupported'
@@ -74,14 +75,16 @@ expired \`previous_response_id\` returns \`404 previous_response_not_found\`.
 **\`store: false\`** opts out of storage — the response is returned but not
 addressable via GET / DELETE / input_items.
 
-**KV cache (opt-in)**: send \`X-QVAC-KV-Cache-Key: <session-key>\` or, as a
-fallback, \`metadata.qvac_kv_cache_key\`. The header wins. Keys must be nonempty
-strings of at most 512 UTF-8 bytes and are SHA-256 hashed before filesystem use.
-Reuse the key with the same conversation's growing history on every request;
-\`previous_response_id\` and \`store\` do not select a cache session. Without a
-key, Responses remains uncached. SDK cache occupancy is reported as
-\`usage.qvac_cache_tokens\` (also in the final SSE response); this is not a
-per-request count of reused tokens.
+**KV cache (opt-in)**: send \`X-QVAC-KV-Cache-Key: <session-key>\` (once), or
+\`metadata.qvac_kv_cache_key\`, or OpenAI's \`prompt_cache_key\`, in that order of
+precedence. Keys must be nonempty strings of at most 512 UTF-8 bytes and are
+SHA-256 hashed before filesystem use. Reuse the key with the same conversation's
+growing history on every request; \`previous_response_id\` and \`store\` do not
+select a cache session. Without a key, Responses remains uncached. These caches
+follow the automatic cache's retention (24-hour idle TTL, 4 GiB LRU quota) and
+\`DELETE /qvac/v1/kv_cache\` reclaims them. On a keyed request, SDK cache
+occupancy is reported as \`usage.qvac_cache_tokens\` (also in the final SSE
+response); this is not a per-request count of reused tokens.
 
 **Rejections**:
 - \`conversation\` → \`400 conversation_not_supported\` (Conversation persistence not implemented)
@@ -143,7 +146,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
       let sdk
       try {
-        sdk = toSdkResponsesArgs(req.body, req.headers)
+        sdk = toSdkResponsesArgs(req.body, req.raw.rawHeaders)
       } catch (err) {
         if (err instanceof InvalidResponsesKvCacheKeyError) {
           throw new HttpError(400, 'invalid_kv_cache_key', err.message)
@@ -238,7 +241,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         topP: params.topP,
         maxOutputTokens: params.maxOutputTokens,
         parallelToolCalls: params.parallelToolCalls,
-        previousResponseId: params.previousResponseId
+        previousResponseId: params.previousResponseId,
+        ...(sdk.kvCache !== undefined ? { kvCached: true } : {})
       }
 
       const completionFn = openaiState(req.server.qvac).completionOverride ?? completion
@@ -265,13 +269,22 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         }
       }
 
-      if (streaming) {
-        initSSE(reply, { [VOLATILE_HEADER]: RESPONSES_VOLATILE_STUB })
-        await writeStreamingResponse(reply.raw, writerParams, runTurn(true))
-      } else {
-        // The writer ends the raw response on success. Keep the reply managed
-        // until then so inference errors before headers can produce HTTP errors.
-        await writeBlockingResponse(reply.raw, writerParams, runTurn(false))
+      const releaseCache =
+        sdk.kvCache !== undefined ? responsesKvCacheRetention.acquire(sdk.kvCache) : undefined
+      try {
+        if (streaming) {
+          initSSE(reply, { [VOLATILE_HEADER]: RESPONSES_VOLATILE_STUB })
+          await writeStreamingResponse(reply.raw, writerParams, runTurn(true))
+        } else {
+          // The writer ends the raw response on success. Keep the reply managed
+          // until then so inference errors before headers can produce HTTP errors.
+          await writeBlockingResponse(reply.raw, writerParams, runTurn(false))
+        }
+      } finally {
+        if (releaseCache) {
+          releaseCache()
+          responsesKvCacheRetention.maybeSweep(ctx.logger)
+        }
       }
     }
   )

@@ -73,7 +73,7 @@ describe('serve: Responses KV cache', () => {
     )
   })
   for (const stream of [false, true]) {
-    for (const source of ['header', 'metadata']) {
+    for (const source of ['header', 'metadata', 'prompt_cache_key']) {
       it(`${source} reaches the SDK (stream=${stream})`, { timeout: 15000 }, async (t) => {
         const app = await server(t)
         await app.ready()
@@ -93,7 +93,8 @@ describe('serve: Responses KV cache', () => {
             model: 'test-llm',
             input: 'hello',
             stream,
-            ...(source === 'metadata' ? { metadata: { qvac_kv_cache_key: 'session-a' } } : {})
+            ...(source === 'metadata' ? { metadata: { qvac_kv_cache_key: 'session-a' } } : {}),
+            ...(source === 'prompt_cache_key' ? { prompt_cache_key: 'session-a' } : {})
           }
         })
         assert.equal(res.statusCode, 200, res.payload)
@@ -120,7 +121,7 @@ describe('serve: Responses KV cache', () => {
       await app.ready()
       openaiState(app.qvac).completionOverride = (params) => {
         assert.equal('kvCache' in params, false)
-        return stubRun()
+        return stubRun({ cacheTokens: 128, emittedTokens: 1 })
       }
       const res = await app.inject({
         method: 'POST',
@@ -129,9 +130,15 @@ describe('serve: Responses KV cache', () => {
         payload: { model: 'test-llm', input: 'hello', stream }
       })
       assert.equal(res.statusCode, 200, res.payload)
-      if (!stream) {
-        assert.deepEqual(res.json().usage, { input_tokens: 0, output_tokens: 1, total_tokens: 1 })
-      }
+      // Occupancy is reported only for a named session.
+      const body = stream
+        ? (
+            collectSSE(res.payload).find(
+              (e) => (e.data as { type?: string }).type === 'response.completed'
+            )?.data as { response: Record<string, unknown> }
+          ).response
+        : res.json()
+      assert.deepEqual(body.usage, { input_tokens: 0, output_tokens: 1, total_tokens: 1 })
     })
 
     it(
@@ -203,6 +210,45 @@ describe('serve: Responses KV cache', () => {
       }
     })
     assert.equal(res.statusCode, 200, res.payload)
+  })
+
+  it('prefers metadata over prompt_cache_key', { timeout: 15000 }, async (t) => {
+    const app = await server(t)
+    await app.ready()
+    openaiState(app.qvac).completionOverride = (params) => {
+      assert.equal(params.kvCache, cacheKey('metadata-session'))
+      return stubRun()
+    }
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      headers: JSON_HEADERS,
+      payload: {
+        model: 'test-llm',
+        input: 'hello',
+        metadata: { qvac_kv_cache_key: 'metadata-session' },
+        prompt_cache_key: 'prompt-session'
+      }
+    })
+    assert.equal(res.statusCode, 200, res.payload)
+  })
+
+  it('rejects a repeated header instead of joining its values', { timeout: 15000 }, async (t) => {
+    const app = await server(t)
+    await app.ready()
+    let called = false
+    openaiState(app.qvac).completionOverride = () => {
+      called = true
+      return stubRun()
+    }
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      headers: { ...JSON_HEADERS, 'X-QVAC-KV-Cache-Key': ['session-a', 'session-b'] },
+      payload: { model: 'test-llm', input: 'hello' }
+    })
+    assertStatusAndError(res, 400, 'invalid_kv_cache_key')
+    assert.equal(called, false)
   })
 
   for (const key of [
