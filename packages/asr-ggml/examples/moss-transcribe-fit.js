@@ -10,5 +10,5 @@ if (!modelPath || !Number.isFinite(audioSeconds) || audioSeconds <= 0) {
 }
 
 ASRGgml.assessFit({ engine: 'moss-transcribe', modelPath, audioSeconds }).then((fit) => {
-  console.log(fit.report)
+  console.log(JSON.stringify(fit, null, 2))
 })

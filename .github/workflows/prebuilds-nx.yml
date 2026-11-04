@@ -17,6 +17,11 @@ on:
         required: false
         type: string
         default: "HEAD"
+      config-ref:
+        description: "Trusted package CI configuration ref. Empty uses base-ref; manual dispatch may select a reviewed branch or commit."
+        required: false
+        type: string
+        default: ""
   workflow_call:
     inputs:
       ref:
@@ -34,6 +39,11 @@ on:
         required: false
         type: string
         default: "HEAD"
+      config-ref:
+        description: "Trusted package CI configuration ref. Empty uses base-ref; manual dispatch may select a reviewed branch or commit."
+        required: false
+        type: string
+        default: ""
       reuse-workflow-file:
         description: "Enables cross-run prebuild reuse (pass the calling on-pr workflow basename, e.g. on-pr-nx.yml). Empty = always build fresh."
         required: false
@@ -74,6 +84,7 @@ jobs:
           target: build
           base-ref: ${{ inputs.base-ref }}
           head-ref: ${{ inputs.head-ref }}
+          config-ref: ${{ inputs.config-ref }}
           packages: ${{ inputs.packages }}
 
   prebuild:

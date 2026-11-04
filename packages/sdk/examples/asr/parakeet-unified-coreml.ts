@@ -3,17 +3,15 @@
  *
  * From packages/sdk:
  *   npx tsx examples/asr/parakeet-unified-coreml.ts \
- *     /path/to/parakeet-unified-en-0.6b.q4_0.gguf [16-kHz-wav-file]
+ *     /path/to/parakeet-unified-en-0.6b.q4_0.gguf <16-kHz-wav-file>
  *
  * The GGUF must be a regenerated Unified artifact. The five compiled Core ML
  * files are downloaded through the SDK registry and staged beside the GGUF.
- * The default audio is examples/audio/sample-16khz.wav.
  */
 import { downloadAsset, getModelInfo, loadModel, transcribe, unloadModel } from '@qvac/sdk'
 import { link, mkdir, mkdtemp, open, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 const MODEL_STEM = 'parakeet-unified-en-0.6b'
 const COREML_FILES = [
@@ -24,9 +22,8 @@ const COREML_FILES = [
   ['PARAKEET_UNIFIED_WEIGHT', 'weights/weight.bin']
 ] as const
 
-const defaultAudioPath = fileURLToPath(new URL('../audio/sample-16khz.wav', import.meta.url))
 const modelPath = process.argv[2]
-const audioPath = process.argv[3] ?? defaultAudioPath
+const audioPath = process.argv[3]
 
 async function checkModel(path: string): Promise<void> {
   const name = basename(path)
@@ -83,10 +80,10 @@ async function stageModel(path: string): Promise<{ modelSrc: string; dir: string
 }
 
 async function main(): Promise<void> {
-  if (!modelPath) {
+  if (!modelPath || !audioPath) {
     throw new Error(
       'Usage: npx tsx examples/asr/parakeet-unified-coreml.ts ' +
-        '<regenerated-unified-gguf> [16-kHz-wav-file]'
+        '<regenerated-unified-gguf> <16-kHz-wav-file>'
     )
   }
 

@@ -114,9 +114,12 @@ if (typeof workerBundle !== 'string') {
   throw new Error('bare-pack mobile bundle did not export a string')
 }
 await fs.writeFile(path.join(assetsDirectory, 'worker.bundle'), workerBundle)
+// The SDK package the bundle came from: the workspace checkout, or the
+// installed @qvac/sdk when this package is checked out on its own.
+const sdkPackageRoot = bundleSdkPath ?? packageDir(projectRoot, '@qvac/sdk')
 const runtimeAssets = [
-  fs.copyFile(path.join(sdkRoot, 'LICENSE'), path.join(assetsDirectory, 'LICENSE')),
-  fs.copyFile(path.join(sdkRoot, 'NOTICE'), path.join(assetsDirectory, 'NOTICE'))
+  fs.copyFile(path.join(sdkPackageRoot, 'LICENSE'), path.join(assetsDirectory, 'LICENSE')),
+  fs.copyFile(path.join(sdkPackageRoot, 'NOTICE'), path.join(assetsDirectory, 'NOTICE'))
 ]
 if (includesClassification) {
   runtimeAssets.push(
@@ -129,10 +132,7 @@ if (includesClassification) {
 await Promise.all(runtimeAssets)
 
 const manifest = JSON.parse(await fs.readFile(bundle.manifestPath, 'utf8'))
-const sdkPackagePath = bundleSdkPath
-  ? path.join(bundleSdkPath, 'package.json')
-  : path.join(projectRoot, 'node_modules', '@qvac', 'sdk', 'package.json')
-const sdkPackage = JSON.parse(await fs.readFile(sdkPackagePath, 'utf8'))
+const sdkPackage = JSON.parse(await fs.readFile(path.join(sdkPackageRoot, 'package.json'), 'utf8'))
 const addons = Array.isArray(manifest.addons) ? manifest.addons : []
 
 // bare-link 4 links the addons the worker entry's module graph loads on the

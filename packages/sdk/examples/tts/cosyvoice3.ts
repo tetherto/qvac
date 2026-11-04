@@ -5,7 +5,7 @@ import {
   type ModelProgressUpdate,
   TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0
 } from '@qvac/sdk'
-import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './utils'
+import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './utils.js'
 
 // CosyVoice3 (GGML): zero-shot speech with one conditioning control per
 // synthesis (emotion, pace, or instruct). The LLM GGUF's registry companion

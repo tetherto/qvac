@@ -95,15 +95,8 @@ const TranslationNmtcpp = class TranslationNmtcpp {
         if (modelType === "IndicTrans" &&
             (request.config["main-gpu"] !== undefined ||
                 request.config.main_gpu !== undefined)) {
-            return {
-                status: "error",
-                reason: "unsupported-config",
-                backend: "",
-                modelBytes: 0,
-                requiredBytes: 0,
-                freeBytes: 0,
-                report: "Fit with main-gpu selection is unavailable",
-            };
+            // The fitter cannot follow a main-gpu selection.
+            return { status: "unknown", devices: [], stats: {} };
         }
         // eslint-disable-next-line @typescript-eslint/no-require-imports -- native binding is resolved lazily.
         const binding = require("./binding");

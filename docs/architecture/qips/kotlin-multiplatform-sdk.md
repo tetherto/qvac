@@ -103,7 +103,7 @@ flowchart LR
 - Bare/BareKit owner signs off that Android service, iOS worklet, and desktop sidecar start, reconnect, terminate, and release resources repeatedly. Android service death must produce a structured terminal error for in-flight calls and allow a fresh client session; it must not silently replay non-idempotent calls.
 - Native inference owner signs off that each runtime profile uses existing version-matched `.bare` prebuilds, validates model checksums, and does not compile native code in consumer projects.
 - Mobile/release owner signs off on the artifact matrix, Maven staging smoke, signed checksums, NOTICE/license contents, and rollback of a mismatched runtime artifact.
-- Security reviewer signs off on desktop capability-token handshakes and Android Binder authorization. The bound service is non-exported, accepts only callers with the app's signature permission or an app-generated per-session secret, rejects unauthenticated frames before dispatch, and clears the secret on service teardown.
+- Security reviewer signs off on desktop capability-token handshakes and Android Binder authorization. The bound service is non-exported and has no intent filter, so Android restricts binding to the owning application's UID; the Binder surface carries no token because there is no cross-application caller. A signature permission or per-session secret with pre-dispatch rejection becomes required only if the service is ever exported or shared across applications.
 - Lead / Architect, Head of QVAC, and CTO decide whether the documented iOS in-process crash-isolation gap is acceptable for v1. If rejected, the iOS host gate fails and the target is removed from the v1 support matrix; it is not silently shipped with reduced guarantees.
 
 ### Runtime capability and support matrix
@@ -157,6 +157,7 @@ Trade-offs reviewers must accept:
 
 - Preserve SHA-256 model verification, Noise-encrypted P2P, firewall keys, local-only diagnostics, and app-sandbox cache storage.
 - Authenticate desktop loopback IPC with an inherited per-launch capability token and reject requests before normal dispatch when it is absent or invalid.
+- Bound the Android worker service to the owning application through `android:exported="false"` with no intent filter; add a Binder caller check only if the service is exported or shared across applications.
 - Never download executable worker/addon code at runtime on mobile; all code is linked or packaged at build time.
 - Treat Kotlin error causes and logs as local data; add no telemetry.
 

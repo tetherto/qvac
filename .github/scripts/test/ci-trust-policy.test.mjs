@@ -2028,7 +2028,7 @@ test('RPC server prebuilds consume PR-built npm Fabric artifacts', () => {
   // lands as a successful prebuild job, so the status reads needs.prebuild.result.
   assert.match(
     rpcPrPrebuild,
-    /reuse-workflow-file:\s*\$\{\{ needs\.detect-fabric-stack\.outputs\.fabric_stack == 'true' && '' \|\| 'on-pr-nx\.yml' \}\}/,
+    /reuse-workflow-file:\s*\$\{\{ needs\.detect-fabric-stack\.outputs\.fabric_stack != 'true' && !\(github\.event_name == 'workflow_dispatch' && inputs\.config_ref_override != ''\) && 'on-pr-nx\.yml' \|\| '' \}\}/,
   )
   assert.match(rpcPrPrebuild, /uses:\s*\.\/\.github\/workflows\/prebuilds-nx\.yml/)
   assert.match(rpcPrPrebuild, /fabric-consumers:\s*\$\{\{ needs\.matrix\.outputs\.fabricconsumers \}\}/)

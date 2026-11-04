@@ -29,6 +29,13 @@ import type {
   NormalizedAudioStream,
   StreamingSession,
 } from "../types";
+import {
+  validateParakeetBackend,
+  validateSpeakerAttribution,
+  type ParakeetSpeakerAttributionConfig,
+} from "./options";
+
+export type { ParakeetSpeakerAttributionConfig } from "./options";
 
 /**
  * Parakeet-specific configuration options. CTC, TDT, RNN-T, EOU, Nemotron,
@@ -39,6 +46,10 @@ export interface ParakeetConfig {
   maxThreads?: number;
   /** Enable the linked ggml GPU backend (Metal / Vulkan / OpenCL). */
   useGPU?: boolean;
+  /** Native ggml backend name or exact device name; omitted preserves automatic selection. */
+  backend?: string;
+  /** Combine this ASR model with a separate diarization model in batch run(). */
+  speakerAttribution?: ParakeetSpeakerAttributionConfig;
   /** Audio sample rate in Hz (default: 16000; engine assumes 16 kHz). */
   sampleRate?: number;
   /** Number of audio channels (default: 1, must be mono). */
@@ -165,6 +176,8 @@ export interface ParakeetReloadConfig {
 const PARAKEET_CONFIG_KEYS: readonly string[] = [
   "maxThreads",
   "useGPU",
+  "backend",
+  "speakerAttribution",
   "sampleRate",
   "channels",
   "captionEnabled",
@@ -294,8 +307,16 @@ export class ParakeetDriver implements AsrDriver {
     this.params = config.parakeetConfig || {};
   }
 
-  validateConfig(): void {
-    for (const key of Object.keys(this.params)) {
+  validateConfig(params: ParakeetConfig = this.params): void {
+    validateParakeetBackend(params.backend);
+    validateSpeakerAttribution(params.speakerAttribution);
+    if (params.speakerAttribution && params.streaming) {
+      throw new QvacErrorAddonASRGgml({
+        code: ERR_CODES_PARAKEET.INVALID_CONFIG,
+        adds: "speakerAttribution uses batch run(), not streaming mode",
+      });
+    }
+    for (const key of Object.keys(params)) {
       if (!PARAKEET_CONFIG_KEYS.includes(key)) {
         throw new QvacErrorAddonASRGgml({
           code: ERR_CODES_PARAKEET.INVALID_CONFIG,
@@ -330,9 +351,9 @@ export class ParakeetDriver implements AsrDriver {
       "Reloading addon with new configuration",
       overrides,
     );
-    if (overrides.parakeetConfig) {
-      this.params = { ...this.params, ...overrides.parakeetConfig };
-    }
+    const nextParams = { ...this.params, ...overrides.parakeetConfig };
+    this.validateConfig(nextParams);
+    this.params = nextParams;
     const configurationParams = this._buildConfigurationParams();
     await this.cancelActive();
     if (this.ctx.job.active) {
@@ -383,6 +404,12 @@ export class ParakeetDriver implements AsrDriver {
     audio: NormalizedAudioStream,
     opts: ASRStreamingOptions = {},
   ): Promise<StreamingSession> {
+    if (this.params.speakerAttribution) {
+      throw new QvacErrorAddonASRGgml({
+        code: ERR_CODES_PARAKEET.INVALID_CONFIG,
+        adds: "speakerAttribution uses batch run(), not runStreaming()",
+      });
+    }
     const streamingOpts = this._validateStreamingOptions(opts);
     const addon = this._requireAddon();
     const response = this.ctx.job.start() as QvacResponse<ASRStreamOutput>;
@@ -479,6 +506,8 @@ export class ParakeetDriver implements AsrDriver {
       modelPath: this._files.model || "",
       maxThreads: this.params.maxThreads ?? 4,
       useGPU: this.params.useGPU === true,
+      backend: this.params.backend,
+      speakerAttribution: this.params.speakerAttribution,
       sampleRate: this.params.sampleRate || 16000,
       channels: this.params.channels || 1,
       captionEnabled: this.params.captionEnabled === true,
@@ -549,17 +578,18 @@ export class ParakeetDriver implements AsrDriver {
       return;
     }
     if (event === "Output") {
+      if (Array.isArray(data) && data.length === 0) return;
       // The segment payload passes through untouched; a typed endOfTurn
       // event is additionally synthesized when the (last) segment carries
       // the model's end-of-utterance flag (double-signal).
       this.ctx.job.output(data);
       const segment = lastSegmentOf(data);
-      if (segment?.isEndOfTurn === true) {
+      if (segment?.isEndOfTurn === true && segment.eotConfidence === undefined) {
         this.ctx.job.output({ type: "endOfTurn", source: "model-eou" });
       }
       return;
     }
-    if (event === "VadState") {
+    if (event === "VadState" || event === "EndOfTurn") {
       // The native payload is already VadEvent-shaped (energy detector or
       // Sortformer speaker activity).
       this.ctx.job.output(data);

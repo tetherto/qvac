@@ -18,24 +18,28 @@ function withAndroidNdkVersion(config: ExpoConfig): ExpoConfig {
     function (config) {
       const buildGradlePath = path.join(config.modRequest.platformProjectRoot, 'build.gradle')
 
-      if (fs.existsSync(buildGradlePath)) {
-        let buildGradle = fs.readFileSync(buildGradlePath, 'utf8')
-
-        if (buildGradle.includes('ndkVersion')) {
-          buildGradle = buildGradle.replace(
-            /ndkVersion\s*=\s*["'][^"']+["']/g,
-            `ndkVersion = "${ndkVersion}"`
-          )
-        } else {
-          buildGradle = buildGradle.replace(
-            /(buildscript\s*\{)/,
-            `$1\n  ext {\n    ndkVersion = "${ndkVersion}"\n  }`
-          )
-        }
-
-        fs.writeFileSync(buildGradlePath, buildGradle)
-        console.log(`[withAndroidNdkVersion] 🔧 QVAC: Set Android NDK version to ${ndkVersion}`)
+      let buildGradle: string
+      try {
+        buildGradle = fs.readFileSync(buildGradlePath, 'utf8')
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'ENOENT') return config
+        throw err
       }
+
+      if (buildGradle.includes('ndkVersion')) {
+        buildGradle = buildGradle.replace(
+          /ndkVersion\s*=\s*["'][^"']+["']/g,
+          `ndkVersion = "${ndkVersion}"`
+        )
+      } else {
+        buildGradle = buildGradle.replace(
+          /(buildscript\s*\{)/,
+          `$1\n  ext {\n    ndkVersion = "${ndkVersion}"\n  }`
+        )
+      }
+
+      fs.writeFileSync(buildGradlePath, buildGradle)
+      console.log(`[withAndroidNdkVersion] 🔧 QVAC: Set Android NDK version to ${ndkVersion}`)
 
       return config
     }

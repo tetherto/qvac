@@ -29,6 +29,8 @@ export interface ServeConfig {
   }
   /** Hostnames accepted in the Host header beyond loopback, IP literals and the bind host; `true` accepts any. */
   allowedHosts: string[] | true
+  /** Admin-only routes answer `403 admin_disabled` unless this is set. */
+  enableAdmin: boolean
   /** Parsed `serve.<extension>` blocks, keyed by extension name. */
   extensions: Partial<ServeExtensionConfig>
 }

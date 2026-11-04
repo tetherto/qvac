@@ -113,6 +113,10 @@ public:
     /// or unloading the model drops it instead of writing its `cacheKey`
     /// file. Only an explicit `saveCache` writes it.
     bool ephemeral = false;
+    /// A `cacheKey` file the request may start from, read and never written:
+    /// it competes with the states in memory, and the one that serves the
+    /// longest prefix of the prompt wins.
+    std::string baseCacheKey;
   };
 
   std::any process(const std::any& input) final;
@@ -195,6 +199,33 @@ public:
   /// `saveCache`. The file, if any, is left alone. A no-op when nothing is
   /// kept for the key.
   void discardCache(const std::string& cacheKey);
+
+  /// What `calcTokens` counts. `history` is a `Message[]` in `process`'s JSON
+  /// shape, tool definitions allowed; `tools` holds tool definitions only. A
+  /// tool name in both is a duplicate and throws. A request with none of the
+  /// three, or with no message to render (`tools` alone, or an empty
+  /// `history` without `text`), throws.
+  struct CalcTokensRequest {
+    std::optional<std::string> text;
+    std::optional<std::string> history;
+    std::optional<std::string> tools;
+  };
+
+  /// Tokens @p request takes on this model. `text` alone is counted raw, with
+  /// no chat template and no BOS. With `history` or `tools` the conversation,
+  /// `text` (even empty) appended as a user turn, is rendered by the chat
+  /// template as the opening request of a fresh conversation, with BOS, and
+  /// with the generation prompt when the last turn is a user or tool turn, as
+  /// `process` renders it. `tools` alone has no message to render and throws,
+  /// as `process` does; pass an empty `text` to count a tool list with an
+  /// empty user turn. Tools the template leaves out are not counted, and a
+  /// `prefill` request, which renders without a user turn, can differ. Media is
+  /// not counted. Every invalid request, a media message included, throws
+  /// `InvalidArgument` prefixed `calcTokens:`; a chat template that cannot
+  /// render the conversation fails as it would for `process`. Reads only
+  /// load-time state and never enters the job scheduler, so it runs beside
+  /// in-flight requests.
+  [[nodiscard]] size_t calcTokens(const CalcTokensRequest& request) const;
 
   /**
    * The Reset method.
@@ -382,9 +413,16 @@ private:
         cacheCheckpointPolicy_;
     /// RAM tier budget for conversation states (`cache_ram_mib`).
     uint64_t cacheRamBytes_ = 0;
+    /// `cache_share_across_keys`, applied to the single-prompt context and to
+    /// every batch driver.
+    bool cacheShareAcrossKeys_ = true;
     /// The RAM tier itself, shared by the single-prompt cache and the batch
     /// scheduler.
     std::shared_ptr<batching::SlotStateCache> ramTier_;
+    /// cacheKey files this model has used, shared by the single-prompt cache
+    /// and the batch scheduler as places to start a request from.
+    std::shared_ptr<qvac_lib_inference_addon_llama::cache::CacheFileIndex>
+        fileIndex_;
 
     // configuration values parsed from configFilemap
     std::optional<load_fit_normalization::NormalizedFitSnapshot>

@@ -15,6 +15,7 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
   - [5. Load Model](#5-load-model)
   - [6. Run Inference](#6-run-inference)
     - [Tool calling](#tool-calling)
+    - [Ordered text and media](#ordered-text-and-media)
     - [Batch inference](#batch-inference)
   - [7. Release Resources](#7-release-resources)
 - [API behavior by state](#api-behavior-by-state)
@@ -206,7 +207,8 @@ const config = {
 | cache_checkpoints_max_bytes | integer (bytes)                 | 0 (unlimited)                | Byte budget for those checkpoints, enforced before the count. The load fails with `InvalidArgument` when it cannot hold `cache_checkpoints` checkpoints of the largest size the context allows (on a sliding-window model, a full window). Also accepted as `cache-checkpoints-max-bytes` |
 | cache_checkpoint_storage | `"memory"` or `"disk"`             | `"memory"`                   | Where checkpoints and the per-request rollback snapshot live. `"memory"` keeps them in host RAM so a cached chat never touches the disk; `"disk"` writes them to a private directory inside `cache_checkpoint_dir`, which it requires. Also accepted as `cache-checkpoint-storage` |
 | cache_checkpoint_dir | directory path                              | none                         | **Required with `cache_checkpoint_storage: "disk"`**, and refused without it: where checkpoint files go, inside a private directory the addon creates in it (mode 0700; on Windows, the directory itself). On mobile, pass the app's cache directory. The load fails with `InvalidArgument` when it is missing, empty, or unusable. Also accepted as `cache-checkpoint-dir` |
-| cache_ram_mib | 0 – 1048576 (MiB)                               | 0 (off)                      | Host-RAM budget for conversations that are not running. A `cacheKey` switch or a batch slot eviction moves the conversation there instead of writing its file, and the next request on that key restores it. A write-back cache: unsaved turns reach the file on `saveCache()`, when the budget pushes the entry out, or at unload; ephemeral entries are dropped instead. Also accepted as `cache-ram-mib` ([details](./docs/cache-api.md#keep-switched-away-conversations-in-ram)) |
+| cache_ram_mib | 0 – 1048576 (MiB)                               | 0 (off)                      | Host-RAM budget for conversations that are not running. A `cacheKey` switch or a batch slot eviction moves the conversation there instead of writing its file, and the next request on that key restores it; unless `cache_share_across_keys` is `"false"`, a request on another key that shares its prompt prefix starts from a copy of it. A write-back cache: unsaved turns reach the file on `saveCache()`, when the budget pushes the entry out, or at unload; ephemeral entries are dropped instead. Also accepted as `cache-ram-mib` ([details](./docs/cache-api.md#keep-switched-away-conversations-in-ram)) |
+| cache_share_across_keys | `"true"`/`"on"`/`"1"`, `"false"`/`"off"`/`"0"` | `"true"`                     | Whether a request on a decoder-only model may start from state another conversation left (keyless memory, another key's state, a `cacheKey` file the model used). `"false"` keeps every request to its own key's state, for callers who must not learn through `cacheTokens` or timing whether another conversation shares their prompt. Also accepted as `cache-share-across-keys` ([details](./docs/cache-api.md#keep-conversations-apart)) |
 | flash-attn        | `"on"`/`"enabled"`/`"true"`/`"1"`, `"off"`/`"disabled"`/`"false"`/`"0"`, or `"auto"` | `"on"`, except when finetuning or on a BitNet model, where it is forced off | Flash attention. The four truthy and four falsey spellings are equivalent; `"auto"` is a third state that defers to qvac-fabric's runtime capability probe. Lower-case only — matching is case-sensitive and any other value is rejected. Affects the KV-cache auto-default — see below. Also accepted as `flash_attn`; supplying both spellings is an error |
 | cache-type-k      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **key** quantization type. Unset = auto-default (see KV-cache type below) |
 | cache-type-v      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **value** quantization type. Quantizing V requires `flash-attn` on |
@@ -265,7 +267,7 @@ projector runs on CPU. The resolved choice is logged at verbosity ≥ 2 as
 
 `spec-type: 'draft-mtp'` turns on llama-server's multi-token-prediction speculative decoding for models that ship their MTP layers (`blk.N.nextn.*`, e.g. Qwen3.5 / Qwen3.6 GGUFs that keep them; quantizations that strip them fail to load with this option unless an external head is given, see below). Every step the MTP head drafts up to `spec-draft-n-max` tokens from the model's own hidden states, the model verifies the sampled token and the draft in one decode, and the longest matching prefix plus one new token is kept. The sampler decides every kept token, so sampling settings, grammars and stop conditions behave as without speculation. The implementation follows llama-server step by step: the same draft limits, rollback by trimming or by a checkpoint for memory that cannot trim, and the same replay.
 
-For a model without MTP layers, give an external MTP head as `spec-draft-model` (llama-server's `--spec-type draft-mtp -md <head>`): a GGUF with MTP layers for the same model, such as the MTP quantization of it, or a Gemma 4 assistant for its Gemma 4 model. The head is loaded next to the model and placed like it (`device`, `gpu-layers`), and the load's fit and `assessFit` count its weights as well as its context. A head without MTP layers fails the load, and `assessFit` refuses it with `unsupported-config`. A head for another model, with a different hidden width or vocabulary, also fails the load, and `assessFit` refuses it the same way. A Gemma 4 assistant reads the model's own tensors, so fabric measures it next to the model, as the load creates it.
+For a model without MTP layers, give an external MTP head as `spec-draft-model` (llama-server's `--spec-type draft-mtp -md <head>`): a GGUF with MTP layers for the same model, such as the MTP quantization of it, or a Gemma 4 assistant for its Gemma 4 model. The head is loaded next to the model and placed like it (`device`, `gpu-layers`), and the load's fit and `assessFit` count its weights as well as its context. A head without MTP layers fails the load, and `assessFit` rejects it. A head for another model, with a different hidden width or vocabulary, also fails the load, and `assessFit` rejects it the same way. A Gemma 4 assistant reads the model's own tensors, so fabric measures it next to the model, as the load creates it.
 
 `spec-type: 'draft-dflash'` drafts with a separate DFlash model instead, given as `spec-draft-model` (an absolute path; llama-server's `-md`). The DFlash model reads the hidden states of the target layers it was trained on and denoises a whole block of draft tokens in one pass, so a step drafts up to its block size minus one tokens (`spec-draft-n-max` caps it further). It is loaded next to the model and placed like it (`device`, `gpu-layers`). The load's fit and `assessFit` count its weights and context, measured next to the model when the drafter borrows the model's embeddings and output head. A draft model fabric still cannot measure is left out of both, and fabric logs `failed to measure the memory of the extra model, fitting without it`. Everything else (verification, rollback, batching, caches, stats) is the same as for MTP.
 
@@ -345,6 +347,28 @@ const response = await model.run([
 
 The tool grammar holds the model to the order of `parameters`. Inside an object it accepts the required properties first, in declared order, then the optional ones, also in declared order. When the model writes a property out of that order, the call isn't rejected with an error: the model drops a field, writes a broken value or never finishes the call. Declare `required` properties before optional ones at every level, and declare each group in the order the model is likely to write it. This applies to nested objects, and to every argument in formats that write the arguments as one JSON object (Qwen3). Qwen3.5's top-level `<parameter=...>` arguments are less strict: up to six required arguments in any order, then the optional ones in any order. An optional argument before a required one is still rejected there.
 
+#### Ordered text and media
+
+A user message's `content` is either a string or an ordered array of parts. Use the array when the position of an image inside the text matters — multiple-choice options that are pictures, illustrated forms, steps — so the model sees the text and every image in one turn, in order:
+
+```javascript
+const response = await model.run([{
+  role: 'user',
+  content: [
+    { type: 'text', text: 'Which image shows the same place as ' },
+    { type: 'media', content: '/images/place.jpg' },
+    { type: 'text', text: '?\nA. ' },
+    { type: 'media', content: imageABytes }, // raw bytes work too
+    { type: 'text', text: '\nB. ' },
+    { type: 'media', content: '/images/option-b.jpg' }
+  ]
+}])
+```
+
+Each media part becomes an `<__media__>` marker at its own position in the rendered turn — the same prompt llama-server builds from an OpenAI content-parts request. A part's `content` is an absolute path or a `Uint8Array`; media parts are only valid on user messages, and an unknown part type is rejected with `InvalidInputFormat`.
+
+The alternative — one `{ role: 'user', type: 'media' }` message per part — keeps the order but renders each text part as its own user turn, so text that refers to "this image" ends up in a different turn from the image.
+
 #### Batch inference
 
 Load the model with `parallel >= 2`, then pass an array of prompts. Each chunk arrives tagged with the id of the sequence that produced it; `await()` returns results in input order.
@@ -384,6 +408,30 @@ const response = await model.run([
 ])
 ```
 
+#### Counting tokens
+
+`calcTokens` returns how many tokens an input takes on the loaded model, without running it:
+
+```javascript
+const raw = await model.calcTokens({ text: 'Hello, world!' })
+
+const prompt = await model.calcTokens({
+  history: [{ role: 'system', content: 'You are a helpful assistant.' }],
+  tools: [{ type: 'function', name: 'get_weather', parameters: { type: 'object', properties: { city: { type: 'string' } } } }],
+  text: 'Weather in Paris?'
+})
+```
+
+- `text` alone is counted raw, with no chat template and no BOS.
+- `history` takes the `Message[]` that `run()` takes, and `tools` takes tool definitions. Either one is rendered by the chat template as the opening request of a fresh conversation, with `text` (even empty) appended as the last user turn. The count includes BOS, and the generation prompt when the last turn is a user or tool turn, so it equals the `promptTokens` a fresh `run()` of the same conversation reports. Tools the template drops are not counted. On an encoder-decoder model `run()` encodes the prompt separately, so its `promptTokens` differs from this count.
+- `tools` needs `text` or `history`, as `run()` can't render tools without a message.
+- It never queues behind `run()`, so it answers while requests are generating.
+- Errors:
+  - A wrong-typed argument rejects with a `TypeError`.
+  - Before `load()` or after `unload()` it rejects with `Model is not loaded`.
+  - Other invalid input, media included, rejects with an error whose `code` is `InvalidArgument` and whose message starts with `calcTokens:`.
+  - A conversation the chat template cannot render at all fails as it would in `run()`.
+
 ### 7. Release Resources
 
 Unload the model when finished:
@@ -398,7 +446,7 @@ try {
 
 ### API behavior by state
 
-The following table describes the expected behavior of `run` and `cancel` depending on the current state (idle vs jobs running). The two cancel entry points have different scopes:
+The following table describes the expected behavior of `run`, `cancel` and `calcTokens` depending on the current state (idle vs jobs running). The two cancel entry points have different scopes:
 
 - `response.cancel()` — **targeted**: cancels only the job (or batch group) that `run()` call produced, leaving other concurrent jobs running.
 - `model.cancel()` — **global**: cancels every live job (in-flight and queued) at the moment of the call, plus any finetuning in progress.
@@ -411,6 +459,7 @@ The following table describes the expected behavior of `run` and `cancel` depend
 | busy, `parallel >= 2` (default `rejectWhenBusy: false`) | run | **Allowed** — the job is admitted concurrently (continuous batching) or queued until a slot frees; each call gets its own independent `QvacResponse` |
 | busy          | `response.cancel()` | **Allowed** — cancels only that response's job/group; Promise resolves when it has stopped |
 | busy          | `model.cancel()`    | **Allowed** — cancels all live jobs; Promise resolves when they have stopped |
+| idle or busy  | `calcTokens` | **Allowed** — counts without running and never queues behind a job; see [Counting tokens](#counting-tokens) |
 
 Admission is controlled by `rejectWhenBusy` (instance-level `opts.rejectWhenBusy`, overridable per call via `runOptions.rejectWhenBusy`). Its default follows `parallel`: `true` for `parallel: 1` (busy runs fail fast, preserving the historical single-job contract) and `false` for `parallel >= 2` (busy runs queue behind the pool and start as slots free). With `parallel >= 2`, separate top-level `run()` calls are batched together into the same decode loop — see [Continuous Batching](./docs/continuous-batching.md).
 
@@ -418,7 +467,7 @@ Admission is controlled by `rejectWhenBusy` (instance-level `opts.rejectWhenBusy
 
 #### Prefill (cache warming) with `parallel >= 2`
 
-A prefill-only run (`runOptions.prefill: true`) is admitted on a parallel model only when its product survives the slot teardown, i.e. it has a `cacheKey`: the warmed conversation stays in its slot for the next request on that key. A keyless prefill warms context state that no concurrent job could ever reach, so it is rejected with `InvalidArgument`; run it on a `parallel: 1` model instead. The same rule applies per item in batch runs. See [cache-api.md](./docs/cache-api.md).
+A prefill-only run (`runOptions.prefill: true`) is admitted on a parallel model only when its product survives the slot teardown, i.e. it has a `cacheKey`: the warmed conversation stays in its slot for the next request on that key. A keyless prefill warms state no later request can count on (at most parked anonymously, first to be evicted), so it is rejected with `InvalidArgument`; run it on a `parallel: 1` model instead. The same rule applies per item in batch runs. See [cache-api.md](./docs/cache-api.md).
 
 #### Cancelling a batch
 
@@ -444,26 +493,33 @@ const fit = await LlmLlamacpp.assessFit({
   config: { device: 'gpu', 'ctx-size': '4096' }
 })
 
-fit.status // 'fits' | 'does-not-fit' | 'error'
-fit.reason // 'fits', 'does-not-fit', 'model-unreadable', 'no-backend-device' or 'unsupported-config'
-fit.gpuLayers // what fits, which is not always what the request asked for
-fit.ctxSize
-fit.devices // one row per device the model was assigned to, then a `host` row
-fit.deviceBytes // model, context and compute summed across the devices, host excluded
-fit.hostBytes // the same, for the trailing host row
+fit.status // 'fits' | 'does-not-fit' | 'unknown'
+fit.devices // one row per device the model is assigned to, then the host CPU
+fit.devices[0] // { id, name, unified, usedBytes, freeBytes, totalBytes }
+fit.stats // { ctxSize, gpuLayers }
 ```
 
-`config` is the load, exactly as `loadModel` takes it. The projection resolves it with the same code that load runs, so every setting reaches the fitter the way it would reach the engine, and a load the engine would refuse is refused here as `status: "error"` with `unsupported-config`. A setting left out takes llama's default.
+Each device row gives the memory the load takes on that device, as `usedBytes`, and the device's free and total memory. `id` is the PCI bus ID when the backend reports one, and the device name otherwise. `unified` is true for memory the host owns: the CPU, an integrated GPU, a GPU that shares the host's memory, Android's OpenCL GPU, and a device that reports no memory of its own, which takes the host's figures. With `load_mode: 'mmap'`, the host row leaves out the mapped weights, which the OS can evict.
 
-With `spec-type: 'draft-mtp'` the MTP draft context is fitted next to the model, as the load fits it, and its memory is in the verdict and in the per-device figures; on a model or head without MTP layers the load fails, so the projection is refused with `unsupported-config`. A DFlash draft model or a Gemma 4 assistant is fitted the same way, measured next to the model since it reads the model's tensors, and is in the verdict and the figures too (see [Speculative decoding](#speculative-decoding-mtp-dflash)).
+On an iOS device every unified row shares the app's own memory limit, `os_proc_available_memory()`. Each such row's free memory is capped at that limit, and a load whose unified rows together take more than the limit less the margin does not fit. A limit of 0 means the app has none left.
 
-Pinning `gpu-layers` fixes the placement: the fitter refuses to move layers off a device the load claimed, so the answer is whether that exact placement fits, never a reduced one. Leave it unset for a projection that can place the model itself.
+`stats` is the load as the fit resolved it. On `fits`, `ctxSize` and `gpuLayers` are the context and GPU layer count the fitter settled on, which can be smaller than the load asked for. On `does-not-fit` they are the ones the load asked for.
 
-`minCtxSize` sets a floor the fitter may not reduce the context below, defaulting to llama's own `fit-ctx` of 4096. `marginBytes` is the memory to leave free on every device, defaulting to llama's `fit-target` of 1 GiB per device. `backendsDir` is where the dynamically-loaded ggml backends live.
+`status` is `unknown` for a load the fitter cannot project: one placed on the CPU, one with a LoRA adapter or a multimodal projector, one with `fit` turned off, or one the fitter cannot break down per device, the host CPU included. `devices` is then empty and `stats` is `{}`.
+
+The projection reads the model's vocabulary, and llama asserts on a vocabulary it finds inconsistent. An assert aborts the process instead of rejecting, so take the model from a source you trust, or call `assessFit` behind a process boundary.
+
+`config` is the load, exactly as `loadModel` takes it. The projection resolves it with the same code that load runs, so every setting reaches the fitter the way it would reach the engine, and a load the engine would refuse rejects here. A setting left out takes llama's default.
+
+With `spec-type: 'draft-mtp'` the MTP draft context is fitted next to the model, as the load fits it, and its memory is in the verdict and in the device rows; on a model or head without MTP layers the load fails, so the projection rejects. A DFlash draft model or a Gemma 4 assistant is fitted the same way, measured next to the model since it reads the model's tensors, and is in the verdict and the rows too (see [Speculative decoding](#speculative-decoding-mtp-dflash)).
+
+Pinning `gpu-layers` fixes the placement: the fitter keeps layers on the devices the load claimed, so the answer is for that exact placement. Leave it unset for a projection that can place the model itself.
+
+`minCtxSize` sets a floor the fitter may not reduce the context below, defaulting to llama's own `fit-ctx` of 4096. `marginBytes` is the memory to leave free on every device. The load's own `fit-target`, 1 GiB per device by default, applies too, and the larger of the two binds. `backendsDir` is where the dynamically-loaded ggml backends live.
 
 `assessFit` returns a Promise. Concurrent calls run one at a time within this addon.
 
-A model the fitter cannot read resolves to `status: "error"`; only a broken request rejects.
+A model the fitter cannot read, an invalid request, or a machine with no backend device rejects with an error whose message starts with `assessFit:` and names the cause.
 
 ## Fine-tuning
 
@@ -703,7 +759,7 @@ npm run test:cpp:models:ci   # exactly what .github/workflows/cpp-tests-llm.yml
                              # downloads; matches what CI exercises
 ```
 
-First-run downloads pull several GB from Hugging Face. Every fixture is SHA256-verified against a digest pinned in `scripts/download-unit-test-models.js`; mismatched or partial files are re-downloaded automatically. Set `HF_TOKEN` if a repo requires authentication. Override paths with env vars such as `SHARDED_MODEL_FIRST_SHARD_PATH` (see `test/unit/test_common.hpp`).
+First-run downloads pull several GB, mostly from Hugging Face. Every fixture is SHA256-verified against a digest pinned in `scripts/download-unit-test-models.js`; mismatched or partial files are re-downloaded automatically. Set `HF_TOKEN` if a repo requires authentication. Fixtures pinned by `s3Path` (currently `bitnet_b1_58-large-TQ2_0.gguf`) are copied from the QVAC model registry bucket and need `MODEL_S3_BUCKET` plus AWS credentials; if either is missing or the copy fails, a local run skips the fixture with a warning and its tests skip, while `--ci` fails. Override paths with env vars such as `SHARDED_MODEL_FIRST_SHARD_PATH` or `BITNET_MODEL_PATH` (see `test/unit/test_common.hpp`).
 
 ### Fuzzing
 

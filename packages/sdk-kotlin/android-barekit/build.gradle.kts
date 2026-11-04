@@ -131,23 +131,33 @@ val npmCi by tasks.registering(Exec::class) {
     outputs.dir(runtimeRoot.dir("node_modules"))
 }
 
+// A checkout of this package alone (no sibling packages/sdk, as the sparse
+// clone in scripts/install-local.sh makes) bundles the exact-pinned @qvac/sdk
+// that npmCi installs. The worker build and the inputs that read the sibling
+// packages exist only in the monorepo.
+val workspaceSdk = runtimeRoot.dir("../sdk")
+val hasWorkspaceSdk = workspaceSdk.file("package.json").asFile.exists()
+
 val buildWorkspaceSdk by tasks.registering(Exec::class) {
     description = "Build packages/sdk with the shared worker build"
+    onlyIf { hasWorkspaceSdk }
     workingDir(runtimeRoot)
     commandLine("python3", "../sdk-python/scripts/build_worker.py", "--force")
-    inputs.dir(runtimeRoot.dir("../sdk/src"))
-    inputs.dir(runtimeRoot.dir("../inference/src"))
-    inputs.files(
-        runtimeRoot.file("../sdk/package.json"),
-        runtimeRoot.file("../sdk/tsconfig.json"),
-        runtimeRoot.file("../sdk/tsconfig.alias.json"),
-        runtimeRoot.file("../sdk/scripts/link-workspace-inference.mjs"),
-        runtimeRoot.file("../inference/package.json"),
-        runtimeRoot.file("../inference/tsconfig.build.json"),
-        runtimeRoot.file("../inference/tsconfig.alias.json"),
-        runtimeRoot.file("../sdk-python/scripts/build_worker.py"),
-    )
-    outputs.dir(runtimeRoot.dir("../sdk/dist/src/worker"))
+    if (hasWorkspaceSdk) {
+        inputs.dir(workspaceSdk.dir("src"))
+        inputs.dir(runtimeRoot.dir("../inference/src"))
+        inputs.files(
+            workspaceSdk.file("package.json"),
+            workspaceSdk.file("tsconfig.json"),
+            workspaceSdk.file("tsconfig.alias.json"),
+            workspaceSdk.file("scripts/link-workspace-inference.mjs"),
+            runtimeRoot.file("../inference/package.json"),
+            runtimeRoot.file("../inference/tsconfig.build.json"),
+            runtimeRoot.file("../inference/tsconfig.alias.json"),
+            runtimeRoot.file("../sdk-python/scripts/build_worker.py"),
+        )
+        outputs.dir(workspaceSdk.dir("dist/src/worker"))
+    }
 }
 
 // Every profile bundles through the same packages/sdk/qvac/worker.bundle.*
@@ -173,11 +183,17 @@ val prepareRuntimeTasks = runtimeProfiles.associateWith { profile ->
         inputs.files(
             runtimeRoot.file("package.json"),
             runtimeRoot.file("scripts/prepare-android-runtime.mjs"),
-            runtimeRoot.file("../sdk/package.json"),
-            runtimeRoot.file("../sdk/LICENSE"),
-            runtimeRoot.file("../sdk/NOTICE"),
         )
-        inputs.dir(runtimeRoot.dir("../sdk/dist/src/worker"))
+        if (hasWorkspaceSdk) {
+            inputs.files(
+                workspaceSdk.file("package.json"),
+                workspaceSdk.file("LICENSE"),
+                workspaceSdk.file("NOTICE"),
+            )
+            inputs.dir(workspaceSdk.dir("dist/src/worker"))
+        } else {
+            inputs.dir(runtimeRoot.dir("node_modules/@qvac/sdk"))
+        }
         inputs.file(runtimeRoot.file(profile.configFile))
         outputs.dir(layout.buildDirectory.dir("generated/qvac/${profile.name}"))
     }

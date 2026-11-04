@@ -89,10 +89,10 @@ async function resolveTablePackageAsset(pkg: string, file: string): Promise<stri
 // platform policy; see catalog/platform-policy.ts.
 const resources = new ResourceManager(policyFor('mobile'))
 
-// One table, shared with every other client, applied here.
+// One table, shared with every other client, applied here as `mobile-<os>` so an entry can target one OS.
 applyResourceTable(
   RESOURCE_TABLE,
-  'mobile',
+  `mobile-${Platform.OS}`,
   (dep, definition) => resources.define(dep, definition as never),
   {
     const: (name) => (MODEL_CONSTANTS as Record<string, unknown>)[name],

@@ -1020,6 +1020,310 @@ TEST_F(LlamaModelTest, FormatPromptMediaWithoutRequest) {
   EXPECT_THROW({ model.process(input); }, qvac_errors::StatusError);
 }
 
+namespace {
+// calcTokens rejects every invalid request with InvalidArgument and a message
+// that names calcTokens, never the prompt parser.
+void expectInvalidArgument(
+    const LlamaModel& model, const LlamaModel::CalcTokensRequest& request) {
+  try {
+    (void)model.calcTokens(request);
+    ADD_FAILURE() << "calcTokens accepted an invalid request";
+  } catch (const qvac_errors::StatusError& e) {
+    const std::string message = e.what();
+    EXPECT_NE(e.codeString().find("InvalidArgument"), std::string::npos)
+        << e.codeString() << " " << message;
+    EXPECT_EQ(message.rfind("calcTokens: ", 0), 0U) << message;
+    EXPECT_EQ(message.find("formatPrompt"), std::string::npos) << message;
+  }
+}
+} // namespace
+
+TEST_F(LlamaModelTest, CalcTokensBeforeLoadThrows) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  LlamaModel model = createModel();
+  expectInvalidArgument(model, {.text = "Hello"});
+}
+
+TEST_F(LlamaModelTest, CalcTokensCountsRawText) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  LlamaModel model = createModel();
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  const size_t hello = model.calcTokens({.text = "Hello"});
+  const size_t longer =
+      model.calcTokens({.text = "Hello, world! How are you today?"});
+  EXPECT_GT(hello, 0U);
+  EXPECT_GT(longer, hello);
+  EXPECT_EQ(model.calcTokens({.text = ""}), 0U);
+  // The template wraps the same text in a user turn, BOS and a generation
+  // prompt.
+  EXPECT_GT(model.calcTokens({.text = "Hello", .history = "[]"}), hello);
+}
+
+// The count is what a fresh request on the same conversation decodes.
+TEST_F(LlamaModelTest, CalcTokensMatchesPromptTokensOfAFreshRun) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  LlamaModel model = createModel();
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  const std::string system =
+      R"({"role": "system", "content": "You are a helpful assistant."})";
+  const std::string user = R"({"role": "user", "content": "Hello, world!"})";
+  const size_t fromHistory =
+      model.calcTokens({.history = "[" + system + "," + user + "]"});
+  const size_t fromText = model.calcTokens(
+      {.text = "Hello, world!", .history = "[" + system + "]"});
+  EXPECT_EQ(fromHistory, fromText);
+  // Whitespace around the JSON is not text after it.
+  EXPECT_EQ(
+      model.calcTokens({.history = " [" + system + "," + user + "]\n\t\r "}),
+      fromHistory);
+  // An empty text is an empty user turn, as `process` renders one.
+  EXPECT_EQ(
+      model.calcTokens({.text = "", .history = "[" + system + "]"}),
+      model.calcTokens(
+          {.history = "[" + system + R"(,{"role": "user", "content": ""}])"}));
+
+  LlamaModel::Prompt prompt;
+  prompt.input = "[" + system + "," + user + "]";
+  (void)model.processPrompt(prompt);
+  EXPECT_EQ(
+      static_cast<double>(fromHistory),
+      getStatValue(model.runtimeStats(), "promptTokens"));
+}
+
+TEST_F(LlamaModelTest, CalcTokensCountsTools) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  LlamaModel model = createModel();
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  const std::string tools = R"([{"type": "function", "name": "get_weather",
+    "description": "Get the weather for a city", "parameters": {"type":
+    "object", "properties": {"city": {"type": "string"}}, "required":
+    ["city"]}}])";
+  const size_t withoutTools =
+      model.calcTokens({.text = "Weather in Paris?", .history = "[]"});
+  const size_t withTools =
+      model.calcTokens({.text = "Weather in Paris?", .tools = tools});
+  EXPECT_GT(withTools, withoutTools);
+  // Tool definitions inside the history count the same.
+  EXPECT_EQ(
+      model.calcTokens({.text = "Weather in Paris?", .history = tools}),
+      withTools);
+}
+
+TEST_F(LlamaModelTest, CalcTokensWithToolsMatchesPromptTokensOfAFreshRun) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  LlamaModel model = createModel();
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  const std::string input = R"([
+    {"role": "user", "content": "Weather in Paris?"},
+    {"type": "function", "name": "get_weather",
+     "description": "Get the weather for a city",
+     "parameters": {"type": "object", "properties":
+       {"city": {"type": "string"}}, "required": ["city"]}}])";
+  const size_t count = model.calcTokens({.history = input});
+
+  LlamaModel::Prompt prompt;
+  prompt.input = input;
+  (void)model.processPrompt(prompt);
+  EXPECT_EQ(
+      static_cast<double>(count),
+      getStatValue(model.runtimeStats(), "promptTokens"));
+}
+
+// calcTokens takes the shared state lock, so it answers while a request holds
+// that lock mid-decode instead of waiting for the request to end.
+TEST_F(LlamaModelTest, CalcTokensRunsBesideAnInFlightRequest) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  LlamaModel model = createModel();
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  const std::string input =
+      R"([{"role": "user", "content": "Tell me a long story"}])";
+  const size_t expected = model.calcTokens({.history = input});
+
+  std::atomic<bool> generationStarted{false};
+  std::atomic<bool> counted{false};
+  std::atomic<bool> inferenceDone{false};
+  bool countedWhileDecoding = false;
+  std::exception_ptr inferenceException;
+
+  std::thread inferenceThread([&]() {
+    try {
+      LlamaModel::Prompt prompt;
+      prompt.input = input;
+      prompt.outputCallback = [&](const std::string&) {
+        if (generationStarted.exchange(true)) {
+          return;
+        }
+        // Holds the request mid-decode until the count is in.
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::chrono::seconds(30);
+        while (!counted.load() && std::chrono::steady_clock::now() < deadline) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        countedWhileDecoding = counted.load();
+      };
+      (void)model.processPrompt(prompt);
+    } catch (...) {
+      inferenceException = std::current_exception();
+    }
+    inferenceDone.store(true);
+  });
+
+  while (!generationStarted.load() && !inferenceDone.load()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  const size_t during = model.calcTokens({.history = input});
+  counted.store(true);
+  inferenceThread.join();
+
+  if (inferenceException) {
+    FAIL() << "Inference thread threw unexpectedly";
+  }
+  ASSERT_TRUE(generationStarted.load()) << "The request generated no token";
+  EXPECT_TRUE(countedWhileDecoding);
+  EXPECT_EQ(during, expected);
+}
+
+// reload() swaps the model state under the exclusive lock, so a count racing
+// it either finishes first or waits for the new state; it never sees a partial
+// one.
+TEST_F(LlamaModelTest, CalcTokensRacingReloadSeesAWholeModel) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  LlamaModel model = createModel();
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  const std::string input =
+      R"([{"role": "system", "content": "You are a helpful assistant."},)"
+      R"( {"role": "user", "content": "Hello, world!"}])";
+  const size_t expected = model.calcTokens({.history = input});
+
+  std::atomic<bool> stop{false};
+  std::atomic<size_t> counts{0};
+  std::atomic<size_t> wrongCounts{0};
+  std::exception_ptr countException;
+  std::thread counter([&]() {
+    try {
+      while (!stop.load()) {
+        if (model.calcTokens({.history = input}) != expected) {
+          ++wrongCounts;
+        }
+        ++counts;
+        // Leaves the lock free between counts so reload() can take it.
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+      }
+    } catch (...) {
+      countException = std::current_exception();
+    }
+  });
+
+  constexpr int kReloads = 2;
+  for (int i = 0; i < kReloads; ++i) {
+    EXPECT_NO_THROW(model.reload());
+    EXPECT_TRUE(model.isLoaded());
+  }
+  stop.store(true);
+  counter.join();
+
+  if (countException) {
+    try {
+      std::rethrow_exception(countException);
+    } catch (const std::exception& e) {
+      FAIL() << "calcTokens threw while racing reload(): " << e.what();
+    } catch (...) {
+      FAIL() << "calcTokens threw a non-std exception while racing reload()";
+    }
+  }
+  EXPECT_GT(counts.load(), 0U);
+  EXPECT_EQ(wrongCounts.load(), 0U);
+  EXPECT_EQ(model.calcTokens({.history = input}), expected);
+}
+
+TEST_F(LlamaModelTest, CalcTokensRejectsInvalidRequests) {
+  if (!fs::exists(getValidModelPath())) {
+    FAIL() << "Test model not found at: " << getValidModelPath();
+  }
+
+  LlamaModel model = createModel();
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  // Nothing passed.
+  expectInvalidArgument(model, {});
+  // A message among the tool definitions.
+  expectInvalidArgument(
+      model, {.text = "Hi", .tools = R"([{"role": "user", "content": "Hi"}])"});
+  // A tool definition missing its type.
+  expectInvalidArgument(
+      model, {.text = "Hi", .tools = R"([{"name": "get_weather"}])"});
+  // Tools with nothing to render them with.
+  expectInvalidArgument(
+      model, {.tools = R"([{"type": "function", "name": "get_weather"}])"});
+  // The same tool in both history and tools.
+  const std::string tool = R"({"type": "function", "name": "get_weather"})";
+  expectInvalidArgument(
+      model,
+      {.text = "Hi", .history = "[" + tool + "]", .tools = "[" + tool + "]"});
+  // An empty conversation.
+  expectInvalidArgument(model, {.history = "[]"});
+  // Media on a text-only model.
+  expectInvalidArgument(
+      model,
+      {.history = R"([{"role": "user", "type": "media", "content": "data"}])"});
+  // A message content that is not a string.
+  expectInvalidArgument(
+      model, {.history = R"([{"role": "user", "content": 1}])"});
+  expectInvalidArgument(model, {.history = "not json"});
+  // Valid JSON that is not an array of objects.
+  expectInvalidArgument(
+      model,
+      {.text = "Hi",
+       .tools = R"({"type": "function", "name": "get_weather"})"});
+  expectInvalidArgument(
+      model, {.text = "Hi", .history = R"({"role": "user", "content": "Hi"})"});
+  expectInvalidArgument(model, {.text = "Hi", .history = R"(["Hi"])"});
+  // Text after the JSON array.
+  expectInvalidArgument(
+      model, {.history = R"([{"role": "user", "content": "Hi"}]trailing)"});
+  expectInvalidArgument(model, {.text = "Hi", .tools = "[]trailing"});
+  expectInvalidArgument(model, {.text = "Hi", .tools = "[] []"});
+  // Nested deep enough to overflow the stack without the depth check.
+  expectInvalidArgument(
+      model,
+      {.text = "Hi",
+       .tools = std::string(100000, '[') + std::string(100000, ']')});
+}
+
 TEST_F(LlamaModelTest, ProcessContextOverflow) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();

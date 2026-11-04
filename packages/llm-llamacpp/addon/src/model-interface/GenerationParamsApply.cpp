@@ -9,6 +9,7 @@
 #include "addon/LlmErrors.hpp"
 #include "common/json-schema-to-grammar.h"
 #include "common/log.h"
+#include "utils/JsonDepth.hpp"
 #include "utils/LogSafeString.hpp"
 
 void applyGenerationOverridesToSampling(
@@ -67,6 +68,17 @@ void applyGenerationOverridesToSampling(
   // composition was never possible and was reverted.
   bool installedGrammar = false;
   if (overrides.json_schema) {
+    if (qvac_lib_inference_addon_llama::utils::nestsTooDeep(
+            *overrides.json_schema)) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          qvac_errors::general_error::toString(
+              qvac_errors::general_error::InvalidArgument),
+          "invalid generationParams.json_schema: nests deeper than " +
+              std::to_string(
+                  qvac_lib_inference_addon_llama::utils::K_MAX_JSON_DEPTH) +
+              " levels");
+    }
     try {
       auto parsed = common_json::parse(*overrides.json_schema);
       sampling.grammar = common_grammar(
