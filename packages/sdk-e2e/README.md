@@ -253,12 +253,12 @@ app and drives it.
 
 Each configuration names the labels that run it in `ci.labels`, and the suite each passes:
 
-| Configurations                                                 | Runs on                                          | Started by                                                                                                             |
-| -------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `linux-x64-gpu`, `darwin-arm64-gpu`, `win32-x64-gpu` (desktop) | the three GPU hosts                              | `test-e2e-smoke` (smoke suite), `test-e2e-full` (full catalog), and every push to a PR into `release-*` (full catalog) |
-| `*-python` (the catalog on the Python client)                  | the same hosts                                   | `test-e2e-python` (smoke suite)                                                                                        |
-| `*-electron`                                                   | the same hosts, the macOS one with a GUI session | a dispatch of `sdk-e2e.yml` with `labels: electron` (full catalog)                                                     |
-| `linux-x64-snap` (strict Snap)                                 | the Linux GPU host                               | a dispatch of `sdk-e2e.yml` with `labels: snap` (full catalog)                                                         |
+| Configurations                                                 | Runs on                                          | Started by                                                                                                                                      |
+| -------------------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `linux-x64-gpu`, `darwin-arm64-gpu`, `win32-x64-gpu` (desktop) | the three GPU hosts                              | `test-e2e-smoke` (smoke suite), `test-e2e-full` (full catalog), `test-e2e-rerun-failed`, and every push to a PR into `release-*` (full catalog) |
+| `*-python` (the catalog on the Python client)                  | the same hosts                                   | `test-e2e-python` (smoke suite)                                                                                                                 |
+| `*-electron`                                                   | the same hosts, the macOS one with a GUI session | a dispatch of `sdk-e2e.yml` with `labels: electron` (full catalog)                                                                              |
+| `linux-x64-snap` (strict Snap)                                 | the Linux GPU host                               | a dispatch of `sdk-e2e.yml` with `labels: snap` (full catalog)                                                                                  |
 
 A dispatch of `sdk-e2e.yml` with `packages: @qvac/sdk` and `labels: test-e2e-smoke` (or any label
 above) runs the same configurations on a branch. Every leg builds `packages/inference` and
@@ -269,14 +269,25 @@ the newest dispatch run's on the base branch; a failed test fails the leg.
 `scripts/impacted-tests.mjs` lists the testIds a change touches
 (`node scripts/impacted-tests.mjs --base main --head HEAD`); CI does not add them to a run.
 
-### Mobile, by dispatch
+On a pull request, `sdk-e2e.yml`'s `plan` job (`packages/sdk/ci/e2e-report.mjs`) routes the run and its `report` job
+closes it:
+
+- `test-e2e-smoke` and `test-e2e-full` are base runs: they also run the sdk's Android and iOS apps, post one comment
+  per leg that the report fills in with its failed tests, and record the failures in a hidden PR comment. A base run
+  green on every leg sets `e2e-tested`.
+- `test-e2e-rerun-failed` reruns only the recorded failures, on the legs where they failed. The label removes itself,
+  so add it again for each attempt; it starts nothing while the base run is still going or when the base is green.
+- `test-e2e-python` posts its comments but records nothing and never sets `e2e-tested`.
+
+### Mobile
 
 Dispatch `sdk-e2e.yml` with `platform: Android` or `platform: iOS` and `packages: @qvac/sdk`, or
 `platform: Android` and `packages: sdk-kotlin` (the Kotlin app). The run builds the consumer APK or IPA with the run id and broker baked in,
 starts it on a Device Farm pool from `SDK_ANDROID_DEVICE_FARM_POOLS` or `SDK_IOS_DEVICE_FARM_POOLS`
 (the dispatch's `pool` names one pool; empty prefers an available private pool), drives the full catalog over MQTT once
 the device runs, and fails on any failed test. `tests` narrows it to comma-separated categories or testId
-prefixes. No pull request label starts a mobile run.
+prefixes. On a pull request, `test-e2e-smoke`, `test-e2e-full` and `test-e2e-rerun-failed` run the sdk's Android and iOS
+apps the same way, with the label's suite; the Kotlin app runs only by dispatch.
 
 ## Developing new tests
 

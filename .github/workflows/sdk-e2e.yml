@@ -1,7 +1,7 @@
 name: SDK e2e
 
-# The SDK pod's end-to-end suites (packages tagged ci:sdk). Desktop configurations run on the label, base branch or
-# dispatch their ci.labels name, through _desktop.yml; Device Farm runs by dispatch, the runner driving the app over MQTT.
+# The SDK pod's end-to-end suites (packages tagged ci:sdk). plan routes a run as main's on-pr-test-sdk.yml did: a label
+# or base branch picks the desktop rows (_desktop.yml) and the SDK's Device Farm app; report posts the results.
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
@@ -38,6 +38,7 @@ concurrency:
   group: >-
     sdk-e2e-${{ github.event.pull_request.number || github.ref }}-${{ inputs.platform || 'none' }}-${{
       github.event.action != 'labeled' && 'base'
+      || (github.event.label.name == 'test-e2e-rerun-failed' && 'rerun')
       || (github.event.label.name == 'test-e2e-smoke' && 'base')
       || (github.event.label.name == 'test-e2e-full' && 'base')
       || (github.event.label.name == 'test-e2e-python' && 'probe')
@@ -102,11 +103,45 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
-  desktop:
+  # The SDK router: the run's mode, each leg's rows and the running comments. Only base-branch code runs here, since
+  # it holds pull-requests: write.
+  plan:
     needs: [select, route, trust]
-    if: >-
-      needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_verified_checks == 'true' &&
-      fromJSON(needs.select.outputs.matrices)['test:integration:labelled'][0] != null
+    if: needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_verified_checks == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    outputs:
+      mode: ${{ steps.plan.outputs.mode }}
+      suite: ${{ steps.plan.outputs.suite }}
+      desktop: ${{ steps.plan.outputs.desktop }}
+      mobile: ${{ steps.plan.outputs.mobile }}
+      report: ${{ steps.plan.outputs.report }}
+      comments: ${{ steps.plan.outputs.comments }}
+    steps:
+      - name: Checkout actions and the report script
+        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          sparse-checkout: |
+            .github/actions
+            packages/sdk/ci
+          persist-credentials: false
+      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          node-version: lts/*
+      - id: plan
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          MATRICES: ${{ needs.select.outputs.matrices }}
+          PLATFORM: ${{ inputs.platform }}
+        run: node packages/sdk/ci/e2e-report.mjs plan
+
+  desktop:
+    needs: plan
+    if: needs.plan.outputs.desktop != '' && needs.plan.outputs.desktop != '[]'
     permissions:
       contents: read
       actions: read
@@ -115,15 +150,13 @@ jobs:
     uses: ./.github/workflows/_desktop.yml
     secrets: inherit
     with:
-      rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices)['test:integration:labelled']) }}
+      rows: ${{ needs.plan.outputs.desktop }}
 
   # The package's test:mobile builds the app and a stub test package; the runner then schedules one run on a pool and
   # drives it over MQTT, as main's SDK Device Farm workflows did.
   mobile:
-    needs: select
-    if: >-
-      github.event_name == 'workflow_dispatch' && inputs.platform != 'none' &&
-      fromJSON(needs.select.outputs.matrices)['test:mobile'][0] != null
+    needs: plan
+    if: needs.plan.outputs.mobile != '' && needs.plan.outputs.mobile != '[]'
     name: mobile / ${{ matrix.row.slug }} ${{ matrix.row.config }}
     runs-on: ${{ matrix.row.runner }}
     environment: release
@@ -136,12 +169,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        row: ${{ fromJSON(needs.select.outputs.matrices)['test:mobile'] }}
+        row: ${{ fromJSON(needs.plan.outputs.mobile) }}
     env:
       WORKDIR: src/${{ matrix.row.dir }}
       PROJECT: ${{ matrix.row.project }}
       CONFIG: ${{ matrix.row.config }}
-      PLATFORM: ${{ inputs.platform }}
+      PLATFORM: ${{ matrix.row.config == 'ios-arm64' && 'iOS' || 'Android' }}
+      # The label's suite, and on a rerun the tests that failed on this row's base run.
+      CI_SUITE: ${{ matrix.row.suite }}
+      TESTS: ${{ matrix.row.tests || inputs.tests }}
       PROJECT_ARN: ${{ vars[matrix.row.meta.mobile.projectArnVar] }}
       NX_DAEMON: "false"
       NX_NO_CLOUD: "true"
@@ -181,13 +217,13 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
           role-duration-seconds: "7200"
-      - if: inputs.platform == 'Android'
+      - if: env.PLATFORM == 'Android'
         uses: tetherto/qvac-actions/setup-java@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           java-version: "17"
-      - if: inputs.platform == 'Android'
+      - if: env.PLATFORM == 'Android'
         uses: tetherto/qvac-actions/setup-android@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-      - if: inputs.platform == 'iOS'
+      - if: env.PLATFORM == 'iOS'
         uses: tetherto/qvac-actions/setup-xcode@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           xcode-versions: "16.1 16.2"
@@ -196,7 +232,7 @@ jobs:
           require-tools: xcodebuild pod ninja
           sdk: iphoneos
       - id: signing
-        if: inputs.platform == 'iOS'
+        if: env.PLATFORM == 'iOS'
         uses: tetherto/qvac-actions/ios-import-signing@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           certificate-base64: ${{ secrets.TEST_APP_APPLE_DISTRIBUTION_CERTIFICATE }}
@@ -210,7 +246,7 @@ jobs:
         working-directory: src
         env:
           AWS_REGION: us-west-2
-          IOS_SIGNING: ${{ inputs.platform == 'iOS' && format('{0},{1},{2}', steps.signing.outputs.profile-uuid, steps.signing.outputs.export-method, secrets.APPLE_TEAM_ID) || '' }}
+          IOS_SIGNING: ${{ env.PLATFORM == 'iOS' && format('{0},{1},{2}', steps.signing.outputs.profile-uuid, steps.signing.outputs.export-method, secrets.APPLE_TEAM_ID) || '' }}
         run: pnpm --config.verify-deps-before-run=false exec nx run-many -t test:mobile -p "$PROJECT" -c "$CONFIG" --outputStyle=stream
       - id: app
         uses: tetherto/qvac-actions/devicefarm-upload@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
@@ -237,13 +273,12 @@ jobs:
         name: test:mobile produce
         working-directory: src
         env:
-          POOLS: ${{ toJSON(fromJSON(vars[matrix.row.meta.mobile.devicePoolsVar[inputs.platform]])) }}
+          POOLS: ${{ toJSON(fromJSON(vars[matrix.row.meta.mobile.devicePoolsVar[env.PLATFORM]])) }}
           DEVICES: ${{ inputs.pool }}
           APP_ARN: ${{ steps.app.outputs.arn }}
           PACKAGE_ARN: ${{ steps.package.outputs.arn }}
           SPECS: ${{ steps.spec.outputs.uploads }}
           TIMEOUT: ${{ matrix.row.meta.mobile.jobTimeoutMinutes || '120' }}
-          TESTS: ${{ inputs.tests }}
         run: >-
           node ../.github/scripts/devicefarm-pool-run.mjs schedule --
           pnpm --config.verify-deps-before-run=false exec nx run-many -t test:mobile -p "$PROJECT" -c "$CONFIG" --outputStyle=stream
@@ -265,17 +300,17 @@ jobs:
         if: always() && steps.pool.outputs.run-count == '1'
         uses: tetherto/qvac-actions/devicefarm-download-logs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
-          platform: ${{ inputs.platform }}
+          platform: ${{ env.PLATFORM }}
           run-arns: ${{ steps.pool.outputs.run-arns }}
           files: |
             bare_console.log
             appium.log
             logcat_full.txt
-          skip-extensions: ${{ inputs.platform == 'Android' && 'mp4' || '' }}
+          skip-extensions: ${{ env.PLATFORM == 'Android' && 'mp4' || '' }}
       - if: always() && steps.logs.outcome == 'success'
         uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
-          name: console-logs-${{ matrix.row.slug }}-${{ inputs.platform }}
+          name: console-logs-${{ matrix.row.slug }}-${{ env.PLATFORM }}
           path: ${{ steps.logs.outputs.console-dir }}
           retention-days: "30"
           if-no-files-found: ignore
@@ -285,3 +320,39 @@ jobs:
           name: ${{ matrix.row.slug }}-results-${{ matrix.row.config }}
           path: ${{ env.WORKDIR }}/test/results/e2e/
           if-no-files-found: ignore
+
+  # main's report jobs: each leg's comment from its results, a base run's failures recorded and e2e-tested on green,
+  # a rerun checked to have run what it planned. Base-branch code only, as plan.
+  report:
+    needs: [plan, desktop, mobile]
+    if: always() && !cancelled() && contains(fromJSON('["base","probe","rerun"]'), needs.plan.outputs.mode)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    steps:
+      - name: Checkout actions and the report script
+        uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          sparse-checkout: |
+            .github/actions
+            packages/sdk/ci
+          persist-credentials: false
+      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          node-version: lts/*
+      - uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          pattern: "*-results-*"
+          path: results
+      - env:
+          GITHUB_TOKEN: ${{ github.token }}
+          MODE: ${{ needs.plan.outputs.mode }}
+          SUITE: ${{ needs.plan.outputs.suite }}
+          REPORT: ${{ needs.plan.outputs.report }}
+          COMMENTS: ${{ needs.plan.outputs.comments }}
+          RESULTS_DIR: results
+          LEGS_OK: ${{ !contains(fromJSON('["failure","cancelled"]'), needs.desktop.result) && !contains(fromJSON('["failure","cancelled"]'), needs.mobile.result) }}
+        run: node packages/sdk/ci/e2e-report.mjs report

@@ -365,6 +365,8 @@ async function main(family, env) {
   const platform = platformOf(env.CI_RUNNER_LABEL)
   if (family === 'snap' && platform !== 'linux') throw new Error('Snap runs on Linux only')
   const suite = list('suite', env.CI_SUITE)
+  // A rerun's previously failed tests, from the e2e router; empty runs the suite.
+  const tests = list('tests', env.CI_TESTS)
   const label = `${family}-${platform}`
   const reports = join(E2E, 'reports')
   let e = prepare(env)
@@ -406,7 +408,7 @@ async function main(family, env) {
     }
     const sha = run('git', ['rev-parse', '--short=7', 'HEAD'], { capture: true }).trim()
     const runId = `${platform}-${sha}-${family}-${Number(env.GITHUB_RUN_ID || Date.now()).toString(36)}-${env.GITHUB_RUN_ATTEMPT || 1}`
-    status = await consumerAndProducer({ env: e, runId, family, filter: '', suite })
+    status = await consumerAndProducer({ env: e, runId, family, filter: tests, suite })
   } finally {
     if (family === 'snap') {
       // Best effort, as main's two optional steps: removing the snap stops its processes; denials explain a failure.

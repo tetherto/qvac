@@ -212,6 +212,7 @@ async function produce(app, env) {
   const fam = family(app, env.PLATFORM || (env.CONFIG === 'ios-arm64' ? 'iOS' : 'Android'))
   const runId = runIdOf(fam, env)
   const filter = list('tests', env.TESTS)
+  const suite = list('suite', env.CI_SUITE)
   await waitForRunning(JSON.parse(env.RUN_ARNS || '[]'))
   const e = mqttCerts(env)
   const reports = join(E2E, 'reports')
@@ -225,7 +226,8 @@ async function produce(app, env) {
     '--config',
     '.',
     '--report-dir=./reports',
-    ...(filter ? [`--filter=${filter}`] : [])
+    ...(filter ? [`--filter=${filter}`] : []),
+    ...(suite ? [`--suite=${suite}`] : [])
   ]
   let failure = null
   try {

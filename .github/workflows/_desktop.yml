@@ -172,6 +172,8 @@ jobs:
           # A configuration selected by a label, with the suite that label passes; see ci.labels.
           CI_LABEL: ${{ matrix.row.label }}
           CI_SUITE: ${{ matrix.row.suite }}
+          # The tests a row names, such as a rerun's previously failed ones; empty runs the suite.
+          CI_TESTS: ${{ matrix.row.tests }}
           # true when the model restore hit its exact key, so a package that downloads its own models can skip it.
           MODELS_CACHE_HIT: ${{ steps.models-restore.outputs.cache-hit }}
           PERF_RUNS: ${{ inputs.perf_runs }}

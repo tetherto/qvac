@@ -99,7 +99,8 @@
             "labels": {
               "test-e2e-smoke": "smoke",
               "test-e2e-full": "",
-              "base:release-*": ""
+              "base:release-*": "",
+              "test-e2e-rerun-failed": ""
             }
           }
         },
@@ -111,7 +112,8 @@
             "labels": {
               "test-e2e-smoke": "smoke",
               "test-e2e-full": "",
-              "base:release-*": ""
+              "base:release-*": "",
+              "test-e2e-rerun-failed": ""
             }
           }
         },
@@ -123,7 +125,8 @@
             "labels": {
               "test-e2e-smoke": "smoke",
               "test-e2e-full": "",
-              "base:release-*": ""
+              "base:release-*": "",
+              "test-e2e-rerun-failed": ""
             }
           }
         },
