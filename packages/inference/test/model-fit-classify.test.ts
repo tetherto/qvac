@@ -70,8 +70,8 @@ test('a wholly CPU-resident load spans no GPU', (t) => {
 
   t.is(outcome.plan?.nGpuDevices, 0)
   t.is(outcome.projection?.deviceName, 'CPU')
-  t.is(outcome.projection?.deviceBytes, 5 * 1024 ** 3)
-  t.absent(outcome.projection?.hostBytes)
+  t.absent(outcome.projection?.deviceBytes)
+  t.is(outcome.projection?.hostBytes, 5 * 1024 ** 3)
 })
 
 test('a placement is reported only where the load fits', (t) => {

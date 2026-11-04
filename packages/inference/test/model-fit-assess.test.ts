@@ -39,6 +39,18 @@ function measured(
   }
 }
 
+function measuredTotal(deviceBytes: number, hostBytes = 0): NativeCandidateFit {
+  return {
+    fit: {
+      verdict: 'fit',
+      basis: 'native-probe',
+      estimatorVersion: 'native-probe-v2',
+      reason: 'fits',
+      projection: { deviceBytes, hostBytes }
+    }
+  }
+}
+
 // A plain dense transformer: 32 blocks, 8 KV heads, 128-wide K and V.
 function denseFacts(overrides: Partial<GgufFacts> = {}): GgufFacts {
   return {
@@ -445,6 +457,24 @@ test('assess: every model measured by its engine reports native evidence', (t) =
   t.is(result.models[0]!.evidence, 'native-fit')
   t.is(result.models[1]!.evidence, 'native-fit')
   t.ok(result.reasons.some((r) => r.includes('measured by the engine')))
+})
+
+test('assess: total-only native measurements combine conservatively', (t) => {
+  const result = assessModelFitFromResources({
+    models: [
+      candidate({ model: { name: 'A', sha256Checksum: 'a'.repeat(64) } }),
+      candidate({ model: { name: 'B', sha256Checksum: 'b'.repeat(64) } })
+    ],
+    execution: 'sequential',
+    resources: resources({ totalBytes: 4.5 * GIB, usedBytes: 0 }),
+    platform: 'darwin-arm64',
+    resolveProfile: () => undefined,
+    nativeFits: [measuredTotal(2 * GIB), measuredTotal(2 * GIB)]
+  })
+
+  t.is(result.verdict, 'likely-too-large')
+  t.is(result.evidence, 'native-fit')
+  t.ok(result.assumptions.some((assumption) => assumption.includes('totals only')))
 })
 
 test('assess: a model the engine could not measure falls back to its floor', (t) => {

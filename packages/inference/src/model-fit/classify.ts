@@ -220,10 +220,8 @@ function classifySharedFit(
         }
       : undefined
   const projection: NativeProbeProjection = {
-    ...((deviceBytes !== undefined || hostBytes !== undefined) && {
-      deviceBytes: deviceBytes ?? hostBytes
-    }),
-    ...(deviceBytes !== undefined && hostBytes !== undefined && { hostBytes }),
+    ...(deviceBytes !== undefined && { deviceBytes }),
+    ...(hostBytes !== undefined && { hostBytes }),
     ...(selected !== undefined && {
       deviceName: selected.name,
       deviceFreeBytes: selected.freeBytes,

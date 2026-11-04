@@ -76,8 +76,10 @@ interface NativeEvaluation {
 }
 
 /**
- * What one fitter answered: its measurement where the figures divide, its bare
- * verdict where they do not, and `undefined` where it reached no verdict.
+ * What one fitter answered: its measurement where the figures divide, a
+ * conservative all-resident measurement where it reports totals alone, its
+ * bare verdict where it reports no byte total, and `undefined` where it reached
+ * no verdict.
  */
 function nativeEvaluation(
   native: NativeCandidateFit | undefined
@@ -96,9 +98,20 @@ function nativeEvaluation(
   const projection = fit.projection
   if (!projection) return bare
 
-  const { weightsBytes, contextBytes, computeBytes, hostBytes } = projection
+  const { weightsBytes, contextBytes, computeBytes, deviceBytes, hostBytes } = projection
   if (weightsBytes === undefined || contextBytes === undefined || computeBytes === undefined) {
-    return bare
+    if (deviceBytes === undefined && hostBytes === undefined) return bare
+
+    return {
+      kind: 'native',
+      persistent: deviceBytes ?? 0,
+      working: 0,
+      hostBytes: hostBytes ?? 0,
+      estimatorVersion: fit.estimatorVersion,
+      verdict: fit.verdict,
+      reasons,
+      assumptions: ['engine reported totals only; treated as resident memory']
+    }
   }
 
   return {
