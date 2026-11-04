@@ -46,6 +46,8 @@ _DONE = object()
 class VadEvent:
     speaking: bool
     probability: float
+    timestamp: float | None = None
+    """Parakeet: seconds from the start of the streaming session; whisper omits it."""
     type: str = "vad"
 
 
@@ -219,6 +221,7 @@ def _process_conversation(wants_metadata: bool) -> Callable[[dict[str, Any]], An
             return VadEvent(
                 speaking=response.vad.speaking,
                 probability=response.vad.probability,
+                timestamp=response.vad.timestamp,
             )
         if response.end_of_turn is not None:
             source = response.end_of_turn.source

@@ -1,0 +1,43 @@
+name: Ensure AWS CLI
+description: Put the AWS CLI v2 on PATH on self-hosted macOS and Windows runners, which don't ship it. No-op where `aws` already resolves.
+
+runs:
+  using: composite
+  steps:
+    - name: Ensure AWS CLI (macOS)
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        set -euo pipefail
+        if command -v aws >/dev/null 2>&1; then
+          echo "aws already on PATH"; exit 0
+        fi
+        for c in /opt/homebrew/bin/aws /usr/local/bin/aws "$HOME/.local/aws-cli/aws"; do
+          if [ -x "$c" ]; then
+            echo "$(dirname "$c")" >> "$GITHUB_PATH"; echo "found $c"; exit 0
+          fi
+        done
+        echo "Installing AWS CLI user-local"
+        curl -fsSL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o /tmp/AWSCLIV2.pkg
+        rm -rf /tmp/awscli-pkg
+        pkgutil --expand-full /tmp/AWSCLIV2.pkg /tmp/awscli-pkg
+        mkdir -p "$HOME/.local"
+        rm -rf "$HOME/.local/aws-cli"
+        mv /tmp/awscli-pkg/*/Payload/aws-cli "$HOME/.local/aws-cli"
+        echo "$HOME/.local/aws-cli" >> "$GITHUB_PATH"
+
+    - name: Ensure AWS CLI (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        if (Get-Command aws -ErrorAction SilentlyContinue) {
+          Write-Host "AWS CLI already installed"
+          aws --version
+        } else {
+          Write-Host "Installing AWS CLI v2..."
+          Invoke-WebRequest -Uri https://awscli.amazonaws.com/AWSCLIV2.msi -OutFile $env:TEMP\AWSCLIV2.msi
+          Start-Process msiexec.exe -Wait -ArgumentList '/I', "$env:TEMP\AWSCLIV2.msi", '/qn'
+          $env:PATH = "C:\Program Files\Amazon\AWSCLIV2;$env:PATH"
+          echo "C:\Program Files\Amazon\AWSCLIV2" >> $env:GITHUB_PATH
+          aws --version
+        }

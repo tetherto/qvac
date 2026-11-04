@@ -2,7 +2,7 @@
 /**
  * Install the locked bare toolchain and put its bin directory first on PATH.
  *
- * The bin directory holds bare-make and every tool its dependencies ship:
+ * The bin directory holds bare-make, bare-link and every tool their dependencies ship:
  * clang, clang++, lld, llvm-profdata, llvm-cov, clang-format, cmake, ninja and
  * nasm. Putting it first makes coverage, formatting and any direct compiler call
  * use the same LLVM bare-make compiles with.
@@ -43,6 +43,7 @@ if (process.env.GITHUB_PATH) {
 // Windows spells it Path, and a second PATH key beside it is not the one used.
 const pathKey = Object.keys(process.env).find((key) => key.toUpperCase() === 'PATH') ?? 'PATH'
 const env = { ...process.env, [pathKey]: `${bin}${delimiter}${process.env[pathKey] ?? ''}` }
-for (const tool of ['bare-make', 'clang', 'llvm-profdata']) {
-  run(tool, ['--version'], { env })
+for (const tool of ['bare-make', 'bare-link', 'clang', 'llvm-profdata']) {
+  // bare-link requires its entry argument even when only printing the version.
+  run(tool, tool === 'bare-link' ? ['--version', '.'] : ['--version'], { env })
 }

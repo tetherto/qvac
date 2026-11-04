@@ -28,13 +28,17 @@ per-package workflow. The next train moves it above that version.
     the other.
   - `anchorGroup`, a fixed group whose version names the branch, or
     `anchorProject`, one package whose version does
-  - `fromNpm`: directories of workspace packages the train depends on but
-    builds and checks against the version on npm (see
-    [Making a release](#making-a-release))
   - `githubRelease`: the one package that also gets a GitHub release, on its
     tag. Every package gets a `<slug>-v<version>` tag.
   - `checks`: the check jobs in `release-train.yml` that must pass
   - `packageChecks`: the per-package check config `package-checks` runs
+
+A train builds, checks and publishes against npm for every workspace package
+its packages depend on outside the train, development dependencies included.
+`release-train.mjs` reads them from the `package.json` files, so no list is
+kept. A workspace copy can hold changes its package has not released, and a
+native addon's copy has no prebuilds, so the train never links one (see
+[Making a release](#making-a-release)).
 
 ## Making a release
 
@@ -75,10 +79,11 @@ per-package workflow. The next train moves it above that version.
    `sdk-python` and `sdk-kotlin` syncs of `qv-sdk-inference-version`);
    `pr-checks-sdk-kotlin.yml` checks the Kotlin version on both PRs.
 
-   When the train lists `fromNpm` packages, take them out of the workspace in a
-   separate commit. pnpm links a workspace package whenever its version
-   satisfies the range, so the train would otherwise build against the
-   workspace copy instead of the version on npm:
+   Take every package outside the train out of the workspace in a separate
+   commit. pnpm links a workspace package whenever its version satisfies the
+   range, so the train would otherwise build against the workspace copy
+   instead of the version on npm. Each of them needs a version on npm that the
+   train's range accepts, or the install fails:
 
    ```bash
    node .github/scripts/release-train.mjs exclude <train>
@@ -159,8 +164,8 @@ push (`release-train.yml`):
 - every range between train packages accepts the new version of its target
 - each moved package has notes under `## [<version>]` in its `CHANGELOG.md`
 - no `.nx/version-plans/` file is committed
-- every `fromNpm` directory is left out of `pnpm-workspace.yaml`, and is not a
-  train package
+- every workspace package the train depends on outside itself is left out of
+  `pnpm-workspace.yaml`
 - on the PR: npm does not have any moved version yet
 - on push: a version npm already has was published from this commit (its
   `gitHead`); otherwise the branch has released and the run stops
@@ -171,18 +176,17 @@ Before npm publish:
   config (install, format, lint, typecheck, build, unit, bare and e2e tests,
   and the SDK's consumer installs), with every train package installed from a tarball
   of this commit and everything else from npm. The backmerge PR, from
-  `backmerge/release-train-<train>-<x.y.z>` into `main`, runs the same through
-  `pr-checks-sdk-pod.yml`, except for a train with `fromNpm` packages. `main`
-  keeps those packages in the workspace, and its code may already need
-  versions of them that npm does not have, so that backmerge runs the checks
-  after npm publish again: on the commit npm records as the anchor package's
-  `gitHead`, with every package from npm.
+  `backmerge/release-train-<train>-<x.y.z>` into `main`, runs these checks
+  through `pr-checks-sdk-pod.yml` after npm publish: on the commit npm records
+  as the anchor package's `gitHead`, with every package from npm. `main` keeps
+  the packages outside the train in the workspace, and its copies may hold
+  changes npm does not have yet.
 - **`shared-runtime-libs`**: `check-shared-runtime-libs.mjs` for inference and
   sdk, as `publish-inference.yml` and `publish-sdk.yml` run it.
 - **`sdk-python`**: the Python contract check, build, version lockstep and
   `twine check`.
-- a workspace package outside the train that the train links must be on npm at
-  the linked version.
+- after the install, no package outside the train is linked from the
+  workspace.
 
 After npm publish, `package-checks` runs again with every package installed
 from npm. Tags, the GitHub release, PyPI and the wheels wait for it.

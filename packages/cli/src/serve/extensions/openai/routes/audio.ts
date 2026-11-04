@@ -60,7 +60,8 @@ model).
 and \`verbose_json\`. \`json\` and \`text\` work with Whisper, Parakeet,
 and MOSS transcription aliases. SRT/VTT require Whisper or MOSS segment metadata.
 Parakeet also supports \`verbose_json\`, including offline diarization turns.
-\`verbose_json\` exposes text, duration, segment id/start/end/text, and available speaker/speaker_id labels.
+\`verbose_json\` exposes text, duration, segment id/start/end/text, available speaker/speaker_id labels,
+and the whisper language, no_speech_prob, speaker_turn_next and token_timestamps the engine reports.
 Its duration is the latest segment or speaker-turn end, not the submitted
 audio length.
 Unknown values return \`400 invalid_response_format\`.
