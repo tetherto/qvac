@@ -1947,6 +1947,9 @@ importers:
       cmake-bare:
         specifier: ^1.9.0
         version: 1.10.1
+      cmake-npm:
+        specifier: ^1.1.2
+        version: 1.1.2
       cmake-vcpkg:
         specifier: ^1.1.0
         version: 1.2.0
