@@ -5,6 +5,7 @@ import type { CompletionRun, CompletionStats, ToolCall } from '@qvac/sdk'
 import { createServer } from '../helpers/server.js'
 import { JSON_HEADERS, assertStatusAndError, collectSSE } from '../helpers/http.js'
 import { openaiState } from '@/serve/extensions/openai/state'
+import { responsesKvCacheRetention } from '@/serve/lib/responses-kv-cache'
 
 function server(t: Parameters<typeof createServer>[0]) {
   return createServer(t, {
@@ -211,6 +212,48 @@ describe('serve: Responses KV cache', () => {
     })
     assert.equal(res.statusCode, 200, res.payload)
   })
+
+  it(
+    'skips inference when the client leaves while its key waits',
+    { timeout: 15000 },
+    async (t) => {
+      const app = await server(t)
+      await app.ready()
+      let called = false
+      openaiState(app.qvac).completionOverride = () => {
+        called = true
+        return stubRun()
+      }
+      let finishDeletion!: () => void
+      const deletion = new Promise<void>((resolve) => {
+        finishDeletion = resolve
+      })
+      let waiting!: () => void
+      const waitStarted = new Promise<void>((resolve) => {
+        waiting = resolve
+      })
+      t.mock.method(responsesKvCacheRetention, 'acquire', async () => {
+        waiting()
+        await deletion
+        return () => {}
+      })
+      const address = await app.listen({ host: '127.0.0.1', port: 0 })
+      const controller = new AbortController()
+      const pending = fetch(`${address}/v1/responses`, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ model: 'test-llm', input: 'hello', prompt_cache_key: 'session-a' })
+      })
+      pending.catch(() => {})
+      await waitStarted
+      controller.abort()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      finishDeletion()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      assert.equal(called, false)
+    }
+  )
 
   it('prefers metadata over prompt_cache_key', { timeout: 15000 }, async (t) => {
     const app = await server(t)

@@ -272,6 +272,9 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       const releaseCache =
         sdk.kvCache !== undefined ? await responsesKvCacheRetention.acquire(sdk.kvCache) : undefined
       try {
+        // The client may have left while the key waited for a deletion; its
+        // close already fired, so nothing would cancel the run.
+        if (reply.raw.destroyed) return
         if (streaming) {
           initSSE(reply, { [VOLATILE_HEADER]: RESPONSES_VOLATILE_STUB })
           await writeStreamingResponse(reply.raw, writerParams, runTurn(true))
