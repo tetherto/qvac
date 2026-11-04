@@ -29,6 +29,9 @@
           "$ref": "#/$defs/bciTranscribeStream.request"
         },
         {
+          "$ref": "#/$defs/calcTokens.request"
+        },
+        {
           "$ref": "#/$defs/cancel.request"
         },
         {
@@ -177,6 +180,9 @@
         },
         {
           "$ref": "#/$defs/bciTranscribeStream.response"
+        },
+        {
+          "$ref": "#/$defs/calcTokens.response"
         },
         {
           "$ref": "#/$defs/cancel.response"
@@ -3750,6 +3756,238 @@
         }
       },
       "required": ["type"],
+      "additionalProperties": false
+    },
+    "calcTokens.request": {
+      "title": "CalcTokensRequest",
+      "type": "object",
+      "properties": {
+        "modelId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Loaded language model to tokenize with."
+        },
+        "text": {
+          "description": "Raw text, or the final user turn when history is present.",
+          "type": "string"
+        },
+        "history": {
+          "description": "Conversation to render with the loaded model chat template.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string",
+                "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`, `\"tool\"`)."
+              },
+              "content": {
+                "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.",
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "attachments": {
+                "description": "Optional file attachments for multimodal models.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "description": "Absolute or resolvable path to the attachment file (e.g., image for multimodal models)."
+                    }
+                  },
+                  "required": ["path"],
+                  "title": "CalcTokensRequestHistoryItemAttachmentsItem"
+                }
+              },
+              "toolCalls": {
+                "description": "Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "description": "Call id, echoed by the `tool` message that answers it.",
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Name of the tool that was called."
+                    },
+                    "arguments": {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {},
+                      "description": "Arguments the tool was called with.",
+                      "title": "CalcTokensRequestHistoryItemToolCallsItemArguments"
+                    }
+                  },
+                  "required": ["name", "arguments"],
+                  "title": "CalcTokensRequestHistoryItemToolCallsItem"
+                }
+              },
+              "toolCallId": {
+                "description": "On a `tool` turn: the id of the call this result answers.",
+                "type": "string"
+              },
+              "toolName": {
+                "description": "On a `tool` turn: the name of the tool that produced the result.",
+                "type": "string"
+              }
+            },
+            "required": ["role"],
+            "title": "CalcTokensRequestHistoryItem"
+          }
+        },
+        "tools": {
+          "description": "Tools to include in the rendered prompt.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "function"
+              },
+              "name": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string"
+              },
+              "deferLoading": {
+                "description": "Opt out of the initial prompt. A deferred tool is registered but only its name and description reach the model, in the catalog carried by the built-in `tool_search`; its parameter schema is appended to the conversation once the model searches for it. Tools without this field behave as before.",
+                "type": "boolean"
+              },
+              "group": {
+                "description": "Optional heading this tool is listed under in the deferred catalog — a skill or an MCP server name. Ignored for tools that are not deferred.",
+                "type": "string"
+              },
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "object"
+                  },
+                  "properties": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "string",
+                                "number",
+                                "integer",
+                                "boolean",
+                                "object",
+                                "array",
+                                "null"
+                              ],
+                              "title": "CalcTokensRequestToolsItemParametersPropertiesValueType"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "string",
+                                  "number",
+                                  "integer",
+                                  "boolean",
+                                  "object",
+                                  "array",
+                                  "null"
+                                ],
+                                "title": "CalcTokensRequestToolsItemParametersPropertiesValueTypeItem"
+                              }
+                            }
+                          ]
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "enum": {
+                          "type": "array",
+                          "items": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "number"
+                              },
+                              {
+                                "type": "boolean"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "additionalProperties": {},
+                      "title": "CalcTokensRequestToolsItemParametersPropertiesValue"
+                    },
+                    "title": "CalcTokensRequestToolsItemParametersProperties"
+                  },
+                  "required": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": ["type", "properties"],
+                "additionalProperties": {},
+                "title": "CalcTokensRequestToolsItemParameters"
+              }
+            },
+            "required": ["type", "name", "description", "parameters"],
+            "title": "CalcTokensRequestToolsItem"
+          }
+        },
+        "type": {
+          "type": "string",
+          "const": "calcTokens"
+        }
+      },
+      "required": ["modelId", "type"],
+      "additionalProperties": false
+    },
+    "calcTokens.response": {
+      "title": "CalcTokensResponse",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "calcTokens"
+        },
+        "tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": ["type", "tokens"],
       "additionalProperties": false
     },
     "cancel.request": {

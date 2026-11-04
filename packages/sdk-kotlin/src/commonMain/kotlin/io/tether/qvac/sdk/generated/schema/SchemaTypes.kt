@@ -15,6 +15,7 @@ sealed class AnyRequest {
     data class BatchCompletionStreamRequest(val value: io.tether.qvac.sdk.generated.schema.BatchCompletionStreamRequest) : AnyRequest()
     data class BciTranscribeRequest(val value: io.tether.qvac.sdk.generated.schema.BciTranscribeRequest) : AnyRequest()
     data class BciTranscribeStreamRequest(val value: io.tether.qvac.sdk.generated.schema.BciTranscribeStreamRequest) : AnyRequest()
+    data class CalcTokensRequest(val value: io.tether.qvac.sdk.generated.schema.CalcTokensRequest) : AnyRequest()
     data class CancelRequest(val value: io.tether.qvac.sdk.generated.schema.CancelRequest) : AnyRequest()
     data class ClassifyRequest(val value: io.tether.qvac.sdk.generated.schema.ClassifyRequest) : AnyRequest()
     data class CompletionOrchestrateRequest(val value: io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequest) : AnyRequest()
@@ -67,6 +68,7 @@ internal object AnyRequestSerializer : KSerializer<AnyRequest> {
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"prompts\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"prompts\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"history\"]}},\"stream\":{\"type\":\"boolean\"},\"captureThinking\":{\"type\":\"boolean\"},\"emitRawDeltas\":{\"type\":\"boolean\"},\"toolDialect\":{\"type\":\"string\",\"enum\":[\"hermes\",\"pythonic\",\"json\",\"harmony\",\"qwen35\",\"gemma4\",\"dsml\"]},\"requestId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"batchCompletionStream\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"neuralData\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"metadata\":{\"type\":\"boolean\"},\"neuralData\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"base64\"},\"value\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"filePath\"},\"value\":{\"type\":\"string\"}}}]},\"type\":{\"type\":\"string\",\"const\":\"bciTranscribe\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"metadata\":{\"type\":\"boolean\"},\"type\":{\"type\":\"string\",\"const\":\"bciTranscribeStream\"},\"streamOpts\":{\"type\":\"object\",\"properties\":{\"windowTimesteps\":{\"type\":\"integer\"},\"hopTimesteps\":{\"type\":\"integer\"},\"emit\":{\"type\":\"string\",\"enum\":[\"delta\",\"full\"]}}},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"text\":{\"type\":\"string\"},\"history\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"role\"]}},\"tools\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"type\",\"name\",\"description\",\"parameters\"]}},\"type\":{\"type\":\"string\",\"const\":\"calcTokens\"}}}").jsonObject,
         Json.parseToJsonElement("{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"operation\",\"requestId\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"cancel\"},\"operation\":{\"type\":\"string\",\"const\":\"request\"},\"requestId\":{\"type\":\"string\"},\"clearCache\":{\"type\":\"boolean\"}}},{\"type\":\"object\",\"required\":[\"type\",\"operation\",\"modelId\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"cancel\"},\"operation\":{\"type\":\"string\",\"const\":\"broad\"},\"modelId\":{\"type\":\"string\"},\"kind\":{\"type\":\"string\",\"enum\":[\"completion\",\"batchCompletion\",\"embeddings\",\"decision\",\"rerank\",\"transcribe\",\"translate\",\"diffusion\",\"world\",\"audiogen\",\"tts\",\"ocr\",\"vla\",\"finetune\",\"loadModel\",\"downloadAsset\",\"rpcServer\",\"rpcDiscovery\",\"rag\"]}}}]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"image\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"image\":{\"type\":\"string\"},\"topK\":{\"type\":\"integer\"},\"width\":{\"type\":\"integer\"},\"height\":{\"type\":\"integer\"},\"channels\":{\"type\":\"number\",\"const\":3},\"type\":{\"type\":\"string\",\"const\":\"classify\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"history\",\"modelId\",\"stream\",\"type\"],\"properties\":{\"history\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"role\"]}},\"modelId\":{\"type\":\"string\"},\"kvCache\":{\"anyOf\":[{\"type\":\"boolean\"},{\"type\":\"string\"}]},\"prefill\":{\"type\":\"boolean\"},\"tools\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"type\",\"name\",\"description\",\"parameters\"]}},\"stream\":{\"type\":\"boolean\"},\"generationParams\":{\"type\":\"object\",\"properties\":{\"temp\":{\"type\":\"number\"},\"top_p\":{\"type\":\"number\"},\"top_k\":{\"type\":\"number\"},\"predict\":{\"type\":\"number\"},\"seed\":{\"type\":\"number\"},\"frequency_penalty\":{\"type\":\"number\"},\"presence_penalty\":{\"type\":\"number\"},\"repeat_penalty\":{\"type\":\"number\"},\"reasoning_budget\":{\"type\":\"integer\"},\"tool_choice\":{\"type\":\"string\"},\"parallel_tool_calls\":{\"type\":\"boolean\"}}},\"captureThinking\":{\"type\":\"boolean\"},\"emitRawDeltas\":{\"type\":\"boolean\"},\"toolDialect\":{\"type\":\"string\",\"enum\":[\"hermes\",\"pythonic\",\"json\",\"harmony\",\"qwen35\",\"gemma4\",\"dsml\"]},\"responseFormat\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"}}},{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"json_object\"}}},{\"type\":\"object\",\"required\":[\"type\",\"json_schema\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"json_schema\"},\"json_schema\":{\"type\":\"object\",\"required\":[\"name\",\"schema\"]}}}]},\"requestId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"completionOrchestrate\"},\"maxToolTurns\":{\"type\":\"integer\"}}}").jsonObject,
@@ -120,47 +122,48 @@ internal object AnyRequestSerializer : KSerializer<AnyRequest> {
             4 -> AnyRequest.BatchCompletionStreamRequest(input.json.decodeFromJsonElement(serializer<BatchCompletionStreamRequest>(), element))
             5 -> AnyRequest.BciTranscribeRequest(input.json.decodeFromJsonElement(serializer<BciTranscribeRequest>(), element))
             6 -> AnyRequest.BciTranscribeStreamRequest(input.json.decodeFromJsonElement(serializer<BciTranscribeStreamRequest>(), element))
-            7 -> AnyRequest.CancelRequest(input.json.decodeFromJsonElement(serializer<CancelRequest>(), element))
-            8 -> AnyRequest.ClassifyRequest(input.json.decodeFromJsonElement(serializer<ClassifyRequest>(), element))
-            9 -> AnyRequest.CompletionOrchestrateRequest(input.json.decodeFromJsonElement(serializer<CompletionOrchestrateRequest>(), element))
-            10 -> AnyRequest.CompletionStreamRequest(input.json.decodeFromJsonElement(serializer<CompletionStreamRequest>(), element))
-            11 -> AnyRequest.DecideRequest(input.json.decodeFromJsonElement(serializer<DecideRequest>(), element))
-            12 -> AnyRequest.DeleteCacheRequest(input.json.decodeFromJsonElement(serializer<DeleteCacheRequest>(), element))
-            13 -> AnyRequest.DiffusionStreamRequest(input.json.decodeFromJsonElement(serializer<DiffusionStreamRequest>(), element))
-            14 -> AnyRequest.DiscoverRpcServersRequest(input.json.decodeFromJsonElement(serializer<DiscoverRpcServersRequest>(), element))
-            15 -> AnyRequest.DownloadAssetRequest(input.json.decodeFromJsonElement(serializer<DownloadAssetRequest>(), element))
-            16 -> AnyRequest.EmbedRequest(input.json.decodeFromJsonElement(serializer<EmbedRequest>(), element))
-            17 -> AnyRequest.FinetuneRequest(input.json.decodeFromJsonElement(serializer<FinetuneRequest>(), element))
-            18 -> AnyRequest.GetLoadedModelInfoRequest(input.json.decodeFromJsonElement(serializer<GetLoadedModelInfoRequest>(), element))
-            19 -> AnyRequest.GetModelInfoRequest(input.json.decodeFromJsonElement(serializer<GetModelInfoRequest>(), element))
-            20 -> AnyRequest.GetSystemResourcesRequest(input.json.decodeFromJsonElement(serializer<GetSystemResourcesRequest>(), element))
-            21 -> AnyRequest.HeartbeatRequest(input.json.decodeFromJsonElement(serializer<HeartbeatRequest>(), element))
-            22 -> AnyRequest.LoadModelRequest(input.json.decodeFromJsonElement(serializer<LoadModelRequest>(), element))
-            23 -> AnyRequest.LoggingStreamRequest(input.json.decodeFromJsonElement(serializer<LoggingStreamRequest>(), element))
-            24 -> AnyRequest.ModelRegistryGetModelRequest(input.json.decodeFromJsonElement(serializer<ModelRegistryGetModelRequest>(), element))
-            25 -> AnyRequest.ModelRegistryListRequest(input.json.decodeFromJsonElement(serializer<ModelRegistryListRequest>(), element))
-            26 -> AnyRequest.ModelRegistrySearchRequest(input.json.decodeFromJsonElement(serializer<ModelRegistrySearchRequest>(), element))
-            27 -> AnyRequest.OcrStreamRequest(input.json.decodeFromJsonElement(serializer<OcrStreamRequest>(), element))
-            28 -> AnyRequest.PluginInvokeRequest(input.json.decodeFromJsonElement(serializer<PluginInvokeRequest>(), element))
-            29 -> AnyRequest.PluginInvokeStreamRequest(input.json.decodeFromJsonElement(serializer<PluginInvokeStreamRequest>(), element))
-            30 -> AnyRequest.RagRequest(input.json.decodeFromJsonElement(serializer<RagRequest>(), element))
-            31 -> AnyRequest.RerankRequest(input.json.decodeFromJsonElement(serializer<RerankRequest>(), element))
-            32 -> AnyRequest.ResumeRequest(input.json.decodeFromJsonElement(serializer<ResumeRequest>(), element))
-            33 -> AnyRequest.StartRpcServerRequest(input.json.decodeFromJsonElement(serializer<StartRpcServerRequest>(), element))
-            34 -> AnyRequest.StateRequest(input.json.decodeFromJsonElement(serializer<StateRequest>(), element))
-            35 -> AnyRequest.StopRpcServerRequest(input.json.decodeFromJsonElement(serializer<StopRpcServerRequest>(), element))
-            36 -> AnyRequest.SuspendRequest(input.json.decodeFromJsonElement(serializer<SuspendRequest>(), element))
-            37 -> AnyRequest.TextToSpeechRequest(input.json.decodeFromJsonElement(serializer<TextToSpeechRequest>(), element))
-            38 -> AnyRequest.TextToSpeechStreamRequest(input.json.decodeFromJsonElement(serializer<TextToSpeechStreamRequest>(), element))
-            39 -> AnyRequest.TranscribeRequest(input.json.decodeFromJsonElement(serializer<TranscribeRequest>(), element))
-            40 -> AnyRequest.TranscribeStreamRequest(input.json.decodeFromJsonElement(serializer<TranscribeStreamRequest>(), element))
-            41 -> AnyRequest.TranslateRequest(input.json.decodeFromJsonElement(serializer<TranslateRequest>(), element))
-            42 -> AnyRequest.UnloadModelRequest(input.json.decodeFromJsonElement(serializer<UnloadModelRequest>(), element))
-            43 -> AnyRequest.UpscaleStreamRequest(input.json.decodeFromJsonElement(serializer<UpscaleStreamRequest>(), element))
-            44 -> AnyRequest.VectorIndexRequest(input.json.decodeFromJsonElement(serializer<VectorIndexRequest>(), element))
-            45 -> AnyRequest.VideoStreamRequest(input.json.decodeFromJsonElement(serializer<VideoStreamRequest>(), element))
-            46 -> AnyRequest.WorldSceneStreamRequest(input.json.decodeFromJsonElement(serializer<WorldSceneStreamRequest>(), element))
-            47 -> AnyRequest.WorldStepStreamRequest(input.json.decodeFromJsonElement(serializer<WorldStepStreamRequest>(), element))
+            7 -> AnyRequest.CalcTokensRequest(input.json.decodeFromJsonElement(serializer<CalcTokensRequest>(), element))
+            8 -> AnyRequest.CancelRequest(input.json.decodeFromJsonElement(serializer<CancelRequest>(), element))
+            9 -> AnyRequest.ClassifyRequest(input.json.decodeFromJsonElement(serializer<ClassifyRequest>(), element))
+            10 -> AnyRequest.CompletionOrchestrateRequest(input.json.decodeFromJsonElement(serializer<CompletionOrchestrateRequest>(), element))
+            11 -> AnyRequest.CompletionStreamRequest(input.json.decodeFromJsonElement(serializer<CompletionStreamRequest>(), element))
+            12 -> AnyRequest.DecideRequest(input.json.decodeFromJsonElement(serializer<DecideRequest>(), element))
+            13 -> AnyRequest.DeleteCacheRequest(input.json.decodeFromJsonElement(serializer<DeleteCacheRequest>(), element))
+            14 -> AnyRequest.DiffusionStreamRequest(input.json.decodeFromJsonElement(serializer<DiffusionStreamRequest>(), element))
+            15 -> AnyRequest.DiscoverRpcServersRequest(input.json.decodeFromJsonElement(serializer<DiscoverRpcServersRequest>(), element))
+            16 -> AnyRequest.DownloadAssetRequest(input.json.decodeFromJsonElement(serializer<DownloadAssetRequest>(), element))
+            17 -> AnyRequest.EmbedRequest(input.json.decodeFromJsonElement(serializer<EmbedRequest>(), element))
+            18 -> AnyRequest.FinetuneRequest(input.json.decodeFromJsonElement(serializer<FinetuneRequest>(), element))
+            19 -> AnyRequest.GetLoadedModelInfoRequest(input.json.decodeFromJsonElement(serializer<GetLoadedModelInfoRequest>(), element))
+            20 -> AnyRequest.GetModelInfoRequest(input.json.decodeFromJsonElement(serializer<GetModelInfoRequest>(), element))
+            21 -> AnyRequest.GetSystemResourcesRequest(input.json.decodeFromJsonElement(serializer<GetSystemResourcesRequest>(), element))
+            22 -> AnyRequest.HeartbeatRequest(input.json.decodeFromJsonElement(serializer<HeartbeatRequest>(), element))
+            23 -> AnyRequest.LoadModelRequest(input.json.decodeFromJsonElement(serializer<LoadModelRequest>(), element))
+            24 -> AnyRequest.LoggingStreamRequest(input.json.decodeFromJsonElement(serializer<LoggingStreamRequest>(), element))
+            25 -> AnyRequest.ModelRegistryGetModelRequest(input.json.decodeFromJsonElement(serializer<ModelRegistryGetModelRequest>(), element))
+            26 -> AnyRequest.ModelRegistryListRequest(input.json.decodeFromJsonElement(serializer<ModelRegistryListRequest>(), element))
+            27 -> AnyRequest.ModelRegistrySearchRequest(input.json.decodeFromJsonElement(serializer<ModelRegistrySearchRequest>(), element))
+            28 -> AnyRequest.OcrStreamRequest(input.json.decodeFromJsonElement(serializer<OcrStreamRequest>(), element))
+            29 -> AnyRequest.PluginInvokeRequest(input.json.decodeFromJsonElement(serializer<PluginInvokeRequest>(), element))
+            30 -> AnyRequest.PluginInvokeStreamRequest(input.json.decodeFromJsonElement(serializer<PluginInvokeStreamRequest>(), element))
+            31 -> AnyRequest.RagRequest(input.json.decodeFromJsonElement(serializer<RagRequest>(), element))
+            32 -> AnyRequest.RerankRequest(input.json.decodeFromJsonElement(serializer<RerankRequest>(), element))
+            33 -> AnyRequest.ResumeRequest(input.json.decodeFromJsonElement(serializer<ResumeRequest>(), element))
+            34 -> AnyRequest.StartRpcServerRequest(input.json.decodeFromJsonElement(serializer<StartRpcServerRequest>(), element))
+            35 -> AnyRequest.StateRequest(input.json.decodeFromJsonElement(serializer<StateRequest>(), element))
+            36 -> AnyRequest.StopRpcServerRequest(input.json.decodeFromJsonElement(serializer<StopRpcServerRequest>(), element))
+            37 -> AnyRequest.SuspendRequest(input.json.decodeFromJsonElement(serializer<SuspendRequest>(), element))
+            38 -> AnyRequest.TextToSpeechRequest(input.json.decodeFromJsonElement(serializer<TextToSpeechRequest>(), element))
+            39 -> AnyRequest.TextToSpeechStreamRequest(input.json.decodeFromJsonElement(serializer<TextToSpeechStreamRequest>(), element))
+            40 -> AnyRequest.TranscribeRequest(input.json.decodeFromJsonElement(serializer<TranscribeRequest>(), element))
+            41 -> AnyRequest.TranscribeStreamRequest(input.json.decodeFromJsonElement(serializer<TranscribeStreamRequest>(), element))
+            42 -> AnyRequest.TranslateRequest(input.json.decodeFromJsonElement(serializer<TranslateRequest>(), element))
+            43 -> AnyRequest.UnloadModelRequest(input.json.decodeFromJsonElement(serializer<UnloadModelRequest>(), element))
+            44 -> AnyRequest.UpscaleStreamRequest(input.json.decodeFromJsonElement(serializer<UpscaleStreamRequest>(), element))
+            45 -> AnyRequest.VectorIndexRequest(input.json.decodeFromJsonElement(serializer<VectorIndexRequest>(), element))
+            46 -> AnyRequest.VideoStreamRequest(input.json.decodeFromJsonElement(serializer<VideoStreamRequest>(), element))
+            47 -> AnyRequest.WorldSceneStreamRequest(input.json.decodeFromJsonElement(serializer<WorldSceneStreamRequest>(), element))
+            48 -> AnyRequest.WorldStepStreamRequest(input.json.decodeFromJsonElement(serializer<WorldStepStreamRequest>(), element))
             else -> throw SerializationException("No matching AnyRequest variant")
         }
     }
@@ -173,6 +176,7 @@ internal object AnyRequestSerializer : KSerializer<AnyRequest> {
             is AnyRequest.BatchCompletionStreamRequest -> encoder.encodeSerializableValue(serializer<BatchCompletionStreamRequest>(), value.value)
             is AnyRequest.BciTranscribeRequest -> encoder.encodeSerializableValue(serializer<BciTranscribeRequest>(), value.value)
             is AnyRequest.BciTranscribeStreamRequest -> encoder.encodeSerializableValue(serializer<BciTranscribeStreamRequest>(), value.value)
+            is AnyRequest.CalcTokensRequest -> encoder.encodeSerializableValue(serializer<CalcTokensRequest>(), value.value)
             is AnyRequest.CancelRequest -> encoder.encodeSerializableValue(serializer<CancelRequest>(), value.value)
             is AnyRequest.ClassifyRequest -> encoder.encodeSerializableValue(serializer<ClassifyRequest>(), value.value)
             is AnyRequest.CompletionOrchestrateRequest -> encoder.encodeSerializableValue(serializer<CompletionOrchestrateRequest>(), value.value)
@@ -980,6 +984,49 @@ enum class BciTranscribeStreamRequestStreamOptsEmit {
     @SerialName("full") `FULL`,
 }
 
+@Serializable
+data class CalcTokensRequest(
+    @SerialName("modelId") val `modelId`: String,
+    @SerialName("text") val `text`: String? = null,
+    @SerialName("history") val `history`: List<CalcTokensRequestHistoryItem>? = null,
+    @SerialName("tools") val `tools`: List<CalcTokensRequestToolsItem>? = null,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("type") val `type`: String = "calcTokens",
+)
+
+@Serializable
+data class CalcTokensRequestHistoryItem(
+    @SerialName("role") val `role`: String,
+    @SerialName("content") val `content`: String? = null,
+    @SerialName("attachments") val `attachments`: List<CalcTokensRequestHistoryItemAttachmentsItem>? = null,
+    @SerialName("toolCalls") val `toolCalls`: List<CalcTokensRequestHistoryItemToolCallsItem>? = null,
+    @SerialName("toolCallId") val `toolCallId`: String? = null,
+    @SerialName("toolName") val `toolName`: String? = null,
+)
+
+@Serializable
+data class CalcTokensRequestHistoryItemAttachmentsItem(
+    @SerialName("path") val `path`: String,
+)
+
+@Serializable
+data class CalcTokensRequestHistoryItemToolCallsItem(
+    @SerialName("id") val `id`: String? = null,
+    @SerialName("name") val `name`: String,
+    @SerialName("arguments") val `arguments`: Map<String, JsonElement>,
+)
+
+@Serializable
+data class CalcTokensRequestToolsItem(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("type") val `type`: String = "function",
+    @SerialName("name") val `name`: String,
+    @SerialName("description") val `description`: String,
+    @SerialName("deferLoading") val `deferLoading`: Boolean? = null,
+    @SerialName("group") val `group`: String? = null,
+    @SerialName("parameters") val `parameters`: JsonObject,
+)
+
 @Serializable(with = CancelRequestSerializer::class)
 sealed class CancelRequest {
     data class Request(val value: io.tether.qvac.sdk.generated.schema.CancelRequestRequest) : CancelRequest()
@@ -1065,11 +1112,11 @@ data class ClassifyRequest(
 
 @Serializable
 data class CompletionOrchestrateRequest(
-    @SerialName("history") val `history`: List<CompletionStreamRequestHistoryItem>,
+    @SerialName("history") val `history`: List<CalcTokensRequestHistoryItem>,
     @SerialName("modelId") val `modelId`: String,
     @SerialName("kvCache") val `kvCache`: CompletionStreamRequestKvCache? = null,
     @SerialName("prefill") val `prefill`: Boolean? = null,
-    @SerialName("tools") val `tools`: List<CompletionStreamRequestToolsItem>? = null,
+    @SerialName("tools") val `tools`: List<CalcTokensRequestToolsItem>? = null,
     @SerialName("stream") val `stream`: Boolean,
     @SerialName("generationParams") val `generationParams`: CompletionStreamRequestGenerationParams? = null,
     @SerialName("captureThinking") val `captureThinking`: Boolean? = null,
@@ -1080,28 +1127,6 @@ data class CompletionOrchestrateRequest(
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "completionOrchestrate",
     @SerialName("maxToolTurns") val `maxToolTurns`: Long? = null,
-)
-
-@Serializable
-data class CompletionStreamRequestHistoryItem(
-    @SerialName("role") val `role`: String,
-    @SerialName("content") val `content`: String? = null,
-    @SerialName("attachments") val `attachments`: List<CompletionStreamRequestHistoryItemAttachmentsItem>? = null,
-    @SerialName("toolCalls") val `toolCalls`: List<CompletionStreamRequestHistoryItemToolCallsItem>? = null,
-    @SerialName("toolCallId") val `toolCallId`: String? = null,
-    @SerialName("toolName") val `toolName`: String? = null,
-)
-
-@Serializable
-data class CompletionStreamRequestHistoryItemAttachmentsItem(
-    @SerialName("path") val `path`: String,
-)
-
-@Serializable
-data class CompletionStreamRequestHistoryItemToolCallsItem(
-    @SerialName("id") val `id`: String? = null,
-    @SerialName("name") val `name`: String,
-    @SerialName("arguments") val `arguments`: Map<String, JsonElement>,
 )
 
 @Serializable(with = CompletionStreamRequestKvCacheSerializer::class)
@@ -1131,17 +1156,6 @@ internal object CompletionStreamRequestKvCacheSerializer : KSerializer<Completio
         }
     }
 }
-
-@Serializable
-data class CompletionStreamRequestToolsItem(
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "function",
-    @SerialName("name") val `name`: String,
-    @SerialName("description") val `description`: String,
-    @SerialName("deferLoading") val `deferLoading`: Boolean? = null,
-    @SerialName("group") val `group`: String? = null,
-    @SerialName("parameters") val `parameters`: JsonObject,
-)
 
 @Serializable
 data class CompletionStreamRequestGenerationParams(
@@ -1230,11 +1244,11 @@ data class CompletionStreamRequestResponseFormatJsonSchemaJsonSchema(
 
 @Serializable
 data class CompletionStreamRequest(
-    @SerialName("history") val `history`: List<CompletionStreamRequestHistoryItem>,
+    @SerialName("history") val `history`: List<CalcTokensRequestHistoryItem>,
     @SerialName("modelId") val `modelId`: String,
     @SerialName("kvCache") val `kvCache`: CompletionStreamRequestKvCache? = null,
     @SerialName("prefill") val `prefill`: Boolean? = null,
-    @SerialName("tools") val `tools`: List<CompletionStreamRequestToolsItem>? = null,
+    @SerialName("tools") val `tools`: List<CalcTokensRequestToolsItem>? = null,
     @SerialName("stream") val `stream`: Boolean,
     @SerialName("generationParams") val `generationParams`: CompletionStreamRequestGenerationParams? = null,
     @SerialName("captureThinking") val `captureThinking`: Boolean? = null,
@@ -12053,6 +12067,7 @@ sealed class AnyResponse {
     data class BatchCompletionStreamResponse(val value: io.tether.qvac.sdk.generated.schema.BatchCompletionStreamResponse) : AnyResponse()
     data class BciTranscribeResponse(val value: io.tether.qvac.sdk.generated.schema.BciTranscribeResponse) : AnyResponse()
     data class BciTranscribeStreamResponse(val value: io.tether.qvac.sdk.generated.schema.BciTranscribeStreamResponse) : AnyResponse()
+    data class CalcTokensResponse(val value: io.tether.qvac.sdk.generated.schema.CalcTokensResponse) : AnyResponse()
     data class CancelResponse(val value: io.tether.qvac.sdk.generated.schema.CancelResponse) : AnyResponse()
     data class ClassifyResponse(val value: io.tether.qvac.sdk.generated.schema.ClassifyResponse) : AnyResponse()
     data class CompletionOrchestrateResponse(val value: io.tether.qvac.sdk.generated.schema.CompletionOrchestrateResponse) : AnyResponse()
@@ -12109,6 +12124,7 @@ internal object AnyResponseSerializer : KSerializer<AnyResponse> {
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"events\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"batchCompletionStream\"},\"done\":{\"type\":\"boolean\"},\"ids\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"events\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"id\",\"event\"]}},\"stats\":{\"type\":\"object\",\"properties\":{\"timeToFirstToken\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"promptTokensPerSecond\":{\"type\":\"number\"},\"cacheTokens\":{\"type\":\"number\"},\"promptTokens\":{\"type\":\"number\"},\"generatedTokens\":{\"type\":\"number\"},\"emittedTokens\":{\"type\":\"number\"},\"avgConcurrentSeq\":{\"type\":\"number\"},\"toolDefinitionsDropped\":{\"type\":\"number\"},\"draftTokens\":{\"type\":\"number\"},\"draftAcceptedTokens\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"text\":{\"type\":\"string\"},\"done\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDuration\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"totalTokens\":{\"type\":\"number\"},\"totalSegments\":{\"type\":\"number\"},\"whisperEncodeTime\":{\"type\":\"number\"},\"whisperDecodeTime\":{\"type\":\"number\"},\"encoderTime\":{\"type\":\"number\"},\"decoderTime\":{\"type\":\"number\"},\"melSpecTime\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"gpuUnsupported\":{\"type\":\"number\"},\"gpuMemTotalMb\":{\"type\":\"number\"},\"gpuMemFreeMb\":{\"type\":\"number\"},\"totalTime\":{\"type\":\"number\"},\"totalWallMs\":{\"type\":\"number\"},\"totalSamples\":{\"type\":\"number\"},\"processCalls\":{\"type\":\"number\"},\"whisperSampleMs\":{\"type\":\"number\"},\"whisperBatchdMs\":{\"type\":\"number\"},\"whisperPromptMs\":{\"type\":\"number\"},\"totalTranscriptions\":{\"type\":\"number\"},\"modelLoadMs\":{\"type\":\"number\"},\"totalEncodedFrames\":{\"type\":\"number\"},\"encoderOnCoreml\":{\"type\":\"number\"},\"encoderUsedCoreml\":{\"type\":\"number\"},\"aoscActive\":{\"type\":\"number\"},\"prefillTime\":{\"type\":\"number\"},\"audioTokens\":{\"type\":\"number\"},\"promptTokens\":{\"type\":\"number\"},\"generatedTokens\":{\"type\":\"number\"}}},\"error\":{\"type\":\"string\"},\"segment\":{\"type\":\"object\",\"required\":[\"text\",\"startMs\",\"endMs\",\"append\",\"id\"],\"properties\":{\"text\":{\"type\":\"string\"},\"startMs\":{\"type\":\"number\"},\"endMs\":{\"type\":\"number\"},\"append\":{\"type\":\"boolean\"},\"id\":{\"type\":\"number\"},\"speakerId\":{\"type\":\"integer\"},\"speaker\":{\"type\":\"string\"},\"speakerSegments\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"speakerId\",\"startMs\",\"endMs\"]}},\"isEndOfTurn\":{\"type\":\"boolean\"},\"startsWord\":{\"type\":\"boolean\"},\"language\":{\"type\":\"string\"},\"noSpeechProb\":{\"type\":\"number\"},\"speakerTurnNext\":{\"type\":\"boolean\"},\"tokens\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"text\",\"startMs\",\"endMs\",\"probability\"]}}}},\"type\":{\"type\":\"string\",\"const\":\"bciTranscribe\"},\"diagnostics\":{\"type\":\"object\",\"required\":[\"selectedBackend\",\"selectedDevice\"],\"properties\":{\"selectedBackend\":{\"type\":\"string\"},\"selectedDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]},\"graphicsApi\":{\"type\":\"string\",\"enum\":[\"vulkan\",\"opencl\",\"opengl\",\"webgpu\",\"metal\",\"direct3d11\",\"direct3d12\",\"cuda\",\"levelZero\",\"rocm\"]},\"driver\":{\"type\":\"object\",\"required\":[\"name\"]},\"gpuId\":{\"type\":\"string\"},\"fallback\":{\"type\":\"object\",\"required\":[\"reason\"]},\"probe\":{\"type\":\"object\",\"required\":[\"status\",\"backend\"]}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"text\":{\"type\":\"string\"},\"done\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\",\"properties\":{\"audioDuration\":{\"type\":\"number\"},\"realTimeFactor\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"totalTokens\":{\"type\":\"number\"},\"totalSegments\":{\"type\":\"number\"},\"whisperEncodeTime\":{\"type\":\"number\"},\"whisperDecodeTime\":{\"type\":\"number\"},\"encoderTime\":{\"type\":\"number\"},\"decoderTime\":{\"type\":\"number\"},\"melSpecTime\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"number\"},\"backendId\":{\"type\":\"number\"},\"gpuUnsupported\":{\"type\":\"number\"},\"gpuMemTotalMb\":{\"type\":\"number\"},\"gpuMemFreeMb\":{\"type\":\"number\"},\"totalTime\":{\"type\":\"number\"},\"totalWallMs\":{\"type\":\"number\"},\"totalSamples\":{\"type\":\"number\"},\"processCalls\":{\"type\":\"number\"},\"whisperSampleMs\":{\"type\":\"number\"},\"whisperBatchdMs\":{\"type\":\"number\"},\"whisperPromptMs\":{\"type\":\"number\"},\"totalTranscriptions\":{\"type\":\"number\"},\"modelLoadMs\":{\"type\":\"number\"},\"totalEncodedFrames\":{\"type\":\"number\"},\"encoderOnCoreml\":{\"type\":\"number\"},\"encoderUsedCoreml\":{\"type\":\"number\"},\"aoscActive\":{\"type\":\"number\"},\"prefillTime\":{\"type\":\"number\"},\"audioTokens\":{\"type\":\"number\"},\"promptTokens\":{\"type\":\"number\"},\"generatedTokens\":{\"type\":\"number\"}}},\"error\":{\"type\":\"string\"},\"segment\":{\"type\":\"object\",\"required\":[\"text\",\"startMs\",\"endMs\",\"append\",\"id\"],\"properties\":{\"text\":{\"type\":\"string\"},\"startMs\":{\"type\":\"number\"},\"endMs\":{\"type\":\"number\"},\"append\":{\"type\":\"boolean\"},\"id\":{\"type\":\"number\"},\"speakerId\":{\"type\":\"integer\"},\"speaker\":{\"type\":\"string\"},\"speakerSegments\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"speakerId\",\"startMs\",\"endMs\"]}},\"isEndOfTurn\":{\"type\":\"boolean\"},\"startsWord\":{\"type\":\"boolean\"},\"language\":{\"type\":\"string\"},\"noSpeechProb\":{\"type\":\"number\"},\"speakerTurnNext\":{\"type\":\"boolean\"},\"tokens\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"text\",\"startMs\",\"endMs\",\"probability\"]}},\"windowStartTimestep\":{\"type\":\"integer\"}}},\"type\":{\"type\":\"string\",\"const\":\"bciTranscribeStream\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"tokens\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"calcTokens\"},\"tokens\":{\"type\":\"integer\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"cancel\"},\"success\":{\"type\":\"boolean\"},\"cancelled\":{\"type\":\"integer\"},\"error\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"results\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"classify\"},\"results\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"label\",\"confidence\"]}},\"done\":{\"type\":\"boolean\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"completionOrchestrate\"},\"turn\":{\"type\":\"integer\"},\"events\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"text\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"text\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"text\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"call\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"error\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"stats\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\",\"stopReason\",\"error\"]},{\"type\":\"object\",\"required\":[\"type\",\"seq\"]}]}},\"toolCallback\":{\"type\":\"object\",\"required\":[\"callId\",\"name\",\"arguments\"],\"properties\":{\"callId\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"arguments\":{\"type\":\"object\"}}},\"done\":{\"type\":\"boolean\"},\"stopReason\":{\"type\":\"string\",\"const\":\"maxToolTurns\"}}}").jsonObject,
@@ -12166,51 +12182,52 @@ internal object AnyResponseSerializer : KSerializer<AnyResponse> {
             4 -> AnyResponse.BatchCompletionStreamResponse(input.json.decodeFromJsonElement(serializer<BatchCompletionStreamResponse>(), element))
             5 -> AnyResponse.BciTranscribeResponse(input.json.decodeFromJsonElement(serializer<BciTranscribeResponse>(), element))
             6 -> AnyResponse.BciTranscribeStreamResponse(input.json.decodeFromJsonElement(serializer<BciTranscribeStreamResponse>(), element))
-            7 -> AnyResponse.CancelResponse(input.json.decodeFromJsonElement(serializer<CancelResponse>(), element))
-            8 -> AnyResponse.ClassifyResponse(input.json.decodeFromJsonElement(serializer<ClassifyResponse>(), element))
-            9 -> AnyResponse.CompletionOrchestrateResponse(input.json.decodeFromJsonElement(serializer<CompletionOrchestrateResponse>(), element))
-            10 -> AnyResponse.CompletionStreamResponse(input.json.decodeFromJsonElement(serializer<CompletionStreamResponse>(), element))
-            11 -> AnyResponse.DecideResponse(input.json.decodeFromJsonElement(serializer<DecideResponse>(), element))
-            12 -> AnyResponse.DeleteCacheResponse(input.json.decodeFromJsonElement(serializer<DeleteCacheResponse>(), element))
-            13 -> AnyResponse.DiffusionStreamResponse(input.json.decodeFromJsonElement(serializer<DiffusionStreamResponse>(), element))
-            14 -> AnyResponse.DiscoverRpcServersResponse(input.json.decodeFromJsonElement(serializer<DiscoverRpcServersResponse>(), element))
-            15 -> AnyResponse.DownloadAssetResponse(input.json.decodeFromJsonElement(serializer<DownloadAssetResponse>(), element))
-            16 -> AnyResponse.EmbedResponse(input.json.decodeFromJsonElement(serializer<EmbedResponse>(), element))
-            17 -> AnyResponse.ErrorResponse(input.json.decodeFromJsonElement(serializer<ErrorResponse>(), element))
-            18 -> AnyResponse.FinetuneResponse(input.json.decodeFromJsonElement(serializer<FinetuneResponse>(), element))
-            19 -> AnyResponse.FinetuneProgressResponse(input.json.decodeFromJsonElement(serializer<FinetuneProgressResponse>(), element))
-            20 -> AnyResponse.GetLoadedModelInfoResponse(input.json.decodeFromJsonElement(serializer<GetLoadedModelInfoResponse>(), element))
-            21 -> AnyResponse.GetModelInfoResponse(input.json.decodeFromJsonElement(serializer<GetModelInfoResponse>(), element))
-            22 -> AnyResponse.GetSystemResourcesResponse(input.json.decodeFromJsonElement(serializer<GetSystemResourcesResponse>(), element))
-            23 -> AnyResponse.HeartbeatResponse(input.json.decodeFromJsonElement(serializer<HeartbeatResponse>(), element))
-            24 -> AnyResponse.LoadModelResponse(input.json.decodeFromJsonElement(serializer<LoadModelResponse>(), element))
-            25 -> AnyResponse.LoggingStreamResponse(input.json.decodeFromJsonElement(serializer<LoggingStreamResponse>(), element))
-            26 -> AnyResponse.ModelProgressResponse(input.json.decodeFromJsonElement(serializer<ModelProgressResponse>(), element))
-            27 -> AnyResponse.ModelRegistryGetModelResponse(input.json.decodeFromJsonElement(serializer<ModelRegistryGetModelResponse>(), element))
-            28 -> AnyResponse.ModelRegistryListResponse(input.json.decodeFromJsonElement(serializer<ModelRegistryListResponse>(), element))
-            29 -> AnyResponse.ModelRegistrySearchResponse(input.json.decodeFromJsonElement(serializer<ModelRegistrySearchResponse>(), element))
-            30 -> AnyResponse.OcrStreamResponse(input.json.decodeFromJsonElement(serializer<OcrStreamResponse>(), element))
-            31 -> AnyResponse.PluginInvokeResponse(input.json.decodeFromJsonElement(serializer<PluginInvokeResponse>(), element))
-            32 -> AnyResponse.PluginInvokeStreamResponse(input.json.decodeFromJsonElement(serializer<PluginInvokeStreamResponse>(), element))
-            33 -> AnyResponse.RagResponse(input.json.decodeFromJsonElement(serializer<RagResponse>(), element))
-            34 -> AnyResponse.RagProgressResponse(input.json.decodeFromJsonElement(serializer<RagProgressResponse>(), element))
-            35 -> AnyResponse.RerankResponse(input.json.decodeFromJsonElement(serializer<RerankResponse>(), element))
-            36 -> AnyResponse.ResumeResponse(input.json.decodeFromJsonElement(serializer<ResumeResponse>(), element))
-            37 -> AnyResponse.StartRpcServerResponse(input.json.decodeFromJsonElement(serializer<StartRpcServerResponse>(), element))
-            38 -> AnyResponse.StateResponse(input.json.decodeFromJsonElement(serializer<StateResponse>(), element))
-            39 -> AnyResponse.StopRpcServerResponse(input.json.decodeFromJsonElement(serializer<StopRpcServerResponse>(), element))
-            40 -> AnyResponse.SuspendResponse(input.json.decodeFromJsonElement(serializer<SuspendResponse>(), element))
-            41 -> AnyResponse.TextToSpeechResponse(input.json.decodeFromJsonElement(serializer<TextToSpeechResponse>(), element))
-            42 -> AnyResponse.TextToSpeechStreamResponse(input.json.decodeFromJsonElement(serializer<TextToSpeechStreamResponse>(), element))
-            43 -> AnyResponse.TranscribeResponse(input.json.decodeFromJsonElement(serializer<TranscribeResponse>(), element))
-            44 -> AnyResponse.TranscribeStreamResponse(input.json.decodeFromJsonElement(serializer<TranscribeStreamResponse>(), element))
-            45 -> AnyResponse.TranslateResponse(input.json.decodeFromJsonElement(serializer<TranslateResponse>(), element))
-            46 -> AnyResponse.UnloadModelResponse(input.json.decodeFromJsonElement(serializer<UnloadModelResponse>(), element))
-            47 -> AnyResponse.UpscaleStreamResponse(input.json.decodeFromJsonElement(serializer<UpscaleStreamResponse>(), element))
-            48 -> AnyResponse.VectorIndexResponse(input.json.decodeFromJsonElement(serializer<VectorIndexResponse>(), element))
-            49 -> AnyResponse.VideoStreamResponse(input.json.decodeFromJsonElement(serializer<VideoStreamResponse>(), element))
-            50 -> AnyResponse.WorldSceneStreamResponse(input.json.decodeFromJsonElement(serializer<WorldSceneStreamResponse>(), element))
-            51 -> AnyResponse.WorldStepStreamResponse(input.json.decodeFromJsonElement(serializer<WorldStepStreamResponse>(), element))
+            7 -> AnyResponse.CalcTokensResponse(input.json.decodeFromJsonElement(serializer<CalcTokensResponse>(), element))
+            8 -> AnyResponse.CancelResponse(input.json.decodeFromJsonElement(serializer<CancelResponse>(), element))
+            9 -> AnyResponse.ClassifyResponse(input.json.decodeFromJsonElement(serializer<ClassifyResponse>(), element))
+            10 -> AnyResponse.CompletionOrchestrateResponse(input.json.decodeFromJsonElement(serializer<CompletionOrchestrateResponse>(), element))
+            11 -> AnyResponse.CompletionStreamResponse(input.json.decodeFromJsonElement(serializer<CompletionStreamResponse>(), element))
+            12 -> AnyResponse.DecideResponse(input.json.decodeFromJsonElement(serializer<DecideResponse>(), element))
+            13 -> AnyResponse.DeleteCacheResponse(input.json.decodeFromJsonElement(serializer<DeleteCacheResponse>(), element))
+            14 -> AnyResponse.DiffusionStreamResponse(input.json.decodeFromJsonElement(serializer<DiffusionStreamResponse>(), element))
+            15 -> AnyResponse.DiscoverRpcServersResponse(input.json.decodeFromJsonElement(serializer<DiscoverRpcServersResponse>(), element))
+            16 -> AnyResponse.DownloadAssetResponse(input.json.decodeFromJsonElement(serializer<DownloadAssetResponse>(), element))
+            17 -> AnyResponse.EmbedResponse(input.json.decodeFromJsonElement(serializer<EmbedResponse>(), element))
+            18 -> AnyResponse.ErrorResponse(input.json.decodeFromJsonElement(serializer<ErrorResponse>(), element))
+            19 -> AnyResponse.FinetuneResponse(input.json.decodeFromJsonElement(serializer<FinetuneResponse>(), element))
+            20 -> AnyResponse.FinetuneProgressResponse(input.json.decodeFromJsonElement(serializer<FinetuneProgressResponse>(), element))
+            21 -> AnyResponse.GetLoadedModelInfoResponse(input.json.decodeFromJsonElement(serializer<GetLoadedModelInfoResponse>(), element))
+            22 -> AnyResponse.GetModelInfoResponse(input.json.decodeFromJsonElement(serializer<GetModelInfoResponse>(), element))
+            23 -> AnyResponse.GetSystemResourcesResponse(input.json.decodeFromJsonElement(serializer<GetSystemResourcesResponse>(), element))
+            24 -> AnyResponse.HeartbeatResponse(input.json.decodeFromJsonElement(serializer<HeartbeatResponse>(), element))
+            25 -> AnyResponse.LoadModelResponse(input.json.decodeFromJsonElement(serializer<LoadModelResponse>(), element))
+            26 -> AnyResponse.LoggingStreamResponse(input.json.decodeFromJsonElement(serializer<LoggingStreamResponse>(), element))
+            27 -> AnyResponse.ModelProgressResponse(input.json.decodeFromJsonElement(serializer<ModelProgressResponse>(), element))
+            28 -> AnyResponse.ModelRegistryGetModelResponse(input.json.decodeFromJsonElement(serializer<ModelRegistryGetModelResponse>(), element))
+            29 -> AnyResponse.ModelRegistryListResponse(input.json.decodeFromJsonElement(serializer<ModelRegistryListResponse>(), element))
+            30 -> AnyResponse.ModelRegistrySearchResponse(input.json.decodeFromJsonElement(serializer<ModelRegistrySearchResponse>(), element))
+            31 -> AnyResponse.OcrStreamResponse(input.json.decodeFromJsonElement(serializer<OcrStreamResponse>(), element))
+            32 -> AnyResponse.PluginInvokeResponse(input.json.decodeFromJsonElement(serializer<PluginInvokeResponse>(), element))
+            33 -> AnyResponse.PluginInvokeStreamResponse(input.json.decodeFromJsonElement(serializer<PluginInvokeStreamResponse>(), element))
+            34 -> AnyResponse.RagResponse(input.json.decodeFromJsonElement(serializer<RagResponse>(), element))
+            35 -> AnyResponse.RagProgressResponse(input.json.decodeFromJsonElement(serializer<RagProgressResponse>(), element))
+            36 -> AnyResponse.RerankResponse(input.json.decodeFromJsonElement(serializer<RerankResponse>(), element))
+            37 -> AnyResponse.ResumeResponse(input.json.decodeFromJsonElement(serializer<ResumeResponse>(), element))
+            38 -> AnyResponse.StartRpcServerResponse(input.json.decodeFromJsonElement(serializer<StartRpcServerResponse>(), element))
+            39 -> AnyResponse.StateResponse(input.json.decodeFromJsonElement(serializer<StateResponse>(), element))
+            40 -> AnyResponse.StopRpcServerResponse(input.json.decodeFromJsonElement(serializer<StopRpcServerResponse>(), element))
+            41 -> AnyResponse.SuspendResponse(input.json.decodeFromJsonElement(serializer<SuspendResponse>(), element))
+            42 -> AnyResponse.TextToSpeechResponse(input.json.decodeFromJsonElement(serializer<TextToSpeechResponse>(), element))
+            43 -> AnyResponse.TextToSpeechStreamResponse(input.json.decodeFromJsonElement(serializer<TextToSpeechStreamResponse>(), element))
+            44 -> AnyResponse.TranscribeResponse(input.json.decodeFromJsonElement(serializer<TranscribeResponse>(), element))
+            45 -> AnyResponse.TranscribeStreamResponse(input.json.decodeFromJsonElement(serializer<TranscribeStreamResponse>(), element))
+            46 -> AnyResponse.TranslateResponse(input.json.decodeFromJsonElement(serializer<TranslateResponse>(), element))
+            47 -> AnyResponse.UnloadModelResponse(input.json.decodeFromJsonElement(serializer<UnloadModelResponse>(), element))
+            48 -> AnyResponse.UpscaleStreamResponse(input.json.decodeFromJsonElement(serializer<UpscaleStreamResponse>(), element))
+            49 -> AnyResponse.VectorIndexResponse(input.json.decodeFromJsonElement(serializer<VectorIndexResponse>(), element))
+            50 -> AnyResponse.VideoStreamResponse(input.json.decodeFromJsonElement(serializer<VideoStreamResponse>(), element))
+            51 -> AnyResponse.WorldSceneStreamResponse(input.json.decodeFromJsonElement(serializer<WorldSceneStreamResponse>(), element))
+            52 -> AnyResponse.WorldStepStreamResponse(input.json.decodeFromJsonElement(serializer<WorldStepStreamResponse>(), element))
             else -> throw SerializationException("No matching AnyResponse variant")
         }
     }
@@ -12223,6 +12240,7 @@ internal object AnyResponseSerializer : KSerializer<AnyResponse> {
             is AnyResponse.BatchCompletionStreamResponse -> encoder.encodeSerializableValue(serializer<BatchCompletionStreamResponse>(), value.value)
             is AnyResponse.BciTranscribeResponse -> encoder.encodeSerializableValue(serializer<BciTranscribeResponse>(), value.value)
             is AnyResponse.BciTranscribeStreamResponse -> encoder.encodeSerializableValue(serializer<BciTranscribeStreamResponse>(), value.value)
+            is AnyResponse.CalcTokensResponse -> encoder.encodeSerializableValue(serializer<CalcTokensResponse>(), value.value)
             is AnyResponse.CancelResponse -> encoder.encodeSerializableValue(serializer<CancelResponse>(), value.value)
             is AnyResponse.ClassifyResponse -> encoder.encodeSerializableValue(serializer<ClassifyResponse>(), value.value)
             is AnyResponse.CompletionOrchestrateResponse -> encoder.encodeSerializableValue(serializer<CompletionOrchestrateResponse>(), value.value)
@@ -12879,6 +12897,13 @@ data class BciTranscribeStreamResponseSegment(
     @SerialName("speakerTurnNext") val `speakerTurnNext`: Boolean? = null,
     @SerialName("tokens") val `tokens`: List<TranscribeResponseSegmentTokensItem>? = null,
     @SerialName("windowStartTimestep") val `windowStartTimestep`: Long? = null,
+)
+
+@Serializable
+data class CalcTokensResponse(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("type") val `type`: String = "calcTokens",
+    @SerialName("tokens") val `tokens`: Long,
 )
 
 @Serializable

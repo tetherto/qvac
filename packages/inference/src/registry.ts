@@ -71,6 +71,7 @@ export const registry: Record<string, HandlerEntry> = {
     type: 'reply',
     handler: handleHeartbeat
   },
+  calcTokens: { type: 'reply', pluginOp: true, handler: pluginReply('calcTokens') },
   unloadModel: {
     type: 'reply',
     handler: handleUnloadModel

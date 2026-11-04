@@ -3572,6 +3572,208 @@ class BciTranscribeStreamResponse(GeneratedBaseModel):
     type: Literal["bciTranscribeStream"] = "bciTranscribeStream"
 
 
+class CalcTokensRequestHistoryItemAttachmentsItem(GeneratedBaseModel):
+    path: Annotated[
+        str,
+        Field(
+            description="Absolute or resolvable path to the attachment file (e.g., image for multimodal models)."
+        ),
+    ]
+
+
+class CalcTokensRequestHistoryItemToolCallsItemArguments(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any],
+        Field(
+            description="Arguments the tool was called with.",
+            title="CalcTokensRequestHistoryItemToolCallsItemArguments",
+        ),
+    ]
+
+
+class CalcTokensRequestHistoryItemToolCallsItem(GeneratedBaseModel):
+    id: Annotated[
+        str | None,
+        Field(description="Call id, echoed by the `tool` message that answers it."),
+    ] = None
+    name: Annotated[
+        str, Field(description="Name of the tool that was called.", min_length=1)
+    ]
+    arguments: Annotated[
+        CalcTokensRequestHistoryItemToolCallsItemArguments,
+        Field(
+            description="Arguments the tool was called with.",
+            title="CalcTokensRequestHistoryItemToolCallsItemArguments",
+        ),
+    ]
+
+
+class CalcTokensRequestHistoryItem(GeneratedBaseModel):
+    role: Annotated[
+        str,
+        Field(
+            description='Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'
+        ),
+    ]
+    content: Annotated[
+        str | None,
+        Field(
+            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
+        ),
+    ] = None
+    attachments: Annotated[
+        list[CalcTokensRequestHistoryItemAttachmentsItem] | None,
+        Field(description="Optional file attachments for multimodal models."),
+    ] = None
+    tool_calls: Annotated[
+        list[CalcTokensRequestHistoryItemToolCallsItem] | None,
+        Field(
+            alias="toolCalls",
+            description="Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
+        ),
+    ] = None
+    tool_call_id: Annotated[
+        str | None,
+        Field(
+            alias="toolCallId",
+            description="On a `tool` turn: the id of the call this result answers.",
+        ),
+    ] = None
+    tool_name: Annotated[
+        str | None,
+        Field(
+            alias="toolName",
+            description="On a `tool` turn: the name of the tool that produced the result.",
+        ),
+    ] = None
+
+
+class CalcTokensRequestToolsItemParametersPropertiesValueType(Enum):
+    string = "string"
+    number = "number"
+    integer = "integer"
+    boolean = "boolean"
+    object = "object"
+    array = "array"
+    null = "null"
+
+
+class CalcTokensRequestToolsItemParametersPropertiesValueTypeItem(Enum):
+    string = "string"
+    number = "number"
+    integer = "integer"
+    boolean = "boolean"
+    object = "object"
+    array = "array"
+    null = "null"
+
+
+class CalcTokensRequestToolsItemParametersPropertiesValue(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    type: (
+        CalcTokensRequestToolsItemParametersPropertiesValueType
+        | list[CalcTokensRequestToolsItemParametersPropertiesValueTypeItem]
+        | None
+    ) = None
+    description: str | None = None
+    enum: list[str | float | bool | None] | None = None
+
+
+CalcTokensRequestToolsItemParametersPropertiesValue.__annotations__[
+    "__pydantic_extra__"
+] = dict[str, Any]
+CalcTokensRequestToolsItemParametersPropertiesValue.model_rebuild(force=True)
+
+
+class CalcTokensRequestToolsItemParametersProperties(
+    RootModel[dict[str, CalcTokensRequestToolsItemParametersPropertiesValue]]
+):
+    root: Annotated[
+        dict[str, CalcTokensRequestToolsItemParametersPropertiesValue],
+        Field(title="CalcTokensRequestToolsItemParametersProperties"),
+    ]
+
+
+class CalcTokensRequestToolsItemParameters(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    type: Literal["object"] = "object"
+    properties: Annotated[
+        CalcTokensRequestToolsItemParametersProperties,
+        Field(title="CalcTokensRequestToolsItemParametersProperties"),
+    ]
+    required: list[str] | None = None
+
+
+CalcTokensRequestToolsItemParameters.__annotations__["__pydantic_extra__"] = dict[
+    str, Any
+]
+CalcTokensRequestToolsItemParameters.model_rebuild(force=True)
+
+
+class CalcTokensRequestToolsItem(GeneratedBaseModel):
+    type: Literal["function"] = "function"
+    name: str
+    description: str
+    defer_loading: Annotated[
+        bool | None,
+        Field(
+            alias="deferLoading",
+            description="Opt out of the initial prompt. A deferred tool is registered but only its name and description reach the model, in the catalog carried by the built-in `tool_search`; its parameter schema is appended to the conversation once the model searches for it. Tools without this field behave as before.",
+        ),
+    ] = None
+    group: Annotated[
+        str | None,
+        Field(
+            description="Optional heading this tool is listed under in the deferred catalog — a skill or an MCP server name. Ignored for tools that are not deferred."
+        ),
+    ] = None
+    parameters: Annotated[
+        CalcTokensRequestToolsItemParameters,
+        Field(title="CalcTokensRequestToolsItemParameters"),
+    ]
+
+
+class CalcTokensRequest(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="Loaded language model to tokenize with.",
+            min_length=1,
+        ),
+    ]
+    text: Annotated[
+        str | None,
+        Field(description="Raw text, or the final user turn when history is present."),
+    ] = None
+    history: Annotated[
+        list[CalcTokensRequestHistoryItem] | None,
+        Field(
+            description="Conversation to render with the loaded model chat template."
+        ),
+    ] = None
+    tools: Annotated[
+        list[CalcTokensRequestToolsItem] | None,
+        Field(description="Tools to include in the rendered prompt."),
+    ] = None
+    type: Literal["calcTokens"] = "calcTokens"
+
+
+class CalcTokensResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["calcTokens"] = "calcTokens"
+    tokens: Annotated[int, Field(ge=0, le=9007199254740991)]
+
+
 class CancelRequestRequest(GeneratedBaseModel):
     type: Literal["cancel"] = "cancel"
     operation: Annotated[Literal["request"], Field(description="Operation type")] = (
@@ -26800,6 +27002,7 @@ class Request(
         | BatchCompletionStreamRequest
         | BciTranscribeRequest
         | BciTranscribeStreamRequest
+        | CalcTokensRequest
         | Request_1
         | ClassifyRequest
         | CompletionOrchestrateRequest
@@ -26851,6 +27054,7 @@ class Request(
         | BatchCompletionStreamRequest
         | BciTranscribeRequest
         | BciTranscribeStreamRequest
+        | CalcTokensRequest
         | Request_1
         | ClassifyRequest
         | CompletionOrchestrateRequest
@@ -26933,6 +27137,7 @@ class Response(
         | BatchCompletionStreamResponse
         | BciTranscribeResponse
         | BciTranscribeStreamResponse
+        | CalcTokensResponse
         | CancelResponse
         | ClassifyResponse
         | CompletionOrchestrateResponse
@@ -26988,6 +27193,7 @@ class Response(
         | BatchCompletionStreamResponse
         | BciTranscribeResponse
         | BciTranscribeStreamResponse
+        | CalcTokensResponse
         | CancelResponse
         | ClassifyResponse
         | CompletionOrchestrateResponse

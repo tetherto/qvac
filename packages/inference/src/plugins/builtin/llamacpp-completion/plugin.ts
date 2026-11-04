@@ -7,6 +7,8 @@ import {
   batchCompletionStreamResponseSchema,
   completionStreamRequestSchema,
   completionStreamResponseSchema,
+  calcTokensRequestSchema,
+  calcTokensResponseSchema,
   finetuneResponseSchema,
   translateRequestSchema,
   translateResponseSchema,
@@ -30,6 +32,7 @@ import { getModelParallel } from '@/utils/config-transform'
 import { completion } from '@/plugins/builtin/llamacpp-completion/ops/completion-stream'
 import { batchCompletion } from '@/plugins/builtin/llamacpp-completion/ops/batch-completion-stream'
 import { finetune } from '@/plugins/builtin/llamacpp-completion/ops/finetune'
+import { calcTokens } from '@/plugins/builtin/llamacpp-completion/ops/calc-tokens'
 import { translate } from '@/plugins/ops/translate'
 import { transformLlmConfig } from '@/plugins/builtin/llamacpp-completion/transform'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
@@ -156,6 +159,12 @@ export const llmPlugin = definePlugin({
   },
 
   handlers: {
+    calcTokens: defineHandler({
+      requestSchema: calcTokensRequestSchema,
+      responseSchema: calcTokensResponseSchema,
+      streaming: false,
+      handler: calcTokens
+    }),
     batchCompletionStream: defineHandler({
       requestSchema: batchCompletionStreamRequestSchema,
       responseSchema: batchCompletionStreamResponseSchema,
