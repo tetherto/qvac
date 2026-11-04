@@ -70,3 +70,5 @@ set(XRT_XCLBINUTIL \"\${XRT_ROOT}/bin/xclbinutil\")
 
 file(WRITE "${CURRENT_PACKAGES_DIR}/share/${PORT}/copyright"
   "XRT is a system-installed runtime (located via XILINX_XRT, default /opt/xilinx/xrt), licensed under Apache-2.0; see the license directory at its install prefix.\n")
+
+file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")

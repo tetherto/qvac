@@ -534,3 +534,5 @@ if(BUILD_XDNA_BACKEND)
     "${SOURCE_PATH}/ggml/src/ggml-xdna/THIRD_PARTY_NOTICES")
 endif()
 vcpkg_install_copyright(FILE_LIST ${QVAC_LICENSE_FILES})
+
+file(INSTALL "${CMAKE_CURRENT_LIST_DIR}/usage" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}")
