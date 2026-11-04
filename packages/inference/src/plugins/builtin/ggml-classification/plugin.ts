@@ -13,6 +13,9 @@ import {
 } from '@/schemas/index'
 import { createStreamLogger, registerAddonLogger } from '@/logging/index'
 import { classify } from '@/plugins/builtin/ggml-classification/ops/classify'
+import { InferenceCancelledError } from '@/errors/index'
+import { getRequestRegistry } from '@/runtime/index'
+import { generateRandomRequestId } from '@/runtime/request-id'
 
 export const classificationPlugin = definePlugin({
   modelType: ModelType.ggmlClassification,
@@ -66,9 +69,18 @@ export const classificationPlugin = definePlugin({
       cancel: { scope: 'none' },
 
       handler: async function* (request) {
+        await using ctx = await getRequestRegistry().begin({
+          requestId: request.requestId ?? generateRandomRequestId(),
+          sessionId: request.sessionId,
+          kind: 'classification',
+          modelId: request.modelId
+        })
+        if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
         const { results, modelExecutionMs } = await classify(request)
+        if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
         yield {
           type: 'classify' as const,
+          requestId: ctx.requestId,
           results,
           done: true,
           modelExecutionMs

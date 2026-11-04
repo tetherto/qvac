@@ -12,7 +12,9 @@ import {
   type ResolveContext,
   type ResolveResult
 } from '@/schemas/index'
-import { ModelLoadFailedError } from '@/errors/index'
+import { InferenceCancelledError, ModelLoadFailedError } from '@/errors/index'
+import { getRequestRegistry } from '@/runtime/index'
+import { generateRandomRequestId } from '@/runtime/request-id'
 import { createStreamLogger, registerAddonLogger, getEngineLogger } from '@/logging/index'
 import { OcrGgml, assessFit as ocrAssessFit } from '@qvac/ocr-ggml'
 import { ocr } from '@/plugins/builtin/ggml-ocr/ops/ocr-stream'
@@ -99,6 +101,17 @@ export const ocrPlugin = definePlugin({
       cancel: { scope: 'none' },
 
       handler: async function* (request) {
+        // No addon abort hook: a cancel stops delivery, the native pass runs
+        // to completion, and the request is still visible to cancel and
+        // to model unload through the registry.
+        await using ctx = await getRequestRegistry().begin({
+          requestId: request.requestId ?? generateRandomRequestId(),
+          sessionId: request.sessionId,
+          kind: 'ocr',
+          modelId: request.modelId
+        })
+        if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
+
         const stream = ocr({
           modelId: request.modelId,
           image: request.image,
@@ -108,17 +121,20 @@ export const ocrPlugin = definePlugin({
           let result = await stream.next()
 
           while (!result.done) {
+            if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
             yield {
               type: 'ocrStream' as const,
               blocks: result.value.blocks
             }
             result = await stream.next()
           }
+          if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
 
           const { modelExecutionMs, stats } = result.value
           yield attachModelExecutionMs(
             {
               type: 'ocrStream' as const,
+              requestId: ctx.requestId,
               blocks: [],
               done: true,
               ...(stats && { stats })

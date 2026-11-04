@@ -4,6 +4,9 @@ import {
   type VectorIndexResponse
 } from '@/schemas/index'
 import { profileReplyHandler, registerOperationMetrics } from '@/profiling/index'
+import { getRequestRegistry } from '@/runtime/index'
+import { generateRandomRequestId } from '@/runtime/request-id'
+import { InferenceCancelledError } from '@/errors/index'
 import {
   addVectors,
   containsVectors,
@@ -35,22 +38,32 @@ export async function handleVectorIndex(request: VectorIndexRequest): Promise<Ve
 
 async function handleVectorIndexInternal(input: VectorIndexRequest): Promise<VectorIndexResponse> {
   const request = vectorIndexRequestSchema.parse(input)
+  // Index operations are short and run to completion, but they are still
+  // registered so a session close accounts for them and a caller can see
+  // them in the registry.
+  await using ctx = await getRequestRegistry().begin({
+    requestId: request.requestId ?? generateRandomRequestId(),
+    sessionId: request.sessionId,
+    kind: 'vectorIndex'
+  })
+  if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
+  const base = { type: 'vectorIndex' as const, requestId: ctx.requestId }
   switch (request.operation) {
     case 'create':
-      return { type: 'vectorIndex', operation: 'create', ...(await createVectorIndex(request)) }
+      return { ...base, operation: 'create', ...(await createVectorIndex(request)) }
     case 'load':
-      return { type: 'vectorIndex', operation: 'load', ...(await loadVectorIndex(request)) }
+      return { ...base, operation: 'load', ...(await loadVectorIndex(request)) }
     case 'add':
-      return { type: 'vectorIndex', operation: 'add', ...addVectors(request) }
+      return { ...base, operation: 'add', ...addVectors(request) }
     case 'search':
-      return { type: 'vectorIndex', operation: 'search', ...searchVectors(request) }
+      return { ...base, operation: 'search', ...searchVectors(request) }
     case 'remove':
-      return { type: 'vectorIndex', operation: 'remove', ...removeVectors(request) }
+      return { ...base, operation: 'remove', ...removeVectors(request) }
     case 'contains':
-      return { type: 'vectorIndex', operation: 'contains', ...containsVectors(request) }
+      return { ...base, operation: 'contains', ...containsVectors(request) }
     case 'write':
-      return { type: 'vectorIndex', operation: 'write', ...(await writeVectorIndex(request)) }
+      return { ...base, operation: 'write', ...(await writeVectorIndex(request)) }
     case 'dispose':
-      return { type: 'vectorIndex', operation: 'dispose', ...disposeVectorIndex(request) }
+      return { ...base, operation: 'dispose', ...disposeVectorIndex(request) }
   }
 }

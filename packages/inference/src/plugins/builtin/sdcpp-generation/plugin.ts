@@ -466,8 +466,9 @@ export const diffusionPlugin = definePlugin({
       // is interrupted on the currently-running generation.
       cancel: { scope: 'model', hard: true },
       handler: (request) =>
-        withCompletionFrame(diffusion(request), ({ stats }) => ({
+        withCompletionFrame(diffusion(request), ({ requestId, stats }) => ({
           type: 'diffusionStream' as const,
+          requestId,
           done: true,
           stats
         }))
