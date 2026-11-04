@@ -138,12 +138,8 @@ describe('buildResponseObject', () => {
       store: true,
       stats: { promptTokens: 120, cacheTokens: 80, emittedTokens: 7 }
     })
-    assert.deepEqual(o['usage'], {
-      input_tokens: 120,
-      output_tokens: 7,
-      total_tokens: 127,
-      input_tokens_details: { cached_tokens: 80 }
-    })
+    // cacheTokens is cache occupancy, not this request's reuse, so it is not reported.
+    assert.deepEqual(o['usage'], { input_tokens: 120, output_tokens: 7, total_tokens: 127 })
   })
 
   it('puts reasoning in its own output item ahead of the message', () => {

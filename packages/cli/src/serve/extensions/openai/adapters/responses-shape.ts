@@ -113,10 +113,7 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
   const usage = {
     input_tokens: inputTokens,
     output_tokens: outputTokens,
-    total_tokens: inputTokens + outputTokens,
-    ...(typeof params.stats?.cacheTokens === 'number'
-      ? { input_tokens_details: { cached_tokens: params.stats.cacheTokens } }
-      : {})
+    total_tokens: inputTokens + outputTokens
   }
 
   const truncated = !hasToolCalls && params.stopReason === 'length'
