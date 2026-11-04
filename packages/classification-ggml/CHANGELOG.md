@@ -7,9 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.35.0] - 2026-11-04
 
-### Changed
+### Breaking
 
 - The default MobileNetV3-Small weights are no longer published in this
   package. `ImageClassifier` requires `modelPath` or
@@ -17,9 +17,28 @@ and this project adheres to
   repository for addon tests
   ([#5432](https://github.com/tetherto/qvac/pull/5432)).
 
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.25.0` -> `^0.26.0`, which carries
+  `qvac-fabric` `11259.2.0` -> `11739.0.0`
+  ([#5331](https://github.com/tetherto/qvac/pull/5331)):
+  a rebase onto upstream llama.cpp b11739, TurboVec 1.1.2, an mtmd
+  image-resize fix, and Linux CUDA, Jetson and HIP backend modules that load
+  in hosts without libstdc++ (such as `bare-sidecar`) instead of falling back
+  to the CPU. A caret on a `0.x` version locks the minor, so `^0.25.0`
+  would not have resolved `0.26.0` on its own. The mobile dev dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.26.0` with it.
+- `@qvac/fabric` 0.26.0 changes the `common` library's API and is not
+  ABI-compatible with 0.25.x, so every addon loaded in one process must resolve
+  the same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.26.0` together.
+- This package needed no code change for the new fabric.
+
 ### Pull Requests
 
 - [#5432](https://github.com/tetherto/qvac/pull/5432) - stop publishing the default classifier weights.
+- [#5331](https://github.com/tetherto/qvac/pull/5331) - sync all addons with fabric b11739.
+- [#5563](https://github.com/tetherto/qvac/pull/5563) - move the fabric consumers to `@qvac/fabric` `^0.26.0`.
 
 ## [0.34.1] - 2026-10-29
 
