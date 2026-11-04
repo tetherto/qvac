@@ -290,7 +290,8 @@ Intentionally rejected with `400`: `conversation` and `background: true`.
 
 `function` tools work normally, and so do the functions inside a `namespace`
 tool: the model sees each as `<namespace>__<name>`, and its calls come back
-with `name` and `namespace` split again. Built-in tools (`web_search`,
+with `name` and `namespace` split again (a malformed `namespace`, or a top-level tool
+spelled like a qualified name, returns `400 invalid_tools`). Built-in tools (`web_search`,
 `file_search`, `code_interpreter`, …) are left out of the request and logged.
 A streamed response that fails after it starts ends with `response.failed`,
 whose `response.error` carries the code (e.g. `context_length_exceeded`).

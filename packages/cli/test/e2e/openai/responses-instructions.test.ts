@@ -113,4 +113,20 @@ describe('responses: instructions across stored turns', () => {
     )
     assert.equal(history[2]!.toolCalls![0]!.name, 'shell')
   })
+
+  it('returns 400 for a malformed namespace tool', async (t) => {
+    const { app, histories } = await capturingServer(t)
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/responses',
+      payload: {
+        model: 'chat',
+        input: 'hello',
+        tools: [{ type: 'namespace', name: 'files', tools: [null] }]
+      }
+    })
+    assert.equal(res.statusCode, 400, res.body)
+    assert.equal((res.json() as any).error.code, 'invalid_tools')
+    assert.equal(histories.length, 0)
+  })
 })

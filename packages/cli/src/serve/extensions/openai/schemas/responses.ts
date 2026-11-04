@@ -129,10 +129,18 @@ export interface ResponsesTools {
   skippedTypes: string[]
 }
 
+export class InvalidResponsesToolsError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'InvalidResponsesToolsError'
+  }
+}
+
 // The model sees one flat list, and names repeat across namespaces (Codex
 // declares `js` in two MCP servers), so a namespaced tool gets a qualified name.
+// It keeps the inner name as is, so distinct tools never share one.
 export function qualifiedToolName(namespace: string, name: string): string {
-  return `${namespace}__${name.replace(/^_+/, '')}`
+  return `${namespace}__${name}`
 }
 
 function functionTool(t: ResponsesTool, name: string): Tool {
@@ -150,20 +158,45 @@ export function openaiResponsesToolsToSdk(tools: ResponsesTool[] | undefined): R
   const out: Tool[] = []
   const namespaces = new Map<string, { namespace: string; name: string }>()
   const skippedTypes = new Set<string>()
+  const topLevel = new Set<string>()
 
   for (const t of tools ?? []) {
     if (t.type === 'function') {
-      if (typeof t.name === 'string' && t.name) out.push(functionTool(t, t.name))
-    } else if (t.type === 'namespace' && typeof t.name === 'string' && t.name) {
-      for (const inner of t.tools ?? []) {
-        if (inner.type !== 'function' || typeof inner.name !== 'string' || !inner.name) continue
-        const qualified = qualifiedToolName(t.name, inner.name)
+      if (typeof t.name === 'string' && t.name) {
+        out.push(functionTool(t, t.name))
+        topLevel.add(t.name)
+      }
+    } else if (t.type === 'namespace') {
+      if (typeof t.name !== 'string' || !t.name || !Array.isArray(t.tools)) {
+        throw new InvalidResponsesToolsError(
+          'A "namespace" tool needs a non-empty "name" and a "tools" array.'
+        )
+      }
+      for (const inner of t.tools as unknown[]) {
+        if (inner === null || typeof inner !== 'object' || Array.isArray(inner)) {
+          throw new InvalidResponsesToolsError(
+            `Namespace "${t.name}" lists a tool that is not an object.`
+          )
+        }
+        const fn = inner as ResponsesTool
+        if (fn.type !== 'function' || typeof fn.name !== 'string' || !fn.name) continue
+        const qualified = qualifiedToolName(t.name, fn.name)
         if (namespaces.has(qualified)) continue
-        namespaces.set(qualified, { namespace: t.name, name: inner.name })
-        out.push(functionTool(inner, qualified))
+        namespaces.set(qualified, { namespace: t.name, name: fn.name })
+        out.push(functionTool(fn, qualified))
       }
     } else {
       skippedTypes.add(t.type)
+    }
+  }
+
+  // A top-level tool spelled like a qualified name would make its calls ambiguous.
+  for (const qualified of namespaces.keys()) {
+    if (topLevel.has(qualified)) {
+      throw new InvalidResponsesToolsError(
+        `Tool "${qualified}" is declared both at the top level and inside namespace ` +
+          `"${namespaces.get(qualified)!.namespace}".`
+      )
     }
   }
 

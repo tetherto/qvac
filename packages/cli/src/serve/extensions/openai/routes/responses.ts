@@ -16,6 +16,7 @@ import {
   historyPrefixFromStoredResponse,
   InvalidResponsesBackgroundError,
   InvalidResponsesConversationError,
+  InvalidResponsesToolsError,
   toSdkResponsesArgs,
   type ResponsesHistoryItem
 } from '@/serve/extensions/openai/schemas/responses'
@@ -83,7 +84,7 @@ addressable via GET / DELETE / input_items.
 
 **Tools**: \`function\` tools, and the functions inside a \`namespace\` tool (the
 model sees them as \`<namespace>__<name>\`; calls come back with \`name\` and
-\`namespace\` split again). Built-in tool types (\`web_search\`,
+\`namespace\` split again; a malformed \`namespace\` → \`400 invalid_tools\`). Built-in tool types (\`web_search\`,
 \`file_search\`, …) are left out of the request and logged.
 
 **\`tool_choice\`**: \`"auto"\` (default), \`"none"\`, \`"required"\`, or
@@ -171,6 +172,9 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       try {
         sdk = toSdkResponsesArgs(req.body)
       } catch (err) {
+        if (err instanceof InvalidResponsesToolsError) {
+          throw new HttpError(400, 'invalid_tools', err.message)
+        }
         if (err instanceof InvalidResponsesConversationError) {
           throw new HttpError(400, 'conversation_not_supported', err.message)
         }

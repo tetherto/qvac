@@ -42,6 +42,7 @@ import {
   normalizeResponsesInputItemsForStorage,
   historyPrefixFromStoredResponse,
   InvalidResponsesConversationError,
+  InvalidResponsesToolsError,
   InvalidResponsesBackgroundError,
   responsesBody,
   toSdkResponsesArgs
@@ -1073,14 +1074,63 @@ describe('openaiResponsesToolsToSdk', () => {
     ])
     assert.deepEqual(
       t.tools?.map((tool) => tool.name),
-      ['mcp__node_repl__js', 'mcp__codex_apps__gmail__search_emails', 'mcp__cua_repl__js']
+      ['mcp__node_repl__js', 'mcp__codex_apps__gmail___search_emails', 'mcp__cua_repl__js']
     )
     assert.equal(t.tools![0]!.description, 'Run JS')
-    assert.deepEqual(t.namespaces.get('mcp__codex_apps__gmail__search_emails'), {
+    assert.deepEqual(t.namespaces.get('mcp__codex_apps__gmail___search_emails'), {
       namespace: 'mcp__codex_apps__gmail',
       name: '_search_emails'
     })
   })
+})
+
+describe('openaiResponsesToolsToSdk: name collisions and bad shapes', () => {
+  it('keeps tools whose names differ only by a leading underscore apart', () => {
+    const t = openaiResponsesToolsToSdk([
+      {
+        type: 'namespace',
+        name: 'files',
+        tools: [
+          { type: 'function', name: 'read' },
+          { type: 'function', name: '_read' }
+        ]
+      }
+    ])
+    assert.deepEqual(
+      t.tools?.map((tool) => tool.name),
+      ['files__read', 'files___read']
+    )
+  })
+
+  it('rejects a top-level tool spelled like a qualified name', () => {
+    assert.throws(
+      () =>
+        openaiResponsesToolsToSdk([
+          { type: 'function', name: 'files__read' },
+          { type: 'namespace', name: 'files', tools: [{ type: 'function', name: 'read' }] }
+        ]),
+      InvalidResponsesToolsError
+    )
+  })
+
+  for (const tool of [
+    { type: 'namespace', name: 'files', tools: [null] },
+    { type: 'namespace', name: 'files', tools: {} },
+    { type: 'namespace', tools: [] }
+  ]) {
+    it(`rejects malformed namespace ${JSON.stringify(tool)}`, () => {
+      assert.throws(
+        () =>
+          openaiResponsesToolsToSdk([
+            tool as Parameters<typeof openaiResponsesToolsToSdk>[0] extends
+              Array<infer T> | undefined
+              ? T
+              : never
+          ]),
+        InvalidResponsesToolsError
+      )
+    })
+  }
 })
 
 describe('openaiResponsesInputToHistory: namespaced calls', () => {
