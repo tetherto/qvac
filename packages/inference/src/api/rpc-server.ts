@@ -1,12 +1,16 @@
 import {
+  type RpcServerStatusStreamOptions,
+  type RpcServerStatusEvent,
+  type AbortableRPCOptions,
   type StartRpcServerOptions,
   type StopRpcServerOptions,
   type DiscoverRpcServersOptions,
   type RpcServerInfo,
   type RpcServerCandidate
 } from '@/schemas/index'
-import { send } from '@/dispatch'
-import { InvalidResponseError } from '@/errors/index'
+import { restoreErrorCause } from '@/schemas/error'
+import { send, stream } from '@/dispatch'
+import { RpcServerOperationError, InvalidResponseError } from '@/errors/index'
 import { decoratePromise } from '@/utils/decorate-promise'
 import { generateRequestId } from '@/runtime/request-id'
 
@@ -55,4 +59,27 @@ async function runDiscoverRpcServers(options: DiscoverRpcServersOptions, request
   const response = await send({ ...options, type: 'discoverRpcServers', requestId })
   if (response.type !== 'discoverRpcServers') throw new InvalidResponseError('discoverRpcServers')
   return response.servers
+}
+
+/** Observe current owned servers and later advertisement changes. Abort to unsubscribe. */
+export async function* rpcServerStatusStream(
+  params: RpcServerStatusStreamOptions = {},
+  options?: AbortableRPCOptions
+): AsyncGenerator<RpcServerStatusEvent> {
+  for await (const response of stream({ ...params, type: 'rpcServerStatusStream' }, options)) {
+    if (response.type !== 'rpcServerStatusStream') {
+      throw new InvalidResponseError('rpcServerStatusStream')
+    }
+    const { error, ...status } = response
+    yield {
+      ...status,
+      ...(error && {
+        error: new RpcServerOperationError(
+          'advertiseRpcServer',
+          status.reason,
+          restoreErrorCause(error.cause)
+        )
+      })
+    }
+  }
 }

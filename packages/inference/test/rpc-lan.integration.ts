@@ -94,7 +94,8 @@ test('native RPC manager selects the sole LAN address and advertises the resulti
   const manager = createRpcServerManager({
     start: (options) => ggmlRpcServerProvider.start(options),
     ready: (server, ctx) => waitForReady(server.host, server.port, ctx.signal),
-    advertise: advertiseRpcServer
+    advertise: (topic, url, ctx, onstatus) =>
+      advertiseRpcServer(topic, url, ctx, undefined, onstatus)
   })
   const registry = createRequestRegistry()
   await using ctx = await registry.begin({ requestId: 'auto-bind', kind: 'rpcServer' })

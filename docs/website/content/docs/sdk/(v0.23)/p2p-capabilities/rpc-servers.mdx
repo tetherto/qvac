@@ -64,7 +64,13 @@ Advertisers send a 55-byte packet immediately and once per second. Packets conta
 
 Each lookup admits at most 64 unique endpoints, runs at most four inventory probes concurrently, and tries each endpoint at most twice within its budget. It accepts at most 256 correctly sized datagrams per second before topic parsing. Oversized, malformed and unrelated-topic packets cannot create candidates. Every candidate still passes the native protocol and device inventory probe.
 
-The transport checks interface addresses and netmasks before every send and accepted receive, and once per second while idle. A detected change closes its sockets and invalidates lookup results. A lookup reports an error; an advertiser logs that advertising stopped while its native server remains owned by the caller. Restart discovery or stop and restart the server with its current address. Runtime suspend closes discovery sockets and cancels probes. Resume rebuilds memberships from current interfaces; an advertiser can resume only if its original bind address remains eligible.
+The transport checks interface addresses and netmasks before every send and accepted receive, and once per second while idle. A detected change closes its sockets and invalidates lookup results. A lookup reports an error. The native server remains owned and stoppable when advertising fails.
+
+Subscribe to `rpcServerStatusStream({ serverId })` to observe the advertisement after startup. Subscribe without a server ID before starting a server to observe startup and rollback too. Each update identifies the server and endpoint, distinguishes native ownership from advertisement state, and includes the failure reason, structured error cause and required recovery. Advertisement states are `inactive`, `starting`, `advertising`, `suspended` and `failed`. Cancelling a status subscription does not stop its server.
+
+Runtime suspension closes discovery sockets and cancels probes, including when UDP bind is still pending. Resume rebuilds receiver memberships. An advertiser resumes only on its original eligible bind address. If that address disappeared, runtime resume still completes, the advertisement reports failure, and the native server remains owned. A terminal send or network failure requires `stopRpcServer({ serverId })` followed by a new start with the current address. QVAC does not silently change a native server's endpoint. Normal suspension reports `resume` recovery; failed advertising reports `restart` recovery. `state()` continues to report runtime lifecycle only.
+
+The status stream is library-only. Applications own native RPC servers through these SDK methods; `qvac serve` serves the HTTP inference API and does not own native RPC advertisements.
 
 ### Mobile prerequisites
 

@@ -34,7 +34,9 @@ function fakeTransport() {
     get suspended() {
       return suspended
     },
-    async start() {},
+    async start() {
+      options.onstart?.()
+    },
     async send(packet) {
       if (!resource.suspended) sent.push(packet)
     },
@@ -44,6 +46,7 @@ function fakeTransport() {
     },
     async resume() {
       suspended = false
+      options.onstart?.()
     },
     async close() {
       closed = true
@@ -279,4 +282,29 @@ test('RPC later announcements retry a failed inventory probe within the lookup b
   transport.announce('10.0.0.2')
   t.alike(await result, [{ url: '10.0.0.2:50052', ...inventory }])
   t.is(probes, 2)
+})
+
+test('RPC advertiser forwards active, suspended and failed state with the original error', async (t) => {
+  const transport = fakeTransport()
+  const states: Array<{ state: string; error?: Error }> = []
+  const withdraw = await advertiseRpcServer(
+    'shared',
+    '10.0.0.2:50052',
+    undefined,
+    transport.factory,
+    (state, error) => states.push({ state, ...(error && { error }) })
+  )
+  try {
+    t.is(states[0]?.state, 'advertising')
+    await transport.resource.suspend()
+    t.is(states.at(-1)?.state, 'suspended')
+    await transport.resource.resume()
+    t.is(states.at(-1)?.state, 'advertising')
+    const cause = new Error('send failed')
+    transport.fail(cause)
+    t.is(states.at(-1)?.state, 'failed')
+    t.is(states.at(-1)?.error, cause)
+  } finally {
+    await withdraw()
+  }
 })

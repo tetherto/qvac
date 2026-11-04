@@ -291,7 +291,7 @@ export async function* stream<T extends Request>(
   request: T,
   options?: AbortableRPCOptions
 ): AsyncGenerator<Response> {
-  await ensureReady()
+  await ensureReady(request.type === 'rpcServerStatusStream')
   assertLifecycleAllowed(request)
 
   const processed = prepareRequest(request)

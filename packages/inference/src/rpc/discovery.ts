@@ -3,7 +3,6 @@ import { randomBytes } from 'bare-crypto'
 import AbortController from 'bare-abort-controller'
 import type { RequestContext } from '@/runtime/request-context'
 import { createDisposableScope } from '@/runtime/disposable-scope'
-import { getEngineLogger } from '@/logging/index'
 import { delay, privateEndpoint, rpcTopic, throwIfAborted } from './network'
 import { queryRpcInventory, type RpcInventory } from './inventory'
 import { ANNOUNCEMENT_BYTES, createLanDiscovery } from './lan'
@@ -32,7 +31,8 @@ export async function advertiseRpcServer(
   topic: string,
   url: string,
   ctx?: RequestContext,
-  createTransport = createLanDiscovery
+  createTransport = createLanDiscovery,
+  onstatus?: (state: 'advertising' | 'suspended' | 'failed', error?: Error) => void
 ): Promise<() => Promise<void>> {
   const endpoint = privateEndpoint(url)
   if (!endpoint) throw new Error('RPC advertising requires a concrete private IPv4 endpoint')
@@ -45,8 +45,11 @@ export async function advertiseRpcServer(
   const scope = createDisposableScope()
   const transport = createTransport({
     host: endpoint.host,
+    onstart() {
+      onstatus?.('advertising')
+    },
     onstop(error) {
-      if (error) getEngineLogger().warn('RPC LAN advertising stopped:', error)
+      onstatus?.(error ? 'failed' : 'suspended', error)
     }
   })
   scope.defer(() => transport.close())
@@ -63,6 +66,7 @@ export async function advertiseRpcServer(
     }, 1000)
     scope.defer(() => clearInterval(timer))
   } catch (error) {
+    onstatus?.('failed', error instanceof Error ? error : new Error(String(error)))
     await scope[Symbol.asyncDispose]()
     if (ctx) throwIfAborted(ctx.signal)
     throw error

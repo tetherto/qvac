@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { errorResponseSchema } from './error'
 
 const topicSchema = z.string().trim().min(1).max(256)
 const requestIdSchema = z
@@ -131,3 +132,33 @@ export interface RpcServerHandle {
 export interface RpcServerProvider {
   start(options: Omit<StartRpcServerOptions, 'discoveryTopic'>): Promise<RpcServerHandle>
 }
+
+export const rpcServerStatusStreamOptionsSchema = z.object({
+  serverId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Observe one owned server, or all servers when omitted.')
+})
+export const rpcServerStatusSchema = z.object({
+  serverId: z.string().min(1),
+  url: z.string().min(1),
+  nativeState: z.enum(['owned', 'stopped']),
+  advertisement: z.enum(['inactive', 'starting', 'advertising', 'suspended', 'failed']),
+  reason: z.string(),
+  recovery: z.enum(['none', 'resume', 'restart']),
+  error: errorResponseSchema
+    .optional()
+    .describe('Structured advertisement failure, including the original cause.')
+})
+export const rpcServerStatusStreamRequestSchema = rpcServerStatusStreamOptionsSchema.extend({
+  type: z.literal('rpcServerStatusStream')
+})
+export const rpcServerStatusStreamResponseSchema = rpcServerStatusSchema.extend({
+  type: z.literal('rpcServerStatusStream')
+})
+export type RpcServerStatus = z.infer<typeof rpcServerStatusSchema>
+export type RpcServerStatusStreamOptions = z.infer<typeof rpcServerStatusStreamOptionsSchema>
+export type RpcServerStatusStreamRequest = z.infer<typeof rpcServerStatusStreamRequestSchema>
+export type RpcServerStatusStreamResponse = z.infer<typeof rpcServerStatusStreamResponseSchema>
+export type RpcServerStatusEvent = Omit<RpcServerStatus, 'error'> & { error?: Error }

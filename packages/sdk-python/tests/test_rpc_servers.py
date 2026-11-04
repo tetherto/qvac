@@ -8,11 +8,13 @@ from tetherto.qvac_sdk import cancel
 from tetherto.qvac_sdk.errors import InferenceCancelledError, reconstruct_error
 from tetherto.qvac_sdk.methods import (
     discover_rpc_servers,
+    rpc_server_status_stream,
     start_rpc_server,
     stop_rpc_server,
 )
 from tetherto.qvac_sdk.schemas import (
     DiscoverRpcServersRequest,
+    RpcServerStatusStreamRequest,
     StartRpcServerRequest,
     StopRpcServerRequest,
 )
@@ -147,3 +149,92 @@ def test_rpc_cancellation_reconstructs_with_request_id():
     )
     assert isinstance(error, InferenceCancelledError)
     assert error.request_id == "rpc-search"
+
+
+async def test_rpc_status_stream_preserves_ownership_recovery_and_structured_cause():
+    cause = {
+        "name": "Error",
+        "message": "send failed",
+        "cause": {"message": "link lost"},
+    }
+    common = {
+        "type": "rpcServerStatusStream",
+        "serverId": "owned",
+        "url": "10.0.0.2:50052",
+        "nativeState": "owned",
+    }
+    transport = FakeTransport(
+        [
+            {
+                **common,
+                "advertisement": "advertising",
+                "reason": "ready",
+                "recovery": "none",
+            },
+            {
+                **common,
+                "advertisement": "suspended",
+                "reason": "runtime suspended",
+                "recovery": "resume",
+            },
+            {
+                **common,
+                "advertisement": "failed",
+                "reason": "send failed",
+                "recovery": "restart",
+                "error": {
+                    "type": "error",
+                    "name": "RPC_SERVER_OPERATION_FAILED",
+                    "message": "Advertising failed",
+                    "cause": cause,
+                    "typedFields": {"operation": "advertise", "details": "send failed"},
+                },
+            },
+        ]
+    )
+    events = [
+        event
+        async for event in rpc_server_status_stream(
+            transport,
+            RpcServerStatusStreamRequest(
+                type="rpcServerStatusStream", server_id="owned"
+            ),
+        )
+    ]
+    assert transport.sent == {"type": "rpcServerStatusStream", "serverId": "owned"}
+    assert [event.advertisement.value for event in events] == [
+        "advertising",
+        "suspended",
+        "failed",
+    ]
+    assert [event.recovery.value for event in events] == ["none", "resume", "restart"]
+    assert all(
+        event.native_state.value == "owned" and event.server_id == "owned"
+        for event in events
+    )
+    failure = events[-1].error
+    assert failure is not None
+    assert failure.cause == cause
+    assert failure.typed_fields is not None
+    assert failure.typed_fields.root["operation"] == "advertise"
+    assert failure.model_dump(by_alias=True)["cause"]["cause"]["message"] == "link lost"
+
+
+def test_rpc_status_stream_rejects_invalid_states_and_identity():
+    from tetherto.qvac_sdk.schemas import RpcServerStatusStreamResponse
+
+    valid = {
+        "serverId": "owned",
+        "url": "10.0.0.2:50052",
+        "nativeState": "owned",
+        "advertisement": "advertising",
+        "reason": "ready",
+        "recovery": "none",
+    }
+    for field, value in [
+        ("serverId", ""),
+        ("advertisement", "unknown"),
+        ("recovery", "retry"),
+    ]:
+        with pytest.raises(ValidationError):
+            RpcServerStatusStreamResponse.model_validate({**valid, field: value})

@@ -37,6 +37,7 @@ export {
   textToSpeechStream,
   getModelInfo,
   getLoadedModelInfo,
+  rpcServerStatusStream,
   startRpcServer,
   stopRpcServer,
   discoverRpcServers,

@@ -59,8 +59,28 @@ enabled and `host` is omitted, it resolves the sole eligible LAN address before
 starting a native server. Missing or ambiguous addresses fail before startup;
 ordinary non-advertising starts keep the native loopback default. A stopped advertisement expires
 at receivers after three seconds. Suspend closes sockets and invalidates lookup
-inventories. Resume selects current eligible interfaces and reopens sockets.
-Detected interface changes stop the transport until restart or runtime resume.
+inventories. Opening resources remain visible to suspension until startup and
+socket cleanup settle. Close cancels startup and prevents a late bind callback
+from reopening the resource.
+
+Lookup resume selects current eligible interfaces and reopens sockets. An
+advertiser keeps its native endpoint fixed. Resume restores advertising only if
+its original bind address remains eligible. Losing that address or a terminal
+send failure stops advertising without failing runtime resume or losing native
+server ownership. Call `stopRpcServer` and start a new server to recover.
+Unexpected cleanup failures still reject the lifecycle transition.
+
+`rpcServerStatusStream` reports current owned servers and subsequent changes,
+including normal advertisement suspension, terminal failure, recovery action and
+structured errors with their original cause. Subscribe without a server ID before
+starting to observe startup failures. Abort the stream to unsubscribe. A slow
+subscriber can hold at most 256 unread updates; exceeding that bound ends the
+stream with an error. Subscribe again to read current state. `state()` continues
+to report runtime lifecycle state only.
+
+The status stream is a library-only capability. Applications own native server
+IDs and their restart policy. The current CLI serving commands expose HTTP APIs
+and do not own native GGML RPC servers.
 
 The fixed-size protocol and UDP implementation stay behind `LanDiscovery` so a
 later transport can replace them without changing public RPC methods or native

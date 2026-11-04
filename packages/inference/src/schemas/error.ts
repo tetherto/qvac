@@ -62,7 +62,8 @@ function serializeCause(cause: unknown, depth = 0): unknown {
     name: cause.name,
     message: cause.message,
     stack: cause.stack,
-    ...('code' in cause && typeof cause.code === 'number' && { code: cause.code }),
+    ...('code' in cause &&
+      (typeof cause.code === 'number' || typeof cause.code === 'string') && { code: cause.code }),
     ...(cause.cause !== undefined && depth < 5 && { cause: serializeCause(cause.cause, depth + 1) })
   }
 }
@@ -99,4 +100,27 @@ export function createErrorResponse(error: unknown): ErrorResponse {
     stack,
     timestamp: new Date().toISOString()
   }
+}
+
+/** Rebuild a serialized native cause without flattening its code or nested cause. */
+export function restoreErrorCause(value: unknown, depth = 0): Error | undefined {
+  if (value === undefined) return undefined
+  if (value instanceof Error) return value
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !('message' in value) ||
+    typeof value.message !== 'string'
+  ) {
+    return new Error(typeof value === 'string' ? value : String(value))
+  }
+  const cause =
+    'cause' in value && depth < 5 ? restoreErrorCause(value.cause, depth + 1) : undefined
+  const error = new Error(value.message, cause ? { cause } : undefined)
+  if ('name' in value && typeof value.name === 'string') error.name = value.name
+  if ('stack' in value && typeof value.stack === 'string') error.stack = value.stack
+  if ('code' in value && (typeof value.code === 'number' || typeof value.code === 'string')) {
+    Object.assign(error, { code: value.code })
+  }
+  return error
 }

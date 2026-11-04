@@ -1,4 +1,5 @@
 import {
+  handleRpcServerStatusStream,
   handleStartRpcServer,
   handleStopRpcServer,
   handleDiscoverRpcServers
@@ -63,6 +64,11 @@ function finetuneSupportsProgress(request: Request): boolean {
 }
 
 export const registry: Record<string, HandlerEntry> = {
+  rpcServerStatusStream: {
+    type: 'stream',
+    handler: handleRpcServerStatusStream,
+    endsOnAbort: true
+  },
   startRpcServer: { type: 'reply', handler: handleStartRpcServer },
   stopRpcServer: { type: 'reply', handler: handleStopRpcServer },
   discoverRpcServers: { type: 'reply', handler: handleDiscoverRpcServers },

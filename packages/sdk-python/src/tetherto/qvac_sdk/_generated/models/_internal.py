@@ -23726,6 +23726,91 @@ class ResumeResponse(GeneratedBaseModel):
     type: Literal["resume"] = "resume"
 
 
+class RpcServerStatusStreamRequest(GeneratedBaseModel):
+    server_id: Annotated[
+        str | None,
+        Field(
+            alias="serverId",
+            description="Observe one owned server, or all servers when omitted.",
+            min_length=1,
+        ),
+    ] = None
+    type: Literal["rpcServerStatusStream"] = "rpcServerStatusStream"
+
+
+class RpcServerStatusStreamResponseNativeState(Enum):
+    owned = "owned"
+    stopped = "stopped"
+
+
+class RpcServerStatusStreamResponseAdvertisement(Enum):
+    inactive = "inactive"
+    starting = "starting"
+    advertising = "advertising"
+    suspended = "suspended"
+    failed = "failed"
+
+
+class RpcServerStatusStreamResponseRecovery(Enum):
+    none = "none"
+    resume = "resume"
+    restart = "restart"
+
+
+class RpcServerStatusStreamResponseErrorTypedFields(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any], Field(title="RpcServerStatusStreamResponseErrorTypedFields")
+    ]
+
+
+class RpcServerStatusStreamResponseError(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["error"] = "error"
+    message: str
+    stack: str | None = None
+    timestamp: str | None = None
+    name: str | None = None
+    code: float | None = None
+    cause: Any | None = None
+    typed_fields: Annotated[
+        RpcServerStatusStreamResponseErrorTypedFields | None,
+        Field(
+            alias="typedFields", title="RpcServerStatusStreamResponseErrorTypedFields"
+        ),
+    ] = None
+
+
+class RpcServerStatusStreamResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    server_id: Annotated[str, Field(alias="serverId", min_length=1)]
+    url: Annotated[str, Field(min_length=1)]
+    native_state: Annotated[
+        RpcServerStatusStreamResponseNativeState,
+        Field(alias="nativeState", title="RpcServerStatusStreamResponseNativeState"),
+    ]
+    advertisement: Annotated[
+        RpcServerStatusStreamResponseAdvertisement,
+        Field(title="RpcServerStatusStreamResponseAdvertisement"),
+    ]
+    reason: str
+    recovery: Annotated[
+        RpcServerStatusStreamResponseRecovery,
+        Field(title="RpcServerStatusStreamResponseRecovery"),
+    ]
+    error: Annotated[
+        RpcServerStatusStreamResponseError | None,
+        Field(
+            description="Structured advertisement failure, including the original cause.",
+            title="RpcServerStatusStreamResponseError",
+        ),
+    ] = None
+    type: Literal["rpcServerStatusStream"] = "rpcServerStatusStream"
+
+
 class Device(RootModel[str]):
     root: Annotated[
         str, Field(description="Native server devices, in caller order.", min_length=1)
@@ -26820,6 +26905,7 @@ class Request(
         | Request_6
         | RerankRequest
         | ResumeRequest
+        | RpcServerStatusStreamRequest
         | StartRpcServerRequest
         | StateRequest
         | StopRpcServerRequest
@@ -26871,6 +26957,7 @@ class Request(
         | Request_6
         | RerankRequest
         | ResumeRequest
+        | RpcServerStatusStreamRequest
         | StartRpcServerRequest
         | StateRequest
         | StopRpcServerRequest
@@ -26957,6 +27044,7 @@ class Response(
         | RagProgressResponse
         | RerankResponse
         | ResumeResponse
+        | RpcServerStatusStreamResponse
         | StartRpcServerResponse
         | StateResponse
         | StopRpcServerResponse
@@ -27012,6 +27100,7 @@ class Response(
         | RagProgressResponse
         | RerankResponse
         | ResumeResponse
+        | RpcServerStatusStreamResponse
         | StartRpcServerResponse
         | StateResponse
         | StopRpcServerResponse

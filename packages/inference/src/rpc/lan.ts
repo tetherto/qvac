@@ -1,6 +1,6 @@
 import { createSocket, type DgramSocket } from 'bare-dgram'
 import { networkInterfaces } from 'bare-os'
-import type { AbortSignal } from 'bare-abort-controller'
+import AbortController, { type AbortSignal } from 'bare-abort-controller'
 import type { Buffer } from 'bare-buffer'
 import { createDisposableScope } from '@/runtime/disposable-scope'
 import { registerSwarm, unregisterSwarm } from '@/runtime/runtime-lifecycle'
@@ -72,6 +72,7 @@ export interface LanDiscovery {
 interface LanOptions {
   host?: string
   onmessage?(frame: Buffer, host: string): void
+  onstart?(): void
   onstop?(error?: Error): void
 }
 
@@ -85,7 +86,10 @@ export function createLanDiscovery(
   let scope = createDisposableScope()
   let selected: LanInterface[] = []
   let sender: DgramSocket | undefined
-  let suspended = true
+  let state: 'suspended' | 'opening' | 'active' | 'stopping' = 'suspended'
+  let startup: AbortController | undefined
+  let disposing: Promise<void> | undefined
+  let terminalFailure: Error | undefined
   let closed = false
   let opening: Promise<void> | undefined
   let sending = false
@@ -103,32 +107,47 @@ export function createLanDiscovery(
     }
   }
 
+  function dispose() {
+    return (disposing ??= scope[Symbol.asyncDispose]())
+  }
+
   function suspend(error?: Error): Promise<void> {
-    if (stopping) return stopping
-    suspended = true
+    if (error && options.host) terminalFailure = error
+    if (stopping) {
+      if (error) options.onstop?.(error)
+      return stopping
+    }
+    state = 'stopping'
     options.onstop?.(error)
-    stopping = scope[Symbol.asyncDispose]().finally(() => {
-      sender = undefined
-      sending = false
-      stopping = undefined
-    })
+    startup?.abort(undefined)
+    const started = opening
+    stopping = (async () => {
+      try {
+        await dispose()
+        await started?.catch(() => {})
+      } finally {
+        sender = undefined
+        sending = false
+        state = 'suspended'
+      }
+    })()
     return stopping
   }
 
   function fail(error: Error) {
-    void suspend(error)
+    // Keep the rejection on the shared stopping promise for lifecycle callers.
+    void suspend(error).catch(() => {})
   }
 
   async function open(signal?: AbortSignal) {
-    if (closed) throw new Error('RPC LAN discovery is closed')
-    if (signal) throwIfAborted(signal)
-    selected = current()
-    if (!selected.length) {
-      throw new Error('RPC LAN discovery requires a private IPv4 Wi-Fi or Ethernet interface')
-    }
-    scope = createDisposableScope()
     const activeScope = scope
     try {
+      if (closed) throw new Error('RPC LAN discovery is closed')
+      if (signal) throwIfAborted(signal)
+      selected = current()
+      if (!selected.length) {
+        throw new Error('RPC LAN discovery requires a private IPv4 Wi-Fi or Ethernet interface')
+      }
       const socket = socketFactory({
         type: 'udp4',
         reuseAddr: !options.host,
@@ -156,7 +175,7 @@ export function createLanDiscovery(
         const onClose = () => {
           const error = new Error('RPC LAN discovery socket closed')
           reject(error)
-          if (!suspended) fail(error)
+          if (state === 'active' || state === 'opening') fail(error)
         }
         socket.on('error', onError)
         socket.once('close', onClose)
@@ -184,7 +203,7 @@ export function createLanDiscovery(
         let window = Date.now()
         let packets = 0
         socket.on('message', (frame, remote) => {
-          if (suspended || activeScope.disposed) return
+          if (state !== 'active' || activeScope.disposed) return
           if (Date.now() - window >= 1000) {
             window = Date.now()
             packets = 0
@@ -200,7 +219,8 @@ export function createLanDiscovery(
           }
         })
       }
-      suspended = false
+      state = 'active'
+      options.onstart?.()
       const monitor = setInterval(() => {
         try {
           checkNetwork()
@@ -210,27 +230,45 @@ export function createLanDiscovery(
       }, 1000)
       activeScope.defer(() => clearInterval(monitor))
     } catch (error) {
-      await suspend()
+      await dispose()
+      if (state === 'opening') state = 'suspended'
       throw error
     }
   }
 
-  function start(signal?: AbortSignal) {
+  function start(signal?: AbortSignal): Promise<void> {
     if (opening) return opening
-    if (!suspended && !closed) return Promise.resolve()
-    opening = open(signal).finally(() => {
-      opening = undefined
-    })
+    if (closed) return Promise.reject(new Error('RPC LAN discovery is closed'))
+    if (state === 'active') return Promise.resolve()
+    if (stopping) {
+      return stopping.then(() => {
+        stopping = undefined
+        return start(signal)
+      })
+    }
+    scope = createDisposableScope()
+    disposing = undefined
+    startup = new AbortController()
+    state = 'opening'
+    const startupSignal = signal
+      ? AbortController.AbortSignal.any([signal, startup.signal])
+      : startup.signal
+    opening = Promise.resolve()
+      .then(() => open(startupSignal))
+      .finally(() => {
+        opening = undefined
+        startup = undefined
+      })
     return opening
   }
 
   const resource: LanDiscovery = {
     get suspended() {
-      return suspended
+      return state === 'suspended'
     },
     start,
     send(frame) {
-      if (suspended || !sender || sending) return Promise.resolve()
+      if (state !== 'active' || !sender || sending) return Promise.resolve()
       const socket = sender
       return new Promise<void>((resolve, reject) => {
         let finished = false
@@ -245,7 +283,7 @@ export function createLanDiscovery(
           sending = false
           finishSend = undefined
           if (error) {
-            if (!suspended) fail(error)
+            if (state === 'active' || state === 'opening') fail(error)
             reject(error)
           } else resolve()
         }
@@ -261,10 +299,15 @@ export function createLanDiscovery(
     },
     suspend,
     async resume() {
-      if (closed || !suspended) return
-      await opening
+      if (closed || state === 'active') return
       await stopping
-      await scope[Symbol.asyncDispose]()
+      if (terminalFailure) return
+      if (options.host && !current().length) {
+        await suspend(
+          new Error('RPC LAN bind address is no longer eligible; stop and restart the server')
+        )
+        return
+      }
       await start()
     },
     async close() {

@@ -1,7 +1,7 @@
 import test from 'brittle'
 import { Buffer } from 'bare-buffer'
 import EventEmitter from 'bare-events'
-import type { createSocket } from 'bare-dgram'
+import { createSocket, type DgramSocket } from 'bare-dgram'
 import AbortController from 'bare-abort-controller'
 import {
   createLanDiscovery,
@@ -13,7 +13,9 @@ import {
 import {
   getRegisteredResourceCounts,
   suspendRuntime,
-  resumeRuntime
+  resumeRuntime,
+  getLifecycleState,
+  assertLifecycleAllowed
 } from '@/runtime/runtime-lifecycle'
 
 const microtask = (fn: () => void) => {
@@ -130,9 +132,11 @@ test('LAN advertiser binds its exact address, pins interface and TTL, stops on n
     t.is(f.sockets[0].sent, 1)
     f.change()
     await t.exception(f.resource.send(Buffer.alloc(55)))
+    await f.resource.suspend()
     t.ok(f.resource.suspended)
     t.is(f.sockets[0].sent, 1)
-    await t.exception(f.resource.resume())
+    await f.resource.resume()
+    t.is(f.sockets.length, 1, 'failed advertiser requires an explicit restart')
   } finally {
     await f.resource.close()
   }
@@ -163,6 +167,7 @@ test('LAN receiver explicitly joins interfaces, filters sources, bounds traffic 
     t.is(f.sockets.length, 2)
     f.change()
     f.sockets[1].emit('message', Buffer.alloc(55), { address: '192.168.1.3', family: 'IPv4' })
+    await f.resource.suspend()
     t.ok(f.resource.suspended)
   } finally {
     await f.resource.close()
@@ -224,6 +229,180 @@ test('LAN send failures and stalled sends reject and release sockets, including 
     await f.resource.close()
     t.ok(f.sockets[0].closed)
     t.ok(f.resource.suspended)
+  }
+  t.is(getRegisteredResourceCounts().swarms, 0)
+})
+
+test('LAN suspension during bind awaits shared socket cleanup and rejects late activation', async (t) => {
+  for (const closing of [false, true]) {
+    let bound: () => void = () => {}
+    let cleaned: () => void = () => {}
+    const socket = new Socket()
+    socket.bind = (_port, _address, done) => {
+      bound = done
+    }
+    socket.close = (done) => {
+      socket.closed = true
+      cleaned = done
+    }
+    const resource = createLanDiscovery(
+      {},
+      {
+        interfaces: () => [lan],
+        socket: (() => socket) as unknown as typeof createSocket
+      }
+    )
+    const opening = resource.start()
+    const rejected = t.exception(opening)
+    await Promise.resolve()
+    t.absent(resource.suspended, 'opening resources participate in runtime suspension')
+    const stopping = closing ? resource.close() : resource.suspend()
+    const concurrent = closing ? resource.close() : resource.suspend()
+    let stopped = false
+    void stopping.then(() => {
+      stopped = true
+    })
+    await Promise.resolve()
+    t.absent(stopped, 'suspension waits for the close callback')
+    bound()
+    await Promise.resolve()
+    t.alike(socket.membership, [], 'late bind cannot join multicast')
+    cleaned()
+    await Promise.all([stopping, concurrent, rejected])
+    t.ok(resource.suspended)
+    await resource.close()
+  }
+  t.is(getRegisteredResourceCounts().swarms, 0)
+})
+
+test('real Bare UDP immediate runtime suspension settles startup without a late socket', async (t) => {
+  const sockets: DgramSocket[] = []
+  const resource = createLanDiscovery(
+    { host: '127.0.0.1' },
+    {
+      interfaces: () => [{ ...lan, address: '127.0.0.1' }],
+      socket: ((options) => {
+        const socket = typeof options === 'function' ? createSocket(options) : createSocket(options)
+        sockets.push(socket)
+        return socket
+      }) as typeof createSocket
+    }
+  )
+  const opening = resource.start()
+  // Observe either a completed bind or cancellation before suspend wins the race.
+  const started = opening.catch(() => {})
+  try {
+    await suspendRuntime()
+    await started
+    t.ok(resource.suspended)
+    t.ok(sockets.every((socket) => socket.closed))
+    await new Promise<void>((resolve) => setTimeout(resolve, 10))
+    t.ok(resource.suspended, 'no bind continuation reactivates the resource')
+    t.ok(sockets.every((socket) => socket.closed))
+  } finally {
+    await resource.close()
+    await resumeRuntime()
+  }
+  t.is(getRegisteredResourceCounts().swarms, 0)
+})
+
+test('lost advertiser bind address leaves runtime active and the resource stoppable', async (t) => {
+  for (const missing of [false, true]) {
+    let entries = [lan]
+    const socket = new Socket()
+    const errors: Error[] = []
+    const resource = createLanDiscovery(
+      {
+        host: lan.address,
+        onstop(error) {
+          if (error) errors.push(error)
+        }
+      },
+      {
+        interfaces: () => entries,
+        socket: (() => socket) as unknown as typeof createSocket
+      }
+    )
+    try {
+      await resource.start()
+      await suspendRuntime()
+      entries = missing ? [] : [{ ...lan, address: '192.168.2.2' }]
+      await resumeRuntime()
+      t.is(getLifecycleState(), 'active')
+      t.execution(() =>
+        assertLifecycleAllowed({ type: 'getSystemResources' } as Parameters<
+          typeof assertLifecycleAllowed
+        >[0])
+      )
+      t.ok(resource.suspended)
+      t.is(errors.length, 1)
+      t.ok(socket.closed)
+    } finally {
+      await resource.close()
+      await resumeRuntime()
+    }
+  }
+  t.is(getRegisteredResourceCounts().swarms, 0)
+})
+
+test('LAN cleanup failures propagate through suspension and close', async (t) => {
+  const socket = new Socket()
+  const failure = new Error('socket cleanup failed')
+  socket.close = () => {
+    throw failure
+  }
+  const resource = createLanDiscovery(
+    { host: lan.address },
+    {
+      interfaces: () => [lan],
+      socket: (() => socket) as unknown as typeof createSocket
+    }
+  )
+  await resource.start()
+  const stopping = [resource.suspend(), resource.close()]
+  await Promise.all(
+    stopping.map((stopped) =>
+      stopped.then(
+        () => t.fail('cleanup failure must reject'),
+        (error) => t.is(error, failure)
+      )
+    )
+  )
+  t.is(getRegisteredResourceCounts().swarms, 0)
+})
+
+test('LAN startup cancellation before bind settles and normal resume reports activation', async (t) => {
+  const controller = new AbortController()
+  controller.abort(undefined)
+  const f = fixture()
+  await t.exception(f.resource.start(controller.signal))
+  t.ok(f.resource.suspended)
+  t.is(f.sockets.length, 0)
+  await f.resource.close()
+
+  const transitions: string[] = []
+  const resource = createLanDiscovery(
+    {
+      host: lan.address,
+      onstart() {
+        transitions.push('active')
+      },
+      onstop(error) {
+        transitions.push(error ? 'failed' : 'suspended')
+      }
+    },
+    {
+      interfaces: () => [lan],
+      socket: (() => new Socket()) as unknown as typeof createSocket
+    }
+  )
+  try {
+    await resource.start()
+    await suspendRuntime()
+    await resumeRuntime()
+    t.alike(transitions, ['active', 'suspended', 'active'])
+  } finally {
+    await resource.close()
   }
   t.is(getRegisteredResourceCounts().swarms, 0)
 })

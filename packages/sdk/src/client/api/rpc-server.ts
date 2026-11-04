@@ -1,11 +1,15 @@
 import {
+  type RpcServerStatusStreamOptions,
+  type RpcServerStatusEvent,
+  type AbortableRPCOptions,
   type StartRpcServerOptions,
   type StopRpcServerOptions,
   type DiscoverRpcServersOptions,
   type RpcServerInfo,
   type RpcServerCandidate
 } from '@qvac/inference/surface'
-import { send } from '@/client/rpc/rpc-client'
+import { send, stream } from '@/client/rpc/rpc-client'
+import { reconstructError } from '@/client/rpc/rpc-error'
 import { InvalidResponseError } from '@/utils/errors-client'
 import { decoratePromise } from '@/utils/decorate-promise'
 import { generateClientRequestId } from '@/client/api/client-request-id'
@@ -55,4 +59,18 @@ async function runDiscoverRpcServers(options: DiscoverRpcServersOptions, request
   const response = await send({ ...options, type: 'discoverRpcServers', requestId })
   if (response.type !== 'discoverRpcServers') throw new InvalidResponseError('discoverRpcServers')
   return response.servers
+}
+
+/** Observe current owned servers and later advertisement changes. Abort to unsubscribe. */
+export async function* rpcServerStatusStream(
+  params: RpcServerStatusStreamOptions = {},
+  options?: AbortableRPCOptions
+): AsyncGenerator<RpcServerStatusEvent> {
+  for await (const response of stream({ ...params, type: 'rpcServerStatusStream' }, options)) {
+    if (response.type !== 'rpcServerStatusStream') {
+      throw new InvalidResponseError('rpcServerStatusStream')
+    }
+    const { error, ...status } = response
+    yield { ...status, ...(error && { error: reconstructError(error) }) }
+  }
 }

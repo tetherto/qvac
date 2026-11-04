@@ -11,7 +11,7 @@ import {
 import { transformLlmConfig } from '@/plugins/builtin/llamacpp-completion/transform'
 import { llmConfigSchema } from '@/schemas/llamacpp-config'
 import net from 'bare-net'
-import type { StartRpcServerOptions } from '@/schemas/rpc-server'
+import type { RpcServerStatus, StartRpcServerOptions } from '@/schemas/rpc-server'
 
 function fixture(overrides: Partial<RpcServerDependencies> = {}) {
   const events: string[] = []
@@ -428,4 +428,80 @@ test('RPC rollback stalled in native stop does not prevent stopping other owned 
   await failedStart
   await closing
   t.is(manager.size, 0)
+})
+
+test('RPC health preserves identity, original cause and native ownership through failure', async (t) => {
+  let changed!: NonNullable<Parameters<RpcServerDependencies['advertise']>[3]>
+  const { manager, registry } = fixture({
+    async advertise(_topic, _url, _ctx, onstatus) {
+      changed = onstatus!
+      changed('advertising')
+      return async () => {
+        changed('suspended')
+      }
+    }
+  })
+  const updates: RpcServerStatus[] = []
+  const unsubscribe = manager.subscribe((status) => updates.push(status))
+  await using ctx = await registry.begin({ requestId: 'advertisement-health', kind: 'rpcServer' })
+  try {
+    const server = await manager.start(serving, ctx)
+    changed('suspended')
+    t.is(updates.at(-1)?.recovery, 'resume')
+    changed('advertising')
+    const cause = Object.assign(
+      new Error('UDP send failed', { cause: new Error('network removed') }),
+      { code: 'ENETDOWN' }
+    )
+    changed('failed', cause)
+    const failed = updates.at(-1)!
+    t.is(failed.serverId, server.serverId)
+    t.is(failed.nativeState, 'owned')
+    t.is(failed.advertisement, 'failed')
+    t.is(failed.recovery, 'restart')
+    t.alike(failed.error?.typedFields, {
+      operation: 'advertiseRpcServer',
+      details: 'UDP send failed'
+    })
+    const wire = JSON.parse(JSON.stringify(failed.error))
+    t.is(wire.cause.code, 'ENETDOWN')
+    t.is(wire.cause.message, cause.message)
+    t.is(wire.cause.cause.message, 'network removed')
+    t.is(manager.size, 1)
+    const snapshots: RpcServerStatus[] = []
+    manager.subscribe((status) => snapshots.push(status))()
+    t.alike(snapshots, [failed], 'late subscriber receives current health')
+    await manager.stop(server.serverId)
+    t.is(updates.at(-1)?.nativeState, 'stopped')
+  } finally {
+    unsubscribe()
+    await manager.close()
+  }
+})
+
+test('RPC advertisement startup failure is observable before rollback', async (t) => {
+  const { manager, registry } = fixture({
+    async advertise() {
+      throw new Error('advertising bind failed')
+    }
+  })
+  const updates: RpcServerStatus[] = []
+  const unsubscribe = manager.subscribe((status) => updates.push(status))
+  await using ctx = await registry.begin({
+    requestId: 'advertisement-start-failure',
+    kind: 'rpcServer'
+  })
+  try {
+    await t.exception(manager.start(serving, ctx), /advertising bind failed/)
+    const failed = updates.find((status) => status.advertisement === 'failed')!
+    t.ok(failed.serverId)
+    t.is(failed.nativeState, 'owned')
+    t.is(failed.reason, 'advertising bind failed')
+    t.is(failed.recovery, 'restart')
+    t.is(updates.at(-1)?.nativeState, 'stopped')
+    t.is(manager.size, 0)
+  } finally {
+    unsubscribe()
+    await manager.close()
+  }
 })

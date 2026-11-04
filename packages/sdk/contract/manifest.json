@@ -215,6 +215,12 @@
       "responseSchema": "schema.json#/$defs/resume.response"
     },
     {
+      "name": "rpcServerStatusStream",
+      "callShape": "server-stream",
+      "requestSchema": "schema.json#/$defs/rpcServerStatusStream.request",
+      "responseSchema": "schema.json#/$defs/rpcServerStatusStream.response"
+    },
+    {
       "name": "startRpcServer",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/startRpcServer.request",

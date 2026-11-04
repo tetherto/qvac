@@ -4,7 +4,12 @@ import { LifecycleOperationBlockedError } from '@/errors/index'
 
 const logger = getEngineLogger()
 
-const LIFECYCLE_ALLOWED_TYPES: ReadonlySet<string> = new Set(['suspend', 'resume', 'state'])
+const LIFECYCLE_ALLOWED_TYPES: ReadonlySet<string> = new Set([
+  'suspend',
+  'resume',
+  'state',
+  'rpcServerStatusStream'
+])
 
 export interface SuspendableSwarm {
   readonly suspended: boolean
