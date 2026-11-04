@@ -1,4 +1,0 @@
-{
-  "extends": "./tsconfig.json",
-  "include": ["runners/js/shared/model-cache-plan.ts", "runners/js/shared/bootstrap-deps.ts"]
-}

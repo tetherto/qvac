@@ -80,10 +80,7 @@ function contentIdOf(files: readonly ModelCacheFile[], dir: string): string {
   return sha256(lines.join('\n'))
 }
 
-/**
- * Mirror of SIDECAR_FAMILIES and COREML_COMPONENTS in
- * packages/inference/src/handlers/load-model/coreml-sidecars.ts; unit tests compare the two.
- */
+/** Mirror of SIDECAR_FAMILIES and COREML_COMPONENTS in handlers/load-model/coreml-sidecars.ts. */
 const COREML_COMPONENTS = [
   'analytics/coremldata.bin',
   'coremldata.bin',

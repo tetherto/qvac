@@ -362,8 +362,7 @@ invalidates only the models it changed:
    platform skips; `selectRunTests` from `@qvac/test-suite`), collects the ResourceManager deps they
    declare, and lists every model constant the bootstrap would download for them, with every file the SDK
    keeps for it, at its exact path, size and registry checksum (`runners/js/shared/model-cache-plan.ts`
-   mirrors the SDK's cache layout, Core ML sets included; its unit tests check the mirror against
-   `packages/inference`).
+   mirrors the SDK's cache layout from `packages/inference`, Core ML sets included).
 2. `.github/actions/sdk-e2e-model-cache` restores those entries. Keys derive from the registry's
    `sha256Checksum`, so desktop, Electron, Python and Snap share one copy of a model (macOS keeps a model
    with Core ML bundles as its own entry), and a branch that is behind `main` still hits every model it
