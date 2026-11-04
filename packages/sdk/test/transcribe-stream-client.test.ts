@@ -211,7 +211,13 @@ test('Nemotron conversation events preserve dominant speaker ids including zero'
         .map((speakerId) =>
           JSON.stringify({
             type: 'transcribeStream',
-            vad: { speaking: true, probability: 0.9, source: 'sortformer', speakerId }
+            vad: {
+              speaking: true,
+              probability: 0.9,
+              source: 'sortformer',
+              timestamp: 1.25,
+              speakerId
+            }
           })
         )
         .concat(JSON.stringify({ type: 'transcribeStream', done: true }))
@@ -226,6 +232,7 @@ test('Nemotron conversation events preserve dominant speaker ids including zero'
       speaking: true,
       probability: 0.9,
       source: 'sortformer',
+      timestamp: 1.25,
       speakerId
     }))
   )

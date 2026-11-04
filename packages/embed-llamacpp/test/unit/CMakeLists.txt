@@ -7,6 +7,7 @@ endif()
 add_executable(
   addon-test
   test_addon_cpp.cpp
+  test_app_memory_budget.cpp
   test_backend_selection.cpp
   test_cancel_stale_flag.cpp
   test_bert_model.cpp

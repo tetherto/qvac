@@ -1338,11 +1338,12 @@ export const ttsRequestSchema = z
 // `realTimeFactor` = `totalTime` * 1000 / `audioDuration`.
 //
 // The chunked paths (`stream: true`, `sentenceStream`, and the duplex session)
-// run one native job per sentence and the addon's aggregate carries only the
-// four summable fields (totalTime, audioDuration, totalSamples,
-// generatedFrames) and Audio8's two Core ML flags, which keep the value of the
-// last sentence that reported them; the five backend fields below are
-// reported by batch synthesis (`stream: false`) only.
+// run one native job per sentence. The addon's aggregate sums the four
+// summable fields (totalTime, audioDuration, totalSamples, generatedFrames)
+// and keeps the backend fields below and Audio8's two Core ML flags from the
+// last sentence that reported them, so a chunked run reports where it ran
+// just as batch synthesis (`stream: false`) does. A field no sentence
+// reported stays absent.
 export const ttsStatsSchema = z.object({
   audioDuration: z.number().optional(),
   totalTime: z.number().optional(),
@@ -1355,13 +1356,21 @@ export const ttsStatsSchema = z.object({
   generatedFrames: z.number().optional(),
   // Backend selection captured once at model load. `0` CPU / `1` GPU;
   // `backendId` codes the family (0 CPU, 1 Metal, 2 CUDA, 3 Vulkan, 4 OpenCL,
-  // 99 other GPU). The enhancer fields report the LavaSR stage separately and
-  // are `-1` when no enhancer is loaded.
+  // 99 other GPU). The enhancer and denoiser fields report each LavaSR stage
+  // separately and are `-1` when that stage is not loaded.
   backendDevice: z.number().optional(),
   backendId: z.number().optional(),
   gpuUnsupported: z.number().optional(),
   enhancerBackendDevice: z.number().optional(),
   enhancerBackendId: z.number().optional(),
+  denoiserBackendDevice: z
+    .number()
+    .optional()
+    .describe('LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed.'),
+  denoiserBackendId: z
+    .number()
+    .optional()
+    .describe('LavaSR denoiser backend family, same codes as `backendId`.'),
   codecSidecarLoaded: z
     .number()
     .optional()

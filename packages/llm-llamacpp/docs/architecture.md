@@ -252,7 +252,8 @@ new LlmLlamacpp({
 - `files.model` contains exactly one absolute disk path: a single GGUF or only the first shard. All disk shards must already be in the same directory.
 - `files.projectionModel`, when present, is forwarded as `projectionPath` for multimodal models.
 - `load()` takes no arguments. It constructs the native addon with the stored disk path and calls `activate()`. Fabric discovers and reads disk shards.
-- `run(messages, runOptions?)` forwards `prefill`, normalized `generationParams` (`grammar` and `json_schema` are mutually exclusive), optional `cacheKey`, and `ephemeral` into the native request path. `saveCache(cacheKey)` writes a cached conversation to its file through the native `saveCache` binding, off the JS thread.
+- `run(messages, runOptions?)` forwards `prefill`, normalized `generationParams` (`grammar` and `json_schema` are mutually exclusive), optional `cacheKey`, `ephemeral` and `baseCacheKey` into the native request path. `saveCache(cacheKey)` writes a cached conversation to its file through the native `saveCache` binding, off the JS thread.
+- `calcTokens({ text?, history?, tools? })` serializes `history` and `tools` to JSON and calls the native `calcTokens` binding, which counts off the JS thread. It takes the shared state lock and reads only load-time state, so it never enters the job scheduler and runs beside in-flight requests.
 
 </details>
 
@@ -423,7 +424,7 @@ handoff worker. The native binding no longer exports `loadWeights()`.
 
 - Saves/loads llama.cpp KV cache to disk for conversation continuity
 - Handles cache invalidation on context changes
-- Connected to JS `runOptions.cacheKey` and `runOptions.ephemeral`, which select the per-request inference context and whether it may be written automatically, and to `saveCache(cacheKey)`, which persists it.
+- Connected to JS `runOptions.cacheKey` and `runOptions.ephemeral`, which select the per-request inference context and whether it may be written automatically, to `runOptions.baseCacheKey`, a file the request may start from, and to `saveCache(cacheKey)`, which persists it.
 
 #### **Notable C++ modules**
 

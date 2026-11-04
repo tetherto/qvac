@@ -4,10 +4,10 @@ name: On Merge Model Cache (LLM)
 # pull_request_target, where cache-models takes its restore-only branch, so
 # nothing else writes this entry.
 #
-# Does not call integration-test-llm-llamacpp.yml: that needs prebuilds, carries
-# `environment: release`, and fans out to seven legs. cache-models' warm step
-# fills the directory on its own, and warm-models.mjs imports only node
-# builtins, so a checkout plus the action is the whole job.
+# Does not call integration-test-llm-llamacpp.yml: that needs prebuilds and fans
+# out to seven legs. cache-models' warm step fills the directory from Hugging
+# Face, and stage-s3-models.mjs adds the S3-only entries the warmer skips, so the
+# saved archive matches what the integration legs load.
 
 on:
   push:
@@ -32,7 +32,8 @@ on:
     - cron: "17 4 */2 * *"
   # No workflow_call. Nothing calls this, and a `pull_request` caller would put
   # the job on cache-models' trusted-save branch, letting PR-head code write an
-  # entry every addon lane afterwards restores. Dispatch covers on-demand runs.
+  # entry every addon lane afterwards restores, next to live AWS credentials.
+  # Dispatch covers on-demand runs.
   workflow_dispatch:
     inputs:
       force_refresh:
@@ -59,8 +60,13 @@ jobs:
     # Self-hosted: the entry is ~19 GB, over GitHub's per-repo cache limit, and
     # only these runners reach the cache server holding it. Non-GPU on purpose.
     runs-on: ${{ needs.runner_names.outputs.linux_ubuntu2404_x64 }}
+    # AWS_OIDC_ROLE_ARN's trust policy is scoped to this environment.
+    environment: release
     timeout-minutes: 300
     name: seed-model-cache
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
       - name: Manual Workspace Cleanup
@@ -84,11 +90,28 @@ jobs:
       # from the resolved path list -- anything extra here writes an entry the
       # integration legs cannot restore.
       - name: Seed integration test models
+        id: model-cache
         uses: ./.github/actions/cache-models
         with:
           package: llm-llamacpp
           seed-probe: 'true'
           force-refresh: ${{ inputs.force_refresh || false }}
+
+      # Gated: actions/cache skips the save on an exact hit, so a copy then is wasted.
+      - name: Configure AWS credentials via OIDC
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Stage S3-hosted test models
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        shell: bash
+        working-directory: packages/llm-llamacpp
+        env:
+          MODEL_S3_BUCKET: ${{ secrets.MODEL_S3_BUCKET }}
+        run: node scripts/stage-s3-models.mjs
 
   # actions/cache only WARNS when the cache server rejects a reservation, so the
   # seed job above reports success whether or not an entry was written. This
