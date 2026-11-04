@@ -102,9 +102,9 @@ const outputs = (text) => Object.fromEntries(text.trim().split('\n').map((line) 
 const runIds = (json) => JSON.parse(json).map((arn) => arn.split('/').pop())
 const scheduled = (calls) => calls.filter((c) => c.startsWith('schedule-run')).map((c) => c.split(' ').slice(1).join(' '))
 
-test('a run with no free unmetered slot is stopped and rescheduled METERED in its place', (t) => {
+test('PENDING_CONCURRENCY moves a run to METERED at once, in its place', (t) => {
   const { options, calls } = schedule(t, {
-    statuses: { r1: ['SCHEDULING'], r2: ['PENDING_CONCURRENCY'], r3: ['PENDING', 'PENDING_DEVICE'] },
+    statuses: { r1: ['RUNNING'], r2: ['PENDING_CONCURRENCY'], r3: ['SCHEDULING', 'SCHEDULING', 'PREPARING'] },
   })
   const out = outputs(runStep(SCHEDULE_ACTION, STEP, options))
   assert.deepEqual(runIds(out.run_arns), ['r1', 'r4', 'r3'])
@@ -118,8 +118,23 @@ test('a run with no free unmetered slot is stopped and rescheduled METERED in it
   assert.match(readFileSync(options.summary, 'utf8'), /\| METERED \| 1 \|/)
 })
 
-test('runs that got a slot stay UNMETERED and nothing is stopped', (t) => {
-  const { options, calls } = schedule(t, { statuses: { r1: ['SCHEDULING'], r2: ['PENDING_DEVICE'], r3: ['RUNNING'] } })
+// Device Farm reports a run queued for an unmetered slot as SCHEDULING, so a
+// run that never reaches PREPARING/RUNNING by the deadline has no slot.
+test('a run still SCHEDULING or PENDING at the deadline is moved to METERED', (t) => {
+  const { options, calls } = schedule(t, {
+    statuses: { r1: ['RUNNING'], r2: ['SCHEDULING'], r3: ['PENDING'] },
+    checkSeconds: '1',
+  })
+  const out = outputs(runStep(SCHEDULE_ACTION, STEP, options))
+  assert.deepEqual(runIds(out.run_arns), ['r1', 'r4', 'r5'])
+  assert.equal(out.metered_count, '2')
+  assert.deepEqual(calls().filter((c) => c.startsWith('stop-run')), ['stop-run r2', 'stop-run r3'])
+})
+
+test('runs that reach PREPARING or RUNNING in time stay UNMETERED and nothing is stopped', (t) => {
+  const { options, calls } = schedule(t, {
+    statuses: { r1: ['RUNNING'], r2: ['SCHEDULING', 'PREPARING'], r3: ['PENDING', 'SCHEDULING', 'RUNNING'] },
+  })
   const out = outputs(runStep(SCHEDULE_ACTION, STEP, options))
   assert.deepEqual(runIds(out.run_arns), ['r1', 'r2', 'r3'])
   assert.equal(out.metered_count, '0')
@@ -136,7 +151,7 @@ test('METERED schedules pay-as-you-go once and never checks for slots', (t) => {
 
 test('a failed stop keeps the queued UNMETERED run and schedules nothing else', (t) => {
   const { options, calls } = schedule(t, {
-    statuses: { r1: ['PENDING_CONCURRENCY'], r2: ['SCHEDULING'], r3: ['SCHEDULING'] },
+    statuses: { r1: ['PENDING_CONCURRENCY'], r2: ['RUNNING'], r3: ['RUNNING'] },
     env: { FAKE_STOP_EXIT: '1' },
   })
   const out = outputs(runStep(SCHEDULE_ACTION, STEP, options))
@@ -145,9 +160,9 @@ test('a failed stop keeps the queued UNMETERED run and schedules nothing else', 
   assert.equal(scheduled(calls()).length, 3)
 })
 
-test('failed status reads never stop a run; it stays UNMETERED at the deadline', (t) => {
+test('a run whose status could never be read is not stopped at the deadline', (t) => {
   const { options, calls } = schedule(t, {
-    statuses: { r1: ['FAIL'], r2: ['PENDING'], r3: ['SCHEDULING'] },
+    statuses: { r1: ['FAIL'], r2: ['RUNNING'], r3: ['RUNNING'] },
     checkSeconds: '1',
   })
   const out = outputs(runStep(SCHEDULE_ACTION, STEP, options))
@@ -166,7 +181,7 @@ test('an invalid billing method fails before anything is scheduled', (t) => {
 
 test('a failed METERED reschedule fails the step and stops every run it created', (t) => {
   const { options, calls } = schedule(t, {
-    statuses: { r1: ['PENDING_CONCURRENCY'], r2: ['SCHEDULING'], r3: ['SCHEDULING'] },
+    statuses: { r1: ['PENDING_CONCURRENCY'], r2: ['RUNNING'], r3: ['RUNNING'] },
     env: { FAKE_METERED_EXIT: '255' },
   })
   const result = spawnStep(SCHEDULE_ACTION, STEP, options)

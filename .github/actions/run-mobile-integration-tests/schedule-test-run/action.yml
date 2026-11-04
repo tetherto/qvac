@@ -42,9 +42,10 @@ description: |
        device(s). Never used by workflow_call callers (their behaviour is
        unchanged); a manual run with no device-models fails fast.
 
-  Billing: every run is scheduled UNMETERED first. A run that lands in
-  PENDING_CONCURRENCY (all unmetered slots busy) is stopped and rescheduled
-  METERED on the same target, so the number of runs at once is unchanged.
+  Billing: every run is scheduled UNMETERED first. A run that has not reached
+  PREPARING/RUNNING within unmetered-check-seconds (all unmetered slots busy)
+  is stopped and rescheduled METERED on the same target, so the number of runs
+  at once is unchanged.
 
 inputs:
   platform:
@@ -106,9 +107,9 @@ inputs:
     required: false
     default: "UNMETERED"
   unmetered-check-seconds:
-    description: "How long to wait for each UNMETERED run to leave PENDING before deciding whether it got a slot."
+    description: "Seconds an UNMETERED run has to reach PREPARING/RUNNING before it is moved to METERED."
     required: false
-    default: "120"
+    default: "180"
   poll-interval-seconds:
     description: "Seconds between status checks during the unmetered slot check."
     required: false
@@ -307,27 +308,36 @@ runs:
           echo "  ${RUN_NAMES[$i]}: no free unmetered slot, rescheduled METERED -> $arn"
         }
 
-        # PENDING_CONCURRENCY means every unmetered slot is taken; any later status means the run got one.
+        # A queued UNMETERED run reports SCHEDULING, the same as one that got a slot, so only
+        # PREPARING/RUNNING prove a slot. Still waiting at the deadline means no free slot.
         move_queued_runs_to_metered() {
           local deadline=$((SECONDS + UNMETERED_CHECK_SECONDS))
-          local pending=() still i status
-          for i in "${!RUN_LIST[@]}"; do pending+=("$i"); done
+          local pending=() still=() last=() i status
+          for i in "${!RUN_LIST[@]}"; do pending+=("$i"); last[$i]="UNKNOWN"; done
           echo "Checking unmetered slots for ${#pending[@]} run(s)..."
           while [ "${#pending[@]}" -gt 0 ]; do
             still=()
             for i in "${pending[@]}"; do
               status=$(aws devicefarm get-run --arn "${RUN_LIST[$i]}" --query 'run.status' --output text 2>/dev/null) || status="UNKNOWN"
               case "$status" in
-                PENDING|UNKNOWN) still+=("$i") ;;
+                PREPARING|RUNNING|COMPLETED|STOPPING) echo "  ${RUN_NAMES[$i]}: unmetered slot taken ($status)" ;;
                 PENDING_CONCURRENCY) switch_to_metered "$i" ;;
-                *) echo "  ${RUN_NAMES[$i]}: unmetered slot taken ($status)" ;;
+                *)
+                  still+=("$i")
+                  if [ "$status" != "UNKNOWN" ]; then last[$i]="$status"; fi
+                  ;;
               esac
             done
             pending=(${still[@]+"${still[@]}"})
             [ "${#pending[@]}" -eq 0 ] && break
             if [ "$SECONDS" -ge "$deadline" ]; then
               for i in "${pending[@]}"; do
-                echo "::warning::${RUN_NAMES[$i]} still pending after ${UNMETERED_CHECK_SECONDS}s; keeping it UNMETERED."
+                if [ "${last[$i]}" = "UNKNOWN" ]; then
+                  echo "::warning::Could not read the status of ${RUN_NAMES[$i]}; keeping it UNMETERED."
+                else
+                  echo "  ${RUN_NAMES[$i]}: still ${last[$i]} after ${UNMETERED_CHECK_SECONDS}s"
+                  switch_to_metered "$i"
+                fi
               done
               break
             fi
