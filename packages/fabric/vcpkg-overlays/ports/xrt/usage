@@ -1,0 +1,10 @@
+This port forwards the system-installed AMD XRT >= 2.25; it does not build XRT.
+Set XILINX_XRT to the install prefix, or use the default /opt/xilinx/xrt.
+
+Forwarding configs resolve this host's XRT when used. Dependent binaries that
+embed its absolute path (such as qvac-fabric[xdna-backend]) must track
+XILINX_XRT in VCPKG_ENV_PASSTHROUGH and the contents of
+${XRT_ROOT}/share/cmake/XRT/xrt-config.cmake in VCPKG_HASH_ADDITIONAL_FILES
+in their triplet. VCPKG_KEEP_ENV_VARS only preserves values; it does not
+track them in the binary-cache ABI. Track the IRON release too when compiling
+NPU kernels. See qvac-fabric's usage for a Linux x64 triplet example.
