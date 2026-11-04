@@ -103,6 +103,22 @@
           "platform": "!(osx | ios)"
         }
       ]
+    },
+    "webgpu": {
+      "description": "Enable opt-in WebGPU (Dawn) GPU acceleration",
+      "dependencies": [
+        {
+          "name": "speech-cpp",
+          "default-features": false,
+          "features": [
+            "webgpu"
+          ]
+        },
+        {
+          "name": "dawn",
+          "default-features": false
+        }
+      ]
     }
   },
   "overrides": [
@@ -112,8 +128,12 @@
     },
     {
       "name": "speech-cpp",
-      "version": "2026-10-24",
+      "version": "2026-10-29",
       "port-version": 0
+    },
+    {
+      "name": "dawn",
+      "version": "20260410.140140"
     }
   ]
 }

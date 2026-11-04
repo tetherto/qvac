@@ -55,6 +55,10 @@ otherwise drive your local model.
   the inbound `Authorization` header with that key, read fresh per request so a
   serve that was respawned after a crash is never sent a stale credential.
 - Neither secret is written to stdout, `QVAC_HOST_LOG`, or debug traces.
+- With `serveBinPath` set, the serve key goes on the command line
+  (`--api-key`), since a custom executable may not support `--api-key-file`.
+  Other local users can read it, so use it only on single-user machines such as
+  CI runners.
 - If the handshake is missing or malformed, the plugin fails startup and
   terminates the host rather than registering an unauthenticated provider.
 
@@ -89,18 +93,19 @@ Set from any of these sources (lowest to highest precedence): built-in defaults,
 a `qvac.json` in the project dir, the `opencode.json` plugin-tuple options, and
 `QVAC_*` environment variables.
 
-| Option (`qvac.json` / plugin tuple) | Env                      | Default      | Meaning                                                              |
-| ----------------------------------- | ------------------------ | ------------ | -------------------------------------------------------------------- |
-| `model`                             | `QVAC_MODEL`             | `qwen3.5-9b` | friendly id or a raw QVAC constant                                   |
-| `ctxSize`                           | `QVAC_CTX_SIZE`          | `32768`      | serve context window (an agent's prompt + tool schemas need ≥ 32768) |
-| `reasoningBudget`                   | `QVAC_REASONING_BUDGET`  | `-1`         | `-1` = reasoning on, `0` = off                                       |
-| `tools`                             | `QVAC_TOOLS`             | `true`       | enable the tool-calling chat template                                |
-| `shim`                              | `QVAC_SHIM`              | `true`       | apply the OpenAI-compat transforms (see below)                       |
-| `runtime`                           | `QVAC_RUNTIME`           | auto         | path to the node/bun runtime that hosts the serve                    |
-| `readyTimeoutMs`                    | `QVAC_READY_TIMEOUT_MS`  | `1800000`    | budget for the serve to become healthy, incl. a cold model download  |
-| `listenTimeoutMs`                   | `QVAC_LISTEN_TIMEOUT_MS` | `30000`      | budget for the host proxy to listen and hand over its handshake      |
-| `setDefaultModel`                   | `QVAC_SET_DEFAULT_MODEL` | `true`       | force `qvac/<model>` as the project default + small model            |
-| `debug`                             | `QVAC_DEBUG`             | `false`      | mirror host milestones + per-request traces to stderr                |
+| Option (`qvac.json` / plugin tuple) | Env                      | Default      | Meaning                                                                                    |
+| ----------------------------------- | ------------------------ | ------------ | ------------------------------------------------------------------------------------------ |
+| `model`                             | `QVAC_MODEL`             | `qwen3.5-9b` | friendly id or a raw QVAC constant                                                         |
+| `ctxSize`                           | `QVAC_CTX_SIZE`          | `32768`      | serve context window (an agent's prompt + tool schemas need ≥ 32768)                       |
+| `reasoningBudget`                   | `QVAC_REASONING_BUDGET`  | `-1`         | `-1` = reasoning on, `0` = off                                                             |
+| `tools`                             | `QVAC_TOOLS`             | `true`       | enable the tool-calling chat template                                                      |
+| `shim`                              | `QVAC_SHIM`              | `true`       | apply the OpenAI-compat transforms (see below)                                             |
+| `runtime`                           | `QVAC_RUNTIME`           | auto         | path to the node/bun runtime that hosts the serve                                          |
+| `serveBinPath`                      | `QVAC_SERVE_BIN_PATH`    | auto         | absolute path to the `qvac` executable for the serve (unset or empty: bundled `@qvac/cli`) |
+| `readyTimeoutMs`                    | `QVAC_READY_TIMEOUT_MS`  | `1800000`    | budget for the serve to become healthy, incl. a cold model download                        |
+| `listenTimeoutMs`                   | `QVAC_LISTEN_TIMEOUT_MS` | `30000`      | budget for the host proxy to listen and hand over its handshake                            |
+| `setDefaultModel`                   | `QVAC_SET_DEFAULT_MODEL` | `true`       | force `qvac/<model>` as the project default + small model                                  |
+| `debug`                             | `QVAC_DEBUG`             | `false`      | mirror host milestones + per-request traces to stderr                                      |
 
 Via the plugin tuple in `opencode.json`:
 
@@ -144,12 +149,12 @@ running `opencode` from the terminal.
 
 ## Requirements
 
-- [`@qvac/ai-sdk-provider@^0.10.0`](https://www.npmjs.com/package/@qvac/ai-sdk-provider)
+- [`@qvac/ai-sdk-provider@^0.11.0`](https://www.npmjs.com/package/@qvac/ai-sdk-provider)
   for managed mode (AI SDK 7). The host proxies on behalf of the managed serve,
   so it needs the provider's `ManagedQvacProvider.apiKey` getter — see
   [Provider compatibility](#provider-compatibility).
-- [`@qvac/cli@^0.16.0`](https://www.npmjs.com/package/@qvac/cli) available so the
-  host can run `qvac serve` (SDK 0.22 runtime). `--api-key-file`, which keeps the
+- [`@qvac/cli@^0.18.0`](https://www.npmjs.com/package/@qvac/cli) available so the
+  host can run `qvac serve` (SDK 0.23 runtime). `--api-key-file`, which keeps the
   managed serve's bearer key out of the process command line, has been accepted
   since CLI 0.11.0.
 - Node.js 22 or newer.

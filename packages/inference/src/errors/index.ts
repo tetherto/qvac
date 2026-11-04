@@ -1061,6 +1061,27 @@ export class ModelRegistryQueryFailedError extends QvacErrorBase {
   }
 }
 
+export class ModelRegistryModelNotFoundError extends QvacErrorBase {
+  readonly registrySource: string
+  readonly registryPath: string
+
+  constructor(registrySource: string, registryPath: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        ERROR_CODES.QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND,
+        [registrySource, registryPath],
+        cause
+      )
+    )
+    this.registrySource = registrySource
+    this.registryPath = registryPath
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { registrySource: this.registrySource, registryPath: this.registryPath }
+  }
+}
+
 export class RpcServerOperationError extends QvacErrorBase {
   readonly operation: string
   readonly details: string

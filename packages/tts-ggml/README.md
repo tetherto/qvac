@@ -29,8 +29,8 @@ The LM, flow frontend/decoder, F0 predictor and HiFT vocoder use resident
 sidecars when present and fall back to ggml when unavailable. HiFT exports
 use FP32 for waveform parity. Core ML chooses operation placement, so a
 sidecar does not guarantee ANE execution or a speed improvement.
-When a sidecar is present, `assessFit` returns an error with reason
-`coreml-memory-estimate-unavailable`; its memory usage is not projected.
+When a sidecar is present, `assessFit` answers `unknown`, since the sidecar's
+memory usage is not projected.
 
 
 Runs in-process with a persistent native engine — the GGUFs, the S3Gen
@@ -577,7 +577,7 @@ accepting a new one, so changing voices means constructing a new instance.
 
 Opt-in neural post-processing that bandwidth-extends the synthesized audio to
 **48 kHz** with a synthesised high band, using the LavaSR Vocos enhancer
-(ConvNeXt backbone + ISTFT spec head) converted to a single GGUF. It follows the
+(ConvNeXt backbone + ISTFT spec head) converted to a single GGUF. Without an explicit Core ML selection, it follows the
 engine's GPU intent: with `config.useGPU: true` (or `nGpuLayers`) the enhancer
 runs on the GPU (Vulkan on Linux/Windows, Metal on macOS/iOS) and falls back to
 CPU otherwise. It is fully backward compatible — provide no enhancer GGUF and
@@ -698,7 +698,58 @@ Notes:
   (scalar CPU port, validated bit-close to the ONNX reference); it requires a
   `tts-cpp` build that includes that port — see the pinned version in `vcpkg.json`.
 
+
+### LavaSR Core ML
+
+On Apple platforms, either stage can use a compiled Core ML model explicitly.
+Provide `coremlModelPath` and `coremlComputeUnits` together inside `enhancer`
+or `denoiser`, alongside the corresponding GGUF path (or its `files` alias).
+
+```js
+const model = new TTSGgml({
+  engine: TTSGgml.ENGINE_SUPERTONIC,
+  files: { supertonicModel: 'models/supertonic.gguf' },
+  enhancer: {
+    type: 'lavasr',
+    enhancerPath: 'models/lavasr-enhancer.gguf',
+    coremlModelPath: 'models/enhancer.mlmodelc',
+    coremlComputeUnits: 'CPU_AND_NE'
+  },
+  denoiser: {
+    type: 'lavasr',
+    denoiserPath: 'models/lavasr-denoiser.gguf',
+    coremlModelPath: 'models/denoiser.mlmodelc',
+    coremlComputeUnits: 'CPU_AND_NE'
+  }
+})
+```
+
+The accepted policies are `CPU_ONLY`, `CPU_AND_GPU`, `CPU_AND_NE`, and `ALL`.
+Each stage has its own policy; it does not change the synthesis engine's
+`config.useGPU`. Models stay loaded with the instance. Omitting both options
+keeps the existing ggml/scalar selection. An invalid, missing, incompatible,
+or unsupported explicitly selected Core ML model fails loading; it does not
+fall back to ggml. Existing streaming restrictions still apply.
+
+Core ML policies select eligible devices; they do not guarantee that every
+operation runs on ANE or GPU. Stage stats report device `2` for Core ML-managed
+placement and backend id `99` (other), rather than claiming CPU or GPU.
+
+Export matching models with the native Fabric
+[`export-lavasr-coreml.py`](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/8d9c6247ac18ff912bb3e1269da5f3fd679e77aa/engines/tts/scripts/export-lavasr-coreml.py)
+script; precision is explicit (`float32` or `float16`). See the
+[native LavaSR guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/8d9c6247ac18ff912bb3e1269da5f3fd679e77aa/engines/tts/docs/lavasr.md#core-ml)
+for export and compilation commands. A runnable addon example is
+[`examples/lavasr-coreml.js`](examples/lavasr-coreml.js).
+
 ## Backends & GPU acceleration
+
+`config.backend` selects the native backend explicitly. Accepted selectors
+include `auto`, `cpu`, `opencl`, `webgpu`, and exact registered
+device names such as `MTL0`, `CUDA0`, `Vulkan0`. Exact device names
+depend on the host. Native selection reports an unavailable explicit backend
+as an error; omitting this option preserves the existing `useGPU` policy.
+The same selector is accepted as top-level `backend` by `assessFit()`.
 
 The addon delegates backend selection to `tts-cpp`'s registry-only
 init path.  At `load()` time the engine walks the ggml-backend registry
@@ -719,6 +770,62 @@ On hosts where more than one backend is usable, `TTS_CPP_GPU_BACKEND`
 and fails loudly when that backend cannot be resolved; unset (or empty)
 keeps the automatic preference above.
 
+### Optional WebGPU builds
+
+Build with `bare-make generate -D TTS_WEBGPU=ON`, followed by
+`bare-make build`, `bare-make install`, and `npm run link:platform` to include
+and load the local Dawn backend.
+WebGPU is exposed only for the native library's established model families:
+Supertonic **3**, Parler, CosyVoice3 and Audio8. Explicit WebGPU requests
+for other families, including Supertonic 1/2, fail before loading weights.
+The manifest pins the compatible Dawn version; default builds stay unchanged.
+
+Hexagon is not included in JavaScript package builds. Stats add `backendId: 5`
+for WebGPU. LavaSR's existing `backendDevice: 2` continues to mean Core ML-managed
+placement.
+
+## Native engine controls
+
+These options are available at construction and through `reload()`. Leaving
+them unset retains the native engine defaults.
+
+| Engine | Options | Meaning |
+| --- | --- | --- |
+| MOSS / TTSD | `nCtx`, `maxNewTokens` | Context and generation budgets; positive integers. Duration validation uses the configured token budget, reserving the native 33 delay/EOS rows. |
+| MOSS / TTSD | `textTemperature`, `textTopP`, `textTopK` | Text-channel sampling. |
+| MOSS / TTSD | `audioTemperature`, `audioTopP`, `audioTopK`, `audioRepetitionPenalty` | Independent audio-channel sampling. |
+| Parler | `coremlDecoder` | Explicit decoder-LM Core ML opt-in. The separate DAC sidecar remains presence-driven. |
+| Parler | `coremlComputeUnits`, `coremlStrict` | Compute policy (`all`, `cpu_and_ane`, `cpu_and_gpu`, `cpu_only`) and optional strict/fallback selection. Omission preserves native/environment policy. |
+| Supertonic | `precision` | `auto`, `f32`, `f16`, `q8_0`. |
+| Supertonic | `f16Attn`, `f16Weights`, `kvAttnType` | Native attention/weight precision overrides; `-1` leaves automatic selection. |
+| Supertonic | `f16WeightsDenyList` | Tensor-name patterns retained at their original precision. |
+| Supertonic | `vulkanEnvOverrides` | String-valued Vulkan environment overrides passed to the engine. Explicit entries take precedence over the `vulkanCacheDir` convenience setting. |
+| Supertonic | `voiceStyleTtl`, `voiceStyleDp` | Paired flattened `number[]` or `Float32Array` voice tensors; the engine validates model-specific sizes. They take precedence over JSON and baked voices. |
+| CosyVoice3 | `greedy`, `forceSpeechTokens` | Greedy LM decoding or an explicit integer speech-token trajectory for replay. An empty trajectory restores generation. |
+
+After loading Supertonic, `await model.warmUp(text)` invokes the engine's
+warm-up directly, completes without returning PCM, and leaves the loaded
+instance available for normal synthesis. It shares the instance's exclusive
+execution queue. Other engines reject the method.
+
+CosyVoice3 responses expose owned `speechTokenIds` arrays. Batch output
+includes them with PCM; native streaming delivers them on a final
+`isLast: true` empty-PCM chunk. Retain those IDs and pass them to
+`reload({ forceSpeechTokens: ids })` to replay the trajectory. The existing
+numeric `response.stats.speechTokens` remains a count.
+
+[`examples/fabric-controls.js`](examples/fabric-controls.js) accepts a JSON
+constructor configuration through `QVAC_TTS_OPTIONS`, optional preflight
+through `QVAC_TTS_FIT`, and `QVAC_TTS_WARM_UP=1` for Supertonic. For example:
+
+```bash
+QVAC_TTS_OPTIONS='{"engine":"pocket","files":{"modelDir":"/models/pocket"},"config":{"useGPU":true}}' \
+  npm run example:fabric-controls -- "Speech runs on the selected backend." pocket.wav
+```
+
+The example saves a WAV and prints stats. For CosyVoice3 it also saves
+`<output>.tokens.json` containing the returned speech token IDs.
+
 ### Core ML sidecars on Apple
 
 The macOS / iOS prebuilds carry the Apple Core ML (Neural Engine) sidecars
@@ -738,7 +845,9 @@ published model set yet; supply your own to opt in.
 | MOSS, MOSS-TTSD | `moss-codec-decoder.mlmodelc`, beside the codec decoder GGUF | codec decoder, 25 frames (2 s) per call, keeping its attention cache between calls (macOS 15 / iOS 18) | non-streaming synthesis and streams with `streamChunkTokens` above 25, which ggml decodes faster in one pass | `MOSS_COREML_DISABLE=1` |
 | MOSS-SoundEffect | `moss-sfx-v2-dit.mlmodelc` and `moss-sfx-v2-vae.mlmodelc` | diffusion transformer, one velocity per call; VAE decoder in 320-frame windows | a call that fails on the sidecar, which retires it | `MOSS_COREML_DISABLE=1` |
 | MOSS-Speech | `moss-speech-codec-tokenizer.mlmodelc`, beside the codec GGUF | speech tokenizer (Whisper-VQ encoder), one full 30 s segment per call | segments shorter than 30 s, which ggml encodes faster; so most spoken questions | `MOSS_COREML_DISABLE=1` |
-| Chatterbox, Parler, CosyVoice3, LavaSR | none | — | always | — |
+| Parler | `<model>-dac.mlmodelc` and optional `<model>-decoder.mlmodelc` (drop the GGUF quant suffix) | DAC; decoder steps when `coremlDecoder: true` (macOS 15 / iOS 18); T5 and prefill stay on ggml | a failed sidecar, unless strict mode rejects it; see [Parler Core ML sidecars](#parler-core-ml-sidecars) | `PARLER_COREML_DISABLE=1` |
+| LavaSR | explicit `enhancer.coremlModelPath` / `denoiser.coremlModelPath` | denoiser and enhancer neural cores | only when Core ML options are absent; explicit load errors fail | omit both Core ML options |
+| Chatterbox, CosyVoice3 | none | — | always | — |
 
 Set the force-ggml variables in the process environment before `load()`.
 Audio8 reports its codec path in `response.stats`: `codecSidecarLoaded` is 1
@@ -928,6 +1037,55 @@ hot).  Parler supports Metal GPU offload on Apple and the vendor-selected
 Android GPU backend (`useGPU: true` / `nGpuLayers`), including Vulkan on ARM
 Mali. Unsupported or unavailable backends fall back to CPU. It emits native
 44.1 kHz.
+
+### Parler Core ML sidecars
+
+On Apple platforms, Parler can use optional Core ML decoder and DAC sidecars.
+Set these **top-level constructor options**, or pass them to `reload()`:
+
+```js
+const model = new TTSGgml({
+  files: { parlerModel: './models/parler-mini-v1-q8_0.gguf' },
+  coremlDecoder: true,
+  coremlComputeUnits: 'cpu_and_ane',
+  coremlStrict: false,
+  opts: { stats: true }
+})
+await model.load()
+await model.reload({ coremlDecoder: false })
+```
+
+`coremlDecoder` is a boolean; omitting it keeps the engine's default.
+`coremlComputeUnits` accepts `all`, `cpu_and_ane`, `cpu_and_gpu`, or `cpu_only`;
+omitting it inherits the engine's environment/default policy. `coremlStrict`
+is a boolean: omit it to inherit strict mode, or pass `false` to explicitly
+permit fallback. These options are Parler-only load settings and are rejected
+on per-call APIs. Reload options that fail validation are rejected before
+replacing the current addon.
+`assessFit()` accepts `coremlDecoder` to match the load's decoder policy.
+
+Strict mode requires a usable DAC sidecar even when `coremlDecoder` is false;
+enabling the decoder also requires its sidecar. A build without Core ML fails
+in strict mode. Combining strict mode with `PARLER_COREML_DISABLE` remains a
+fatal configuration under the engine's existing policy. On reload, omitted or
+`undefined` settings retain their current values; an empty `coremlComputeUnits`
+string is invalid. To return to inherited compute-unit or strict policy,
+construct a new instance with the corresponding options omitted.
+
+If the replacement model fails to load, `reload()` rejects and leaves the
+instance unloaded with the requested settings retained. Recover by reloading
+with a usable configuration or constructing a new instance.
+
+With stats enabled, `decoderSidecarLoaded` and `dacSidecarLoaded` report `1`
+while the corresponding sidecar remains attached. `decoderOnCoreml` and
+`dacOnCoreml` report `1` only when that synthesis used the corresponding Core ML
+stage; ggml fallback and mixed Core ML/ggml execution report `0`. Sentence
+streams report Core ML execution only if every reported sentence used it;
+sidecar availability retains the last report. These numeric flags describe
+execution paths; they do not
+identify whether Core ML scheduled work on the CPU, GPU, or Neural Engine.
+`backendDevice` / `backendId` continue to identify the ggml backend, so a mixed
+pipeline does not report all stages as Core ML.
 
 ## CosyVoice3 instruct
 
@@ -1204,6 +1362,15 @@ to 30 seconds.  It is not a speech model, and it ships as one GGUF.  Select it
 with `engine: TTSGgml.ENGINE_MOSS_SFX` or by staging `moss-sfx-*.gguf` in the
 `modelDir`.
 
+Native generation reuses fixed cross-attention K/V across diffusion steps and
+uses Metal DiT FlashAttention when the GPU supports both attention shapes.
+Memory preflight includes the request cache (360 MiB for guided generation
+with the released models) alongside the scheduler's retained peak across text
+encoding, diffusion and VAE decoding, including repeated requests.
+FlashAttention can slightly change waveform samples. See the
+[native SoundEffect guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/33174cc8693b1c8cdb44b5ff57b0f120bc89e454/engines/tts/docs/moss.md#moss-soundeffect)
+for precision details and the M1 Ultra measurements.
+
 ```js
 const sfx = new TTSGgml({
   engine: TTSGgml.ENGINE_MOSS_SFX,
@@ -1356,7 +1523,7 @@ instance.  Runtime stats add `promptTokens`, `generatedTokens`, `replyTokens`,
 | `pitch`, `expressivity`, `noise`, `reverb`, `quality` | string | — | Parler-only template fields (see [Parler descriptions](#parler-descriptions)); invalid values error listing the valid set |
 | `temperature` / `topK` / `topP` | number | engine defaults | Parler, Audio8 and Chatterbox sampling knobs (omit for the engine's own defaults — Parler temp 1.0 / top-k 50, Audio8 temp 0.7 / top-k 50 / top-p 0.9, Chatterbox temp 0.8 / top-k 1000 / top-p 0.95 where temp `0` is greedy and top-k `0` disables the cutoff; `topP` in `(0, 1]`) |
 | `maxFrames`               | number     | engine max | Parler + Audio8 generation cap in frames (Parler ~86/s of audio, Audio8 ~21.5/s); `0` = model default, Parler rejects 1–9 |
-| `greedy`                  | boolean    | `false`    | Audio8-only: take the argmax instead of sampling; ignores `temperature` / `topK` / `topP` |
+| `greedy`                  | boolean    | `false`    | Audio8 / CosyVoice3: take the argmax instead of sampling; Audio8 ignores `temperature` / `topK` / `topP` |
 | `minNewTokens`            | number     | GGUF default | Parler-only minimum tokens before EOS (`-1` = model default) |
 | `normalizeNumbers`        | boolean    | `true`     | Parler-only: expand digits before tokenization (English words; script-native digits on indic) — parler voices raw digits badly |
 | `instruct`                | object \| string | —    | CosyVoice3-only: instruction controls (`dialect` / `volume` / `style`, resolved by precedence in that order) or a raw instruction string; an unknown key or invalid value throws, and it counts toward the one-instruction rule (see [CosyVoice3 instruct](#cosyvoice3-instruct)). Also accepted per call, where it replaces the configured conditioning like a per-call `emotion` / `pace` |
@@ -1367,9 +1534,10 @@ instance.  Runtime stats add `promptTokens`, `generatedTokens`, `replyTokens`,
 | `openclCacheDir`          | string     | unset      | Android-only: directory where the OpenCL backend persists its compiled program-binary cache.  Setting it across runs avoids re-JITing the kernels on every fresh process |
 | `vulkanCacheDir`          | string     | unset      | Supertonic + `useGPU: true` only: writable directory where the Vulkan backend persists its compiled pipeline cache (`GGML_VK_PIPELINE_CACHE_DIR`).  Moves the one-time first-dispatch pipeline-compile cost (seconds on Mali) off the first `run()` — paid once per install instead of once per process — and enables a load-time pre-warm.  Fully opt-in: unset -> no cross-process cache, no pre-warm, behaviour unchanged |
 | `config.language`         | string     | `"en"`     | Chatterbox MTL accepts `es/fr/de/pt/it/zh/ja/ko/...`; turbo & Supertonic are English; MOSS takes it as a prompt hint (`en`, `zh`, ...) |
+| `config.backend` | string | unset | Native backend selector or exact registered device name; see [Backends](#backends--gpu-acceleration) |
 | `config.useGPU`           | boolean    | `false`    | Set to `true` to route through Metal / CUDA / Vulkan / OpenCL if available. Honored for Chatterbox/Supertonic on GPU-capable hosts (including Android, per `tts-cpp`'s per-vendor allowlist); Parler is validated on Apple/Metal, linux CUDA, and Android/ARM Mali Vulkan; CosyVoice3 and Audio8 offload on Apple/Metal, desktop linux CUDA/Vulkan, Windows Vulkan, and Android OpenCL/Adreno; MOSS, MOSS-SoundEffect and MOSS-Speech GPU offload is validated on Apple/Metal. Unsupported backends fall back to CPU. See [Backends & GPU acceleration](#backends--gpu-acceleration) |
 | `config.outputSampleRate` | number     | — (engine-native) | Resample the output to this rate (8000–192000 Hz). Omit to keep the engine-native rate (Chatterbox 24 kHz, Supertonic / Parler / Audio8 44.1 kHz, CosyVoice3 24 kHz, MOSS 24 kHz, MOSS-SoundEffect 48 kHz, MOSS-Speech 24 kHz, enhancer 48 kHz). Parler native chunk streaming accepts a non-native rate only with the enhancer active; MOSS, MOSS-SoundEffect and MOSS-Speech accept only their native rate |
-| `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU), `backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other), `enhancerBackendDevice` / `enhancerBackendId` and `denoiserBackendDevice` / `denoiserBackendId` (`-1` when that LavaSR stage is off), and the engine's own stage stats: Chatterbox `t3Ms` / `s3genMs` / `t3Tokens`; CosyVoice3 per-stage ms (`lmPrefillMs` … `hiftDecodeMs`, `stageTotalMs`) and work counters (`speechTokens`, `decodeSteps`, …); Audio8 per-stage ms (`prefillMs`, `fastDecodeMs`, `codecSynthMs`, …, `stageTotalMs`) |
+| `opts.stats`              | boolean    | `false`    | Populate `response.stats` with RTF, `backendDevice` (0=CPU, 1=GPU), `backendId` (0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 5=WebGPU, 99=other), `enhancerBackendDevice` / `enhancerBackendId` and `denoiserBackendDevice` / `denoiserBackendId` (`-1` when that LavaSR stage is off; device `2` and id `99` for Core ML-managed placement), and the engine's own stage stats: Chatterbox `t3Ms` / `s3genMs` / `t3Tokens`; CosyVoice3 per-stage ms (`lmPrefillMs` … `hiftDecodeMs`, `stageTotalMs`) and work counters (`speechTokens`, `decodeSteps`, …); Audio8 per-stage ms (`prefillMs`, `fastDecodeMs`, `codecSynthMs`, …, `stageTotalMs`) |
 | `exclusiveRun`            | boolean    | `false`    | **Top-level** option (not under `opts`): serialize overlapping streaming runs |
 
 ### Methods
@@ -1382,6 +1550,7 @@ instance.  Runtime stats add `promptTokens`, `generatedTokens`, `replyTokens`,
   config (`language`, `useGPU`, `outputSampleRate`, …).
 - `await model.destroy()` — `unload()` + mark this instance dead.
 - `await model.cancel()` — best-effort cancel of any in-flight run.
+- `await model.warmUp(text)` — Supertonic-only native warm-up without a PCM response.
 - `TTSGgml.getVoiceControls()` — static: tts-cpp's emotion / pace vocabulary
   and each engine's supported subset (see [Emotion & pace](#emotion--pace-cross-engine)).
 - `model.run({ input, type: 'text' })` → `QvacResponse`.
@@ -1435,14 +1604,16 @@ response.stats.generatedFrames   // Audio8 and MOSS only: codec frames (Audio8 e
 response.stats.codecSidecarLoaded // Audio8 only, macOS / iOS: 1 while the Apple Core ML codec sidecar is attached
 response.stats.codecOnCoreml     // Audio8 only: 1 when this synthesis ran the codec on that sidecar, 0 when on the ggml backend
 response.stats.backendDevice     // 0=CPU, 1=GPU
-response.stats.backendId         // 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 99=other
+response.stats.backendId         // 0=CPU, 1=Metal, 2=CUDA, 3=Vulkan, 4=OpenCL, 5=WebGPU, 99=other
 // present when a LavaSR enhancer is active:
 response.stats.enhancerBackendDevice // -1 none, 0 CPU, 1 GPU
 response.stats.enhancerBackendId
 ```
 
-For `runStream()` and `runStreaming()`, `codecSidecarLoaded` and
-`codecOnCoreml` retain the last chunk that reported each field, including zero
+For `runStream()` and `runStreaming()`, the backend fields (`backendDevice`,
+`backendId`, `gpuUnsupported`, and the LavaSR `enhancerBackend*` and
+`denoiserBackend*` pairs) and the Audio8 codec fields (`codecSidecarLoaded`,
+`codecOnCoreml`) retain the last chunk that reported each field, including zero
 when a sidecar is retired or synthesis falls back to ggml. They are not summed;
 if no chunk reports a field, it remains absent.
 
@@ -1498,19 +1669,16 @@ const fit = await TTSGgml.assessFit({
   audioSeconds: 30
 })
 
-fit.status // 'fits' | 'does-not-fit' | 'error'
-fit.reason // the engine's own wording, e.g. 'model-unreadable', 'workload-too-large'
-fit.modelVariant // which pipeline was projected, e.g. 'chatterbox-t3-turbo'
-fit.deviceName
-fit.deviceBytes
-fit.weightsBytes
-fit.stateBytes
-fit.lmComputeBytes // 0 for a pipeline with no language-model stage, such as supertonic
-fit.codecComputeBytes // 0 for a pipeline with no separate codec stage
-fit.hostBytes
-fit.lavasrFileBytes // the LavaSR stages' size on disk, 0 when none was named
-fit.report
+fit.status // 'fits' | 'does-not-fit' | 'unknown'
+fit.devices // [{ id, name, unified, usedBytes, freeBytes, totalBytes }]
+fit.stats // {}
 ```
+
+`devices` holds the device the load resolves to, then the host CPU, which holds the host-side buffers. A load on the CPU is one row. `id` is the PCI bus ID when the backend reports one, so the same GPU matches across addons built on different backends, and the device name otherwise. `unified` is true for memory the host owns: the CPU, an integrated GPU, a GPU that shares the host's memory, Android's OpenCL GPU, and a device that reports no memory of its own, which takes the host's figures. `usedBytes` is what the load takes on that device.
+
+On an iOS device every unified row shares the app's own memory limit, `os_proc_available_memory()`. Each such row's free memory is capped at that limit, and a load whose unified rows together take more than the limit less the margin does not fit. A limit of 0 means the app has none left.
+
+`unknown` is a load the fitter cannot size, and it carries no rows: supertonic outside the fused graph path it models, which is a validated GPU, or a CPU without the Accelerate pointwise kernels; a CosyVoice3 or Parler load with Core ML sidecars; or a load whose memory the engine fails to measure.
 
 `engineType` picks the fitter, the same key a load uses, and is required: a fit request carries none of the file keys a load is inferred from. Each engine takes the load's own file keys, plus a workload the fit adds:
 
@@ -1521,16 +1689,15 @@ fit.report
 | `chatterbox` | `t3ModelPath`, `s3genModelPath` | `textTokens`, `predictTokens` |
 | `audio8` | `audio8LmPath`, `audio8CodecDecoderPath`, `audio8CodecEncoderPath` | `promptTokens`, `maxFrames`, `referenceSeconds` |
 | `cosyvoice3` | `cosyvoiceLlmModelPath`, `cosyvoiceFlowModelPath`, `cosyvoiceHiftModelPath`, `cosyvoiceVoiceModelPath` | `textTokens`, `speechTokens` |
+| `pocket` | `pocketFlowModelPath`, `pocketMimiModelPath`, `pocketFrontendPath`, optional `pocketVoicePath` / `referenceAudio` | Required `text`; optional `memoryBudgetBytes`, `marginBytes`, and native load controls |
 | `moss` | `mossBackbonePath`, `mossCodecDecoderPath`, optional `mossCodecEncoderPath` | Required `promptRows`, `referenceSamples`, `streaming`; load controls `durationTokens`, `streamChunkTokens`, `threads` |
 | `moss-sfx` | Required `mossSoundEffectPath` | Required `prompt`, `seconds`; optional `negativePrompt`, `steps`, `guidance`, `shift`, `threads` |
 
 Everything else comes from the load config: `nGpuLayers` and `useGPU` carry the offload intent, `nCtx` and `kvCacheType` size the chatterbox cache, `steps` takes the GGUF's own default at 0, and `vulkanDevice` and `backendsDir` place the backend. Supplying `audio8CodecEncoderPath` projects voice cloning, which the decoder alone cannot do. `marginBytes` sets the free memory that must remain for the projection to count as fitting.
 
-`lavasrEnhancerPath` and `lavasrDenoiserPath` are reported as `lavasrFileBytes`, their size on disk. Those stages have no fitter, so the figure is a size on disk. It is counted in neither `deviceBytes` nor `hostBytes`.
+The LavaSR enhancer and denoiser have no fitter, and the request takes no LavaSR paths. The estimate for a load with LavaSR stages leaves those stages out.
 
-`deviceSharesHostMemory` reports that the device pool is system RAM, so host bytes compete with device bytes.
-
-A model the engine cannot read resolves to `status: "error"`, as does a voice with no fitter, which reports `reason: "unsupported-engine"`. MOSS-TTS, MOSS-TTSD and MOSS-SoundEffect are supported. MOSS-Speech has no SDK fit projection. A broken request, or a host with no native binding, rejects.
+A model the engine cannot read, a workload it cannot project, a voice with no fitter, or a broken request rejects with an `InvalidArgument` error, and a host with no native binding rejects as well. MOSS-TTS, MOSS-TTSD and MOSS-SoundEffect are supported. MOSS-Speech has no fitter.
 
 MOSS-TTS and MOSS-TTSD share the `moss` fitter. `promptRows` is the complete
 native prompt length, including special tokens, encoded speaker references and
@@ -1558,8 +1725,6 @@ as a conservative upper bound, including the reference encoder when requested;
 this may reject a workload whose actual peak is smaller. The fit follows the
 load's generation settings and does not change synthesis behavior.
 
-The supertonic fitter covers the fused graph path: a validated GPU, or a CPU without the Accelerate pointwise kernels. Elsewhere it answers `compute-path-not-supported` and projects nothing.
-
 ### MOSS-SoundEffect fit
 
 ```js
@@ -1570,7 +1735,7 @@ const fit = await TTSGgml.assessFit({
   seconds: 8,
   useGPU: false
 })
-console.log(fit.report)
+console.log(fit.devices)
 ```
 
 The fitter uses generation's tokenizer, request validation and graph builders,
@@ -1578,8 +1743,8 @@ without loading weights or generating audio. It supports full and metadata-only
 GGUF files. `negativePrompt`, `steps`, `guidance` and `shift` keep their generation
 semantics; `marginBytes` keeps the shared 256 MiB default. DiT processes the model's
 full latent duration even for a short output. Requested seconds size decoder
-windows and audio buffers. The shared compute arena is counted at its peak:
-`lmComputeBytes` covers text/DiT, `codecComputeBytes` any additional VAE demand.
+windows and audio buffers. The shared compute arena for text/DiT and any
+additional VAE demand is counted at its peak.
 Host memory includes conditioning, temporary arrays and CPU fallback buffers.
 
 Run `bare examples/moss-sfx-fit.js ./moss-sfx-v2-q8_0.gguf "Rain on a roof." 8`.
@@ -1602,6 +1767,7 @@ Runnable demos under `examples/`:
 | `supertonic-mtl-sweep-tts.js` | Multilingual Supertonic sweep across languages |
 | `supertonic-sentence-stream-tts.js` | Supertonic sentence-level streaming |
 | `supertonic-chunk-stream-tts.js` | Supertonic native chunk streaming via `streamChunkTokens`, with streaming playback |
+| `lavasr-coreml.js` | Supertonic + explicit Core ML denoiser/enhancer. Run without arguments for usage. |
 | `supertonic-enhanced.js` | Supertonic + LavaSR 48 kHz enhancement. `bare examples/supertonic-enhanced.js "Hello"` |
 | `parler-tts.js` | Parler batch synth with voice/emotion templates. `bare examples/parler-tts.js "Hello" Laura happy` |
 | `parler-enhanced.js` | Parler + LavaSR 48 kHz enhancement. `bare examples/parler-enhanced.js "Hello" Laura happy` |
@@ -1779,9 +1945,10 @@ Apache-2.0.  See [LICENSE](./LICENSE).
 
 ## Pocket TTS
 
-The native `speech-cpp` dependency includes Pocket Metal, CUDA, Vulkan and
-OpenCL support in the native library. The JavaScript Pocket API continues
-to require `config.useGPU: false`; updating the native dependency does not
-remove that addon validation.
+Pocket supports CPU, Metal, CUDA, Vulkan and OpenCL through the addon.
+CPU remains the default. Set `config.useGPU: true`, `nGpuLayers`, or
+`config.backend` to select an accelerator; runtime stats identify the
+backend actually selected. Metadata-only `assessFit()` uses the same
+native configuration and accepts an optional application memory budget.
 
 See [Pocket TTS](docs/pocket-tts.md) for model conversion, addon/SDK usage, supported controls and validation commands.

@@ -28,13 +28,17 @@ per-package workflow. The next train moves it above that version.
     the other.
   - `anchorGroup`, a fixed group whose version names the branch, or
     `anchorProject`, one package whose version does
-  - `fromNpm`: directories of workspace packages the train depends on but
-    builds and checks against the version on npm (see
-    [Making a release](#making-a-release))
-  - `githubRelease`: the one package that gets a GitHub release; the others get
-    a `<slug>-v<version>` tag
+  - `githubRelease`: the one package that also gets a GitHub release, on its
+    tag. Every package gets a `<slug>-v<version>` tag.
   - `checks`: the check jobs in `release-train.yml` that must pass
   - `packageChecks`: the per-package check config `package-checks` runs
+
+A train builds, checks and publishes against npm for every workspace package
+its packages depend on outside the train, development dependencies included.
+`release-train.mjs` reads them from the `package.json` files, so no list is
+kept. A workspace copy can hold changes its package has not released, and a
+native addon's copy has no prebuilds, so the train never links one (see
+[Making a release](#making-a-release)).
 
 ## Making a release
 
@@ -68,16 +72,18 @@ per-package workflow. The next train moves it above that version.
    rm .nx/version-plans/<ticket>.md
    ```
 
-5. Write a changelog section for each package (`qv-sdk-changelog`). When the
-   train moves `@qvac/sdk`, bring `packages/sdk-python` and
-   `packages/sdk-kotlin` to its new version (the `sdk-python` and `sdk-kotlin`
-   syncs of `qv-sdk-inference-version`); `pr-checks-sdk-kotlin.yml` checks the Kotlin
-   version on both PRs.
+5. Write a changelog section for each package (`qv-sdk-changelog`). The
+   `@qvac/sdk` section also carries the Python and Kotlin clients, which have
+   no changelog of their own. When the train moves `@qvac/sdk`, bring
+   `packages/sdk-python` and `packages/sdk-kotlin` to its new version (the
+   `sdk-python` and `sdk-kotlin` syncs of `qv-sdk-inference-version`);
+   `pr-checks-sdk-kotlin.yml` checks the Kotlin version on both PRs.
 
-   When the train lists `fromNpm` packages, take them out of the workspace in a
-   separate commit. pnpm links a workspace package whenever its version
-   satisfies the range, so the train would otherwise build against the
-   workspace copy instead of the version on npm:
+   Take every package outside the train out of the workspace in a separate
+   commit. pnpm links a workspace package whenever its version satisfies the
+   range, so the train would otherwise build against the workspace copy
+   instead of the version on npm. Each of them needs a version on npm that the
+   train's range accepts, or the install fails:
 
    ```bash
    node .github/scripts/release-train.mjs exclude <train>
@@ -90,6 +96,38 @@ per-package workflow. The next train moves it above that version.
    into `main` from `backmerge/release-train-<train>-<anchor version>`. The
    backmerge keeps `main`'s `pnpm-workspace.yaml` and regenerates
    `pnpm-lock.yaml` from it.
+
+   The documentation site has one step here. **Run `qv-docs-cutoff` right
+   after cutting the train branch**, passing the new version of each
+   collection's package and the train branch itself — `@qvac/sdk` and
+   `@qvac/cli` are the two documented today, and a train that moves neither
+   cuts nothing. The branch is what tells it the release base: the cutoff
+   publishes the tree the train was cut from, not `main`'s tip. It opens one PR
+   into `main` and reports its URL. The documentation engineer
+   reviews and merges it. That review is how the documentation side of the
+   release is verified — no CI check does it — so do not approve or merge it
+   yourself. The checks they run are in
+   [`docs/website/docs-workflow.md`](../website/docs-workflow.md), "Reviewing
+   the cutoff PR". It lands on `main`; the train branch is the release's
+   target, never documentation's. Nothing in steps 1 to 8 waits on it, and it
+   touches no package.
+
+   What the PR does, per collection the train moves: regenerate the API
+   summary of the version being released, publish that version's line — the
+   line the sprint was written into, which until now sat outside the site at
+   `content/_unpublished/<collection>/next/` — and preserve the previously
+   published line at its versioned URLs. The development line stays where it
+   is and is now the next version's, which is where the coming sprint's
+   feature PRs write. No folder is renamed across versions and none is
+   deleted.
+
+   Why here and not at step 7 or 8: the line has to be published from the tree
+   the release was cut from, and the development line has to be free for the
+   next sprint from the moment its development starts.
+
+   Skipping this step is the one option that is not available: the version
+   would ship with the previous version's documentation. If the documentation
+   engineer is unavailable to review, the PR waits — it blocks no other step.
 7. Wait for the release PR's `Release Train (nx)` run, the dry run described
    under [Checks](#checks), then merge the release PR. `release-train.yml`
    then:
@@ -100,12 +138,22 @@ per-package workflow. The next train moves it above that version.
       npm
    5. with the `sdk-python` check, publishes `tetherto-qvac-sdk` after the
       `pypi` approval
-   6. tags each package, creates the `githubRelease` package's GitHub release
-      and, with `sdk-python`, attaches the fat wheels
+   6. tags each package, then creates the `githubRelease` package's GitHub
+      release on its tag and, with `sdk-python`, attaches the fat wheels
 8. Merge the backmerge PR once the push run has published to npm. Before that,
    `main` would name versions that the checks of later PRs cannot install. If
    the run fails before publishing, fix it with a PR into the train branch
    (see [Recovery](#recovery)) and carry the same commit to the backmerge.
+9. Promote the documentation to production, once the versions are on npm.
+   Verify that tree on staging, then run `promote-docs-production.yml` on the
+   merge commit of step 6's PR, reading the content diff its preflight prints.
+   Name that commit, never `main`'s tip: promoting before npm would publish
+   documentation for a version nobody can install, and promoting a later commit
+   would publish whatever else merged into `main` meanwhile — including a change
+   that breaks the build or the pages without touching a line at all. The
+   procedure is in
+   [`docs/website/docs-workflow.md`](../website/docs-workflow.md),
+   "Production (manual promotion)".
 
 ## Checks
 
@@ -116,8 +164,8 @@ push (`release-train.yml`):
 - every range between train packages accepts the new version of its target
 - each moved package has notes under `## [<version>]` in its `CHANGELOG.md`
 - no `.nx/version-plans/` file is committed
-- every `fromNpm` directory is left out of `pnpm-workspace.yaml`, and is not a
-  train package
+- every workspace package the train depends on outside itself is left out of
+  `pnpm-workspace.yaml`
 - on the PR: npm does not have any moved version yet
 - on push: a version npm already has was published from this commit (its
   `gitHead`); otherwise the branch has released and the run stops
@@ -128,15 +176,17 @@ Before npm publish:
   config (install, format, lint, typecheck, build, unit, bare and e2e tests,
   and the SDK's consumer installs), with every train package installed from a tarball
   of this commit and everything else from npm. The backmerge PR, from
-  `backmerge/release-train-<train>-<x.y.z>` into `main`, runs the same through
-  `pr-checks-sdk-pod.yml`, except for a train with `fromNpm` packages, whose
-  backmerge installs every package from npm.
+  `backmerge/release-train-<train>-<x.y.z>` into `main`, runs these checks
+  through `pr-checks-sdk-pod.yml` after npm publish: on the commit npm records
+  as the anchor package's `gitHead`, with every package from npm. `main` keeps
+  the packages outside the train in the workspace, and its copies may hold
+  changes npm does not have yet.
 - **`shared-runtime-libs`**: `check-shared-runtime-libs.mjs` for inference and
   sdk, as `publish-inference.yml` and `publish-sdk.yml` run it.
 - **`sdk-python`**: the Python contract check, build, version lockstep and
   `twine check`.
-- a workspace package outside the train that the train links must be on npm at
-  the linked version.
+- after the install, no package outside the train is linked from the
+  workspace.
 
 After npm publish, `package-checks` runs again with every package installed
 from npm. Tags, the GitHub release, PyPI and the wheels wait for it.
@@ -151,8 +201,11 @@ below npm's `latest`. The run measures the train from the merge base with
 same. A dry run publishes, tags and releases nothing, and needs no approval:
 `pnpm publish --dry-run` runs in its own job, with no environment and no
 `id-token`. Publishing runs only on a push or a dispatch without `dry_run`, in
-the job that holds the `npm` environment. Both jobs wait for `checks-passed`,
-which requires the build and every check the train lists.
+the job that holds the `npm` environment. Both jobs wait for `checks-passed`
+(`Train checks passed`). It fails when the train does not resolve or the run
+is not authorized (a draft PR is not), and otherwise requires the build and
+every check the train lists. It never ends as skipped, because a required
+check that is skipped counts as passed.
 
 ## Publishing
 
@@ -160,20 +213,27 @@ which requires the build and every check the train lists.
   the run; an older line is released through its per-package workflow.
 - `gitHead` in each published manifest is the commit it was built from. Each
   tag goes on that commit, the GitHub release's tag included.
-- npm's sha of each published tarball must match the tarball the build job
-  packed.
-- A version npm already has is skipped.
+- npm's sha of each tarball the run published must match the tarball the build
+  job packed, compared once npm serves the version. A version an earlier run
+  published is not compared again: a rebuild can pack different bytes.
+- A version npm already has from this commit (its `gitHead`) is skipped; one
+  from another commit, or with no recorded commit, stops the run.
 
 ## Recovery
 
 - **Nothing published yet** (a check failed, or the approval was rejected): fix
   it with a PR into the same branch.
-- **Partly published, transient error**: re-run the workflow on the same
-  commit. Versions on npm from that commit are skipped.
+- **Partly published, or a job after publishing failed, transient error**:
+  re-run the failed jobs on the same commit, not all jobs: re-running all jobs
+  rebuilds the train and no longer compares npm's sha with what was published.
+  Versions on npm from that commit are skipped, and every job after publishing
+  runs again: it skips tags already at npm's `gitHead` and files PyPI already
+  has, and updates the notes of an existing GitHub release.
 - **Partly published, fix needs a new commit**: the branch can no longer
   publish. Cut a new train with new versions for the packages npm already has;
   the others can keep theirs.
-- `workflow_dispatch` with `publish_pypi_only: true` publishes PyPI alone.
+- `workflow_dispatch` with `publish_pypi_only: true` publishes PyPI alone. It
+  fails on a file PyPI already has.
 
 ## Per-package workflows
 

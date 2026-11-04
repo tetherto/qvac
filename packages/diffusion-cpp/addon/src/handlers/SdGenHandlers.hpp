@@ -3,6 +3,7 @@
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include <inference-addon-cpp/Errors.hpp>
 #include <picojson/picojson.h>
@@ -39,7 +40,8 @@ struct SdGenConfig {
   int steps = 20;
   sample_method_t sampleMethod = SAMPLE_METHOD_COUNT; // auto
   scheduler_t scheduler = SCHEDULER_COUNT;            // auto
-  float eta = 0.0f; // stochasticity for DDIM / TCD samplers
+  std::vector<float> customSigmas; // includes terminal zero; owns native data
+  float eta = 0.0f;                // stochasticity for DDIM / TCD samplers
 
   // -- Guidance -------------------------------------------------------------
   float cfgScale =
@@ -87,8 +89,8 @@ struct SdGenConfig {
   // -- VAE tiling -- required for images > ~768px on 16 GB machines ----------
   // Maps to sd_img_gen_params_t.vae_tiling_params
   bool vaeTiling = false;
-  int vaeTileSizeX = 512;      // tile width  in pixels
-  int vaeTileSizeY = 512;      // tile height in pixels
+  int vaeTileSizeX = 512;      // tile width in native latent units
+  int vaeTileSizeY = 512;      // tile height in native latent units
   float vaeTileOverlap = 0.5f; // fraction of tile used as overlap seam (0-1)
 
   // -- Step-caching (cuts FLUX generation time by 30-50%) -------------------

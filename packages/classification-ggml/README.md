@@ -1,6 +1,6 @@
 # @qvac/classification-ggml
 
-GGML-powered vision addon for QVAC. `ImageClassifier` runs the bundled MobileNetV3-Small triage model on CPU. `MegaLoc` produces visual place descriptors using a local GGUF on CPU or a Fabric GPU backend. The existing classifier API and default model are unchanged.
+GGML-powered vision addon for QVAC. `ImageClassifier` runs a MobileNetV3-Small triage model on CPU from a weights path you pass in. `MegaLoc` produces visual place descriptors using a local GGUF on CPU or a Fabric GPU backend. `@qvac/inference` downloads the default classifier from the registry when `modelSrc` is omitted.
 
 ## MegaLoc image embeddings
 
@@ -26,7 +26,7 @@ a local conversion script and does not download or redistribute these GGUFs.
 | ------------- | ----------------------------------------------- |
 | Model         | MobileNetV3-Small (3 classes)                   |
 | Parameters    | ~2.5 M                                          |
-| Weights       | FP16 GGUF, **2.94 MB**, bundled in this package |
+| Weights       | FP16 GGUF, **2.94 MB**, downloaded from the registry |
 | Input         | JPEG, PNG, or raw RGB bytes                     |
 | Resize target | 224 × 224 (bilinear)                            |
 | Normalization | ImageNet mean/std                               |
@@ -45,7 +45,9 @@ This addon is published to the `@qvac` scope and consumed like any other QVAC na
 ```js
 const ImageClassifier = require('@qvac/classification-ggml')
 
-const classifier = new ImageClassifier()
+const classifier = new ImageClassifier({
+  modelPath: '/path/to/mobilenetv3_3class_v3_fp16.gguf'
+})
 await classifier.load()
 
 const imageBuffer = fs.readFileSync('./my-image.jpg')
@@ -99,7 +101,7 @@ All constructor options are optional.
 
 | Option         | Type                | Default                                               | Description                                                                                                                                                                                                                                                                                                                            |
 | -------------- | ------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `modelPath`    | `string`            | Bundled `weights/mobilenetv3_3class_v3_fp16.gguf`     | Absolute path to an FP16 GGUF file. Override only when pointing at a custom fine-tune produced by the ONNX→GGUF conversion guide. Also overridable via the `QVAC_CLASSIFICATION_MODEL_PATH` env variable.                                                                                                                              |
+| `modelPath`    | `string`            | none (or `QVAC_CLASSIFICATION_MODEL_PATH`)            | Absolute path to an FP16 GGUF file. Required for `new ImageClassifier()`. `@qvac/inference` downloads `registry://s3/qvac_models_compiled/ggml/mobilenetv3-3class/2026-10-28/mobilenetv3_3class_v3_fp16.gguf` when `loadModel` omits `modelSrc`.                                                                                                                              |
 | `logger`       | `QvacLogger`-shaped | `null`                                                | A sink with optional `error / warn / info / debug(msg)` methods (compatible with `@qvac/logging`). Receives JS-side `info` from a successful `load()` and `error` from a failed `load()`. With `nativeLogger: true`, also receives forwarded native `LogMsg` events at `info` level. Always honoured, regardless of `nativeLogger`.    |
 | `nativeLogger` | `boolean`           | `false`                                               | When `true`, native C++ `QLOG(...)` lines from inside the addon's model-loading and graph code are forwarded to `logger`. Disabled by default because the underlying `qvac-lib-inference-addon-cpp` logger is a process-wide singleton with a static `uv_async_t` that is not safe across rapid create/destroy cycles (e.g. in tests). |
 
@@ -127,7 +129,7 @@ None take arguments. `load()` is idempotent — calling it twice is a no-op (che
 - An array of `{ label: string, confidence: number }`.
 - Sorted by `confidence` descending.
 - `confidence` values are softmax probabilities in `[0, 1]` and sum to ≈ 1.
-- Labels come from the GGUF metadata (`mobilenet.class_0/1/2`). For the bundled weights these are `food`, `report`, `other`.
+- Labels come from the GGUF metadata (`mobilenet.class_0/1/2`). For the default registry weights these are `food`, `report`, `other`.
 
 ## Build (from source, monorepo)
 
@@ -206,7 +208,7 @@ Depending on the platform, one call to `classifier.classify(buffer)` takes from 
 
 | Component                                                  | Size            |
 | ---------------------------------------------------------- | --------------- |
-| Bundled FP16 weights (mmapped)                             | 2.94 MB         |
+| FP16 weights (mmapped)                                     | 2.94 MB         |
 | Backend weight buffer (FP16 + folded BN + FP32 classifier) | ≈ 5.5 MB        |
 | Intermediate activations (compute buffer)                  | single-digit MB |
 | **Total resident** during inference                        | **~8–10 MB**    |
@@ -244,7 +246,8 @@ If you fine-tune or swap the underlying MobileNetV3 model, follow `[docs/onnx-to
 
 ## Troubleshooting
 
-- **“MobileNet GGUF weights not found”**: the default path is `<package>/weights/mobilenetv3_3class_v3_fp16.gguf`. Override with `new ImageClassifier({ modelPath: '/abs/path.gguf' })` or set the `QVAC_CLASSIFICATION_MODEL_PATH` env variable.
+- **“MobileNet GGUF modelPath is required”**: pass `new ImageClassifier({ modelPath })` or set `QVAC_CLASSIFICATION_MODEL_PATH`. Through `@qvac/inference`, omit `modelSrc` and the engine downloads the registry model.
+- **“MobileNet GGUF weights not found”**: `modelPath` does not point at a file on disk.
 - **All predictions look wrong**: verify the BN epsilon is still `0.001` (see the guarded unit test) — the architecture is unusually sensitive to this constant.
 - **Build fails looking for `stb_image.h`**: make sure the `stb` vcpkg port is installed. The `vcpkg-configuration.json` pins it.
 - **Build fails resolving `qvac__fabric-<host>@0.bare`**: the shared ggml runtime ships in the `@qvac/fabric-<host>` platform package that `@qvac/fabric` installs as an optional dependency, and is not bundled into this addon. Run `npm install` (without `--omit=optional`) before `bare-make generate`/`build`. Android and iOS builds link against the `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` devDependencies.

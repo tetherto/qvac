@@ -25,6 +25,7 @@
 #include "model-interface/OutputResampler.hpp"
 #include "model-interface/PcmConversion.hpp"
 #include "model-interface/StreamingEnhancer.hpp"
+#include "model-interface/cosyvoice/ForcedSpeechTokens.hpp"
 
 namespace qvac::ttsggml::cosyvoice {
 
@@ -80,6 +81,10 @@ tts_cpp::cosyvoice::EngineOptions toEngineOptions(const CosyvoiceConfig& cfg) {
   if (cfg.streamLeftContextTokens.has_value())
     opts.stream_left_context_tokens = *cfg.streamLeftContextTokens;
 
+  opts.backend = cfg.backend;
+  if (cfg.greedy)
+    opts.greedy = *cfg.greedy;
+  opts.force_speech_tokens = cfg.forceSpeechTokens;
   opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   // Forwarded as-is; only consumed on Android's OpenCL/Adreno GPU path
   // (n_gpu_layers > 0). Empty leaves ggml's default cache location.
@@ -444,8 +449,9 @@ void CosyvoiceModel::loadLocked() {
     return;
 
   try {
-    engine_ =
-        std::make_shared<tts_cpp::cosyvoice::Engine>(toEngineOptions(cfg_));
+    auto options = toEngineOptions(cfg_);
+    validateForcedSpeechTokens(options);
+    engine_ = std::make_shared<tts_cpp::cosyvoice::Engine>(options);
   } catch (const std::exception& e) {
     engine_.reset();
     throw createTTSError(
@@ -477,7 +483,8 @@ void CosyvoiceModel::loadPostProcessingLocked() {
       cfg_.enhancerGgufPath,
       backendDevice_ == kBackendDeviceGpu,
       "CosyvoiceModel::load: lavasr enhancer: ",
-      cfg_.vulkanDevice.value_or(0));
+      cfg_.vulkanDevice.value_or(0),
+      cfg_.enhancerCoreml);
   enhancer_ = std::move(loaded.enhancer);
   enhancerBackendDevice_ = loaded.backendDevice;
   enhancerBackendId_ = loaded.backendId;
@@ -485,7 +492,8 @@ void CosyvoiceModel::loadPostProcessingLocked() {
   LoadedDenoiser denoiser = loadDenoiser(
       cfg_.denoiserGgufPath,
       backendDevice_ == kBackendDeviceGpu,
-      "CosyvoiceModel::load: lavasr denoiser: ");
+      "CosyvoiceModel::load: lavasr denoiser: ",
+      cfg_.denoiserCoreml);
   denoiser_ = std::move(denoiser.denoiser);
   denoiserBackendDevice_ = denoiser.backendDevice;
   denoiserBackendId_ = denoiser.backendId;
@@ -584,9 +592,12 @@ CosyvoiceModel::SynthResult CosyvoiceModel::synthesize(
       emitted.samples, emitted.sampleRate, result.duration_s, t0, t1);
 
   if (streaming) {
-    return {Output{}, true}; // chunks already emitted via onChunk
+    return {Output{}, true, std::move(result.speech_tokens)};
   }
-  return {pcmFloatToInt16(result.pcm.data(), result.pcm.size()), false};
+  return {
+      pcmFloatToInt16(result.pcm.data(), result.pcm.size()),
+      false,
+      std::move(result.speech_tokens)};
 }
 
 void CosyvoiceModel::recordSynthesisStats(
@@ -635,6 +646,10 @@ std::any CosyvoiceModel::process(const std::any& input) {
       anyInput->hasControls ? anyInput->controls : toVoiceControls(cfg_);
   SynthResult out =
       synthesize(anyInput->text, controls, anyInput->chunkCallback);
+  if (anyInput->returnSpeechTokens) {
+    return std::any(
+        CosyvoiceReply{std::move(out.pcm), std::move(out.speechTokenIds)});
+  }
   // Streaming already published its chunks via chunkCallback -> OutputQueue;
   // returning the concatenated PCM here would duplicate as a final outputArray
   // event (matches ParlerModel::process).

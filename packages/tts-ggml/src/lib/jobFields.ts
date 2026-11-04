@@ -24,6 +24,7 @@ import {
 } from "./engines/mossSpeech";
 import {
   PARLER_ONLY_KEYS,
+  assertNoPerCallParlerCoreml,
   resolveParlerJobFields,
   type ParlerDescFields,
   type ParlerJobSource,
@@ -106,6 +107,7 @@ export function resolveJobFields(
   source: JobFieldSource | null | undefined,
   where: string,
 ): JobFields | undefined {
+  assertNoPerCallParlerCoreml(source, where);
   if (setup.engineType === ENGINE_MOSS_SPEECH) {
     assertNoOtherEngineFields(setup, source, where);
     return resolveSpeechJobFields(source, where);

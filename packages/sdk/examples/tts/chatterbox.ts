@@ -6,7 +6,7 @@ import {
   TTS_T3_TURBO_EN_CHATTERBOX_Q8_0,
   TTS_S3GEN_EN_CHATTERBOX
 } from '@qvac/sdk'
-import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './utils'
+import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './utils.js'
 
 // Chatterbox TTS (GGML): voice cloning with optional reference audio.
 // Uses registry model constants — downloads automatically from QVAC Registry.

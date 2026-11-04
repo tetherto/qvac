@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.assessFit = assessFit;
+const fabricOptions_1 = require("./fabricOptions");
 /**
  * Projects one voice against the memory free right now, reading GGUF metadata
  * and never weight data. The registry's weightless copy of each file answers
@@ -12,11 +13,12 @@ exports.assessFit = assessFit;
  *
  * `engineType` picks the fitter, the same key a load uses, and is required
  * here: a fit request carries none of the file keys a load is inferred from.
- * A model the engine cannot read resolves to `status: "error"`, as does a
- * voice with no fitter; a broken request, or a host with no native binding,
- * rejects. Fits run one at a time within this addon.
+ * A model the engine cannot read, a voice with no fitter, an invalid request,
+ * or a host with no native binding rejects. Fits run one at a time within this
+ * addon.
  */
 async function assessFit(request) {
+    (0, fabricOptions_1.validateBackendOption)(request.engineType, request.backend);
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- the native binding loads on first use.
     const binding = require('../binding.js');
     return await binding.assessFit(request);

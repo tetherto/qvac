@@ -34,7 +34,7 @@ npm run test:mobile:validate   # node ./scripts/validate-mobile-tests.js
 The package publishes `test/mobile/` **and** `test/integration/` (see
 the `files` field in `package.json`) so the mobile framework can
 resolve the `../integration/*.test.js` imports from the installed npm
-tree. Only the MobileNet model is bundled under `weights/`. MegaLoc GGUFs,
+tree. The MobileNet GGUF stays in the repo under `weights/` for addon tests and is not published. MegaLoc GGUFs,
 including their staged `.gguf.bin` mobile copies, are excluded from the npm
 package. The mobile test harness must receive the staged assets separately;
 the tests resolve their device paths through `global.assetPaths`.

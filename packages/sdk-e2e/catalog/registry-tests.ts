@@ -132,7 +132,7 @@ export const registryGetModelNotFound: TestDefinition = {
     registryPath: 'nonexistent/model/path.gguf',
     registrySource: 'nonexistent-source'
   },
-  expectation: { validation: 'throws-error', errorContains: 'not found' },
+  expectation: { validation: 'throws-error', errorContains: 'has no model at' },
   suites: ['smoke'],
   steps: [
     {

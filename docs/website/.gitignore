@@ -6,6 +6,12 @@
 .content-collections
 .source
 
+# the local preview link into the development line, which lives outside the
+# site (see docs-workflow.md, "Previewing the development line"). Committed, it
+# would publish an unreleased line; `tests/line-structure.test.ts` fails on one
+# that reaches a commit anyway.
+/content/docs/*/preview
+
 # test & build
 /coverage
 /.next/

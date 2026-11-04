@@ -142,8 +142,14 @@ export function int16SamplesToBuffer(samples: number[]): Buffer {
 // Build a 44-byte RIFF/WAVE header for 16-bit signed PCM, mono, at the given
 // sample rate, followed by `dataLength` data bytes. Layout matches the
 // canonical PCM WAV format used by the SDK example helpers.
-export function buildWavHeader(dataLength: number, sampleRate: number): Buffer {
+export function buildWavHeader(
+  dataLength: number,
+  sampleRate: number,
+  channels = 1,
+  bitsPerSample = 16
+): Buffer {
   const header = Buffer.alloc(44)
+  const blockAlign = channels * (bitsPerSample / 8)
 
   header.write('RIFF', 0)
   header.writeUInt32LE(36 + dataLength, 4)
@@ -152,11 +158,11 @@ export function buildWavHeader(dataLength: number, sampleRate: number): Buffer {
   header.write('fmt ', 12)
   header.writeUInt32LE(16, 16)
   header.writeUInt16LE(1, 20)
-  header.writeUInt16LE(1, 22)
+  header.writeUInt16LE(channels, 22)
   header.writeUInt32LE(sampleRate, 24)
-  header.writeUInt32LE(sampleRate * 2, 28)
-  header.writeUInt16LE(2, 32)
-  header.writeUInt16LE(16, 34)
+  header.writeUInt32LE(sampleRate * blockAlign, 28)
+  header.writeUInt16LE(blockAlign, 32)
+  header.writeUInt16LE(bitsPerSample, 34)
 
   header.write('data', 36)
   header.writeUInt32LE(dataLength, 40)

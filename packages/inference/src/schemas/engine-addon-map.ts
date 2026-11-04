@@ -39,6 +39,7 @@ export const ENGINE_TO_ADDON = {
   [ModelType.audiogenGgml]: 'audiogen',
   [ModelType.ggmlVla]: 'vla',
   [ModelType.ggmlClassification]: 'classification',
+  'ggml-image-embedding': 'classification',
   'onnx-vad': 'vad'
 } as const satisfies Record<ModelRegistryEngine, ModelRegistryEntryAddon>
 

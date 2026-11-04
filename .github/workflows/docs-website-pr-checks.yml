@@ -37,14 +37,21 @@ jobs:
         run: bun install
 
       - name: Build and validate
-        # The API summary lives at `content/docs/sdk/(v0.20)/reference/api.mdx`,
-        # with one copy per cut line under `content/docs/sdk/v0.19/reference/`
-        # and `content/docs/sdk/v0.18/reference/`. Each is committed to the
-        # repo and refreshed locally by the `qv-sdk-changelog` skill (Step 8)
-        # during SDK release prep, so every PR checkout already has them on
-        # disk — no placeholder step is needed here. (The historical
-        # placeholder targeted `content/docs/sdk/api/`, a path the build never
-        # read and that no longer exists.)
+        # The API summary lives at `content/docs/sdk/(vX.Y)/reference/api.mdx`,
+        # with one copy per cut line under `content/docs/sdk/vX.Y/reference/`
+        # and one in the development line at
+        # `content/_unpublished/sdk/next/reference/api.mdx`. Each is committed
+        # to the repo and refreshed locally during the release cutoff (see
+        # `docs/ci/RELEASE-TRAIN.md` step 6), so every PR checkout already
+        # has them on disk — no placeholder step is needed here. (The
+        # historical placeholder targeted `content/docs/sdk/api/`, a path
+        # the build never read and that no longer exists.)
+        #
+        # The development line is not built: it sits outside `content/docs/`,
+        # which is what keeps unreleased pages off the site. The checks that do
+        # not need a render read it anyway — `tests/link-integrity.test.ts`
+        # resolves its links and requires a title on every page — so what
+        # surfaces only on the cutoff PR is malformed MDX.
         run: bun run build
 
       - name: Run docs tests
@@ -62,3 +69,128 @@ jobs:
         env:
           SDK_PATH: ${{ github.workspace }}/packages/sdk
         run: bun run vitest run tests/tsdoc-completeness.test.ts
+
+  published-lines:
+    # Two checks on where a PR writes documentation: one warns, one fails.
+    # Neither is required, so a red run asks for a rebase and records why
+    # rather than withholding the merge.
+    #
+    # Feature documentation belongs in the development line, outside the site
+    # at `content/_unpublished/<collection>/next/`. Everything under
+    # `content/docs/<collection>/` has been cut, so editing it is legitimate —
+    # correcting a shipped release is why the folders are kept — and the first
+    # step only warns: only a human can tell a correction from documentation
+    # written into the wrong line.
+    #
+    # The second step fails, and covers the window a cutoff opens for the
+    # published lines. The cut renames the outgoing group — `(vX.Y)` becomes
+    # `vX.Y` — beside a new `(vX.Y+1)` that is byte-identical wherever the
+    # sprint changed nothing, so each page a pre-cutoff PR edits has two exact
+    # rename candidates and git picks one (QVAC-27286, reproduced here with
+    # `git merge-tree`). No conflict, so nothing warns whoever merges.
+    #
+    # The filter reads `content/docs/<collection>/` only, on purpose: the
+    # development line crosses a cutoff intact — `next/` is copied, not
+    # renamed — so reading it too would fail every feature PR carrying docs, at
+    # every cutoff, and the rebase would dismiss their approvals. What that
+    # leaves unread — documentation merging clean into the line after the
+    # release it describes — the open-PR inventory in `qv-docs-cutoff` reads
+    # before the cut.
+    name: Documentation lines
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          # The diff needs both ends; the default depth of 1 has neither.
+          fetch-depth: 0
+
+      - name: Report edits to lines already cut
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        working-directory: .
+        run: |
+          set -euo pipefail
+
+          if [ -z "${HEAD_SHA:-}" ]; then
+            echo "Not a pull request; nothing to report."
+            exit 0
+          fi
+
+          paths=()
+          for collection in sdk cli; do
+            paths+=("docs/website/content/docs/${collection}/")
+          done
+
+          base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          changed=$(git diff --name-only "$base" "$HEAD_SHA" -- "${paths[@]}" || true)
+
+          if [ -z "$changed" ]; then
+            echo "This PR edits no line that has been cut."
+            exit 0
+          fi
+
+          echo "::warning::This PR edits documentation lines that have already been cut. Correcting a release's pages is legitimate; documenting a new feature is not — that belongs in content/_unpublished/<collection>/next/. If the correction also applies to the line under development, apply it there too, or it will not survive the next cutoff."
+          printf '%s\n' "$changed"
+
+      - name: Fail documentation written against a line layout a cutoff has changed
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        working-directory: .
+        run: |
+          set -euo pipefail
+
+          if [ -z "${HEAD_SHA:-}" ]; then
+            echo "Not a pull request; nothing to check."
+            exit 0
+          fi
+
+          # The commit this PR's work was written against. Not the merge-base:
+          # the "Update branch" button moves that past the cutoff and takes the
+          # misplacement in with it, so a merge-base check turns green at the
+          # moment the damage is done. The parent of the PR's oldest own commit
+          # moves only under a rebase, which is the fix being asked for.
+          merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
+          commits=$(git log --reverse --no-merges --format=%H "$merge_base..$HEAD_SHA")
+          if [ -z "$commits" ]; then
+            echo "This PR carries no commit of its own; nothing to check."
+            exit 0
+          fi
+          origin="${commits%%$'\n'*}^"
+          if ! git rev-parse --verify --quiet "$origin" > /dev/null; then
+            echo "The branch point is not in this checkout; nothing to check."
+            exit 0
+          fi
+
+          # A cut's signature in the tree, read per collection: the
+          # parenthesized folder is the line last cut, and a cutoff is the only
+          # thing that changes its name. No `head`/`-m1` here — closing the
+          # pipe early kills `ls-tree` with SIGPIPE under `pipefail`.
+          group_at() {
+            git ls-tree --full-tree --name-only "$1:docs/website/content/docs/$2" 2> /dev/null \
+              | grep -E '^\(v[0-9]+\.[0-9]+\)$' || true
+          }
+
+          stale=""
+          for collection in sdk cli; do
+            if [ -z "$(git diff --name-only "$origin" "$HEAD_SHA" -- \
+              "docs/website/content/docs/${collection}/")" ]; then
+              continue
+            fi
+            was=$(group_at "$origin" "$collection")
+            now=$(group_at "$BASE_SHA" "$collection")
+            if [ "$was" = "$now" ]; then
+              continue
+            fi
+            stale="${stale}  ${collection}: the line last cut was ${was:-none} when this branch came off, and is ${now:-none} now"$'\n'
+          done
+
+          if [ -z "$stale" ]; then
+            echo "No cutoff has landed since this branch came off; the lines this PR writes to still mean what they meant."
+            exit 0
+          fi
+
+          printf '%s' "$stale"
+          echo "::error::A cutoff landed after this branch came off, so this PR's documentation was written against a line layout that no longer exists. Rebase onto the base branch — rebase, not 'Update branch': a merge commit lets git relocate the edits by similarity, which is the failure this check exists to stop. Then place each change in the line it documents: a correction to a released version in docs/website/content/docs/<collection>/<line>/, and documentation for the version still being written in docs/website/content/_unpublished/<collection>/next/. If the change belongs to the version that was just cut, it goes in that line's folder and reaches production with the next promotion. This check is not required, so it does not hold the merge: merging it red carries whatever it reports into the base branch."
+          exit 1

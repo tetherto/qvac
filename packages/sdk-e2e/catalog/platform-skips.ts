@@ -341,6 +341,46 @@ const RULES: Rule[] = [
     }
   },
 
+  // ── the Kotlin client ────────────────────────────────────────────────────
+  // As for Python: skip only claims that belong to the JS client.
+  {
+    match: ['model-load-llm-legacy-no-mmap-rejected'],
+    skip: {
+      reason:
+        "Asserts 50010, the code the JS client's strict load schema gives a modelConfig with the removed no_mmap key before sending. The Kotlin client sends the config as is and the worker drops the unknown key, so the claim belongs to the JS client",
+      platforms: ['kotlin-android']
+    }
+  },
+  {
+    match: ['model-load-missing-type-string-src'],
+    skip: {
+      reason:
+        "Asserts the JS client's runtime refusal of a load with no modelType. The Kotlin SDK takes the model type as a required parameter, so the same call does not compile",
+      platforms: ['kotlin-android']
+    }
+  },
+  {
+    match: [
+      'tts-parler-invalid-emotion',
+      'tts-cosyvoice3-invalid-emotion',
+      'system-resources-invalid-input',
+      'transcribe-stream-events-invalid'
+    ],
+    skip: {
+      reason:
+        "Asserts the message the JS client's request schema gives before sending. The Kotlin SDK's typed requests cannot hold an unknown emotion or a non-boolean sample, and admit a negative endOfTurnSilenceMs that the worker rejects later on the session, with a message that names no field",
+      platforms: ['kotlin-android']
+    }
+  },
+  {
+    match: /^plugin-(echo-|invoke-unknown-handler$)/,
+    skip: {
+      reason:
+        'The echo plugin is a JS module the JS consumers register in their worker config; the Kotlin app runs the runtime profile the Kotlin SDK ships, which bundles only the built-in plugins',
+      platforms: ['kotlin-android']
+    }
+  },
+
   // ── one mobile OS only ───────────────────────────────────────────────────
   {
     match: ['parakeet-stream-eou', 'parakeet-stream-iterator-throw'],
@@ -357,8 +397,64 @@ const RULES: Rule[] = [
   }
 ]
 
+/**
+ * Legs that run on another leg's devices (same phones, memory and Device Farm budget) and inherit
+ * its device skips. A skip that belongs to one client, not the device, goes under that client's
+ * label.
+ */
+const SAME_DEVICE: Record<string, string> = { 'kotlin-android': 'mobile-android' }
+
+const OPERATING_SYSTEMS = new Set(['macos', 'linux', 'windows', 'ios', 'android'])
+
+/** The consumer's matching rule (`ConsumerBase.getTestSkipReason`): exact, or coarse over the OS. */
+function applies(entry: string, platform: string): boolean {
+  if (entry === platform) return true
+  const segments = platform.split('-')
+  const entrySegments = entry.split('-')
+  if (entrySegments.length >= segments.length) return false
+  if (!entrySegments.every((segment, index) => segment === segments[index])) return false
+  return segments.slice(entrySegments.length).every((segment) => OPERATING_SYSTEMS.has(segment))
+}
+
+/** Extend every device skip to the legs that share the device. */
+function applySameDevice(test: TestDefinition): void {
+  const skip = test.skip
+  // An unconditional skip already covers every leg.
+  if (!skip?.platforms?.length) return
+  const platforms = new Set(skip.platforms)
+  const groups = (skip.reasons ?? []).map((group) => ({
+    ...group,
+    platforms: [...group.platforms]
+  }))
+  // A leg may already be listed by its own rule while a device reason group still lacks it.
+  let changed = false
+  for (const [leg, device] of Object.entries(SAME_DEVICE)) {
+    if (!skip.platforms.some((entry) => applies(entry, device))) continue
+    if (!platforms.has(leg)) {
+      platforms.add(leg)
+      changed = true
+    }
+    for (const group of groups) {
+      if (
+        group.platforms.some((entry) => applies(entry, device)) &&
+        !group.platforms.includes(leg)
+      ) {
+        group.platforms.push(leg)
+        changed = true
+      }
+    }
+  }
+  if (!changed) return
+  test.skip = { ...skip, platforms: [...platforms], ...(skip.reasons ? { reasons: groups } : {}) }
+}
+
 /** Attach the platform policy to the catalog. */
 export function applyPlatformSkips(tests: TestDefinition[]): void {
+  applyRules(tests)
+  for (const test of tests) applySameDevice(test)
+}
+
+function applyRules(tests: TestDefinition[]): void {
   for (const test of tests) {
     const matched = RULES.filter((rule) =>
       Array.isArray(rule.match) ? rule.match.includes(test.testId) : rule.match.test(test.testId)

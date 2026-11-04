@@ -1,5 +1,12 @@
 #!/usr/bin/env bun
 /**
+ * Not in use. The site no longer publishes release-notes pages: each line's
+ * sidebar entry links to that minor's GitHub release instead. Kept on disk
+ * because the page model may come back, and nothing about this script is
+ * wrong — it simply has no caller. Everything below describes the model as it
+ * was, and as it would be again.
+ */
+/**
  * Generate (or augment) the per-minor-series release-notes MDX page for
  * the SDK pod.
  *

@@ -19,15 +19,26 @@ import { forwardModelExecution } from '@/profiling/model-execution'
 import { isMobile } from '@/runtime/state'
 import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
 import { transformEmbedConfig } from '@/plugins/builtin/llamacpp-embedding/transform'
-import { getIdMapIndex } from '@/plugins/builtin/llamacpp-embedding/turbovec.cjs'
+
+async function getIdMapIndex() {
+  try {
+    return (await import('@qvac/turbovec-ggml')).IdMapIndex
+  } catch (err) {
+    throw new Error(
+      'Vector indexing requires the optional peer dependency @qvac/turbovec-ggml; install it to create or load an index',
+      { cause: err }
+    )
+  }
+}
 
 const turbovecIndexProvider: TurboVecIndexProvider = {
-  create(options) {
-    const IdMapIndex = getIdMapIndex()
+  async create(options) {
+    const IdMapIndex = await getIdMapIndex()
     return new IdMapIndex(options)
   },
-  load(snapshotPath) {
-    return getIdMapIndex().load(snapshotPath)
+  async load(snapshotPath) {
+    const IdMapIndex = await getIdMapIndex()
+    return IdMapIndex.load(snapshotPath)
   }
 }
 

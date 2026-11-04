@@ -18,6 +18,7 @@ import {
 // row validation, snapshot paths, and lifetime. Engine behaviour lives in
 // the backend.
 const indexes = new Map<string, OpenVectorIndex>()
+const pendingIndexes = new Set<Promise<OpenVectorIndex>>()
 
 function requireBackend(): VectorIndexBackend {
   const backend = getTurboVecBackend()
@@ -39,9 +40,32 @@ function runBackend<T>(action: () => T, describe?: (detail: string) => string): 
   try {
     return action()
   } catch (error) {
-    if (error instanceof QvacErrorBase) throw error
-    const detail = error instanceof Error ? error.message : String(error)
-    throw new VectorIndexFailedError(describe ? describe(detail) : detail, error)
+    failBackend(error, describe)
+  }
+}
+
+function failBackend(error: unknown, describe?: (detail: string) => string): never {
+  if (error instanceof QvacErrorBase) throw error
+  const detail = error instanceof Error ? error.message : String(error)
+  throw new VectorIndexFailedError(describe ? describe(detail) : detail, error)
+}
+
+// Keep pending opens reachable by shutdown until their indexes are registered.
+async function openVectorIndex(action: () => OpenVectorIndex | Promise<OpenVectorIndex>) {
+  const opening = (async () => {
+    try {
+      return await action()
+    } catch (error) {
+      failBackend(error)
+    }
+  })()
+  pendingIndexes.add(opening)
+  try {
+    const index = await opening
+    const indexId = track(index)
+    return { index, indexId }
+  } finally {
+    pendingIndexes.delete(opening)
   }
 }
 
@@ -79,17 +103,17 @@ function track(index: OpenVectorIndex) {
   return indexId
 }
 
-export function createVectorIndex(params: { dim: number; storage: VectorIndexStorage }) {
+export async function createVectorIndex(params: { dim: number; storage: VectorIndexStorage }) {
   const backend = requireBackend()
-  const index = runBackend(() => backend.create(params.dim, params.storage))
-  const indexId = track(index)
+  const { index, indexId } = await openVectorIndex(() => backend.create(params.dim, params.storage))
   return { indexId, dim: index.dim, storage: params.storage, length: index.length }
 }
 
-export function loadVectorIndex(params: { path: string }) {
+export async function loadVectorIndex(params: { path: string }) {
   const backend = requireBackend()
-  const index = runBackend(() => backend.load(resolveVectorIndexPath(params.path)))
-  const indexId = track(index)
+  const { index, indexId } = await openVectorIndex(() =>
+    backend.load(resolveVectorIndexPath(params.path))
+  )
   return {
     indexId,
     dim: index.dim,
@@ -179,7 +203,8 @@ export function getOpenVectorIndexCount() {
   return indexes.size
 }
 
-export function disposeAllVectorIndexes() {
+export async function disposeAllVectorIndexes() {
+  await Promise.allSettled(pendingIndexes)
   for (const [indexId, index] of indexes) {
     try {
       index.dispose()
