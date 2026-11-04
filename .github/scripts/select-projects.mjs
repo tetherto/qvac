@@ -59,7 +59,9 @@ const METADATA = {
   publish: ['publish'],
   // Prebuild directories besides the platform ones that the meta package ships, such as fabric's include and share.
   prebuildExtraDirs: ['publish'],
-  secrets: ['test:integration', 'test:backend', 'benchmark', 'test:mobile', 'cpp:tests'],
+  secrets: ['test:integration', 'test:backend', 'benchmark', 'test:mobile', 'cpp:tests', 'cache:models'],
+  // A model directory no manifest lists: { path, keyFiles }, relative to the package; cache:models fills it.
+  modelCache: ['test:integration'],
   baseline: ['cpp:tests'],
   perfReport: ['test:integration'],
   // Toolkits a check target needs on pr-checks' runner, from CHECK_SETUP.
@@ -208,6 +210,11 @@ export function checkMetadata(project, target) {
     throw new Error(
       `${project.name} ${target}: metadata.secrets takes ${SECRETS.join(', ')}, found ${unknownSecrets.join(', ')}`
     )
+  if (meta.modelCache) {
+    const { path, keyFiles, ...extra } = meta.modelCache
+    if (typeof path !== 'string' || !Array.isArray(keyFiles) || !keyFiles.length || Object.keys(extra).length)
+      throw new Error(`${project.name} ${target}: metadata.modelCache takes path and a non-empty keyFiles`)
+  }
   if (meta.publish) {
     const extra = Object.keys(meta.publish).filter((k) => !PUBLISH_KEYS.includes(k))
     if (extra.length)

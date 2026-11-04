@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The key hashes the manifest alone, so test or CI edits never throw models away.
+// The key hashes the manifest alone, or a modelCache's key files, so test or CI edits never throw models away.
 
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
@@ -34,6 +34,20 @@ export function resolve({
   return { key: `${prefix}${hash}`, prefix, paths, count: entries.length }
 }
 
+// A package whose models no manifest lists names, on the target, the one directory they land in and the files that
+// decide them: metadata.modelCache, paths relative to the package. Its cache:models target fills the directory.
+export function resolveDirectory({ cache, keyText, workdir, target, version = 'v1' }) {
+  const hash = createHash('sha256').update(keyText).digest('hex').slice(0, 16)
+  const prefix = `models-${basename(workdir)}-${target.replace(/[^A-Za-z0-9]+/g, '-')}-${version}-`
+  return { key: `${prefix}${hash}`, prefix, paths: [posix.join(workdir, cache.path)], count: 1 }
+}
+
+export function modelCache(workdir, target) {
+  const file = join(workdir, 'project.json')
+  if (!target || !existsSync(file)) return null
+  return JSON.parse(readFileSync(file, 'utf8')).targets?.[target]?.metadata?.modelCache ?? null
+}
+
 // The package's one model manifest; a package without one has no models.
 export function loadManifest(workdir, path = 'test/integration/models.manifest.json') {
   const file = join(workdir, path)
@@ -42,18 +56,32 @@ export function loadManifest(workdir, path = 'test/integration/models.manifest.j
 }
 
 function main(env) {
-  const { text, manifest } = loadManifest(env.WORKDIR, env.MANIFEST || undefined)
-  const r = resolve({
-    manifestText: text,
-    manifest,
-    workdir: env.WORKDIR,
-    target: env.TARGET,
-    version: env.VERSION
-  })
-  console.log(`${r.count} models, key ${r.key}`)
+  const cache = modelCache(env.WORKDIR, env.TARGET)
+  let r
+  if (cache) {
+    const keyText = cache.keyFiles.map((f) => readFileSync(join(env.WORKDIR, f), 'utf8')).join('\0')
+    r = resolveDirectory({
+      cache,
+      keyText,
+      workdir: env.WORKDIR,
+      target: env.TARGET,
+      version: env.VERSION
+    })
+    console.log(`${cache.path}, key ${r.key} from ${cache.keyFiles.join(', ')}`)
+  } else {
+    const { text, manifest } = loadManifest(env.WORKDIR, env.MANIFEST || undefined)
+    r = resolve({
+      manifestText: text,
+      manifest,
+      workdir: env.WORKDIR,
+      target: env.TARGET,
+      version: env.VERSION
+    })
+    console.log(`${r.count} models, key ${r.key}`)
+  }
   appendFileSync(
     env.GITHUB_OUTPUT,
-    `key=${r.key}\nrestore-prefix=${r.prefix}\npaths<<EOF\n${r.paths.join('\n')}\nEOF\n`
+    `key=${r.key}\nrestore-prefix=${r.prefix}\nfill=${Boolean(cache)}\npaths<<EOF\n${r.paths.join('\n')}\nEOF\n`
   )
 }
 

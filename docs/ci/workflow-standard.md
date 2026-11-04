@@ -48,7 +48,7 @@ A package on the contract declares only these targets:
 | `cpp:build`, `cpp:tests` | Builds and runs the C++ test binary | yes |
 | `test:integration`, `test:backend` | Desktop tests | yes |
 | `test:mobile` | Prepares the Device Farm test package | yes |
-| `cache:models` | Marks the package for model cache warming; `nx:noop` | no |
+| `cache:models` | Marks the package for model cache warming; `nx:noop`, or the command that fills its `modelCache` directory | no |
 | `benchmark` | Runs the package's benchmarks; its `report` configuration then reads every configuration's results | yes, plus `report` |
 | `publish:pre` | A check the release must pass before it publishes, which the publish groups run in their verify job, e.g. a library's own install and tests | no |
 | `publish` | Marks the package as publishable: `nx:noop`, or a command `publish-gpr.yml` runs before packing a JavaScript build, with `PUBLISH_REGISTRY=gpr` and the run's `PUBLISH_PROJECTS` | no |
@@ -80,7 +80,8 @@ Each platform a target runs on is an Nx configuration of that target, named `<pl
 | `mobile` | `test:mobile` | `devicefarmProject`, `enablesPerf`, `mochaTimeoutMs`, `waitforTimeoutMs`, `perTestTimeoutMinutes`, `jobTimeoutMinutes` (the Device Farm job timeout, 120 by default), `perfReport`; for a producer, `mode: producer`, `projectArnVar` (the repository variable holding its Device Farm project ARN) and `devicePoolsVar` (`{Android, iOS}`, the variables holding its pool lists) in place of `devicefarmProject` |
 | `publish` | `publish` | `tagPrefix` for the release tag; `platformPackages: true` publishes one npm package per platform before the meta; `nameTransform: rename-prefix` renames the `qvac_` prebuild files and `binding.js` references to `tetherto_` in the GitHub Packages build; `githubRelease` names the GitHub release created after the npm publish; `releaseGuard: true` runs the release merge guard and the CHANGELOG section check on the package's release PR; `releaseNotes: true` needs the version's CHANGELOG section before the npm publish |
 | `prebuildExtraDirs` | `publish` | prebuild directories besides the platform ones that the meta package ships, such as fabric's `include` and `share` |
-| `secrets` | `test:integration`, `test:backend`, `benchmark`, `test:mobile` | secrets the command reads from its environment, from `SECRETS` in `select-projects.mjs` (`QASE_API_TOKEN`, `HF_TOKEN`, `MODEL_S3_BUCKET`, `GITHUB_TOKEN` (the job's token), and the six `MQTT_*` broker secrets, which also bring the `MQTT_PROTOCOL` and `MQTT_PORT` variables) |
+| `secrets` | `test:integration`, `test:backend`, `benchmark`, `test:mobile`, `cpp:tests`, `cache:models` | secrets the command reads from its environment, from `SECRETS` in `select-projects.mjs` (`QASE_API_TOKEN`, `HF_TOKEN`, `MODEL_S3_BUCKET`, `GITHUB_TOKEN` (the job's token), and the six `MQTT_*` broker secrets, which also bring the `MQTT_PROTOCOL` and `MQTT_PORT` variables) |
+| `modelCache` | `test:integration` | models no manifest lists: `path`, the one directory they land in, and `keyFiles`, whose contents key the cache, both relative to the package. The desktop job restores the directory and sets `MODELS_CACHE_HIT` to `true` on an exact hit; on a miss, `cache-warm.yml` runs the package's `cache:models` to fill it, then saves it |
 | `setup` | `lint`, `typecheck`, `test:unit`, `verify:generated`, `verify:deps` | toolkits the package's checks job installs: `python`, `java`, `android-ndk` (`nx.json`'s NDK), `bare` (the Bare runtime on PATH) |
 | `sources` | `test:unit` | how the checks install the package instead of the pnpm workspace: `npm` (alone, as a consumer would), `workspace` (its `sdk-source:workspace` script) or `self` (nothing; its targets install what they need, as sdk-kotlin's checks build and install this commit's SDK); `published` also checks it against npm's ranges on its own `release-<slug>-*` PRs and on a dispatch. The publish groups use the same install |
 
@@ -90,7 +91,7 @@ A producer row (`mobile.mode: producer`, the SDK's) brings its own app instead o
 
 ### Models
 
-The jobs that run a target fetch its models first, from the package's one manifest, `test/integration/models.manifest.json`; a package without it has no models. Package tools that read the same file skip the entries that are not theirs. Each entry names one source:
+The jobs that run a target fetch its models first, from the package's one manifest, `test/integration/models.manifest.json`; a package without it has no models, unless its `test:integration` names a `modelCache` directory (see the metadata table). Package tools that read the same file skip the entries that are not theirs. Each entry names one source:
 
 - `s3Path`: one object, into `dest`.
 - `s3Prefix`: a directory, synced into `dest`, skipping the `exclude` globs.

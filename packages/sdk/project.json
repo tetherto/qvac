@@ -208,7 +208,21 @@
           "MQTT_CLIENT_CERT",
           "MQTT_CLIENT_KEY"
         ],
-        "timeoutMinutes": 360
+        "timeoutMinutes": 360,
+        "modelCache": {
+          "path": "../sdk-e2e/.qvac-cache",
+          "keyFiles": ["../inference/src/models/registry/models.ts"]
+        }
+      }
+    },
+    "cache:models": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk",
+        "command": "node ci/e2e.mjs cache"
+      },
+      "metadata": {
+        "secrets": ["GITHUB_TOKEN"]
       }
     },
     "test:mobile": {

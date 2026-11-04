@@ -172,6 +172,8 @@ jobs:
           # A configuration selected by a label, with the suite that label passes; see ci.labels.
           CI_LABEL: ${{ matrix.row.label }}
           CI_SUITE: ${{ matrix.row.suite }}
+          # true when the model restore hit its exact key, so a package that downloads its own models can skip it.
+          MODELS_CACHE_HIT: ${{ steps.models-restore.outputs.cache-hit }}
           PERF_RUNS: ${{ inputs.perf_runs }}
           PERF_WARMUP_RUNS: ${{ inputs.perf_warmup_runs }}
           ARGS: ${{ inputs.args }}

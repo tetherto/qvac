@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The sdk's test:integration, one leg of main's desktop, python, electron or snap family: this commit's inference and
 // test-suite packed into the sdk and sdk-e2e npm installs, the consumer and the producer over MQTT, the results checked
-// and compared with the newest dispatch run on the base branch. Usage: node ci/e2e.mjs <family>.
+// and compared with the newest dispatch run on the base branch. Usage: node ci/e2e.mjs <family|cache>.
 
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import {
@@ -344,7 +344,23 @@ async function consumerAndProducer({ env, runId, family, filter, suite }) {
   return producer.status === 0 ? consumerExit : producer.status || 1
 }
 
+// The model cache the consumers download into: test:integration's metadata.modelCache, which cache-warm saves.
+function modelCache(env) {
+  const dir = join(E2E, '.qvac-cache')
+  mkdirSync(dir, { recursive: true })
+  const config = join(E2E, 'qvac.config.ci.json')
+  writeFileSync(config, `${JSON.stringify({ cacheDirectory: dir }, null, 2)}\n`)
+  return { ...env, QVAC_CONFIG_PATH: config }
+}
+
 async function main(family, env) {
+  // cache:models: the desktop bootstrap alone, the model set the desktop and python legs restore.
+  if (family === 'cache') {
+    const e = modelCache(prepare(env))
+    run('npm', ['run', 'bundle:sdk'], { cwd: E2E, env: e })
+    run('npx', ['qvac-test', 'run:bootstrap:desktop', '--config=.'], { cwd: E2E, env: e })
+    return
+  }
   if (!FAMILIES.includes(family)) throw new Error(`family must be one of ${FAMILIES.join(', ')}`)
   const platform = platformOf(env.CI_RUNNER_LABEL)
   if (family === 'snap' && platform !== 'linux') throw new Error('Snap runs on Linux only')
@@ -370,16 +386,17 @@ async function main(family, env) {
         { cwd: E2E, env: e }
       )
     } else {
-      const cacheDir = join(E2E, '.qvac-cache')
-      mkdirSync(cacheDir, { recursive: true })
-      const config = join(E2E, 'qvac.config.ci.json')
-      writeFileSync(config, `${JSON.stringify({ cacheDirectory: cacheDir }, null, 2)}\n`)
-      e = { ...e, QVAC_CONFIG_PATH: config }
-      run(
-        'npx',
-        ['qvac-test', `run:bootstrap:${family === 'python' ? 'desktop' : family}`, '--config=.'],
-        { cwd: E2E, env: e }
-      )
+      e = modelCache(e)
+      // As main: an exact hit already holds the desktop bootstrap's models.
+      if (env.MODELS_CACHE_HIT === 'true' && (family === 'desktop' || family === 'python')) {
+        console.log('Models restored from the cache; skipping the bootstrap')
+      } else {
+        run(
+          'npx',
+          ['qvac-test', `run:bootstrap:${family === 'python' ? 'desktop' : family}`, '--config=.'],
+          { cwd: E2E, env: e }
+        )
+      }
     }
     if (family === 'electron') {
       run('npx', ['qvac-test', 'build:consumer:electron', '--config=.', '--skip-install'], {
