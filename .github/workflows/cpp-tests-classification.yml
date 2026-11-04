@@ -94,6 +94,7 @@ jobs:
             platform: darwin
             arch: arm64
             runner: ${{ needs.runner_names.outputs.macos_arm64_gpu }}
+            bridgedepth_backend: MTL0
           - os: windows-2025
             platform: win32
             arch: x64
@@ -105,6 +106,8 @@ jobs:
 
     env:
       WORKDIR: ${{ inputs.workdir }}
+      # BridgeDepth parity runs on Metal on the macOS GPU runner, CPU elsewhere.
+      QVAC_BRIDGEDEPTH_BACKEND: ${{ matrix.bridgedepth_backend || 'CPU' }}
 
     steps:
       - name: Manual Workspace Cleanup
