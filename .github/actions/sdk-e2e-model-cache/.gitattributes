@@ -1,2 +1,2 @@
-# ncc copies CRLF lines from bundled deps; keep dist byte-identical to the build.
-dist/** -text
+# ncc bundle: byte-identical to the build (it copies CRLF lines from deps), collapsed in PR diffs.
+dist/** -text linguist-generated=true
