@@ -101,13 +101,27 @@ void BoundedStringNeverCrashes(
     int64_t length, const std::vector<uint8_t>& payload) {
   BufferReader reader{payload.data(), payload.size(), 0};
   auto loader = makeLoader(reader);
-  std::string out;
-  (void)nmtReadBoundedString(&loader, length, NMT_MAX_TENSOR_NAME_LENGTH, out);
+  const std::string unchanged = "unchanged";
+  std::string out = unchanged;
+  const bool validLength = length >= 0 && length <= NMT_MAX_TENSOR_NAME_LENGTH;
+  const bool complete =
+      validLength && static_cast<size_t>(length) <= payload.size();
+  ASSERT_EQ(
+      nmtReadBoundedString(&loader, length, NMT_MAX_TENSOR_NAME_LENGTH, out),
+      complete);
+  if (complete) {
+    EXPECT_EQ(out, std::string(payload.begin(), payload.begin() + length));
+    EXPECT_EQ(reader.pos, static_cast<size_t>(length));
+  } else {
+    EXPECT_EQ(out, unchanged);
+    EXPECT_EQ(reader.pos, validLength ? payload.size() : 0U);
+  }
 }
 FUZZ_TEST(NmtWeightHeaderFuzz, BoundedStringNeverCrashes)
     .WithDomains(
         fuzztest::InRange<int64_t>(-1, NMT_MAX_TENSOR_NAME_LENGTH + 1),
-        fuzztest::Arbitrary<std::vector<uint8_t>>().WithMaxSize(64))
+        fuzztest::Arbitrary<std::vector<uint8_t>>().WithMaxSize(
+            NMT_MAX_TENSOR_NAME_LENGTH + 1))
     .WithSeeds([] {
       const std::string name = "encoder.embeddings.weight";
       return std::vector<std::tuple<int64_t, std::vector<uint8_t>>>{
@@ -115,7 +129,12 @@ FUZZ_TEST(NmtWeightHeaderFuzz, BoundedStringNeverCrashes)
            std::vector<uint8_t>(name.begin(), name.end())},
           {0, {}},
           {-1, {0}},
-          {NMT_MAX_TENSOR_NAME_LENGTH + 1, {0}},
+          {NMT_MAX_TENSOR_NAME_LENGTH,
+           std::vector<uint8_t>(NMT_MAX_TENSOR_NAME_LENGTH, 'x')},
+          {NMT_MAX_TENSOR_NAME_LENGTH + 1,
+           std::vector<uint8_t>(NMT_MAX_TENSOR_NAME_LENGTH + 1, 'x')},
+          {NMT_MAX_TENSOR_NAME_LENGTH,
+           std::vector<uint8_t>(NMT_MAX_TENSOR_NAME_LENGTH - 1, 'x')},
           {8, {'a', 'b', 'c', 'd'}},
       };
     });
@@ -124,13 +143,33 @@ void ReadCountNeverCrashes(const std::vector<uint8_t>& bytes) {
   BufferReader reader{bytes.data(), bytes.size(), 0};
   auto loader = makeLoader(reader);
   int32_t count = 0;
-  (void)nmtReadCount(&loader, NMT_MAX_VOCAB_SIZE, count);
+  if (bytes.size() < sizeof(count)) {
+    EXPECT_FALSE(nmtReadCount(&loader, NMT_MAX_VOCAB_SIZE, count));
+    EXPECT_EQ(reader.pos, bytes.size());
+    return;
+  }
+
+  // Decode the file's little-endian signed value independently of the reader.
+  int64_t expectedCount = static_cast<uint32_t>(bytes[0]) |
+                          (static_cast<uint32_t>(bytes[1]) << 8) |
+                          (static_cast<uint32_t>(bytes[2]) << 16) |
+                          (static_cast<uint32_t>(bytes[3]) << 24);
+  if (expectedCount > INT32_MAX) {
+    expectedCount -= int64_t{1} << 32;
+  }
+  EXPECT_EQ(
+      nmtReadCount(&loader, NMT_MAX_VOCAB_SIZE, count),
+      expectedCount >= 0 && expectedCount <= NMT_MAX_VOCAB_SIZE);
+  EXPECT_EQ(count, expectedCount);
+  EXPECT_EQ(reader.pos, sizeof(count));
 }
 FUZZ_TEST(NmtWeightHeaderFuzz, ReadCountNeverCrashes)
     .WithDomains(fuzztest::Arbitrary<std::vector<uint8_t>>().WithMaxSize(16))
     .WithSeeds([] {
       return std::vector<std::tuple<std::vector<uint8_t>>>{
+          {leBytes({0})},
           {leBytes({3})},
+          {leBytes({NMT_MAX_VOCAB_SIZE})},
           {leBytes({-1})},
           {leBytes({NMT_MAX_VOCAB_SIZE + 1})},
           {std::vector<uint8_t>{0, 0}},
@@ -138,7 +177,7 @@ FUZZ_TEST(NmtWeightHeaderFuzz, ReadCountNeverCrashes)
     });
 
 void TensorTypeNeverCrashes(int32_t ttype) {
-  (void)nmtIsValidTensorType(ttype);
+  EXPECT_EQ(nmtIsValidTensorType(ttype), ttype >= 0 && ttype < GGML_TYPE_COUNT);
 }
 FUZZ_TEST(NmtWeightHeaderFuzz, TensorTypeNeverCrashes)
     .WithDomains(fuzztest::Arbitrary<int32_t>())
@@ -146,6 +185,7 @@ FUZZ_TEST(NmtWeightHeaderFuzz, TensorTypeNeverCrashes)
       return std::vector<std::tuple<int32_t>>{
           {0},
           {-1},
+          {GGML_TYPE_COUNT - 1},
           {GGML_TYPE_COUNT},
       };
     });
