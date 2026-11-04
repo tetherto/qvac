@@ -74,8 +74,8 @@ target_compile_features(addon-test PRIVATE cxx_std_20)
 # Define test binary directory path for runtime use
 get_filename_component(TEST_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}" ABSOLUTE)
 # BackendLoader.cpp includes ModuleBackendsDir.hpp whenever ggml exports
-# GGML_BACKEND_DL (Linux and Android). That header requires the same module
-# name the addon target is built with; darwin and win32 leave the header out.
+# GGML_BACKEND_DL (Linux, Android and Windows). That header requires the same
+# module name the addon target is built with; darwin leaves the header out.
 target_compile_definitions(addon-test PRIVATE
   TEST_BINARY_DIR="${TEST_BINARY_DIR}"
   PROJECT_ROOT="${CMAKE_SOURCE_DIR}"
@@ -111,13 +111,18 @@ if(NOT WIN32 AND NOT APPLE)
       -fsanitize=address
   )
 endif()
-# Copy ggml backend libraries next to the test executable
-if((ANDROID OR UNIX) AND NOT APPLE)
+# Copy ggml backend libraries next to the test executable, where ggml
+# searches for the runtime-loaded modules. On Windows the static CPU backend
+# is skipped: only the module .dll files are loadable.
+if(NOT APPLE)
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
+    if(WIN32 AND "${_backend}" MATCHES "^ggml-cpu")
+      continue()
+    endif()
     add_custom_command(TARGET addon-test POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy_if_different
         $<TARGET_FILE:ggml::${_backend}>
-        ${CMAKE_CURRENT_BINARY_DIR}
+        $<TARGET_FILE_DIR:addon-test>
       COMMENT "Copying ggml backend ${_backend} to test directory"
     )
   endforeach()

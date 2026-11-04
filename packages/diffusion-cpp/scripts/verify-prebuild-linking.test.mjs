@@ -94,7 +94,10 @@ function fixture(
   fs.writeFileSync(path.join(backends, 'libqvac-diffusion-ggml-vulkan.so'), elf(['libvulkan.so.1']))
   if (cuda)
     fs.writeFileSync(path.join(backends, 'libqvac-diffusion-ggml-cuda.so'), elf(cuda, symbols))
-  const result = spawnSync(process.execPath, [checker, directory], { encoding: 'utf8' })
+  const result = spawnSync(process.execPath, [checker, directory], {
+    encoding: 'utf8',
+    env: { ...process.env, BUILD_PLATFORM: 'linux' }
+  })
   return { status: result.status, output: result.stdout + result.stderr }
 }
 
@@ -161,7 +164,8 @@ test('split publication retains CUDA and Vulkan in both Linux platform packages'
     assert.equal(manifest.name, `@qvac/diffusion-cpp-linux-${arch}`)
     assert.equal(manifest.version, meta.version)
     const result = spawnSync(process.execPath, [checker, path.join(directory, 'prebuilds')], {
-      encoding: 'utf8'
+      encoding: 'utf8',
+      env: { ...process.env, BUILD_PLATFORM: 'linux' }
     })
     assert.equal(result.status, 0, result.stdout + result.stderr)
   }
@@ -334,4 +338,104 @@ test('local integration still rejects broken addon or Vulkan linkage without CUD
     integrationLayout({ vulkan: ['libvulkan.so.1', 'libstdc++.so.6'] }),
     /Vulkan module must not depend on/
   )
+})
+
+// Smallest PE32+ the checker accepts: one section holding an import table
+// with one descriptor per DLL name.
+function pe(imports) {
+  const header = 0x80
+  const optional = header + 24
+  const sizeOfOptionalHeader = 112 + 16 * 8
+  const sectionTable = optional + sizeOfOptionalHeader
+  const rawOffset = 0x400
+  const rva = 0x1000
+  const buffer = Buffer.alloc(rawOffset + 0x200)
+  buffer.write('MZ', 0, 'latin1')
+  buffer.writeUInt32LE(header, 0x3c)
+  buffer.writeUInt32LE(0x00004550, header)
+  buffer.writeUInt16LE(1, header + 6)
+  buffer.writeUInt16LE(sizeOfOptionalHeader, header + 20)
+  buffer.writeUInt16LE(0x20b, optional)
+  buffer.writeUInt32LE(16, optional + 108)
+  buffer.writeUInt32LE(rva, optional + 112 + 8) // data directory 1: imports
+  buffer.writeUInt32LE(rva, sectionTable + 12)
+  buffer.writeUInt32LE(0x200, sectionTable + 16)
+  buffer.writeUInt32LE(rawOffset, sectionTable + 20)
+  let nameRva = rva + (imports.length + 1) * 20
+  imports.forEach((name, index) => {
+    buffer.writeUInt32LE(nameRva, rawOffset + index * 20 + 12)
+    buffer.write(name + '\0', rawOffset + (nameRva - rva), 'latin1')
+    nameRva += name.length + 1
+  })
+  return buffer
+}
+
+// A merged artifact as the verify-prebuild-linking job sees it.
+function mergedFixture(t, { linux = ['x64', 'arm64'], win32 = true, addonImports } = {}) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'diffusion-merged-'))
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
+  for (const arch of linux) {
+    const moduleName = `qvac__diffusion-cpp-linux-${arch}`
+    const backends = path.join(directory, `linux-${arch}`, moduleName)
+    fs.mkdirSync(backends, { recursive: true })
+    fs.writeFileSync(
+      path.join(directory, `linux-${arch}`, `${moduleName}.bare`),
+      elf(['libc.so.6'])
+    )
+    fs.writeFileSync(
+      path.join(backends, 'libqvac-diffusion-ggml-vulkan.so'),
+      elf(['libvulkan.so.1'])
+    )
+    fs.writeFileSync(
+      path.join(backends, 'libqvac-diffusion-ggml-cuda.so'),
+      elf(['libcudart.so.13'])
+    )
+  }
+  if (win32) {
+    const moduleName = 'qvac__diffusion-cpp-win32-x64'
+    const backends = path.join(directory, 'win32-x64', moduleName)
+    fs.mkdirSync(backends, { recursive: true })
+    fs.writeFileSync(
+      path.join(directory, 'win32-x64', `${moduleName}.bare`),
+      pe(addonImports ?? ['kernel32.dll'])
+    )
+    fs.writeFileSync(
+      path.join(backends, 'qvac-diffusion-ggml-vulkan.dll'),
+      pe(['vulkan-1.dll', 'kernel32.dll'])
+    )
+  }
+  return (buildPlatform) => {
+    const env = { ...process.env, BUILD_PLATFORM: buildPlatform ?? '' }
+    const result = spawnSync(process.execPath, [checker, directory], { encoding: 'utf8', env })
+    return { status: result.status, output: result.stdout + result.stderr }
+  }
+}
+
+test('merged artifact passes with linux and win32 prebuilds', (t) => {
+  const result = mergedFixture(t)()
+  assert.equal(result.status, 0, result.output)
+})
+
+test('merged artifact fails when the win32 prebuild is missing', (t) => {
+  const result = mergedFixture(t, { win32: false })()
+  assert.equal(result.status, 1)
+  assert.match(result.output, /win32-x64: no prebuild/)
+})
+
+test('a prebuild job directory skips the missing win32 prebuild', (t) => {
+  const result = mergedFixture(t, { linux: ['x64'], win32: false })('linux')
+  assert.equal(result.status, 0, result.output)
+  assert.match(result.output, /SKIP win32-x64/)
+})
+
+test('fails when only the win32 prebuild is present', (t) => {
+  const result = mergedFixture(t, { linux: [] })()
+  assert.equal(result.status, 1)
+  assert.match(result.output, /no linux prebuilds/)
+})
+
+test('fails when the win32 addon imports cuBLASLt', (t) => {
+  const result = mergedFixture(t, { addonImports: ['kernel32.dll', 'cublasLt64_12.dll'] })()
+  assert.equal(result.status, 1)
+  assert.match(result.output, /addon imports cublaslt64/)
 })
