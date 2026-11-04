@@ -1,0 +1,2162 @@
+{
+  "date": "2026-11-04",
+  "engine_revision": "bc3890d",
+  "addon_final_native_revision": "4e027082e",
+  "timing": "Native generationMs, median excluding warmup; load reported separately. Spark H3 repeat excludes two warmups. The earlier ci-rtx-h3 pair is a first-request check; ci-final-rtx-h3 uses one warmup and two measured requests. See performance-profiles-validation.md for revision limits.",
+  "measurements": [
+    {
+      "model": "FLUX.2 Klein 4B Q8_0",
+      "gpu": "RTX 5090",
+      "os": "Linux x64",
+      "api": "CUDA",
+      "date": "2026-11-04",
+      "cases": [
+        {
+          "name": "rtx-flux-off",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cuda0",
+            "prediction": "flux2_flow",
+            "performance_profile": "off"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "prompt": "A red panda walking on a mossy log in a misty forest, natural daylight, realistic fur, detailed photograph.",
+                "width": 1024,
+                "height": 1024,
+                "steps": 10,
+                "cfg_scale": 1,
+                "guidance": 1,
+                "seed": 42
+              }
+            }
+          ],
+          "generation_ms": [
+            8638,
+            8655,
+            8683
+          ],
+          "warmup_ms": [
+            8769
+          ],
+          "median_generation_ms": 8655,
+          "load_ms": 2707,
+          "sampled_memory": {}
+        },
+        {
+          "name": "rtx-flux-auto",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cuda0",
+            "prediction": "flux2_flow",
+            "performance_profile": "auto"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "prompt": "A red panda walking on a mossy log in a misty forest, natural daylight, realistic fur, detailed photograph.",
+                "width": 1024,
+                "height": 1024,
+                "steps": 10,
+                "cfg_scale": 1,
+                "guidance": 1,
+                "seed": 42
+              }
+            }
+          ],
+          "generation_ms": [
+            2814,
+            2818,
+            2809
+          ],
+          "warmup_ms": [
+            2952
+          ],
+          "median_generation_ms": 2814,
+          "load_ms": 2328,
+          "sampled_memory": {}
+        }
+      ],
+      "latency_change_percent": -67.48700173310225,
+      "speedup": 3.0756929637526653
+    },
+    {
+      "model": "FLUX.2 Klein 4B Q8_0",
+      "gpu": "NVIDIA GB10",
+      "os": "Linux arm64",
+      "api": "CUDA",
+      "date": "2026-11-04",
+      "cases": [
+        {
+          "name": "spark-flux-off",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cuda0",
+            "prediction": "flux2_flow",
+            "performance_profile": "off"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "prompt": "A red panda walking on a mossy log in a misty forest, natural daylight, realistic fur, detailed photograph.",
+                "width": 1024,
+                "height": 1024,
+                "steps": 10,
+                "cfg_scale": 1,
+                "guidance": 1,
+                "seed": 42
+              }
+            }
+          ],
+          "generation_ms": [
+            40693,
+            40759,
+            40812
+          ],
+          "warmup_ms": [
+            40775
+          ],
+          "median_generation_ms": 40759,
+          "load_ms": 3175,
+          "sampled_memory": {}
+        },
+        {
+          "name": "spark-flux-auto",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cuda0",
+            "prediction": "flux2_flow",
+            "performance_profile": "auto"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "prompt": "A red panda walking on a mossy log in a misty forest, natural daylight, realistic fur, detailed photograph.",
+                "width": 1024,
+                "height": 1024,
+                "steps": 10,
+                "cfg_scale": 1,
+                "guidance": 1,
+                "seed": 42
+              }
+            }
+          ],
+          "generation_ms": [
+            15349,
+            15370,
+            15604
+          ],
+          "warmup_ms": [
+            15671
+          ],
+          "median_generation_ms": 15370,
+          "load_ms": 3094,
+          "sampled_memory": {}
+        }
+      ],
+      "latency_change_percent": -62.29053705929979,
+      "speedup": 2.651854261548471
+    },
+    {
+      "model": "FLUX.2 Klein 4B Q8_0",
+      "gpu": "RTX 5090",
+      "os": "Linux x64",
+      "api": "Vulkan",
+      "date": "2026-11-04",
+      "cases": [
+        {
+          "name": "rtx-flux-vulkan-off",
+          "config": {
+            "device": "gpu",
+            "backend": "vulkan0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "vulkan0",
+            "prediction": "flux2_flow",
+            "performance_profile": "off"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "prompt": "A red panda walking on a mossy log in a misty forest, natural daylight, realistic fur, detailed photograph.",
+                "width": 1024,
+                "height": 1024,
+                "steps": 10,
+                "cfg_scale": 1,
+                "guidance": 1,
+                "seed": 42
+              }
+            }
+          ],
+          "generation_ms": [
+            2596,
+            2599
+          ],
+          "warmup_ms": [
+            8840
+          ],
+          "median_generation_ms": 2597.5,
+          "load_ms": 2243,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 794512,
+            "peak_gpu_mib": 9640,
+            "sampling_interval_seconds": 5
+          }
+        },
+        {
+          "name": "rtx-flux-vulkan-auto",
+          "config": {
+            "device": "gpu",
+            "backend": "vulkan0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "vulkan0",
+            "prediction": "flux2_flow",
+            "performance_profile": "auto"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "prompt": "A red panda walking on a mossy log in a misty forest, natural daylight, realistic fur, detailed photograph.",
+                "width": 1024,
+                "height": 1024,
+                "steps": 10,
+                "cfg_scale": 1,
+                "guidance": 1,
+                "seed": 42
+              }
+            }
+          ],
+          "generation_ms": [
+            2593,
+            2591
+          ],
+          "warmup_ms": [
+            2619
+          ],
+          "median_generation_ms": 2592.0,
+          "load_ms": 2150,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 712252,
+            "peak_gpu_mib": 9640,
+            "sampling_interval_seconds": 5
+          }
+        }
+      ],
+      "latency_change_percent": -0.21174205967275928,
+      "speedup": 1.0021219135802468
+    },
+    {
+      "model": "FLUX.2 Klein 4B Q8_0",
+      "gpu": "Apple M3 Ultra",
+      "os": "macOS arm64",
+      "api": "Metal",
+      "date": "2026-11-04",
+      "cases": [
+        {
+          "name": "mac-flux-metal-off",
+          "config": {
+            "device": "gpu",
+            "backend": "mtl0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "mtl0",
+            "prediction": "flux2_flow",
+            "performance_profile": "off"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "prompt": "A red panda walking on a mossy log in a misty forest, natural daylight, realistic fur, detailed photograph.",
+                "width": 1024,
+                "height": 1024,
+                "steps": 10,
+                "cfg_scale": 1,
+                "guidance": 1,
+                "seed": 42
+              }
+            }
+          ],
+          "generation_ms": [
+            27856,
+            27867,
+            27875
+          ],
+          "warmup_ms": [
+            27890
+          ],
+          "median_generation_ms": 27867,
+          "load_ms": 2245,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 8368288,
+            "sampling_interval_seconds": 5
+          }
+        },
+        {
+          "name": "mac-flux-metal-auto",
+          "config": {
+            "device": "gpu",
+            "backend": "mtl0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "mtl0",
+            "prediction": "flux2_flow",
+            "performance_profile": "auto"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "prompt": "A red panda walking on a mossy log in a misty forest, natural daylight, realistic fur, detailed photograph.",
+                "width": 1024,
+                "height": 1024,
+                "steps": 10,
+                "cfg_scale": 1,
+                "guidance": 1,
+                "seed": 42
+              }
+            }
+          ],
+          "generation_ms": [
+            27886,
+            27876,
+            27885
+          ],
+          "warmup_ms": [
+            27914
+          ],
+          "median_generation_ms": 27885,
+          "load_ms": 2197,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 8369264,
+            "sampling_interval_seconds": 5
+          }
+        }
+      ],
+      "latency_change_percent": 0.06459252879749133,
+      "speedup": 0.9993544916621839
+    },
+    {
+      "model": "MiniMax-H3 FL2VA Q4_K",
+      "gpu": "RTX 5090",
+      "os": "Linux x64",
+      "api": "CUDA",
+      "date": "2026-11-04",
+      "cases": [
+        {
+          "name": "rtx-h3-off",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cpu",
+            "performance_profile": "off"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A red panda walks slowly along a mossy log in a misty green forest. The camera tracks smoothly beside it. Natural daylight, realistic fur and paws, gentle forest ambience with birds and soft footsteps, no music, no dialogue.",
+                "width": 960,
+                "height": 544,
+                "video_frames": 124,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 11,
+                "vae_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            122465,
+            122363
+          ],
+          "warmup_ms": [
+            121720
+          ],
+          "median_generation_ms": 122414.0,
+          "load_ms": 24324,
+          "sampled_memory": {}
+        },
+        {
+          "name": "rtx-h3-auto",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cpu",
+            "performance_profile": "auto"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A red panda walks slowly along a mossy log in a misty green forest. The camera tracks smoothly beside it. Natural daylight, realistic fur and paws, gentle forest ambience with birds and soft footsteps, no music, no dialogue.",
+                "width": 960,
+                "height": 544,
+                "video_frames": 124,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 11,
+                "vae_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            111365,
+            111992
+          ],
+          "warmup_ms": [
+            112448
+          ],
+          "median_generation_ms": 111678.5,
+          "load_ms": 23158,
+          "sampled_memory": {}
+        }
+      ],
+      "latency_change_percent": -8.769830248174227,
+      "speedup": 1.0961286192060244
+    },
+    {
+      "model": "MiniMax-H3 FL2VA Q4_K",
+      "gpu": "RTX 5090",
+      "os": "Linux x64",
+      "api": "Vulkan",
+      "date": "2026-11-04",
+      "cases": [
+        {
+          "name": "rtx-h3-vulkan-off",
+          "config": {
+            "device": "gpu",
+            "backend": "vulkan0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cpu",
+            "performance_profile": "off"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A red panda walks slowly along a mossy log in a misty green forest. The camera tracks smoothly beside it. Natural daylight, realistic fur and paws, gentle forest ambience with birds and soft footsteps, no music, no dialogue.",
+                "width": 960,
+                "height": 544,
+                "video_frames": 124,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 11,
+                "vae_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            103511,
+            103668
+          ],
+          "warmup_ms": [
+            115950
+          ],
+          "median_generation_ms": 103589.5,
+          "load_ms": 8752,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 37933096,
+            "peak_gpu_mib": 24360,
+            "sampling_interval_seconds": 5
+          }
+        },
+        {
+          "name": "rtx-h3-vulkan-auto",
+          "config": {
+            "device": "gpu",
+            "backend": "vulkan0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cpu",
+            "performance_profile": "auto"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A red panda walks slowly along a mossy log in a misty green forest. The camera tracks smoothly beside it. Natural daylight, realistic fur and paws, gentle forest ambience with birds and soft footsteps, no music, no dialogue.",
+                "width": 960,
+                "height": 544,
+                "video_frames": 124,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 11,
+                "vae_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            92144,
+            92122
+          ],
+          "warmup_ms": [
+            93025
+          ],
+          "median_generation_ms": 92133.0,
+          "load_ms": 8160,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 37799852,
+            "peak_gpu_mib": 23302,
+            "sampling_interval_seconds": 5
+          }
+        }
+      ],
+      "latency_change_percent": -11.05951858055112,
+      "speedup": 1.124347410808288
+    },
+    {
+      "model": "MiniMax-H3 FL2VA Q4_K",
+      "gpu": "NVIDIA GB10",
+      "os": "Linux arm64",
+      "api": "CUDA",
+      "date": "2026-11-04",
+      "cases": [
+        {
+          "name": "spark-h3-off",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cpu",
+            "performance_profile": "off"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A red panda walks slowly along a mossy log in a misty green forest. The camera tracks smoothly beside it. Natural daylight, realistic fur and paws, gentle forest ambience with birds and soft footsteps, no music, no dialogue.",
+                "width": 960,
+                "height": 544,
+                "video_frames": 124,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 11,
+                "vae_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            716528
+          ],
+          "warmup_ms": [
+            678781
+          ],
+          "median_generation_ms": 716528,
+          "load_ms": 12773,
+          "sampled_memory": {}
+        },
+        {
+          "name": "spark-h3-auto",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cpu",
+            "performance_profile": "auto"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A red panda walks slowly along a mossy log in a misty green forest. The camera tracks smoothly beside it. Natural daylight, realistic fur and paws, gentle forest ambience with birds and soft footsteps, no music, no dialogue.",
+                "width": 960,
+                "height": 544,
+                "video_frames": 124,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 11,
+                "vae_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            610965
+          ],
+          "warmup_ms": [
+            631191
+          ],
+          "median_generation_ms": 610965,
+          "load_ms": 19659,
+          "sampled_memory": {}
+        }
+      ],
+      "latency_change_percent": -14.732571511511061,
+      "speedup": 1.1727807648555972,
+      "interpretation": "Exploratory pair with a slow first denoising step in the baseline; use the repeated pair for the final speed claim."
+    },
+    {
+      "model": "MiniMax-H3 FL2VA Q4_K",
+      "gpu": "Apple M3 Ultra",
+      "os": "macOS arm64",
+      "api": "Metal",
+      "date": "2026-11-04",
+      "cases": [
+        {
+          "name": "mac-h3-off",
+          "config": {
+            "device": "gpu",
+            "backend": "mtl0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cpu",
+            "performance_profile": "off"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A red panda walks slowly along a mossy log in a misty green forest. The camera tracks smoothly beside it. Natural daylight, realistic fur and paws, gentle forest ambience with birds and soft footsteps, no music, no dialogue.",
+                "width": 960,
+                "height": 544,
+                "video_frames": 124,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 11,
+                "vae_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            1531236
+          ],
+          "warmup_ms": [
+            1532765
+          ],
+          "median_generation_ms": 1531236,
+          "load_ms": 8987,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 58174592,
+            "sampling_interval_seconds": 5
+          }
+        },
+        {
+          "name": "mac-h3-auto",
+          "config": {
+            "device": "gpu",
+            "backend": "mtl0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cpu",
+            "performance_profile": "auto"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A red panda walks slowly along a mossy log in a misty green forest. The camera tracks smoothly beside it. Natural daylight, realistic fur and paws, gentle forest ambience with birds and soft footsteps, no music, no dialogue.",
+                "width": 960,
+                "height": 544,
+                "video_frames": 124,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 11,
+                "vae_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            1238063
+          ],
+          "warmup_ms": [
+            1238607
+          ],
+          "median_generation_ms": 1238063,
+          "load_ms": 16927,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 58847568,
+            "sampling_interval_seconds": 5
+          }
+        }
+      ],
+      "latency_change_percent": -19.146166887403382,
+      "speedup": 1.2367997428240727
+    },
+    {
+      "model": "LTX-2.3 22B distilled Q5_K",
+      "gpu": "Apple M3 Ultra",
+      "os": "macOS arm64",
+      "api": "Metal",
+      "date": "2026-11-04",
+      "cases": [
+        {
+          "name": "mac-ltx-off",
+          "config": {
+            "device": "gpu",
+            "backend": "mtl0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "mtl0",
+            "vae_conv_direct": true,
+            "performance_max_width": 512,
+            "performance_max_height": 320,
+            "performance_max_frames": 97,
+            "performance_profile": "off"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A claymation cat playing jazz on a piano. Clear piano music, gentle expressive paw movements, warm studio light.",
+                "width": 512,
+                "height": 320,
+                "video_frames": 97,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 42,
+                "vae_tiling": true,
+                "temporal_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            92763,
+            92831,
+            92895
+          ],
+          "warmup_ms": [
+            93108
+          ],
+          "median_generation_ms": 92831,
+          "load_ms": 27372,
+          "sampled_memory": {}
+        },
+        {
+          "name": "mac-ltx-auto",
+          "config": {
+            "device": "gpu",
+            "backend": "mtl0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "mtl0",
+            "vae_conv_direct": true,
+            "performance_max_width": 512,
+            "performance_max_height": 320,
+            "performance_max_frames": 97,
+            "performance_profile": "auto"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A claymation cat playing jazz on a piano. Clear piano music, gentle expressive paw movements, warm studio light.",
+                "width": 512,
+                "height": 320,
+                "video_frames": 97,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 42,
+                "vae_tiling": true,
+                "temporal_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            87969,
+            87998,
+            87929
+          ],
+          "warmup_ms": [
+            88513
+          ],
+          "median_generation_ms": 87969,
+          "load_ms": 29903,
+          "sampled_memory": {}
+        }
+      ],
+      "latency_change_percent": -5.237474550527299,
+      "speedup": 1.055269469926906
+    },
+    {
+      "model": "LTX-2.3 22B distilled Q5_K",
+      "gpu": "RTX 5090",
+      "os": "Linux x64",
+      "api": "CUDA",
+      "date": "2026-11-04",
+      "cases": [
+        {
+          "name": "rtx-ltx-193-off",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cpu",
+            "vae_conv_direct": true,
+            "performance_profile": "off"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A claymation cat playing jazz on a piano. Clear piano music, gentle expressive paw movements, warm studio light.",
+                "width": 512,
+                "height": 320,
+                "video_frames": 193,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 42,
+                "vae_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            20819,
+            20850,
+            20773
+          ],
+          "warmup_ms": [
+            21389
+          ],
+          "median_generation_ms": 20819,
+          "load_ms": 19639,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 35770700,
+            "peak_gpu_mib": 21348,
+            "sampling_interval_seconds": 5
+          }
+        },
+        {
+          "name": "rtx-ltx-193-auto",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cpu",
+            "vae_conv_direct": true,
+            "performance_profile": "auto"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A claymation cat playing jazz on a piano. Clear piano music, gentle expressive paw movements, warm studio light.",
+                "width": 512,
+                "height": 320,
+                "video_frames": 193,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 42,
+                "vae_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            20767,
+            20855,
+            21009
+          ],
+          "warmup_ms": [
+            21833
+          ],
+          "median_generation_ms": 20855,
+          "load_ms": 20428,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 35221248,
+            "peak_gpu_mib": 21348,
+            "sampling_interval_seconds": 5
+          }
+        }
+      ],
+      "latency_change_percent": 0.1729189682501575,
+      "speedup": 0.9982737952529369
+    },
+    {
+      "model": "LTX-2.3 22B distilled Q5_K",
+      "gpu": "NVIDIA GB10",
+      "os": "Linux arm64",
+      "api": "CUDA",
+      "date": "2026-11-04",
+      "cases": [
+        {
+          "name": "spark-ltx-193-off",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cpu",
+            "vae_conv_direct": true,
+            "performance_profile": "off"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A claymation cat playing jazz on a piano. Clear piano music, gentle expressive paw movements, warm studio light.",
+                "width": 512,
+                "height": 320,
+                "video_frames": 193,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 42,
+                "vae_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            72889
+          ],
+          "warmup_ms": [
+            73383
+          ],
+          "median_generation_ms": 72889,
+          "load_ms": 19353,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 35090840,
+            "sampling_interval_seconds": 5
+          }
+        },
+        {
+          "name": "spark-ltx-193-auto",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cpu",
+            "vae_conv_direct": true,
+            "performance_profile": "auto"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A claymation cat playing jazz on a piano. Clear piano music, gentle expressive paw movements, warm studio light.",
+                "width": 512,
+                "height": 320,
+                "video_frames": 193,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 42,
+                "vae_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            73018
+          ],
+          "warmup_ms": [
+            72981
+          ],
+          "median_generation_ms": 73018,
+          "load_ms": 12836,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 35763752,
+            "sampling_interval_seconds": 5
+          }
+        }
+      ],
+      "latency_change_percent": 0.17698143752828965,
+      "speedup": 0.9982333123339451
+    },
+    {
+      "model": "MiniMax-H3 FL2VA Q4_K",
+      "gpu": "NVIDIA GB10",
+      "os": "Linux arm64",
+      "api": "CUDA",
+      "date": "2026-11-04",
+      "cases": [
+        {
+          "name": "spark-h3-off-repeat",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cpu",
+            "performance_profile": "off"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A red panda walks slowly along a mossy log in a misty green forest. The camera tracks smoothly beside it. Natural daylight, realistic fur and paws, gentle forest ambience with birds and soft footsteps, no music, no dialogue.",
+                "width": 960,
+                "height": 544,
+                "video_frames": 124,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 11,
+                "vae_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            675734,
+            639245
+          ],
+          "warmup_ms": [
+            662241,
+            664114
+          ],
+          "median_generation_ms": 657489.5,
+          "load_ms": 19921,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 38452296,
+            "sampling_interval_seconds": 5
+          }
+        },
+        {
+          "name": "spark-h3-auto-repeat",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cpu",
+            "performance_profile": "auto"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A red panda walks slowly along a mossy log in a misty green forest. The camera tracks smoothly beside it. Natural daylight, realistic fur and paws, gentle forest ambience with birds and soft footsteps, no music, no dialogue.",
+                "width": 960,
+                "height": 544,
+                "video_frames": 124,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 11,
+                "vae_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            592708,
+            601084
+          ],
+          "warmup_ms": [
+            609625,
+            602655
+          ],
+          "median_generation_ms": 596896.0,
+          "load_ms": 11032,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 39060692,
+            "sampling_interval_seconds": 5
+          }
+        }
+      ],
+      "latency_change_percent": -9.21588861875361,
+      "speedup": 1.1015143341553637
+    },
+    {
+      "model": "LTX-2.3 22B distilled Q5_K",
+      "gpu": "Apple M3 Ultra",
+      "os": "macOS arm64",
+      "api": "Metal",
+      "date": "2026-11-04",
+      "cases": [
+        {
+          "name": "mac-ltx-default-off",
+          "config": {
+            "device": "gpu",
+            "backend": "mtl0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "mtl0",
+            "vae_conv_direct": true,
+            "performance_max_width": 512,
+            "performance_max_height": 320,
+            "performance_max_frames": 97,
+            "performance_profile": "off"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A claymation cat playing jazz on a piano. Clear piano music, gentle expressive paw movements, warm studio light.",
+                "width": 512,
+                "height": 320,
+                "video_frames": 97,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 42,
+                "vae_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            91755,
+            91780,
+            91852
+          ],
+          "warmup_ms": [
+            92065
+          ],
+          "median_generation_ms": 91780,
+          "load_ms": 8675,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 38432224,
+            "sampling_interval_seconds": 5
+          }
+        },
+        {
+          "name": "mac-ltx-default-auto",
+          "config": {
+            "device": "gpu",
+            "backend": "mtl0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "mtl0",
+            "vae_conv_direct": true,
+            "performance_max_width": 512,
+            "performance_max_height": 320,
+            "performance_max_frames": 97,
+            "performance_profile": "auto"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A claymation cat playing jazz on a piano. Clear piano music, gentle expressive paw movements, warm studio light.",
+                "width": 512,
+                "height": 320,
+                "video_frames": 97,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 42,
+                "vae_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            86762,
+            86885,
+            86846
+          ],
+          "warmup_ms": [
+            87398
+          ],
+          "median_generation_ms": 86846,
+          "load_ms": 15801,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 65331696,
+            "sampling_interval_seconds": 5
+          }
+        }
+      ],
+      "latency_change_percent": -5.375898888646768,
+      "speedup": 1.056813209589388
+    },
+    {
+      "model": "FLUX.2 Klein 4B Q8_0",
+      "gpu": "RTX 5090",
+      "os": "Linux x64",
+      "api": "CUDA",
+      "date": "2026-11-04",
+      "cases": [
+        {
+          "name": "ci-rtx-flux-off",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cuda0",
+            "prediction": "flux2_flow",
+            "performance_profile": "off"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "prompt": "A red panda walking on a mossy log in a misty forest, natural daylight, realistic fur, detailed photograph.",
+                "width": 1024,
+                "height": 1024,
+                "steps": 10,
+                "cfg_scale": 1,
+                "guidance": 1,
+                "seed": 42
+              }
+            }
+          ],
+          "generation_ms": [
+            8688,
+            8703,
+            8736
+          ],
+          "warmup_ms": [
+            8807
+          ],
+          "median_generation_ms": 8703,
+          "load_ms": 2554,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 1261152,
+            "peak_gpu_mib": 11356,
+            "sampling_interval_seconds": 5
+          }
+        },
+        {
+          "name": "ci-rtx-flux-auto",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cuda0",
+            "prediction": "flux2_flow",
+            "performance_profile": "auto"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "prompt": "A red panda walking on a mossy log in a misty forest, natural daylight, realistic fur, detailed photograph.",
+                "width": 1024,
+                "height": 1024,
+                "steps": 10,
+                "cfg_scale": 1,
+                "guidance": 1,
+                "seed": 42
+              }
+            }
+          ],
+          "generation_ms": [
+            2814,
+            2816,
+            2813
+          ],
+          "warmup_ms": [
+            2955
+          ],
+          "median_generation_ms": 2814,
+          "load_ms": 2324,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 1301248,
+            "peak_gpu_mib": 15380,
+            "sampling_interval_seconds": 5
+          }
+        }
+      ],
+      "latency_change_percent": -67.66632195794553,
+      "speedup": 3.0927505330490406
+    },
+    {
+      "model": "MiniMax-H3 FL2VA Q4_K",
+      "gpu": "RTX 5090",
+      "os": "Linux x64",
+      "api": "CUDA",
+      "date": "2026-11-04",
+      "cases": [
+        {
+          "name": "ci-rtx-h3-off",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cpu",
+            "performance_profile": "off"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A red panda walks slowly along a mossy log in a misty green forest. The camera tracks smoothly beside it. Natural daylight, realistic fur and paws, gentle forest ambience with birds and soft footsteps, no music, no dialogue.",
+                "width": 960,
+                "height": 544,
+                "video_frames": 124,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 11,
+                "vae_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            121005
+          ],
+          "warmup_ms": [],
+          "median_generation_ms": 121005,
+          "load_ms": 20418,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 38139848,
+            "peak_gpu_mib": 17456,
+            "sampling_interval_seconds": 5
+          }
+        },
+        {
+          "name": "ci-rtx-h3-auto",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cpu",
+            "performance_profile": "auto"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A red panda walks slowly along a mossy log in a misty green forest. The camera tracks smoothly beside it. Natural daylight, realistic fur and paws, gentle forest ambience with birds and soft footsteps, no music, no dialogue.",
+                "width": 960,
+                "height": 544,
+                "video_frames": 124,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 11,
+                "vae_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            112047
+          ],
+          "warmup_ms": [],
+          "median_generation_ms": 112047,
+          "load_ms": 41795,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 38144856,
+            "peak_gpu_mib": 18300,
+            "sampling_interval_seconds": 5
+          }
+        }
+      ],
+      "latency_change_percent": -7.402999876038185,
+      "speedup": 1.0799485930011512,
+      "interpretation": "One first request per context using the CI binary; functional confirmation, not a warm latency estimate."
+    },
+    {
+      "model": "FLUX.2 Klein 4B Q8_0",
+      "gpu": "RTX 5090",
+      "os": "Linux x64",
+      "api": "CUDA",
+      "date": "2026-11-04",
+      "cases": [
+        {
+          "name": "ci-final-rtx-flux-off",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cuda0",
+            "prediction": "flux2_flow",
+            "performance_profile": "off"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "prompt": "A red panda walking on a mossy log in a misty forest, natural daylight, realistic fur, detailed photograph.",
+                "width": 1024,
+                "height": 1024,
+                "steps": 10,
+                "cfg_scale": 1,
+                "guidance": 1,
+                "seed": 42
+              }
+            }
+          ],
+          "generation_ms": [
+            8678,
+            8711,
+            8739
+          ],
+          "warmup_ms": [
+            8774
+          ],
+          "median_generation_ms": 8711,
+          "load_ms": 2442,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 1252656,
+            "peak_gpu_mib": 11356,
+            "sampling_interval_seconds": 5
+          }
+        },
+        {
+          "name": "ci-final-rtx-flux-auto",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cuda0",
+            "prediction": "flux2_flow",
+            "performance_profile": "auto"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "prompt": "A red panda walking on a mossy log in a misty forest, natural daylight, realistic fur, detailed photograph.",
+                "width": 1024,
+                "height": 1024,
+                "steps": 10,
+                "cfg_scale": 1,
+                "guidance": 1,
+                "seed": 42
+              }
+            }
+          ],
+          "generation_ms": [
+            2824,
+            2822,
+            2827
+          ],
+          "warmup_ms": [
+            2951
+          ],
+          "median_generation_ms": 2824,
+          "load_ms": 2315,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 1292852,
+            "peak_gpu_mib": 15380,
+            "sampling_interval_seconds": 5
+          }
+        }
+      ],
+      "latency_change_percent": -67.58121914820342,
+      "speedup": 3.0846317280453257
+    },
+    {
+      "model": "MiniMax-H3 FL2VA Q4_K",
+      "gpu": "RTX 5090",
+      "os": "Linux x64",
+      "api": "CUDA",
+      "date": "2026-11-04",
+      "cases": [
+        {
+          "name": "ci-final-rtx-h3-off",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cpu",
+            "performance_profile": "off"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A red panda walks slowly along a mossy log in a misty green forest. The camera tracks smoothly beside it. Natural daylight, realistic fur and paws, gentle forest ambience with birds and soft footsteps, no music, no dialogue.",
+                "width": 960,
+                "height": 544,
+                "video_frames": 124,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 11,
+                "vae_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            120886,
+            120859
+          ],
+          "warmup_ms": [
+            121466
+          ],
+          "median_generation_ms": 120872.5,
+          "load_ms": 20117,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 38153816,
+            "peak_gpu_mib": 22452,
+            "sampling_interval_seconds": 5
+          }
+        },
+        {
+          "name": "ci-final-rtx-h3-auto",
+          "config": {
+            "device": "gpu",
+            "backend": "cuda0",
+            "threads": 8,
+            "diffusion_fa": true,
+            "verbosity": 2,
+            "params_backend": "cpu",
+            "performance_profile": "auto"
+          },
+          "requests": [
+            {
+              "name": "prompt-0",
+              "params": {
+                "mode": "txt2vid",
+                "prompt": "A red panda walks slowly along a mossy log in a misty green forest. The camera tracks smoothly beside it. Natural daylight, realistic fur and paws, gentle forest ambience with birds and soft footsteps, no music, no dialogue.",
+                "width": 960,
+                "height": 544,
+                "video_frames": 124,
+                "fps": 24,
+                "steps": 8,
+                "cfg_scale": 1,
+                "seed": 11,
+                "vae_tiling": true
+              }
+            }
+          ],
+          "generation_ms": [
+            111866,
+            112240
+          ],
+          "warmup_ms": [
+            111999
+          ],
+          "median_generation_ms": 112053.0,
+          "load_ms": 20243,
+          "sampled_memory": {
+            "peak_process_group_rss_kib": 38446052,
+            "peak_gpu_mib": 21494,
+            "sampling_interval_seconds": 5
+          }
+        }
+      ],
+      "latency_change_percent": -7.296531469110013,
+      "speedup": 1.0787082898271354
+    }
+  ],
+  "quality": [
+    {
+      "reference": "evidence\\rtx\\results\\rtx-flux-off\\0-1-0.png",
+      "candidate": "evidence\\rtx\\results\\rtx-flux-auto\\0-1-0.png",
+      "width": 1024,
+      "height": 1024,
+      "ssim": 0.999585,
+      "psnr_db": 59.480872660623035,
+      "rmse_0_255": 0.2707051683048786,
+      "mae_0_255": 0.07326857248942058,
+      "max_absolute_difference_0_255": 2,
+      "different_channel_values_percent": 7.326221466064453,
+      "decoded_sha256": [
+        "127a58213c06c363dfd264164618318a860656badce58f4c1bed2585ae1559eb",
+        "022bcf8038f1179d68acb114bc3413f6092dea5f03b4bd53478c3b2d272f69e7"
+      ]
+    },
+    {
+      "reference": "evidence\\rtx\\results\\rtx-flux-off-quality\\0-0-0.png",
+      "candidate": "evidence\\rtx\\results\\rtx-flux-auto-quality\\0-0-0.png",
+      "width": 1024,
+      "height": 1024,
+      "ssim": 0.999552,
+      "psnr_db": 60.44748668455037,
+      "rmse_0_255": 0.2421953753759878,
+      "mae_0_255": 0.05863253275553385,
+      "max_absolute_difference_0_255": 4,
+      "different_channel_values_percent": 5.862172444661458,
+      "decoded_sha256": [
+        "9dc685b3ff3e73ea3eb1faf137aa98c2c642268570a33d720ea75659fd5e130d",
+        "2f07a09057c90b82da01d6ba056c14c3a71245cba29778faae6058a788ea8cc2"
+      ]
+    },
+    {
+      "reference": "evidence\\rtx\\results\\rtx-flux-off-quality\\1-0-0.png",
+      "candidate": "evidence\\rtx\\results\\rtx-flux-auto-quality\\1-0-0.png",
+      "width": 1024,
+      "height": 1024,
+      "ssim": 0.999856,
+      "psnr_db": 58.26614193481619,
+      "rmse_0_255": 0.31133868280534954,
+      "mae_0_255": 0.09684975941975911,
+      "max_absolute_difference_0_255": 4,
+      "different_channel_values_percent": 9.681193033854166,
+      "decoded_sha256": [
+        "798f5a28ad2f5f8cb33fdee5ad53110ff9655fbfd0489614e1daab808e08ad01",
+        "3598f8a87938cb8457315e7e30a040e35a74b906e185112695867c23996f0d15"
+      ]
+    },
+    {
+      "reference": "evidence\\spark\\results\\spark-flux-off\\0-1-0.png",
+      "candidate": "evidence\\spark\\results\\spark-flux-auto\\0-1-0.png",
+      "width": 1024,
+      "height": 1024,
+      "ssim": 0.99957,
+      "psnr_db": 59.465770806104544,
+      "rmse_0_255": 0.27117624337749563,
+      "mae_0_255": 0.07352574666341145,
+      "max_absolute_difference_0_255": 2,
+      "different_channel_values_percent": 7.352034250895183,
+      "decoded_sha256": [
+        "ce61869a094a7d445b7407e1451f45237ea9911c8d080e48bd8eb8d7ac51eed2",
+        "674b818e458851915261d51f6f942baa95369fab02669c48cbc6f7d99209cccf"
+      ]
+    },
+    {
+      "reference": "evidence\\spark\\results\\spark-flux-off-quality\\0-0-0.png",
+      "candidate": "evidence\\spark\\results\\spark-flux-auto-quality\\0-0-0.png",
+      "width": 1024,
+      "height": 1024,
+      "ssim": 0.999551,
+      "psnr_db": 60.49788600040219,
+      "rmse_0_255": 0.2407941215650955,
+      "mae_0_255": 0.05797990163167318,
+      "max_absolute_difference_0_255": 2,
+      "different_channel_values_percent": 5.797894795735677,
+      "decoded_sha256": [
+        "b52d716b2a76ca1668a4e238167e3fbac45c16748517c423b5f8648b06a20012",
+        "6859d32fd7a3124e254015e0052bb78baf10004eb33b08debeb99b9855a0c707"
+      ]
+    },
+    {
+      "reference": "evidence\\spark\\results\\spark-flux-off-quality\\1-0-0.png",
+      "candidate": "evidence\\spark\\results\\spark-flux-auto-quality\\1-0-0.png",
+      "width": 1024,
+      "height": 1024,
+      "ssim": 0.999857,
+      "psnr_db": 58.180620870247125,
+      "rmse_0_255": 0.31441925687824196,
+      "mae_0_255": 0.09872722625732422,
+      "max_absolute_difference_0_255": 4,
+      "different_channel_values_percent": 9.866778055826822,
+      "decoded_sha256": [
+        "3fb3a3df8e0a17b4e5bfa526d7e45a47b63cbd4099c6c441a9d05470bd2e49f1",
+        "205463460e45ab932646c7625a7bb62ac4256d33c2f3987be4b6b2ac7dbccd5c"
+      ]
+    },
+    {
+      "metrics_schema": 2,
+      "reference": "evidence\\mac\\results\\mac-h3-off\\0-1-0.avi",
+      "candidate": "evidence\\mac\\results\\mac-h3-auto\\0-1-0.avi",
+      "video_frames": 124,
+      "video_mae_0_255": 0.0587113369373287,
+      "video_mse_0_255": 0.07921838762386675,
+      "video_psnr_db": 59.14254362148079,
+      "different_channel_values_percent": 5.013750732988088,
+      "decoded_video_sha256": [
+        "eea00a331e585eeb42f2ec2df9aa3a2383f76cae8d9014a51a3075496d89f80e",
+        "09cc39e2dfb8dcdca3d8f8591d4a25e7cefe52eb7140e407da216a281f81eff5"
+      ],
+      "video_max_absolute_difference_0_255": 11,
+      "video_worst_frame_index": 4,
+      "video_worst_frame_psnr_db": 58.16067737898811,
+      "video_ssim": 0.999691,
+      "audio_sample_values": 331200,
+      "audio_rmse_float": 0.0,
+      "audio_max_absolute_error_float": 0.0,
+      "audio_snr_db": "infinity",
+      "audio_sample_rate_hz": 32000,
+      "audio_channels": 2
+    },
+    {
+      "metrics_schema": 2,
+      "reference": "evidence\\rtx\\results\\rtx-h3-off\\0-1-0.avi",
+      "candidate": "evidence\\rtx\\results\\rtx-h3-auto\\0-1-0.avi",
+      "video_frames": 124,
+      "video_mae_0_255": 0.2052031550607474,
+      "video_mse_0_255": 0.28539423434864536,
+      "video_psnr_db": 53.57635165795873,
+      "different_channel_values_percent": 17.286458539228864,
+      "decoded_video_sha256": [
+        "610e7adedebd5baa05fab0026d489ff8ac3d128f83049330a0c3cf95d622ec9e",
+        "e7d8499ca186b965a4f6f3d235e0d57984662e9214e12851b2f9ace92500a557"
+      ],
+      "video_max_absolute_difference_0_255": 15,
+      "video_worst_frame_index": 24,
+      "video_worst_frame_psnr_db": 52.97123838352529,
+      "video_ssim": 0.998652,
+      "audio_sample_values": 331200,
+      "audio_rmse_float": 0.0,
+      "audio_max_absolute_error_float": 0.0,
+      "audio_snr_db": "infinity",
+      "audio_sample_rate_hz": 32000,
+      "audio_channels": 2
+    },
+    {
+      "metrics_schema": 2,
+      "reference": "evidence\\rtx\\results\\rtx-h3-vulkan-off\\0-1-0.avi",
+      "candidate": "evidence\\rtx\\results\\rtx-h3-vulkan-auto\\0-1-0.avi",
+      "video_frames": 124,
+      "video_mae_0_255": 0.2625496877388388,
+      "video_mse_0_255": 0.3677224629140971,
+      "video_psnr_db": 52.47560200616486,
+      "different_channel_values_percent": 22.04279147394845,
+      "decoded_video_sha256": [
+        "f479fdee088c5cc11d7c12de65b3e3d1efa7950b455e82300df71a43bab63e31",
+        "afe78ec806f27c3d5ffbe1f65babc68862e583eda6f4cade595b094d2cabe9ce"
+      ],
+      "video_max_absolute_difference_0_255": 13,
+      "video_worst_frame_index": 26,
+      "video_worst_frame_psnr_db": 51.946415548319976,
+      "video_ssim": 0.997973,
+      "audio_sample_values": 331200,
+      "audio_rmse_float": 0.0,
+      "audio_max_absolute_error_float": 0.0,
+      "audio_snr_db": "infinity",
+      "audio_sample_rate_hz": 32000,
+      "audio_channels": 2
+    },
+    {
+      "metrics_schema": 2,
+      "reference": "evidence\\spark\\results\\spark-h3-off\\0-1-0.avi",
+      "candidate": "evidence\\spark\\results\\spark-h3-auto\\0-1-0.avi",
+      "video_frames": 124,
+      "video_mae_0_255": 0.21014928043630088,
+      "video_mse_0_255": 0.29271255419170356,
+      "video_psnr_db": 53.466390115148855,
+      "different_channel_values_percent": 17.695642447587232,
+      "decoded_video_sha256": [
+        "4462e119168e0b3d272f3d11cb556fdc4d60397baa4c2fcce3e6727331d12a73",
+        "4f40a65fbfbf4830b4b5957a534241cf86fe71e6f04895550f8f7814c23afc77"
+      ],
+      "video_max_absolute_difference_0_255": 14,
+      "video_worst_frame_index": 40,
+      "video_worst_frame_psnr_db": 52.901392501090704,
+      "video_ssim": 0.998637,
+      "audio_sample_values": 331200,
+      "audio_rmse_float": 0.0,
+      "audio_max_absolute_error_float": 0.0,
+      "audio_snr_db": "infinity",
+      "audio_sample_rate_hz": 32000,
+      "audio_channels": 2
+    }
+  ],
+  "ci_source_output_parity": [
+    {
+      "reference": "rtx-flux-off/0-1-0.png",
+      "candidate": "ci-rtx-flux-off/0-1-0.png",
+      "byte_exact": true,
+      "sha256": [
+        "52bdbda179a7263c7b711910a1d179b500cac159ce430b718a9ec9d8b3ce3408",
+        "52bdbda179a7263c7b711910a1d179b500cac159ce430b718a9ec9d8b3ce3408"
+      ]
+    },
+    {
+      "reference": "rtx-flux-auto/0-1-0.png",
+      "candidate": "ci-rtx-flux-auto/0-1-0.png",
+      "byte_exact": true,
+      "sha256": [
+        "5a3d6905a930f611968fa318e6085ffe5f6ab0e7a51512c2627e8f6acc22c8a2",
+        "5a3d6905a930f611968fa318e6085ffe5f6ab0e7a51512c2627e8f6acc22c8a2"
+      ]
+    },
+    {
+      "reference": "rtx-h3-off/0-1-0.avi",
+      "candidate": "ci-rtx-h3-off/0-0-0.avi",
+      "byte_exact": true,
+      "sha256": [
+        "275cc78e75b6ab7cbe568aaef10d3841c60446dfbd45c8162604503a60846962",
+        "275cc78e75b6ab7cbe568aaef10d3841c60446dfbd45c8162604503a60846962"
+      ]
+    },
+    {
+      "reference": "rtx-h3-auto/0-1-0.avi",
+      "candidate": "ci-rtx-h3-auto/0-0-0.avi",
+      "byte_exact": true,
+      "sha256": [
+        "01d305131ac65bbbe738faf54c72f3216edd779d4276f4f30e4dd17436d84d63",
+        "01d305131ac65bbbe738faf54c72f3216edd779d4276f4f30e4dd17436d84d63"
+      ]
+    },
+    {
+      "reference": "ci-rtx-flux-fallbacks-off/1-0-0.png",
+      "candidate": "ci-rtx-flux-fallbacks-auto/1-0-0.png",
+      "byte_exact": true,
+      "sha256": [
+        "52bdbda179a7263c7b711910a1d179b500cac159ce430b718a9ec9d8b3ce3408",
+        "52bdbda179a7263c7b711910a1d179b500cac159ce430b718a9ec9d8b3ce3408"
+      ]
+    },
+    {
+      "reference": "ci-rtx-flux-fallbacks-off/2-0-0.png",
+      "candidate": "ci-rtx-flux-fallbacks-auto/2-0-0.png",
+      "byte_exact": true,
+      "sha256": [
+        "add481720087ea382ed38b9514b7c9c02d6d4224a726d61e5a7d18d8539b768d",
+        "add481720087ea382ed38b9514b7c9c02d6d4224a726d61e5a7d18d8539b768d"
+      ]
+    }
+  ],
+  "ci_binary_records": [
+    {
+      "head": "3af6ae5d231de577a55d40d31fecb187fcfbceae",
+      "binary_sha256": "f920450cde4b2088ef1d90165988ec89acef85eb575f9430133ae6c5fbc1c06d"
+    },
+    {
+      "head": "4e027082eadc94819adfdcde8187d946e875cc56",
+      "binary_sha256": "e9f8f2016d3321f253400ca58bc4ffc61566b684287e9bfcde879ffce19c8b34"
+    }
+  ],
+  "final_validation": {
+    "rtx": {
+      "native_tests": {
+        "addon-complete-native-suite": [
+          "[==========] Running 329 tests from 81 test suites.",
+          "[==========] 329 tests from 81 test suites ran. (821798 ms total)",
+          "[  PASSED  ] 329 tests."
+        ],
+        "addon-release-native-suite": [
+          "[==========] Running 330 tests from 81 test suites.",
+          "[==========] 330 tests from 81 test suites ran. (843089 ms total)",
+          "[  PASSED  ] 330 tests."
+        ],
+        "addon-guard-native-suite": [
+          "[==========] Running 331 tests from 81 test suites.",
+          "[==========] 331 tests from 81 test suites ran. (824660 ms total)",
+          "[  PASSED  ] 331 tests."
+        ],
+        "review2-policy-tests": [
+          "[==========] Running 11 tests from 1 test suite.",
+          "[==========] 11 tests from 1 test suite ran. (145 ms total)",
+          "[  PASSED  ] 11 tests."
+        ],
+        "guard-policy-tests": [
+          "[==========] Running 12 tests from 1 test suite.",
+          "[==========] 12 tests from 1 test suite ran. (149 ms total)",
+          "[  PASSED  ] 12 tests."
+        ]
+      },
+      "parity": [
+        {
+          "reference": "rtx-flux-off/0-1-0.png",
+          "candidate": "ci-final-rtx-flux-off/0-1-0.png",
+          "byte_exact": true,
+          "sha256": [
+            "52bdbda179a7263c7b711910a1d179b500cac159ce430b718a9ec9d8b3ce3408",
+            "52bdbda179a7263c7b711910a1d179b500cac159ce430b718a9ec9d8b3ce3408"
+          ]
+        },
+        {
+          "reference": "rtx-flux-auto/0-1-0.png",
+          "candidate": "ci-final-rtx-flux-auto/0-1-0.png",
+          "byte_exact": true,
+          "sha256": [
+            "5a3d6905a930f611968fa318e6085ffe5f6ab0e7a51512c2627e8f6acc22c8a2",
+            "5a3d6905a930f611968fa318e6085ffe5f6ab0e7a51512c2627e8f6acc22c8a2"
+          ]
+        },
+        {
+          "reference": "rtx-h3-off/0-1-0.avi",
+          "candidate": "ci-final-rtx-h3-off/0-1-0.avi",
+          "byte_exact": true,
+          "sha256": [
+            "275cc78e75b6ab7cbe568aaef10d3841c60446dfbd45c8162604503a60846962",
+            "275cc78e75b6ab7cbe568aaef10d3841c60446dfbd45c8162604503a60846962"
+          ]
+        },
+        {
+          "reference": "rtx-h3-auto/0-1-0.avi",
+          "candidate": "ci-final-rtx-h3-auto/0-1-0.avi",
+          "byte_exact": true,
+          "sha256": [
+            "01d305131ac65bbbe738faf54c72f3216edd779d4276f4f30e4dd17436d84d63",
+            "01d305131ac65bbbe738faf54c72f3216edd779d4276f4f30e4dd17436d84d63"
+          ]
+        }
+      ],
+      "source_sha256": {
+        "addon/src/utils/PerformanceProfiles.cpp": "805cef034d65dad4155a14bfa2e2cd2be19ee72abc7fc15238e22301654694c9",
+        "addon/src/model-interface/SdModel.cpp": "c8a5d47e6292cb3a8488ce08cefe030d10015feb7eb0851988a07b45b257e6a7",
+        "test/unit/test_performance_profiles.cpp": "5f801ef8b54bc964b3b28399c67aec2b616d196625782be18c24129747c61b74"
+      },
+      "output_checks": {
+        "h3-shape-quality.json": [
+          {
+            "file": "0-0-0.avi",
+            "byte_exact": true
+          },
+          {
+            "file": "2-0-0.avi",
+            "byte_exact": true
+          },
+          {
+            "file": "1-0-0.avi",
+            "byte_exact": true
+          }
+        ],
+        "ci-final-fallback-quality.json": [
+          {
+            "file": "1-0-0.png",
+            "byte_exact": true,
+            "sha256": [
+              "6c2398860bc62f2485379497e2874d0ad341bb87d0f07c7ad37e0b1091fb1876",
+              "6c2398860bc62f2485379497e2874d0ad341bb87d0f07c7ad37e0b1091fb1876"
+            ]
+          },
+          {
+            "file": "2-0-0.png",
+            "byte_exact": true,
+            "sha256": [
+              "add481720087ea382ed38b9514b7c9c02d6d4224a726d61e5a7d18d8539b768d",
+              "add481720087ea382ed38b9514b7c9c02d6d4224a726d61e5a7d18d8539b768d"
+            ]
+          }
+        ]
+      }
+    },
+    "spark": {
+      "native_tests": {
+        "addon-complete-native-suite": [
+          "[==========] Running 329 tests from 81 test suites.",
+          "[==========] 329 tests from 81 test suites ran. (1475592 ms total)",
+          "[  PASSED  ] 329 tests."
+        ],
+        "addon-release-native-suite": [
+          "[==========] Running 331 tests from 81 test suites.",
+          "[==========] 331 tests from 81 test suites ran. (1468845 ms total)",
+          "[  PASSED  ] 331 tests."
+        ],
+        "review2-policy-tests": [
+          "[==========] Running 12 tests from 1 test suite.",
+          "[==========] 12 tests from 1 test suite ran. (182 ms total)",
+          "[  PASSED  ] 12 tests."
+        ]
+      },
+      "parity": [
+        {
+          "reference": "spark-h3-off/0-1-0.avi",
+          "candidate": "spark-h3-off-repeat/0-2-0.avi",
+          "byte_exact": true,
+          "sha256": [
+            "481000fe59b386ba7eb79ea0c57248efb878585825793af5b9ae9c4d84040f49",
+            "481000fe59b386ba7eb79ea0c57248efb878585825793af5b9ae9c4d84040f49"
+          ]
+        },
+        {
+          "reference": "spark-h3-off/0-1-0.avi",
+          "candidate": "spark-h3-off-repeat/0-3-0.avi",
+          "byte_exact": true,
+          "sha256": [
+            "481000fe59b386ba7eb79ea0c57248efb878585825793af5b9ae9c4d84040f49",
+            "481000fe59b386ba7eb79ea0c57248efb878585825793af5b9ae9c4d84040f49"
+          ]
+        },
+        {
+          "reference": "spark-h3-auto/0-1-0.avi",
+          "candidate": "spark-h3-auto-repeat/0-2-0.avi",
+          "byte_exact": true,
+          "sha256": [
+            "5bc6eadab4ff2b4d02d383737f3740884332eef740f3ea9e6885a54a13636dc2",
+            "5bc6eadab4ff2b4d02d383737f3740884332eef740f3ea9e6885a54a13636dc2"
+          ]
+        },
+        {
+          "reference": "spark-h3-auto/0-1-0.avi",
+          "candidate": "spark-h3-auto-repeat/0-3-0.avi",
+          "byte_exact": true,
+          "sha256": [
+            "5bc6eadab4ff2b4d02d383737f3740884332eef740f3ea9e6885a54a13636dc2",
+            "5bc6eadab4ff2b4d02d383737f3740884332eef740f3ea9e6885a54a13636dc2"
+          ]
+        }
+      ],
+      "source_sha256": {
+        "addon/src/utils/PerformanceProfiles.cpp": "805cef034d65dad4155a14bfa2e2cd2be19ee72abc7fc15238e22301654694c9",
+        "addon/src/model-interface/SdModel.cpp": "c8a5d47e6292cb3a8488ce08cefe030d10015feb7eb0851988a07b45b257e6a7",
+        "test/unit/test_performance_profiles.cpp": "5f801ef8b54bc964b3b28399c67aec2b616d196625782be18c24129747c61b74"
+      },
+      "output_checks": {}
+    },
+    "mac": {
+      "native_tests": {
+        "addon-complete-native-suite": [
+          "[==========] Running 330 tests from 81 test suites.",
+          "[==========] 330 tests from 81 test suites ran. (49380 ms total)",
+          "[  PASSED  ] 330 tests."
+        ],
+        "addon-guard-native-suite": [
+          "[==========] Running 331 tests from 81 test suites.",
+          "[==========] 331 tests from 81 test suites ran. (52753 ms total)",
+          "[  PASSED  ] 331 tests."
+        ],
+        "guard-policy-tests": [
+          "[==========] Running 12 tests from 1 test suite.",
+          "[==========] 12 tests from 1 test suite ran. (151 ms total)",
+          "[  PASSED  ] 12 tests."
+        ]
+      },
+      "parity": [
+        {
+          "reference": "mac-flux-metal-off/0-0-0.png",
+          "candidate": "mac-flux-metal-auto/0-0-0.png",
+          "byte_exact": true,
+          "sha256": [
+            "f7ce4cd23f249970cbc8a22ad06d0071bd212b1d239bb9d0546aac0f790a6677",
+            "f7ce4cd23f249970cbc8a22ad06d0071bd212b1d239bb9d0546aac0f790a6677"
+          ]
+        },
+        {
+          "reference": "mac-flux-metal-off/0-1-0.png",
+          "candidate": "mac-flux-metal-auto/0-1-0.png",
+          "byte_exact": true,
+          "sha256": [
+            "f7ce4cd23f249970cbc8a22ad06d0071bd212b1d239bb9d0546aac0f790a6677",
+            "f7ce4cd23f249970cbc8a22ad06d0071bd212b1d239bb9d0546aac0f790a6677"
+          ]
+        },
+        {
+          "reference": "mac-flux-metal-off/0-2-0.png",
+          "candidate": "mac-flux-metal-auto/0-2-0.png",
+          "byte_exact": true,
+          "sha256": [
+            "f7ce4cd23f249970cbc8a22ad06d0071bd212b1d239bb9d0546aac0f790a6677",
+            "f7ce4cd23f249970cbc8a22ad06d0071bd212b1d239bb9d0546aac0f790a6677"
+          ]
+        },
+        {
+          "reference": "mac-flux-metal-off/0-3-0.png",
+          "candidate": "mac-flux-metal-auto/0-3-0.png",
+          "byte_exact": true,
+          "sha256": [
+            "f7ce4cd23f249970cbc8a22ad06d0071bd212b1d239bb9d0546aac0f790a6677",
+            "f7ce4cd23f249970cbc8a22ad06d0071bd212b1d239bb9d0546aac0f790a6677"
+          ]
+        },
+        {
+          "reference": "mac-ltx-default-off/0-0-0.avi",
+          "candidate": "mac-ltx-default-auto/0-0-0.avi",
+          "byte_exact": true,
+          "sha256": [
+            "1f4ba8fe79e64c4c03db957412710df98d615eb9699b78128c019e151daea5e8",
+            "1f4ba8fe79e64c4c03db957412710df98d615eb9699b78128c019e151daea5e8"
+          ]
+        },
+        {
+          "reference": "mac-ltx-default-off/0-1-0.avi",
+          "candidate": "mac-ltx-default-auto/0-1-0.avi",
+          "byte_exact": true,
+          "sha256": [
+            "1f4ba8fe79e64c4c03db957412710df98d615eb9699b78128c019e151daea5e8",
+            "1f4ba8fe79e64c4c03db957412710df98d615eb9699b78128c019e151daea5e8"
+          ]
+        },
+        {
+          "reference": "mac-ltx-default-off/0-2-0.avi",
+          "candidate": "mac-ltx-default-auto/0-2-0.avi",
+          "byte_exact": true,
+          "sha256": [
+            "1f4ba8fe79e64c4c03db957412710df98d615eb9699b78128c019e151daea5e8",
+            "1f4ba8fe79e64c4c03db957412710df98d615eb9699b78128c019e151daea5e8"
+          ]
+        },
+        {
+          "reference": "mac-ltx-default-off/0-3-0.avi",
+          "candidate": "mac-ltx-default-auto/0-3-0.avi",
+          "byte_exact": true,
+          "sha256": [
+            "1f4ba8fe79e64c4c03db957412710df98d615eb9699b78128c019e151daea5e8",
+            "1f4ba8fe79e64c4c03db957412710df98d615eb9699b78128c019e151daea5e8"
+          ]
+        }
+      ],
+      "source_sha256": {
+        "addon/src/utils/PerformanceProfiles.cpp": "805cef034d65dad4155a14bfa2e2cd2be19ee72abc7fc15238e22301654694c9",
+        "addon/src/model-interface/SdModel.cpp": "c8a5d47e6292cb3a8488ce08cefe030d10015feb7eb0851988a07b45b257e6a7",
+        "test/unit/test_performance_profiles.cpp": "5f801ef8b54bc964b3b28399c67aec2b616d196625782be18c24129747c61b74"
+      },
+      "output_checks": {
+        "mac-ltx-default-quality.json": [
+          {
+            "file": "0-2-0.avi",
+            "byte_exact": true
+          },
+          {
+            "file": "0-0-0.avi",
+            "byte_exact": true
+          },
+          {
+            "file": "0-1-0.avi",
+            "byte_exact": true
+          },
+          {
+            "file": "0-3-0.avi",
+            "byte_exact": true
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,7 +1,7 @@
 # Performance profiles
 
 `performance_profile` defaults to `auto`. The addon selects only measured
-model/GPU/API combinations whose complete profile improved latency by at least
+model/GPU/API combinations whose complete profile improved warm generation latency by at least
 5%. Set `performance_profile: 'off'` to retain the previous native settings.
 Explicit options, including `flash_attn: false`, take precedence.
 
@@ -62,9 +62,12 @@ The Metal profile requires GPU-resident parameters, at least 96 GiB physical
 memory, 76 GiB available host memory and 64 GiB available Metal working-set budget
 at load. It converts selected transformer matrices to F16; it does not change
 the encoder or VAE precision. The measured improvement was 5.4%, with exact
-output pixels and about 25 GB additional process memory. Unbounded contexts
+output pixels and about 26 GiB additional process memory. Unbounded contexts
 retain the original precision. Memory availability can change after loading;
 callers still need to serialize workloads and handle allocation failures.
+Loading is slower: the final pair took 8.7 → 15.8 s to load. Load plus the first
+clip was 2.4% slower, despite the warm-generation gain. Use `off` for single-clip
+contexts until cold-start validation establishes a benefit for that workload.
 
 ## LTX quality tradeoff and residency
 
@@ -92,3 +95,6 @@ Hardware classification and selection are grouped in
 adding a measured device/API row. The temporary vcpkg overlay carries the two
 engine setters until the engine PR and registry repin are merged; remove the
 overlay before releasing the addon.
+
+See [implementation validation](performance-profiles-validation.md) for timings,
+quality comparisons, memory costs, CI status and remaining release checks.
