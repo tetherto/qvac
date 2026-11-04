@@ -39,8 +39,9 @@ const pack = (dir, dest) =>
 const work = mkdtempSync(join(tmpdir(), 'sdk-consumer-'))
 // As main: the engine packs built. A train's checks install the SDK alone, so nothing has built the checkout's yet.
 if (!existsSync(join(inference, 'dist/index.js'))) {
-  for (const args of [['install', '--ignore-scripts'], ['run', 'build']])
+  for (const args of [['install', '--ignore-scripts'], ['run', 'build']]) {
     execFileSync('npm', args, { cwd: inference, stdio: 'inherit', shell: process.platform === 'win32' })
+  }
 }
 const inferenceTgz = pack(inference, work)
 const sdkTgz = pack(sdk, work)
