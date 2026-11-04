@@ -195,19 +195,8 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   classification: {
-    type: 'ggml-classification',
-    // Bundled weights: the worker finds them itself on desktop, and cannot on mobile, where the
-    // Bare bundle does not expose package data files at `__dirname`.
-    configOn: {
-      mobile: {
-        modelPath: {
-          $packageAsset: {
-            package: '@qvac/classification-ggml',
-            file: 'weights/mobilenetv3_3class_v3_fp16.gguf'
-          }
-        }
-      }
-    }
+    constant: { $const: 'MOBILENETV3_3CLASS_V3_FP16' },
+    type: 'ggml-classification'
   },
 
   echo: {
