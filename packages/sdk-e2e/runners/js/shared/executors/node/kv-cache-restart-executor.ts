@@ -37,7 +37,7 @@ export class KvCacheRestartExecutor extends AbstractModelExecutor<typeof kvCache
     const deadline = Date.now() + timeoutMs
     for (;;) {
       try {
-        return await this.resources.ensureLoaded('llm')
+        return await this.resources.ensureLoaded('llm-no-shared-cache')
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
         const recovering =
@@ -87,7 +87,7 @@ export class KvCacheRestartExecutor extends AbstractModelExecutor<typeof kvCache
         return { passed: false, output: 'Needs at least two messages to stage a restart' }
       }
 
-      let modelId = await this.resources.ensureLoaded('llm')
+      let modelId = await this.resources.ensureLoaded('llm-no-shared-cache')
       history.push({ role: 'user', content: firstMessage })
       const committed = await turn(modelId, [...history], params.cacheKey)
       history.push({ role: 'assistant', content: committed.text })

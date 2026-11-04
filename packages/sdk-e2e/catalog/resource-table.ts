@@ -8,6 +8,12 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: { verbosity: 0, ctx_size: 2048 }
   },
 
+  'llm-no-shared-cache': {
+    constant: { $const: 'LLAMA_3_2_1B_INST_Q4_0' },
+    type: 'llamacpp-completion',
+    config: { verbosity: 0, ctx_size: 2048, cache_share_across_keys: false }
+  },
+
   'llm-small-ctx': {
     constant: { $const: 'LLAMA_3_2_1B_INST_Q4_0' },
     type: 'llamacpp-completion',
@@ -118,13 +124,13 @@ export const RESOURCE_TABLE: ResourceTable = {
   'prefill-llm': {
     constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
     type: 'llamacpp-completion',
-    config: { ctx_size: 4096, tools: true, parallel: 1 }
+    config: { ctx_size: 4096, tools: true, parallel: 1, cache_share_across_keys: false }
   },
 
   'prefill-llm-parallel': {
     constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
     type: 'llamacpp-completion',
-    config: { ctx_size: 4096, tools: true, parallel: 2 }
+    config: { ctx_size: 4096, tools: true, parallel: 2, cache_share_across_keys: false }
   },
 
   'tools-qwen35': {
@@ -132,6 +138,13 @@ export const RESOURCE_TABLE: ResourceTable = {
     constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
     type: 'llamacpp-completion',
     config: { ctx_size: 4096, tools: true }
+  },
+
+  'tools-qwen35-no-shared-cache': {
+    on: ['desktop', 'electron', 'snap'],
+    constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
+    type: 'llamacpp-completion',
+    config: { ctx_size: 4096, tools: true, cache_share_across_keys: false }
   },
 
   'tools-gemma4': {
