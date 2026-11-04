@@ -1,0 +1,134 @@
+diff --git a/include/stable-diffusion.h b/include/stable-diffusion.h
+index 4428be3..f4fecef 100644
+--- a/include/stable-diffusion.h
++++ b/include/stable-diffusion.h
+@@ -561,6 +561,14 @@ SD_API void sd_fit_result_free(sd_fit_result_t* result);
+ 
+ SD_API sd_ctx_t* new_sd_ctx(const sd_ctx_params_t* sd_ctx_params);
+ SD_API void free_sd_ctx(sd_ctx_t* sd_ctx);
++
++// Opt-in H3 graph operations. Call only while the context is idle; default false.
++// Returns false for a null context or a model other than MiniMax-H3.
++SD_API bool sd_set_h3_local_ops(sd_ctx_t* sd_ctx, bool enabled);
++
++// Change the VAE convolution implementation between generation calls.
++// Returns false when the context has no VAE. Call only while the context is idle.
++SD_API bool sd_set_vae_conv_direct(sd_ctx_t* sd_ctx, bool enabled);
+ SD_API void free_sd_audio(sd_audio_t* audio);
+ 
+ SD_API void sd_sample_params_init(sd_sample_params_t* sample_params);
+diff --git a/src/model/diffusion/minimax_h3.hpp b/src/model/diffusion/minimax_h3.hpp
+index f2f18d1..ae3777d 100644
+--- a/src/model/diffusion/minimax_h3.hpp
++++ b/src/model/diffusion/minimax_h3.hpp
+@@ -153,6 +153,8 @@ namespace MiniMaxH3 {
+     };
+ 
+     struct MLP : public UnaryBlock {
++        bool local_ops_enabled = false;
++
+         MLP(int64_t hidden_size,
+             int64_t ffn_hidden_size) {
+             blocks["fc1"] = std::make_shared<Linear>(hidden_size, ffn_hidden_size * 2, false, false, true, 1.f / 128.f);
+@@ -162,6 +164,9 @@ namespace MiniMaxH3 {
+         ggml_tensor* forward(GGMLRunnerContext* ctx, ggml_tensor* x) override {
+             auto fc1 = std::dynamic_pointer_cast<Linear>(blocks["fc1"]);
+             auto fc2 = std::dynamic_pointer_cast<Linear>(blocks["fc2"]);
++            if (local_ops_enabled) {
++                return fc2->forward(ctx, ggml_swiglu(ctx->ggml_ctx, fc1->forward(ctx, x)));
++            }
+             auto uv  = ggml_ext_chunk(ctx->ggml_ctx, fc1->forward(ctx, x), 2, 0);
+             return fc2->forward(ctx, ggml_mul(ctx->ggml_ctx,
+                                               ggml_silu(ctx->ggml_ctx, uv[0]),
+@@ -193,6 +198,7 @@ namespace MiniMaxH3 {
+     struct Attention : public GGMLBlock {
+         int64_t heads;
+         int64_t head_dim;
++        bool local_ops_enabled = false;
+ 
+         Attention(int64_t hidden_size,
+                   int64_t heads,
+@@ -216,10 +222,25 @@ namespace MiniMaxH3 {
+ 
+             int64_t sequence = x->ne[1];
+             int64_t batch    = x->ne[2] * x->ne[3];
+-            auto qkv         = ggml_ext_chunk(ctx->ggml_ctx, qkv_proj->forward(ctx, x), 3, 0);
+-            auto q           = ggml_reshape_4d(ctx->ggml_ctx, qkv[0], head_dim, heads, sequence, batch);
+-            auto k           = ggml_reshape_4d(ctx->ggml_ctx, qkv[1], head_dim, heads, sequence, batch);
+-            auto v           = ggml_reshape_4d(ctx->ggml_ctx, qkv[2], head_dim, heads, sequence, batch);
++            auto projected   = qkv_proj->forward(ctx, x);
++            ggml_tensor* q;
++            ggml_tensor* k;
++            ggml_tensor* v;
++            if (local_ops_enabled) {
++                auto view = [&](int index) {
++                    return ggml_view_4d(ctx->ggml_ctx, projected, head_dim, heads, sequence, batch,
++                                        head_dim * projected->nb[0], projected->nb[1], projected->nb[2],
++                                        index * heads * head_dim * projected->nb[0]);
++                };
++                q = view(0);
++                k = view(1);
++                v = view(2);
++            } else {
++                auto qkv = ggml_ext_chunk(ctx->ggml_ctx, projected, 3, 0);
++                q        = ggml_reshape_4d(ctx->ggml_ctx, qkv[0], head_dim, heads, sequence, batch);
++                k        = ggml_reshape_4d(ctx->ggml_ctx, qkv[1], head_dim, heads, sequence, batch);
++                v        = ggml_reshape_4d(ctx->ggml_ctx, qkv[2], head_dim, heads, sequence, batch);
++            }
+             q                = q_norm->forward(ctx, q);
+             k                = k_norm->forward(ctx, k);
+             if (pe != nullptr) {
+@@ -995,6 +1016,19 @@ namespace MiniMaxH3 {
+             return "minimax_h3";
+         }
+ 
++        void set_local_ops_enabled(bool enabled) {
++            std::vector<GGMLBlock*> blocks;
++            model.get_all_blocks(blocks);
++            for (auto* block : blocks) {
++                if (auto* mlp = dynamic_cast<MLP*>(block)) {
++                    mlp->local_ops_enabled = enabled;
++                }
++                if (auto* attention = dynamic_cast<Attention*>(block)) {
++                    attention->local_ops_enabled = enabled;
++                }
++            }
++        }
++
+         void get_param_tensors(std::map<std::string, ggml_tensor*>& tensors,
+                                const std::string& prefix) override {
+             model.get_param_tensors(tensors, prefix);
+diff --git a/src/stable-diffusion.cpp b/src/stable-diffusion.cpp
+index b33d149..d612d99 100644
+--- a/src/stable-diffusion.cpp
++++ b/src/stable-diffusion.cpp
+@@ -4046,6 +4046,29 @@ sd_ctx_t* new_sd_ctx(const sd_ctx_params_t* sd_ctx_params) {
+     return sd_ctx;
+ }
+ 
++bool sd_set_vae_conv_direct(sd_ctx_t* sd_ctx, bool enabled) {
++    if (sd_ctx == nullptr || sd_ctx->sd == nullptr || !sd_ctx->sd->first_stage_model) {
++        return false;
++    }
++    sd_ctx->sd->first_stage_model->set_conv2d_direct_enabled(enabled);
++    if (sd_ctx->sd->preview_vae) {
++        sd_ctx->sd->preview_vae->set_conv2d_direct_enabled(enabled);
++    }
++    return true;
++}
++
++bool sd_set_h3_local_ops(sd_ctx_t* sd_ctx, bool enabled) {
++    if (sd_ctx == nullptr || sd_ctx->sd == nullptr) {
++        return false;
++    }
++    auto runner = std::dynamic_pointer_cast<MiniMaxH3::MiniMaxH3Runner>(sd_ctx->sd->diffusion_model);
++    if (!runner) {
++        return false;
++    }
++    runner->set_local_ops_enabled(enabled);
++    return true;
++}
++
+ void free_sd_ctx(sd_ctx_t* sd_ctx) {
+     if (sd_ctx->sd != nullptr) {
+         delete sd_ctx->sd;

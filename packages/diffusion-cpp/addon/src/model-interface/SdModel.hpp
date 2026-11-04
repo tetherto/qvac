@@ -17,6 +17,7 @@
 #include "handlers/SdGenHandlers.hpp"
 #include "handlers/SdVidGenHandlers.hpp"
 #include "utils/EsrganUpscaler.hpp"
+#include "utils/PerformanceProfiles.hpp"
 #include "utils/VideoModelCapabilities.hpp"
 
 /**
@@ -211,6 +212,7 @@ private:
     sd_ctx_params_t params{};
     std::string paramsBackend;
     std::string mainGpuBackend;
+    qvac_lib_inference_addon_sd::PerformanceProfile profile;
   };
 
   /** The one mapping from the stored config; load() and assessFit() share it.
@@ -218,6 +220,8 @@ private:
   void fillCtxParams(CtxParams& out) const;
 
   const qvac_lib_inference_addon_sd::SdCtxConfig config_;
+  qvac_lib_inference_addon_sd::PerformanceProfile performanceProfile_;
+  std::string performanceBackend_;
 
   // LTX-2 is inferred from its LTX-only embeddings-connectors input. Its
   // temporal rules are unavailable from the current stable-diffusion C API,

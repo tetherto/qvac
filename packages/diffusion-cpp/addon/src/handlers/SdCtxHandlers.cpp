@@ -718,6 +718,42 @@ const SdCtxHandlersMap SD_CTX_HANDLERS = {
 void applySdCtxHandlers(
     SdCtxConfig& config,
     const std::unordered_map<std::string, std::string>& configMap) {
+  if (const auto it = configMap.find("performance_profile");
+      it != configMap.end()) {
+    if (it->second != "auto" && it->second != "off" &&
+        it->second != "allow-small-changes")
+      throw StatusError(
+          general_error::InvalidArgument,
+          "performance_profile must be auto, off, or allow-small-changes");
+    config.performanceProfile = it->second;
+  }
+  config.explicitFlashAttention = config.explicitFlashAttention ||
+                                  configMap.contains("flash_attn") ||
+                                  configMap.contains("fa");
+  config.explicitVaeConvDirect =
+      config.explicitVaeConvDirect || configMap.contains("vae_conv_direct");
+  config.explicitTensorTypeRules =
+      config.explicitTensorTypeRules || configMap.contains("tensor_type_rules");
+  for (const auto& [key, output] :
+       {std::pair{"performance_max_width", &config.performanceMaxWidth},
+        std::pair{"performance_max_height", &config.performanceMaxHeight},
+        std::pair{"performance_max_frames", &config.performanceMaxFrames}}) {
+    if (const auto it = configMap.find(key); it != configMap.end()) {
+      *output = parseAutoOrPositiveInt(it->second, key);
+      if (*output <= 0)
+        throw StatusError(
+            general_error::InvalidArgument,
+            std::string(key) + " must be a positive integer");
+    }
+  }
+  if ((config.performanceMaxWidth || config.performanceMaxHeight ||
+       config.performanceMaxFrames) &&
+      !(config.performanceMaxWidth && config.performanceMaxHeight &&
+        config.performanceMaxFrames))
+    throw StatusError(
+        general_error::InvalidArgument,
+        "Declare all three performance_max_width, "
+        "performance_max_height and performance_max_frames limits");
   static const std::array<std::pair<const char*, const char*>, 3>
       deprecatedBackendOptions{{
           {"control_net_cpu",
