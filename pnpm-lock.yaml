@@ -246,7 +246,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.25.0
-        version: link:../fabric
+        version: 0.25.0(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -350,7 +350,7 @@ importers:
         version: link:../classification-ggml
       '@qvac/core':
         specifier: 1.0.0-rc.2
-        version: 1.0.0-rc.2(7b059c9b9c3a1294f6488d66e1790692)
+        version: 1.0.0-rc.2(ff8043664d5d5d15930613cefed4c727)
       '@qvac/decoder-audio':
         specifier: 0.8.1
         version: link:../decoder-audio
@@ -359,19 +359,19 @@ importers:
         version: 0.31.0
       '@qvac/embed-llamacpp':
         specifier: 0.53.1
-        version: link:../embed-llamacpp
+        version: 0.53.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1)
       '@qvac/ggml-rpc-server':
         specifier: 0.7.1
         version: link:../ggml-rpc-server
       '@qvac/harness':
         specifier: 1.0.0-rc.15
-        version: 1.0.0-rc.15(058b06128b35d0527a5069900fcad7c6)
+        version: 1.0.0-rc.15(a05ed30db5f0ab0bdd3c81f50e717b0b)
       '@qvac/inference':
         specifier: 0.23.0
         version: link:../inference
       '@qvac/langdetect-text':
         specifier: ^0.1.2
-        version: link:../langdetect-text
+        version: 0.1.3
       '@qvac/llm-llamacpp':
         specifier: 0.65.1
         version: 0.65.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1)
@@ -753,7 +753,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.25.0
-        version: link:../fabric
+        version: 0.25.0(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -890,7 +890,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.25.0
-        version: link:../fabric
+        version: 0.25.0(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)
       bare-net:
         specifier: ^2.3.2
         version: 2.3.2(bare-abort-controller@1.1.2)(bare-buffer@3.7.1)
@@ -1070,13 +1070,13 @@ importers:
         version: 0.31.0
       '@qvac/embed-llamacpp':
         specifier: ^0.53.0
-        version: link:../embed-llamacpp
+        version: 0.53.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/ggml-rpc-server':
         specifier: ^0.7.0
         version: link:../ggml-rpc-server
       '@qvac/langdetect-text':
         specifier: ^0.1.2
-        version: link:../langdetect-text
+        version: 0.1.3
       '@qvac/llm-llamacpp':
         specifier: ^0.65.0
         version: 0.65.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -1170,7 +1170,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.25.0
-        version: link:../fabric
+        version: 0.25.0(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -1382,7 +1382,7 @@ importers:
         version: 0.1.1
       '@qvac/fabric':
         specifier: ^0.25.0
-        version: link:../fabric
+        version: 0.25.0(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -1814,7 +1814,7 @@ importers:
         version: 0.31.0
       '@qvac/embed-llamacpp':
         specifier: ^0.53.0
-        version: link:../embed-llamacpp
+        version: 0.53.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/error':
         specifier: ^0.1.1
         version: 0.1.1
@@ -1826,7 +1826,7 @@ importers:
         version: link:../inference
       '@qvac/langdetect-text':
         specifier: ^0.1.2
-        version: link:../langdetect-text
+        version: 0.1.3
       '@qvac/llm-llamacpp':
         specifier: ^0.65.0
         version: 0.65.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
@@ -2095,7 +2095,7 @@ importers:
         version: 0.1.1
       '@qvac/fabric':
         specifier: ^0.25.0
-        version: link:../fabric
+        version: 0.25.0(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -2196,7 +2196,7 @@ importers:
         version: 0.8.0
       '@qvac/langdetect-text':
         specifier: ^0.1.2
-        version: link:../langdetect-text
+        version: 0.1.3
       '@qvac/logging':
         specifier: ^0.1.0
         version: 0.1.1
@@ -2278,7 +2278,7 @@ importers:
     dependencies:
       '@qvac/fabric':
         specifier: ^0.25.0
-        version: link:../fabric
+        version: 0.25.0(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)
     devDependencies:
       '@qvac/fabric-android-arm64':
         specifier: ^0.25.0
@@ -2364,7 +2364,7 @@ importers:
         version: 0.1.1
       '@qvac/fabric':
         specifier: ^0.25.0
-        version: link:../fabric
+        version: 0.25.0(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -4595,6 +4595,18 @@ packages:
       '@qvac/fabric-ios':
         optional: true
 
+  '@qvac/embed-llamacpp@0.53.1':
+    resolution: {integrity: sha512-O+U0K/aoIgK0lWKvouCIz/wFsewYEHleyckGfIZixMDlCh0w10HdtElCJ/MUuNIy0cBpC6Rgyj68E/5v8LKVIQ==}
+    engines: {bare: '>=1.24.0'}
+    peerDependencies:
+      '@qvac/fabric-android-arm64': ^0.25.0
+      '@qvac/fabric-ios': ^0.25.0
+    peerDependenciesMeta:
+      '@qvac/fabric-android-arm64':
+        optional: true
+      '@qvac/fabric-ios':
+        optional: true
+
   '@qvac/error@0.1.1':
     resolution: {integrity: sha512-Xv7p1wnC/JmsKimGrkvXlcq+AHsG1r33f+uayANuEYe5ThFi+FR3txnN2UPjulwBdDorEnger9/+9ftShAFOAw==}
 
@@ -5005,6 +5017,9 @@ packages:
         optional: true
       '@qvac/vla-ggml':
         optional: true
+
+  '@qvac/langdetect-text@0.1.3':
+    resolution: {integrity: sha512-VDvheNdJSmzdeHy/2GyYhPs76y26/n2v7/99sTJgQXJvmUuBIlfy0T4EK52w2eWeQAnmmBW7aQ9nGV/UF8m1Uw==}
 
   '@qvac/llm-llamacpp@0.61.2':
     resolution: {integrity: sha512-WUsgaKCI7vI2Rp9+rhK8tLQ00nWti4KqFvwQdqYGboLonZ3zFE8RRSA3+kyu4ossmwmEXXA7oCKvkUecHn/JsQ==}
@@ -14855,10 +14870,10 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
-  '@qvac/core@1.0.0-rc.2(7b059c9b9c3a1294f6488d66e1790692)':
+  '@qvac/core@1.0.0-rc.2(ff8043664d5d5d15930613cefed4c727)':
     dependencies:
       '@qvac/error': 0.2.0
-      '@qvac/harness': 1.0.0-rc.8(a695d0c3b49022045ea2673bcc88079d)
+      '@qvac/harness': 1.0.0-rc.8(28347df94c99e9a71e09c72934d854f5)
       '@qvac/logging': 0.2.0
       '@qvac/skills': 0.1.20
       asenion: 0.1.0
@@ -14985,6 +15000,46 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
+  '@qvac/embed-llamacpp@0.53.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
+    dependencies:
+      '@qvac/fabric': 0.25.0(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)
+      '@qvac/infer-base': 0.8.0
+      '@qvac/logging': 0.1.1
+      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-path: 3.0.1
+    optionalDependencies:
+      '@qvac/fabric-android-arm64': 0.25.0
+      '@qvac/fabric-darwin-arm64': 0.25.0
+      '@qvac/fabric-darwin-x64': 0.25.0
+      '@qvac/fabric-ios': 0.25.0
+      '@qvac/fabric-linux-arm64': 0.25.0
+      '@qvac/fabric-linux-x64': 0.25.0
+      '@qvac/fabric-win32-x64': 0.25.0
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
+
+  '@qvac/embed-llamacpp@0.53.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1)':
+    dependencies:
+      '@qvac/fabric': 0.25.0(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)
+      '@qvac/infer-base': 0.8.0
+      '@qvac/logging': 0.1.1
+      bare-fs: 4.7.4(bare-abort-controller@1.1.2)(bare-buffer@3.7.1)
+      bare-path: 3.0.1
+    optionalDependencies:
+      '@qvac/fabric-android-arm64': 0.25.0
+      '@qvac/fabric-darwin-arm64': 0.25.0
+      '@qvac/fabric-darwin-x64': 0.25.0
+      '@qvac/fabric-ios': 0.25.0
+      '@qvac/fabric-linux-arm64': 0.25.0
+      '@qvac/fabric-linux-x64': 0.25.0
+      '@qvac/fabric-win32-x64': 0.25.0
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - react-native-b4a
+
   '@qvac/error@0.1.1': {}
 
   '@qvac/error@0.2.0': {}
@@ -15078,10 +15133,10 @@ snapshots:
       '@qvac/fabric-linux-x64': 0.25.0
       '@qvac/fabric-win32-x64': 0.25.0
 
-  '@qvac/harness@1.0.0-rc.15(058b06128b35d0527a5069900fcad7c6)':
+  '@qvac/harness@1.0.0-rc.15(a05ed30db5f0ab0bdd3c81f50e717b0b)':
     dependencies:
       '@qvac/error': 0.1.1
-      '@qvac/inference': 0.23.0(@qvac/asr-ggml@0.11.2(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))(@qvac/audiogen-ggml@packages+audiogen-ggml)(@qvac/bci-whispercpp@packages+bci-whispercpp)(@qvac/classification-ggml@packages+classification-ggml)(@qvac/decoder-audio@packages+decoder-audio)(@qvac/diffusion-cpp@0.31.0)(@qvac/embed-llamacpp@packages+embed-llamacpp)(@qvac/ggml-rpc-server@packages+ggml-rpc-server)(@qvac/langdetect-text@packages+langdetect-text)(@qvac/llm-llamacpp@0.65.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))(@qvac/ocr-ggml@packages+ocr-ggml)(@qvac/translation-nmtcpp@packages+translation-nmtcpp)(@qvac/tts-ggml@packages+tts-ggml)(@qvac/turbovec-ggml@packages+turbovec-ggml)(@qvac/vla-ggml@packages+vla-ggml)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))
+      '@qvac/inference': 0.23.0(@qvac/asr-ggml@0.11.2(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))(@qvac/audiogen-ggml@packages+audiogen-ggml)(@qvac/bci-whispercpp@packages+bci-whispercpp)(@qvac/classification-ggml@packages+classification-ggml)(@qvac/decoder-audio@packages+decoder-audio)(@qvac/diffusion-cpp@0.31.0)(@qvac/embed-llamacpp@0.53.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))(@qvac/ggml-rpc-server@packages+ggml-rpc-server)(@qvac/langdetect-text@0.1.3)(@qvac/llm-llamacpp@0.65.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))(@qvac/ocr-ggml@packages+ocr-ggml)(@qvac/translation-nmtcpp@packages+translation-nmtcpp)(@qvac/tts-ggml@packages+tts-ggml)(@qvac/turbovec-ggml@packages+turbovec-ggml)(@qvac/vla-ggml@packages+vla-ggml)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))
       '@qvac/logging': 0.1.1
       '@qvac/skills': 0.1.20
       '@xmldom/xmldom': 0.9.12
@@ -15137,8 +15192,8 @@ snapshots:
       '@qvac/audiogen-ggml': link:packages/audiogen-ggml
       '@qvac/decoder-audio': link:packages/decoder-audio
       '@qvac/diffusion-cpp': 0.31.0
-      '@qvac/embed-llamacpp': link:packages/embed-llamacpp
-      '@qvac/langdetect-text': link:packages/langdetect-text
+      '@qvac/embed-llamacpp': 0.53.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1)
+      '@qvac/langdetect-text': 0.1.3
       '@qvac/llm-llamacpp': 0.65.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1)
       '@qvac/sdk': link:packages/sdk
       '@qvac/translation-nmtcpp': link:packages/translation-nmtcpp
@@ -15164,10 +15219,10 @@ snapshots:
       - react-native-b4a
       - sodium-javascript
 
-  '@qvac/harness@1.0.0-rc.8(a695d0c3b49022045ea2673bcc88079d)':
+  '@qvac/harness@1.0.0-rc.8(28347df94c99e9a71e09c72934d854f5)':
     dependencies:
       '@qvac/error': 0.1.1
-      '@qvac/inference': 0.22.0(@qvac/asr-ggml@0.11.2(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))(@qvac/audiogen-ggml@packages+audiogen-ggml)(@qvac/bci-whispercpp@packages+bci-whispercpp)(@qvac/classification-ggml@packages+classification-ggml)(@qvac/decoder-audio@packages+decoder-audio)(@qvac/diffusion-cpp@0.31.0)(@qvac/embed-llamacpp@packages+embed-llamacpp)(@qvac/ggml-rpc-server@packages+ggml-rpc-server)(@qvac/langdetect-text@packages+langdetect-text)(@qvac/llm-llamacpp@0.65.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))(@qvac/ocr-ggml@packages+ocr-ggml)(@qvac/translation-nmtcpp@packages+translation-nmtcpp)(@qvac/tts-ggml@packages+tts-ggml)(@qvac/vla-ggml@packages+vla-ggml)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))
+      '@qvac/inference': 0.22.0(@qvac/asr-ggml@0.11.2(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))(@qvac/audiogen-ggml@packages+audiogen-ggml)(@qvac/bci-whispercpp@packages+bci-whispercpp)(@qvac/classification-ggml@packages+classification-ggml)(@qvac/decoder-audio@packages+decoder-audio)(@qvac/diffusion-cpp@0.31.0)(@qvac/embed-llamacpp@0.53.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))(@qvac/ggml-rpc-server@packages+ggml-rpc-server)(@qvac/langdetect-text@0.1.3)(@qvac/llm-llamacpp@0.65.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))(@qvac/ocr-ggml@packages+ocr-ggml)(@qvac/translation-nmtcpp@packages+translation-nmtcpp)(@qvac/tts-ggml@packages+tts-ggml)(@qvac/vla-ggml@packages+vla-ggml)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))
       '@qvac/logging': 0.1.1
       '@qvac/skills': 0.1.20
       '@xmldom/xmldom': 0.9.12
@@ -15223,8 +15278,8 @@ snapshots:
       '@qvac/audiogen-ggml': link:packages/audiogen-ggml
       '@qvac/decoder-audio': link:packages/decoder-audio
       '@qvac/diffusion-cpp': 0.31.0
-      '@qvac/embed-llamacpp': link:packages/embed-llamacpp
-      '@qvac/langdetect-text': link:packages/langdetect-text
+      '@qvac/embed-llamacpp': 0.53.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1)
+      '@qvac/langdetect-text': 0.1.3
       '@qvac/llm-llamacpp': 0.65.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1)
       '@qvac/sdk': link:packages/sdk
       '@qvac/translation-nmtcpp': link:packages/translation-nmtcpp
@@ -15274,7 +15329,7 @@ snapshots:
       bare-events: 2.9.1(bare-abort-controller@1.1.2)
       bare-os: 3.9.3
 
-  '@qvac/inference@0.22.0(@qvac/asr-ggml@0.11.2(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))(@qvac/audiogen-ggml@packages+audiogen-ggml)(@qvac/bci-whispercpp@packages+bci-whispercpp)(@qvac/classification-ggml@packages+classification-ggml)(@qvac/decoder-audio@packages+decoder-audio)(@qvac/diffusion-cpp@0.31.0)(@qvac/embed-llamacpp@packages+embed-llamacpp)(@qvac/ggml-rpc-server@packages+ggml-rpc-server)(@qvac/langdetect-text@packages+langdetect-text)(@qvac/llm-llamacpp@0.65.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))(@qvac/ocr-ggml@packages+ocr-ggml)(@qvac/translation-nmtcpp@packages+translation-nmtcpp)(@qvac/tts-ggml@packages+tts-ggml)(@qvac/vla-ggml@packages+vla-ggml)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))':
+  '@qvac/inference@0.22.0(@qvac/asr-ggml@0.11.2(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))(@qvac/audiogen-ggml@packages+audiogen-ggml)(@qvac/bci-whispercpp@packages+bci-whispercpp)(@qvac/classification-ggml@packages+classification-ggml)(@qvac/decoder-audio@packages+decoder-audio)(@qvac/diffusion-cpp@0.31.0)(@qvac/embed-llamacpp@0.53.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))(@qvac/ggml-rpc-server@packages+ggml-rpc-server)(@qvac/langdetect-text@0.1.3)(@qvac/llm-llamacpp@0.65.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))(@qvac/ocr-ggml@packages+ocr-ggml)(@qvac/translation-nmtcpp@packages+translation-nmtcpp)(@qvac/tts-ggml@packages+tts-ggml)(@qvac/vla-ggml@packages+vla-ggml)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))':
     dependencies:
       '@qvac/error': 0.1.1
       '@qvac/logging': 0.1.1
@@ -15314,9 +15369,9 @@ snapshots:
       '@qvac/classification-ggml': link:packages/classification-ggml
       '@qvac/decoder-audio': link:packages/decoder-audio
       '@qvac/diffusion-cpp': 0.31.0
-      '@qvac/embed-llamacpp': link:packages/embed-llamacpp
+      '@qvac/embed-llamacpp': 0.53.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1)
       '@qvac/ggml-rpc-server': link:packages/ggml-rpc-server
-      '@qvac/langdetect-text': link:packages/langdetect-text
+      '@qvac/langdetect-text': 0.1.3
       '@qvac/llm-llamacpp': 0.65.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1)
       '@qvac/ocr-ggml': link:packages/ocr-ggml
       '@qvac/translation-nmtcpp': link:packages/translation-nmtcpp
@@ -15328,7 +15383,7 @@ snapshots:
       - react-native-b4a
       - sodium-javascript
 
-  '@qvac/inference@0.23.0(@qvac/asr-ggml@0.11.2(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))(@qvac/audiogen-ggml@packages+audiogen-ggml)(@qvac/bci-whispercpp@packages+bci-whispercpp)(@qvac/classification-ggml@packages+classification-ggml)(@qvac/decoder-audio@packages+decoder-audio)(@qvac/diffusion-cpp@0.31.0)(@qvac/embed-llamacpp@packages+embed-llamacpp)(@qvac/ggml-rpc-server@packages+ggml-rpc-server)(@qvac/langdetect-text@packages+langdetect-text)(@qvac/llm-llamacpp@0.65.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))(@qvac/ocr-ggml@packages+ocr-ggml)(@qvac/translation-nmtcpp@packages+translation-nmtcpp)(@qvac/tts-ggml@packages+tts-ggml)(@qvac/turbovec-ggml@packages+turbovec-ggml)(@qvac/vla-ggml@packages+vla-ggml)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))':
+  '@qvac/inference@0.23.0(@qvac/asr-ggml@0.11.2(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))(@qvac/audiogen-ggml@packages+audiogen-ggml)(@qvac/bci-whispercpp@packages+bci-whispercpp)(@qvac/classification-ggml@packages+classification-ggml)(@qvac/decoder-audio@packages+decoder-audio)(@qvac/diffusion-cpp@0.31.0)(@qvac/embed-llamacpp@0.53.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))(@qvac/ggml-rpc-server@packages+ggml-rpc-server)(@qvac/langdetect-text@0.1.3)(@qvac/llm-llamacpp@0.65.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))(@qvac/ocr-ggml@packages+ocr-ggml)(@qvac/translation-nmtcpp@packages+translation-nmtcpp)(@qvac/tts-ggml@packages+tts-ggml)(@qvac/turbovec-ggml@packages+turbovec-ggml)(@qvac/vla-ggml@packages+vla-ggml)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.7.1))':
     dependencies:
       '@qvac/error': 0.1.1
       '@qvac/logging': 0.1.1
@@ -15366,9 +15421,9 @@ snapshots:
       '@qvac/classification-ggml': link:packages/classification-ggml
       '@qvac/decoder-audio': link:packages/decoder-audio
       '@qvac/diffusion-cpp': 0.31.0
-      '@qvac/embed-llamacpp': link:packages/embed-llamacpp
+      '@qvac/embed-llamacpp': 0.53.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1)
       '@qvac/ggml-rpc-server': link:packages/ggml-rpc-server
-      '@qvac/langdetect-text': link:packages/langdetect-text
+      '@qvac/langdetect-text': 0.1.3
       '@qvac/llm-llamacpp': 0.65.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1)
       '@qvac/ocr-ggml': link:packages/ocr-ggml
       '@qvac/translation-nmtcpp': link:packages/translation-nmtcpp
@@ -15380,6 +15435,10 @@ snapshots:
       - bare-pipe
       - react-native-b4a
       - sodium-javascript
+
+  '@qvac/langdetect-text@0.1.3':
+    dependencies:
+      tinyld: 1.3.4
 
   '@qvac/llm-llamacpp@0.61.2(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)(bare-abort-controller@1.1.2)(bare-buffer@3.7.1)':
     dependencies:

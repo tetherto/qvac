@@ -225,6 +225,15 @@ jobs:
       - name: Check @qvac/sdk
         run: node .github/scripts/check-shared-runtime-libs.mjs packages/sdk --local packages/inference
 
+  # publish-inference.yml's Pear e2e, on the train's @qvac/inference tarball.
+  pear-e2e:
+    name: Pear e2e
+    needs: [train, build]
+    if: needs.train.outputs.moved != '[]' && contains(fromJSON(needs.train.outputs.checks), 'pear-e2e')
+    uses: ./.github/workflows/test-inference-pear-e2e.yml
+    with:
+      tarballs-artifact: tarballs-${{ needs.train.outputs.name }}
+
   # Each package's own checks, as on its release PR, with every train package
   # installed from a tarball of this commit. Its tarballs are its own: the
   # publish job never takes anything from this run.
@@ -324,6 +333,7 @@ jobs:
       - shared-runtime-libs
       - package-checks
       - sdk-python
+      - pear-e2e
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5

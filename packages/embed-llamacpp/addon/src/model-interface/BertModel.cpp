@@ -15,6 +15,7 @@
 #include "inference-addon-cpp/GGUFShards.hpp"
 #include "logging.hpp"
 #include "utils.hpp"
+#include "utils/LlamaBatch.hpp"
 
 using namespace qvac_lib_infer_llamacpp_embed::errors;
 using namespace qvac_lib_infer_llamacpp_embed::logging;
@@ -26,8 +27,7 @@ void batchAddSeq(
     llama_seq_id seqId) {
   size_t numTokens = tokens.size();
   for (size_t i = 0; i < numTokens; i++) {
-    common_batch_add(
-        batch, tokens[i], static_cast<llama_pos>(i), {seqId}, true);
+    llamaBatchAdd(batch, tokens[i], static_cast<llama_pos>(i), {seqId}, true);
   }
 }
 
@@ -525,7 +525,7 @@ void BertModel::initializeBackend(
 void BertModel::reset() {
   stopCancelled_.store(false);
   // Clear the batch state - this is the most important part
-  common_batch_clear(batch_);
+  llamaBatchClear(batch_);
 
   // Clear memory and KV cache (llama_memory_clear handles both)
   if (ctx_ != nullptr) {
@@ -632,7 +632,7 @@ BertEmbeddings BertModel::processBatched(
           (pooling_type == LLAMA_POOLING_TYPE_NONE ? batch_.n_tokens
                                                    : numPromptsInBatch);
       numPromptsInBatch = 0;
-      common_batch_clear(batch_);
+      llamaBatchClear(batch_);
     }
 
     // add to batch
