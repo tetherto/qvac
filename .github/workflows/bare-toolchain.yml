@@ -3,7 +3,7 @@ name: Bare toolchain
 # Watches the bare toolchain CI builds with, which .github/bare-toolchain pins.
 #
 # On a pull request that moves the lock, every OS installs it and checks that
-# bare-make, clang and llvm-profdata on PATH come from it. The builds
+# bare-make, bare-link, clang and llvm-profdata on PATH come from it. The builds
 # run from On PR Trigger (Fabric), which lists the lockfile in its paths, and
 # On PR Trigger (nx), where the lockfile is an on-pr input of llm-llamacpp.
 #

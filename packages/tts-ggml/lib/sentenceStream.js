@@ -324,6 +324,9 @@ class SentenceStreamer {
         if (data.sampleRate != null) {
             enriched.sampleRate = data.sampleRate;
         }
+        if (data.speechTokenIds !== undefined) {
+            enriched.speechTokenIds = data.speechTokenIds;
+        }
         if (!context.textStreamMode) {
             enriched.isLast = index >= context.chunks.length - 1 && data.isLast !== false;
         }
