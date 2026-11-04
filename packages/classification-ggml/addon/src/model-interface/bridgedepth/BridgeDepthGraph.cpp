@@ -1224,7 +1224,7 @@ struct BridgeDepthGraph::Impl {
   // v_rpe. q [C, Tq, nW], k and v [C, Tk, nW], table [3C, (2w-1)^2] with the 3C
   // laid out (head, {q, k, v}, c), idx I32 [Tk*Tq] already expanded over the M
   // query and N key tokens of a pixel, mask [Tk, Tq, 1, nW] or [Tk, Tq] or
-  // null. The rpe terms are batched mat-vecs over (i, head) or (j, head).
+  // null. The rpe terms are batched products over (i, head) or (j, head).
   T* rpeAttention(
       ggml_context* ctx, T* q, T* k, T* v, T* table, T* idx, T* mask) {
     const int64_t cDim = q->ne[0], tokQ = q->ne[1], tokK = k->ne[1],
@@ -1271,35 +1271,47 @@ struct BridgeDepthGraph::Impl {
         dHead,
         tokQ * nHeads); // [j, c, (i, h)]
 
+    // The rpe tables have no window dim. Vulkan runs mul_mat on the CPU when
+    // src0 and src1 differ in ne3, so the windows go into src1's ne1 instead
+    // of being broadcast: [inner, rows, nW] -> [inner, nW, rows].
+    auto windowsAsCols = [&](T* t, int64_t inner, int64_t rows) {
+      return ggml_cont(
+          ctx,
+          ggml_permute(
+              ctx, ggml_reshape_3d(ctx, t, inner, rows, nW), 0, 2, 1, 3));
+    };
     T* attn = ggml_mul_mat(ctx, kh, qh); // [Tk, Tq, Hh, nW]
     T* qr = ggml_mul_mat(
+        ctx, kRpe, windowsAsCols(qh, dHead, tokQ * nHeads)); // [Tk, nW, Tq*Hh]
+    qr = ggml_cont(
         ctx,
-        kRpe,
-        ggml_reshape_4d(
-            ctx, qh, dHead, 1, tokQ * nHeads, nW)); // [Tk, 1, Tq*Hh, nW]
-    attn =
-        ggml_add(ctx, attn, ggml_reshape_4d(ctx, qr, tokK, tokQ, nHeads, nW));
+        ggml_permute(
+            ctx, ggml_reshape_4d(ctx, qr, tokK, nW, tokQ, nHeads), 0, 3, 1, 2));
+    attn = ggml_add(ctx, attn, qr);
     T* kr = ggml_mul_mat(
-        ctx,
-        qRpe,
-        ggml_reshape_4d(
-            ctx, kh, dHead, 1, tokK * nHeads, nW)); // [Tq, 1, Tk*Hh, nW]
+        ctx, qRpe, windowsAsCols(kh, dHead, tokK * nHeads)); // [Tq, nW, Tk*Hh]
     kr = ggml_cont(
         ctx,
         ggml_permute(
-            ctx, ggml_reshape_4d(ctx, kr, tokQ, tokK, nHeads, nW), 1, 0, 2, 3));
+            ctx, ggml_reshape_4d(ctx, kr, tokQ, nW, tokK, nHeads), 1, 3, 0, 2));
     attn = ggml_add(ctx, attn, kr);
     attn = ggml_soft_max_ext(
         ctx, attn, mask, 1.0f / std::sqrt(static_cast<float>(dHead)), 0.0f);
     T* vt = ggml_cont(ctx, ggml_transpose(ctx, vh)); // [Tk, Dh, Hh, nW]
     T* o = ggml_mul_mat(ctx, vt, attn);              // [Dh, Tq, Hh, nW]
     T* vr = ggml_mul_mat(
+        ctx, vRpe, windowsAsCols(attn, tokK, tokQ * nHeads)); // [Dh, nW, Tq*Hh]
+    vr = ggml_cont(
         ctx,
-        vRpe,
-        ggml_reshape_4d(
-            ctx, attn, tokK, 1, tokQ * nHeads, nW)); // [Dh, 1, Tq*Hh, nW]
-    o = ggml_add(ctx, o, ggml_reshape_4d(ctx, vr, dHead, tokQ, nHeads, nW));
+        ggml_permute(
+            ctx,
+            ggml_reshape_4d(ctx, vr, dHead, nW, tokQ, nHeads),
+            0,
+            3,
+            2,
+            1));
     o = ggml_cont(ctx, ggml_permute(ctx, o, 0, 2, 1, 3)); // [Dh, Hh, Tq, nW]
+    o = ggml_add(ctx, o, vr);
     return ggml_reshape_3d(ctx, o, cDim, tokQ, nW);
   }
 

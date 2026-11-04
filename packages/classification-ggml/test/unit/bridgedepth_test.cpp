@@ -265,9 +265,9 @@ protected:
 };
 
 // Torch and ggml break top-k ties in the DPN differently; feeding the
-// reference seeds isolates every other op. Measured 2026-11-03: CPU 99.99%
-// within 0.05 px (M5 Pro and x86), CUDA 99.93% (T4), Metal 99.86% (M5 Pro),
-// Vulkan 99.65% (T4). Metal and Vulkan stage F32 matmul operands as half in
+// reference seeds isolates every other op. Measured 2026-11-04: CPU 99.99%
+// within 0.05 px (M5 Pro and x86), CUDA 99.93% (T4), Metal 99.75% (M5 Pro),
+// Vulkan 99.63% (T4). Metal and Vulkan stage F32 matmul operands as half in
 // shared memory (Vulkan when the device has fp16 or coopmat2), so their gate
 // is 99% within 0.2 px; both measure 99.8% or more there.
 TEST_F(BridgeDepthReference, MatchesTorchWithReferenceSeeds) {

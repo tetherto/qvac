@@ -43,10 +43,10 @@ foreground disparity), compared with the original PyTorch model in FP32 on CPU.
 | Backend | Reference DPN seeds, within 0.05 px | Own seeds, within 0.2 px |
 |---|---|---|
 | CPU (Apple M5 Pro) | 99.99% | 99.8% |
-| Metal (Apple M5 Pro) | 99.86% | 99.8% |
+| Metal (Apple M5 Pro) | 99.75% | 99.8% |
 | CPU (Linux x64) | 99.99% | 99.8% |
 | CUDA (Tesla T4) | 99.93% | 99.8% |
-| Vulkan (Tesla T4) | 99.65% | 99.8% |
+| Vulkan (Tesla T4) | 99.63% | 99.8% |
 
 The DPN picks two disparity proposals per pixel with a top-k. Where two
 candidates tie, ggml and PyTorch keep a different one, and the difference

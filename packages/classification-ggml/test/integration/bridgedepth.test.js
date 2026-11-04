@@ -89,7 +89,7 @@ test(
         `${backend}: ${fraction} within 0.2 px, stats=${JSON.stringify(model.getRuntimeStats())}`
       )
       // Top-k tie breaks in the DPN differ from torch on a few pixels. Measured
-      // on the fixture: CPU and CUDA 99.81%, Metal and Vulkan 99.79%.
+      // on the fixture: CPU, CUDA and Vulkan 99.8%, Metal 99.79%.
       t.ok(fraction >= 0.99, 'matches the PyTorch disparity')
       const stats = model.getRuntimeStats()
       t.ok(stats.total_time_ms > 0)
