@@ -32,7 +32,7 @@ const RULES: Rule[] = [
 
   // ── the packaged Electron app, Snap included ─────────────────────────────
   {
-    match: /^(diffusion-|addon-logging-diffusion$)/,
+    match: /^(diffusion-|session-diffusion-|addon-logging-diffusion$)/,
     skip: {
       reason:
         'The packaged Electron pass, Snap included, skips diffusion: image generation takes too long for it',
@@ -141,7 +141,7 @@ const RULES: Rule[] = [
     skip: { reason: 'Tools test disabled on mobile', platforms: ['mobile'] }
   },
   {
-    match: /^(diffusion-|addon-logging-diffusion$)/,
+    match: /^(diffusion-|session-diffusion-|addon-logging-diffusion$)/,
     skip: {
       reason: 'Diffusion cold-load is too heavy for Device Farm devices (OOM, 3+GB)',
       platforms: ['mobile']
