@@ -133,6 +133,15 @@ export interface HttpServer {
   decorate(name: string, value: unknown): this
   addHook(name: 'onRequest' | 'preValidation' | 'preHandler' | 'onResponse', hook: HttpHook): this
   addHook(name: 'onClose', hook: (app: HttpServer, done: HookDone) => unknown): this
+  addHook(
+    name: 'onError',
+    hook: (
+      req: HttpRequest,
+      reply: HttpReply,
+      error: import('./schema.js').HttpErrorShape,
+      done: HookDone
+    ) => unknown
+  ): this
   setErrorHandler(
     handler: (
       error: import('./schema.js').HttpErrorShape,

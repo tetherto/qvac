@@ -554,18 +554,23 @@ export class ProductApp {
 
   approve({ approved, scope = 'once' }: { approved: boolean; scope?: 'once' | 'always' }): Command {
     const pending = this.pending!
+    const chatId = this.chatId
     this.pending = null
-    return this.effect(
-      () =>
-        this.engine!.resolveApproval({
+    return async () => {
+      try {
+        await this.engine!.resolveApproval({
           meshId: this.meshId!,
           chunkId: pending.id!,
           approved,
           scope,
           agentId: pending.detail.agentId ?? null
-        }),
-      'chat.noop'
-    )
+        })
+        return { type: 'chat.noop' }
+      } catch (error) {
+        if (this.chatId === chatId && this.pending === null) this.pending = pending
+        return { type: 'product.error', error }
+      }
+    }
   }
 
   useModel(name: string): Command {
@@ -2385,9 +2390,9 @@ function noop() {}
 
 // `~/…/tail` of a path label that keeps as many trailing segments as fit in max cells.
 function shortPath(text: string, max: number) {
-  const parts = text.split('/')
-  for (let i = 1; i < parts.length; i++) {
-    const tail = `${parts[0]}/…/${parts.slice(i).join('/')}`
+  const [head, ...rest] = text.split('/')
+  for (; rest.length > 0; rest.shift()) {
+    const tail = `${head}/…/${rest.join('/')}`
     if (tail.length <= max) {
       return tail
     }

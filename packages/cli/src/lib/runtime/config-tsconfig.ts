@@ -163,7 +163,10 @@ export function configAliases(entry: string): (specifier: string) => string[] {
       ) {
         const middle = specifier.slice(before.length, after ? -after.length : undefined)
         return targets.map((target) =>
-          path.resolve(options.baseUrl ?? options.pathsBase!, target.replace('*', middle))
+          path.resolve(
+            options.baseUrl ?? options.pathsBase!,
+            target.replaceAll('*', () => middle)
+          )
         )
       }
     }

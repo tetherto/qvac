@@ -7,7 +7,10 @@ import {
   audioGenerationBody,
   audioUnderstandingBody
 } from '@/lib/api/extensions/default/schemas/music'
-import { createMusicJobsStore, musicJobResource } from '@/lib/api/extensions/default/music-jobs-store'
+import {
+  createMusicJobsStore,
+  musicJobResource
+} from '@/lib/api/extensions/default/music-jobs-store'
 import { tearDownMusicJob } from '@/lib/api/extensions/default/routes/music'
 import { buildWavHeader } from '@/lib/api/extensions/openai/audio'
 import { extensionErrorCodes } from '@/lib/api/core/extensions'

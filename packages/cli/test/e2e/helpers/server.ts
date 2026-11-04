@@ -88,10 +88,7 @@ export function useServer(opts: CreateServerOptions = {}): () => HttpServer {
 // would interfere with the test runner.
 // One shared server per file, since model loads are expensive and node:test
 // isolates files into separate processes.
-export function useModelServer(
-  config: unknown,
-  opts: CreateServerOptions = {}
-): () => HttpServer {
+export function useModelServer(config: unknown, opts: CreateServerOptions = {}): () => HttpServer {
   let app: HttpServer | undefined
   let dir: string | undefined
   before(async () => {

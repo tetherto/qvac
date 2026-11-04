@@ -103,7 +103,7 @@ export async function* multipartParts(
         fieldname: name,
         filename,
         mimetype: headers['content-type'] ?? 'application/octet-stream',
-        toBuffer: () => Promise.resolve(value)
+        toBuffer: () => Promise.resolve(Buffer.from(value))
       }
     } else {
       if (++fields > (limits.fields ?? 1000)) throw malformed('Too many multipart fields')

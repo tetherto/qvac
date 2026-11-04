@@ -162,7 +162,7 @@ export async function createCoreServer(
         'This endpoint is admin-only. Start the server with --enable-admin or serve.enableAdmin: true.'
       )
     }
-    if (config?.admin === true && !adminOriginAllowed(req.headers.origin)) {
+    if (config?.admin === true && !adminOriginAllowed(req.headers['origin'])) {
       throw new HttpError(
         403,
         'origin_not_allowed',

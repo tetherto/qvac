@@ -21,7 +21,7 @@ import { multipartBodyLimit, multipartParts } from './multipart.js'
 import { validate, serializerCompiler, operation } from './schema.js'
 import type { HttpErrorShape } from './schema.js'
 
-type HookName = 'onRequest' | 'preValidation' | 'preHandler' | 'onResponse'
+type HookName = 'onRequest' | 'preValidation' | 'preHandler' | 'onResponse' | 'onError'
 type LifecycleHook = (server: HttpServer, done: HookDone) => unknown
 type ErrorHandler = (error: HttpErrorShape, req: HttpRequest, reply: HttpReply) => unknown
 interface Route {
@@ -85,14 +85,17 @@ class Reply implements HttpReply {
         this.schema?.response?.[`${Math.floor(this.statusCode / 100)}xx`] ??
         this.schema?.response?.['default']
       data = schema ? serializerCompiler({ schema })(payload) : JSON.stringify(payload)
-      if (!this.raw.hasHeader('content-type')) this.type('application/json; charset=utf-8')
+      if (!this.raw.hasHeader('content-type')) {
+        this.raw.setHeader('content-type', 'application/json; charset=utf-8')
+      }
     }
     if (data !== undefined) {
       if (!this.raw.hasHeader('content-type')) {
-        this.type(
-          typeof data === 'string' ? 'text/plain; charset=utf-8' : 'application/octet-stream'
-        )
+        if (typeof data === 'string')
+          this.raw.setHeader('content-type', 'text/plain; charset=utf-8')
+        else this.raw.setHeader('content-type', 'application/octet-stream')
       }
+      this.raw.setHeader('x-content-type-options', 'nosniff')
       if (!this.raw.hasHeader('content-length')) {
         this.header('content-length', Buffer.byteLength(data))
       }
@@ -346,15 +349,16 @@ class Scope {
     name: HookName,
     req: HttpRequest,
     reply: HttpReply,
-    extra?: HttpHook | readonly HttpHook[]
+    extra?: HttpHook | readonly HttpHook[],
+    error?: HttpErrorShape
   ): Promise<void> {
     const list = [
       ...this.chain().flatMap((scope) => scope.ownHooks.get(name) ?? []),
       ...hooks(extra)
     ]
     for (const hook of list) {
-      await invoke(hook, this.public(), [req, reply])
-      if (name !== 'onResponse' && reply.sent) break
+      await invoke(hook, this.public(), error ? [req, reply, error] : [req, reply])
+      if (name !== 'onResponse' && name !== 'onError' && reply.sent) break
     }
   }
   private async dispatch(raw: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -454,6 +458,7 @@ class Scope {
     } catch (error) {
       try {
         const converted = asError(error)
+        await scope.runHooks('onError', req, reply, undefined, converted).catch(() => {})
         const handler = scope
           .chain()
           .reverse()
