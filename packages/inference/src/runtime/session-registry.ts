@@ -51,6 +51,16 @@ export function assertSessionOpen(id: string): void {
   if (!isSessionOpen(id)) throw new SessionNotOpenError(id)
 }
 
+/**
+ * The open-session check for a request as it arrived on the wire. A request
+ * runs as the owner only by naming no session: the owner id itself is refused
+ * so a client cannot act as the owner by sending the string.
+ */
+export function assertWireSessionOpen(request: { sessionId?: string | undefined }): void {
+  if (request.sessionId === OWNER_SESSION_ID) throw new SessionNotOpenError(OWNER_SESSION_ID)
+  assertSessionOpen(request.sessionId ?? OWNER_SESSION_ID)
+}
+
 export function listSessions(): SessionEntry[] {
   return Array.from(sessions.values())
 }

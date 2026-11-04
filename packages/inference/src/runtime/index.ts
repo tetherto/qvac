@@ -18,6 +18,7 @@ export {
   openSession,
   closeSession,
   assertSessionOpen,
+  assertWireSessionOpen,
   isSessionOpen,
   isOwnerSession,
   listSessions,

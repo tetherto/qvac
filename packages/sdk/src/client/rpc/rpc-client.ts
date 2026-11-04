@@ -271,14 +271,15 @@ function onWorkerLost(): void {
  * A request made through a session handle carries the session id. The call
  * waits for the session's `openSession` round trip, so a handle is usable the
  * moment `openSession()` returns, and is refused locally once the session is
- * closed or lost. A request that already names a session (`openSession`,
- * `closeSession`) keeps its own id.
+ * closed or lost. The handle's id replaces any id the request carries, so a
+ * caller cannot send a request as another session; only the session methods
+ * themselves (`openSession`, `closeSession`) name the session they act on.
  */
 async function stampSession<T extends Request>(request: T, options?: RPCOptions): Promise<T> {
   const sessionId = options?.sessionId
   if (sessionId === undefined) return request
   await awaitSessionUsable(sessionId, request as { modelId?: string | undefined })
-  if ((request as { sessionId?: string }).sessionId !== undefined) return request
+  if (request.type === 'openSession' || request.type === 'closeSession') return request
   return { ...request, sessionId }
 }
 

@@ -60,8 +60,10 @@ class SessionTransport:
             if isinstance(model_id, str) and model_id in self._held_models:
                 raise ModelHandleInvalidatedError(model_id, self.session_id)
             raise SessionInvalidatedError(self.session_id, self._ended)
-        # A payload that already names a session (open/close) keeps its own id.
-        if "sessionId" in payload:
+        # The handle's id replaces any id the payload carries, so a caller
+        # cannot send a request as another session. Only the session methods
+        # themselves name the session they act on.
+        if payload.get("type") in ("openSession", "closeSession"):
             return payload
         return {**payload, "sessionId": self.session_id}
 

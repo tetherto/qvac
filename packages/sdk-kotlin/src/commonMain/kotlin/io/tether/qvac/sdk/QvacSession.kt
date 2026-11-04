@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * A caller session on a shared runtime. It is a [QvacClient] whose every
@@ -61,12 +62,15 @@ internal class SessionTransport(
         closed = true
     }
 
-    // A payload that already names a session (`openSession`, `closeSession`) keeps its own id.
+    // The handle's id replaces any id the payload carries, so a caller cannot send a
+    // request as another session. Only the session methods themselves name the
+    // session they act on.
     private suspend fun stamp(payload: JsonObject): JsonObject {
         if (closed) throw QvacSessionClosedException(sessionId)
         opened.await()
         if (closed) throw QvacSessionClosedException(sessionId)
-        if (payload.containsKey("sessionId")) return payload
+        val type = payload["type"]?.jsonPrimitive?.content
+        if (type == "openSession" || type == "closeSession") return payload
         return JsonObject(payload + ("sessionId" to JsonPrimitive(sessionId)))
     }
 

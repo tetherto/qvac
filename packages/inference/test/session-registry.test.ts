@@ -3,6 +3,7 @@ import {
   openSession,
   closeSession,
   assertSessionOpen,
+  assertWireSessionOpen,
   isSessionOpen,
   hasOpenSessions,
   listSessions,
@@ -47,6 +48,20 @@ test('session registry: the owner id cannot be opened or closed', (t) => {
   t.exception(() => closeSession(OWNER_SESSION_ID), SessionNotOpenError)
   t.is(isSessionOpen(OWNER_SESSION_ID), true, 'the owner is always open')
   assertSessionOpen(OWNER_SESSION_ID)
+})
+
+test('session registry: a wire request runs as the owner only by naming no session', (t) => {
+  clearSessions()
+  assertWireSessionOpen({})
+  assertWireSessionOpen({ sessionId: undefined })
+  t.exception(
+    () => assertWireSessionOpen({ sessionId: OWNER_SESSION_ID }),
+    SessionNotOpenError,
+    'the owner id on the wire is refused'
+  )
+  openSession('s1')
+  assertWireSessionOpen({ sessionId: 's1' })
+  t.exception(() => assertWireSessionOpen({ sessionId: 's2' }), SessionNotOpenError)
 })
 
 test('session registry: an unknown or closed session fails the open check', (t) => {

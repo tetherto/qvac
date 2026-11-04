@@ -2,8 +2,8 @@
  * Session id of the runtime owner: the process that started the engine and
  * calls it without a session handle. Requests without a `sessionId` run as
  * this session. It is never accepted on the wire (`openSession` refuses it and
- * a request naming it fails the open-session check), so a client cannot act as
- * the owner by sending the string.
+ * `assertWireSessionOpen` fails a request naming it), so a client cannot act
+ * as the owner by sending the string.
  */
 export const OWNER_SESSION_ID = 'owner'
 

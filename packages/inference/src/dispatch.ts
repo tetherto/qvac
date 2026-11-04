@@ -25,8 +25,7 @@ import { handlerSupportsProgress, selectHandler } from '@/selection'
 import { assertLifecycleAllowed } from '@/runtime/runtime-lifecycle'
 import { resolveModelConfig, setConfig, setRuntimeContext, isConfigSet } from '@/runtime/state'
 import { initialize, close as closeEngine } from '@/runtime/lifecycle'
-import { assertSessionOpen } from '@/runtime/session-registry'
-import { resolveSessionId } from '@/runtime/session-id'
+import { assertWireSessionOpen } from '@/runtime/session-registry'
 import { getAllPlugins } from '@/plugins/index'
 import { hasRpcServerProvider } from '@/rpc/provider'
 import { resolveConfig } from '@/config/resolve-config'
@@ -208,7 +207,7 @@ function prepareRequest<T extends Request>(request: T): Request {
 // and close removes one, so neither can require it to be open already.
 function assertRequestSessionOpen(request: Request): void {
   if (request.type === 'openSession' || request.type === 'closeSession') return
-  assertSessionOpen(resolveSessionId(request))
+  assertWireSessionOpen(request)
 }
 
 function invokeHandler(request: Request, handler: HandlerEntry['handler']): HandlerResult {

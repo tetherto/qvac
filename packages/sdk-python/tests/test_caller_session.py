@@ -94,6 +94,23 @@ async def test_open_session_registers_the_session_and_stamps_every_call():
     assert owner.sent[-1]["sessionId"] == session.session_id
 
 
+async def test_a_payload_cannot_name_another_session():
+    owner = FakeTransport()
+    session = await open_session(owner)
+
+    await session.transport.call({"type": "heartbeat", "sessionId": "owner"})
+    assert owner.sent[-1] == {"type": "heartbeat", "sessionId": session.session_id}
+
+    frames = [
+        frame
+        async for frame in session.transport.call_stream(
+            {"type": "classify", "sessionId": "other"}
+        )
+    ]
+    assert frames == [{"type": "classify", "done": True}]
+    assert owner.sent[-1]["sessionId"] == session.session_id
+
+
 async def test_close_sends_close_session_and_ends_the_handle():
     owner = FakeTransport()
     session = await open_session(owner)

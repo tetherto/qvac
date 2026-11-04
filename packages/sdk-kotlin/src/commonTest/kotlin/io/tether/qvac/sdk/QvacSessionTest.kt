@@ -51,6 +51,19 @@ class QvacSessionTest {
     }
 
     @Test
+    fun aPayloadCannotNameAnotherSession() = runTest {
+        val transport = SessionRecordingTransport()
+        val session = QvacClient(transport).openSession()
+
+        session.cancel(CancelRequest.Request(CancelRequestRequest(requestId = "r-1", sessionId = "owner")))
+        session.call(buildJsonObject { put("type", "heartbeat"); put("sessionId", "other") })
+
+        for (request in transport.requests.drop(1)) {
+            assertEquals(session.sessionId, request["sessionId"]?.jsonPrimitive?.content, request.type())
+        }
+    }
+
+    @Test
     fun closeSendsCloseSessionAndLeavesTheTransportOpen() = runTest {
         val transport = SessionRecordingTransport()
         val session = QvacClient(transport).openSession()
