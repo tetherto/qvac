@@ -53,6 +53,12 @@ _CODE_MODEL_REGISTRY_MODEL_NOT_FOUND = _CODES["QVAC_MODEL_REGISTRY_MODEL_NOT_FOU
 _CODE_INVALID_RESPONSE_TYPE = _CODES["INVALID_RESPONSE_TYPE"]
 _CODE_STREAM_ENDED_WITHOUT_RESPONSE = _CODES["STREAM_ENDED_WITHOUT_RESPONSE"]
 _CODE_MODEL_TYPE_REQUIRED = _CODES["MODEL_TYPE_REQUIRED"]
+_CODE_SESSION_ID_CONFLICT = _CODES["SESSION_ID_CONFLICT"]
+_CODE_SESSION_NOT_OPEN = _CODES["SESSION_NOT_OPEN"]
+_CODE_MODEL_LEASED = _CODES["MODEL_LEASED"]
+_CODE_OWNER_ONLY = _CODES["OWNER_ONLY"]
+_CODE_SESSION_INVALIDATED = _CODES["SESSION_INVALIDATED"]
+_CODE_MODEL_HANDLE_INVALIDATED = _CODES["MODEL_HANDLE_INVALIDATED"]
 _CODE_MODEL_SRC_TYPE_MISMATCH = _CODES["MODEL_SRC_TYPE_MISMATCH"]
 
 
@@ -425,6 +431,116 @@ class DeleteCacheFailedError(QvacError):
         )
 
 
+class SessionIdConflictError(QvacError):
+    """The worker already has a session with the id the client minted."""
+
+    def __init__(
+        self, session_id: str, *, cause: Any = None, message: str | None = None
+    ) -> None:
+        self.session_id = session_id
+        super().__init__(
+            message or f'Session id "{session_id}" is already open',
+            name="SESSION_ID_CONFLICT",
+            code=_CODE_SESSION_ID_CONFLICT,
+            cause=cause,
+        )
+
+
+class SessionNotOpenError(QvacError):
+    """A request named a session the worker does not have open."""
+
+    def __init__(
+        self, session_id: str, *, cause: Any = None, message: str | None = None
+    ) -> None:
+        self.session_id = session_id
+        super().__init__(
+            message or f'Session "{session_id}" is not open',
+            name="SESSION_NOT_OPEN",
+            code=_CODE_SESSION_NOT_OPEN,
+            cause=cause,
+        )
+
+
+class ModelLeasedError(QvacError):
+    """A config reload on a model another session holds a lease on."""
+
+    def __init__(
+        self,
+        model_id: str,
+        lease_count: int,
+        *,
+        cause: Any = None,
+        message: str | None = None,
+    ) -> None:
+        self.model_id = model_id
+        self.lease_count = lease_count
+        super().__init__(
+            message
+            or (
+                f'Model "{model_id}" is held by {lease_count} other session(s); '
+                "it cannot be reconfigured while another session uses it"
+            ),
+            name="MODEL_LEASED",
+            code=_CODE_MODEL_LEASED,
+            cause=cause,
+        )
+
+
+class OwnerOnlyError(QvacError):
+    """An operation reserved for the runtime owner was called through a session."""
+
+    def __init__(
+        self,
+        operation: str,
+        session_id: str,
+        *,
+        cause: Any = None,
+        message: str | None = None,
+    ) -> None:
+        self.operation = operation
+        self.session_id = session_id
+        super().__init__(
+            message
+            or (
+                f'Operation "{operation}" is reserved for the runtime owner; '
+                f'session "{session_id}" cannot call it'
+            ),
+            name="OWNER_ONLY",
+            code=_CODE_OWNER_ONLY,
+            cause=cause,
+        )
+
+
+class SessionInvalidatedError(QvacError):
+    """A call on a `Session` after it was closed or its runtime was shut down.
+    Raised locally, before any wire traffic."""
+
+    def __init__(self, session_id: str, reason: str, *, cause: Any = None) -> None:
+        self.session_id = session_id
+        self.reason = reason
+        super().__init__(
+            f'Session "{session_id}" is no longer usable ({reason}); open a new session',
+            name="SESSION_INVALIDATED",
+            code=_CODE_SESSION_INVALIDATED,
+            cause=cause,
+        )
+
+
+class ModelHandleInvalidatedError(QvacError):
+    """A model id that a now-invalid `Session` loaded; the model went with it."""
+
+    def __init__(self, model_id: str, session_id: str, *, cause: Any = None) -> None:
+        self.model_id = model_id
+        self.session_id = session_id
+        super().__init__(
+            f'Model "{model_id}" was held by session "{session_id}", which is no '
+            "longer usable; load it again through a new session",
+            name="MODEL_HANDLE_INVALIDATED",
+            code=_CODE_MODEL_HANDLE_INVALIDATED,
+            cause=cause,
+        )
+
+
 class InvalidCancelParamsError(QvacError):
     """cancel() was called with neither request_id nor model_id. JS forbids
     this at compile time via its CancelClientInput union; Python guards it at
@@ -546,7 +662,47 @@ def _reconstruct_inference_cancelled(response: dict[str, Any]) -> QvacError:
     )
 
 
+def _reconstruct_session_id_conflict(response: dict[str, Any]) -> QvacError:
+    return SessionIdConflictError(
+        _str_field(_typed_fields(response), "sessionId"),
+        cause=response.get("cause"),
+        message=_opt_str(response, "message"),
+    )
+
+
+def _reconstruct_session_not_open(response: dict[str, Any]) -> QvacError:
+    return SessionNotOpenError(
+        _str_field(_typed_fields(response), "sessionId"),
+        cause=response.get("cause"),
+        message=_opt_str(response, "message"),
+    )
+
+
+def _reconstruct_model_leased(response: dict[str, Any]) -> QvacError:
+    fields = _typed_fields(response)
+    return ModelLeasedError(
+        _str_field(fields, "modelId"),
+        _opt_num_field(fields, "leaseCount") or 0,
+        cause=response.get("cause"),
+        message=_opt_str(response, "message"),
+    )
+
+
+def _reconstruct_owner_only(response: dict[str, Any]) -> QvacError:
+    fields = _typed_fields(response)
+    return OwnerOnlyError(
+        _str_field(fields, "operation"),
+        _str_field(fields, "sessionId"),
+        cause=response.get("cause"),
+        message=_opt_str(response, "message"),
+    )
+
+
 _RECONSTRUCTORS: dict[str, Callable[[dict[str, Any]], QvacError]] = {
+    "SESSION_ID_CONFLICT": _reconstruct_session_id_conflict,
+    "SESSION_NOT_OPEN": _reconstruct_session_not_open,
+    "MODEL_LEASED": _reconstruct_model_leased,
+    "OWNER_ONLY": _reconstruct_owner_only,
     "INFERENCE_CANCELLED": _reconstruct_inference_cancelled,
     "REQUEST_ID_CONFLICT": _reconstruct_request_id_conflict,
     "REQUEST_NOT_FOUND": _reconstruct_request_not_found,
@@ -611,5 +767,11 @@ __all__ = [
     "InvalidDeleteCacheParamsError",
     "InvalidCancelParamsError",
     "DeleteCacheFailedError",
+    "SessionIdConflictError",
+    "SessionNotOpenError",
+    "ModelLeasedError",
+    "OwnerOnlyError",
+    "SessionInvalidatedError",
+    "ModelHandleInvalidatedError",
     "reconstruct_error",
 ]
