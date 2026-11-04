@@ -3,7 +3,7 @@ import { sdcppConfigSchema } from '@/schemas/sdcpp-config'
 import { loadModelOptionsBaseSchema, loadModelSrcRequestSchema } from '@/schemas/load-model'
 
 test('diffusion profiles survive model options and wire validation with explicit overrides', (t) => {
-  for (const performance_profile of ['auto', 'off', 'allow-small-changes'] as const) {
+  for (const performance_profile of ['auto', 'off'] as const) {
     const modelConfig = {
       mode: 'video' as const,
       performance_profile,
@@ -11,7 +11,7 @@ test('diffusion profiles survive model options and wire validation with explicit
       performance_max_height: 320,
       performance_max_frames: 97,
       flash_attn: false,
-      vae_conv_direct: true,
+      vae_conv_direct: performance_profile === 'auto',
       tensor_type_rules: ''
     }
     const input = { modelType: 'sdcpp-generation', modelSrc: '/models/ltx.gguf', modelConfig }
@@ -28,6 +28,7 @@ test('diffusion profiles survive model options and wire validation with explicit
 test('diffusion profiles reject unsupported modes and invalid output limits', (t) => {
   for (const config of [
     { performance_profile: 'fast' },
+    { performance_profile: 'allow-small-changes' },
     { performance_profile: true },
     { performance_max_width: 0 },
     { performance_max_height: -1 },

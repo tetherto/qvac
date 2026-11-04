@@ -231,12 +231,11 @@ export const sdcppConfigSchema = z.object({
     ),
   flash_attn: z.boolean().optional().describe('Enable flash attention to reduce memory usage'),
   performance_profile: z
-    .enum(['auto', 'off', 'allow-small-changes'])
+    .enum(['auto', 'off'])
     .optional()
     .describe(
       'Addon-owned model/GPU/API performance profiles. Default: auto. Explicit native ' +
-        'options win. off retains baseline settings; allow-small-changes also permits ' +
-        'validated LTX full-temporal decoding with small visible differences.'
+        'options win. off retains baseline settings. Temporal tiling is unchanged.'
     ),
   performance_max_width: z
     .number()
