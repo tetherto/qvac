@@ -1385,6 +1385,48 @@ TEST_F(BackendSelectionTest, CudaPreferredOverIntegratedGpu) {
   expectChosen(mockBackend, BackendType::GPU, "cuda0");
 }
 
+// A unified-memory GB10 registers CUDA and Vulkan as iGPUs: `dedicated` must
+// not push its only GPU onto the CPU.
+TEST_F(BackendSelectionTest, MainGpuDedicatedFallsBackToIntegratedCuda) {
+  mockBackend.addDevice(createIGPUDevice("NVIDIA GB10", CUDA0_BACK));
+  mockBackend.addDevice(createIGPUDevice("NVIDIA GB10", VULKAN0_BACK));
+  MainGpu mainGpu = MainGpuType::Dedicated;
+  expectChosen(mockBackend, BackendType::GPU, "cuda0", mainGpu);
+  ASSERT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& log) {
+    return log.first == GGML_LOG_LEVEL_INFO &&
+           log.second.find("found no dedicated GPU") != std::string::npos;
+  }));
+}
+
+TEST_F(BackendSelectionTest, MainGpuDedicatedFallsBackToIntegratedVulkan) {
+  mockBackend.addDevice(createIGPUDevice("Intel Arc", VULKAN0_BACK));
+  MainGpu mainGpu = MainGpuType::Dedicated;
+  expectChosen(mockBackend, BackendType::GPU, "vulkan0", mainGpu);
+}
+
+// The fallback is for `dedicated` only: `integrated` stays a filter.
+TEST_F(BackendSelectionTest, MainGpuIntegratedStillSkipsDedicatedGpu) {
+  mockBackend.addDevice(createGPUDevice(NVIDIA_DESC, CUDA0_BACK));
+  MainGpu mainGpu = MainGpuType::Integrated;
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none", mainGpu);
+}
+
+// The rescan refuses the same devices again; the CPU warning names them once.
+TEST_F(BackendSelectionTest, MainGpuDedicatedNamesRefusedDeviceOnce) {
+  mockBackend.addDevice(createIGPUDevice("AMD Radeon", ROCM0_BACK));
+  MainGpu mainGpu = MainGpuType::Dedicated;
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none", mainGpu);
+  const auto warning =
+      std::ranges::find_if(mockBackend.logs, [](const auto& log) {
+        return log.first == GGML_LOG_LEVEL_WARN &&
+               log.second.find("rejected") != std::string::npos;
+      });
+  ASSERT_NE(warning, mockBackend.logs.end());
+  EXPECT_EQ(warning->second.find("ROCm0"), warning->second.rfind("ROCm0"));
+}
+
 // Adreno OpenCL must keep winning: mobile behaviour is unchanged by CUDA.
 TEST_F(BackendSelectionTest, AdrenoOpenClStillBeatsCuda) {
   mockBackend.addDevice(createGPUDevice(ADRENO_DESC, OPENCL_BACK));

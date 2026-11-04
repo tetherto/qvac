@@ -583,21 +583,46 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
         gpuType = std::get<MainGpuType>(mainGpuValue);
       }
     }
-    for (size_t i = 0; loopAllDevices && i < bckI.ggml_backend_dev_count();
-         ++i) {
-      ::tryEmplaceDevice(
-          bckI,
-          i,
-          gpuType,
-          gpuBackends,
-          igpuBackends,
-          openClBackends,
-          cudaBackends,
-          otherOpenClBackends,
-          maxAdrenoVersion,
-          sawMaliGpu,
-          rejectedDevices,
-          allowNonAdrenoOpenCl);
+    auto scanAllDevices = [&](std::optional<MainGpuType> type) {
+      for (size_t i = 0; i < bckI.ggml_backend_dev_count(); ++i) {
+        ::tryEmplaceDevice(
+            bckI,
+            i,
+            type,
+            gpuBackends,
+            igpuBackends,
+            openClBackends,
+            cudaBackends,
+            otherOpenClBackends,
+            maxAdrenoVersion,
+            sawMaliGpu,
+            rejectedDevices,
+            allowNonAdrenoOpenCl);
+      }
+    };
+    if (loopAllDevices) {
+      scanAllDevices(gpuType);
+    }
+
+    // `dedicated` is a preference, not a filter: a host whose only GPU is
+    // integrated (a unified-memory GB10 registers CUDA as an iGPU) uses it
+    // rather than the CPU. The rescan finds the same refusals again.
+    auto hasCandidate = [&]() {
+      return !openClBackends.empty() || !cudaBackends.empty() ||
+             !gpuBackends.empty() || !igpuBackends.empty() ||
+             !otherOpenClBackends.empty();
+    };
+    if (loopAllDevices && gpuType == MainGpuType::Dedicated &&
+        !hasCandidate()) {
+      rejectedDevices.clear();
+      scanAllDevices(std::nullopt);
+      if (hasCandidate()) {
+        bckI.llamaLogCallback(
+            GGML_LOG_LEVEL_INFO,
+            "main-gpu 'dedicated' found no dedicated GPU; using an integrated "
+            "GPU",
+            nullptr);
+      }
     }
   }
 

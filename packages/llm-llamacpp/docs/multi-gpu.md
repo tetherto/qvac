@@ -140,7 +140,7 @@ Selects which GPU to use. The behavior depends on the split mode:
 |-------|----------|
 | integer (e.g. `'0'`, `'1'`) | Selects a GPU by its index in the raw ggml device registry, matching qvac-fabric's own indexing. If that device is not in the backend allowlist, the load falls back to CPU rather than silently sliding onto a different GPU. |
 | `'integrated'` | Filters to integrated GPUs only during backend selection. Falls back to CPU if none is eligible. |
-| `'dedicated'`  | Filters to dedicated GPUs only during backend selection. Falls back to CPU if none is eligible. |
+| `'dedicated'`  | Prefers dedicated GPUs during backend selection. Uses an integrated GPU if no dedicated one is eligible, and falls back to CPU only if neither is. |
 
 Accepts both `main-gpu` (hyphen) and `main_gpu` (underscore). Providing both throws an error. The string values are case-insensitive.
 
@@ -372,7 +372,7 @@ const config = {
 }
 ```
 
-Skips integrated GPUs during backend selection. Falls back to CPU if no discrete GPU is found. `split-mode` defaults to `'none'`.
+Skips integrated GPUs when a dedicated GPU is eligible. Without one, uses an integrated GPU (a DGX Spark's GB10 registers as integrated), and the CPU only when there is no GPU. `split-mode` defaults to `'none'`.
 
 ## Fallback behavior
 

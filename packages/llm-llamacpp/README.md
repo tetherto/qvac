@@ -234,8 +234,8 @@ The addon picks a safe KV-cache type when `cache-type-k`/`cache-type-v` are unse
 
 | Scenario                       | main-gpu not specified                | main-gpu: `"dedicated"`             | main-gpu: `"integrated"`           |
 |---------------------------------|---------------------------------------|-------------------------------------|-------------------------------------|
-| Devices considered              | All GPUs (dedicated + integrated)     | Only dedicated GPUs                 | Only integrated GPUs                |
-| System with iGPU only           | ✅ Uses iGPU                          | ❌ Falls back to CPU                | ✅ Uses iGPU                        |
+| Devices considered              | All GPUs (dedicated + integrated)     | Dedicated GPUs; integrated if none  | Only integrated GPUs                |
+| System with iGPU only           | ✅ Uses iGPU                          | ✅ Uses iGPU                        | ✅ Uses iGPU                        |
 | System with dedicated GPU only  | ✅ Uses dedicated GPU                 | ✅ Uses dedicated GPU               | ❌ Falls back to CPU                |
 | System with both                | ✅ Uses dedicated GPU (preferred)     | ✅ Uses dedicated GPU               | ✅ Uses integrated GPU              |
 
