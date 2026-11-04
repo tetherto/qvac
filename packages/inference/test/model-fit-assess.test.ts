@@ -477,6 +477,34 @@ test('assess: total-only native measurements combine conservatively', (t) => {
   t.ok(result.assumptions.some((assumption) => assumption.includes('totals only')))
 })
 
+test('assess: a partial OCR measurement falls back to its floor in a set', (t) => {
+  const partialOcr: NativeCandidateFit = {
+    fit: {
+      verdict: 'fit',
+      basis: 'native-probe',
+      estimatorVersion: 'native-probe-v2',
+      reason: 'fits',
+      projection: { deviceBytes: 2 * GIB, weightsBytes: 1 * GIB }
+    }
+  }
+  const result = assessModelFitFromResources({
+    models: [
+      candidate({ model: { name: 'OCR A', sha256Checksum: 'a'.repeat(64) } }),
+      candidate({ model: { name: 'OCR B', sha256Checksum: 'b'.repeat(64) } })
+    ],
+    execution: 'concurrent',
+    resources: resources(),
+    platform: 'darwin-arm64',
+    resolveProfile: () => profile({ artifactBytes: 1 * GIB, ggufFacts: undefined }),
+    nativeFits: [partialOcr, partialOcr]
+  })
+
+  t.is(result.verdict, 'unknown', 'partial measurements cannot confirm a fit')
+  t.is(result.evidence, 'computed-only')
+  t.is(result.models[0]!.evidence, 'computed-only')
+  t.is(result.models[1]!.evidence, 'computed-only')
+})
+
 test('assess: a model the engine could not measure falls back to its floor', (t) => {
   const result = assessModelFitFromResources({
     models: [

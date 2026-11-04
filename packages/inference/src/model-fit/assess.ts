@@ -78,8 +78,8 @@ interface NativeEvaluation {
 /**
  * What one fitter answered: its measurement where the figures divide, a
  * conservative all-resident measurement where it reports totals alone, its
- * bare verdict where it reports no byte total, and `undefined` where it reached
- * no verdict.
+ * bare verdict where its byte breakdown is partial or it reports no totals,
+ * and `undefined` where it reached no verdict.
  */
 function nativeEvaluation(
   native: NativeCandidateFit | undefined
@@ -100,6 +100,9 @@ function nativeEvaluation(
 
   const { weightsBytes, contextBytes, computeBytes, deviceBytes, hostBytes } = projection
   if (weightsBytes === undefined || contextBytes === undefined || computeBytes === undefined) {
+    const hasPartialBreakdown =
+      weightsBytes !== undefined || contextBytes !== undefined || computeBytes !== undefined
+    if (hasPartialBreakdown) return bare
     if (deviceBytes === undefined && hostBytes === undefined) return bare
 
     return {
