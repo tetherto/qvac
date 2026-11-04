@@ -39,6 +39,7 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
+- Align the shared native `speech-cpp` pin to `2026-11-04` across the speech addons.
 - Update the shared `speech-cpp` native dependency to `2026-10-29`
   ([#5420](https://github.com/tetherto/qvac/pull/5420),
   [#5447](https://github.com/tetherto/qvac/pull/5447)).
