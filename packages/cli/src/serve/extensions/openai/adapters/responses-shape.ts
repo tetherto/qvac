@@ -11,6 +11,10 @@ export function messageId(): string {
   return `msg_${randomId()}`
 }
 
+export function reasoningItemId(): string {
+  return `rs_${randomId()}`
+}
+
 export function functionCallOutputItemId(): string {
   return `fc_${randomId()}`
 }
@@ -23,6 +27,8 @@ export interface BuildResponseObjectParams {
   id: string
   modelAlias: string
   text: string
+  /** Model reasoning, returned as a `reasoning` output item ahead of the message. */
+  reasoning?: string
   toolCalls: ToolCall[] | null | undefined
   createdAtSec: number
   metadata: Record<string, unknown> | null | undefined
@@ -34,6 +40,8 @@ export interface BuildResponseObjectParams {
   store: boolean
   /** When set (e.g. streaming), must match SSE item ids so finalized response matches the stream. */
   messageItemId?: string
+  /** When set, must match the streamed reasoning item id. */
+  reasoningItemId?: string
   /** When set, must align with `toolCalls` length; same ids as streamed function_call items. */
   functionCallItemIds?: string[]
   /** From SDK completion stats; `emittedTokens` / `generatedTokens` map to `usage.output_tokens`. */
@@ -57,6 +65,10 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
     params.toolCalls !== null && params.toolCalls !== undefined && params.toolCalls.length > 0
   const msgId = params.messageItemId ?? messageId()
   const output: unknown[] = []
+
+  if (params.reasoning) {
+    output.push(reasoningItem(params.reasoningItemId ?? reasoningItemId(), params.reasoning))
+  }
 
   output.push({
     type: 'message',
@@ -88,12 +100,14 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
     typeof params.completionTokens === 'number' && Number.isFinite(params.completionTokens)
       ? params.completionTokens
       : completionTokensFromStats(params.text || '', params.stats)
-  // SDK does not expose prompt token count today; `cacheTokens` is KV-cache hit count, not full prompt size.
-  const inputTokens = 0
+  const inputTokens = params.stats?.promptTokens ?? 0
   const usage = {
     input_tokens: inputTokens,
     output_tokens: outputTokens,
-    total_tokens: inputTokens + outputTokens
+    total_tokens: inputTokens + outputTokens,
+    ...(typeof params.stats?.cacheTokens === 'number'
+      ? { input_tokens_details: { cached_tokens: params.stats.cacheTokens } }
+      : {})
   }
 
   const truncated = !hasToolCalls && params.stopReason === 'length'
@@ -141,4 +155,14 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
   if (params.previousResponseId) base['previous_response_id'] = params.previousResponseId
 
   return base
+}
+
+export function reasoningItem(id: string, text: string): Record<string, unknown> {
+  return {
+    type: 'reasoning',
+    id,
+    status: 'completed',
+    summary: [],
+    content: [{ type: 'reasoning_text', text }]
+  }
 }

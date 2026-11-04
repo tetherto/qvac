@@ -88,8 +88,12 @@ constrain generation with the chat template's tool grammar.
 **\`parallel_tool_calls\`**: \`true\` (default) lets one response carry several
 tool calls; \`false\` limits it to one.
 
+**Reasoning** from models that emit \`<think>\` blocks is returned as a
+\`reasoning\` output item ahead of the message, not in \`output_text\`.
+
 **Streaming** (\`stream: true\`) emits the OpenAI Responses SSE event sequence
-(\`response.created\` → \`response.output_text.delta\` … → \`response.completed\`)
+(\`response.created\` → \`response.reasoning_text.delta\` … →
+\`response.output_text.delta\` … → \`response.completed\`)
 and terminates **without** a \`[DONE]\` sentinel (per the spec).
 `.trim(),
   getById:
@@ -238,6 +242,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
             modelId: params.sdkModelId,
             history,
             stream,
+            captureThinking: true,
             ...(params.tools !== undefined ? { tools: params.tools } : {}),
             ...(params.generationParams !== undefined
               ? { generationParams: params.generationParams }

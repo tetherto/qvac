@@ -290,6 +290,12 @@ Intentionally rejected with `400`: `conversation`, `background: true`, and
 built-in tools (`web_search`, `file_search`, `code_interpreter`).
 `function`-typed tools work normally.
 
+`usage.input_tokens` is the prompt size reported by the SDK, and
+`total_tokens` is input plus output. Reasoning from `<think>` models is
+returned as a `reasoning` output item (`reasoning_text` content) ahead of the
+message, never in `output_text`; streaming sends it as
+`response.reasoning_text.delta` events.
+
 ### Examples
 
 ```bash

@@ -17,7 +17,9 @@ import type { ResponsesHistoryItem } from '@/serve/extensions/openai/schemas/res
 import {
   buildResponseObject,
   functionCallOutputItemId,
-  messageId
+  messageId,
+  reasoningItem,
+  reasoningItemId
 } from '@/serve/extensions/openai/adapters/responses-shape'
 import {
   RESPONSES_DEFAULT_TTL_SEC,
@@ -86,15 +88,14 @@ export async function writeBlockingResponse(
     if (!extended) break
     turnHistory = extended
   }
-  const { text, toolCalls, toolErrors, stats, stopReason, completionTokens } = stripToolSearchCalls(
-    p.tools,
-    total ?? drained
-  )
+  const { text, thinking, toolCalls, toolErrors, stats, stopReason, completionTokens } =
+    stripToolSearchCalls(p.tools, total ?? drained)
 
   const responseObject = buildResponseObject({
     id: p.rid,
     modelAlias: p.modelAlias,
     text,
+    ...(thinking ? { reasoning: thinking } : {}),
     toolCalls,
     createdAtSec: p.createdAtSec,
     metadata: p.metadata,
@@ -143,7 +144,13 @@ export async function writeStreamingResponse(
   runTurn: RunTurn
 ): Promise<Record<string, unknown>> {
   const msgId = messageId()
+  const rsId = reasoningItemId()
   let fullText = ''
+  let reasoningText = ''
+  let nextOutputIndex = 0
+  let reasoningIndex: number | undefined
+  let messageIndex: number | undefined
+  let reasoningOpen = false
 
   sendSSE(res, {
     type: 'response.created',
@@ -155,21 +162,57 @@ export async function writeStreamingResponse(
       model: p.modelAlias
     }
   })
-  sendSSE(res, {
-    type: 'response.output_item.added',
-    output_index: 0,
-    item: { type: 'message', id: msgId, status: 'in_progress', role: 'assistant', content: [] },
-    sequence_number: 0,
-    response_id: p.rid
-  })
-  sendSSE(res, {
-    type: 'response.content_part.added',
-    item_id: msgId,
-    output_index: 0,
-    content_index: 0,
-    part: { type: 'output_text', text: '' },
-    response_id: p.rid
-  })
+
+  // Items open in the order the model produces them: reasoning (if any), then
+  // the message. Reasoning closes when the message opens.
+  const closeReasoning = () => {
+    if (!reasoningOpen) return
+    reasoningOpen = false
+    sendSSE(res, {
+      type: 'response.reasoning_text.done',
+      item_id: rsId,
+      output_index: reasoningIndex,
+      content_index: 0,
+      text: reasoningText,
+      response_id: p.rid
+    })
+    sendSSE(res, {
+      type: 'response.content_part.done',
+      item_id: rsId,
+      output_index: reasoningIndex,
+      content_index: 0,
+      part: { type: 'reasoning_text', text: reasoningText },
+      response_id: p.rid
+    })
+    sendSSE(res, {
+      type: 'response.output_item.done',
+      output_index: reasoningIndex,
+      item: reasoningItem(rsId, reasoningText),
+      response_id: p.rid
+    })
+  }
+
+  const openMessage = (): number => {
+    if (messageIndex !== undefined) return messageIndex
+    closeReasoning()
+    messageIndex = nextOutputIndex++
+    sendSSE(res, {
+      type: 'response.output_item.added',
+      output_index: messageIndex,
+      item: { type: 'message', id: msgId, status: 'in_progress', role: 'assistant', content: [] },
+      sequence_number: 0,
+      response_id: p.rid
+    })
+    sendSSE(res, {
+      type: 'response.content_part.added',
+      item_id: msgId,
+      output_index: messageIndex,
+      content_index: 0,
+      part: { type: 'output_text', text: '' },
+      response_id: p.rid
+    })
+    return messageIndex
+  }
 
   // Every turn streams live. Tool-call syntax is framed into `toolCall` events
   // by the normalizer, so a search turn emits no text deltas to withhold; what
@@ -179,11 +222,43 @@ export async function writeStreamingResponse(
     sendSSE(res, {
       type: 'response.output_text.delta',
       item_id: msgId,
-      output_index: 0,
+      output_index: openMessage(),
       content_index: 0,
       delta: token,
       response_id: p.rid
     })
+
+  const sendReasoningDelta = (token: string) => {
+    // Reasoning after the message has opened has no item left to land in.
+    if (messageIndex !== undefined) return
+    if (reasoningIndex === undefined) {
+      reasoningIndex = nextOutputIndex++
+      reasoningOpen = true
+      sendSSE(res, {
+        type: 'response.output_item.added',
+        output_index: reasoningIndex,
+        item: { type: 'reasoning', id: rsId, status: 'in_progress', summary: [], content: [] },
+        response_id: p.rid
+      })
+      sendSSE(res, {
+        type: 'response.content_part.added',
+        item_id: rsId,
+        output_index: reasoningIndex,
+        content_index: 0,
+        part: { type: 'reasoning_text', text: '' },
+        response_id: p.rid
+      })
+    }
+    reasoningText += token
+    sendSSE(res, {
+      type: 'response.reasoning_text.delta',
+      item_id: rsId,
+      output_index: reasoningIndex,
+      content_index: 0,
+      delta: token,
+      response_id: p.rid
+    })
+  }
 
   let turnHistory = p.history
   let drained
@@ -192,10 +267,14 @@ export async function writeStreamingResponse(
     // Only the answering turn's text belongs in the final response object; a
     // search turn's preamble was streamed but is not part of the answer.
     fullText = ''
-    drained = await drainCompletion(runTurn(turnHistory), (token) => {
-      fullText += token
-      sendDelta(token)
-    })
+    drained = await drainCompletion(
+      runTurn(turnHistory),
+      (token) => {
+        fullText += token
+        sendDelta(token)
+      },
+      sendReasoningDelta
+    )
     total = accumulateUsage(total, drained)
 
     const extended =
@@ -217,11 +296,12 @@ export async function writeStreamingResponse(
     total ?? drained
   )
   const hasToolCalls = toolCalls.length > 0
+  const msgIndex = openMessage()
 
   sendSSE(res, {
     type: 'response.output_text.done',
     item_id: msgId,
-    output_index: 0,
+    output_index: msgIndex,
     content_index: 0,
     text: fullText,
     response_id: p.rid
@@ -229,13 +309,13 @@ export async function writeStreamingResponse(
   sendSSE(res, {
     type: 'response.content_part.done',
     item_id: msgId,
-    output_index: 0,
+    output_index: msgIndex,
     content_index: 0,
     response_id: p.rid
   })
   sendSSE(res, {
     type: 'response.output_item.done',
-    output_index: 0,
+    output_index: msgIndex,
     item: {
       type: 'message',
       id: msgId,
@@ -253,7 +333,7 @@ export async function writeStreamingResponse(
     let i = 0
     for (const tc of openaiCalls ?? []) {
       const fcItemId = fcItemIds[i]!
-      const outputIndex = i + 1
+      const outputIndex = msgIndex + 1 + i
       const argsStr = tc.function.arguments
       sendSSE(res, {
         type: 'response.output_item.added',
@@ -303,6 +383,7 @@ export async function writeStreamingResponse(
     id: p.rid,
     modelAlias: p.modelAlias,
     text: fullText,
+    ...(reasoningText ? { reasoning: reasoningText, reasoningItemId: rsId } : {}),
     toolCalls,
     createdAtSec: p.createdAtSec,
     metadata: p.metadata,

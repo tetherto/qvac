@@ -42,6 +42,7 @@ function baseHandlerParams(rid: string): ResponsesHandlerParams {
 }
 
 function fakeStreamCompletion(opts: {
+  thinkingTokens?: string[]
   tokens: string[]
   toolCalls: ToolCall[]
   text: string
@@ -52,6 +53,7 @@ function fakeStreamCompletion(opts: {
   // and the terminal `stopReason` the way the SDK does.
   async function* events(): AsyncGenerator<unknown> {
     let seq = 0
+    for (const t of opts.thinkingTokens ?? []) yield { type: 'thinkingDelta', seq: seq++, text: t }
     for (const t of opts.tokens) yield { type: 'contentDelta', seq: seq++, text: t }
     for (const call of opts.toolCalls) yield { type: 'toolCall', seq: seq++, call }
     if (opts.stats !== undefined) yield { type: 'completionStats', seq: seq++, stats: opts.stats }
@@ -207,6 +209,95 @@ describe('writeStreamingResponse', () => {
     assert.ok(terminal)
     assert.equal(terminal.response.status, 'incomplete')
     assert.equal(terminal.response.incomplete_details.reason, 'max_output_tokens')
+  })
+})
+
+describe('writeStreamingResponse: reasoning', () => {
+  it('streams reasoning as its own item before the message and keeps it out of the text', async () => {
+    const holder = createStreamResponse()
+    const result = fakeStreamCompletion({
+      thinkingTokens: ['Check ', 'the file.'],
+      tokens: ['Done', '.'],
+      toolCalls: [],
+      text: 'Done.',
+      stats: { promptTokens: 50, emittedTokens: 6 }
+    })
+
+    const completed = await writeStreamingResponse(
+      holder.res,
+      baseHandlerParams('resp_reason'),
+      () => result
+    )
+    const events = parseSseJsonEvents(holder.raw) as Array<Record<string, unknown>>
+    const types = events.map((e) => e['type'])
+
+    const reasoningDeltas = events.filter((e) => e['type'] === 'response.reasoning_text.delta')
+    assert.deepEqual(
+      reasoningDeltas.map((e) => e['delta']),
+      ['Check ', 'the file.']
+    )
+    assert.equal(reasoningDeltas[0]!['output_index'], 0)
+    const rsId = reasoningDeltas[0]!['item_id'] as string
+    assert.match(rsId, /^rs_/)
+
+    const textDeltas = events.filter((e) => e['type'] === 'response.output_text.delta')
+    assert.deepEqual(
+      textDeltas.map((e) => e['delta']),
+      ['Done', '.']
+    )
+    assert.equal(textDeltas[0]!['output_index'], 1)
+
+    // The reasoning item closes before the message item opens.
+    const reasoningDone = events.findIndex(
+      (e) =>
+        e['type'] === 'response.output_item.done' &&
+        (e['item'] as { type: string }).type === 'reasoning'
+    )
+    const messageAdded = events.findIndex(
+      (e) =>
+        e['type'] === 'response.output_item.added' &&
+        (e['item'] as { type: string }).type === 'message'
+    )
+    assert.ok(reasoningDone !== -1 && reasoningDone < messageAdded)
+    assert.ok(types.includes('response.reasoning_text.done'))
+
+    const output = completed['output'] as Array<Record<string, unknown>>
+    assert.deepEqual(
+      output.map((o) => o['type']),
+      ['reasoning', 'message']
+    )
+    assert.equal(output[0]!['id'], rsId)
+    assert.deepEqual(output[0]!['content'], [{ type: 'reasoning_text', text: 'Check the file.' }])
+    assert.equal(completed['output_text'], 'Done.')
+    assert.deepEqual(completed['usage'], {
+      input_tokens: 50,
+      output_tokens: 6,
+      total_tokens: 56
+    })
+  })
+
+  it('indexes tool calls after the reasoning and message items', async () => {
+    const holder = createStreamResponse()
+    const result = fakeStreamCompletion({
+      thinkingTokens: ['Need to list files.'],
+      tokens: [],
+      toolCalls: [{ id: 'call_ls', name: 'shell', arguments: { cmd: 'ls' } }],
+      text: ''
+    })
+
+    const completed = await writeStreamingResponse(
+      holder.res,
+      baseHandlerParams('resp_reason_tool'),
+      () => result
+    )
+    const events = parseSseJsonEvents(holder.raw) as Array<Record<string, unknown>>
+    const argDelta = events.find((e) => e['type'] === 'response.function_call_arguments.delta')!
+    assert.equal(argDelta['output_index'], 2)
+    assert.deepEqual(
+      (completed['output'] as Array<{ type: string }>).map((o) => o.type),
+      ['reasoning', 'message', 'function_call']
+    )
+    assert.equal(completed['status'], 'requires_action')
   })
 })
 

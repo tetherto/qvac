@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import type { ServerResponse } from 'node:http'
 import { buildResponseObject } from '@/serve/extensions/openai/adapters/responses-shape'
 import { writeBlockingResponse } from '@/serve/extensions/openai/adapters/response-writers'
+import { historyPrefixFromStoredResponse } from '@/serve/extensions/openai/schemas/responses'
 import type {
   ResponsesHandlerParams,
   ResponseWriterContext
@@ -121,6 +122,55 @@ describe('buildResponseObject', () => {
     assert.equal(u.total_tokens, 99)
   })
 
+  it('reports prompt tokens as input_tokens and sums total_tokens', () => {
+    const o = buildResponseObject({
+      id: 'resp_in',
+      modelAlias: 'm',
+      text: 'hi',
+      toolCalls: [],
+      createdAtSec: 1,
+      metadata: undefined,
+      temperature: undefined,
+      topP: undefined,
+      maxOutputTokens: undefined,
+      parallelToolCalls: true,
+      previousResponseId: null,
+      store: true,
+      stats: { promptTokens: 120, cacheTokens: 80, emittedTokens: 7 }
+    })
+    assert.deepEqual(o['usage'], {
+      input_tokens: 120,
+      output_tokens: 7,
+      total_tokens: 127,
+      input_tokens_details: { cached_tokens: 80 }
+    })
+  })
+
+  it('puts reasoning in its own output item ahead of the message', () => {
+    const o = buildResponseObject({
+      id: 'resp_r',
+      modelAlias: 'm',
+      text: 'The answer is 4.',
+      reasoning: '2 + 2 is 4.',
+      toolCalls: [],
+      createdAtSec: 1,
+      metadata: undefined,
+      temperature: undefined,
+      topP: undefined,
+      maxOutputTokens: undefined,
+      parallelToolCalls: true,
+      previousResponseId: null,
+      store: true
+    })
+    const out = o['output'] as Array<Record<string, unknown>>
+    assert.equal(out.length, 2)
+    assert.equal(out[0]!['type'], 'reasoning')
+    assert.match(out[0]!['id'] as string, /^rs_/)
+    assert.deepEqual(out[0]!['content'], [{ type: 'reasoning_text', text: '2 + 2 is 4.' }])
+    assert.equal(out[1]!['type'], 'message')
+    assert.equal(o['output_text'], 'The answer is 4.')
+  })
+
   it('marks status incomplete with max_output_tokens reason when truncated by length', () => {
     const o = buildResponseObject({
       id: 'resp_len',
@@ -219,6 +269,7 @@ function baseHandlerParams(): ResponsesHandlerParams {
 
 function fakeCompletion(opts: {
   text: string
+  thinking?: string
   toolCalls: ToolCall[]
   stats?: CompletionStats
   stopReason?: string
@@ -227,6 +278,7 @@ function fakeCompletion(opts: {
   // delta, tool calls, stats, terminal done) rather than the legacy promises.
   async function* events(): AsyncGenerator<unknown> {
     let seq = 0
+    if (opts.thinking) yield { type: 'thinkingDelta', seq: seq++, text: opts.thinking }
     if (opts.text) yield { type: 'contentDelta', seq: seq++, text: opts.text }
     for (const call of opts.toolCalls) yield { type: 'toolCall', seq: seq++, call }
     if (opts.stats !== undefined) yield { type: 'completionStats', seq: seq++, stats: opts.stats }
@@ -307,5 +359,74 @@ describe('writeBlockingResponse', () => {
       required_action: { submit_tool_outputs: { tool_calls: unknown[] } }
     }
     assert.equal(parsed.required_action.submit_tool_outputs.tool_calls.length, 1)
+  })
+
+  it('returns reasoning separately from the answer and reports input tokens', async () => {
+    let bodyStr = ''
+    let sent = false
+    const res = {
+      setHeader: (): void => {},
+      writeHead: (): void => {
+        sent = true
+      },
+      end(payload?: string | Buffer): void {
+        if (typeof payload === 'string') bodyStr = payload
+      },
+      get headersSent(): boolean {
+        return sent
+      }
+    } as unknown as ServerResponse
+
+    const result = fakeCompletion({
+      thinking: 'The user wants a greeting.',
+      text: 'Hello!',
+      toolCalls: [],
+      stats: { promptTokens: 31, emittedTokens: 9 }
+    })
+
+    await writeBlockingResponse(res, baseHandlerParams(), () => result)
+    const parsed = JSON.parse(bodyStr) as {
+      output: Array<Record<string, unknown>>
+      output_text: string
+      usage: { input_tokens: number; output_tokens: number; total_tokens: number }
+    }
+    assert.equal(parsed.output_text, 'Hello!')
+    assert.deepEqual(
+      parsed.output.map((o) => o['type']),
+      ['reasoning', 'message']
+    )
+    assert.deepEqual(parsed.output[0]!['content'], [
+      { type: 'reasoning_text', text: 'The user wants a greeting.' }
+    ])
+    assert.equal(JSON.stringify(parsed.output[1]).includes('greeting'), false)
+    assert.deepEqual(parsed.usage, { input_tokens: 31, output_tokens: 9, total_tokens: 40 })
+  })
+})
+
+describe('historyPrefixFromStoredResponse', () => {
+  it('replays the answer without the reasoning item', () => {
+    const responseObject = buildResponseObject({
+      id: 'resp_prev',
+      modelAlias: 'm',
+      text: 'Hello!',
+      reasoning: 'The user wants a greeting.',
+      toolCalls: [],
+      createdAtSec: 1,
+      metadata: undefined,
+      temperature: undefined,
+      topP: undefined,
+      maxOutputTokens: undefined,
+      parallelToolCalls: true,
+      previousResponseId: null,
+      store: true
+    })
+    const prefix = historyPrefixFromStoredResponse({
+      responseObject,
+      inputItems: [{ type: 'message', role: 'user', content: 'Hi' }]
+    })
+    assert.deepEqual(prefix, [
+      { role: 'user', content: 'Hi' },
+      { role: 'assistant', content: 'Hello!' }
+    ])
   })
 })
