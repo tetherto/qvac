@@ -63,6 +63,10 @@ export function collectTtsStats(response: { stats?: AddonTtsStats }): TtsStats {
       enhancerBackendDevice: stats.enhancerBackendDevice
     }),
     ...(stats.enhancerBackendId !== undefined && { enhancerBackendId: stats.enhancerBackendId }),
+    ...(stats.denoiserBackendDevice !== undefined && {
+      denoiserBackendDevice: stats.denoiserBackendDevice
+    }),
+    ...(stats.denoiserBackendId !== undefined && { denoiserBackendId: stats.denoiserBackendId }),
     ...(stats.codecSidecarLoaded !== undefined && {
       codecSidecarLoaded: stats.codecSidecarLoaded
     }),
