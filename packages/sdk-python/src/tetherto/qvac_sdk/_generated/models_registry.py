@@ -2621,6 +2621,24 @@ GEMMA_3_12B_Q4_K_XL = ModelConstant(
     params="12B",
 )
 
+GLM_5_3_FLASH_320B_A18B_MULTIMODAL_Q4_K_M_SHARD = ModelConstant(
+    name="GLM_5_3_FLASH_320B_A18B_MULTIMODAL_Q4_K_M_SHARD",
+    src="registry://hf/bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/GLM-5.3-Flash-BF16-Q4_K_M/GLM-5.3-Flash-BF16-Q4_K_M-00001-of-00006.gguf",
+    registry_path="bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/GLM-5.3-Flash-BF16-Q4_K_M/GLM-5.3-Flash-BF16-Q4_K_M-00001-of-00006.gguf",
+    registry_source="hf",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=2225189,
+    blob_block_length=593018,
+    blob_byte_offset=145799638755,
+    model_id="GLM-5.3-Flash-BF16-Q4_K_M-00001-of-00006.gguf",
+    expected_size=200828233184,
+    sha256_checksum="117a0e308fbc31d68400f0496f0d47154c52d40814a6d3dedbc74893569d9188",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="q4_k_m",
+    params="320B-A18B",
+)
+
 GPT_OSS_120B_INST_Q4_K_M_SHARD = ModelConstant(
     name="GPT_OSS_120B_INST_Q4_K_M_SHARD",
     src="registry://s3/qvac_models_compiled/ggml/gpt-oss120b/2026-03-17/gpt-oss-120b-Q4_K_M-00001-of-00002.gguf",
@@ -3861,6 +3879,24 @@ MMPROJ_GEMMA4_4B_MULTIMODAL_F16 = ModelConstant(
     engine="llamacpp-completion",
     quantization="f16",
     params="4B",
+)
+
+MMPROJ_GLM_5_3_FLASH_320B_A18B_MULTIMODAL_BF16 = ModelConstant(
+    name="MMPROJ_GLM_5_3_FLASH_320B_A18B_MULTIMODAL_BF16",
+    src="registry://hf/bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/mmproj-GLM-5.3-Flash-BF16-bf16.gguf",
+    registry_path="bartowski/GLM-5.3-Flash-BF16-GGUF/resolve/66e5e9f0e337470e8801b99bae6c45779b042cc2/mmproj-GLM-5.3-Flash-BF16-bf16.gguf",
+    registry_source="hf",
+    blob_core_key="e1152dfd75a688ee35eec9b6c5f07bbd48081a0995f1504145f4d8be1430fcb7",
+    blob_block_offset=63096,
+    blob_block_length=17762,
+    blob_byte_offset=4133118112,
+    model_id="mmproj-GLM-5.3-Flash-BF16-bf16.gguf",
+    expected_size=1164010176,
+    sha256_checksum="cf7ff0083e3fe7427ce02aa5bb89f0d79f5e830efa0b7f06a8987bc0d1e19ec5",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="bf16",
+    params="320B-A18B",
 )
 
 MMPROJ_OCR_0_6B_MULTIMODAL_F16 = ModelConstant(
@@ -8725,6 +8761,7 @@ __all__ = [
     "GEMMA4_4B_MULTIMODAL_Q4_K_M",
     "GEMMA4_4B_MULTIMODAL_Q6_K",
     "GEMMA_3_12B_Q4_K_XL",
+    "GLM_5_3_FLASH_320B_A18B_MULTIMODAL_Q4_K_M_SHARD",
     "GPT_OSS_120B_INST_Q4_K_M_SHARD",
     "GPT_OSS_120B_INST_Q4_K_M_TENSORS",
     "GPT_OSS_20B_INST_Q4_K_M",
@@ -8794,6 +8831,7 @@ __all__ = [
     "MMPROJ_GEMMA4_31B_MULTIMODAL_F16",
     "MMPROJ_GEMMA4_4B_MULTIMODAL_BF16",
     "MMPROJ_GEMMA4_4B_MULTIMODAL_F16",
+    "MMPROJ_GLM_5_3_FLASH_320B_A18B_MULTIMODAL_BF16",
     "MMPROJ_OCR_0_6B_MULTIMODAL_F16",
     "MMPROJ_OCR_3B_MULTIMODAL_F16",
     "MMPROJ_OCR_3B_MULTIMODAL_Q8_0",
