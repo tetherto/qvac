@@ -23,7 +23,7 @@ import {
 } from '@/handlers/load-model/coreml-sidecars'
 import { findModelShards } from '@/handlers/load-model/registry'
 import {
-  createRegistryDownloadKey,
+  createRegistryCacheKey,
   hasActiveTransfer,
   withDownloadBlocked
 } from '@/handlers/load-model/download-manager'
@@ -45,14 +45,14 @@ export async function deleteRegistryModelCache(modelSrc: string): Promise<void> 
   const parsed = registryUrlSchema.safeParse(modelSrc)
   if (!parsed.success) throw new InvalidDeleteCacheParamsError()
   const { registryPath, registrySource } = parsed.data
-  const downloadKey = createRegistryDownloadKey(registrySource, registryPath)
+  const cacheKey = createRegistryCacheKey(registryPath)
 
-  if (hasActiveTransfer(downloadKey)) {
+  if (hasActiveTransfer(cacheKey)) {
     throw new DeleteCacheFailedError(`${modelSrc} is downloading; cancel it first`)
   }
 
-  // Downloads and loads of this model are refused until the files are gone.
-  await withDownloadBlocked(downloadKey, async () => {
+  // Downloads and loads of this path, from any source, are refused until the files are gone.
+  await withDownloadBlocked(cacheKey, async () => {
     const client = await getRegistryClient()
     const entry = getModelByPath(registryPath)
     const catalogued = entry?.registrySource === registrySource ? entry : undefined

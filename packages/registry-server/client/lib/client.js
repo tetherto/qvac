@@ -215,11 +215,14 @@ class QVACRegistryClient extends ReadyResource {
 
   // A caller may start the next download of a blob before the previous one's
   // teardown finishes; clearing then would delete blocks the new one counted.
+  // Loops because a clearBlob can register while we wait. Its error is its caller's.
   async _awaitPendingRelease(blobsCoreKey, blockStart) {
-    const pending = this._pendingReleases?.get(
-      this._releaseId(this._decodeCoreKey(blobsCoreKey), blockStart)
-    )
-    if (pending) await pending
+    const id = this._releaseId(this._decodeCoreKey(blobsCoreKey), blockStart)
+    let pending = this._pendingReleases?.get(id)
+    while (pending) {
+      await pending.catch(() => {})
+      pending = this._pendingReleases.get(id)
+    }
   }
 
   async _getBlobsCore(blobsCoreKey) {
@@ -637,15 +640,15 @@ class QVACRegistryClient extends ReadyResource {
       throw new Error('Invalid blobBinding: blockOffset and blockLength are required numbers')
     }
 
-    await this.ready()
-    await this._awaitPendingRelease(blobBinding.coreKey, blobBinding.blockOffset)
-
-    // Tracked from the start so a download of this blob waits for the whole clear.
+    // Registered before the first await so a download called right after waits for it.
     const id = this._releaseId(this._decodeCoreKey(blobBinding.coreKey), blobBinding.blockOffset)
-    await this._trackRelease(id, this._clearBlobNow(blobBinding))
+    const previous = this._pendingReleases?.get(id)
+    await this._trackRelease(id, this._clearBlobNow(blobBinding, previous))
   }
 
-  async _clearBlobNow(blobBinding) {
+  async _clearBlobNow(blobBinding, previous) {
+    if (previous) await previous.catch(() => {})
+    await this.ready()
     const { core, blobs } = await this._getBlobsCore(blobBinding.coreKey)
     // A cancel that kept its blocks skipped the drain; its in-flight blocks can still land.
     await this._waitForInflightBlocks(core)

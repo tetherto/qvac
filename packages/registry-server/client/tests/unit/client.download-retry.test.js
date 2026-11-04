@@ -904,6 +904,45 @@ test('downloadBlob waits for a clearBlob of the same blob that is still draining
   )
 })
 
+test('downloadBlob called right after clearBlob waits for the clear', async (t) => {
+  const dir = await tmp(t)
+  const client = makeClient(t)
+  const opened = new Promise((resolve) => setImmediate(resolve))
+  client.ready = () => opened
+  client._core.download = () => ({ destroy() {} })
+  let finishDrain
+  let drains = 0
+  client._waitForInflightBlocks = () => {
+    if (drains++ > 0) return Promise.resolve()
+    return new Promise((resolve) => {
+      finishDrain = resolve
+    })
+  }
+  // lunte-disable-next-line require-await
+  client._clearBlobBlocks = async () => {
+    client._events.push('clear')
+  }
+  // lunte-disable-next-line require-await
+  client._streamBlobToFile = async () => {
+    client._events.push('stream')
+  }
+  const blobBinding = { coreKey: Buffer.alloc(32), blockOffset: 3, blockLength: 7, byteLength: 700 }
+
+  const clearing = client.clearBlob(blobBinding)
+  const download = client.downloadBlob(blobBinding, { outputFile: path.join(dir, 'blob.bin') })
+  while (!finishDrain) await new Promise((resolve) => setImmediate(resolve))
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  t.absent(client._events.includes('stream'), 'download waits while the clear drains')
+
+  finishDrain()
+  await clearing
+  await download
+  t.ok(
+    client._events.indexOf('clear') < client._events.indexOf('stream'),
+    'download streams only after the clear finished'
+  )
+})
+
 test('clearBlob rejects a binding without a block range', async (t) => {
   const client = makeClient(t)
   await t.exception(() => client.clearBlob({ coreKey: Buffer.alloc(32) }), /blockOffset/)

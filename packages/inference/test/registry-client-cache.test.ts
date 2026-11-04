@@ -229,3 +229,55 @@ test('deleteCache({ modelSrc }): a download of the model is refused while deleti
   release()
   t.is((await deletion).success, true)
 })
+
+test('deleteCache({ modelSrc }): a download of the same path from another source is refused', async (t) => {
+  let release!: () => void
+  let clearing!: () => void
+  const started = new Promise<void>((resolve) => (clearing = resolve))
+  stubClient(t, {
+    getModel: async () => ({ blobBinding: binding }),
+    clearBlob: () => {
+      clearing()
+      return new Promise<void>((resolve) => (release = resolve))
+    }
+  })
+
+  const deletion = handleDeleteCache({
+    type: 'deleteCache',
+    modelSrc: 'registry://s3/review/shared-model.gguf'
+  })
+  await started
+
+  let downloadStarted = false
+  const download = startOrJoinDownload(
+    createRegistryDownloadKey('hf', 'review/shared-model.gguf'),
+    async () => {
+      downloadStarted = true
+      return 'path'
+    }
+  )
+  await t.exception(download.promise, /being deleted/)
+  t.absent(downloadStarted, 'download did not start')
+
+  release()
+  t.is((await deletion).success, true)
+})
+
+test('deleteCache({ modelSrc }): refused while another source downloads the same path', async (t) => {
+  stubClient(t, {})
+  let finish!: () => void
+  const download = startOrJoinDownload(
+    createRegistryDownloadKey('hf', 'review/active-model.gguf'),
+    () => new Promise<string>((resolve) => (finish = () => resolve('path')))
+  )
+
+  const response = await handleDeleteCache({
+    type: 'deleteCache',
+    modelSrc: 'registry://s3/review/active-model.gguf'
+  })
+  t.is(response.success, false)
+  t.ok(response.error?.includes('downloading'), 'reports the active download')
+
+  finish()
+  await download.promise
+})

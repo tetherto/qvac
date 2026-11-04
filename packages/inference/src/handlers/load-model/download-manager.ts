@@ -211,7 +211,7 @@ export function startOrJoinDownload(
   onProgress?: (progress: ModelProgressUpdate) => void,
   request?: SubscriberRequestBinding
 ): StartOrJoinResult {
-  if (deletingKeys.has(downloadKey)) {
+  if (deletingKeys.has(getCacheResourceKey(downloadKey))) {
     return {
       promise: Promise.reject(
         new ModelLoadFailedError(`The cache for ${downloadKey} is being deleted`)
@@ -338,27 +338,41 @@ export function markClearCacheForRequest(requestId: string): boolean {
 }
 
 /**
- * Runs `fn` while new downloads and loads of `downloadKey` are refused, so a
- * cache deletion cannot remove files another call is writing or loading.
+ * Runs `fn` while new downloads and loads writing `resourceKey` are refused, so
+ * a cache deletion cannot remove files another call is writing or loading.
  */
 export async function withDownloadBlocked<T>(
-  downloadKey: string,
+  resourceKey: string,
   fn: () => Promise<T>
 ): Promise<T> {
-  if (deletingKeys.has(downloadKey)) {
-    throw new DeleteCacheFailedError(`The cache for ${downloadKey} is already being deleted`)
+  if (deletingKeys.has(resourceKey)) {
+    throw new DeleteCacheFailedError(`The cache for ${resourceKey} is already being deleted`)
   }
-  deletingKeys.add(downloadKey)
+  deletingKeys.add(resourceKey)
   try {
     return await fn()
   } finally {
-    deletingKeys.delete(downloadKey)
+    deletingKeys.delete(resourceKey)
   }
 }
 
-export function hasActiveTransfer(downloadKey: string): boolean {
-  const transfer = activeTransfers.get(downloadKey)
-  return !!transfer && !transfer.abortController.signal.aborted
+export function hasActiveTransfer(resourceKey: string): boolean {
+  for (const [downloadKey, transfer] of activeTransfers) {
+    if (getCacheResourceKey(downloadKey) !== resourceKey) continue
+    if (!transfer.abortController.signal.aborted) return true
+  }
+  return false
+}
+
+// The registry cache is laid out by path alone, so every source of a path
+// writes the same files.
+export function createRegistryCacheKey(registryPath: string): string {
+  return `registry-cache:${registryPath}`
+}
+
+function getCacheResourceKey(downloadKey: string): string {
+  const registry = /^registry:[^:]*:(.*)$/.exec(downloadKey)
+  return registry ? createRegistryCacheKey(registry[1]!) : downloadKey
 }
 
 export function cancelTransfer(downloadKey: string, clearCache = false): void {
