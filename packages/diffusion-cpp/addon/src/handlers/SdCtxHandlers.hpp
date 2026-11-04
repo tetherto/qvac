@@ -175,7 +175,7 @@ struct SdCtxConfig {
   int upscalerThreads = -1;
 
   // -- Backend loading --------------------------------------------------------
-  std::string backendsDir; // directory containing DL backend .so modules
+  std::string backendsDir; // directory containing DL backend .so/.dll modules
 
   // -- Internal --------------------------------------------------------------
   // Historical knob from engines whose sd_ctx_params_t had
