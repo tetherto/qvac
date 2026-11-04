@@ -204,17 +204,10 @@ if(BUILD_CUDA_BACKEND)
     list(APPEND PLATFORM_OPTIONS
       "-DCMAKE_CUDA_FLAGS=-allow-unsupported-compiler -Xfatbin=-compress-all")
   endif()
-  # The pinned nvcc (13.0, and 12.6 for Jetson) cannot compile host code
-  # against libc++, so the CUDA module is built against libstdc++ throughout,
-  # including its own ggml-base, and links it statically and privately.
-  if(VCPKG_TARGET_IS_LINUX)
-    list(APPEND PLATFORM_OPTIONS
-      "-DCMAKE_PROJECT_ggml_INCLUDE=${CMAKE_CURRENT_LIST_DIR}/linux-cuda-runtime.cmake")
-  endif()
 endif()
 
 # XDNA (AMD NPU) backend, opt-in via 'xdna-backend': a runtime-loaded module
-# built in a configure of its own after the main one (see the end of this file).
+# sharing the libstdc++ GGML core with CUDA, with its own embedded CPU backend.
 # Requesting it without XRT or IRON is an error, never a silent skip: ggml skips
 # the kernels when IRON is missing, and a module without them would share the
 # real build's binary-cache ABI. The xrt port checks XRT and, through its
@@ -240,6 +233,15 @@ if(BUILD_XDNA_BACKEND)
     message(FATAL_ERROR "qvac-fabric: ${QVAC_XDNA_IRON_PYTHON} cannot import IRON:\n${_qvac_iron_error}")
   endif()
   message(STATUS "qvac-fabric: xdna-backend ON, XRT ${XRT_ROOT}, IRON ${QVAC_XDNA_IRON_PYTHON}")
+  get_filename_component(_qvac_xrt_bin "${XRT_XCLBINUTIL}" DIRECTORY)
+  vcpkg_add_to_path(PREPEND "${_qvac_xrt_bin}")
+  list(APPEND PLATFORM_OPTIONS
+    -DGGML_XDNA=ON
+    -DGGML_XDNA_BUILD_KERNELS=ON
+    -DGGML_XDNA_BUILD_TESTS=OFF
+    "-DGGML_XDNA_GEMM_PYTHON=${QVAC_XDNA_IRON_PYTHON}"
+    "-DQVAC_XRT_ROOT=${XRT_ROOT}")
+  set(X_VCPKG_RPATH_KEEP_SYSTEM_PATHS ON)
 endif()
 
 if(VCPKG_TARGET_IS_ANDROID AND BUILD_KLEIDIAI)
@@ -298,6 +300,8 @@ endif()
 # libc++_shared via the NDK STL, Windows uses the MSVC runtime.
 if(VCPKG_TARGET_IS_LINUX AND DL_BACKENDS)
   string(APPEND VCPKG_LINKER_FLAGS " -static-libstdc++")
+  list(APPEND PLATFORM_OPTIONS
+    "-DCMAKE_PROJECT_ggml_INCLUDE=${CMAKE_CURRENT_LIST_DIR}/linux-cxx-runtime.cmake")
 endif()
 
 set(LLAMA_OPTIONS)
@@ -367,8 +371,8 @@ if(BUILD_CUDA_BACKEND)
   endif()
 endif()
 
-# Each module links its C++ runtime statically, which holds only if every
-# source in it compiled against that runtime. CUDA and HIP compile through
+# Modules other than XDNA link their C++ runtime statically, which requires every
+# source to compile against that runtime. CUDA and HIP compile through
 # their own drivers, and a module that misses this loads only in processes
 # which already map libstdc++.
 if(VCPKG_TARGET_IS_LINUX AND DL_BACKENDS)
@@ -376,7 +380,11 @@ if(VCPKG_TARGET_IS_LINUX AND DL_BACKENDS)
   file(GLOB QVAC_MODULES
     "${CURRENT_PACKAGES_DIR}/lib/*.so"
     "${CURRENT_PACKAGES_DIR}/debug/lib/*.so")
-  qvac_check_cxx_runtime(${QVAC_MODULES})
+  set(QVAC_RUNTIME_OPTIONS)
+  if(BUILD_XDNA_BACKEND)
+    list(APPEND QVAC_RUNTIME_OPTIONS WITH_XDNA)
+  endif()
+  qvac_check_cxx_runtime(${QVAC_RUNTIME_OPTIONS} ${QVAC_MODULES})
 endif()
 
 if(BUILD_LLAMA)
@@ -403,40 +411,6 @@ if (NOT VCPKG_BUILD_TYPE)
 endif()
 
 if(BUILD_XDNA_BACKEND)
-  # XRT's C++ API takes libstdc++ types, so the XDNA module and the ggml-base
-  # and CPU backend copies linked into it are built against the system
-  # libstdc++, linked dynamically, in a configure without the triplet's libc++
-  # flags. Only the C ggml-backend ABI crosses between this module and the libc++
-  # rest of the build; the libstdc++ objects stay between the module and XRT.
-  # This configure replaces the main build tree, which is installed by now, and
-  # installs only the ggml-xdna component: its ggml and ggml-base stay out of the
-  # package.
-  string(REPLACE "-stdlib=libc++" "" VCPKG_CXX_FLAGS "${VCPKG_CXX_FLAGS}")
-  string(REPLACE "-stdlib=libc++" "" VCPKG_LINKER_FLAGS "${VCPKG_LINKER_FLAGS}")
-  string(REPLACE "-static-libstdc++" "" VCPKG_LINKER_FLAGS "${VCPKG_LINKER_FLAGS}")
-  get_filename_component(_qvac_xrt_bin "${XRT_XCLBINUTIL}" DIRECTORY)
-  vcpkg_add_to_path(PREPEND "${_qvac_xrt_bin}")
-
-  # vcpkg_cmake_configure warns on a second call through this cache entry
-  unset(Z_VCPKG_CMAKE_GENERATOR CACHE)
-  vcpkg_cmake_configure(
-    SOURCE_PATH "${SOURCE_PATH}/ggml"
-    LOGFILE_BASE config-xdna
-    OPTIONS
-      -DGGML_NATIVE=OFF
-      -DGGML_CCACHE=OFF
-      -DGGML_BACKEND_DL=ON
-      -DGGML_CPU=OFF
-      -DGGML_XDNA=ON
-      -DGGML_XDNA_BUILD_KERNELS=ON
-      "-DGGML_XDNA_GEMM_PYTHON=${QVAC_XDNA_IRON_PYTHON}"
-      -DGGML_XDNA_BUILD_TESTS=OFF
-      -DGGML_BUILD_TESTS=OFF
-      -DGGML_BUILD_EXAMPLES=OFF
-      -DGGML_OPENMP=OFF
-      # AMD's XRT packages do not put libxrt_coreutil.so.2 on the loader's path
-      "-DCMAKE_INSTALL_RPATH=${XRT_ROOT}/lib"
-  )
   # ggml-xdna also adds /opt/xilinx/xrt to CMAKE_PREFIX_PATH; XRT has to come
   # through the xrt port, which is what the package's ABI records.
   foreach(_qvac_cfg IN ITEMS rel dbg)
@@ -452,7 +426,6 @@ if(BUILD_XDNA_BACKEND)
       endforeach()
     endif()
   endforeach()
-  vcpkg_cmake_build(TARGET ggml-xdna LOGFILE_BASE build-xdna)
 
   set(QVAC_XDNA_MODULE "${VCPKG_TARGET_SHARED_LIBRARY_PREFIX}qvac-ggml-xdna${VCPKG_TARGET_SHARED_LIBRARY_SUFFIX}")
   foreach(_qvac_cfg IN ITEMS rel dbg)
@@ -465,10 +438,6 @@ if(BUILD_XDNA_BACKEND)
     else()
       set(_qvac_prefix "${CURRENT_PACKAGES_DIR}/debug")
     endif()
-    vcpkg_execute_required_process(
-      COMMAND "${CMAKE_COMMAND}" --install "${_qvac_build_dir}" --component ggml-xdna --prefix "${_qvac_prefix}"
-      WORKING_DIRECTORY "${_qvac_build_dir}"
-      LOGNAME "install-xdna-${_qvac_cfg}")
     if(NOT EXISTS "${_qvac_prefix}/lib/${QVAC_XDNA_MODULE}")
       message(FATAL_ERROR "qvac-fabric: expected XDNA module was not installed at ${_qvac_prefix}/lib/${QVAC_XDNA_MODULE}")
     endif()
@@ -481,41 +450,20 @@ if(BUILD_XDNA_BACKEND)
     endforeach()
   endforeach()
 
-  # The module came from a configure of its own, so ggml-targets.cmake does not
-  # list it. Import it the way that file imports the other DL modules, so that
-  # consumers staging GGML_AVAILABLE_BACKENDS (packages/fabric) ship it too, and
-  # name the kernel files that have to be shipped next to it.
+  # Export the kernel list beside the normal GGML backend targets.
   file(GLOB QVAC_XDNA_KERNELS RELATIVE "${CURRENT_PACKAGES_DIR}/lib"
     "${CURRENT_PACKAGES_DIR}/lib/*.xclbin" "${CURRENT_PACKAGES_DIR}/lib/*.insts.bin")
-  set(QVAC_XDNA_DEBUG_LOCATION "")
-  if(EXISTS "${CURRENT_PACKAGES_DIR}/debug/lib/${QVAC_XDNA_MODULE}")
-    set(QVAC_XDNA_DEBUG_LOCATION "IMPORTED_LOCATION_DEBUG \"\${_ggml_xdna_prefix}/debug/lib/${QVAC_XDNA_MODULE}\"")
-  endif()
   string(CONFIGURE [=[
-# Written by the qvac-fabric port: the XDNA module is built in a configure of its
-# own, so ggml-targets.cmake does not import it.
 get_filename_component(_ggml_xdna_prefix "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
-if(NOT TARGET ggml::ggml-xdna)
-  add_library(ggml::ggml-xdna MODULE IMPORTED)
-  set_target_properties(ggml::ggml-xdna PROPERTIES
-    IMPORTED_LOCATION "${_ggml_xdna_prefix}/lib/@QVAC_XDNA_MODULE@"
-    @QVAC_XDNA_DEBUG_LOCATION@)
-endif()
 # The kernel artifacts the module loads; ship them next to it.
 set(GGML_XDNA_KERNEL_FILES "@QVAC_XDNA_KERNELS@")
 list(TRANSFORM GGML_XDNA_KERNEL_FILES PREPEND "${_ggml_xdna_prefix}/lib/")
-if(NOT "ggml-xdna" IN_LIST GGML_AVAILABLE_BACKENDS)
-  list(APPEND GGML_AVAILABLE_BACKENDS ggml-xdna)
-endif()
 unset(_ggml_xdna_prefix)
 ]=] QVAC_XDNA_TARGETS @ONLY)
   file(WRITE "${CURRENT_PACKAGES_DIR}/share/ggml/ggml-xdna-targets.cmake" "${QVAC_XDNA_TARGETS}")
   vcpkg_replace_string("${CURRENT_PACKAGES_DIR}/share/ggml/ggml-config.cmake"
     "check_required_components(ggml)"
     "include(\"\${CMAKE_CURRENT_LIST_DIR}/ggml-xdna-targets.cmake\")\n\ncheck_required_components(ggml)")
-
-  # Keep the module's absolute XRT runpath; vcpkg drops non-$ORIGIN entries.
-  set(X_VCPKG_RPATH_KEEP_SYSTEM_PATHS ON)
 endif()
 
 file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")

@@ -120,7 +120,7 @@
       ]
     },
     "xdna-backend": {
-      "description": "Build the AMD XDNA (Ryzen AI NPU) backend as a runtime-loaded module, libqvac-ggml-xdna.so, with its kernel artifacts next to it. The module links XRT's C++ API, so it is built against the system libstdc++ (dynamically) in a configure of its own. Requires the system XRT (through the xrt port) and QVAC_XDNA_IRON_PYTHON, an interpreter with IRON (mlir-aie + llvm-aie). Where XRT is not installed the module fails to load and is skipped.",
+      "description": "Build the AMD XDNA (Ryzen AI NPU) backend as a runtime-loaded module, libqvac-ggml-xdna.so, with its kernel artifacts next to it. The module links XRT's C++ API, so it is built against the system libstdc++ (dynamically) using ggml-base-libstdcxx (also used by CUDA when enabled). Requires the system XRT (through the xrt port) and QVAC_XDNA_IRON_PYTHON, an interpreter with IRON (mlir-aie + llvm-aie). Where XRT is not installed the module fails to load and is skipped.",
       "supports": "linux & x64",
       "dependencies": [
         {

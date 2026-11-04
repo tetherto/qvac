@@ -7,6 +7,9 @@
 # Allowed undefined: __cxa_atexit, __cxa_finalize, __cxa_thread_atexit_impl
 # (glibc) and _Unwind_* (libgcc_s).
 #
+# WITH_XDNA permits only the XDNA module to use the system XRT/libstdc++ ABI.
+# Script mode accepts the same opt-in through QVAC_CHECK_XDNA=ON.
+#
 # Script mode, for checking prebuilt modules:
 #   cmake -DQVAC_CHECK_FILES="a.so;b.so" -P qvac-check-cxx-runtime.cmake
 
@@ -28,7 +31,9 @@ set(_QVAC_CXX_RUNTIME_SYMBOLS
 set(_QVAC_CXX_RUNTIME_ALLOWED "^__cxa_(atexit|finalize|thread_atexit_impl)$")
 
 function(qvac_check_cxx_runtime)
-  set(_modules ${ARGN})
+  cmake_parse_arguments(PARSE_ARGV 0 arg "WITH_XDNA" "" "")
+  set(_modules ${arg_UNPARSED_ARGUMENTS})
+  set(_xdna_found OFF)
   list(REMOVE_ITEM _modules "")
   list(LENGTH _modules _module_count)
   if(_module_count EQUAL 0)
@@ -43,13 +48,31 @@ function(qvac_check_cxx_runtime)
       OUTPUT_VARIABLE _dynamic
       COMMAND_ERROR_IS_FATAL ANY)
     string(REGEX MATCHALL "\\(NEEDED\\)[^\n]*\\[[^]\n]+\\]" _needed_lines "${_dynamic}")
+    get_filename_component(_module_name "${_module}" NAME)
+    set(_xdna OFF)
+    if(arg_WITH_XDNA AND _module_name STREQUAL "libqvac-ggml-xdna.so")
+      set(_xdna ON)
+      set(_xdna_found ON)
+    endif()
+    set(_needed)
     set(_bad_needed)
     foreach(_line IN LISTS _needed_lines)
       string(REGEX REPLACE ".*\\[([^]]+)\\]$" "\\1" _lib "${_line}")
-      if(_lib MATCHES "${_QVAC_CXX_RUNTIME_NEEDED}")
+      list(APPEND _needed "${_lib}")
+      if(_lib MATCHES "${_QVAC_CXX_RUNTIME_NEEDED}" AND
+         NOT (_xdna AND _lib STREQUAL "libstdc++.so.6"))
         list(APPEND _bad_needed "${_lib}")
       endif()
     endforeach()
+
+    if(_xdna)
+      foreach(_required libstdc++.so.6 libxrt_coreutil.so.2)
+        list(FIND _needed "${_required}" _required_index)
+        if(_required_index EQUAL -1)
+          list(APPEND _bad_needed "missing ${_required}")
+        endif()
+      endforeach()
+    endif()
 
     execute_process(
       COMMAND "${QVAC_NM}" -D --undefined-only -P "${_module}"
@@ -60,6 +83,12 @@ function(qvac_check_cxx_runtime)
     foreach(_line IN LISTS _undefined)
       string(REGEX REPLACE "[@ ].*" "" _symbol "${_line}")
       if(_symbol STREQUAL "" OR _symbol MATCHES "${_QVAC_CXX_RUNTIME_ALLOWED}")
+        continue()
+      endif()
+      if(_xdna)
+        if(_symbol MATCHES "^(ggml|gguf)_" OR _symbol MATCHES "_ZNK?St3__1")
+          list(APPEND _bad_symbols "${_symbol}")
+        endif()
         continue()
       endif()
       foreach(_pattern IN LISTS _QVAC_CXX_RUNTIME_SYMBOLS)
@@ -84,12 +113,19 @@ function(qvac_check_cxx_runtime)
       string(APPEND _failures "\n   ${_count} undefined C++ runtime symbols, first:\n    ${_shown}")
     endif()
   endforeach()
+  if(arg_WITH_XDNA AND NOT _xdna_found)
+    message(FATAL_ERROR "qvac-fabric: requested XDNA module is missing")
+  endif()
   if(_failures)
     message(FATAL_ERROR "qvac-fabric: modules depend on a C++ runtime the loading process may not have:${_failures}")
   endif()
-  message(STATUS "qvac-fabric: ${_module_count} modules carry no C++ runtime dependency (${QVAC_NM}, ${QVAC_READELF})")
+  message(STATUS "qvac-fabric: ${_module_count} modules passed C++ runtime validation (XDNA system ABI: ${_xdna_found})")
 endfunction()
 
 if(CMAKE_SCRIPT_MODE_FILE STREQUAL CMAKE_CURRENT_LIST_FILE)
-  qvac_check_cxx_runtime(${QVAC_CHECK_FILES})
+  set(_options)
+  if(QVAC_CHECK_XDNA)
+    list(APPEND _options WITH_XDNA)
+  endif()
+  qvac_check_cxx_runtime(${_options} ${QVAC_CHECK_FILES})
 endif()

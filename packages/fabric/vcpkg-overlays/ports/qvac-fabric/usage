@@ -20,5 +20,9 @@ hash values):
       endif()
     endif()
 
+CUDA and XDNA share ggml-base-libstdcxx, a PIC static archive compiled
+against libstdc++. The final CUDA module links its runtime statically; XDNA
+links it dynamically to match XRT. Both use the same CMake configure.
+
 No NPU is required to compile. The XDNA module and its kernel artifacts must
 be installed together. Hosts without XRT skip the optional module.

@@ -83,8 +83,10 @@ runner-provisioned XRT and installs the pinned IRON environment through
 [setup-xdna](../../.github/actions/setup-xdna/action.yml). Compilation does
 not require NPU hardware.
 
-The XDNA module uses system libstdc++ to match XRT's C++ ABI and embeds its
-own ggml-base. Its `.xclbin` and `.insts.bin` files ship beside it. Hosts
+CUDA and XDNA share `ggml-base-libstdcxx`, a static archive compiled against
+libstdc++ in the same CMake configure. CUDA links its C++ runtime statically;
+XDNA uses the system libstdc++ dynamically to match XRT's C++ ABI. Each module
+embeds the required ggml-base objects. Its `.xclbin` and `.insts.bin` files ship beside it. Hosts
 without XRT skip this optional backend when loading modules.
 
 For a build-only CI check, dispatch
