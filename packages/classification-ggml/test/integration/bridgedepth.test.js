@@ -94,6 +94,12 @@ test(
       const stats = model.getRuntimeStats()
       t.ok(stats.total_time_ms > 0)
       t.ok(stats.weight_bytes > 100000000)
+      // A GPU op that falls back to the CPU keeps the result right and only
+      // costs speed, so parity alone misses it. OpenCL lacks ops this graph
+      // needs and is left out.
+      if ([1, 2, 3].includes(stats.backend_id)) {
+        t.is(stats.cpu_fallback_nodes, 0, 'whole graph runs on the GPU')
+      }
 
       await t.exception.all(() => model.infer(left, new Uint8Array([1, 2, 3])), /JPEG\/PNG/)
       await t.exception.all(
