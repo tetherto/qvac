@@ -111,7 +111,10 @@ function main() {
   if (addon === 'all') {
     for (const [heading, name, workflow, out, mobile] of WEEKLY) {
       console.log(`=== ${heading} ===`)
-      aggregate(name, workflow, runs, out, mobile)
+      // One quiet package warns instead of failing the whole weekly report.
+      if (!aggregate(name, workflow, runs, out, mobile)) {
+        console.log(`::warning::${heading}: no runs or artifacts found`)
+      }
     }
   } else if (SLUGS[addon]) {
     ok = aggregate(addon, process.env.PERF_WORKFLOW, runs, `${addon}-performance`)
