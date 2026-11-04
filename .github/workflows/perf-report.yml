@@ -154,14 +154,17 @@ jobs:
             --output-json reports/vlm-mobile-performance.json \
             --output-html reports/vlm-mobile-performance.html || true
 
+          # asr's mobile runs, Parakeet included, upload <slug>-perf-mobile-* from the contract's Mobile tests.
           echo "=== Parakeet (Mobile) ==="
           node scripts/perf-report/aggregate.js \
-            --addon parakeet \
-            --workflow "Mobile Integration Tests (Parakeet)" \
+            --addon asr-ggml \
+            --workflow "Mobile tests" \
+            --artifact-pattern "asr-ggml-perf-mobile-*" \
             --runs 6 \
             --output reports/parakeet-mobile-performance.md \
             --output-json reports/parakeet-mobile-performance.json \
-            --output-html reports/parakeet-mobile-performance.html || true
+            --output-html reports/parakeet-mobile-performance.html ||
+            echo "::warning::Parakeet (Mobile): no Mobile tests runs or asr-ggml-perf-mobile-* artifacts found"
 
           echo "=== Diffusion (Desktop) ==="
           node scripts/perf-report/aggregate.js \
