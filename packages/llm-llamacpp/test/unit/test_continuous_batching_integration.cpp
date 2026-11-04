@@ -793,6 +793,74 @@ TEST_F(
   EXPECT_FALSE(outputs[1].empty());
 }
 
+namespace {
+/// Qwen3.5 with thinking on ends the prompt with `<think>\n`, so the model
+/// never generates the opener. Both paths must stream it exactly once, first,
+/// or a consumer that splits reasoning on the tags reads it as content.
+void expectForcedOpenerStreamedOnce(LlamaModel& model) {
+  ASSERT_NE(LlamaModelTestPeer::scheduler(model), nullptr)
+      << "test requires the continuous-batching scheduler";
+  const auto startsWithOpenerOnce = [](const std::string& text) {
+    return text.rfind("<think>", 0) == 0 &&
+           text.find("<think>", 1) == std::string::npos;
+  };
+
+  LlamaModel::Prompt singlePrompt;
+  singlePrompt.input = R"([{"role":"user","content":"What is 17 * 23?"}])";
+  const std::string single = model.processPrompt(singlePrompt);
+  EXPECT_TRUE(startsWithOpenerOnce(single)) << single;
+
+  std::string streamed;
+  LlamaModel::Prompt first;
+  first.input = singlePrompt.input;
+  first.outputCallback = [&streamed](const std::string& piece) {
+    streamed += piece;
+  };
+  LlamaModel::Prompt second;
+  second.input = R"([{"role":"user","content":"What is 12 * 11?"}])";
+  std::vector<LlamaModel::Prompt> prompts{std::move(first), std::move(second)};
+  const auto outputs = model.processPromptBatch(prompts);
+  ASSERT_EQ(outputs.size(), 2u);
+  EXPECT_TRUE(startsWithOpenerOnce(outputs[0])) << outputs[0];
+  EXPECT_TRUE(startsWithOpenerOnce(outputs[1])) << outputs[1];
+  EXPECT_EQ(streamed, outputs[0]);
+}
+} // namespace
+
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchStreamsForcedOpenReasoningOpenerLikeSinglePrompt) {
+  REQUIRE_MODEL(qwen35HybridModel_);
+  config_["ctx_size"] = "4096";
+  config_["parallel"] = "2";
+  config_["n_predict"] = "8";
+  auto model = loadModel(qwen35HybridModel_);
+  expectForcedOpenerStreamedOnce(*model);
+}
+
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchMtmdStreamsForcedOpenReasoningOpenerLikeSinglePrompt) {
+  const std::string vlmPath =
+      test_common::BaseTestModelPath::get("Qwen3.5-0.8B-Q8_0.gguf");
+  const std::string mmprojPath =
+      test_common::BaseTestModelPath::get("mmproj-Qwen3.5-0.8B-F16.gguf");
+  if (!fs::exists(vlmPath) || !fs::exists(mmprojPath)) {
+    GTEST_SKIP() << "Qwen3.5 M-RoPE fixture not found";
+  }
+  std::string path = vlmPath;
+  std::string projection = mmprojPath;
+  auto cfg = config_;
+  cfg["ctx_size"] = "4096";
+  cfg["parallel"] = "2";
+  cfg["n_predict"] = "8";
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::move(projection), std::move(cfg));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
+  expectForcedOpenerStreamedOnce(*model);
+}
+
 TEST_F(
     ContinuousBatchingIntegrationTest,
     Qwen35HybridSequenceLimitMidReasoningRollsBackAndKeepsSibling) {

@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- With `parallel >= 2`, a request whose chat template force-opens the
+  reasoning block (such as Qwen3.5's `<think>\n`) now streams the opener
+  first, as `parallel: 1` does. Without it, consumers that split reasoning on
+  the tags returned the reasoning as content.
+
 ## [0.67.0] - 2026-11-02
 
 ### Added

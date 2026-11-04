@@ -824,6 +824,7 @@ void TextLlmContext::onPrefillComplete(
   if (thinkingForcedOpen_ && reasoningEnabled_) {
     reasoningState_.inside_reasoning = true;
   }
+  thinkingOpenerPending_ = thinkingForcedOpen_;
 }
 
 void TextLlmContext::flushPendingUtf8ToCallback(
@@ -867,6 +868,7 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
   // opener to the visible stream so consumers see a balanced tag pair;
   // `inside_reasoning` and the span capture were already set in
   // `onPrefillComplete`.
+  thinkingOpenerPending_ = false;
   if (thinkingForcedOpen_ && outputCallback) {
     outputCallback(thinkingForcedOpenText_);
     reasoningState_.inside_reasoning = true;
@@ -1189,6 +1191,12 @@ SequenceStepResult TextLlmContext::onLogitsReady(
     int logitIdx, unsigned generatedAfterAccept,
     const std::function<void(const std::string&)>& outputCallback,
     LlamaBatch* inlineDecodeBatch) {
+  // The batch path has no `generateResponse`; its first sample emits the
+  // force-opened reasoning opener, as `generateResponse` does.
+  if (thinkingOpenerPending_) {
+    thinkingOpenerPending_ = false;
+    emitOutputPiece(outputCallback, thinkingForcedOpenText_);
+  }
   const SequenceStepResult result = sampleFromLogits(
       logitIdx, generatedAfterAccept, outputCallback, inlineDecodeBatch);
   // The single-prompt loop records a token itself once it decoded it; on the
@@ -2187,6 +2195,7 @@ void TextLlmContext::resetStateKeepingMemory(bool resetStats) {
   utf8Buffer_.clear();
   thinkingForcedOpen_ = false;
   thinkingForcedOpenText_.clear();
+  thinkingOpenerPending_ = false;
   requestRollback_.clear();
   llama_synchronize(modelCtx_.lctx);
   if (resetStats) {
