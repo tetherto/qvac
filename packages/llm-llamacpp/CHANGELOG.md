@@ -2,6 +2,23 @@
 
 ## [0.68.0] - 2026-11-04
 
+### Breaking
+
+- Removed model-weight streaming. `files.model` now accepts exactly one absolute
+  disk path: a single GGUF or only its first shard. All shards must already be
+  in the same directory. Multiple paths and weight buffers are rejected;
+  the `loadWeights()` API has been removed
+  ([#5398](https://github.com/tetherto/qvac/pull/5398)).
+- Renamed `pickPrimaryGgufPath` to `validateModelPath`. `files.model` is typed
+  as a one-element tuple so TypeScript also rejects multi-path model inputs
+  ([#5398](https://github.com/tetherto/qvac/pull/5398)).
+- Removed addon-side shard-name expansion. Fabric discovers and reads disk
+  shards from the first GGUF, preventing excessive allocation from a shard
+  count embedded in a filename. Tensor-name companion files are not needed
+  ([#5398](https://github.com/tetherto/qvac/pull/5398)).
+- Generated-token streaming, multimodal input, caching and finetuning remain
+  supported.
+
 ### Changed
 
 - `@qvac/fabric` dependency bumped `^0.25.0` -> `^0.26.0`, which carries
@@ -20,7 +37,6 @@
 - The addon is ported to fabric's `common_batch`, `common_speculative_process()`
   and `common_chat_prompt` APIs
   ([#5331](https://github.com/tetherto/qvac/pull/5331)).
-  No API change for this package.
 
 ### Fixed
 
