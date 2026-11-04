@@ -2,7 +2,8 @@
 // ggml-speech builds in package.json (`qvac["ggml-speech"]`). They ship their
 // ggml backends under the same file names, so an app keeps one copy of each
 // for all of them. A speech addon that records none is reported but cannot fail
-// the check.
+// the check. Addons on the @qvac/fabric runtime (audiogen-ggml, tts-ggml) ship
+// no ggml and are not listed.
 //
 // Usage: node check-speech-ggml-builds.mjs [--modules-dir node_modules]
 
@@ -12,9 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 export const SPEECH_ADDONS = [
   '@qvac/asr-ggml',
-  '@qvac/audiogen-ggml',
   '@qvac/bci-whispercpp',
-  '@qvac/tts-ggml',
 ];
 
 const BUILD_FIELD = 'qvac';
