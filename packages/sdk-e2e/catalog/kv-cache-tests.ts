@@ -744,7 +744,11 @@ export const kvCacheCancelKeepsCommittedCache: TestDefinition = {
     generationParams: { temp: 0, top_k: 1, seed: 42, predict: 256 }
   },
   expectation: { validation: 'function', fn: () => true },
-  metadata: { category: 'kv-cache', dependency: 'llm', estimatedDurationMs: 60000 }
+  metadata: {
+    category: 'kv-cache',
+    dependency: 'llm-no-shared-cache',
+    estimatedDurationMs: 60000
+  }
 }
 
 export const kvCacheTests = [
