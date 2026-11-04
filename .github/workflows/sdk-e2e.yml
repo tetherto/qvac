@@ -282,16 +282,16 @@ jobs:
         run: >-
           node ../.github/scripts/devicefarm-pool-run.mjs schedule --
           pnpm --config.verify-deps-before-run=false exec nx run-many -t test:mobile -p "$PROJECT" -c "$CONFIG" --outputStyle=stream
-      - if: cancelled() && steps.pool.outputs.run-count == '1'
-        uses: tetherto/qvac-actions/devicefarm-cancel-runs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          run-arns: ${{ steps.pool.outputs.run-arns }}
-      # Fresh credentials: the session above may have run out during a long run.
+      # Fresh credentials before the cancel: an expired session fails the run step and would leave the run billing.
       - if: always() && steps.pool.outputs.run-count == '1'
         uses: tetherto/qvac-actions/configure-aws-credentials@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
+      - if: (failure() || cancelled()) && steps.pool.outputs.run-count == '1'
+        uses: tetherto/qvac-actions/devicefarm-cancel-runs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          run-arns: ${{ steps.pool.outputs.run-arns }}
       - if: always() && steps.pool.outputs.run-count == '1'
         env:
           RUN_ARNS: ${{ steps.pool.outputs.run-arns }}
