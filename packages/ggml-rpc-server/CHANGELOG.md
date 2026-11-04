@@ -2,6 +2,12 @@
 
 ## [0.8.0] - 2026-11-04
 
+### Breaking
+
+- The RPC protocol moves 112 -> 113. Clients on `@qvac/fabric` 0.25.x refuse
+  a server on this release, and clients on 0.26.0 refuse a 0.7.x server; the
+  client logs the version mismatch. Move servers and clients together.
+
 ### Changed
 
 - `@qvac/fabric` dependency bumped `^0.25.0` -> `^0.26.0`, which carries
@@ -17,10 +23,7 @@
   ABI-compatible with 0.25.x, so every addon loaded in one process must resolve
   the same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
   `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.26.0` together.
-- The RPC protocol moves 112 -> 113. Clients on `@qvac/fabric` 0.25.x refuse
-  a server on this release, and clients on 0.26.0 refuse a 0.7.x server; the
-  client logs the version mismatch. Move servers and clients together. No API
-  change for this package.
+- No JavaScript API change for this package.
 
 ## [0.7.1] - 2026-10-29
 

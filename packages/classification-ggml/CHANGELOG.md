@@ -37,6 +37,8 @@ and this project adheres to
 ### Pull Requests
 
 - [#5432](https://github.com/tetherto/qvac/pull/5432) - stop publishing the default classifier weights.
+- [#5331](https://github.com/tetherto/qvac/pull/5331) - sync all addons with fabric b11739.
+- [#5563](https://github.com/tetherto/qvac/pull/5563) - move the fabric consumers to `@qvac/fabric` `^0.26.0`.
 
 ## [0.34.1] - 2026-10-29
 
