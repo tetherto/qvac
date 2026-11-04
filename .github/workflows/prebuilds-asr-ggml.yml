@@ -77,7 +77,7 @@ jobs:
       - uses: ./.github/actions/setup-cuda
       - name: Install addon dependencies and build JavaScript
         working-directory: packages/asr-ggml
-        run: npm install && npm run build:ts
+        run: npm install --ignore-scripts && npm run build:ts
       - uses: ./.github/actions/prebuild-artifact-materialize
         with:
           workdir: packages/asr-ggml
