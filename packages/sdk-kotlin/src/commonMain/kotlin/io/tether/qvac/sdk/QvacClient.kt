@@ -15,7 +15,7 @@ import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-class QvacClient(
+open class QvacClient(
     private val transport: QvacTransport,
     internal val json: Json = Json {
         ignoreUnknownKeys = true
@@ -24,6 +24,9 @@ class QvacClient(
 ) {
     internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val runtimeProfile: QvacRuntimeProfile? get() = transport.runtimeProfile
+
+    /** The transport a session handle wraps; see [openSession]. */
+    internal val transportForSessions: QvacTransport get() = transport
 
     suspend fun heartbeat(): HeartbeatResponse = heartbeat(HeartbeatRequest())
 
@@ -112,7 +115,8 @@ class QvacClient(
         }
     }
 
-    suspend fun close() {
+    /** Owner shutdown: stops the transport and, with it, every session opened on this client. */
+    open suspend fun close() {
         try {
             transport.close()
         } finally {
