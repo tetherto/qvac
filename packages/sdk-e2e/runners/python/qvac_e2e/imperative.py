@@ -339,6 +339,7 @@ async def rpc_server_status_abort(
             await quiet
             return StepResult.fail("Cancelled quiet status subscription did not end")
         except asyncio.CancelledError:
+            # The quiet read must raise cancellation after quiet.cancel().
             pass
         await updates.aclose()
         unused = _status_stream(transport, server.server_id)
