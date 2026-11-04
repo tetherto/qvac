@@ -6,27 +6,30 @@ const modelId = z.string().min(1).describe('Loaded language model to tokenize wi
 const text = z.string().describe('Raw text, or the final user turn when history is present.')
 const history = z
   .array(historyMessageSchema)
-  .describe('Conversation to render with the loaded model chat template.')
-const nonEmptyHistory = z
-  .array(historyMessageSchema)
-  .min(1)
-  .describe('Conversation to render with the loaded model chat template.')
+  .describe(
+    'Text-only conversation to render with the loaded model chat template. Attachments are not supported by token counting.'
+  )
 const tools = z.array(toolSchema).optional().describe('Tools to include in the rendered prompt.')
 
-const fields = {
+const commonFields = {
   modelId,
-  text: text.optional(),
-  history: history.optional(),
   tools
 }
-const requiredInput = z.union([z.object({ text }), z.object({ history: nonEmptyHistory })])
+const textFields = { ...commonFields, text, history: history.optional() }
+const historyFields = { ...commonFields, text: text.optional(), history: history.min(1) }
 
-export const calcTokensParamsSchema = z.object(fields).strict().and(requiredInput)
+const calcTokensTextParamsSchema = z.object(textFields).strict()
+const calcTokensHistoryParamsSchema = z.object(historyFields).strict()
+export const calcTokensParamsSchema = z.union([
+  calcTokensTextParamsSchema,
+  calcTokensHistoryParamsSchema
+])
 
-export const calcTokensRequestSchema = z
-  .object({ ...fields, type: z.literal('calcTokens') })
-  .strict()
-  .and(requiredInput)
+const requestEnvelope = { type: z.literal('calcTokens') }
+export const calcTokensRequestSchema = z.union([
+  calcTokensTextParamsSchema.extend(requestEnvelope).meta({ title: 'CalcTokensRequestText' }),
+  calcTokensHistoryParamsSchema.extend(requestEnvelope).meta({ title: 'CalcTokensRequestHistory' })
+])
 
 export const calcTokensResponseSchema = z.object({
   type: z.literal('calcTokens'),

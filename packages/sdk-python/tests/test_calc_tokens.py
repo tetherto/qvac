@@ -2,6 +2,7 @@ from collections.abc import AsyncIterable
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from tetherto.qvac_sdk._generated import CalcTokensRequest
 from tetherto.qvac_sdk._generated.methods import calc_tokens
@@ -37,3 +38,10 @@ async def test_calc_tokens_sends_default_discriminator() -> None:
         "text": "Hello",
         "type": "calcTokens",
     }
+
+
+def test_calc_tokens_rejects_unknown_fields() -> None:
+    with pytest.raises(ValidationError):
+        CalcTokensRequest.model_validate(
+            {"modelId": "llm", "text": "Hello", "tool": []}
+        )

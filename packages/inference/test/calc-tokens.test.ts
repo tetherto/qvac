@@ -5,11 +5,19 @@ import { calcTokensRequestSchema, ModelType } from '@/schemas/index'
 
 type TestContext = { teardown(cleanup: () => void): void }
 
-function fixture(t: TestContext, id: string, count: (input: unknown) => Promise<number>) {
+function fixture(
+  t: TestContext,
+  id: string,
+  count: (input: unknown) => Promise<number>,
+  config: { system_prompt?: string; tools?: boolean } = {
+    system_prompt: 'Configured system prompt',
+    tools: true
+  }
+) {
   registerModel(id, {
     model: { calcTokens: count } as unknown as AnyModel,
     path: '/tmp/model.gguf',
-    config: { system_prompt: 'Configured system prompt', tools: true },
+    config,
     modelType: ModelType.llamacppCompletion
   })
   t.teardown(() => unregisterModel(id))
@@ -83,4 +91,129 @@ test('calcTokens contract requires text or a non-empty history', (t) => {
       tools: []
     }).success
   )
+  t.ok(
+    calcTokensRequestSchema.safeParse({
+      type: 'calcTokens',
+      modelId: 'llm',
+      text: 'Hello',
+      history: []
+    }).success
+  )
+  t.absent(
+    calcTokensRequestSchema.safeParse({
+      type: 'calcTokens',
+      modelId: 'llm',
+      text: 'Hello',
+      tool: []
+    }).success
+  )
+})
+
+test('calcTokens drops tools when the model has tools disabled but keeps the system prompt', async (t) => {
+  let input: unknown
+  fixture(
+    t,
+    'tools-disabled',
+    async (value) => {
+      input = value
+      return 4
+    },
+    { system_prompt: 'Configured system prompt', tools: false }
+  )
+
+  await calcTokens({
+    type: 'calcTokens',
+    modelId: 'tools-disabled',
+    text: 'Hello',
+    tools: [
+      {
+        type: 'function',
+        name: 'weather',
+        description: 'Get weather',
+        parameters: { type: 'object', properties: {} }
+      }
+    ]
+  })
+
+  t.alike(input, {
+    text: 'Hello',
+    history: [{ role: 'system', content: 'Configured system prompt' }]
+  })
+})
+
+test('calcTokens renders always-loaded tools and tool_search for deferred tools', async (t) => {
+  let input: unknown
+  fixture(t, 'deferred-tools', async (value) => {
+    input = value
+    return 8
+  })
+
+  await calcTokens({
+    type: 'calcTokens',
+    modelId: 'deferred-tools',
+    history: [{ role: 'user', content: 'Hello' }],
+    tools: [
+      {
+        type: 'function',
+        name: 'weather',
+        description: 'Get weather',
+        parameters: { type: 'object', properties: {} }
+      },
+      {
+        type: 'function',
+        name: 'calendar',
+        description: 'Read the calendar',
+        parameters: { type: 'object', properties: {} },
+        deferLoading: true,
+        group: 'calendar'
+      }
+    ]
+  })
+
+  const names = (input as { tools?: { name: string }[] }).tools?.map((tool) => tool.name)
+  t.alike(names, ['weather', 'tool_search'])
+})
+
+test('calcTokens does not add a configured system prompt when history already has one', async (t) => {
+  let input: unknown
+  fixture(t, 'existing-system', async (value) => {
+    input = value
+    return 5
+  })
+
+  await calcTokens({
+    type: 'calcTokens',
+    modelId: 'existing-system',
+    history: [
+      { role: 'system', content: 'Request system prompt' },
+      { role: 'user', content: 'Hello' }
+    ]
+  })
+
+  t.alike(input, {
+    history: [
+      { role: 'system', content: 'Request system prompt' },
+      { role: 'user', content: 'Hello' }
+    ]
+  })
+})
+
+test('calcTokens accepts text with an empty history and seeds the configured system prompt', async (t) => {
+  let input: unknown
+  fixture(t, 'empty-history', async (value) => {
+    input = value
+    return 2
+  })
+
+  await calcTokens({
+    type: 'calcTokens',
+    modelId: 'empty-history',
+    text: 'Hello',
+    history: []
+  })
+
+  t.alike(input, {
+    text: 'Hello',
+    history: [{ role: 'system', content: 'Configured system prompt' }]
+  })
 })

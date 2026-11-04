@@ -3572,82 +3572,6 @@ class BciTranscribeStreamResponse(GeneratedBaseModel):
     type: Literal["bciTranscribeStream"] = "bciTranscribeStream"
 
 
-class CalcTokensRequestTextHistoryItemAttachmentsItem(GeneratedBaseModel):
-    path: Annotated[
-        str,
-        Field(
-            description="Absolute or resolvable path to the attachment file (e.g., image for multimodal models)."
-        ),
-    ]
-
-
-class CalcTokensRequestTextHistoryItemToolCallsItemArguments(RootModel[dict[str, Any]]):
-    root: Annotated[
-        dict[str, Any],
-        Field(
-            description="Arguments the tool was called with.",
-            title="CalcTokensRequestTextHistoryItemToolCallsItemArguments",
-        ),
-    ]
-
-
-class CalcTokensRequestTextHistoryItemToolCallsItem(GeneratedBaseModel):
-    id: Annotated[
-        str | None,
-        Field(description="Call id, echoed by the `tool` message that answers it."),
-    ] = None
-    name: Annotated[
-        str, Field(description="Name of the tool that was called.", min_length=1)
-    ]
-    arguments: Annotated[
-        CalcTokensRequestTextHistoryItemToolCallsItemArguments,
-        Field(
-            description="Arguments the tool was called with.",
-            title="CalcTokensRequestTextHistoryItemToolCallsItemArguments",
-        ),
-    ]
-
-
-class CalcTokensRequestTextHistoryItem(GeneratedBaseModel):
-    role: Annotated[
-        str,
-        Field(
-            description='Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'
-        ),
-    ]
-    content: Annotated[
-        str | None,
-        Field(
-            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
-        ),
-    ] = None
-    attachments: Annotated[
-        list[CalcTokensRequestTextHistoryItemAttachmentsItem] | None,
-        Field(description="Optional file attachments for multimodal models."),
-    ] = None
-    tool_calls: Annotated[
-        list[CalcTokensRequestTextHistoryItemToolCallsItem] | None,
-        Field(
-            alias="toolCalls",
-            description="Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
-        ),
-    ] = None
-    tool_call_id: Annotated[
-        str | None,
-        Field(
-            alias="toolCallId",
-            description="On a `tool` turn: the id of the call this result answers.",
-        ),
-    ] = None
-    tool_name: Annotated[
-        str | None,
-        Field(
-            alias="toolName",
-            description="On a `tool` turn: the name of the tool that produced the result.",
-        ),
-    ] = None
-
-
 class CalcTokensRequestTextToolsItemParametersPropertiesValueType(Enum):
     string = "string"
     number = "number"
@@ -3737,33 +3661,7 @@ class CalcTokensRequestTextToolsItem(GeneratedBaseModel):
     ]
 
 
-class CalcTokensRequestText(GeneratedBaseModel):
-    model_id: Annotated[
-        str,
-        Field(
-            alias="modelId",
-            description="Loaded language model to tokenize with.",
-            min_length=1,
-        ),
-    ]
-    text: Annotated[
-        str,
-        Field(description="Raw text, or the final user turn when history is present."),
-    ]
-    history: Annotated[
-        list[CalcTokensRequestTextHistoryItem] | None,
-        Field(
-            description="Conversation to render with the loaded model chat template."
-        ),
-    ] = None
-    tools: Annotated[
-        list[CalcTokensRequestTextToolsItem] | None,
-        Field(description="Tools to include in the rendered prompt."),
-    ] = None
-    type: Literal["calcTokens"] = "calcTokens"
-
-
-class CalcTokensRequestHistoryHistoryItemAttachmentsItem(GeneratedBaseModel):
+class CalcTokensRequestTextHistoryItemAttachmentsItem(GeneratedBaseModel):
     path: Annotated[
         str,
         Field(
@@ -3772,19 +3670,17 @@ class CalcTokensRequestHistoryHistoryItemAttachmentsItem(GeneratedBaseModel):
     ]
 
 
-class CalcTokensRequestHistoryHistoryItemToolCallsItemArguments(
-    RootModel[dict[str, Any]]
-):
+class CalcTokensRequestTextHistoryItemToolCallsItemArguments(RootModel[dict[str, Any]]):
     root: Annotated[
         dict[str, Any],
         Field(
             description="Arguments the tool was called with.",
-            title="CalcTokensRequestHistoryHistoryItemToolCallsItemArguments",
+            title="CalcTokensRequestTextHistoryItemToolCallsItemArguments",
         ),
     ]
 
 
-class CalcTokensRequestHistoryHistoryItemToolCallsItem(GeneratedBaseModel):
+class CalcTokensRequestTextHistoryItemToolCallsItem(GeneratedBaseModel):
     id: Annotated[
         str | None,
         Field(description="Call id, echoed by the `tool` message that answers it."),
@@ -3793,15 +3689,15 @@ class CalcTokensRequestHistoryHistoryItemToolCallsItem(GeneratedBaseModel):
         str, Field(description="Name of the tool that was called.", min_length=1)
     ]
     arguments: Annotated[
-        CalcTokensRequestHistoryHistoryItemToolCallsItemArguments,
+        CalcTokensRequestTextHistoryItemToolCallsItemArguments,
         Field(
             description="Arguments the tool was called with.",
-            title="CalcTokensRequestHistoryHistoryItemToolCallsItemArguments",
+            title="CalcTokensRequestTextHistoryItemToolCallsItemArguments",
         ),
     ]
 
 
-class CalcTokensRequestHistoryHistoryItem(GeneratedBaseModel):
+class CalcTokensRequestTextHistoryItem(GeneratedBaseModel):
     role: Annotated[
         str,
         Field(
@@ -3815,11 +3711,11 @@ class CalcTokensRequestHistoryHistoryItem(GeneratedBaseModel):
         ),
     ] = None
     attachments: Annotated[
-        list[CalcTokensRequestHistoryHistoryItemAttachmentsItem] | None,
+        list[CalcTokensRequestTextHistoryItemAttachmentsItem] | None,
         Field(description="Optional file attachments for multimodal models."),
     ] = None
     tool_calls: Annotated[
-        list[CalcTokensRequestHistoryHistoryItemToolCallsItem] | None,
+        list[CalcTokensRequestTextHistoryItemToolCallsItem] | None,
         Field(
             alias="toolCalls",
             description="Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
@@ -3839,6 +3735,35 @@ class CalcTokensRequestHistoryHistoryItem(GeneratedBaseModel):
             description="On a `tool` turn: the name of the tool that produced the result.",
         ),
     ] = None
+
+
+class CalcTokensRequestText(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="Loaded language model to tokenize with.",
+            min_length=1,
+        ),
+    ]
+    tools: Annotated[
+        list[CalcTokensRequestTextToolsItem] | None,
+        Field(description="Tools to include in the rendered prompt."),
+    ] = None
+    text: Annotated[
+        str,
+        Field(description="Raw text, or the final user turn when history is present."),
+    ]
+    history: Annotated[
+        list[CalcTokensRequestTextHistoryItem] | None,
+        Field(
+            description="Text-only conversation to render with the loaded model chat template. Attachments are not supported by token counting."
+        ),
+    ] = None
+    type: Literal["calcTokens"] = "calcTokens"
 
 
 class CalcTokensRequestHistoryToolsItemParametersPropertiesValueType(Enum):
@@ -3930,7 +3855,88 @@ class CalcTokensRequestHistoryToolsItem(GeneratedBaseModel):
     ]
 
 
+class CalcTokensRequestHistoryHistoryItemAttachmentsItem(GeneratedBaseModel):
+    path: Annotated[
+        str,
+        Field(
+            description="Absolute or resolvable path to the attachment file (e.g., image for multimodal models)."
+        ),
+    ]
+
+
+class CalcTokensRequestHistoryHistoryItemToolCallsItemArguments(
+    RootModel[dict[str, Any]]
+):
+    root: Annotated[
+        dict[str, Any],
+        Field(
+            description="Arguments the tool was called with.",
+            title="CalcTokensRequestHistoryHistoryItemToolCallsItemArguments",
+        ),
+    ]
+
+
+class CalcTokensRequestHistoryHistoryItemToolCallsItem(GeneratedBaseModel):
+    id: Annotated[
+        str | None,
+        Field(description="Call id, echoed by the `tool` message that answers it."),
+    ] = None
+    name: Annotated[
+        str, Field(description="Name of the tool that was called.", min_length=1)
+    ]
+    arguments: Annotated[
+        CalcTokensRequestHistoryHistoryItemToolCallsItemArguments,
+        Field(
+            description="Arguments the tool was called with.",
+            title="CalcTokensRequestHistoryHistoryItemToolCallsItemArguments",
+        ),
+    ]
+
+
+class CalcTokensRequestHistoryHistoryItem(GeneratedBaseModel):
+    role: Annotated[
+        str,
+        Field(
+            description='Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'
+        ),
+    ]
+    content: Annotated[
+        str | None,
+        Field(
+            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
+        ),
+    ] = None
+    attachments: Annotated[
+        list[CalcTokensRequestHistoryHistoryItemAttachmentsItem] | None,
+        Field(description="Optional file attachments for multimodal models."),
+    ] = None
+    tool_calls: Annotated[
+        list[CalcTokensRequestHistoryHistoryItemToolCallsItem] | None,
+        Field(
+            alias="toolCalls",
+            description="Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
+        ),
+    ] = None
+    tool_call_id: Annotated[
+        str | None,
+        Field(
+            alias="toolCallId",
+            description="On a `tool` turn: the id of the call this result answers.",
+        ),
+    ] = None
+    tool_name: Annotated[
+        str | None,
+        Field(
+            alias="toolName",
+            description="On a `tool` turn: the name of the tool that produced the result.",
+        ),
+    ] = None
+
+
 class CalcTokensRequestHistory(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
     model_id: Annotated[
         str,
         Field(
@@ -3939,6 +3945,10 @@ class CalcTokensRequestHistory(GeneratedBaseModel):
             min_length=1,
         ),
     ]
+    tools: Annotated[
+        list[CalcTokensRequestHistoryToolsItem] | None,
+        Field(description="Tools to include in the rendered prompt."),
+    ] = None
     text: Annotated[
         str | None,
         Field(description="Raw text, or the final user turn when history is present."),
@@ -3946,14 +3956,10 @@ class CalcTokensRequestHistory(GeneratedBaseModel):
     history: Annotated[
         list[CalcTokensRequestHistoryHistoryItem],
         Field(
-            description="Conversation to render with the loaded model chat template.",
+            description="Text-only conversation to render with the loaded model chat template. Attachments are not supported by token counting.",
             min_length=1,
         ),
     ]
-    tools: Annotated[
-        list[CalcTokensRequestHistoryToolsItem] | None,
-        Field(description="Tools to include in the rendered prompt."),
-    ] = None
     type: Literal["calcTokens"] = "calcTokens"
 
 

@@ -3769,88 +3769,6 @@
               "minLength": 1,
               "description": "Loaded language model to tokenize with."
             },
-            "text": {
-              "type": "string",
-              "description": "Raw text, or the final user turn when history is present."
-            },
-            "history": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "properties": {
-                  "role": {
-                    "type": "string",
-                    "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`, `\"tool\"`)."
-                  },
-                  "content": {
-                    "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.",
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "attachments": {
-                    "description": "Optional file attachments for multimodal models.",
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "path": {
-                          "type": "string",
-                          "description": "Absolute or resolvable path to the attachment file (e.g., image for multimodal models)."
-                        }
-                      },
-                      "required": ["path"],
-                      "title": "CalcTokensRequestTextHistoryItemAttachmentsItem"
-                    }
-                  },
-                  "toolCalls": {
-                    "description": "Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "description": "Call id, echoed by the `tool` message that answers it.",
-                          "type": "string"
-                        },
-                        "name": {
-                          "type": "string",
-                          "minLength": 1,
-                          "description": "Name of the tool that was called."
-                        },
-                        "arguments": {
-                          "type": "object",
-                          "propertyNames": {
-                            "type": "string"
-                          },
-                          "additionalProperties": {},
-                          "description": "Arguments the tool was called with.",
-                          "title": "CalcTokensRequestTextHistoryItemToolCallsItemArguments"
-                        }
-                      },
-                      "required": ["name", "arguments"],
-                      "title": "CalcTokensRequestTextHistoryItemToolCallsItem"
-                    }
-                  },
-                  "toolCallId": {
-                    "description": "On a `tool` turn: the id of the call this result answers.",
-                    "type": "string"
-                  },
-                  "toolName": {
-                    "description": "On a `tool` turn: the name of the tool that produced the result.",
-                    "type": "string"
-                  }
-                },
-                "required": ["role"],
-                "title": "CalcTokensRequestTextHistoryItem"
-              },
-              "description": "Conversation to render with the loaded model chat template."
-            },
             "tools": {
               "description": "Tools to include in the rendered prompt.",
               "type": "array",
@@ -3967,22 +3885,6 @@
                 "title": "CalcTokensRequestTextToolsItem"
               }
             },
-            "type": {
-              "type": "string",
-              "const": "calcTokens"
-            }
-          },
-          "required": ["modelId", "type", "text"],
-          "title": "CalcTokensRequestText"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "modelId": {
-              "type": "string",
-              "minLength": 1,
-              "description": "Loaded language model to tokenize with."
-            },
             "text": {
               "type": "string",
               "description": "Raw text, or the final user turn when history is present."
@@ -4019,7 +3921,7 @@
                         }
                       },
                       "required": ["path"],
-                      "title": "CalcTokensRequestHistoryHistoryItemAttachmentsItem"
+                      "title": "CalcTokensRequestTextHistoryItemAttachmentsItem"
                     }
                   },
                   "toolCalls": {
@@ -4044,11 +3946,11 @@
                           },
                           "additionalProperties": {},
                           "description": "Arguments the tool was called with.",
-                          "title": "CalcTokensRequestHistoryHistoryItemToolCallsItemArguments"
+                          "title": "CalcTokensRequestTextHistoryItemToolCallsItemArguments"
                         }
                       },
                       "required": ["name", "arguments"],
-                      "title": "CalcTokensRequestHistoryHistoryItemToolCallsItem"
+                      "title": "CalcTokensRequestTextHistoryItemToolCallsItem"
                     }
                   },
                   "toolCallId": {
@@ -4061,10 +3963,26 @@
                   }
                 },
                 "required": ["role"],
-                "title": "CalcTokensRequestHistoryHistoryItem"
+                "title": "CalcTokensRequestTextHistoryItem"
               },
-              "description": "Conversation to render with the loaded model chat template.",
-              "minItems": 1
+              "description": "Text-only conversation to render with the loaded model chat template. Attachments are not supported by token counting."
+            },
+            "type": {
+              "type": "string",
+              "const": "calcTokens"
+            }
+          },
+          "required": ["modelId", "text", "type"],
+          "additionalProperties": false,
+          "title": "CalcTokensRequestText"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "modelId": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Loaded language model to tokenize with."
             },
             "tools": {
               "description": "Tools to include in the rendered prompt.",
@@ -4182,12 +4100,96 @@
                 "title": "CalcTokensRequestHistoryToolsItem"
               }
             },
+            "text": {
+              "type": "string",
+              "description": "Raw text, or the final user turn when history is present."
+            },
+            "history": {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "type": "string",
+                    "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`, `\"tool\"`)."
+                  },
+                  "content": {
+                    "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.",
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "attachments": {
+                    "description": "Optional file attachments for multimodal models.",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "type": "string",
+                          "description": "Absolute or resolvable path to the attachment file (e.g., image for multimodal models)."
+                        }
+                      },
+                      "required": ["path"],
+                      "title": "CalcTokensRequestHistoryHistoryItemAttachmentsItem"
+                    }
+                  },
+                  "toolCalls": {
+                    "description": "Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "description": "Call id, echoed by the `tool` message that answers it.",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "Name of the tool that was called."
+                        },
+                        "arguments": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {},
+                          "description": "Arguments the tool was called with.",
+                          "title": "CalcTokensRequestHistoryHistoryItemToolCallsItemArguments"
+                        }
+                      },
+                      "required": ["name", "arguments"],
+                      "title": "CalcTokensRequestHistoryHistoryItemToolCallsItem"
+                    }
+                  },
+                  "toolCallId": {
+                    "description": "On a `tool` turn: the id of the call this result answers.",
+                    "type": "string"
+                  },
+                  "toolName": {
+                    "description": "On a `tool` turn: the name of the tool that produced the result.",
+                    "type": "string"
+                  }
+                },
+                "required": ["role"],
+                "title": "CalcTokensRequestHistoryHistoryItem"
+              },
+              "description": "Text-only conversation to render with the loaded model chat template. Attachments are not supported by token counting."
+            },
             "type": {
               "type": "string",
               "const": "calcTokens"
             }
           },
-          "required": ["modelId", "type", "history"],
+          "required": ["modelId", "history", "type"],
+          "additionalProperties": false,
           "title": "CalcTokensRequestHistory"
         }
       ]

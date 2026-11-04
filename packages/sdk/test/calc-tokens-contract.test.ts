@@ -24,6 +24,14 @@ test('calcTokens is a typed unary method in the generated client contract', (t) 
       history: []
     }).valid
   )
+  t.absent(
+    contractValidate('calcTokens.request', {
+      type: 'calcTokens',
+      modelId: 'llm',
+      text: 'Hello',
+      tool: []
+    }).valid
+  )
   t.ok(contractValidate('calcTokens.response', { type: 'calcTokens', tokens: 12 }).valid)
   t.absent(contractValidate('calcTokens.response', { type: 'calcTokens', tokens: -1 }).valid)
 })

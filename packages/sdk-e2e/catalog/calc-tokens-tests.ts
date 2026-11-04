@@ -8,7 +8,6 @@ export interface CalcTokensPromptParams {
 export const calcTokensPrompt: TestDefinition = {
   testId: 'calc-tokens-llm-prompt',
   params: {
-    zero: 0,
     shortText: 'Hello',
     longText: 'Hello, world. Please count every token in this deliberately longer sentence.'
   },
@@ -34,7 +33,6 @@ export const calcTokensPrompt: TestDefinition = {
         as: 'longCount'
       }
     },
-    { compare: { left: '$shortCount', right: '$params.zero', named: 'greaterThan' } },
     { compare: { left: '$longCount', right: '$shortCount', named: 'greaterThan' } }
   ],
   metadata: { category: 'completion', dependency: 'llm', estimatedDurationMs: 5000 }

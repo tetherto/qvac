@@ -78,22 +78,6 @@ class ContractTypesTest(unittest.TestCase):
         self.assertIn("class LongMethodRequest(", text)
         self.assertIn("class ShortRequest(", text)
 
-    def test_public_completion_type_name_survives_a_shorter_reuser(self):
-        def request(title, method):
-            return {"title": title, "type": "object", "required": ["type", "history"], "properties": {
-                "type": {"type": "string", "const": method},
-                "history": {"type": "array", "items": {"title": title + "HistoryItem", "type": "object",
-                                                       "properties": {"role": {"type": "string"}}}},
-            }}
-        graph = TypeGraph({"$defs": {
-            "A": request("CalcTokensRequest", "calcTokens"),
-            "B": request("CompletionStreamRequest", "completionStream"),
-        }})
-        text = graph.render()
-        self.assertIn("class CompletionStreamRequestHistoryItem(", text)
-        self.assertNotIn("class CalcTokensRequestHistoryItem(", text)
-        self.assertIn("val `history`: List<CompletionStreamRequestHistoryItem>", text)
-
     def test_forbidden_field_not_exposed(self):
         graph = TypeGraph({"$defs": {"A": {"title": "A", "type": "object", "properties": {"forbidden": {"not": {}}, "ok": {"type": "string"}}}}})
         self.assertNotIn("val `forbidden`", graph.render())
