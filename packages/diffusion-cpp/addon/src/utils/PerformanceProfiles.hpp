@@ -38,6 +38,8 @@ ProfileDevice classifyProfileDevice(
     uint64_t totalBytes);
 PerformanceProfile selectPerformanceProfile(
     const SdCtxConfig& config, ProfileModel model, const ProfileDevice& device);
+bool useH3LocalOps(
+    const PerformanceProfile& profile, int width, int height, int frames);
 bool useVaeGemm(
     const PerformanceProfile& profile, int width, int height, int batch,
     uint64_t freeBytes, bool vaeTiling = false);

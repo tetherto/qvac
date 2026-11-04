@@ -38,6 +38,8 @@ automatic flash attention and the accompanying graph profile; disabling
 the graph changes by default.
 The RTX graph profile requires at least 28 GiB free at load. Below that threshold,
 only the independently validated flash-attention change is selected.
+Graph changes apply only to 960×544×124 text-to-video requests. Other requests
+restore the original graph in the same context, retaining automatic attention.
 
 ## Bounded LTX precision
 

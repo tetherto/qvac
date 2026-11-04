@@ -777,15 +777,12 @@ void SdModel::load() {
   sdCtx_.reset(raw);
   performanceProfile_ = ctx.profile;
   performanceBackend_ = params.backend == nullptr ? "" : params.backend;
-  if (performanceProfile_.h3LocalOps && !sd_set_h3_local_ops(raw, true))
-    throw StatusError(
-        general_error::InternalError,
-        "MiniMax-H3 performance profile could not be enabled");
   QLOG_IF(
       qvac_lib_inference_addon_cpp::logger::Priority::INFO,
       "Performance profile: flash=" +
           std::to_string(performanceProfile_.flashAttention) +
-          ", h3_local_ops=" + std::to_string(performanceProfile_.h3LocalOps) +
+          ", h3_local_ops_candidate=" +
+          std::to_string(performanceProfile_.h3LocalOps) +
           ", vae_gemm_candidate=" +
           std::to_string(performanceProfile_.vaeGemm) +
           ", ltx_f16=" + std::to_string(performanceProfile_.ltxF16));
@@ -1597,6 +1594,19 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
   // -- Decode init / end / control-frame images -----------------------------
   qvac_lib_inference_addon_sd::validatePerformanceWorkload(
       config_, vid.width, vid.height, vid.videoFrames);
+  if (performanceProfile_.h3LocalOps) {
+    const bool enabled =
+        vid.mode == "txt2vid" &&
+        qvac_lib_inference_addon_sd::useH3LocalOps(
+            performanceProfile_, vid.width, vid.height, vid.videoFrames);
+    if (!sd_set_h3_local_ops(sdCtx_.get(), enabled))
+      throw StatusError(
+          general_error::InternalError,
+          "MiniMax-H3 performance profile could not be applied");
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        std::string("H3 graph profile: ") + (enabled ? "enabled" : "baseline"));
+  }
   // sd_image_t::data is allocated by stb_image via malloc(), so we wrap each
   // pixel buffer in unique_ptr with image_codec::FreeDeleter to guarantee
   // release on every exit path (including exceptions from generate_video()

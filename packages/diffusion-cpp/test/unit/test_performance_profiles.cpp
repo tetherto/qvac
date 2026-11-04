@@ -97,6 +97,19 @@ TEST(SdPerformanceProfiles, FluxRequiresBoundedWorkloadAndFreeMemory) {
   EXPECT_FALSE(select().vaeGemm);
 }
 
+TEST(SdPerformanceProfiles, H3GraphRequiresValidatedVideoShape) {
+  const auto profile = selectPerformanceProfile(
+      {},
+      ProfileModel::MiniMaxH3FL2VAQ4,
+      device(ProfileApi::Cuda, ProfileGpu::Rtx5090));
+  EXPECT_TRUE(useH3LocalOps(profile, 960, 544, 124));
+  EXPECT_FALSE(useH3LocalOps(profile, 512, 288, 39));
+  EXPECT_FALSE(useH3LocalOps(profile, 1920, 544, 124));
+  EXPECT_FALSE(useH3LocalOps(profile, 960, 1088, 124));
+  EXPECT_FALSE(useH3LocalOps(profile, 960, 544, 141));
+  EXPECT_FALSE(useH3LocalOps({}, 960, 544, 124));
+}
+
 TEST(SdPerformanceProfiles, LtxF16RetainsBaselineOutsideValidatedBudget) {
   SdCtxConfig config;
   auto gpu = device(ProfileApi::Metal, ProfileGpu::M3Ultra);

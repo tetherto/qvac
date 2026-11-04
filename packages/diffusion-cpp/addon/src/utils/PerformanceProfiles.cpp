@@ -272,6 +272,11 @@ PerformanceProfile selectPerformanceProfile(
   return result;
 }
 
+bool useH3LocalOps(
+    const PerformanceProfile& profile, int width, int height, int frames) {
+  return profile.h3LocalOps && width == 960 && height == 544 && frames == 124;
+}
+
 bool useVaeGemm(
     const PerformanceProfile& profile, int width, int height, int batch,
     uint64_t freeBytes, bool vaeTiling) {
