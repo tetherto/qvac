@@ -35,6 +35,8 @@
     "sync:test-suite": "./sync-test-suite.sh",
     "emit:resource-table": "node scripts/emit-resource-table.mjs",
     "check:resource-table": "node scripts/emit-resource-table.mjs --check",
+    "test:unit": "tsc -p tsconfig.unit.json && node --test test/unit/*.test.mjs",
+    "plan:model-cache": "node scripts/model-cache-plan.mjs",
     "check:step-dependencies": "node scripts/check-step-dependencies.mjs",
     "check:skip-matrix": "node scripts/check-skip-matrix.mjs",
     "check:contract": "node scripts/check-contract.mjs",

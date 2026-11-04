@@ -20,7 +20,7 @@ import { profiler } from '@qvac/sdk'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { ResourceManager } from '../shared/resource-manager.js'
-import { collectTestDeps } from '../shared/collect-test-deps.js'
+import { resolveBootstrapDeps, resolveBootstrapModels } from '../shared/bootstrap-deps.js'
 import { ModelLoadingExecutor } from '../shared/executors/model-loading-executor.js'
 import { CompletionExecutor } from '../shared/executors/completion-executor.js'
 import { ToolsExecutor } from '../shared/executors/tools-executor.js'
@@ -136,8 +136,14 @@ function ensureElectronE2EConfig() {
 export async function bootstrap(filteredTests?: TestDefinition[]) {
   ensureElectronE2EConfig()
 
-  const allowedDeps = filteredTests ? collectTestDeps(filteredTests) : undefined
-  await resources.downloadAllOnce(console.log, { allowedDeps })
+  // The producer's post-filter test list when the consumer bootstraps inside a run; the CI
+  // model-cache plan when `qvac-test run:bootstrap:*` warms a leg ahead of it.
+  const allowedDeps = resolveBootstrapDeps(filteredTests)
+  await resources.downloadAllOnce(console.log, {
+    allowedDeps,
+    // Only on a standalone bootstrap: inside a run, the producer's list is the whole story.
+    onlyModels: filteredTests ? undefined : resolveBootstrapModels()
+  })
 }
 
 export async function runSnapRefreshProbe() {

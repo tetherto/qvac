@@ -1,0 +1,235 @@
+name: On Merge SDK E2E Model Cache
+
+# Seeds the per-model SDK e2e cache (`sdk-e2e-model-v1-*`, see
+# .github/actions/sdk-e2e-model-cache). The e2e legs run from pull_request_target, where the
+# action only restores, so this and a test-sdk.yml dispatch are what write entries. Each leg
+# plans the whole catalog for every family on its OS, probes which models the cache already
+# has, downloads only the rest and saves each as its own entry -- a registry change that
+# touches one model costs one download here, not the whole set.
+#
+# One leg per runner OS the e2e legs use. Linux and Windows share every entry (they are
+# cross-OS), macOS adds the Core ML sets, so the legs run one after another: each later leg's
+# probe finds what the earlier ones saved instead of downloading and uploading it again. The
+# Windows leg is then a lookup, unless its runner archives differently (no zstd) and so needs
+# entries of its own.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      # The model set: the shared resource table, which tests use which keys, the planner.
+      - "packages/sdk-e2e/catalog/**"
+      - "packages/sdk-e2e/qvac-test.config.js"
+      - "packages/sdk-e2e/runners/js/shared/resource-manager.ts"
+      - "packages/sdk-e2e/runners/js/shared/collect-test-deps.ts"
+      - "packages/sdk-e2e/runners/js/shared/bootstrap-deps.ts"
+      - "packages/sdk-e2e/runners/js/shared/model-cache-plan.ts"
+      - "packages/sdk-e2e/scripts/model-cache-*.mjs"
+      # The registry the constants resolve against. The e2e legs build inference from the
+      # branch, and so does this workflow.
+      - "packages/inference/src/models/registry/**"
+      - "packages/sdk/package.json"
+      - "packages/sdk-e2e/package.json"
+      - ".github/actions/sdk-e2e-model-cache/**"
+      - ".github/workflows/on-merge-sdk-e2e-model-cache.yml"
+  # Every two days. The cache server prunes an entry once neither an upload nor a download
+  # has touched it for CACHE_CLEANUP_OLDER_THAN_DAYS (=5), and a lookup touches nothing. The
+  # scheduled run therefore restores every entry for real, which keeps the models only a
+  # full-suite run uses from ageing out between those runs.
+  schedule:
+    - cron: "47 2 */2 * *"
+  # No workflow_call and no pull_request: either would put PR-head code on the save path.
+  workflow_dispatch:
+    inputs:
+      force_refresh:
+        description: "Restore every entry for real, as the cron does, which resets the cache server's prune clock. A lookup alone does not."
+        type: boolean
+        default: false
+
+# A cancelled run cannot save what it downloaded.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  runner_names:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/reusable-runner-names.yml
+
+  # The e2e legs run against inference packed from the branch (on-pr-test-sdk.yml passes
+  # inference-source: branch), so their checksums come from this commit's models.ts, not from
+  # the last published @qvac/inference. Seed the same registry.
+  prepare-inference:
+    name: Pack inference from this commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      dependency-spec: ${{ steps.inference.outputs.dependency-spec }}
+      provenance: ${{ steps.inference.outputs.provenance }}
+      artifact-name: ${{ steps.artifact.outputs.name }}
+    steps:
+      - id: checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            packages/sdk/package.json
+            packages/inference
+            .github/actions/sdk-e2e-prepare-inference
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - name: Pack inference
+        id: inference
+        shell: bash
+        env:
+          INFERENCE_SOURCE: branch
+          PROJECT_DIRECTORY: packages/sdk
+          INFERENCE_DIRECTORY: packages/inference
+          ARTIFACT_DIRECTORY: ${{ runner.temp }}/sdk-e2e-inference-package
+          CHECKOUT_SHA: ${{ steps.checkout.outputs.commit }}
+        run: node .github/actions/sdk-e2e-prepare-inference/prepare.mjs resolve
+
+      - name: Derive artifact name
+        id: artifact
+        shell: bash
+        run: echo "name=sdk-e2e-model-cache-inference-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload inference package
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: ${{ steps.inference.outputs.artifact-path }}
+          if-no-files-found: error
+          retention-days: 1
+
+  seed:
+    needs: [runner_names, prepare-inference]
+    strategy:
+      fail-fast: false
+      # One after another, in this order; see the header.
+      max-parallel: 1
+      matrix:
+        include:
+          - os: linux
+            runner: linux_ubuntu2204_x64_gpu
+            families: desktop,python,electron,snap
+          - os: macos
+            runner: macos_arm64_gpu
+            families: desktop,python,electron
+          - os: windows
+            runner: win_2025_x64_gpu
+            families: desktop,python,electron
+    # The e2e legs' own runner pools: they reach the cache server those legs restore from and
+    # load the same SDK addon prebuilds the bootstrap starts.
+    runs-on: ${{ needs.runner_names.outputs[matrix.runner] }}
+    # A cold seed downloads the whole catalog (~70 GB) from the registry and uploads it again.
+    timeout-minutes: 240
+    name: seed (${{ matrix.os }})
+    permissions:
+      contents: read
+      packages: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Manual Workspace Cleanup
+        run: rm -rf "$GITHUB_WORKSPACE" && mkdir -p "$GITHUB_WORKSPACE"
+        working-directory: .
+        if: runner.environment != 'github-hosted'
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            packages/sdk
+            packages/sdk-e2e
+            packages/inference
+            .github/actions/sdk-e2e-model-cache
+            .github/actions/sdk-e2e-node-prepare
+            .github/actions/sdk-e2e-prepare-inference
+            .github/actions/sdk-e2e-prepare-test-suite
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - name: Install and build
+        uses: ./.github/actions/sdk-e2e-node-prepare
+        with:
+          project-directory: packages/sdk
+          working-directory: packages/sdk-e2e
+          inference-source: branch
+          inference-dependency-spec: ${{ needs.prepare-inference.outputs.dependency-spec }}
+          inference-artifact-name: ${{ needs.prepare-inference.outputs.artifact-name }}
+          inference-provenance: ${{ needs.prepare-inference.outputs.provenance }}
+
+      # Same worker and cache directory as the e2e legs (test-node-sdk.yml): the bootstrap
+      # writes where the plan's paths point.
+      - name: Bundle SDK worker (custom plugins)
+        working-directory: packages/sdk-e2e
+        run: npm run bundle:sdk
+
+      - name: Configure SDK cache directory
+        shell: node {0}
+        working-directory: packages/sdk-e2e
+        run: |
+          const fs = require('fs');
+          const path = require('path');
+          const cacheDir = path.resolve('.qvac-cache');
+          fs.mkdirSync(cacheDir, { recursive: true });
+          const configPath = path.resolve('qvac.config.ci.json');
+          fs.writeFileSync(configPath, `${JSON.stringify({ cacheDirectory: cacheDir }, null, 2)}\n`);
+          fs.appendFileSync(process.env.GITHUB_ENV, `QVAC_CONFIG_PATH=${configPath}\n`);
+
+      - name: Plan models cache
+        id: models-plan
+        working-directory: packages/sdk-e2e
+        env:
+          FAMILIES: ${{ matrix.families }}
+          HOST_OS: ${{ matrix.os }}
+        run: >-
+          node scripts/model-cache-plan.mjs
+          "--family=$FAMILIES"
+          "--os=$HOST_OS"
+          "--out=$RUNNER_TEMP/sdk-e2e-model-cache-plan.json"
+
+      - name: Probe models cache
+        id: models-cache
+        uses: ./.github/actions/sdk-e2e-model-cache
+        with:
+          mode: restore
+          plan: ${{ steps.models-plan.outputs.plan }}
+          lookup-only: ${{ github.event_name != 'schedule' && inputs.force_refresh != true }}
+
+      - name: Download missing models
+        if: steps.models-cache.outputs.complete != 'true'
+        working-directory: packages/sdk-e2e
+        env:
+          PLAN: ${{ steps.models-plan.outputs.plan }}
+          QVAC_E2E_BOOTSTRAP_MODELS: ${{ steps.models-cache.outputs.missing-models }}
+        run: node scripts/model-cache-bootstrap.mjs --plan "$PLAN"
+
+      # Also after a failed download: every model that did arrive is worth keeping, and the
+      # action skips (and reports) any entry not complete on disk.
+      - name: Save models cache
+        if: ${{ !cancelled() && steps.models-cache.outcome == 'success' }}
+        uses: ./.github/actions/sdk-e2e-model-cache
+        with:
+          mode: save
+          plan: ${{ steps.models-plan.outputs.plan }}
+          fail-on-save-error: "true"

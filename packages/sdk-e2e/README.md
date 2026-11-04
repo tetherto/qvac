@@ -336,8 +336,8 @@ in the form.
 `test-sdk.yml` fans out one reusable workflow per family, and each family gets one job per runner:
 
 - `test-node-sdk.yml` runs desktop, Electron, and Python. Their job is the same apart from a few steps.
-- `test-snap-sdk.yml` runs strict Snap. The LXD build, the snapd install, and the in-snap model cache are
-  its own steps, so none of them show up as skipped steps on the other families' jobs.
+- `test-snap-sdk.yml` runs strict Snap. The LXD build, the snapd install, and staging the cached models
+  into the Snap are its own steps, so none of them show up as skipped steps on the other families' jobs.
 - `test-android-sdk.yml` and `test-ios-sdk.yml` run the mobile consumers on Device Farm. The Android
   workflow runs either app (`app: js | kotlin`); the Kotlin one reports as its own family, `kotlin-android`.
 
@@ -350,8 +350,39 @@ workflow was loaded from, not from `test-version`, so a PR branch or tag that pr
 
 Desktop, Electron, and Python stay separate jobs on the same runner label. Merging them into one job per
 OS would run the three in sequence, end every other client's results when one fails, and change the
-`results-<family>-<platform>` contract that reports and reruns read. Electron would not share the desktop
-model cache either, because it bootstraps a different set of models.
+`results-<family>-<platform>` contract that reports and reruns read. They would not save model downloads
+either: the model cache below is shared per model, not per job.
+
+### Model cache in CI
+
+Each model is its own cache entry, so a leg transfers only the models its run uses and a registry change
+invalidates only the models it changed:
+
+1. `scripts/model-cache-plan.mjs` resolves the leg's tests the way the run will (suite, filter, include,
+   platform skips; `selectRunTests` from `@qvac/test-suite`), collects the ResourceManager deps they
+   declare, and lists every model constant the bootstrap would download for them, with every file the SDK
+   keeps for it, at its exact path, size and registry checksum (`runners/js/shared/model-cache-plan.ts`
+   mirrors the SDK's cache layout, Core ML sets included; its unit tests check the mirror against
+   `packages/inference`).
+2. `.github/actions/sdk-e2e-model-cache` restores those entries. Keys derive from the registry's
+   `sha256Checksum`, so desktop, Electron, Python and Snap share one copy of a model (macOS keeps a model
+   with Core ML bundles as its own entry), and a branch that is behind `main` still hits every model it
+   has in common with it.
+3. `scripts/model-cache-bootstrap.mjs` downloads only what the restore did not provide
+   (`QVAC_E2E_BOOTSTRAP_DEPS` and `QVAC_E2E_BOOTSTRAP_MODELS` narrow `run:bootstrap:*`).
+4. Only trusted runs save, and only files whose sha256 matches the registry:
+   `on-merge-sdk-e2e-model-cache.yml` (push to `main`, every two days, dispatch) and a `test-sdk.yml`
+   dispatch. PR runs restore and never write, so a model a PR adds is downloaded on that PR's runs until
+   it reaches `main`.
+
+The SDK verifies every file against the registry checksum when it loads it, so a damaged entry costs a
+download, never a wrong result. A save warns about anything the SDK wrote that no entry covers: that is
+the layout mirror drifting from the SDK. To see what a selection would restore:
+
+```bash
+npm run build
+npm run plan:model-cache -- --family=desktop --suite=smoke --out=plan.json
+```
 
 ## Developing new tests
 

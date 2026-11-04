@@ -90,6 +90,24 @@ interface TrackedModel {
   lastUsedAtTest: number
 }
 
+export interface PreDownloadOptions {
+  /** Root defs that contribute constants; every def when omitted */
+  allowedDeps?: ReadonlySet<string>
+  /** Constant names to keep; every collected constant when omitted */
+  onlyModels?: ReadonlySet<string>
+}
+
+export interface PreDownloadPlan {
+  /** Unique constants, in first-seen order, with the defs that reference each */
+  constants: { constant: ModelConstant; owners: string[] }[]
+  definedCount: number
+  contributorCount: number
+  /** Defs `allowedDeps` excluded */
+  filteredOutCount: number
+  /** Allowed defs marked `skipPreDownload` */
+  skippedDeps: string[]
+}
+
 export interface ResourceManagerOptions {
   /**
    * Milliseconds to sleep after a successful unloadModel() call inside
@@ -143,54 +161,39 @@ export class ResourceManager {
   }
 
   /**
-   * Pre-download every model constant referenced by every registered
-   * definition, including constants buried inside `config` (companion
-   * models, pivot models, upscaler/VAE/projection/etc.). Per-test
-   * `ensureLoaded` then mmaps from the already-cached files.
+   * Every model constant `downloadAllOnce` would fetch, without fetching
+   * anything: each registered definition's root `constant` plus every
+   * constant buried inside its `config` (companion models, pivot models,
+   * upscaler/VAE/projection/etc.), with the defs that reference it.
    *
-   * Behaviour:
    *  - `options.allowedDeps`, if given, narrows the set of *root* defs
-   *    that contribute constants to the pre-download list.
+   *    that contribute constants.
    *  - A root def with `skipPreDownload: true` contributes nothing — not
    *    its root `constant` and not anything its `config` references. A
-   *    constant that is *also* referenced by a non-skipped def will still
-   *    be downloaded via that other def.
-   *  - Idempotent on `downloaded`. Pass the full filter on the first
-   *    call; later calls with a different filter are a no-op.
+   *    constant that is *also* referenced by a non-skipped def is still
+   *    listed via that other def.
+   *  - `options.onlyModels`, if given, keeps only constants with those
+   *    names (CI: the models the per-model cache restore did not provide).
+   *
+   * CI sizes the per-model cache restore from this list, so a leg pulls
+   * exactly the models its bootstrap would otherwise download.
    */
-  async downloadAllOnce(
-    log?: (msg: string) => void,
-    options: { allowedDeps?: ReadonlySet<string> } = {}
-  ): Promise<void> {
-    if (this.downloaded) return
-    this.downloaded = true
-
+  async preDownloadConstants(options: PreDownloadOptions = {}): Promise<PreDownloadPlan> {
     const allowed = options.allowedDeps
     const isAllowed = (dep: string) => allowed === undefined || allowed.has(dep)
 
     const allDefinitions = Array.from(this.definitions.entries())
+    const filteredOut = allDefinitions.filter(([dep]) => !isAllowed(dep)).length
+    const skipped = allDefinitions
+      .filter(([dep, def]) => def.skipPreDownload && isAllowed(dep))
+      .map(([dep]) => dep)
 
-    if (allowed !== undefined) {
-      const filteredOut = allDefinitions.filter(([dep]) => !isAllowed(dep)).length
-      log?.(
-        `🎯 Bootstrap dep-filter active: keeping ${allowed.size} dep(s); ${filteredOut} of ${allDefinitions.length} defined excluded`
-      )
-    }
-
-    const skipped = allDefinitions.filter(([dep, def]) => def.skipPreDownload && isAllowed(dep))
-    if (skipped.length > 0) {
-      log?.(
-        `⏭️  Skipping ${skipped.length} def(s) marked skipPreDownload: ${skipped.map(([dep]) => dep).join(', ')}`
-      )
-    }
-
-    // Discover every constant referenced by every contributing def, keyed
-    // by `src` so the same constant referenced by multiple defs (or listed
-    // both as the root `constant` and inside `config`) is only downloaded
-    // once. `src` (the full registry URL) is the unique identity — `modelId`
-    // is the bare filename, which distinct models can share (both GR00T
-    // conversions ship `groot-q5_vf16.gguf`), and keying on it silently
-    // drops one of the colliding models from the pre-download list.
+    // Keyed by `src` so the same constant referenced by multiple defs (or
+    // listed both as the root `constant` and inside `config`) appears once.
+    // `src` (the full registry URL) is the unique identity — `modelId` is the
+    // bare filename, which distinct models can share (both GR00T conversions
+    // ship `groot-q5_vf16.gguf`), and keying on it silently drops one of the
+    // colliding models.
     const contributors = allDefinitions.filter(
       ([dep, def]) => !def.skipPreDownload && isAllowed(dep)
     )
@@ -213,19 +216,64 @@ export class ResourceManager {
       }
     }
 
-    const downloadList = Array.from(constants.values())
+    const only = options.onlyModels
+    return {
+      constants: Array.from(constants.values())
+        .filter((constant) => only === undefined || only.has(constant.name))
+        .map((constant) => ({
+          constant,
+          owners: owners.get(constant.src) ?? []
+        })),
+      definedCount: allDefinitions.length,
+      contributorCount: contributors.length,
+      filteredOutCount: filteredOut,
+      skippedDeps: skipped
+    }
+  }
+
+  /**
+   * Pre-download every model constant `preDownloadConstants` lists, so
+   * per-test `ensureLoaded` then mmaps from the already-cached files.
+   * Idempotent on `downloaded`. Pass the full filter on the first call;
+   * later calls with a different filter are a no-op.
+   */
+  async downloadAllOnce(
+    log?: (msg: string) => void,
+    options: PreDownloadOptions = {}
+  ): Promise<void> {
+    if (this.downloaded) return
+    this.downloaded = true
+
+    const plan = await this.preDownloadConstants(options)
+
+    if (options.allowedDeps !== undefined) {
+      log?.(
+        `🎯 Bootstrap dep-filter active: keeping ${options.allowedDeps.size} dep(s); ${plan.filteredOutCount} of ${plan.definedCount} defined excluded`
+      )
+    }
+
+    if (options.onlyModels !== undefined) {
+      log?.(`🎯 Bootstrap model filter active: ${options.onlyModels.size} model(s) not yet cached`)
+    }
+
+    if (plan.skippedDeps.length > 0) {
+      log?.(
+        `⏭️  Skipping ${plan.skippedDeps.length} def(s) marked skipPreDownload: ${plan.skippedDeps.join(', ')}`
+      )
+    }
+
     const env = typeof process !== 'undefined' ? process.env : {}
     const concurrency = resolveBootstrapDownloadConcurrency(env, this.downloadTarget)
     const retryConcurrency = resolveBootstrapRetryConcurrency(concurrency)
     log?.(
-      `📥 Pre-downloading ${downloadList.length} unique model constant(s) from ${contributors.length} def(s) ` +
+      `📥 Pre-downloading ${plan.constants.length} unique model constant(s) from ${plan.contributorCount} def(s) ` +
         `(concurrency=${concurrency}, retryConcurrency=${retryConcurrency})...`
     )
 
-    const downloadItems: BootstrapDownloadItem[] = downloadList.map((constant) => ({
+    const downloadItems: BootstrapDownloadItem[] = plan.constants.map(({ constant, owners }) => ({
       id: constant.src,
       name: constant.name,
-      ownerLabel: (owners.get(constant.src) ?? []).join(',') || '?',
+      ownerLabel: owners.join(',') || '?',
       run: async () => {
         await downloadAsset({
           assetSrc: constant as never,
@@ -241,7 +289,7 @@ export class ResourceManager {
     })
 
     log?.(
-      `📦 All ${downloadList.length} constant(s) pre-cached (max concurrent: ${result.maxConcurrent})`
+      `📦 All ${plan.constants.length} constant(s) pre-cached (max concurrent: ${result.maxConcurrent})`
     )
   }
 

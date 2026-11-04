@@ -50,8 +50,13 @@
   {
     "package": "sdk-e2e",
     "path": "packages/sdk-e2e",
-    "checks": ["format", "check:catalog"],
-    "depends_on": ["packages/sdk/contract"]
+    "checks": ["format", "check:catalog", "test:unit"],
+    "depends_on": [
+      "packages/sdk/contract",
+      "packages/inference/src/utils",
+      "packages/inference/src/handlers/load-model",
+      ".github/actions/sdk-e2e-model-cache"
+    ]
   },
   {
     "package": "opencode-plugin",
