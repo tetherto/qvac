@@ -36,7 +36,7 @@ that was **pushed** — not the PR base. It requires
 `release-<pkg>-x.y.z` (three-part semver).
 
 A **release train** base is `release-train-<train>-<x.y.z>` instead (see
-`qv-release-train`); `pr-checks.yml`'s release-guard job checks it. Rules 2 and 3 below apply
+`qv-release-train`); `sdk-checks.yml`'s release-guard job checks it. Rules 2 and 3 below apply
 unchanged; for rule 1, read `release-train-<train>-<x.y.z>` and prefer a head of
 `chore/<train>-train-<x.y.z>-changelog`.
 

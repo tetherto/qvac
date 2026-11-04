@@ -17,7 +17,7 @@ SDK's version.
 ## The engine is published first
 
 The SDK's committed range is installed from npm when `publish-npm.yml` builds a
-release and by the `published` leg of the SDK's checks in `pr-checks.yml`, so a
+release and by the `published` leg of the SDK's checks in `sdk-checks.yml`, so a
 range naming an unpublished version fails both.
 
 Moving to a new major.minor is two releases:
@@ -60,7 +60,7 @@ plugins).
 - Does not auto-commit.
 - Does not run in CI. CI checks the shared major.minor on every PR through the
   SDK's `lint` (`enforce-inference-versions`) and installs the range for real on
-  the `published` leg of the SDK's checks in `pr-checks.yml`; this skill is the fix.
+  the `published` leg of the SDK's checks in `sdk-checks.yml`; this skill is the fix.
 
 ## Workflow
 
@@ -122,7 +122,7 @@ python3 packages/sdk-kotlin/scripts/generate-contract.py --check
 `SDK_VERSION` is stamped from `packages/sdk/package.json` (Step 2 set it). The
 generator does not touch the test that asserts it: set the version literal in
 `packages/sdk-kotlin/src/commonTest/kotlin/io/tether/qvac/sdk/GeneratedContractTest.kt`
-by hand. sdk-kotlin's checks in `pr-checks.yml` run the version alignment check and
+by hand. sdk-kotlin's checks in `sdk-checks.yml` run the version alignment check and
 `jvmTest` on any PR that changes `packages/inference`, so the release PR and
 the backmerge both need these edits. Commit the `package.json` repin, the test
 literal, and any updates under
