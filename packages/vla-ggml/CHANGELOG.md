@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-11-04
+
 ### Breaking
 
 - `load({ backend })` with a GPU family list no longer falls back to CPU. When
