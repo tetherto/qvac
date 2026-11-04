@@ -1,5 +1,9 @@
 'use strict'
 
+const binding = require('../../binding.js')
+const test = require('brittle')
+const { LayaDecisions, Reranker } = require('../../index.js')
+
 const fs = require('bare-fs')
 const os = require('bare-os')
 const path = require('bare-path')
@@ -48,15 +52,12 @@ const DISK_SHARDED_MODEL = {
   ]
 }
 
-const DISK_SHARDS_LOG = 'load the model metadata from disk shards'
-const STREAMED_METADATA_LOG = 'load the model metadata from memory'
-// llama.cpp logs this per additional split it opens. A streamed load never
-// resolves the shard paths, so the absolute path only appears for a disk load.
+// llama.cpp logs this per additional split it opens from disk.
 const SPLIT_FILE_LOG = 'loading split-file'
 
-// [label, index of the shard passed to GGMLBert]
-const SHARD_CASES = [
-  ['the first shard', 0],
+// [label, index of the shard passed to GGMLBert]. Only the first shard names
+// the split; llama.cpp rejects a load that starts from any other.
+const REJECTED_SHARD_CASES = [
   ['a middle shard', 2],
   ['the last shard', 4]
 ]
@@ -98,14 +99,9 @@ async function downloadDiskShardedModel(modelDir) {
   return DISK_SHARDED_MODEL.shards.map((shard) => path.join(modelDir, shard.name))
 }
 
-// Passes one shard path, as a caller with the shards already on disk does:
-// GGMLBert skips _streamShards(), and the addon finds the sibling shards by
-// file name and loads them with llama_model_load_from_splits().
-async function runDiskShardedInference(t, shardPaths, shardIndex, modelDir) {
-  const specLogger = attachSpecLogger({ forwardToConsole: true })
-
-  const addon = new GGMLBert({
-    files: { model: [shardPaths[shardIndex]] },
+function createShardedAddon(shardPath, modelDir) {
+  return new GGMLBert({
+    files: { model: [shardPath] },
     config: {
       device: 'cpu',
       gpu_layers: '0',
@@ -117,6 +113,13 @@ async function runDiskShardedInference(t, shardPaths, shardIndex, modelDir) {
     logger: console,
     opts: { stats: true }
   })
+}
+
+// Passes the first shard path. Fabric finds the sibling shards by file name
+// and reads them from disk.
+async function runDiskShardedInference(t, shardPaths, modelDir) {
+  const specLogger = attachSpecLogger({ forwardToConsole: true })
+  const addon = createShardedAddon(shardPaths[0], modelDir)
 
   try {
     await addon.load()
@@ -140,14 +143,6 @@ async function runDiskShardedInference(t, shardPaths, shardIndex, modelDir) {
       'trained context should be at least the runtime context'
     )
 
-    t.ok(
-      specLogger.logs.some((line) => line.includes(DISK_SHARDS_LOG)),
-      'metadata should be read from the shards on disk'
-    )
-    t.absent(
-      specLogger.logs.some((line) => line.includes(STREAMED_METADATA_LOG)),
-      'metadata should not be read from streamed buffers'
-    )
     for (const siblingPath of shardPaths.slice(1)) {
       t.ok(
         specLogger.logs.some((line) => line.includes(`${SPLIT_FILE_LOG} ${siblingPath}`)),
@@ -160,9 +155,22 @@ async function runDiskShardedInference(t, shardPaths, shardIndex, modelDir) {
   }
 }
 
-for (const [label, shardIndex] of SHARD_CASES) {
+safeTest(
+  'sharded embed model loads from disk given the first shard',
+  {
+    timeout: 10 * 60 * 1000,
+    skip: isMobile
+  },
+  async (t) => {
+    const modelDir = path.resolve(__dirname, '../model')
+    const shardPaths = await ensureDiskShardedModel(modelDir)
+    await runDiskShardedInference(t, shardPaths, modelDir)
+  }
+)
+
+for (const [label, shardIndex] of REJECTED_SHARD_CASES) {
   safeTest(
-    `sharded embed model loads from disk given ${label}`,
+    `sharded embed model rejects a load given ${label}`,
     {
       timeout: 10 * 60 * 1000,
       skip: isMobile
@@ -170,7 +178,33 @@ for (const [label, shardIndex] of SHARD_CASES) {
     async (t) => {
       const modelDir = path.resolve(__dirname, '../model')
       const shardPaths = await ensureDiskShardedModel(modelDir)
-      await runDiskShardedInference(t, shardPaths, shardIndex, modelDir)
+      const addon = createShardedAddon(shardPaths[shardIndex], modelDir)
+      try {
+        await t.exception(() => addon.load(), /model initialization returned a null model\/context/)
+        t.is(addon.getState().configLoaded, false)
+      } finally {
+        await addon.unload().catch(() => {})
+      }
     }
   )
 }
+
+test('native binding does not expose weight streaming', function (t) {
+  t.is(binding.loadWeights, undefined)
+})
+
+// prestage-ignore: missing-model-00001-of-10000000.gguf — intentionally missing path for the allocation regression
+test('all model classes reject missing disk filenames without expanding oversized shard counts', async function (t) {
+  for (const Model of [GGMLBert, LayaDecisions, Reranker]) {
+    const model = new Model({
+      files: { model: [path.resolve(__dirname, 'missing-model-00001-of-10000000.gguf')] },
+      config: { device: 'cpu', gpu_layers: '0' }
+    })
+    try {
+      await t.exception(() => model.load(), /Failed to read GGUF metadata from disk/)
+      t.is(model.getState().configLoaded, false)
+    } finally {
+      await model.unload()
+    }
+  }
+})
