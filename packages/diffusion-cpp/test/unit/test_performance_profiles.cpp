@@ -66,11 +66,14 @@ TEST(SdPerformanceProfiles, FluxRequiresBoundedWorkloadAndFreeMemory) {
   EXPECT_FALSE(useVaeGemm(select(), 2048, 512, 1, 24 * GIB));
   EXPECT_FALSE(useVaeGemm(select(), 768, 768, 1, 24 * GIB));
   EXPECT_TRUE(useVaeGemm(select(), 512, 512, 1, 16 * GIB));
+  gpu = device(ProfileApi::Hip, ProfileGpu::StrixHalo);
+  EXPECT_TRUE(useVaeGemm(select(), 1024, 1024, 1, 16 * GIB));
+  EXPECT_FALSE(useVaeGemm(select(), 512, 512, 1, 16 * GIB));
   for (const auto api : {ProfileApi::Metal, ProfileApi::Vulkan}) {
     gpu.api = api;
     EXPECT_FALSE(select().vaeGemm);
   }
-  gpu.api = ProfileApi::Cuda;
+  gpu = device(ProfileApi::Cuda, ProfileGpu::Rtx5090);
   applySdCtxHandlers(config, {{"vae_conv_direct", "true"}});
   EXPECT_FALSE(select().vaeGemm);
 }
@@ -150,6 +153,38 @@ TEST(SdPerformanceProfiles, OptOutAndUnknownModelsKeepDefaults) {
       applySdCtxHandlers(config, {{"performance_profile", "fast"}}));
 }
 
+TEST(SdPerformanceProfiles, ExplicitGraphAndMemoryPoliciesKeepDefaults) {
+  const auto gpu = device(ProfileApi::Cuda, ProfileGpu::Rtx5090);
+  for (const auto& option :
+       {std::pair<const char*, const char*>{"performance_profile", "off"},
+        {"max_vram", "8GB"},
+        {"stream_layers", "true"},
+        {"diffusion_fa", "false"},
+        {"vae_auto_cpu_fallback", "true"},
+        {"tensor_type_rules", ".*=f16"}}) {
+    SdCtxConfig config;
+    applySdCtxHandlers(config, {{option.first, option.second}});
+    for (const auto model :
+         {ProfileModel::Flux2Klein4BQ8,
+          ProfileModel::MiniMaxH3FL2VAQ4,
+          ProfileModel::Ltx23Q5}) {
+      const auto profile = selectPerformanceProfile(config, model, gpu);
+      EXPECT_FALSE(profile.flashAttention);
+      EXPECT_FALSE(profile.h3LocalOps);
+      EXPECT_FALSE(profile.vaeGemm);
+      EXPECT_FALSE(profile.ltxF16);
+      EXPECT_FALSE(profile.ltxFullTemporal);
+    }
+  }
+  for (const auto* value : {"true", "false"}) {
+    SdCtxConfig config;
+    applySdCtxHandlers(config, {{"vae_conv_direct", value}});
+    EXPECT_FALSE(
+        selectPerformanceProfile(config, ProfileModel::Flux2Klein4BQ8, gpu)
+            .vaeGemm);
+  }
+}
+
 TEST(SdPerformanceProfiles, VendorNameDoesNotSubstituteForApiOrGpu) {
   const auto unknown = classifyProfileDevice("CUDA", "NVIDIA RTX 4090", 0, 0);
   EXPECT_EQ(unknown.gpu, ProfileGpu::Unknown);
@@ -160,4 +195,7 @@ TEST(SdPerformanceProfiles, VendorNameDoesNotSubstituteForApiOrGpu) {
   EXPECT_EQ(
       classifyProfileDevice("ROCm", "AMD Radeon 8060S Graphics", 0, 0).api,
       ProfileApi::Hip);
+  EXPECT_EQ(
+      classifyProfileDevice("ROCm", "Radeon 8060S Graphics", 0, 0).gpu,
+      ProfileGpu::StrixHalo);
 }

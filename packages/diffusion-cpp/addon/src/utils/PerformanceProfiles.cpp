@@ -142,7 +142,7 @@ ProfileDevice classifyProfileDevice(
     result.gpu = ProfileGpu::Gb10;
   if (gpu == "Apple M3 Ultra")
     result.gpu = ProfileGpu::M3Ultra;
-  if (gpu == "AMD Radeon 8060S Graphics")
+  if (gpu == "Radeon 8060S Graphics" || gpu == "AMD Radeon 8060S Graphics")
     result.gpu = ProfileGpu::StrixHalo;
   result.freeBytes = freeBytes;
   result.totalBytes = totalBytes;
@@ -234,6 +234,7 @@ PerformanceProfile selectPerformanceProfile(
       ((rtx && cuda) || (spark && cuda) || (strix && hip)) &&
       !config.explicitVaeConvDirect) {
     result.vaeGemm = true;
+    result.vaeGemm512 = cuda;
   }
   if (model == ProfileModel::Ltx23Q5) {
     result.ltxF16 =
@@ -265,7 +266,8 @@ bool useVaeGemm(
     const PerformanceProfile& profile, int width, int height, int batch,
     uint64_t freeBytes) {
   return profile.vaeGemm && width == height &&
-         (width == 512 || width == 1024) && batch == 1 && freeBytes >= 16 * GIB;
+         (width == 1024 || (width == 512 && profile.vaeGemm512)) &&
+         batch == 1 && freeBytes >= 16 * GIB;
 }
 
 const char* ltxF16TensorRules() {

@@ -24,6 +24,7 @@ struct PerformanceProfile {
   bool flashAttention = false;
   bool h3LocalOps = false;
   bool vaeGemm = false;
+  bool vaeGemm512 = false;
   bool ltxF16 = false;
   bool ltxFullTemporal = false;
 };
