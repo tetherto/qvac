@@ -20,6 +20,7 @@ import { transcribe, transcribeStream } from '@/plugins/ops/transcribe'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
 import { attachBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import { buildWhisperEngineConfig } from '@/plugins/builtin/asr-ggml/config'
+import { assessAsrFit } from '@/plugins/builtin/asr-ggml/assess'
 import { whisperFitRequest } from '@/plugins/builtin/asr-ggml/fit'
 import { createAsrModelLogger } from '@/plugins/builtin/asr-ggml/logging'
 
@@ -50,7 +51,7 @@ export const whisperPlugin = definePlugin({
   addonPackage: ADDON_ASR,
   loadConfigSchema: whisperConfigSchema,
   fitRequest: whisperFitRequest,
-  assessFit: ASRGgml.assessFit,
+  assessFit: assessAsrFit,
 
   async resolveConfig(cfg: WhisperConfig, ctx: ResolveContext) {
     const { vadModelSrc, ...whisperConfig } = cfg

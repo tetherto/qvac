@@ -22,6 +22,7 @@ import { transcribe, transcribeStream } from '@/plugins/ops/transcribe'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
 import { attachBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import { buildParakeetEngineConfig } from '@/plugins/builtin/asr-ggml/config'
+import { assessAsrFit } from '@/plugins/builtin/asr-ggml/assess'
 import { parakeetFitRequest } from '@/plugins/builtin/asr-ggml/fit'
 import { createAsrModelLogger } from '@/plugins/builtin/asr-ggml/logging'
 
@@ -62,7 +63,7 @@ export const parakeetPlugin = definePlugin({
   addonPackage: ADDON_ASR,
   loadConfigSchema: parakeetLoadConfigSchema,
   fitRequest: parakeetFitRequest,
-  assessFit: ASRGgml.assessFit,
+  assessFit: assessAsrFit,
 
   resolveConfig(cfg: ParakeetConfig): Promise<ResolveResult<ParakeetConfig>> {
     return resolveParakeetConfig(cfg)

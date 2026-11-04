@@ -1,4 +1,5 @@
 import type {
+  AsrFitResult,
   MossTranscribeFitRequest,
   ParakeetFitRequest,
   WhisperFitRequest
@@ -7,6 +8,55 @@ import type {
 import { gpuLayersFromGate } from '@/model-fit/gpu'
 import type { MossTranscribeConfig, ParakeetConfig, WhisperConfig } from '@/schemas/index'
 import type { FitLoad, FitRequestPlan } from '@/schemas/plugin'
+
+const UNSIZED_REASONS = new Set([
+  'measurement-failed',
+  'memory-capacity-unavailable',
+  'backend-memory-unavailable'
+])
+
+/** Adapts the last report-shaped ASR release to the shared fit-result contract. */
+export function normalizeAsrFitResult(result: AsrFitResult) {
+  if (result.status === 'error') {
+    if (UNSIZED_REASONS.has(result.reason)) {
+      return { status: 'unknown' as const, devices: [], stats: {} }
+    }
+    throw new TypeError(`assessFit: ${result.reason}`)
+  }
+
+  if (result.deviceIsCpu) {
+    return {
+      status: result.status,
+      devices: [
+        {
+          id: result.deviceName,
+          name: result.deviceName,
+          unified: true,
+          usedBytes: result.deviceBytes + result.hostBytes,
+          freeBytes: result.deviceFreeBytes,
+          totalBytes: result.deviceTotalBytes
+        }
+      ],
+      stats: {}
+    }
+  }
+
+  return {
+    status: result.status,
+    devices: [
+      {
+        id: result.deviceName,
+        name: result.deviceName,
+        unified: result.deviceSharesHostMemory,
+        usedBytes: result.deviceBytes,
+        freeBytes: result.deviceFreeBytes,
+        totalBytes: result.deviceTotalBytes
+      },
+      { id: 'CPU', name: 'CPU', unified: true, usedBytes: result.hostBytes }
+    ],
+    stats: {}
+  }
+}
 
 /**
  * The longest single transcribe the projection has to cover. Whisper's KV cache

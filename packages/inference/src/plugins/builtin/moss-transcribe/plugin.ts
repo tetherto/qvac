@@ -18,6 +18,7 @@ import { transcribe } from '@/plugins/ops/transcribe'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
 import { attachBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import { buildMossTranscribeEngineConfig } from '@/plugins/builtin/asr-ggml/config'
+import { assessAsrFit } from '@/plugins/builtin/asr-ggml/assess'
 import { mossTranscribeFitRequest } from '@/plugins/builtin/asr-ggml/fit'
 import { createAsrModelLogger } from '@/plugins/builtin/asr-ggml/logging'
 
@@ -47,7 +48,7 @@ export const mossTranscribePlugin = definePlugin({
   addonPackage: ADDON_ASR,
   loadConfigSchema: mossTranscribeConfigSchema,
   fitRequest: mossTranscribeFitRequest,
-  assessFit: ASRGgml.assessFit,
+  assessFit: assessAsrFit,
 
   resolveConfig(cfg: MossTranscribeConfig): Promise<ResolveResult<MossTranscribeConfig>> {
     return Promise.resolve({ config: cfg })

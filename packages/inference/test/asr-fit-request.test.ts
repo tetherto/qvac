@@ -1,7 +1,9 @@
 import test from 'brittle'
+import type { AsrFitResult } from '@qvac/asr-ggml'
 
 import {
   mossTranscribeFitRequest,
+  normalizeAsrFitResult,
   parakeetFitRequest,
   whisperFitRequest
 } from '@/plugins/builtin/asr-ggml/fit'
@@ -14,6 +16,84 @@ function load(modelPath: string, modelConfig: unknown, extra: Partial<FitLoad> =
 function requestOf(plan: FitRequestPlan): Record<string, unknown> | undefined {
   return 'request' in plan ? (plan.request as Record<string, unknown>) : undefined
 }
+
+function asrResult(overrides: Partial<AsrFitResult> = {}): AsrFitResult {
+  return {
+    status: 'fits',
+    reason: '',
+    modelType: 'base',
+    modelVariant: '',
+    deviceName: 'CPU',
+    deviceIsCpu: true,
+    deviceSharesHostMemory: true,
+    deviceFreeBytes: 8_000,
+    deviceTotalBytes: 16_000,
+    deviceBytes: 1_000,
+    weightsBytes: 800,
+    hostBytes: 200,
+    report: '',
+    ...overrides
+  }
+}
+
+test('ASR fit: combines device and host allocations for a CPU load', (t) => {
+  t.alike(normalizeAsrFitResult(asrResult()), {
+    status: 'fits',
+    devices: [
+      {
+        id: 'CPU',
+        name: 'CPU',
+        unified: true,
+        usedBytes: 1_200,
+        freeBytes: 8_000,
+        totalBytes: 16_000
+      }
+    ],
+    stats: {}
+  })
+})
+
+test('ASR fit: keeps discrete device and host allocations in separate pools', (t) => {
+  t.alike(
+    normalizeAsrFitResult(
+      asrResult({
+        status: 'does-not-fit',
+        deviceName: 'CUDA0',
+        deviceIsCpu: false,
+        deviceSharesHostMemory: false
+      })
+    ),
+    {
+      status: 'does-not-fit',
+      devices: [
+        {
+          id: 'CUDA0',
+          name: 'CUDA0',
+          unified: false,
+          usedBytes: 1_000,
+          freeBytes: 8_000,
+          totalBytes: 16_000
+        },
+        { id: 'CPU', name: 'CPU', unified: true, usedBytes: 200 }
+      ],
+      stats: {}
+    }
+  )
+})
+
+test('ASR fit: reports an unsized projection as unknown', (t) => {
+  t.alike(
+    normalizeAsrFitResult(asrResult({ status: 'error', reason: 'memory-capacity-unavailable' })),
+    { status: 'unknown', devices: [], stats: {} }
+  )
+})
+
+test('ASR fit: rejects invalid model and request errors', async (t) => {
+  await t.exception.all(
+    () => normalizeAsrFitResult(asrResult({ status: 'error', reason: 'model-unreadable' })),
+    /assessFit: model-unreadable/
+  )
+})
 
 test('whisper: carries the VAD model, flash attention, and the decoder count', (t) => {
   const plan = whisperFitRequest(
