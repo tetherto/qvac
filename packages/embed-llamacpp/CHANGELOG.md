@@ -19,6 +19,32 @@
 - Reranker classifier checks still inspect all disk shards, using the bounded
   shard count in the GGUF header ([#5398](https://github.com/tetherto/qvac/pull/5398)).
 
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.25.0` -> `^0.26.0`, which carries
+  `qvac-fabric` `11259.2.0` -> `11739.0.0`
+  ([#5331](https://github.com/tetherto/qvac/pull/5331)):
+  a rebase onto upstream llama.cpp b11739, TurboVec 1.1.2, an mtmd
+  image-resize fix, and Linux CUDA, Jetson and HIP backend modules that load
+  in hosts without libstdc++ (such as `bare-sidecar`) instead of falling back
+  to the CPU. A caret on a `0.x` version locks the minor, so `^0.25.0`
+  would not have resolved `0.26.0` on its own. The mobile dev dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.26.0` with it.
+- `@qvac/fabric` 0.26.0 changes the `common` library's API and is not
+  ABI-compatible with 0.25.x, so every addon loaded in one process must resolve
+  the same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.26.0` together.
+- The addon fills its `llama_batch` with its own helpers, since fabric's
+  `common` library dropped `common_batch_clear` and `common_batch_add`
+  ([#5331](https://github.com/tetherto/qvac/pull/5331)).
+
+### Fixed
+
+- With a projector that resizes images dynamically, half-way image dimensions
+  round to even, as the reference implementation does, so such an image can
+  get a different token count and embedding than on 0.54.0
+  ([#5331](https://github.com/tetherto/qvac/pull/5331)).
+
 ## [0.54.0] - 2026-11-03
 
 ### Breaking
