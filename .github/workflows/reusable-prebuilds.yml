@@ -111,12 +111,7 @@ on:
         required: false
         default: "6550da740ac8565ec2f1dc886f6ec6425af1df79588d773594163b0778832560"
       include-xdna:
-        description: >-
-          Validate provisioned AMD XRT and install IRON on the linux-x64 build so a consumer's
-          qvac-fabric xdna-backend feature builds libqvac-ggml-xdna.so and its
-          NPU kernels, and verify the module's linkage and kernels after
-          install. No NPU is needed on the runner (compile-only). Only affects
-          the linux-x64 job.
+        description: "Validate provisioned XRT and install pinned IRON for Linux x64 XDNA builds"
         type: boolean
         required: false
         default: false
@@ -463,7 +458,7 @@ jobs:
 
       - if: ${{ inputs.include-xdna && matrix.platform == 'linux' && matrix.arch == 'x64' }}
         name: Setup XRT and IRON for the XDNA backend
-        uses: ./.github/actions/setup-xdna
+        uses: tetherto/qvac/.github/actions/setup-xdna@48260f3d77e807a226a63afc159d39e265eca3a3 # XDNA toolchain setup
 
       # QVAC-24442: the arm64 runner has no GPU, which is fine. The toolkit is
       # compile-only and the CUDA backend is a runtime-loaded module that never

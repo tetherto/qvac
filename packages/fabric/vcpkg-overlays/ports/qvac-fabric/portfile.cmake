@@ -219,6 +219,8 @@ endif()
 # the kernels when IRON is missing, and a module without them would share the
 # real build's binary-cache ABI. The xrt port checks XRT and, through its
 # vcpkg-port-config.cmake, sets XRT_ROOT and XRT_XCLBINUTIL here.
+# Consumers must track XILINX_XRT and the XRT config in their triplet ABI
+# (see usage); this module embeds the absolute XRT library path.
 if(BUILD_XDNA_BACKEND)
   if(NOT DL_BACKENDS)
     message(FATAL_ERROR "qvac-fabric: xdna-backend needs the GGML_BACKEND_DL build (Linux x64 with gpu-backends)")

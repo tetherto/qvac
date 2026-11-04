@@ -75,7 +75,10 @@ template resolve the local runtime without a publish.
 Linux x64 builds include the AMD XDNA backend and its NPU kernel artifacts.
 The builder needs XRT 2.25 or newer (base, base-dev and npu packages) under
 `/opt/xilinx/xrt`, or at `XILINX_XRT`, and `QVAC_XDNA_IRON_PYTHON` pointing to
-an interpreter with IRON (`mlir-aie` and `llvm-aie`). CI validates the
+an interpreter with IRON (`mlir-aie` and `llvm-aie`). Set
+`QVAC_XDNA_IRON_VERSION` to that IRON release for binary-cache tracking. The
+Linux x64 triplet tracks the XRT install path and config contents, as well as
+the IRON release, so changing them invalidates cached XDNA builds. CI validates the
 runner-provisioned XRT and installs the pinned IRON environment through
 [setup-xdna](../../.github/actions/setup-xdna/action.yml). Compilation does
 not require NPU hardware.
