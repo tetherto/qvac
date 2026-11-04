@@ -111,6 +111,15 @@ async def test_a_payload_cannot_name_another_session():
     assert owner.sent[-1]["sessionId"] == session.session_id
 
 
+async def test_a_session_cannot_open_a_nested_session():
+    owner = FakeTransport()
+    session = await open_session(owner)
+
+    with pytest.raises(ValueError):
+        await open_session(session.transport)
+    assert [p["type"] for p in owner.sent] == ["openSession"]
+
+
 async def test_close_sends_close_session_and_ends_the_handle():
     owner = FakeTransport()
     session = await open_session(owner)

@@ -91,11 +91,18 @@ internal class SessionTransport(
 class QvacSessionClosedException(val sessionId: String) :
     QvacFeatureException("Session \"$sessionId\" is closed; open a new session")
 
+/** `openSession` called on a session handle instead of the owner client. */
+class QvacNestedSessionException(val sessionId: String) :
+    QvacFeatureException("Session \"$sessionId\" cannot open a session; open it on the owner client")
+
 /**
  * Opens a caller session and returns its handle at once. The `openSession`
  * round trip runs in the background; calls on the handle wait for it.
  */
 fun QvacClient.openSession(name: String? = null): QvacSession {
+    // A session's transport stamps its own id over every call, so a session opened
+    // on top of another would run as its parent and never be closable on its own.
+    if (this is QvacSession) throw QvacNestedSessionException(sessionId)
     val sessionId = qvacRequestId()
     val opened = scope.async {
         openSession(OpenSessionRequest(sessionId = sessionId, name = name))

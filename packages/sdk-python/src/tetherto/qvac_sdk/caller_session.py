@@ -117,7 +117,15 @@ class Session:
 
 
 async def open_session(owner: Transport, name: str | None = None) -> Session:
-    """Registers a new session on the worker and returns its handle."""
+    """Registers a new session on the worker and returns its handle. `owner`
+    is the client's own transport: a session's transport stamps its id over
+    every call, so a session opened through another session would run as
+    its parent."""
+    if isinstance(owner, SessionTransport):
+        raise ValueError(
+            f'session "{owner.session_id}" cannot open a session; '
+            "pass the owner client's transport"
+        )
     session_id = generate_client_request_id()
     payload: dict[str, Any] = {"type": "openSession", "sessionId": session_id}
     if name is not None:

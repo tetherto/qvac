@@ -64,6 +64,16 @@ class QvacSessionTest {
     }
 
     @Test
+    fun aSessionCannotOpenANestedSession() = runTest {
+        val transport = SessionRecordingTransport()
+        val session = QvacClient(transport).openSession()
+        session.opened.await()
+
+        assertFailsWith<QvacNestedSessionException> { session.openSession() }
+        assertEquals(listOf("openSession"), transport.requests.map { it.type() })
+    }
+
+    @Test
     fun closeSendsCloseSessionAndLeavesTheTransportOpen() = runTest {
         val transport = SessionRecordingTransport()
         val session = QvacClient(transport).openSession()
