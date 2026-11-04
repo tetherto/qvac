@@ -100,6 +100,8 @@ export interface SearchHit {
   ordinal: number
   content: string
   metadataJson?: string
+  // The document's `metadata` from ingest, when it had any.
+  documentMetadata?: Record<string, unknown>
   score: number
 }
 

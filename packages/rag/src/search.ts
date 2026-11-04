@@ -74,7 +74,31 @@ export async function scanSearch(
   }
   scoreBatch()
 
-  return top.map((entry) => entry.hit)
+  const hits = top.map((entry) => entry.hit)
+  await attachDocumentMetadata(reader, scope.namespace, hits)
+  return hits
+}
+
+// Reads each hit's document once, from the same snapshot as the scan.
+async function attachDocumentMetadata(
+  reader: HyperDBReader,
+  namespace: string,
+  hits: SearchHit[]
+): Promise<void> {
+  const documentIds = Array.from(new Set(hits.map((hit) => hit.documentId)))
+  const documents = await Promise.all(
+    documentIds.map((documentId) =>
+      reader.get<DocumentRecord>(DOCUMENTS, { namespace, documentId })
+    )
+  )
+  const metadata = new Map<string, Record<string, unknown>>()
+  documents.forEach((document, i) => {
+    if (document?.metadata) metadata.set(documentIds[i], document.metadata)
+  })
+  for (const hit of hits) {
+    const value = metadata.get(hit.documentId)
+    if (value) hit.documentMetadata = value
+  }
 }
 
 // Resolves the scope to key ranges over current-generation chunks. When

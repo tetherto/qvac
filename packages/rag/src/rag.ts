@@ -2,7 +2,7 @@ import HyperDB from 'hyperdb'
 import qvacCrypto from '#crypto'
 
 import dbSpec from './db/hyperspec/hyperdb/index.js'
-import { QvacErrorRAG, ERR_CODES } from './errors.js'
+import { QvacErrorRAG, ERR_CODES, toRagError } from './errors.js'
 import {
   FIRST_NATIVE_ID,
   MAX_NATIVE_ID,
@@ -73,7 +73,7 @@ export function createRag(options: CreateRagOptions): Rag {
     if (!opening) {
       opening = open().catch((error) => {
         opening = null
-        throw error
+        throw toRagError(error)
       })
     }
     return opening
@@ -382,6 +382,8 @@ async function withSnapshot<T>(
   const snapshot = db.snapshot()
   try {
     return await operation(snapshot)
+  } catch (error) {
+    throw toRagError(error)
   } finally {
     await snapshot.close()
   }
@@ -396,12 +398,7 @@ async function withTransaction<T>(
   try {
     return await operation(tx)
   } catch (error) {
-    if (error instanceof QvacErrorRAG) throw error
-    throw new QvacErrorRAG({
-      code: ERR_CODES.DB_OPERATION_FAILED,
-      adds: error instanceof Error ? error.message : String(error),
-      cause: error instanceof Error ? error : undefined
-    })
+    throw toRagError(error)
   } finally {
     await tx.close()
   }

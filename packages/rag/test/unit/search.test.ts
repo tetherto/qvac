@@ -252,3 +252,38 @@ test('an aborted signal cancels the search', async (t) => {
     'a non-signal is rejected'
   )
 })
+
+test('hits carry the document metadata given at ingest', async (t) => {
+  const { rag, spaceId } = await openRag(t)
+  await rag.ingest({
+    namespace: 'ns',
+    documents: [
+      {
+        ...doc('titled', spaceId, [
+          ['a', [1, 0, 0]],
+          ['b', [0.9, 0, 0]]
+        ]),
+        metadata: { title: 'Leave policy' }
+      },
+      doc('plain', spaceId, [['c', [0.8, 0, 0]]])
+    ]
+  })
+
+  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], k: 3 })
+  t.alike(hits[0].documentMetadata, { title: 'Leave policy' })
+  t.alike(hits[1].documentMetadata, { title: 'Leave policy' }, 'every chunk of the document')
+  t.absent('documentMetadata' in hits[2], 'no key when the document had none')
+})
+
+test('a storage error during search surfaces as DB_OPERATION_FAILED', async (t) => {
+  const { rag, store, spaceId } = await openRag(t)
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+  await (store as unknown as { close(): Promise<void> }).close()
+
+  await rejectsWithCode(
+    t,
+    rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], k: 1 }),
+    ERR_CODES.DB_OPERATION_FAILED,
+    'a read on a closed store'
+  )
+})

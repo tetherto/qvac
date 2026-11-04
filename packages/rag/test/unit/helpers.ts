@@ -96,7 +96,8 @@ export async function rejectsWithCode(
   t: Test,
   promise: Promise<unknown> | (() => unknown),
   code: number,
-  message: string
+  message: string,
+  pattern?: RegExp
 ): Promise<void> {
   try {
     await (typeof promise === 'function' ? promise() : promise)
@@ -104,5 +105,6 @@ export async function rejectsWithCode(
   } catch (error) {
     t.ok(error instanceof QvacErrorRAG, `${message}: QvacErrorRAG`)
     t.is((error as QvacErrorRAG).code, code, message)
+    if (pattern) t.ok(pattern.test((error as Error).message), `${message}: ${pattern}`)
   }
 }

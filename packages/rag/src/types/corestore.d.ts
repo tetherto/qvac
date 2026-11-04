@@ -1,11 +1,10 @@
 // Types the untyped `corestore` module for this package's own compile and
-// tests. The member shapes are owned in db/db-types.ts (which
-// ships); here they are bound to the module specifier plus its default.
+// tests. The shapes this package needs are owned in db/db-types.ts (which
+// ships); tests also close the store they create.
 declare module 'corestore' {
-  export type { Hypercore, ReplicationStream } from '../db/db-types.js'
   const Corestore: new (
     storage: string,
     options?: Record<string, unknown>
-  ) => import('../db/db-types.js').Corestore
+  ) => import('../db/db-types.js').Corestore & { close(): Promise<void> }
   export default Corestore
 }

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { QvacErrorRAG, ERR_CODES } from './errors.js'
+import { fromZodError } from './validation.js'
 import type { SearchScope } from './types.js'
 
 const documentIdsSchema = z.array(z.string().min(1))
@@ -20,10 +21,7 @@ const narrowingSchema = z
   .strict()
 
 function invalidScope(error: z.ZodError): QvacErrorRAG {
-  const reason = error.issues
-    .map((issue) => (issue.path.length ? `${issue.path.join('.')}: ` : '') + issue.message)
-    .join('; ')
-  return new QvacErrorRAG({ code: ERR_CODES.INVALID_SCOPE, adds: reason })
+  return fromZodError(ERR_CODES.INVALID_SCOPE, error)
 }
 
 // Rejects a missing namespace and unknown keys, so a typo never widens a search.

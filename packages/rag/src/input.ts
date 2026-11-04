@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { QvacErrorRAG, ERR_CODES } from './errors.js'
+import { fromZodError } from './validation.js'
 import type { DeleteDocumentsParams } from './types.js'
 
 export interface ValidChunk {
@@ -66,10 +67,7 @@ const searchSchema = z
   .strict()
 
 function invalidInput(error: z.ZodError): QvacErrorRAG {
-  const reason = error.issues
-    .map((issue) => (issue.path.length ? `${issue.path.join('.')}: ` : '') + issue.message)
-    .join('; ')
-  return new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT, adds: reason })
+  return fromZodError(ERR_CODES.INVALID_INPUT, error)
 }
 
 // Always copies, so a caller reusing its buffer can't change a pending call.

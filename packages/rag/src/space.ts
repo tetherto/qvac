@@ -1,7 +1,8 @@
 import qvacCrypto from '#crypto'
 import { z } from 'zod'
 
-import { QvacErrorRAG, ERR_CODES } from './errors.js'
+import { ERR_CODES } from './errors.js'
+import { fromZodError } from './validation.js'
 import type { EmbeddingSpace } from './types.js'
 
 const embeddingSpaceSchema = z
@@ -19,12 +20,7 @@ const embeddingSpaceSchema = z
 
 export function parseEmbeddingSpace(space: unknown): EmbeddingSpace {
   const parsed = embeddingSpaceSchema.safeParse(space)
-  if (!parsed.success) {
-    throw new QvacErrorRAG({
-      code: ERR_CODES.INVALID_INPUT,
-      adds: `space: ${parsed.error.issues.map((issue) => issue.message).join('; ')}`
-    })
-  }
+  if (!parsed.success) throw fromZodError(ERR_CODES.INVALID_INPUT, parsed.error, 'space')
   return parsed.data
 }
 

@@ -74,4 +74,15 @@ const definitions: ErrorCodesMap = {
   }
 }
 
+// Errors from Corestore and HyperDB surface as DB_OPERATION_FAILED, with the
+// original kept as `cause`.
+export function toRagError(error: unknown): QvacErrorRAG {
+  if (error instanceof QvacErrorRAG) return error
+  return new QvacErrorRAG({
+    code: ERR_CODES.DB_OPERATION_FAILED,
+    adds: error instanceof Error ? error.message : String(error),
+    cause: error instanceof Error ? error : undefined
+  })
+}
+
 addCodes(definitions, { name: '@qvac/rag', version: '0.10.0' })

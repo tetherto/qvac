@@ -67,6 +67,8 @@ Creates a RAG instance on a caller-owned Corestore. `close()` waits for calls al
 
 Creates a namespace pinned to one embedding space and returns `{ name, spaceId, revision }`. `spaceId` is a hash of every field of `space`, so two spaces with the same dimensions but a different model, encoding or metric never match. Calling it again with the same space returns the existing namespace; a different space fails with `NAMESPACE_EXISTS`.
 
+`documentEncoding`, `queryEncoding` and `preprocessing` only identify the space; `@qvac/rag` never applies them. Add the document and query prefixes yourself before embedding. Nothing checks that you did, and skipping them only makes results worse.
+
 `computeSpaceId(space)` returns the same ID without touching storage.
 
 ### `ingest({ namespace, documents })`
@@ -86,7 +88,7 @@ Deletes the documents and their chunks in one batch. Unknown IDs are ignored. Re
 
 ### `search({ scope, vector, k, signal? })`
 
-Returns up to `k` hits `{ namespace, documentId, chunkId, ordinal, content, metadataJson?, score }`, best first. The score is the dot product, or the cosine similarity for `cosine` spaces. An aborted `signal` stops the scan between batches with `OPERATION_CANCELLED`.
+Returns up to `k` hits `{ namespace, documentId, chunkId, ordinal, content, metadataJson?, documentMetadata?, score }`, best first. `metadataJson` is the chunk's and `documentMetadata` is the document's `metadata` from ingest. The score is the dot product, or the cosine similarity for `cosine` spaces. An aborted `signal` stops the scan between batches with `OPERATION_CANCELLED`.
 
 `scope` is `{ namespace, documentIds? }`. Only chunks inside the scope are read and ranked, so a restricted search fills its top `k` from allowed documents. Search fails closed:
 
@@ -106,7 +108,7 @@ await reader.search({ vector: queryVector, k: 5, scope: { documentIds: ['travel'
 
 ## Errors
 
-Every error is a `QvacErrorRAG` with a code from `ERR_CODES`, importable from `@qvac/rag` or `@qvac/rag/errors`.
+Every error is a `QvacErrorRAG` with a code from `ERR_CODES`, importable from `@qvac/rag` or `@qvac/rag/errors`. Corestore and HyperDB failures, including `ready()` on storage another process holds, surface as `DB_OPERATION_FAILED` with the original error as `cause`.
 
 ## Development
 

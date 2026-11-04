@@ -1,20 +1,12 @@
 // Owned type surface for the untyped `corestore` and `hyperdb` deps. Only the
 // members this package uses are described.
 
-export interface ReplicationStream {
-  pipe(destination: ReplicationStream): ReplicationStream
-  destroy(): void
-}
-
-export interface Hypercore {
-  readonly key: Uint8Array
-  replicate(isInitiator: boolean): ReplicationStream
-}
+// Opaque to this package: it is only handed to HyperDB.
+export type Hypercore = object
 
 export interface Corestore {
   ready(): Promise<void>
   get(options: { name: string }): Hypercore
-  close(): Promise<void>
 }
 
 export interface HyperDBStream<T> extends AsyncIterable<T> {
@@ -34,7 +26,6 @@ export interface HyperDBTransaction extends HyperDBReader {
 }
 
 export interface HyperDBInstance {
-  readonly core: Hypercore
   ready(): Promise<void>
   close(): Promise<void>
   snapshot(): HyperDBReader

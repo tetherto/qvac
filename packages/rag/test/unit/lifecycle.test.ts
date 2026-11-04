@@ -46,7 +46,13 @@ test('ready can be retried after the corestore fails to open', async (t) => {
   }
   const rag = createRag({ corestore: flaky })
 
-  await t.exception(rag.ready(), /disk busy/, 'first open fails')
+  await rejectsWithCode(
+    t,
+    rag.ready(),
+    ERR_CODES.DB_OPERATION_FAILED,
+    'a Corestore error is wrapped',
+    /disk busy/
+  )
   await rag.ready()
   await rag.createNamespace({ name: 'ns', space: SPACE })
   await rag.close()
@@ -81,7 +87,13 @@ test('a HyperDB that fails to open is closed before ready() retries', async (t) 
   }
   const rag = createRag({ corestore: flaky })
 
-  await t.exception(rag.ready(), /bad core/, 'first open fails inside HyperDB')
+  await rejectsWithCode(
+    t,
+    rag.ready(),
+    ERR_CODES.DB_OPERATION_FAILED,
+    'a HyperDB open error is wrapped',
+    /bad core/
+  )
   t.ok(failed[0].closed, 'the failed instance released its core')
   await rag.ready()
   await rag.createNamespace({ name: 'ns', space: SPACE })
@@ -160,7 +172,8 @@ test('createNamespace validates the space', async (t) => {
     t,
     rag.createNamespace({ name: 'ns', space: { ...SPACE, dimensions: 0 } }),
     ERR_CODES.INVALID_INPUT,
-    'zero dimensions'
+    'zero dimensions',
+    /space\.dimensions:/
   )
   await rejectsWithCode(
     t,
