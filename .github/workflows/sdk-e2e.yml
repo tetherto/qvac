@@ -6,6 +6,10 @@ on:
   pull_request_target:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches: [main, release-*, feature-*, tmp-*]
+  # TEMP proof only, never merged: pull_request_target runs the default branch's copy, so this proof PR uses its own.
+  pull_request:
+    types: [labeled]
+    branches: [tmp-sdk-e2e-proof]
   workflow_dispatch:
     inputs:
       packages:
