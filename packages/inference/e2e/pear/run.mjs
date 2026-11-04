@@ -4,11 +4,12 @@
 // The app in ./app is packed with its addons offloaded, as apps ship, and run
 // outside the install tree.
 //
-// Usage: node e2e/pear/run.mjs [--inference <tarball>] [--keep]
+// Usage: node e2e/pear/run.mjs [--inference <tarball> | --tarballs <dir>] [--keep]
 //   --inference  @qvac/inference tarball (default: `npm pack` of the built package)
+//   --tarballs   `release-train.mjs pack` output; uses its @qvac/inference
 //   --keep       keep the temp directory
-// Env: PEAR_RUNTIME_VERSION, BARE_RUNTIME_VERSION (default latest),
-//      PEAR_E2E_TIMEOUT_MS (default 900000), PEAR_E2E_CACHE_DIR (model cache)
+// Env: PEAR_RUNTIME_VERSION, BARE_RUNTIME_VERSION, BARE_PACK_VERSION (default
+//      latest), PEAR_E2E_TIMEOUT_MS (default 900000), PEAR_E2E_CACHE_DIR
 
 import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -41,12 +42,14 @@ const REPORTED_PACKAGES = [
 const { values: args } = parseArgs({
   options: {
     inference: { type: 'string' },
+    tarballs: { type: 'string' },
     keep: { type: 'boolean', default: false }
   }
 })
 
 const pearRuntimeVersion = process.env.PEAR_RUNTIME_VERSION || 'latest'
 const bareRuntimeVersion = process.env.BARE_RUNTIME_VERSION || 'latest'
+const barePackVersion = process.env.BARE_PACK_VERSION || 'latest'
 const timeoutMs = Number(process.env.PEAR_E2E_TIMEOUT_MS || 900_000)
 
 const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-pear-e2e-'))
@@ -79,6 +82,10 @@ function npm(npmArgs, cwd) {
 
 function packInference() {
   if (args.inference) return path.resolve(args.inference)
+  if (args.tarballs) {
+    const index = readJson(path.join(args.tarballs, 'tarballs.json'))
+    return path.resolve(args.tarballs, index['@qvac/inference'])
+  }
 
   if (!fs.existsSync(path.join(packageDir, 'dist', 'index.js'))) {
     throw new Error('No dist/. Run `npm run build` first or pass --inference.')
@@ -106,7 +113,7 @@ function installApp(inferenceTarball) {
       '--ignore-scripts',
       `pear-runtime@${pearRuntimeVersion}`,
       `bare-runtime@${bareRuntimeVersion}`,
-      'bare-pack@latest',
+      `bare-pack@${barePackVersion}`,
       inferenceTarball,
       ...APP_PEERS.map((name) => `${name}@${manifest.peerDependencies[name]}`)
     ],
