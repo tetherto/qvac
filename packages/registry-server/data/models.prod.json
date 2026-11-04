@@ -10361,7 +10361,7 @@
     "params": "552B-A16B",
     "licenseId": "MIT",
     "tags": ["generation", "dspark", "deepseek-v4.1", "draft"],
-    "notes": "Speculative-decoding drafter, not a standalone model. Provide this file as draftModelSrc with spec_type draft-dflash; params is the target model size.",
+    "notes": "DSpark speculative-decoding drafter, not a standalone model; params is the target model size. Runtime integration will follow separately.",
     "link": "https://huggingface.co/unsloth/DeepSeek-V4.1-Flash-1017-GGUF"
   },
   {
