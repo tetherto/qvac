@@ -164,6 +164,10 @@ runs:
         fi
         echo "Pack file: $PACK_FILE ($(du -h "$PACK_FILE" | cut -f1))"
 
+    - name: Install locked Bare toolchain
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/../../../bare-toolchain/install.mjs"
+
     - name: Setup test framework dependencies
       shell: bash
       working-directory: ./test-framework
@@ -171,7 +175,9 @@ runs:
         echo "Setting up mobile test framework..."
         # react-native-bare-kit 0.16 no longer links the worklet's native
         # addons; "Link native addons" below does it with bare-link.
-        npm pkg set dependencies.react-native-bare-kit=^0.16.0 devDependencies.bare-link=^4.0.1
+        # The linker is installed separately from the repository lockfile.
+        npm pkg delete devDependencies.bare-link
+        npm pkg set dependencies.react-native-bare-kit=^0.16.0
         npm install
 
     # A leftover tree from an earlier job on the same self-hosted runner must
@@ -243,13 +249,19 @@ runs:
       working-directory: ./test-framework
       env:
         PLATFORM: ${{ inputs.platform }}
+        BARE_LINK: ${{ github.action_path }}/../../../bare-toolchain/node_modules/.bin/bare-link
       run: |
         if [ "$PLATFORM" = "Android" ]; then
-          preset=android out=node_modules/react-native-bare-kit/android/src/main/addons
+          # The APK builds only arm64-v8a. The android preset also asks for
+          # arm/ia32/x64, which arm64-only platform packages cannot provide.
+          targets=(--host android-arm64)
+          out=node_modules/react-native-bare-kit/android/src/main/addons
         else
-          preset=ios out=node_modules/react-native-bare-kit/ios/addons
+          targets=(--preset ios)
+          out=node_modules/react-native-bare-kit/ios/addons
         fi
-        npx --no-install bare-link --preset "$preset" --out "$out" backend/backend.cjs
+        "$BARE_LINK" --version backend/backend.cjs
+        "$BARE_LINK" "${targets[@]}" --out "$out" backend/backend.cjs
         echo "Linked addons in $out:"
         find "$out" -mindepth 1 -maxdepth 2 | sort
 
