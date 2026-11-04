@@ -611,8 +611,9 @@ families that protect several addons at once.
   `nmtReadBoundedString` / `nmtReadCount` / `nmtIsValidTensorType` are compiled
   without `LINK_FABRIC` (full ASan + LSan) and without sentencepiece. Seeds
   include the `n_dims=8` stack smash from #4590 so bounded CI actually reaches
-  the reject path. Linux C++ CI runs `npm run fuzz` after the coverage harvest
-  against a separate `build-fuzz/` tree (`test/fuzz/vcpkg.json`) so FuzzTest's
+  the reject path. Linux C++ CI builds the fuzz target through `coverage:cpp:build` and runs
+  it before model tests through `coverage:cpp:run`, against a separate
+  `build-fuzz/` tree (`test/fuzz/vcpkg.json`) so FuzzTest's
   ASan Abseil never shares a prefix with production `abseil@onnxruntime#1` and
   the coverage artefacts in `build/` are left alone.
 - **Phase 2 — text + audio + config families.** Add targets for the llama.cpp /
@@ -654,8 +655,10 @@ families that protect several addons at once.
   keeps full ASan + LSan (its target doesn't link fabric). darwin/win32 keep the
   `test:cpp` path (no fuzzing). **`translation-nmtcpp` cannot use that combined
   configure:** its production graph pins `abseil@onnxruntime#1`, so Linux C++ CI
-  keeps `coverage:cpp` on `build/` and runs `npm run fuzz` against `build-fuzz/`
-  (`test/fuzz/vcpkg.json`) after unit tests. It reuses the caller's existing
+  keeps model tests and coverage on `build/`; `coverage:cpp:build` also builds
+  the isolated `build-fuzz/` tree (`test/fuzz/vcpkg.json`), and
+  `coverage:cpp:run` runs fuzz before the model tests. This package-owned
+  wiring exercises fuzz on PRs even when the workflow is read from main. It reuses the caller's existing
   SHA-bound fork gate (no new trust wiring). The whole fuzz stack is vcpkg-served
   (see "Dependency sourcing"), so a job that wipes `build/` still pays only the
   vcpkg restore. Then add a separate scheduled
