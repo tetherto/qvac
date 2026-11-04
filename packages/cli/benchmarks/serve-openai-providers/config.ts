@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
-import { load as loadYaml } from 'js-yaml'
+import { parse as loadYaml } from '../../src/lib/vendor/miniyaml.mjs'
 import type { BenchmarkConfig, PromptDoc, PromptsFile } from './types'
 
 export const PLACEHOLDER_PREFIXES = ['REPLACE_WITH_'] as const
