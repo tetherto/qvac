@@ -20,6 +20,7 @@ import { readBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import {
   ConfigReloadNotSupportedError,
   InferenceCancelledError,
+  ModelLeasedError,
   ModelTypeMismatchError,
   ModelNotFoundError,
   ModelLoadFailedError,
@@ -31,6 +32,7 @@ import { formatZodError } from '@/utils/zod-error'
 import { getPlugin } from '@/plugins/index'
 import { getRequestRegistry, withRequestContext } from '@/runtime/index'
 import { generateRandomRequestId } from '@/runtime/request-id'
+import { resolveSessionId } from '@/runtime/session-id'
 
 const logger = getEngineLogger()
 
@@ -55,6 +57,7 @@ export async function handleLoadModel(
   const profilingEnabled = profilingMeta?.enabled !== false && !!profilingMeta
 
   const requestId = request.requestId ?? generateRandomRequestId()
+  const sessionId = resolveSessionId(request)
   // The handler `modelId` is derived from the config hash below — it
   // isn't known until after `resolveConfig` runs. The registry context
   // is opened with `modelId: undefined` so a cancel-by-modelId fired
@@ -62,6 +65,7 @@ export async function handleLoadModel(
   // half-built entry). Cancel-by-`requestId` works from `begin(...)` on.
   await using ctx = await getRequestRegistry().begin({
     requestId,
+    sessionId,
     kind: 'loadModel'
   })
   const log = withRequestContext(getEngineLogger(), ctx)
@@ -94,7 +98,8 @@ export async function handleLoadModel(
       requestBinding: {
         signal: ctx.signal,
         scope: ctx.scope,
-        requestId
+        requestId,
+        sessionId
       },
       security: { requireHttpChecksum, requireSecureTransport }
     })
@@ -172,7 +177,8 @@ export async function handleLoadModel(
       },
       {
         ...(profilingEnabled && { collectTiming: true }),
-        request: { signal: ctx.signal, requestId }
+        request: { signal: ctx.signal, requestId },
+        sessionId
       }
     )
 
@@ -271,6 +277,14 @@ async function handleConfigReload(request: ReloadConfigRequest): Promise<LoadMod
       throw new ConfigReloadNotSupportedError(modelId)
     }
 
+    // A reload mutates the one shared native model, so it is refused while
+    // any other session depends on the current configuration.
+    const sessionId = resolveSessionId(request)
+    const otherLeases = Array.from(entry.leases).filter((id) => id !== sessionId).length
+    if (otherLeases > 0) {
+      throw new ModelLeasedError(modelId, otherLeases)
+    }
+
     const mergedConfig = {
       ...(currentConfig as Record<string, unknown>),
       ...(modelConfig as Record<string, unknown>)
@@ -287,6 +301,9 @@ async function handleConfigReload(request: ReloadConfigRequest): Promise<LoadMod
       modelId
     }
   } catch (error) {
+    // A refused reload is a typed error the client reacts to, not a
+    // generic `success: false` envelope.
+    if (error instanceof ModelLeasedError) throw error
     logger.error('Error reloading config:', error)
     return {
       type: 'loadModel',

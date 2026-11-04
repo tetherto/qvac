@@ -29,6 +29,7 @@ import {
 import { handleSuspend } from '@/handlers/suspend'
 import { handleResume } from '@/handlers/resume'
 import { handleState } from '@/handlers/state'
+import { handleOpenSession, handleCloseSession } from '@/handlers/session'
 import type {
   HandlerEntry,
   ReplyHandler,
@@ -71,6 +72,8 @@ export const registry: Record<string, HandlerEntry> = {
     type: 'reply',
     handler: handleHeartbeat
   },
+  openSession: { type: 'reply', handler: handleOpenSession },
+  closeSession: { type: 'reply', handler: handleCloseSession },
   unloadModel: {
     type: 'reply',
     handler: handleUnloadModel

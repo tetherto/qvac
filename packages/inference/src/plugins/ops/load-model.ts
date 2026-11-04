@@ -9,7 +9,13 @@ import {
 import type { LoadTimingStats } from '@/profiling/types'
 import { nowMs } from '@/profiling/clock'
 import { forwardBackendDiagnostics } from '@/profiling/backend-diagnostics'
-import { isModelLoaded, registerModel, type AnyModel } from '@/runtime/model-registry'
+import {
+  addModelLease,
+  isModelLoaded,
+  registerModel,
+  type AnyModel
+} from '@/runtime/model-registry'
+import { OWNER_SESSION_ID } from '@/runtime/session-id'
 import { startLogBuffering, stopLogBufferingWithTimeout } from '@/runtime/logging-stream-registry'
 import {
   detectShardedModel,
@@ -42,6 +48,8 @@ export interface LoadModelResult {
 export interface LoadModelOptions {
   collectTiming?: boolean
   request?: { signal: AbortSignal; requestId: string }
+  /** Session that takes a lease on the model. Defaults to the owner session. */
+  sessionId?: string
 }
 
 export async function loadModel(
@@ -60,9 +68,12 @@ export async function loadModel(
   // Normalize modelType to canonical form (handles aliases and custom types)
   const modelType = normalizeModelType(rawModelType)
 
-  // Check if model is already loaded
+  const sessionId = options?.sessionId ?? OWNER_SESSION_ID
+
+  // An already loaded model is shared: the caller takes a lease on it.
   if (isModelLoaded(modelId)) {
-    logger.info(`${modelType} model ${modelId} is already loaded`)
+    addModelLease(modelId, sessionId)
+    logger.info(`${modelType} model ${modelId} is already loaded; lease added for ${sessionId}`)
     return {}
   }
 
@@ -164,15 +175,19 @@ export async function loadModel(
         ? await resolveToolDialect(modelName, modelPath)
         : undefined
 
-    registerModel(modelId, {
-      model: result.model,
-      path: modelPath,
-      config: modelConfig,
-      modelType: modelType as CanonicalModelType,
-      name: modelName,
-      fitProbe,
-      toolDialect
-    })
+    registerModel(
+      modelId,
+      {
+        model: result.model,
+        path: modelPath,
+        config: modelConfig,
+        modelType: modelType as CanonicalModelType,
+        name: modelName,
+        fitProbe,
+        toolDialect
+      },
+      sessionId
+    )
 
     const loadResult: LoadModelResult =
       modelInitializationTimeMs !== undefined ? { timing: { modelInitializationTimeMs } } : {}
