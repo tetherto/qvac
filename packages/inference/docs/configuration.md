@@ -18,10 +18,11 @@ Read the current source before documenting defaults; configuration fields and
 defaults are intentionally not duplicated here.
 
 Diffusion and video `modelConfig.performance_profile` delegates hardware selection
-to the diffusion addon. `off` retains baseline settings; `allow-small-changes`
-also permits validated LTX decoding with small visible differences. Explicit
+to the diffusion addon. `off` retains baseline settings. Explicit
 `flash_attn`, `vae_conv_direct`, and `tensor_type_rules` settings take precedence.
 These controls require an addon release containing performance profiles.
+Temporal tiling remains unchanged: full-temporal decoding is already the native
+default, and an explicit `temporal_tiling` setting is preserved.
 
 LTX's automatic Metal F16 profile needs declared output limits:
 `performance_max_width: 512`, `performance_max_height: 320`, and
