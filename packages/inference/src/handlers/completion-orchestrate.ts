@@ -33,7 +33,8 @@ const MAX_TOOL_RESULT_LINE_BYTES = 16 * 1024 * 1024
  * and the reader stops holding the request stream open.
  */
 export class ToolResultReader {
-  private buffer = Buffer.alloc(0)
+  private pending: Buffer[] = []
+  private pendingBytes = 0
   private readonly results = new Map<string, ToolCallbackResult>()
   private readonly waiters = new Map<string, (result: ToolCallbackResult) => void>()
   private failed: Error | undefined
@@ -50,24 +51,38 @@ export class ToolResultReader {
       while (!this.closed) {
         const next = await this.iterator.next()
         if (next.done) break
-        this.buffer = Buffer.concat([this.buffer, next.value])
+        const chunk = next.value
+        let start = 0
         let nl: number
-        while ((nl = this.buffer.indexOf(0x0a)) !== -1) {
+        while ((nl = chunk.indexOf(0x0a, start)) !== -1) {
+          this.append(chunk.subarray(start, nl))
           // A transport chunk can end inside a UTF-8 character. Decode complete lines only.
-          const line = this.buffer.toString('utf8', 0, nl)
-          this.buffer = Buffer.from(this.buffer.subarray(nl + 1))
+          const line = Buffer.concat(this.pending).toString('utf8')
+          this.pending = []
+          this.pendingBytes = 0
           if (line.trim()) this.accept(line)
+          start = nl + 1
         }
-        if (this.buffer.length > MAX_TOOL_RESULT_LINE_BYTES) {
-          throw new CompletionFailedError('tool result frame exceeds the maximum size')
-        }
+        this.append(chunk.subarray(start))
       }
       if (!this.closed) {
-        const tail = this.buffer.toString()
+        const tail = Buffer.concat(this.pending).toString('utf8')
+        this.pending = []
+        this.pendingBytes = 0
         if (tail.trim()) this.accept(tail)
       }
     } catch (error) {
       this.failWaiters(error instanceof Error ? error : new Error(String(error)))
+    }
+  }
+
+  private append(bytes: Uint8Array): void {
+    if (this.pendingBytes + bytes.length > MAX_TOOL_RESULT_LINE_BYTES) {
+      throw new CompletionFailedError('tool result frame exceeds the maximum size')
+    }
+    if (bytes.length) {
+      this.pending.push(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength))
+      this.pendingBytes += bytes.length
     }
   }
 
@@ -118,7 +133,8 @@ export class ToolResultReader {
   close(): void {
     if (this.closed) return
     this.closed = true
-    this.buffer = Buffer.alloc(0)
+    this.pending = []
+    this.pendingBytes = 0
     this.results.clear()
     if (!this.failed) this.failWaiters(new CompletionFailedError('tool result stream closed'))
     void this.iterator.return?.()

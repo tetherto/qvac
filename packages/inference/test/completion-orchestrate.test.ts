@@ -245,6 +245,43 @@ test('ToolResultReader: keeps a split Unicode tail between complete frames', asy
   }
 })
 
+test('ToolResultReader: enforces the byte limit for a non-ASCII line', async (t) => {
+  const prefix = '{"callId":"large","result":"'
+  const suffix = '"}'
+  const limit = 16 * 1024 * 1024
+  const room = limit - Buffer.byteLength(prefix + suffix)
+  const atLimit = Buffer.from(
+    prefix + 'é'.repeat(Math.floor(room / 2)) + 'a'.repeat(room % 2) + suffix
+  )
+  t.is(atLimit.length, limit, 'fixture is exactly at the byte limit')
+
+  async function* valid() {
+    yield atLimit
+    yield Buffer.from('\n')
+  }
+  const accepted = new ToolResultReader(valid())
+  try {
+    t.is(String((await accepted.waitFor('large', 10000)).result).length, Math.ceil(room / 2))
+  } finally {
+    accepted.close()
+  }
+
+  for (const newline of [false, true]) {
+    async function* invalid() {
+      yield Buffer.from(
+        prefix + 'é'.repeat(Math.floor(room / 2) + 1) + suffix + (newline ? '\n' : '')
+      )
+    }
+    const rejected = new ToolResultReader(invalid())
+    try {
+      t.ok((await rejected.waitFor('large', 1000)).error?.includes('exceeds the maximum size'))
+      await t.exception(rejected.waitFor('large', 1000), /exceeds the maximum size/)
+    } finally {
+      rejected.close()
+    }
+  }
+})
+
 test('orchestrateCompletion: the next turn receives the original Unicode tool result', async (t) => {
   const expected = { city: '東京', note: 'café 🦆' }
   const line = Buffer.from(JSON.stringify({ callId: 'lookup', result: expected }) + '\n')
