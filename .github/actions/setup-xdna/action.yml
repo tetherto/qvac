@@ -33,7 +33,9 @@ runs:
       uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # 6.2.0
       with:
         python-version: "3.12"
-        update-environment: false
+        # The hosted-toolcache Python needs its lib directory in
+        # LD_LIBRARY_PATH, including when invoked by its absolute path.
+        update-environment: true
 
     - name: Create IRON venv
       shell: bash
