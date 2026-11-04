@@ -1684,6 +1684,8 @@ When generation is truncated because it hit `max_output_tokens` / `max_tokens`, 
 
 The following Responses-API features are intentionally rejected with `400`: `conversation` and `background: true`. `function` tools work when the model was loaded with `config.tools: true`; otherwise the request returns `400 tools_not_enabled`. The functions inside a `namespace` tool work the same way: the model sees each as `<namespace>__<name>`, and its calls come back with `name` and `namespace` split again. Built-in tools (`web_search`, `file_search`, `code_interpreter`, …) are left out of the request and logged instead of rejected.
 
+When a streamed response fails after it has started (for example `context_length_exceeded`), the stream ends with a `response.failed` event whose `response.error` carries the code and message.
+
 `tool_choice` is supported in the same shapes as chat completions, except that the object form is the Responses API's flattened `{ "type": "function", "name": "get_weather" }`.
 
 #### `GET /v1/responses/:id`

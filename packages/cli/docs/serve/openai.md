@@ -292,6 +292,8 @@ Intentionally rejected with `400`: `conversation` and `background: true`.
 tool: the model sees each as `<namespace>__<name>`, and its calls come back
 with `name` and `namespace` split again. Built-in tools (`web_search`,
 `file_search`, `code_interpreter`, …) are left out of the request and logged.
+A streamed response that fails after it starts ends with `response.failed`,
+whose `response.error` carries the code (e.g. `context_length_exceeded`).
 
 `instructions` and every `system` or `developer` input item are merged, in
 order, into one leading system message, so chat templates that reject a

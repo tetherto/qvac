@@ -91,6 +91,19 @@ async function completionServer(
   return { app, address }
 }
 
+// A Responses stream fails with `response.failed`; the others send a bare error frame.
+function streamError(events: ReturnType<typeof collectSSE>): unknown {
+  for (const event of events) {
+    const data = event.data as Record<string, unknown> | string | null
+    if (data === null || typeof data !== 'object') continue
+    if ('error' in data) return data
+    if (data['type'] === 'response.failed') {
+      return { error: (data['response'] as Record<string, unknown>)['error'] }
+    }
+  }
+  return undefined
+}
+
 const ROUTES = [
   {
     url: '/v1/completions',
@@ -136,10 +149,8 @@ describe('serve: context overflow errors', () => {
           assert.equal(response.status, 200, 'SSE headers are already committed')
           const payload = await response.text()
           const events = collectSSE(payload)
-          body = events.find(
-            (event) =>
-              event.data !== null && typeof event.data === 'object' && 'error' in event.data
-          )?.data as typeof body
+          body = streamError(events) as typeof body
+          if (route.url === '/v1/responses') assert.match(payload, /response\.failed/)
           assert.equal(
             events.some((event) => event.data === '[DONE]'),
             route.sentinel
@@ -197,9 +208,9 @@ describe('serve: context overflow errors', () => {
       })
       const payload = await response.text()
       const events = collectSSE(payload)
-      const failure = events.find(
-        (event) => event.data !== null && typeof event.data === 'object' && 'error' in event.data
-      )?.data as { error: { code: string; type: string; message: string } }
+      const failure = streamError(events) as {
+        error: { code: string; type: string; message: string }
+      }
 
       assert.equal(response.status, 200)
       assert.equal(failure.error.code, 'internal_error')
