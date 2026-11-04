@@ -475,7 +475,7 @@ export class ParakeetDriver implements AsrDriver {
   _assertNemotronChunkMs(chunkMs: number | undefined): void {
     if (chunkMs === undefined) return;
     if (this.getBackendInfo()?.modelType !== "nemotron") return;
-    if (NEMOTRON_STREAMING_CHUNK_MS.includes(chunkMs)) return;
+    if ((NEMOTRON_STREAMING_CHUNK_MS as readonly number[]).includes(chunkMs)) return;
     throw new QvacErrorAddonASRGgml({
       code: ERR_CODES_PARAKEET.INVALID_CONFIG,
       adds: `chunkMs ${chunkMs} is not supported by Nemotron streaming; use one of ${NEMOTRON_STREAMING_CHUNK_MS.join(", ")} ms`,

@@ -78,7 +78,6 @@ export const ERR_CODES_PARAKEET = Object.freeze({
   BUFFER_LIMIT_EXCEEDED: 24017,
   INSTANCE_DESTROYED: 24018,
   JOB_CANCELLED: 24019,
-  FAILED_TO_START_STREAMING: 24020,
 });
 
 /**
@@ -308,11 +307,6 @@ registerCodes(
     [ERR_CODES_PARAKEET.JOB_CANCELLED]: {
       name: "JOB_CANCELLED",
       message: () => "Job cancelled",
-    },
-    [ERR_CODES_PARAKEET.FAILED_TO_START_STREAMING]: {
-      name: "FAILED_TO_START_STREAMING",
-      message: (message: string) =>
-        `Failed to start streaming session: ${message}`,
     },
   },
 );

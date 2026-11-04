@@ -58,7 +58,7 @@ declare class ASRGgml {
         INVALID_ENGINE: 6021;
     }>;
     /** Chunk cadences (ms) Nemotron streaming accepts; see `runStreaming()`. */
-    static readonly NEMOTRON_STREAMING_CHUNK_MS: readonly number[];
+    static readonly NEMOTRON_STREAMING_CHUNK_MS: readonly [80, 160, 320, 560, 1120];
     static readonly Error: typeof QvacErrorAddonASRGgml;
     static readonly inferenceManagerConfig: Readonly<{
         noAdditionalDownload: true;
