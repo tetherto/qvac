@@ -14,6 +14,7 @@
 
 #include "addon/BertErrors.hpp"
 #include "utils.hpp"
+#include "utils/LlamaBatch.hpp"
 
 using namespace qvac_lib_infer_llamacpp_embed::errors;
 
@@ -135,9 +136,7 @@ RerankModel::RerankModel(
     const std::string& modelGgufPath,
     const std::unordered_map<std::string, std::string>& config,
     const std::string& backendsDir)
-    : loader_(
-          "RerankModel", loadHooks(), modelGgufPath, checkConfig(config),
-          backendsDir) {}
+    : loader_(loadHooks(), modelGgufPath, checkConfig(config), backendsDir) {}
 
 RerankModel::~RerankModel() { llama_batch_free(batch_); }
 
@@ -178,8 +177,7 @@ void RerankModel::configureParams(
   }
   // A reranker scores with a classifier head: `cls` (BERT-style rerankers)
   // and/or `cls.output` (e.g. Qwen3-Reranker). A chat model declares no
-  // pooling and has neither. A streamed model's tensor table is not on disk,
-  // so it is not checked.
+  // pooling and has neither.
   if (metadata.hasAnyTensor({"cls.weight", "cls.output.weight"}) == false) {
     throw qvac_errors::StatusError(
         ADDON_ID,
@@ -224,15 +222,15 @@ void RerankModel::decodeBatch(
     std::size_t count, std::vector<float>& scores) {
   llama_context* ctx = loader_.context();
 
-  common_batch_clear(batch_);
-  // common_batch_add takes the sequence ids by vector: fill one per pair
+  llamaBatchClear(batch_);
+  // llamaBatchAdd takes the sequence ids by vector: fill one per pair
   // rather than building one per token.
   std::vector<llama_seq_id> seqIds(1);
   for (std::size_t seq = 0; seq < count; ++seq) {
     const std::vector<int32_t>& tokens = pairs[first + seq];
     seqIds[0] = static_cast<llama_seq_id>(seq);
     for (std::size_t pos = 0; pos < tokens.size(); ++pos) {
-      common_batch_add(
+      llamaBatchAdd(
           batch_, tokens[pos], static_cast<llama_pos>(pos), seqIds, true);
     }
   }

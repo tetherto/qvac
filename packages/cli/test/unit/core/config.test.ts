@@ -248,21 +248,28 @@ describe('resolveNestedModelSrcConstants', () => {
   })
 })
 
-describe('parseServeConfig bundled weights', () => {
-  it('loads the bundled classifier when a classification alias has no src', () => {
-    const cfg = parseServeConfig(
-      { serve: { models: { cls: { type: 'ggml-classification' } } } },
-      {}
+describe('parseServeConfig src', () => {
+  it('requires src for an alias without a model constant', () => {
+    assert.throws(
+      () => parseServeConfig({ serve: { models: { cls: { type: 'ggml-classification' } } } }, {}),
+      /serve\.models\.cls: "src" is required/
     )
-    const cls = cfg.models.get('cls')!
-    assert.equal(cls.modelSrc, '')
-    assert.equal(cls.endpointCategory, 'classification')
-  })
-
-  it('still requires src for other model types', () => {
     assert.throws(
       () => parseServeConfig({ serve: { models: { ocr: { type: 'ggml-ocr' } } } }, {}),
       /serve\.models\.ocr: "src" is required/
+    )
+  })
+
+  it('loads the classifier from its model constant', () => {
+    const cfg = parseServeConfig(
+      { serve: { models: { cls: { model: 'MOBILENETV3_3CLASS_V3_FP16' } } } },
+      {}
+    )
+    const cls = cfg.models.get('cls')!
+    assert.equal(cls.endpointCategory, 'classification')
+    assert.equal(
+      typeof cls.modelSrc === 'object' && cls.modelSrc.name,
+      'MOBILENETV3_3CLASS_V3_FP16'
     )
   })
 })
