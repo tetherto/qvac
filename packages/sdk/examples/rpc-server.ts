@@ -2,7 +2,7 @@
 // Rebuild the worker with
 // rpcServerProvider: '@qvac/sdk/ggml-rpc-server/provider' in qvac.config.json.
 // npx tsx rpc-server.ts my-private-rpc-group
-// Choose an interface explicitly: npx tsx rpc-server.ts 10.0.0.2 my-private-rpc-group
+// Explicit address selection also supports renamed adapters: npx tsx rpc-server.ts 10.0.0.2 my-private-rpc-group
 import { createInterface } from 'node:readline/promises'
 import { startRpcServer, stopRpcServer, rpcServerStatusStream, close } from '@qvac/sdk'
 
@@ -11,7 +11,7 @@ try {
   const topic = process.argv[3] ?? process.argv[2]
   if (!topic) throw new Error('Usage: rpc-server.ts [private-ipv4] <topic>')
   const options = {
-    ...(host ? { host } : {}),
+    ...(host ? { host, lanAddresses: [host] } : {}),
     allowNonLoopbackHost: true,
     discoveryTopic: topic
   }

@@ -58,6 +58,9 @@ function fakeTransport() {
   }
   return {
     resource,
+    get options() {
+      return options
+    },
     sent,
     get closed() {
       return closed
@@ -518,4 +521,46 @@ test('RPC protocol admission survives irrelevant bursts and source flooding befo
   t.ok(probes.filter((url) => url.startsWith('192.168.1.3:')).length <= 8)
   t.ok(probes.includes('192.168.1.4:50052'))
   t.is(getRegisteredResourceCounts().swarms, 0)
+})
+
+test('RPC explicit LAN selection reaches receiver membership and pins advertising to its bound host', async (t) => {
+  const addresses = ['10.0.0.2', '10.0.1.2']
+  const advertiser = fakeTransport()
+  await t.exception(
+    advertiseRpcServer(
+      'shared',
+      '10.9.0.2:50052',
+      undefined,
+      advertiser.factory,
+      undefined,
+      addresses
+    ),
+    /must belong/
+  )
+  const withdraw = await advertiseRpcServer(
+    'shared',
+    '10.0.0.2:50052',
+    undefined,
+    advertiser.factory,
+    undefined,
+    addresses
+  )
+  try {
+    t.alike(advertiser.options.lanAddresses, ['10.0.0.2'])
+  } finally {
+    await withdraw()
+  }
+  const receiver = fakeTransport()
+  const registry = createRequestRegistry()
+  await using ctx = await registry.begin({ requestId: 'selected-lookup', kind: 'rpcDiscovery' })
+  const lookup = discoverRpcEndpoints(
+    'shared',
+    100,
+    ctx,
+    { createTransport: receiver.factory, probe: async () => inventory },
+    addresses
+  )
+  t.alike(receiver.options.lanAddresses, addresses)
+  receiver.announce('10.0.0.3')
+  t.alike(await lookup, [{ url: '10.0.0.3:50052', ...inventory }])
 })

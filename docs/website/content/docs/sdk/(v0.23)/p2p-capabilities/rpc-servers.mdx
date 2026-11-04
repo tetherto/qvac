@@ -56,7 +56,24 @@ Announcements use QVAC's versioned UDP multicast protocol at `239.255.77.76:4976
 
 An advertiser selects the interface whose IPv4 address matches its selected or explicit `host`. Its UDP socket binds that address and sets that multicast interface. There is no default-route or Internet discovery fallback. Lookup joins each supported Wi-Fi or Ethernet interface and accepts only private IPv4 sources in one of those interfaces' connected subnets. The RPC host comes from the packet source, never from an advertised destination address.
 
-Supported interface names are `en` followed by digits, `eth` followed by digits, `wlan` followed by digits, Linux predictable names beginning with `eno`, `enp`, `ens`, `enx`, `wlo`, `wlp`, `wls`, or `wlx`, and Windows `Ethernet` or `Wi-Fi` with an optional numbered suffix. Unknown names, tunnels, cellular interfaces and bridges are excluded. IPv6-only links and IPv4 link-local addresses are unsupported. At most eight eligible interface addresses are allowed. Custom interface aliases require a transport change. Interface names are an operating-system convention, not a security boundary.
+Supported interface names are `en` followed by digits, `eth` followed by digits, `wlan` followed by digits, Linux predictable names beginning with `eno`, `enp`, `ens`, `enx`, `wlo`, `wlp`, `wls`, or `wlx`, and Windows `Ethernet` or `Wi-Fi` with an optional numbered suffix. Unknown names, tunnels, cellular interfaces and bridges are excluded. IPv6-only links and IPv4 link-local addresses are unsupported. At most eight eligible interface addresses are allowed. Interface names are an operating-system convention, not a security boundary.
+
+Set `lanAddresses` on both `startRpcServer` and `discoverRpcServers` to select local IPv4 addresses on adapters named `WLAN`, `Office LAN`, or other custom or localized aliases. Supply one to eight unique canonical private IPv4 addresses. Each must exist locally on a noninternal interface, have a valid contiguous subnet mask, and be a host address rather than the subnet's network or broadcast address. Missing addresses, duplicate requests and conflicting local masks fail selection. Explicit selection bypasses only the adapter-name convention. The current OS API cannot prove that an arbitrarily named adapter is physical, so this opt-in can also select a private-address tunnel or bridge. Automatic selection keeps its existing exclusions.
+
+```ts
+const lanAddresses = ["192.168.1.20"];
+const server = await startRpcServer({
+  lanAddresses,
+  discoveryTopic: "my-private-rpc-group",
+  allowNonLoopbackHost: true,
+});
+const candidates = await discoverRpcServers({
+  topic: "my-private-rpc-group",
+  lanAddresses,
+});
+```
+
+`host` chooses the server's TCP bind address. It does not enable renamed adapters by itself. If both options are present, `host` must belong to `lanAddresses`. Omitting `host` still requires a single eligible selected address. Starting a server with `lanAddresses` but no `discoveryTopic` fails before native startup. The server validates the full list initially, then pins its advertisement to the returned native endpoint. Losing an unused address from the initial list does not stop advertising on an eligible original bind address.
 
 Both devices must share a multicast-capable local link and connected IPv4 subnet. Routed private networks, guest networks with client isolation, and Wi-Fi networks filtering multicast are unsupported. Allow inbound UDP port 49764 and the selected TCP RPC ports in the host firewall. TTL and interface selection limit ordinary routing; they do not authenticate peers, isolate people sharing a LAN, or prevent a local participant from deliberately relaying traffic.
 
@@ -72,9 +89,9 @@ The transport checks interface addresses and netmasks before every send and acce
 
 Subscribe to `rpcServerStatusStream({ serverId })` to observe the advertisement after startup. Subscribe without a server ID before starting a server to observe startup and rollback too. Each update identifies the server and endpoint, distinguishes native ownership from advertisement state, and includes the failure reason, structured error cause and required recovery. Advertisement states are `inactive`, `starting`, `advertising`, `suspended` and `failed`. Cancelling a status subscription does not stop its server.
 
-Runtime suspension closes discovery sockets and cancels probes, including when UDP bind is still pending. Resume rebuilds receiver memberships. An advertiser resumes only on its original eligible bind address. If that address disappeared, runtime resume still completes, the advertisement reports failure, and the native server remains owned. A terminal send or network failure requires `stopRpcServer({ serverId })` followed by a new start with the current address. QVAC does not silently change a native server's endpoint. Normal suspension reports `resume` recovery; failed advertising reports `restart` recovery. `state()` continues to report runtime lifecycle only.
+Runtime suspension closes discovery sockets and cancels probes, including when UDP bind is still pending. Resume rebuilds receiver memberships. If a selected receiver address disappeared, the lookup reports failure and closes while runtime resume completes. An advertiser resumes only on its original eligible bind address. If that address disappeared, runtime resume still completes, the advertisement reports failure, and the native server remains owned. A terminal send or network failure requires `stopRpcServer({ serverId })` followed by a new start with the current address. QVAC does not silently change a native server's endpoint. Normal suspension reports `resume` recovery; failed advertising reports `restart` recovery. `state()` continues to report runtime lifecycle only.
 
-The status stream is library-only. Applications own native RPC servers through these SDK methods; `qvac serve` serves the HTTP inference API and does not own native RPC advertisements.
+The status stream and native RPC address selection are library-only. Applications own native RPC servers through these SDK methods; `qvac serve` serves the HTTP inference API and does not own native RPC advertisements.
 
 ### Mobile prerequisites
 
@@ -106,7 +123,7 @@ Pending server starts and discovery calls expose a synchronous `requestId` on th
 
 ### Serve and discover endpoints
 
-The following script starts an RPC server on the sole eligible LAN address and shared topic, with an optional explicit IPv4 address, then waits for you to stop it after clients unload their models:
+The following script starts an RPC server on the sole eligible LAN address and shared topic, with an optional explicit IPv4 selection that also supports renamed adapters, then waits for you to stop it after clients unload their models:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>

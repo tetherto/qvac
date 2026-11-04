@@ -6,6 +6,8 @@ rpcServerProvider: "@qvac/sdk/ggml-rpc-server/provider" in qvac.config.json.
 python examples/rpc_servers.py serve my-private-rpc-group
 python examples/rpc_servers.py serve 10.0.0.2 my-private-rpc-group
 python examples/rpc_servers.py discover my-private-rpc-group
+python examples/rpc_servers.py serve my-private-rpc-group --lan-address 10.0.0.2
+python examples/rpc_servers.py discover my-private-rpc-group --lan-address 10.0.0.2
 """
 
 from __future__ import annotations
@@ -38,7 +40,14 @@ async def main() -> int:
     serve.add_argument("topic")
     discover = modes.add_parser("discover")
     discover.add_argument("topic")
+    for mode in (serve, discover):
+        mode.add_argument(
+            "--lan-address",
+            action="append",
+            help="Opt in to a local private IPv4 address, including renamed adapters. Repeat to select several.",
+        )
     args = parser.parse_args()
+    selection = {"lan_addresses": args.lan_address} if args.lan_address else {}
     try:
         async with Client() as client:
             transport = client.transport
@@ -47,6 +56,7 @@ async def main() -> int:
                     type="startRpcServer",
                     allow_non_loopback_host=True,
                     discovery_topic=args.topic,
+                    **selection,
                 )
                 if args.host is not None:
                     options.host = args.host
@@ -109,7 +119,10 @@ async def main() -> int:
                 result = await discover_rpc_servers(
                     transport,
                     DiscoverRpcServersRequest(
-                        type="discoverRpcServers", topic=args.topic, timeout_ms=5000
+                        type="discoverRpcServers",
+                        topic=args.topic,
+                        timeout_ms=5000,
+                        **selection,
                     ),
                 )
                 alias = 0

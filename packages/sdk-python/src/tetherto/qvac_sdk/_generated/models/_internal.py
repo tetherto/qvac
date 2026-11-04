@@ -6362,7 +6362,25 @@ class DiffusionStreamResponse(GeneratedBaseModel):
     ] = None
 
 
+class LanAddress(RootModel[str]):
+    root: Annotated[
+        str,
+        Field(
+            pattern="^(?:10\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])|172\\.(?:1[6-9]|2[0-9]|3[01])|192\\.168)\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$"
+        ),
+    ]
+
+
 class DiscoverRpcServersRequest(GeneratedBaseModel):
+    lan_addresses: Annotated[
+        list[LanAddress] | None,
+        Field(
+            alias="lanAddresses",
+            description="Explicit local private IPv4 addresses. Bypasses automatic adapter-name selection only. Each address must be noninternal with a valid host address and subnet mask. This cannot prove an adapter is physical.",
+            max_length=8,
+            min_length=1,
+        ),
+    ] = None
     topic: Annotated[
         str,
         Field(
@@ -23829,6 +23847,15 @@ class Device1(RootModel[list[Device1Item]]):
 
 
 class StartRpcServerRequest(GeneratedBaseModel):
+    lan_addresses: Annotated[
+        list[LanAddress] | None,
+        Field(
+            alias="lanAddresses",
+            description="Explicit local private IPv4 addresses. Bypasses automatic adapter-name selection only. Each address must be noninternal with a valid host address and subnet mask. This cannot prove an adapter is physical.",
+            max_length=8,
+            min_length=1,
+        ),
+    ] = None
     host: Annotated[
         str | None,
         Field(

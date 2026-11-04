@@ -29,24 +29,69 @@ function ipv4(address: string): number {
   return address.split('.').reduce((n, part) => (n << 8) | Number(part), 0) >>> 0
 }
 
-export function selectLanInterfaces(all = networkInterfaces()): LanInterface[] {
-  const selected: LanInterface[] = []
+class LanSelectionError extends Error {}
+
+function validIpv4(address: string) {
+  const parts = address.split('.')
+  return (
+    parts.length === 4 &&
+    parts.every((part) => /^(?:0|[1-9]\d{0,2})$/.test(part) && Number(part) <= 255)
+  )
+}
+
+export function selectLanInterfaces(
+  all = networkInterfaces(),
+  lanAddresses?: string[]
+): LanInterface[] {
+  if (
+    lanAddresses &&
+    (!lanAddresses.length ||
+      lanAddresses.length > 8 ||
+      new Set(lanAddresses).size !== lanAddresses.length ||
+      lanAddresses.some((address) => !privateEndpoint(`${address}:1`)))
+  ) {
+    throw new LanSelectionError(
+      'RPC LAN selection requires one to eight unique private IPv4 addresses'
+    )
+  }
+  const available: LanInterface[] = []
   for (const [name, entries] of Object.entries(all).sort(([a], [b]) => a.localeCompare(b))) {
-    if (!LAN_NAME.test(name)) continue
     for (const entry of entries) {
       if (entry.internal || entry.family !== 'IPv4' || !privateEndpoint(`${entry.address}:1`)) {
         continue
       }
-      if (!/^\d+\.\d+\.\d+\.\d+$/.test(entry.netmask)) continue
+      if (!validIpv4(entry.netmask)) continue
       const mask = ipv4(entry.netmask)
       const inverse = ~mask >>> 0
       if (!mask || inverse < 3 || (inverse & (inverse + 1)) !== 0) continue
-      if (selected.some((item) => item.address === entry.address)) continue
-      selected.push({ name, address: entry.address, netmask: entry.netmask })
+      const address = ipv4(entry.address)
+      const network = address & mask
+      if (address === network >>> 0 || address === (network | ~mask) >>> 0) continue
+      available.push({ name, address: entry.address, netmask: entry.netmask })
     }
   }
+  function unique(entries: LanInterface[]) {
+    const selected: LanInterface[] = []
+    for (const entry of entries) {
+      const previous = selected.find((item) => item.address === entry.address)
+      if (previous && previous.netmask !== entry.netmask) {
+        throw new LanSelectionError(`RPC LAN address has conflicting netmasks: ${entry.address}`)
+      }
+      if (!previous) selected.push(entry)
+    }
+    return selected
+  }
+  const selected = lanAddresses
+    ? lanAddresses.map((address) => {
+        const matching = unique(available.filter((entry) => entry.address === address))
+        if (!matching.length) {
+          throw new LanSelectionError(`RPC LAN address is missing or ineligible: ${address}`)
+        }
+        return matching[0]!
+      })
+    : unique(available.filter(({ name }) => LAN_NAME.test(name)))
   if (selected.length > 8) {
-    throw new Error('RPC LAN discovery supports at most eight IPv4 interfaces')
+    throw new LanSelectionError('RPC LAN discovery supports at most eight IPv4 interfaces')
   }
   return selected
 }
@@ -76,6 +121,7 @@ export interface LanDiscovery {
 
 interface LanOptions {
   host?: string
+  lanAddresses?: string[]
   accept?(frame: Buffer, host: string): boolean
   onmessage?(frame: Buffer, host: string): void
   onstart?(): void
@@ -85,9 +131,13 @@ interface LanOptions {
 // This interface owns UDP only. Announcement parsing and inventory probes live in discovery.ts.
 export function createLanDiscovery(
   options: LanOptions,
-  deps: { interfaces?: () => LanInterface[]; socket?: typeof createSocket } = {}
+  deps: {
+    interfaces?: (lanAddresses?: string[]) => LanInterface[]
+    socket?: typeof createSocket
+  } = {}
 ): LanDiscovery {
-  const interfaces = deps.interfaces ?? selectLanInterfaces
+  const interfaces =
+    deps.interfaces ?? ((addresses?: string[]) => selectLanInterfaces(undefined, addresses))
   const socketFactory = deps.socket ?? createSocket
   let scope = createDisposableScope()
   let selected: LanInterface[] = []
@@ -103,12 +153,19 @@ export function createLanDiscovery(
   let stopping: Promise<void> | undefined
 
   function current() {
-    const entries = interfaces()
+    if (options.host && options.lanAddresses && !options.lanAddresses.includes(options.host)) {
+      throw new LanSelectionError('RPC LAN bind host must be included in lanAddresses')
+    }
+    const entries = interfaces(
+      options.host && options.lanAddresses ? [options.host] : options.lanAddresses
+    )
     return options.host ? entries.filter((entry) => entry.address === options.host) : entries
   }
 
   function checkNetwork() {
-    if (JSON.stringify(current()) !== JSON.stringify(selected)) {
+    const identity = (entries: LanInterface[]) =>
+      options.lanAddresses ? entries.map(({ address, netmask }) => ({ address, netmask })) : entries
+    if (JSON.stringify(identity(current())) !== JSON.stringify(identity(selected))) {
       throw new Error('RPC LAN interfaces changed; restart discovery or resume the runtime')
     }
   }
@@ -152,7 +209,7 @@ export function createLanDiscovery(
       if (signal) throwIfAborted(signal)
       selected = current()
       if (!selected.length) {
-        throw new Error('RPC LAN discovery requires a private IPv4 Wi-Fi or Ethernet interface')
+        throw new LanSelectionError('RPC LAN discovery requires an eligible private IPv4 interface')
       }
       const socket = socketFactory({
         type: 'udp4',
@@ -332,13 +389,17 @@ export function createLanDiscovery(
       if (closed || state === 'active') return
       await stopping
       if (terminalFailure) return
-      if (options.host && !current().length) {
-        await suspend(
-          new Error('RPC LAN bind address is no longer eligible; stop and restart the server')
-        )
-        return
+      try {
+        if (options.host && !current().length) {
+          throw new LanSelectionError(
+            'RPC LAN bind address is no longer eligible; stop and restart the server'
+          )
+        }
+        await start()
+      } catch (error) {
+        if (!(error instanceof LanSelectionError)) throw error
+        await suspend(error)
       }
-      await start()
     },
     async close() {
       closed = true

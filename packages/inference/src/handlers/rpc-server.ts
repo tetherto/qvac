@@ -81,7 +81,13 @@ export async function handleDiscoverRpcServers(request: DiscoverRpcServersReques
   return run('discoverRpcServers', () =>
     withContext('rpcDiscovery', request.requestId ?? generateRandomRequestId(), async (ctx) => ({
       type: 'discoverRpcServers' as const,
-      servers: await discoverRpcEndpoints(request.topic, request.timeoutMs ?? 5000, ctx)
+      servers: await discoverRpcEndpoints(
+        request.topic,
+        request.timeoutMs ?? 5000,
+        ctx,
+        undefined,
+        request.lanAddresses
+      )
     }))
   )
 }

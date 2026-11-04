@@ -1,6 +1,7 @@
 import test from 'brittle'
 import { createRpcServerManager, type RpcServerDependencies } from '@/rpc/manager'
 import { createRequestRegistry } from '@/runtime/request-context'
+import { selectLanInterfaces } from '@/rpc/lan'
 import { privateEndpoint, rpcTopic, probeTcp, waitForReady } from '@/rpc/network'
 import {
   startRpcServerOptionsSchema,
@@ -502,6 +503,108 @@ test('RPC advertisement startup failure is observable before rollback', async (t
     t.is(manager.size, 0)
   } finally {
     unsubscribe()
+    await manager.close()
+  }
+})
+
+test('RPC LAN selection schema bounds canonical private IPv4 addresses', (t) => {
+  for (const schema of [startRpcServerOptionsSchema, discoverRpcServersOptionsSchema]) {
+    for (const lanAddresses of [['10.0.0.2'], ['172.16.0.2', '172.31.255.254', '192.168.1.2']]) {
+      t.ok(schema.safeParse({ topic: 'shared', lanAddresses }).success)
+    }
+    for (const lanAddresses of [
+      [],
+      Array.from({ length: 9 }, (_, i) => `10.0.0.${i + 1}`),
+      ['10.0.0.2', '10.0.0.2'],
+      ['010.0.0.2'],
+      ['127.0.0.1'],
+      ['8.8.8.8'],
+      ['172.32.0.1'],
+      ['192.168.1.256'],
+      ['10.0.0.2:50052'],
+      ['::1']
+    ]) {
+      t.absent(schema.safeParse({ topic: 'shared', lanAddresses }).success)
+    }
+  }
+})
+
+test('RPC manager selects renamed adapters only with explicit LAN opt-in before native start', async (t) => {
+  for (const name of ['WLAN', 'Office LAN', 'Réseau local']) {
+    const entry = { ...lan, family: 'IPv4' as const, internal: false, mac: '', cidr: '' }
+    const forwarded: StartRpcServerOptions[] = []
+    let advertised: string[] | undefined
+    const { manager, registry } = fixture({
+      lanInterfaces: (_all, addresses) => selectLanInterfaces({ [name]: [entry] }, addresses),
+      async start(options) {
+        forwarded.push(options)
+        return {
+          host: options.host!,
+          port: 50052,
+          url: `${options.host}:50052`,
+          rdmaCapable: false,
+          async stop() {}
+        }
+      },
+      async advertise(_topic, _url, _ctx, _onstatus, addresses) {
+        advertised = addresses
+        return async () => {}
+      }
+    })
+    await using ctx = await registry.begin({ requestId: `alias-${name}`, kind: 'rpcServer' })
+    try {
+      await t.exception(
+        manager.start({ discoveryTopic: 'shared', allowNonLoopbackHost: true }, ctx),
+        /eligible private IPv4/
+      )
+      t.is(forwarded.length, 0)
+      const options = {
+        discoveryTopic: 'shared',
+        allowNonLoopbackHost: true,
+        lanAddresses: [lan.address]
+      }
+      const server = await manager.start(options, ctx)
+      t.is(server.url, `${lan.address}:50052`)
+      t.alike(forwarded, [{ ...options, host: lan.address }])
+      t.alike(advertised, [lan.address])
+    } finally {
+      await manager.close()
+    }
+  }
+})
+
+test('RPC manager rejects missing, conflicting and ambiguous explicit selections before native startup', async (t) => {
+  const entry = { ...lan, family: 'IPv4' as const, internal: false, mac: '', cidr: '' }
+  const all = { 'Office LAN': [entry, { ...entry, address: '10.0.1.2' }] }
+  const { manager, events, registry } = fixture({
+    lanInterfaces: (_all, addresses) => selectLanInterfaces(all, addresses)
+  })
+  await using ctx = await registry.begin({ requestId: 'invalid-selection', kind: 'rpcServer' })
+  try {
+    await t.exception(
+      manager.start({ lanAddresses: [lan.address] }, ctx),
+      /requires discoveryTopic/
+    )
+    await t.exception(manager.start({ ...serving, lanAddresses: ['10.9.0.2'] }, ctx))
+    await t.exception(
+      manager.start({ ...serving, host: '10.0.1.2', lanAddresses: [lan.address] }, ctx),
+      /must belong/
+    )
+    await t.exception(
+      manager.start(
+        {
+          discoveryTopic: 'shared',
+          allowNonLoopbackHost: true,
+          lanAddresses: [lan.address, '10.0.1.2']
+        },
+        ctx
+      ),
+      /Multiple eligible/
+    )
+    t.alike(events, [])
+    const server = await manager.start({ ...serving, lanAddresses: [lan.address, '10.0.1.2'] }, ctx)
+    t.is(server.url, `${lan.address}:50052`)
+  } finally {
     await manager.close()
   }
 })

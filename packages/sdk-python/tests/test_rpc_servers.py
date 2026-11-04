@@ -238,3 +238,52 @@ def test_rpc_status_stream_rejects_invalid_states_and_identity():
     ]:
         with pytest.raises(ValidationError):
             RpcServerStatusStreamResponse.model_validate({**valid, field: value})
+
+
+async def test_explicit_lan_addresses_reach_serving_and_discovery_in_order():
+    addresses = ["10.0.1.2", "10.0.0.2"]
+    transport = FakeTransport(
+        {
+            "type": "startRpcServer",
+            "serverId": "selected-interface",
+            "url": "10.0.0.2:50052",
+            "rdmaCapable": False,
+        }
+    )
+    await start_rpc_server(
+        transport,
+        StartRpcServerRequest(
+            type="startRpcServer",
+            host="10.0.0.2",
+            allow_non_loopback_host=True,
+            discovery_topic="renamed-adapter",
+            lan_addresses=addresses,
+        ),
+    )
+    assert transport.sent is not None
+    assert transport.sent["host"] == "10.0.0.2"
+    assert transport.sent["lanAddresses"] == addresses
+    transport.response = {"type": "discoverRpcServers", "servers": []}
+    await discover_rpc_servers(
+        transport,
+        DiscoverRpcServersRequest(
+            type="discoverRpcServers", topic="renamed-adapter", lan_addresses=addresses
+        ),
+    )
+    assert transport.sent == {
+        "type": "discoverRpcServers",
+        "topic": "renamed-adapter",
+        "lanAddresses": addresses,
+    }
+
+
+@pytest.mark.parametrize(
+    "addresses", [[], ["10.0.0.2"] * 9, ["192.0.2.1"], ["10.0.0.999"], [""]]
+)
+@pytest.mark.parametrize(
+    ("request_type", "fields"),
+    [(StartRpcServerRequest, {}), (DiscoverRpcServersRequest, {"topic": "selected"})],
+)
+def test_explicit_lan_address_bounds(request_type, fields, addresses):
+    with pytest.raises(ValidationError):
+        request_type.model_validate({**fields, "lanAddresses": addresses})

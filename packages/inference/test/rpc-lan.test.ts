@@ -494,3 +494,170 @@ test('LAN useful source counters are bounded and reset each receive window', asy
     await f.resource.close()
   }
 })
+
+test('explicit LAN addresses select renamed adapters in requested order', (t) => {
+  const entry = { ...lan, family: 'IPv4' as const, internal: false, mac: '', cidr: '' }
+  for (const name of ['WLAN', 'Office LAN', 'Lokales Netzwerk', 'Siec lokalna']) {
+    t.alike(selectLanInterfaces({ [name]: [entry] }), [])
+    t.alike(selectLanInterfaces({ [name]: [entry] }, [lan.address]), [{ ...lan, name }])
+  }
+  t.alike(
+    selectLanInterfaces(
+      {
+        'Office LAN': [entry],
+        WLAN: [{ ...entry, address: '10.0.0.2' }]
+      },
+      ['10.0.0.2', lan.address]
+    ),
+    [
+      { ...lan, name: 'WLAN', address: '10.0.0.2' },
+      { ...lan, name: 'Office LAN' }
+    ]
+  )
+  t.alike(
+    selectLanInterfaces({ utun0: [entry] }, [lan.address]),
+    [{ ...lan, name: 'utun0' }],
+    'explicit opt-in bypasses names without claiming physical adapter metadata'
+  )
+})
+
+test('explicit LAN addresses reject missing, duplicate and ineligible selections', (t) => {
+  const entry = { ...lan, family: 'IPv4' as const, internal: false, mac: '', cidr: '' }
+  for (const addresses of [
+    [],
+    [lan.address, lan.address],
+    ['8.8.8.8'],
+    ['127.0.0.1'],
+    ['169.254.1.2'],
+    ['192.168.001.2'],
+    Array.from({ length: 9 }, (_, i) => `10.0.0.${i + 1}`)
+  ]) {
+    t.exception(() => selectLanInterfaces({ WLAN: [entry] }, addresses))
+  }
+  t.exception(() => selectLanInterfaces({}, [lan.address]), /missing or ineligible/)
+  for (const invalid of [
+    { ...entry, internal: true },
+    { ...entry, family: 'IPv6' as const },
+    { ...entry, address: '192.168.1.0' },
+    { ...entry, address: '192.168.1.255' }
+  ]) {
+    t.exception(() => selectLanInterfaces({ WLAN: [invalid] }, [invalid.address]))
+  }
+  for (const netmask of [
+    '255.255.256.0',
+    '255.255.255.999',
+    '255.255.255.000',
+    '255.0.255.0',
+    '0.0.0.0',
+    '255.255.255.254',
+    '255.255.255.255'
+  ]) {
+    t.exception(() => selectLanInterfaces({ WLAN: [{ ...entry, netmask }] }, [lan.address]))
+    t.alike(selectLanInterfaces({ en0: [{ ...entry, netmask }] }), [])
+  }
+  t.exception(
+    () =>
+      selectLanInterfaces(
+        {
+          WLAN: [entry],
+          'Office LAN': [{ ...entry, netmask: '255.255.0.0' }]
+        },
+        [lan.address]
+      ),
+    /conflicting netmasks/
+  )
+  const many = Array.from({ length: 9 }, (_, i) => ({ ...entry, address: `10.0.0.${i + 1}` }))
+  t.exception(() => selectLanInterfaces({ eth0: many }), /at most eight/)
+  t.is(
+    selectLanInterfaces(
+      { WLAN: many },
+      many.slice(0, 8).map(({ address }) => address)
+    ).length,
+    8
+  )
+})
+
+test('explicit LAN serving and lookup survive alias changes and keep a fixed advertiser address', async (t) => {
+  const entry = { ...lan, family: 'IPv4' as const, internal: false, mac: '', cidr: '' }
+  for (const serving of [false, true]) {
+    const other = { ...entry, address: '10.0.0.2' }
+    let all: Record<string, (typeof entry)[]> = { 'Office LAN': [entry, other] }
+    const sockets: Socket[] = []
+    const messages: string[] = []
+    const errors: Error[] = []
+    const resource = createLanDiscovery(
+      {
+        ...(serving ? { host: lan.address } : {}),
+        lanAddresses: [other.address, lan.address],
+        onmessage: (_packet, host) => messages.push(host),
+        onstop(error) {
+          if (error) errors.push(error)
+        }
+      },
+      {
+        interfaces: (addresses) => selectLanInterfaces(all, addresses),
+        socket: (() => {
+          const socket = new Socket()
+          sockets.push(socket)
+          return socket
+        }) as unknown as typeof createSocket
+      }
+    )
+    try {
+      await resource.start()
+      if (serving) {
+        t.alike(sockets[0].bound, [0, lan.address])
+        t.is(sockets[0].ttl, 1)
+        t.is(sockets[0].iface, lan.address)
+      } else {
+        t.alike(sockets[0].membership, [
+          [DISCOVERY_GROUP, other.address],
+          [DISCOVERY_GROUP, lan.address]
+        ])
+      }
+      all = { WLAN: [entry, other] }
+      if (serving) {
+        all = { WLAN: [entry] }
+        await resource.send(Buffer.alloc(55))
+        t.is(
+          sockets[0].sent,
+          1,
+          'losing an unrelated selected address does not move the advertiser'
+        )
+      } else {
+        sockets[0].emit('message', Buffer.alloc(55), { address: '192.168.1.3', family: 'IPv4' })
+        t.alike(messages, ['192.168.1.3'])
+      }
+      t.is(errors.length, 0, 'an alias rename with the same address data keeps transport active')
+      await suspendRuntime()
+      await resumeRuntime()
+      t.is(sockets.length, 2)
+      await suspendRuntime()
+      all = { WLAN: [other] }
+      await resumeRuntime()
+      t.is(getLifecycleState(), 'active')
+      t.ok(resource.suspended)
+      t.is(errors.length, 1)
+      t.is(sockets.length, 2, 'missing selected address cannot create a stale socket')
+    } finally {
+      await resource.close()
+      await resumeRuntime()
+    }
+  }
+  t.is(getRegisteredResourceCounts().swarms, 0)
+})
+
+test('LAN transport rejects an explicit bind host outside its address selection', async (t) => {
+  const resource = createLanDiscovery(
+    { host: lan.address, lanAddresses: ['10.0.0.2'] },
+    {
+      interfaces: () => [lan]
+    }
+  )
+  try {
+    await t.exception(resource.start(), /bind host must be included/)
+  } finally {
+    await resource.close()
+  }
+  t.is(getRegisteredResourceCounts().swarms, 0)
+})

@@ -20,7 +20,8 @@ export interface RpcServerDependencies {
     topic: string,
     url: string,
     ctx: RequestContext,
-    onstatus?: (state: 'advertising' | 'suspended' | 'failed', error?: Error) => void
+    onstatus?: (state: 'advertising' | 'suspended' | 'failed', error?: Error) => void,
+    lanAddresses?: string[]
   ): Promise<() => Promise<void>>
   lanInterfaces?: typeof selectLanInterfaces
 }
@@ -89,6 +90,9 @@ export function createRpcServerManager(deps: RpcServerDependencies) {
     ctx: RequestContext
   ): Promise<RpcServerInfo> {
     throwIfAborted(ctx.signal)
+    if (options.lanAddresses && !options.discoveryTopic) {
+      throw new Error('lanAddresses requires discoveryTopic when starting an RPC server')
+    }
     if (
       options.discoveryTopic &&
       (!options.allowNonLoopbackHost ||
@@ -98,19 +102,31 @@ export function createRpcServerManager(deps: RpcServerDependencies) {
         'RPC advertising requires allowNonLoopbackHost: true; an explicit host must be a private IPv4 address'
       )
     }
-    if (options.discoveryTopic && options.host === undefined) {
-      const interfaces = (deps.lanInterfaces ?? selectLanInterfaces)()
+    if (
+      options.discoveryTopic &&
+      (options.host === undefined || options.lanAddresses !== undefined)
+    ) {
+      const interfaces = (deps.lanInterfaces ?? selectLanInterfaces)(
+        undefined,
+        options.lanAddresses
+      )
       if (!interfaces.length) {
         throw new Error(
           'RPC advertising requires an eligible private IPv4 Wi-Fi or Ethernet address'
         )
       }
-      if (interfaces.length > 1) {
+      if (
+        options.host !== undefined &&
+        !interfaces.some((entry) => entry.address === options.host)
+      ) {
+        throw new Error('RPC bind host must belong to lanAddresses')
+      }
+      if (options.host === undefined && interfaces.length > 1) {
         throw new Error(
           `Multiple eligible RPC LAN addresses; specify host explicitly: ${interfaces.map(({ name, address }) => `${name}=${address}`).join(', ')}`
         )
       }
-      options = { ...options, host: interfaces[0]!.address }
+      options = { ...options, host: options.host ?? interfaces[0]!.address }
     }
     await using scope = createDisposableScope()
     const handle = await deps.start(options)
@@ -166,7 +182,8 @@ export function createRpcServerManager(deps: RpcServerDependencies) {
                 )
               })
             })
-          }
+          },
+          options.lanAddresses
         )
       } catch (error) {
         const cause = error instanceof Error ? error : new Error(String(error))

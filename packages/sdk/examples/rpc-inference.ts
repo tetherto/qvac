@@ -1,5 +1,5 @@
 // Discovery requires the same multicast-capable Wi-Fi or Ethernet link and IPv4 subnet.
-// npx tsx rpc-inference.ts my-private-rpc-group
+// npx tsx rpc-inference.ts my-private-rpc-group [local-ipv4,local-ipv4]
 import {
   discoverRpcServers,
   getRpcDeviceMap,
@@ -12,9 +12,12 @@ import {
 
 try {
   const topic = process.argv[2]
-  if (!topic) throw new Error('Usage: rpc-inference.ts <topic>')
+  if (!topic) throw new Error('Usage: rpc-inference.ts <topic> [local-ipv4,local-ipv4]')
+  const lanAddresses = process.argv[3]?.split(',')
   // Prefer server RDMA offers before assigning aliases. Transport is negotiated at load time.
-  const selected = (await discoverRpcServers({ topic, timeoutMs: 5000 }))
+  const selected = (
+    await discoverRpcServers({ topic, timeoutMs: 5000, ...(lanAddresses && { lanAddresses }) })
+  )
     .sort((a, b) => Number(b.rdmaAvailable) - Number(a.rdmaAvailable) || a.url.localeCompare(b.url))
     .slice(0, 2)
   if (selected.length !== 2) throw new Error('Two idle RPC servers are required')

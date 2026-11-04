@@ -1,6 +1,8 @@
 package io.tether.qvac.sdk
 
 import io.tether.qvac.sdk.generated.schema.HeartbeatRequest
+import io.tether.qvac.sdk.generated.schema.StartRpcServerRequest
+import io.tether.qvac.sdk.generated.schema.DiscoverRpcServersRequest
 import io.tether.qvac.sdk.generated.schema.LoadModelCustomPluginRequest
 import io.tether.qvac.sdk.generated.schema.LoadModelRequest
 import io.tether.qvac.sdk.generated.schema.LoadModelSrcRequest
@@ -15,11 +17,14 @@ import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.putJsonObject
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertFailsWith
 
 class SchemaMethodsTest {
     @Test
@@ -127,6 +132,57 @@ class SchemaMethodsTest {
             frames.map { it["nativeState"]?.jsonPrimitive?.content },
         )
         assertEquals(originalCause, frames.last()["error"]?.jsonObject?.get("cause"))
+    }
+
+    @Test
+    fun explicitLanAddressesReachServingAndDiscoveryInOrder() = runTest {
+        val addresses = listOf("10.0.1.2", "10.0.0.2")
+        val expected = buildJsonArray { addresses.forEach { add(it) } }
+        val serving = TypedRecordingTransport(
+            unaryResponse = buildJsonObject {
+                put("type", "startRpcServer")
+                put("serverId", "selected-interface")
+                put("url", "10.0.0.2:50052")
+                put("rdmaCapable", false)
+            },
+        )
+        QvacClient(serving).startRpcServer(
+            StartRpcServerRequest(
+                host = "10.0.0.2",
+                allowNonLoopbackHost = true,
+                discoveryTopic = "renamed-adapter",
+                lanAddresses = addresses,
+            ),
+        )
+        assertEquals("10.0.0.2", serving.lastPayload?.get("host")?.jsonPrimitive?.content)
+        assertEquals(expected, serving.lastPayload?.get("lanAddresses"))
+        val discovery = TypedRecordingTransport(
+            unaryResponse = buildJsonObject {
+                put("type", "discoverRpcServers")
+                put("servers", buildJsonArray {})
+            },
+        )
+        QvacClient(discovery).discoverRpcServers(
+            DiscoverRpcServersRequest(topic = "renamed-adapter", lanAddresses = addresses),
+        )
+        assertEquals(expected, discovery.lastPayload?.get("lanAddresses"))
+    }
+
+    @Test
+    fun invalidNetworkSelectionPreservesTheWorkerError() = runTest {
+        val refusal = buildJsonObject {
+            put("type", "error")
+            put("message", "lanAddresses must contain at least one address")
+        }
+        val transport = TypedRecordingTransport(unaryResponse = refusal)
+        val error = assertFailsWith<QvacException> {
+            QvacClient(transport).discoverRpcServers(
+                DiscoverRpcServersRequest(topic = "selected", lanAddresses = emptyList()),
+            )
+        }
+        assertEquals(buildJsonArray {}, transport.lastPayload?.get("lanAddresses"))
+        assertEquals("lanAddresses must contain at least one address", error.message)
+        assertEquals(refusal, error.payload)
     }
 
     private class TypedRecordingTransport(

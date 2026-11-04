@@ -56,14 +56,27 @@ Request scopes close lookup sockets and cancel inventory probes on completion,
 error and cancellation. The RPC server manager owns advertiser cleanup and
 withdraws before stopping its native handle. When advertising is explicitly
 enabled and `host` is omitted, it resolves the sole eligible LAN address before
-starting a native server. Missing or ambiguous addresses fail before startup;
+starting a native server. Both serving and lookup accept `lanAddresses` to select
+one to eight unique local private IPv4 addresses, including renamed adapters.
+Explicit selection bypasses only the name convention. Addresses must remain
+noninternal valid hosts with valid contiguous subnet masks. The current OS API
+cannot prove an arbitrarily named adapter is physical. Automatic selection keeps
+its tunnel, cellular and bridge name exclusions.
+
+Serving rejects `lanAddresses` without `discoveryTopic`. A supplied TCP `host`
+must belong to the explicit list. Omitted `host` still requires a single eligible
+address. Validate the full list before native startup, then advertise only on the
+original bound address. Losing an unused address from the original selection
+does not stop that advertisement. Missing or ambiguous addresses fail before startup;
 ordinary non-advertising starts keep the native loopback default. A stopped advertisement expires
 at receivers after three seconds. Suspend closes sockets and invalidates lookup
 inventories. Opening resources remain visible to suspension until startup and
 socket cleanup settle. Close cancels startup and prevents a late bind callback
 from reopening the resource.
 
-Lookup resume selects current eligible interfaces and reopens sockets. An
+Lookup resume selects current eligible interfaces and reopens sockets. If an
+explicitly selected receiver address disappears, the lookup reports failure and
+releases its resources while runtime resume continues. An
 advertiser keeps its native endpoint fixed. Resume restores advertising only if
 its original bind address remains eligible. Losing that address or a terminal
 send failure stops advertising without failing runtime resume or losing native
@@ -98,7 +111,7 @@ subscriber can hold at most 256 unread updates; exceeding that bound ends the
 stream with an error. Subscribe again to read current state. `state()` continues
 to report runtime lifecycle state only.
 
-The status stream is a library-only capability. Applications own native server
+The status stream and native RPC address selection are library-only capabilities. Applications own native server
 IDs and their restart policy. The current CLI serving commands expose HTTP APIs
 and do not own native GGML RPC servers.
 

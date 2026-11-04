@@ -38,10 +38,14 @@ export async function advertiseRpcServer(
   url: string,
   ctx?: RequestContext,
   createTransport = createLanDiscovery,
-  onstatus?: (state: 'advertising' | 'suspended' | 'failed', error?: Error) => void
+  onstatus?: (state: 'advertising' | 'suspended' | 'failed', error?: Error) => void,
+  lanAddresses?: string[]
 ): Promise<() => Promise<void>> {
   const endpoint = privateEndpoint(url)
   if (!endpoint) throw new Error('RPC advertising requires a concrete private IPv4 endpoint')
+  if (lanAddresses && !lanAddresses.includes(endpoint.host)) {
+    throw new Error('RPC advertised endpoint must belong to lanAddresses')
+  }
   const frame = Buffer.alloc(ANNOUNCEMENT_BYTES)
   frame.write(MAGIC, 0, 'ascii')
   frame[4] = 1
@@ -51,6 +55,7 @@ export async function advertiseRpcServer(
   const scope = createDisposableScope()
   const transport = createTransport({
     host: endpoint.host,
+    ...(lanAddresses && { lanAddresses: [endpoint.host] }),
     onstart() {
       onstatus?.('advertising')
     },
@@ -89,7 +94,8 @@ export async function discoverRpcEndpoints(
   deps: {
     createTransport?: typeof createLanDiscovery
     probe?: typeof queryRpcInventory
-  } = {}
+  } = {},
+  lanAddresses?: string[]
 ): Promise<RpcServerCandidate[]> {
   throwIfAborted(ctx.signal)
   await using scope = createDisposableScope()
@@ -218,6 +224,7 @@ export async function discoverRpcEndpoints(
   }
 
   const transport = (deps.createTransport ?? createLanDiscovery)({
+    ...(lanAddresses && { lanAddresses }),
     accept: (frame) => !!parseAnnouncement(frame, hash),
     onmessage(frame, host) {
       if (Date.now() >= deadline || ctx.signal.aborted || transport.suspended) return
