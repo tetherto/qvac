@@ -1,6 +1,6 @@
 import type { QVACBlobBinding } from '@qvac/registry-client'
 import { promises as fsPromises } from 'bare-fs'
-import { getModelByPath, type RegistryItem } from '@/models/registry/index'
+import { getModelByPath, models, type RegistryItem } from '@/models/registry/index'
 import { registryUrlSchema } from '@/schemas/load-model'
 import { getRegistryClient } from '@/runtime/registry-client'
 import { getAllModelIds, getModelEntry } from '@/runtime/model-registry'
@@ -35,7 +35,7 @@ const logger = getEngineLogger()
 type BlobRange = Pick<QVACBlobBinding, 'coreKey' | 'blockOffset' | 'blockLength'>
 type ClearableClient = { clearBlob?: (binding: BlobRange) => Promise<void> }
 type RegistryClient = Awaited<ReturnType<typeof getRegistryClient>>
-type DeletePlan = { targets: string[]; bindings: BlobRange[] }
+type DeletePlan = { targets: string[]; bindings: BlobRange[]; registryPaths: string[] }
 
 /**
  * Deletes a registry model's cached files and the corestore blocks a cancelled
@@ -46,13 +46,10 @@ export async function deleteRegistryModelCache(modelSrc: string): Promise<void> 
   if (!parsed.success) throw new InvalidDeleteCacheParamsError()
   const { registryPath, registrySource } = parsed.data
   const cacheKey = createRegistryCacheKey(registryPath)
-
-  if (hasActiveTransfer(cacheKey)) {
-    throw new DeleteCacheFailedError(`${modelSrc} is downloading; cancel it first`)
-  }
+  assertNotDownloading(modelSrc, [cacheKey])
 
   // Downloads and loads of this path, from any source, are refused until the files are gone.
-  await withDownloadBlocked(cacheKey, async () => {
+  await withDownloadBlocked([cacheKey], async () => {
     const client = await getRegistryClient()
     const entry = getModelByPath(registryPath)
     const catalogued = entry?.registrySource === registrySource ? entry : undefined
@@ -60,22 +57,50 @@ export async function deleteRegistryModelCache(modelSrc: string): Promise<void> 
       ? await planCatalogued(catalogued)
       : await planUncatalogued(client, registryPath, registrySource)
 
-    assertNotLoaded(modelSrc, plan.targets)
+    // Companion files are shared: clearing one would erase another model's download.
+    const sharedKeys = getModelsSharingFiles(plan.registryPaths)
+      .map(createRegistryCacheKey)
+      .filter((key) => key !== cacheKey)
+    assertNotDownloading(modelSrc, sharedKeys)
 
-    // Read structurally: older registry clients have no clearBlob.
-    const clearable = client as ClearableClient
-    if (typeof clearable.clearBlob === 'function') {
-      for (const binding of plan.bindings) await clearable.clearBlob(binding)
-    } else {
-      logger.warn('Registry client cannot clear blob blocks; deleting cached files only')
-    }
+    await withDownloadBlocked(sharedKeys, async () => {
+      assertNotLoaded(modelSrc, plan.targets)
 
-    assertNotLoaded(modelSrc, plan.targets)
-    for (const target of plan.targets) {
-      await fsPromises.rm(target, { recursive: true, force: true })
-    }
+      // Read structurally: older registry clients have no clearBlob.
+      const clearable = client as ClearableClient
+      if (typeof clearable.clearBlob === 'function') {
+        for (const binding of plan.bindings) await clearable.clearBlob(binding)
+      } else {
+        logger.warn('Registry client cannot clear blob blocks; deleting cached files only')
+      }
+
+      assertNotLoaded(modelSrc, plan.targets)
+      for (const target of plan.targets) {
+        await fsPromises.rm(target, { recursive: true, force: true })
+      }
+    })
   })
   logger.info(`🗑️ Deleted registry model cache: ${modelSrc}`)
+}
+
+function assertNotDownloading(modelSrc: string, cacheKeys: string[]): void {
+  if (cacheKeys.some(hasActiveTransfer)) {
+    throw new DeleteCacheFailedError(`${modelSrc} is downloading; cancel it first`)
+  }
+}
+
+// Every catalogued model whose own download writes one of these registry paths.
+function getModelsSharingFiles(registryPaths: string[]): string[] {
+  const paths = new Set(registryPaths)
+  const sharing = new Set(registryPaths)
+  for (const model of models as readonly RegistryItem[]) {
+    const files = [
+      model.registryPath,
+      ...(model.companionSet?.files ?? []).map((f) => f.registryPath)
+    ]
+    if (files.some((file) => paths.has(file))) sharing.add(model.registryPath)
+  }
+  return [...sharing]
 }
 
 function assertNotLoaded(modelSrc: string, targets: string[]): void {
@@ -92,7 +117,8 @@ async function planCatalogued(entry: RegistryItem): Promise<DeletePlan> {
   if (entry.shardMetadata?.length) {
     return {
       targets: [getShardedModelCacheDir(generateShortHash(entry.registryPath))],
-      bindings: entry.shardMetadata.map(buildBlobBinding)
+      bindings: entry.shardMetadata.map(buildBlobBinding),
+      registryPaths: [entry.registryPath]
     }
   }
 
@@ -102,13 +128,15 @@ async function planCatalogued(entry: RegistryItem): Promise<DeletePlan> {
         getCompanionSetCacheDir(entry.companionSet.setKey),
         ...getLegacyCompanionSetPaths(entry.companionSet, entry.addon === 'nmt')
       ],
-      bindings: entry.companionSet.files.map(buildBlobBinding)
+      bindings: entry.companionSet.files.map(buildBlobBinding),
+      registryPaths: entry.companionSet.files.map((file) => file.registryPath)
     }
   }
 
   const plan: DeletePlan = {
     targets: [getClearStorageTarget(getSingleFileCachePath(entry.registryPath)).path],
-    bindings: [buildBlobBinding(entry)]
+    bindings: [buildBlobBinding(entry)],
+    registryPaths: [entry.registryPath]
   }
 
   const platform = getRuntimeContext().platform
@@ -119,7 +147,9 @@ async function planCatalogued(entry: RegistryItem): Promise<DeletePlan> {
     )
     const coremlSet = await findLocallyCachedCoremlCompanionSet(entry, platform)
     for (const file of coremlSet?.files ?? []) {
-      if (file.registryPath !== entry.registryPath) plan.bindings.push(buildBlobBinding(file))
+      if (file.registryPath === entry.registryPath) continue
+      plan.bindings.push(buildBlobBinding(file))
+      plan.registryPaths.push(file.registryPath)
     }
   }
   return plan
@@ -139,14 +169,16 @@ async function planUncatalogued(
     )
     return {
       targets: [getShardedModelCacheDir(generateShortHash(registryPath))],
-      bindings: shards.flatMap((shard) => (shard.blobBinding ? [shard.blobBinding] : []))
+      bindings: shards.flatMap((shard) => (shard.blobBinding ? [shard.blobBinding] : [])),
+      registryPaths: [registryPath]
     }
   }
 
   const model = await client.getModel(registryPath, registrySource)
   return {
     targets: [getClearStorageTarget(getSingleFileCachePath(registryPath)).path],
-    bindings: model?.blobBinding ? [model.blobBinding] : []
+    bindings: model?.blobBinding ? [model.blobBinding] : [],
+    registryPaths: [registryPath]
   }
 }
 

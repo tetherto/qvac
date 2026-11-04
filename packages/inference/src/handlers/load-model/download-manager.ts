@@ -342,17 +342,18 @@ export function markClearCacheForRequest(requestId: string): boolean {
  * a cache deletion cannot remove files another call is writing or loading.
  */
 export async function withDownloadBlocked<T>(
-  resourceKey: string,
+  resourceKeys: string[],
   fn: () => Promise<T>
 ): Promise<T> {
-  if (deletingKeys.has(resourceKey)) {
-    throw new DeleteCacheFailedError(`The cache for ${resourceKey} is already being deleted`)
+  const busy = resourceKeys.find((key) => deletingKeys.has(key))
+  if (busy) {
+    throw new DeleteCacheFailedError(`The cache for ${busy} is already being deleted`)
   }
-  deletingKeys.add(resourceKey)
+  for (const key of resourceKeys) deletingKeys.add(key)
   try {
     return await fn()
   } finally {
-    deletingKeys.delete(resourceKey)
+    for (const key of resourceKeys) deletingKeys.delete(key)
   }
 }
 

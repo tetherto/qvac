@@ -14,7 +14,7 @@ import {
   getCompanionSetCacheDir
 } from '@/utils/cache/paths'
 import { generateShortHash } from '@/utils/index'
-import { QWEN3_600M_INST_Q4, models } from '@/models/registry/index'
+import { BCI_EMBEDDER, BCI_WINDOWED, QWEN3_600M_INST_Q4, models } from '@/models/registry/index'
 import {
   createRegistryDownloadKey,
   startOrJoinDownload
@@ -277,6 +277,58 @@ test('deleteCache({ modelSrc }): refused while another source downloads the same
   })
   t.is(response.success, false)
   t.ok(response.error?.includes('downloading'), 'reports the active download')
+
+  finish()
+  await download.promise
+})
+
+test('deleteCache({ modelSrc }): a model sharing a companion file cannot download during deletion', async (t) => {
+  let release: (() => void) | undefined
+  let clearing!: () => void
+  const started = new Promise<void>((resolve) => (clearing = resolve))
+  stubClient(t, {
+    clearBlob: () => {
+      if (release) return Promise.resolve()
+      clearing()
+      return new Promise<void>((resolve) => (release = resolve))
+    }
+  })
+
+  const deletion = handleDeleteCache({ type: 'deleteCache', modelSrc: BCI_WINDOWED.src })
+  await started
+
+  let downloadStarted = false
+  const download = startOrJoinDownload(
+    createRegistryDownloadKey(BCI_EMBEDDER.registrySource, BCI_EMBEDDER.registryPath),
+    async () => {
+      downloadStarted = true
+      return 'path'
+    }
+  )
+  await t.exception(download.promise, /being deleted/)
+  t.absent(downloadStarted, 'download did not start')
+
+  release!()
+  t.is((await deletion).success, true)
+})
+
+test('deleteCache({ modelSrc }): refused while a model sharing the file downloads', async (t) => {
+  const cleared: unknown[] = []
+  stubClient(t, {
+    clearBlob: async (blob: unknown) => {
+      cleared.push(blob)
+    }
+  })
+  let finish!: () => void
+  const download = startOrJoinDownload(
+    createRegistryDownloadKey(BCI_WINDOWED.registrySource, BCI_WINDOWED.registryPath),
+    () => new Promise<string>((resolve) => (finish = () => resolve('path')))
+  )
+
+  const response = await handleDeleteCache({ type: 'deleteCache', modelSrc: BCI_EMBEDDER.src })
+  t.is(response.success, false)
+  t.ok(response.error?.includes('downloading'), 'reports the active download')
+  t.is(cleared.length, 0, 'cleared nothing')
 
   finish()
   await download.promise
