@@ -2079,6 +2079,80 @@ test("release policy: no workflow or action calls nx's publish directly", () => 
   assert.deepEqual(offenders, []);
 });
 
+// C++ lint checks out the event's head commit, never a branch name that a later push can move under the job.
+test("cpp-lint resolves checkout from event head SHA, never branch ref", () => {
+  const source = read(".github/workflows/_cpp-lint.yml");
+  assert.match(
+    source,
+    /ref:\s+\$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/,
+  );
+  assert.doesNotMatch(source, /head\.ref\b|PR_HEAD_REF|env\.HEAD_REF/);
+});
+
+// The text of every `run:` script in a workflow, block scalars included.
+function runScripts(source) {
+  const lines = source.split("\n");
+  const scripts = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^(\s*)(- )?run:(.*)$/.exec(lines[i]);
+    if (!m) continue;
+    const indent = m[1].length + (m[2] ? 2 : 0);
+    const block = [m[3]];
+    while (
+      i + 1 < lines.length &&
+      (!lines[i + 1].trim() || lines[i + 1].search(/\S/) > indent)
+    ) {
+      block.push(lines[++i]);
+    }
+    scripts.push(block.join("\n"));
+  }
+  return scripts;
+}
+
+// (1) No expression is interpolated into a run: script, so a crafted dispatch input cannot break out of it; inputs
+// reach scripts through env. (2) The model match defaults to EQUALS, so a one-device run bills the exact fleet model.
+// (3) The published-build input defaults to empty, never to an @latest spec.
+test("mobile dispatch inputs are injection-safe and default to exact-model runs", () => {
+  let checked = 0;
+  for (const path of [".github/workflows/mobile-tests.yml", ".github/workflows/_mobile.yml"]) {
+    const source = read(path);
+    const scripts = runScripts(withoutComments(source));
+    checked += scripts.length;
+    for (const script of scripts) {
+      assert.doesNotMatch(script, /\$\{\{/, `${path}: an expression is interpolated into a run: script`);
+    }
+    assert.match(
+      source,
+      /device_model_operator:\n(?:\s+[a-z_]+:.*\n)*?\s+default: EQUALS\b/,
+      `${path} must default device_model_operator to EQUALS`,
+    );
+    assert.doesNotMatch(source, /default: CONTAINS/, `${path} must not default to CONTAINS`);
+    assert.doesNotMatch(
+      source,
+      /default:\s*['"]?@[a-z]+\/[^'"\s]*@latest/,
+      `${path} must default the published-build spec to empty, not @latest`,
+    );
+  }
+  assert.ok(checked >= 1, "no run: scripts found in the mobile workflows");
+});
+
+// fabric-cmake-layout.sh is the only check of every @qvac/fabric install layout, so it must stay wired to the files
+// it guards.
+test("the fabric CMake layout script runs when its inputs change", () => {
+  const source = read(".github/workflows/on-pr-shared-ci-infra.yml");
+  for (const path of [
+    ".github/scripts/test/fabric-cmake-layout.sh",
+    "cmake/qvac-addon/qvac-addon.cmake",
+    "packages/fabric/cmake/qvac-fabric-hosts.cmake",
+  ]) {
+    assert.ok(source.includes(`- "${path}"`), `on-pr-shared-ci-infra.yml does not run on ${path}`);
+  }
+  assert.match(
+    source,
+    /run: \.github\/scripts\/test\/fabric-cmake-layout\.sh packages\/fabric\/node_modules/,
+  );
+});
+
 // The contract's cache writers run PR-head code once fork approval and the trust check pass, so a cache WRITE must
 // happen only on a trusted run: _cpp-tests.yml gates each write on its env.TRUSTED, and cache-warm.yml has no
 // pull-request trigger at all. Easy to undo by accident, so pin it here. See .github/AGENTS.md.

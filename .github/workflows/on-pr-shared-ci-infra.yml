@@ -23,6 +23,9 @@ on:
       - "packages/ocr-ggml/.agent/skills/**"
       - "vcpkg-overlays/triplets/**"
       - "vcpkg-overlays/toolchains/**"
+      - ".github/scripts/test/fabric-cmake-layout.sh"
+      - "cmake/qvac-addon/qvac-addon.cmake"
+      - "packages/fabric/cmake/qvac-fabric-hosts.cmake"
   workflow_dispatch:
 
 permissions:
@@ -137,3 +140,25 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
       - name: Verify qvac-fabric versions are lockstep
         uses: ./.github/actions/verify-qvac-fabric-lockstep
+
+  # Which @qvac/fabric runtime qvac_addon_fabric_layout() links, across every install layout; nothing else
+  # configures a consumer against each layout before an addon build hits the wrong one.
+  fabric-cmake-layout:
+    name: Fabric CMake runtime layout
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: lts/*
+      # cmake-bare and cmake-npm come from fabric's own devDependencies.
+      - name: Install fabric's CMake modules
+        working-directory: packages/fabric
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Resolve the runtime across install layouts
+        run: .github/scripts/test/fabric-cmake-layout.sh packages/fabric/node_modules
