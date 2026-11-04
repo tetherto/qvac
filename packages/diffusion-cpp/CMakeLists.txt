@@ -23,12 +23,12 @@ endif()
 # Ordinary source, unit-test, coverage and fuzz builds need no CUDA toolkit.
 # Vulkan and Metal use the registry ports' platform-specific defaults.
 #
-# GGML_BACKEND_DL is ON on Android and desktop Linux (set in the ggml
-# portfile), mirroring qvac-fabric: GPU backends are dlopen'd MODULE .so files
-# shipped next to the addon, so the .bare itself never links
-# libvulkan/libOpenCL and loads on hosts without a graphics stack (QVAC-23767).
-# Windows CUDA source builds also use runtime-loaded GPU modules; other
-# Windows builds and macOS/iOS (Metal) keep static GPU backends.
+# GGML_BACKEND_DL is ON on Android, desktop Linux and Windows (set in the
+# ggml portfile), mirroring qvac-fabric: GPU backends are runtime-loaded
+# MODULE .so / .dll files shipped next to the addon, so the .bare itself never
+# links libvulkan/libOpenCL/vulkan-1 or the CUDA runtime and loads on hosts
+# without a graphics stack (QVAC-23767, QVAC-25560). On macOS/iOS (Metal) GPU
+# backends are statically linked.
 
 find_package(cmake-bare REQUIRED PATHS node_modules/cmake-bare)
 find_package(cmake-vcpkg REQUIRED PATHS node_modules/cmake-vcpkg)
@@ -87,10 +87,9 @@ else()
 endif()
 message("Building inference-addon-sd module '${module_name}'")
 
-# With GGML_BACKEND_DL, install GPU backend modules alongside the addon
-# on Android, Linux, and Windows CUDA source builds. CPU
-# backends are statically linked (GGML_CPU_STATIC) and excluded from this
-# loop.
+# With GGML_BACKEND_DL, install GPU backend modules alongside the addon on
+# Android, Linux and Windows. CPU backends are statically linked
+# (GGML_CPU_STATIC) and excluded from this loop.
 set(BACKEND_DL_EXPORTS "")
 if(GGML_BACKEND_DL AND (ANDROID OR WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
   foreach(_backend ${GGML_AVAILABLE_BACKENDS})
@@ -117,6 +116,14 @@ if(GGML_BACKEND_DL AND (ANDROID OR WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
       IMPORTED_NO_SONAME TRUE)
     list(APPEND BACKEND_DL_EXPORTS INSTALL TARGET ggml::${_backend})
   endforeach()
+endif()
+
+# Every Windows build loads its GPU backends from DLLs, so fail the configure
+# rather than ship a CPU-only Windows prebuild when none were packaged.
+if(GGML_BACKEND_DL AND WIN32 AND NOT BACKEND_DL_EXPORTS)
+  message(FATAL_ERROR "inference-addon-sd: GGML_BACKEND_DL is on but ggml "
+    "exports no GPU backend module; the prebuild would ship without GPU "
+    "backends")
 endif()
 
 add_bare_module(inference-addon-sd NAME ${module_name} EXPORTS ${BACKEND_DL_EXPORTS})
