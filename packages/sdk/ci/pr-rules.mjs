@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The SDK pod's PR title and description rules (validator.cjs --type=pr), for a pull request that changes a path
-// .github/teams/sdk.json owns. Run by pr-checks.yml's pod-rules job, which also runs on edits.
+// .github/teams/sdk.json owns. Run by sdk-checks.yml's pod-rules job, which also runs on edits.
 
 import { readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
