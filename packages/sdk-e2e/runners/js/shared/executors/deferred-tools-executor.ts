@@ -171,13 +171,15 @@ export class DeferredToolsExecutor extends AbstractModelExecutor<typeof deferred
     const history = this.baseHistory(p)
 
     try {
-      const deferred = await this.run(modelId, history, p, { predict: 1 })
+      const deferred = await this.run(modelId, history, p, { predict: 1, kvCache: false })
       const emptySchemas = await this.run(modelId, history, p, {
         predict: 1,
+        kvCache: false,
         tools: withEmptySchemas(DEFERRED_TOOL_INVENTORY)
       })
       const eager = await this.run(modelId, history, p, {
         predict: 1,
+        kvCache: false,
         tools: withoutDeferral(DEFERRED_TOOL_INVENTORY)
       })
 
