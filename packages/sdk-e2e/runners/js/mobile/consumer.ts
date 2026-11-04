@@ -64,27 +64,6 @@ async function resolveTableAsset(kind: string, file: string): Promise<string> {
   return await resolveBundledAssetUri(assetModule)
 }
 
-/**
- * Every `$packageAsset` the table names, written out statically. Metro resolves
- * `require` while it bundles, so a template literal fails the whole build.
- */
-const PACKAGE_ASSETS: Record<string, number> = {
-  // @ts-ignore - Metro turns the bundled data file into an asset module.
-  '@qvac/classification-ggml/weights/mobilenetv3_3class_v3_fp16.gguf': require('../../../../node_modules/@qvac/classification-ggml/weights/mobilenetv3_3class_v3_fp16.gguf')
-}
-
-/** A data file inside an installed package, as a bundled-asset URI. */
-async function resolveTablePackageAsset(pkg: string, file: string): Promise<string> {
-  const assetModule = PACKAGE_ASSETS[`${pkg}/${file}`]
-  if (assetModule === undefined) {
-    throw new Error(
-      `package asset not bundled on mobile: ${pkg}/${file} -- ` +
-        'add it to PACKAGE_ASSETS in runners/js/mobile/consumer.ts'
-    )
-  }
-  return await resolveBundledAssetUri(assetModule)
-}
-
 // Download plan and the unload settling mobile needs -- and why it needs it -- come from the shared
 // platform policy; see catalog/platform-policy.ts.
 const resources = new ResourceManager(policyFor('mobile'))
@@ -96,8 +75,7 @@ applyResourceTable(
   (dep, definition) => resources.define(dep, definition as never),
   {
     const: (name) => (MODEL_CONSTANTS as Record<string, unknown>)[name],
-    asset: (kind, file) => resolveTableAsset(kind, file),
-    packageAsset: (pkg, file) => resolveTablePackageAsset(pkg, file)
+    asset: (kind, file) => resolveTableAsset(kind, file)
   }
 )
 // NOTE: no "vla-pi05" resource on mobile by design — the pi05 q_aggressive
