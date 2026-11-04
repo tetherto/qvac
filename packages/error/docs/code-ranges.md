@@ -18,9 +18,9 @@ Add each numeric map's owner, file, and symbols to
 using static literals, constant references, or `Object.freeze`.
 Keep registration definitions static too; filter them with
 `Object.fromEntries(Object.entries(definitions).filter(...))` instead of mutating
-a map. Shadowed maps and mutations fail validation. The checker reads source
-without loading packages or native addons and ignores compiled JavaScript copies
-of listed TypeScript modules.
+a map. Shadowed maps, mutations, and passing checked maps to unsupported helpers
+fail validation. The checker reads source without loading packages or native
+addons and ignores compiled JavaScript copies of listed TypeScript modules.
 Discovery is file-local and does not follow imports, so list maps registered
 through imported helpers explicitly in `sources`.
 

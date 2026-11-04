@@ -1,6 +1,6 @@
 import ts from 'typescript'
 
-function parseSource(source: string) {
+function parseSource(source: string, registrars: ReadonlySet<string> = new Set(['addCodes'])) {
   const file = ts.createSourceFile('codes.ts', source, ts.ScriptTarget.Latest, true)
   // Bind this file in isolation: resolve lexical scopes without loading dependencies.
   const host: ts.CompilerHost = {
@@ -73,6 +73,27 @@ function parseSource(source: string) {
         }
         if (!readsProperty && !(checker.getTypeAtLocation(node).flags & ts.TypeFlags.NumberLike)) {
           if (
+            ts.isCallExpression(parent) &&
+            parent.arguments.some((argument) => argument === target)
+          ) {
+            const callee = parent.expression
+            const name = ts.isPropertyAccessExpression(callee)
+              ? callee.name.text
+              : callee.getText(file)
+            if (
+              !(parent.arguments[0] === target && registrars.has(name)) &&
+              ![
+                'Object.entries',
+                'Object.fromEntries',
+                'Object.freeze',
+                'Object.keys',
+                'Object.values'
+              ].includes(callee.getText(file))
+            ) {
+              throw new Error(`Unsupported error table call: ${callee.getText(file)}`)
+            }
+          }
+          if (
             ts.isBinaryExpression(parent) &&
             parent.right === target &&
             parent.operatorToken.kind === ts.SyntaxKind.EqualsToken
@@ -96,9 +117,9 @@ function parseSource(source: string) {
 }
 
 export function referencedCodeMaps(source: string): string[] {
-  const { file, declarations, checker, assertUnmodified } = parseSource(source)
-  const symbols = new Set<string>()
   const registrars = new Set(['addCodes'])
+  const { file, declarations, checker, assertUnmodified } = parseSource(source, registrars)
+  const symbols = new Set<string>()
   const inspected = new Set<ts.Expression>()
 
   function definitionOf(identifier: ts.Identifier): ts.Expression | undefined {

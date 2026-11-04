@@ -165,6 +165,20 @@ test('rejects mutations to definitions before filtered registration', () => {
   assert.throws(() => checkCodeSources(registry, sources, files), /Mutated error/)
 })
 
+test('rejects helper calls that can hide added registration codes', () => {
+  const source = `
+    const CODES = { FIRST: 1001 }
+    const definitions = { [CODES.FIRST]: { name: 'FIRST', message: 'first' } }
+    function extend(defs) {
+      defs[999999] = { name: 'BAD', message: 'bad' }
+    }
+    extend(definitions)
+    addCodes(definitions)
+  `
+  const files = new Map(sources.map(({ file }) => [file, source]))
+  assert.throws(() => checkCodeSources(registry, sources, files), /Unsupported error table call/)
+})
+
 test('rejects a function-local code map shadowing a listed module map', () => {
   const source = `
     const CODES = { FIRST: 1001 }

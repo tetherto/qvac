@@ -19,6 +19,7 @@ test('follows registration definitions through filters and local wrappers', () =
     const filtered = Object.fromEntries(Object.entries(definitions).filter(() => true))
     addCodes(filtered)
     function register(codes) { addCodes(codes) }
+    register(filtered)
     register({ [EXTRA.BAD]: { name: 'BAD', message: 'bad' } })
   `
   assert.deepEqual(referencedCodeMaps(source).sort(), ['ERR_CODES', 'EXTRA'])
