@@ -73,6 +73,12 @@ export const modelFitProbeBci = probeCase('bci', 'bci', 'bci-whispercpp')
 export const modelFitProbeTts = probeCase('tts-chatterbox', 'tts-chatterbox', 'tts-ggml')
 export const modelFitProbeAudiogen = probeCase('audiogen', 'audiogen-turbo', 'audiogen-ggml')
 export const modelFitProbeDiffusion = probeCase('diffusion', 'diffusion', 'diffusion-cpp')
+export const modelFitProbeDiffusionEsrgan = probeCase(
+  'diffusion-esrgan',
+  'diffusion-esrgan-fit-probe',
+  'diffusion-cpp'
+)
+export const modelFitProbeUpscaler = probeCase('upscaler', 'upscaler', 'diffusion-cpp')
 export const modelFitProbeOcr = probeCase('ocr', 'ocr', 'ocr-ggml')
 export const modelFitProbeTranslation = probeCase(
   'translation',
@@ -106,6 +112,8 @@ export const modelFitProbeTests = [
   modelFitProbeTts,
   modelFitProbeAudiogen,
   modelFitProbeDiffusion,
+  modelFitProbeDiffusionEsrgan,
+  modelFitProbeUpscaler,
   modelFitProbeOcr,
   modelFitProbeTranslation
 ]

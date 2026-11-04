@@ -7,6 +7,7 @@ find_package(GTest CONFIG REQUIRED)
 option(ENABLE_COVERAGE "Enable coverage instrumentation for unit tests" OFF)
 
 set(TEST_SOURCES
+  fit_verdict_test.cpp
   translation_tests.cpp
   nmt_model_wrapper_test_indic.cpp
   nmt_test.cpp

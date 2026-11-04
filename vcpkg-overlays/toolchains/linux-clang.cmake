@@ -20,4 +20,37 @@ set(CMAKE_CUDA_HOST_COMPILER "${CMAKE_CXX_COMPILER}")
 # CUDA integration lane validates the combination end to end.
 set(CMAKE_CUDA_FLAGS_INIT "-allow-unsupported-compiler")
 
+# HIP sources compile through their own driver, which never sees
+# VCPKG_CXX_FLAGS. Their host code would then use libstdc++ while the module
+# links libc++, leaving libstdc++ symbols undefined, and the module loads only
+# in a process that already has libstdc++ mapped. CUDA cannot take the same
+# fix: nvcc before 13.4 rejects libc++ host code, so the qvac-fabric port
+# builds its CUDA module against libstdc++ instead.
+if(VCPKG_CXX_FLAGS MATCHES "(^| )-stdlib=libc\\+\\+( |$)")
+  # HIP stays on ROCm's clang: bare-make's has no AMDGPU backend. ROCm's own
+  # libc++ headers do not build (no __config_site) and it ships no libc++.a, so
+  # HIP takes the headers of the libc++ the C++ compiler links.
+  # -stdlib++-isystem, unlike -isystem, keeps them after clang's HIP math
+  # wrappers.
+  set(_qvac_libcxx_target)
+  if(CMAKE_CXX_COMPILER_TARGET)
+    set(_qvac_libcxx_target "--target=${CMAKE_CXX_COMPILER_TARGET}")
+  endif()
+  execute_process(
+    COMMAND "${CMAKE_CXX_COMPILER}" ${_qvac_libcxx_target} -stdlib=libc++ -E -v -x c++ /dev/null
+    OUTPUT_QUIET
+    ERROR_VARIABLE _qvac_libcxx_search
+    RESULT_VARIABLE _qvac_libcxx_result)
+  string(REGEX MATCH "\n *([^\n]*/c\\+\\+/v1)\n" _qvac_libcxx_match "${_qvac_libcxx_search}")
+  if(NOT _qvac_libcxx_result EQUAL 0 OR NOT IS_DIRECTORY "${CMAKE_MATCH_1}")
+    message(FATAL_ERROR "qvac linux-clang: ${CMAKE_CXX_COMPILER} reports no libc++ headers for -stdlib=libc++")
+  endif()
+  set(CMAKE_HIP_FLAGS_INIT "-stdlib=libc++ -stdlib++-isystem ${CMAKE_MATCH_1}")
+
+  unset(_qvac_libcxx_target)
+  unset(_qvac_libcxx_search)
+  unset(_qvac_libcxx_result)
+  unset(_qvac_libcxx_match)
+endif()
+
 include("$ENV{VCPKG_ROOT}/scripts/toolchains/linux.cmake")

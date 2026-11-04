@@ -101,8 +101,8 @@ Add `@qvac/fabric` and its platform packages to the consumer's `package.json`:
     "@qvac/fabric-ios": { "optional": true }
   },
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "0.21.1",
-    "@qvac/fabric-ios": "0.21.1",
+    "@qvac/fabric-android-arm64": "^0.21.1",
+    "@qvac/fabric-ios": "^0.21.1",
     "cmake-bare": "^1.9.0",
     "cmake-vcpkg": "^1.1.0"
   }
@@ -120,10 +120,12 @@ dependencies. Hence each kind of declaration:
   150 MB) with every install. The application installs the one it ships,
   pinned to the exact `@qvac/fabric` version. The SDK's
   `installMissingPrebuilds` does that for you.
-- **Exact-pinned `devDependencies` (mobile).** These are what an addon that
-  cross-builds Android or iOS prebuilds links against. Bump them together with
-  the `@qvac/fabric` range. When one is missing, configure fails and names the
-  package to add.
+- **`devDependencies` (mobile).** These are what an addon that cross-builds
+  Android or iOS prebuilds links against. Use the same caret range as
+  `@qvac/fabric`: the meta requires its mobile packages at its own exact
+  version, so npm installs a matching pair, and a fabric patch needs no
+  manifest change. When one is missing, configure fails and names the package
+  to add.
 
 After `npm install`, the headers and CMake config are under
 `node_modules/@qvac/fabric/prebuilds/`, and the host's prebuilt `.bare` and ggml
@@ -352,7 +354,7 @@ bare-pack --host <host> --linked index.js > /dev/null   # bundles without errors
 
 | # | Step | What to verify |
 |---|------|----------------|
-| 1 | `package.json` | `@qvac/fabric` `^0.21.1` in `dependencies`; the desktop platform packages in `optionalDependencies` and the mobile ones as optional `peerDependencies`; `cmake-bare` + `cmake-vcpkg` in `devDependencies`, plus exact-pinned `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` when building mobile prebuilds |
+| 1 | `package.json` | `@qvac/fabric` `^0.21.1` in `dependencies`; the desktop platform packages in `optionalDependencies` and the mobile ones as optional `peerDependencies`; `cmake-bare` + `cmake-vcpkg` in `devDependencies`, plus `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` at the `@qvac/fabric` caret range when building mobile prebuilds |
 | 2 | `vcpkg.json` | `qvac-fabric` is **not** listed; `vk-profiling` feature removed; addon-specific deps remain |
 | 3 | `CMakeLists.txt` | `qvac_addon_use_fabric()`, or `find_package(qvac-fabric ...)` + `qvac_addon_fabric_layout()`; `qvac-fabric::headers`; no runtime or backend install |
 | 4 | `binding.js`, exports function | `require('@qvac/fabric')` **before** `require.addon()`, literal specifiers only; no backends path in JS; the exports function calls `qvacAddonBindFabric()` and throws if it fails |

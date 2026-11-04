@@ -16,46 +16,42 @@ Never edit anything under `packages/**`. If a source file is wrong — an exampl
 
 ## Collections, and the one line this skill writes to
 
-The site is partitioned into four collections, each a folder under `content/docs/`: `sdk/`, `cli/`, `ecosystem/`, `resources/`. Only the first two document a release, and each of them is cut into **documentation lines** — one folder per published version.
+The site is partitioned into four collections: `sdk/`, `cli/`, `ecosystem/`, `resources/`. Only the first two document a release, and each of them is cut into **documentation lines** — one folder per published version, under `content/docs/<collection>/`.
 
-The current line is the folder whose name is parenthesized. Fumadocs treats that as a group and drops it from the URL, so the current line is what answers the version-less addresses a reader normally follows. Every other folder is a line already cut and serves its version segment.
+The line still being written is not among them. It lives outside the site, at `content/_unpublished/<collection>/next/`, where nothing builds it and no URL reaches it. It is published at the release cutoff, by being copied into the collection as the new parenthesized folder.
 
 ```text
-content/docs/sdk/(v0.20)/   current — answers /sdk/…
-content/docs/sdk/v0.19/     cut     — answers /sdk/v0.19/…
-content/docs/sdk/v0.18/     cut
-content/docs/cli/(v0.14)/   current — answers /cli/…
-content/docs/cli/v0.13/     cut
-content/docs/cli/v0.12/     cut
+content/_unpublished/sdk/next/   being written — the next release, no URL
+content/docs/sdk/(v0.20)/        cut — answers /sdk/…
+content/docs/sdk/v0.19/          cut — answers /sdk/v0.19/…
+content/docs/sdk/v0.18/          cut
+content/_unpublished/cli/next/   being written
+content/docs/cli/(v0.14)/        cut — answers /cli/…
+content/docs/cli/v0.13/          cut
 ```
 
-**This skill writes to the current line and to nothing else.** It documents the working tree, which is the release not yet cut. An older line documents a release already shipped, so adding a new parameter to `sdk/v0.19/` would assert that the shipped 0.19 had it. Older lines stay editable by hand for corrections; that is a human decision and never this skill's.
+**This skill writes to the development line and to nothing else.** It documents the working tree, which is the release not yet cut. Every folder under `content/docs/<collection>/` documents a release that already shipped, so adding a new parameter to `sdk/(v0.20)/` would assert that the shipped 0.20 had it. Cut lines stay editable by hand for corrections; that is a human decision and never this skill's.
 
-Never hardcode the folder — it changes at every release. Resolve it each run:
+The name is fixed — `next`, not the version — so that the path stays the same across a cutoff. A PR writing this line, opened before the cutoff and merged after it, lands in the path it was written to, with no rename for git to replay it through. What a cutoff does change is which release that path belongs to: documentation meant to ship with the release has to merge before the cut, or it reaches readers a version late. No check catches that — `Documentation lines` reads `content/docs/` only, so a PR writing this line is never failed by it. The cutoff reads that window instead, listing the open PRs writing this line before cutting.
 
-```bash
-ls docs/website/content/docs/sdk | grep '^(v'   # -> (v0.20)
-ls docs/website/content/docs/cli | grep '^(v'   # -> (v0.14)
-```
-
-`docs/website/src/lib/versions.ts` is the manifest that declares the lines, and `tests/line-structure.test.ts` fails the build if it and the folders disagree. `<line>` below stands for the resolved folder. `route-docs-targets.ts` and `check-capability-parity.ts` resolve it the same way and exit 2 if a collection has anything other than exactly one current line. `collect-source-changes.sh` reads only `packages/**` and never needs it.
+`docs/website/src/lib/versions.ts` is the manifest that declares the cut lines, and `tests/line-structure.test.ts` fails the build if it and the folders disagree. `<sdk-line>` and `<cli-line>` below stand for the development lines. `route-docs-targets.ts` and `check-capability-parity.ts` resolve them the same way and exit 2 if a collection carries no development line. `collect-source-changes.sh` reads only `packages/**` and never needs them.
 
 ## Allowlist — freely editable
 
 ```text
-docs/website/content/docs/sdk/<line>/ai-capabilities/**
-docs/website/content/docs/sdk/<line>/configuration/**
-docs/website/content/docs/sdk/<line>/models/**
-docs/website/content/docs/sdk/<line>/p2p-capabilities/**
-docs/website/content/docs/sdk/<line>/runtime/**
-docs/website/content/docs/sdk/<line>/index.mdx
-docs/website/content/docs/sdk/<line>/js-ts-sdk.mdx
-docs/website/content/docs/sdk/<line>/python-sdk.mdx
-docs/website/content/docs/sdk/<line>/system-requirements.mdx
-docs/website/content/docs/cli/<line>/**
+<sdk-line>/ai-capabilities/**
+<sdk-line>/configuration/**
+<sdk-line>/models/**
+<sdk-line>/p2p-capabilities/**
+<sdk-line>/runtime/**
+<sdk-line>/index.mdx
+<sdk-line>/js-ts-sdk.mdx
+<sdk-line>/python-sdk.mdx
+<sdk-line>/system-requirements.mdx
+<cli-line>/**
 ```
 
-`sdk/<line>/index.mdx` is the SDK collection overview, the page that carries `### AI tasks`, `### P2P capabilities` and `### Utilities`. Those three lists are a registration point for the page-creation subprocedures.
+`<sdk-line>/index.mdx` is the SDK collection overview, the page that carries `### AI tasks`, `### P2P capabilities` and `### Utilities`. Those three lists are a registration point for the page-creation subprocedures.
 
 ## Restricted allowlist — append-only, page-creation subprocedures only
 
@@ -64,8 +60,8 @@ These three files are read-only in every state except `NEW_CAPABILITY_PAGE` and 
 | Path | State | Permitted operation |
 | --- | --- | --- |
 | `docs/website/content/docs/ecosystem/index.mdx` | `NEW_CAPABILITY_PAGE` | append 1 `<Card>` at the end of the `## AI capabilities` grid, and add 1 identifier to the `lucide-react` import |
-| `docs/website/content/docs/sdk/<line>/ai-capabilities/meta.json` | `NEW_CAPABILITY_PAGE` | append 1 slug at the end of the `pages` array |
-| `docs/website/content/docs/sdk/<line>/models/meta.json` | `NEW_MODELS_PAGE` | append 1 slug at the end of the `pages` array |
+| `<sdk-line>/ai-capabilities/meta.json` | `NEW_CAPABILITY_PAGE` | append 1 slug at the end of the `pages` array |
+| `<sdk-line>/models/meta.json` | `NEW_MODELS_PAGE` | append 1 slug at the end of the `pages` array |
 
 `ecosystem/index.mdx` is the page the old site index became, and its AI-capabilities grid still links every capability — now at `/sdk/ai-capabilities/<slug>`. It takes no edit under `NEW_MODELS_PAGE`: its only grid is `## AI capabilities`, and a model-lifecycle topic is not one, so there is no card to append.
 
@@ -78,18 +74,18 @@ Never reorder, rewrite, or remove an existing entry in any of the three. That is
 ## Denylist — never written, in any state
 
 ```text
-docs/website/content/docs/sdk/v*/**            # lines already cut
-docs/website/content/docs/cli/v*/**            # lines already cut
-docs/website/content/docs/*/*/reference/**     # generated deterministically
-docs/website/content/docs/sdk/<line>/how-it-works.mdx
+docs/website/content/docs/sdk/**               # lines already cut
+docs/website/content/docs/cli/**               # lines already cut
+<sdk-line>/reference/**                        # generated deterministically
+<sdk-line>/how-it-works.mdx
 docs/website/content/docs/ecosystem/**         # except the grid append above
 docs/website/content/docs/resources/**
 packages/**                                    # source is never edited
 ```
 
-The two line globs are exact because of how a line folder is named: the current line starts with `(`, every cut line with `v`. `sdk/v*` therefore matches the cut lines and never the current one.
+The two collection globs deny every line that has been cut, which is everything the site serves. They cannot collide with the allowlist: the line this skill writes to is outside `content/docs/` entirely.
 
-`reference/**` gets an explicit entry because it is the most tempting wrong answer. The API summary and the release notes are produced from the SDK source by the generators in `docs/website/scripts/`, in every line. A hand-written patch there is overwritten on the next release.
+`reference/**` gets an explicit entry because it is the most tempting wrong answer. The API summary is produced from the SDK source by the generators in `docs/website/scripts/`, in every line, and the release-notes entry beside it is a link to that minor's GitHub release rather than a page. A hand-written patch there is overwritten at the next release cutoff.
 
 `how-it-works.mdx` explains the architecture behind the SDK rather than how to use it. It moved into the SDK line from the old `about/` section and keeps that section's read-only status.
 

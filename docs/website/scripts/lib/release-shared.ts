@@ -8,7 +8,7 @@
  * so unit tests can point them at fixtures without monkey-patching `cwd`.
  */
 
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { execSync } from "child_process";
@@ -24,20 +24,44 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const DOCS_WEBSITE_DIR = path.resolve(SCRIPT_DIR, "..", "..");
 
 /**
- * The reference folder a version's generated pages belong in: the folder of
- * the SDK's current documentation line, and only when that line is the
- * version's own.
+ * The folder holding the line a collection is still writing: the version under
+ * development, outside the site, where nothing builds it and no URL reaches
+ * it.
  *
- * The destination is read from the manifest rather than named on the command
- * line, so it follows a cut without anything being passed. That is also why it
- * has to be checked. Documenting a release before its line is cut would resolve
- * to the line before it and overwrite the record of a release that already
- * shipped — a full render replaces the page — and the tree that results still
- * builds and still tests clean. Refusing here is what makes the missing cut
- * visible, and what enforces the rule that a released line is never
- * regenerated.
+ * It is addressed by a fixed name rather than by its number, which is what
+ * keeps the path a feature PR writes to stable across a cutoff. A cut copies
+ * this folder into the collection and leaves it in place, so a feature PR
+ * opened before the cutoff and merged after it lands in the path it was
+ * written to, with no rename for git to replay it through.
+ *
+ * That holds for this folder only. The outgoing group is renamed by the cut,
+ * so a PR writing anywhere under `content/docs/` is still exposed to rename
+ * detection — which is what the `Documentation lines` job fails on.
  */
-export function referenceDirFor(version: string | SemVer): string {
+export const DEVELOPMENT_LINE = "next";
+
+export function developmentLineDir(
+  slug: string,
+  root: string = DOCS_WEBSITE_DIR,
+): string {
+  return path.join(root, "content", "_unpublished", slug, DEVELOPMENT_LINE);
+}
+
+/**
+ * The reference folder a version's generated pages belong in: the reference
+ * folder of the SDK's development line, and only for a version whose line has
+ * not been cut yet.
+ *
+ * The destination is read rather than named on the command line, which is why
+ * it has to be checked. Regenerating into a line that has been cut would
+ * overwrite the record of a release — a full render replaces the page — and
+ * the tree that results still builds and still tests clean. Refusing here is
+ * what enforces the rule that a cut line is never regenerated.
+ */
+export function referenceDirFor(
+  version: string | SemVer,
+  root: string = DOCS_WEBSITE_DIR,
+): string {
   const wanted = typeof version === "string" ? parseVersion(version) : version;
   const sdk = getDocumentedSoftware("/sdk");
   const current = sdk && getCurrentLine(sdk);
@@ -49,39 +73,43 @@ export function referenceDirFor(version: string | SemVer): string {
   }
 
   const line = `v${wanted.major}.${wanted.minor}`;
-  if (current.version !== line) {
-    const ahead =
-      line.localeCompare(current.version, undefined, { numeric: true }) > 0;
+  const ahead =
+    line.localeCompare(current.version, undefined, { numeric: true }) > 0;
+  const development = developmentLineDir("sdk", root);
+
+  if (!existsSync(development)) {
     throw new Error(
-      `Refusing to write ${line} pages into ${current.version}, the current ` +
-        `line of /sdk.\n` +
-        (ahead
-          ? `  ${line} has no line yet. Cut it before documenting the ` +
-            `release:\n` +
-            `    bun run scripts/cut-line.ts sdk ${line}\n`
-          : `  ${line} has already shipped. A released line is what the site ` +
-            `serves and is never regenerated.\n`),
+      `/sdk has no development line at ${development}, so there is nowhere ` +
+        `to write generated pages.`,
     );
   }
 
-  return path.join(
-    DOCS_WEBSITE_DIR,
-    "content",
-    "docs",
-    "sdk",
-    current.folder,
-    "reference",
-  );
+  if (!ahead) {
+    throw new Error(
+      `Refusing to write ${line} pages into the development line of /sdk.\n` +
+        `  ${current.version} is the line last cut, so ${line} has shipped. A ` +
+        `cut line is what the site serves and is never regenerated. Edit\n` +
+        `  content/docs/sdk/${current.folder}/ directly to correct it.\n`,
+    );
+  }
+
+  return path.join(development, "reference");
 }
 
 /** Absolute path to the API summary page of `version`'s line. */
-export function apiPageFor(version: string | SemVer): string {
-  return path.join(referenceDirFor(version), "api.mdx");
+export function apiPageFor(
+  version: string | SemVer,
+  root: string = DOCS_WEBSITE_DIR,
+): string {
+  return path.join(referenceDirFor(version, root), "api.mdx");
 }
 
 /** Absolute path to the release notes page of `version`'s line. */
-export function releaseNotesPageFor(version: string | SemVer): string {
-  return path.join(referenceDirFor(version), "release-notes.mdx");
+export function releaseNotesPageFor(
+  version: string | SemVer,
+  root: string = DOCS_WEBSITE_DIR,
+): string {
+  return path.join(referenceDirFor(version, root), "release-notes.mdx");
 }
 
 /**

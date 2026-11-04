@@ -17,8 +17,22 @@ import { buildMossSoundEffectParams } from "./engines/mossSoundEffect";
 import { buildMossSpeechParams } from "./engines/mossSpeech";
 import { buildParlerParams } from "./engines/parler";
 import { buildSupertonicParams } from "./engines/supertonic";
+import { assignFabricOptions } from "./fabricOptions";
 
 export function buildNativeParams(setup: EngineSetup): TTSConfigurationParams {
+  const parameters = buildEngineParams(setup);
+  assignFabricOptions(setup.settings, parameters);
+  if (setup.config.backend !== undefined) parameters.backend = setup.config.backend;
+  if (setup.engineType === ENGINE_MOSS && setup.settings.nCtx !== undefined) {
+    parameters.nCtx = setup.settings.nCtx;
+  }
+  if (setup.engineType === ENGINE_COSYVOICE3 && setup.settings.greedy !== undefined) {
+    parameters.greedy = setup.settings.greedy;
+  }
+  return parameters;
+}
+
+function buildEngineParams(setup: EngineSetup): TTSConfigurationParams {
   if (setup.pocket) return { ...setup.pocket.params };
   switch (setup.engineType) {
     case ENGINE_SUPERTONIC:

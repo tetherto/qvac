@@ -6,9 +6,9 @@ const path = require('bare-path')
 /**
  * Assess loading the detector and recognizer weights from GGUF metadata.
  * This does not load weights or account for image-dependent inference memory.
- * `error` means no reliable capacity verdict was available.
  *
- * Concurrent calls run one at a time. An invalid request rejects.
+ * Concurrent calls run one at a time. A model that cannot be read, a host with
+ * no backend device, or an invalid request rejects.
  */
 async function assessFit(request) {
   for (const key of ['pathDetector', 'pathRecognizer']) {

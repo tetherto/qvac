@@ -3,7 +3,7 @@ import Buffer from 'bare-buffer'
 import fs from 'bare-fs'
 import os from 'bare-os'
 import path from 'bare-path'
-import { type DecoderOutput } from '@qvac/decoder-audio'
+import { FFmpegDecoder, type DecoderOutput } from '@qvac/decoder-audio'
 import {
   decodeAudioToStream,
   decoderResponseToStream,
@@ -54,6 +54,51 @@ async function drain(stream: AsyncIterable<Uint8Array>) {
   const collected: Uint8Array[] = []
   for await (const chunk of stream) collected.push(chunk)
   return collected
+}
+
+for (const [audioFormat, sampleRate] of [
+  ['s16le', 16000],
+  ['f32le', 48000]
+] as const) {
+  test(`decoder stream delivers ${audioFormat} PCM without retaining response history`, async (t) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'audio-decoder-retention-'))
+    t.teardown(() => fs.rmSync(dir, { recursive: true, force: true }))
+    const wavPath = path.join(dir, 'input.wav')
+    const frames = new Int16Array(44100)
+    for (let index = 0; index < frames.length; index++) {
+      frames[index] = Math.round(Math.sin(index / 20) * 12000)
+    }
+    writeWav(wavPath, 44100, 1, frames)
+
+    const baseline = new FFmpegDecoder({ config: { audioFormat, sampleRate } })
+    await baseline.load()
+    t.teardown(() => baseline.unload())
+    const retained = await baseline
+      .run(fs.createReadStream(wavPath) as unknown as AsyncIterable<Buffer>)
+      .await()
+    const expected = Buffer.concat(
+      (retained as DecoderOutput[]).map((output) => output.outputArray)
+    )
+    t.ok(expected.length > 0, 'the retaining baseline produced PCM')
+
+    const originalRun = FFmpegDecoder.prototype.run
+    let response: ReturnType<FFmpegDecoder['run']> | undefined
+    FFmpegDecoder.prototype.run = function (...args: Parameters<FFmpegDecoder['run']>) {
+      response = originalRun.apply(this, args)
+      return response
+    }
+    t.teardown(() => {
+      FFmpegDecoder.prototype.run = originalRun
+    })
+
+    const stream = await decodeAudioToStream(wavPath, audioFormat, { sampleRate })
+    const chunks = await drain(stream as unknown as AsyncIterable<Buffer>)
+    t.ok(Buffer.concat(chunks as Buffer[]).equals(expected), 'every PCM byte reaches the consumer')
+    t.ok(response, 'observed the response created by the inference helper')
+    const completion = (await response!.await()) as DecoderOutput[]
+    t.is(completion.length, 0, 'completion retains no decoded chunks')
+    t.ok(response!.getLatest() === null, 'no PCM history remains in the response')
+  })
 }
 
 test('decoder stream timeout is inactivity-based, not a cap on total decode time', async (t) => {

@@ -2,6 +2,7 @@ import * as path from 'node:path'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { loadConfig } from '../../utils/config-loader.js'
+import { findExternalConsumer } from '../utils/external-consumer.js'
 
 interface ExternalConsumerOptions {
   runId: string
@@ -14,15 +15,13 @@ export async function runConsumerExternal(options: ExternalConsumerOptions) {
   try {
     const config = await loadConfig(options.config)
 
-    const entry = config.consumers.external?.find((c) => c.name === options.name)
-    if (!entry) {
-      const available = (config.consumers.external ?? []).map((c) => c.name).join(', ') || 'none'
-      throw new Error(`No external consumer named "${options.name}" (configured: ${available})`)
-    }
+    const entry = findExternalConsumer(config.consumers.external, options.name)
 
     const configDir = path.resolve(options.config)
 
-    console.log(`🚀 Running external consumer "${entry.name}" (${entry.platform})...\n`)
+    console.log(
+      `🚀 Running external consumer "${entry.name}" (${entry.platform}, ${entry.mode})...\n`
+    )
 
     const __filename = fileURLToPath(import.meta.url)
     const __dirname = path.dirname(__filename)

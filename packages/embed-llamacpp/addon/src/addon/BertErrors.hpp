@@ -18,7 +18,10 @@ enum GteErrorCode : std::uint8_t {
   FailedToGetSequenceEmbeddings,
   DecodeFailed,
   InvalidRequest,
-  UnsupportedModel
+  UnsupportedModel,
+  UnableToLoadProjectionModel,
+  UnsupportedMedia,
+  MediaEncodeFailed
 };
 
 inline std::string toString(GteErrorCode code)
@@ -45,6 +48,12 @@ inline std::string toString(GteErrorCode code)
       return "InvalidRequest";
     case UnsupportedModel:
       return "UnsupportedModel";
+    case UnableToLoadProjectionModel:
+      return "UnableToLoadProjectionModel";
+    case UnsupportedMedia:
+      return "UnsupportedMedia";
+    case MediaEncodeFailed:
+      return "MediaEncodeFailed";
     default: return "UnknownError";
   }
 }

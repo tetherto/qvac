@@ -41,13 +41,14 @@ You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible
 * Tool parameters: a tool's `parameters` is a JSON Schema object and is passed to the model as declared, including nested `properties`, `items`, nullable types (`["string", "null"]`) and `anyOf`. Zod `parameters` are converted with `z.toJSONSchema`, so nested Zod objects and arrays keep their structure.
 * Tool errors: a tool-call region the model emitted that fails to parse or validate surfaces as a `toolError` event and in `final.toolErrors`, so an empty `toolCalls` can be told apart from a malformed call.
 * Past tool calls in history: an `assistant` message carries the calls it made in `toolCalls` (`id`, `name`, `arguments`), and a `tool` message names the call it answers with `toolCallId` and `toolName`. llama.cpp-backed models render them with their own chat template instead of reading them as text in `content`.
-* Parallel tool calls: `generationParams.parallel_tool_calls: true` lets one response carry several tool calls on llama.cpp-backed models; unset or `false` keeps one.
+* Parallel tool calls: one response may carry several tool calls on llama.cpp-backed models. `generationParams.parallel_tool_calls` defaults to `true`; set it to `false` to get at most one.
 * MCP: plug MCP servers into `completion()` so the model can use external tools (e.g., web search) via the same tool-call mechanism.
 * Raw output: with `emitRawDeltas: true`, every raw model token is also emitted as a `rawDelta` event in parallel to the structured events — useful for debugging or full-fidelity logging.
 * KV cache: cache and reuse the model's key/value attention state to speed up follow-up turns in long conversations. The `kvCache` parameter sets the cache key — pass a string to manage a session manually, or `true` to let the SDK auto-generate one.
 * Multimodal: attach images (and other media) to prompts so the model reasons over text and images together in the same conversation — see [Multimodal](/sdk/ai-capabilities/multimodal).
 * Multi-job continuous batching: load with `modelConfig.parallel >= 2` (default `1`) to run several `completion()` calls in parallel on one loaded model. Up to `parallel` prompts finish in roughly the time of the slowest one (extras queue), and each call has its own `requestId` so you can cancel one without touching the others — see [Concurrent completions](#concurrent-completions).
 * Batch processing: run multiple prompts through a single loaded model in one call with `batchCompletion()` — optimizes resources and reduces total run time. See [Batch processing](/sdk/ai-capabilities/batch-processing).
+* Speculative decoding: load with `modelConfig.spec_type` to draft several tokens per step and verify them in one decode, with multi-token-prediction (MTP) layers, the model's own or an external head, or with a separate DFlash draft model. Output keeps the distribution of plain decoding. See [Speculative decoding](#speculative-decoding).
 
 ## Examples
 
@@ -229,9 +230,9 @@ The JavaScript and TypeScript examples below import the same `shared` module sho
 The Python example takes the [worker-orchestrated loop](#worker-orchestrated-tool-loop) while the others take the client-side one. Deferring a tool works the same in both languages — the worker builds the catalog and reads back what the conversation has loaded — but running `tool_search` from client code needs the `executeToolSearch` helper, which only the JS SDK exports. On the orchestrated path the worker runs the search itself.
 
 The model calls `tool_search({ query })` with a capability or an exact tool
-name; the SDK searches the registered tools outside inference and appends the
-matching definitions to the conversation as a tool result, and the model calls
-them by name on its next step.
+name; the SDK searches the registered tools outside inference and returns a
+tool result naming the matches, the next turn declares their definitions in the
+prompt alongside the other tools, and the model calls them by name.
 
 Notes:
 
@@ -241,18 +242,21 @@ Notes:
   MCP server name.
 * To defer an MCP server's tools, set it on the client entry:
   `mcp: [{ client, deferLoading: true, group: 'github' }]`.
-* Loading a definition twice appends nothing; the search result says the tool is
-  already available.
+* Loading a definition twice declares it once; the search result says the tool
+  is already available.
+* Give tools distinct names. A deferred tool the prompt could not declare is
+  left out of the catalog and cannot be loaded: an empty name, `auto`, `none`
+  or `required`, or a name equal to an always-loaded tool's, `tool_search` or
+  an earlier deferred tool's once every run of characters outside `A-Z`, `a-z`,
+  `0-9` and `-` is read as `-` (`get_weather` and `get-weather`).
 * `completion()` stays stateless. The loaded set is read back from the
   conversation, so a reopened chat given the same tools and the same history has
   the same tools loaded, and concurrent chats cannot mix.
 * `generationParams.tool_choice` cannot name a deferred tool — its schema is not
   in the prompt, so the call cannot be constrained. Force `"tool_search"`
   instead.
-* Once the conversation has loaded a deferred tool, turns with no `tool_choice`
-  or `"auto"` run without the tool-call grammar, which only knows the tools in
-  the prompt. The call is still parsed and checked against the loaded
-  definitions.
+* The tool block sits near the start of the prompt, so the turn after a load
+  re-processes most or all of the prompt instead of reusing the cached prefix.
 * On the worker-orchestrated loop the SDK runs `tool_search` itself; your
   handlers are never called for it.
 
@@ -312,6 +316,30 @@ On hybrid and recurrent models (Qwen3.5, Jamba, DeepSeek V4) and on sliding-wind
 - `cache_checkpoint_storage`: `'memory'` (default) or `'disk'`. With `'disk'`, set `cache_checkpoint_dir` to a writable directory; on mobile, use the app's cache directory.
 - `cache_ram_mib`: host-RAM budget, in MiB, for cached conversations that are not running, so switching back to a caller-managed `kvCache` key skips reading its cache file. Default `0` (off).
 
+#### Prepare the system prompt and tools ahead of time
+
+Use `prefill: true` to evaluate a prompt before the first question arrives. It requires `kvCache: true` or a nonempty named key and finishes with stats, no answer and no tool calls. Await the priming run before sending the question:
+
+```typescript
+const history = [{ role: "system", content: "You are a helpful assistant." }];
+await completion({ modelId, history, tools, stream: false, kvCache: "chat", prefill: true }).final;
+const answer = await completion({
+  modelId,
+  history: [...history, { role: "user", content: "What is the weather in Lugano?" }],
+  tools,
+  stream: false,
+  kvCache: "chat",
+}).final;
+```
+
+Load the model with `modelConfig: { tools: true }` when passing tools. Resend the same system prompt and tools on the question so their cached prefix can be reused. A prefill rejects forced `generationParams.tool_choice` values (`"required"` or a named tool, including `"tool_search"`); use the default `"auto"` or `"none"` instead. Auto-cache priming saves the complete prompt history without appending an empty assistant message.
+
+With `kvCache: true`, the first question moves the cache to the conversation's new history, so the prime serves one conversation. Use a named key for reuse across conversations, or prime each conversation separately.
+
+Affected templates require `@qvac/llm-llamacpp` 0.64.1 or later. Full reuse is template-dependent; arbitrary custom templates may fall back to normal rendering. Cache priming is available through the library API, not the CLI OpenAI-compatible HTTP endpoints or model-load configuration.
+
+#### Compare cached and uncached turns
+
 The following script enables `kvCache: true` to speed up follow-up turns, and then compares it with `kvCache: false` on the same history:
 
 <Tabs>
@@ -339,6 +367,29 @@ The following script enables `kvCache: true` to speed up follow-up turns, and th
 </WrapCode>
 </Tab>
 </Tabs>
+
+### Speculative decoding
+
+Speculative decoding drafts several tokens per step and has the model verify the whole draft in one decode. The model checks every drafted token, so output keeps the distribution of plain decoding. Enable it at load time with `modelConfig.spec_type`:
+
+- `"draft-mtp"` — drafts with multi-token-prediction (MTP) layers: the model's own, for example `QWEN3_5_0_8B_MTP_Q4_K_M` (also 2B, 4B and 9B) or `QWEN3_8_27B_MULTIMODAL_UD_Q4_K_XL`, or an external MTP head given as `modelConfig.draftModelSrc`, for example `QWEN3_5_0_8B_MTP_Q4_K_M` for `QWEN3_5_0_8B_MULTIMODAL_Q4_K_M`, or a Gemma 4 assistant for its Gemma 4 model. The head, when given, otherwise the model, must have MTP layers, and a head must match the model (hidden width and vocabulary), or the load fails. A head is placed like the model, and model fit checks count its memory, except a Gemma 4 assistant's.
+- `"draft-dflash"` — drafts with a separate DFlash model, given as `modelConfig.draftModelSrc`, which it requires: for example `QWEN3_5_4B_DFLASH_Q8_0` with `QWEN3_5_4B_MULTIMODAL_Q4_K_M`. The draft model is placed like the model, and model fit checks do not count its memory, so leave room for it.
+- `"none"` (default) — one token per step.
+
+`spec_draft_n_max` (1–64, default 3) caps the draft length and is lowered at load, with a warning, to fit the batch. `spec_draft_n_min` (0–64, default 0) drops shorter drafts, and `spec_draft_p_min` (0–1, default 0) is the minimum draft-head probability for a token to extend the draft. These three require `spec_type` `"draft-mtp"` or `"draft-dflash"`. Speculative decoding works with multimodal prompts, `parallel` and `kvCache`.
+
+When it is on, `stats.draftTokens` counts the drafted tokens and `stats.draftAcceptedTokens` the ones the model kept. For [`batchCompletion()`](/sdk/reference/api#batchcompletion) they are batch-level, on `run.stats`. The gain depends on the device: with several concurrent sequences, the larger verification batches can cost more than they save.
+
+```js
+const modelId = await loadModel({
+  modelSrc: QWEN3_5_4B_MULTIMODAL_Q4_K_M,
+  modelType: "llm",
+  modelConfig: {
+    spec_type: "draft-dflash",
+    draftModelSrc: QWEN3_5_4B_DFLASH_Q8_0,
+  },
+});
+```
 
 <Callout type="success">
 **Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).

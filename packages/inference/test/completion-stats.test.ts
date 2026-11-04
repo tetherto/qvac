@@ -43,6 +43,31 @@ test('normalizeCompletionStats: keeps prefill throughput as the only stat', (t) 
   t.alike(normalizeCompletionStats({ ppTPS: 640 }), { promptTokensPerSecond: 640 })
 })
 
+test('normalizeCompletionStats: maps the speculative draft counters', (t) => {
+  const normalized = normalizeCompletionStats({
+    TPS: 30,
+    draftTokens: 120,
+    draftAcceptedTokens: 96
+  })
+
+  t.alike(normalized, { tokensPerSecond: 30, draftTokens: 120, draftAcceptedTokens: 96 })
+  t.is(completionStatsSchema.safeParse(normalized).success, true)
+})
+
+test('normalizeCompletionStats: keeps zero draft counters', (t) => {
+  t.alike(normalizeCompletionStats({ draftTokens: 0, draftAcceptedTokens: 0 }), {
+    draftTokens: 0,
+    draftAcceptedTokens: 0
+  })
+})
+
+test('normalizeCompletionStats: omits the draft counters the addon did not report', (t) => {
+  const normalized = normalizeCompletionStats({ TPS: 30 })
+
+  t.alike(normalized, { tokensPerSecond: 30 })
+  t.absent(normalized && 'draftTokens' in normalized)
+})
+
 test('withEmittedTokens: attaches streamed piece count without overwriting decode count', (t) => {
   const normalized = normalizeCompletionStats({
     TTFT: 12,

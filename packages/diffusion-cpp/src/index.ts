@@ -192,6 +192,10 @@ export interface GenerationParams {
   sampling_method?: SamplerMethod
   sampler?: SamplerMethod
   scheduler?: ScheduleType
+  /** Strictly decreasing finite non-negative sigmas ending in zero.
+   * Overrides scheduler and steps; the step count is array length minus one.
+   */
+  custom_sigmas?: number[]
   seed?: number
   batch_count?: number
   vae_tiling?: boolean
@@ -855,8 +859,10 @@ import { assessFit as assessFitImpl } from './fit'
 
 export { assessFit } from './fit'
 export type {
+  DiffusionFitDevice,
   DiffusionFitRequest,
   DiffusionFitResult,
+  DiffusionFitStats,
   DiffusionFitStatus,
   DiffusionFitWorkload,
   EsrganFitRequest,

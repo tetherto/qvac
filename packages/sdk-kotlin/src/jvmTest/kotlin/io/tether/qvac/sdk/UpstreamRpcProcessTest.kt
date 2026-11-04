@@ -1,7 +1,6 @@
 package io.tether.qvac.sdk
 
 import java.nio.file.Path
-import io.tether.qvac.sdk.rpc.BareRpcLimits
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
@@ -22,7 +21,6 @@ class UpstreamRpcProcessTest {
         withTimeout(30_000) {
             val transport = JvmBareRpcTransport.connect(
                 command = listOf("node", Path.of("test-fixtures/rpc-peer.cjs").toAbsolutePath().toString()),
-                rpcLimits = BareRpcLimits(pauseBytes = 64, resumeBytes = 32),
             )
             val client = QvacClient(transport)
             try {
@@ -38,10 +36,12 @@ class UpstreamRpcProcessTest {
                 // Real peer barrier: it has accepted the open request.
                 assertEquals(9.0, client.heartbeat().number)
                 pending.cancelAndJoin()
-                // Fails with REQUEST|DESTROY: the actual peer ignores that
-                // direction, leaving its input open indefinitely.
+                // The peer's input must have ended: it ignores a DESTROY in that
+                // direction, which would leave its input open indefinitely.
                 val closed = client.call(buildJsonObject { put("type", "inputClosed") })
                 assertTrue(closed.getValue("closed").jsonPrimitive.boolean)
+                // 200 KiB behind a slow collector crosses the pause mark, so the
+                // peer is paused and resumed on the way.
                 val frames = client.stream(buildJsonObject { put("type", "stream") }).onEach { delay(2) }.toList()
                 assertEquals((0 until 200).toList(), frames.map { it.getValue("index").jsonPrimitive.int })
                 assertEquals(9.0, client.heartbeat().number)

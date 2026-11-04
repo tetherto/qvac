@@ -28,6 +28,7 @@ from tetherto.qvac_sdk import (
     HeartbeatRequest,
     QvacError,
     RagRequest,
+    RerankRequest,
     ResumeRequest,
     StateRequest,
     SuspendRequest,
@@ -53,6 +54,7 @@ from tetherto.qvac_sdk import (
     model_registry_search,
     rag,
     reconstruct_error,
+    rerank,
     resume,
     state,
     suspend,
@@ -587,6 +589,7 @@ CALLS: dict[str, Callable[[Any, dict[str, Any]], Any]] = {
     # --- inference, request/reply -------------------------------------------
     "embed": _request(EmbedRequest, "embed", embed),
     "classify": _classified,
+    "rerank": _request(RerankRequest, "rerank", rerank),
     "transcribe": _transcribe,
     "bciTranscribe": _bci_transcribe,
     "vla": lambda transport, params: vla(transport, **_snake(params)),
@@ -740,6 +743,7 @@ async def _completion_stream(
         response_format=params.get("responseFormat"),
         tool_dialect=params.get("toolDialect"),
         kv_cache=params.get("kvCache"),
+        prefill=params.get("prefill"),
         capture_thinking=params.get("captureThinking"),
         emit_raw_deltas=params.get("emitRawDeltas"),
     )

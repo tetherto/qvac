@@ -28,6 +28,7 @@
 #include <llama.h>
 
 #include "common/common.h"
+#include "utils/LlamaBatch.hpp"
 
 namespace qvac_lib_inference_addon_llama {
 namespace utils {
@@ -416,8 +417,8 @@ uint64_t estimateMaxSequenceStateBytes(
   constexpr llama_seq_id kProbeSeq = 0;
   llama_batch batch = llama_batch_init(1, 0, 1);
   const auto decodeAt = [&](llama_pos pos) {
-    common_batch_clear(batch);
-    common_batch_add(batch, probe, pos, {kProbeSeq}, false);
+    llamaBatchClear(batch);
+    llamaBatchAdd(batch, probe, pos, {kProbeSeq}, false);
     return llama_decode(lctx, batch) == 0;
   };
 

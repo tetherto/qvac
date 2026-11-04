@@ -70,7 +70,11 @@ function updateEnvFile(key, value) {
   const envPath = path.join(process.cwd(), '.env')
   try {
     let envContent = ''
-    if (fs.existsSync(envPath)) envContent = fs.readFileSync(envPath, 'utf8')
+    try {
+      envContent = fs.readFileSync(envPath, 'utf8')
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err
+    }
     let formattedValue = value
     if (typeof value === 'object') formattedValue = `'${JSON.stringify(value)}'`
     else if (typeof value === 'string' && !value.startsWith('"') && !value.startsWith("'")) {
@@ -94,8 +98,13 @@ function updateEnvFile(key, value) {
 function removeEnvKey(key) {
   const envPath = path.join(process.cwd(), '.env')
   try {
-    if (!fs.existsSync(envPath)) return true
-    const envContent = fs.readFileSync(envPath, 'utf8')
+    let envContent
+    try {
+      envContent = fs.readFileSync(envPath, 'utf8')
+    } catch (err) {
+      if (err.code === 'ENOENT') return true
+      throw err
+    }
     const lines = envContent.split('\n')
     const filteredLines = lines.filter((line) => {
       const trimmed = line.trim()

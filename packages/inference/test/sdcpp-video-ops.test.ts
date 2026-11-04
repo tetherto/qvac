@@ -2,6 +2,8 @@ import test from 'brittle'
 import { VideoStableDiffusion } from '@qvac/diffusion-cpp'
 import path from 'bare-path'
 import Buffer from 'bare-buffer'
+import type { VideoStreamResponse } from '@/schemas/sdcpp-config'
+import type { VideoOpResult } from '@/plugins/builtin/sdcpp-generation/ops/video'
 
 const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUg=='
 const JPEG_B64 = '/9j/4AAQSkZJRgABAQEASABIAAA='
@@ -10,6 +12,16 @@ let idCounter = 0
 function makeId(prefix: string): string {
   idCounter++
   return `${prefix}-${idCounter}-${Date.now()}`
+}
+
+async function collectVideo(stream: AsyncGenerator<VideoStreamResponse, VideoOpResult>) {
+  const chunks: VideoStreamResponse[] = []
+  let result = await stream.next()
+  while (!result.done) {
+    chunks.push(result.value)
+    result = await stream.next()
+  }
+  return { chunks, stats: result.value.stats }
 }
 
 async function withRegisteredVideoModel<T>(
@@ -96,11 +108,10 @@ test('video op: H3 validates before native execution and preserves audio results
         {},
         { scheduler: 'discrete' as const }
       ]) {
-        const chunks = []
-        for await (const chunk of videoOp({ ...base, ...params })) chunks.push(chunk)
+        const { chunks, stats } = await collectVideo(videoOp({ ...base, ...params }))
         t.is(chunks[0]?.data, 'UklGRg==')
-        t.is(chunks[1]?.stats?.hasAudio, true)
-        t.is(chunks[1]?.stats?.audioSampleRate, 32000)
+        t.is(stats?.hasAudio, true)
+        t.is(stats?.audioSampleRate, 32000)
       }
       t.is(observed[0]?.['video_frames'], 124)
       t.is(observed[1]?.['video_frames'], 22)
@@ -115,15 +126,10 @@ test('video op: H3 validates before native execution and preserves audio results
       ]) {
         t.is(observed[2]?.[field], undefined, `${field} remains omitted`)
       }
-      const i2vChunks = []
-      for await (const chunk of videoOp({
-        ...base,
-        mode: 'img2vid',
-        init_image: PNG_B64
-      })) {
-        i2vChunks.push(chunk)
-      }
-      t.is(i2vChunks.at(-1)?.done, true)
+      const { stats: i2vStats } = await collectVideo(
+        videoOp({ ...base, mode: 'img2vid', init_image: PNG_B64 })
+      )
+      t.is(i2vStats?.hasAudio, true)
       t.is(observed[4]?.['mode'], 'img2vid')
       t.alike(observed[4]?.['init_image'], Buffer.from(PNG_B64, 'base64'))
     },
@@ -178,17 +184,16 @@ test('video op: decodes base64 inputs, forwards mode, and emits stream responses
       }
     },
     async (modelId) => {
-      const chunks = []
-      for await (const chunk of videoOp({
-        modelId,
-        mode: 'txt2vid',
-        prompt: 'a running fox',
-        control_frames: [PNG_B64, JPEG_B64],
-        video_frames: 5,
-        fps: 16
-      })) {
-        chunks.push(chunk)
-      }
+      const { chunks, stats } = await collectVideo(
+        videoOp({
+          modelId,
+          mode: 'txt2vid',
+          prompt: 'a running fox',
+          control_frames: [PNG_B64, JPEG_B64],
+          video_frames: 5,
+          fps: 16
+        })
+      )
 
       t.ok(observed, 'model.run was called')
       t.is(observed?.['mode'], 'txt2vid')
@@ -214,8 +219,8 @@ test('video op: decodes base64 inputs, forwards mode, and emits stream responses
       })
       t.is(chunks[1]?.type, 'videoStream')
       t.is(chunks[1]?.outputIndex, 0)
-      t.is(chunks[2]?.done, true)
-      t.alike(chunks[2]?.stats, {
+      t.is(chunks.length, 2, 'the handler emits the terminal frame after the op returns')
+      t.alike(stats, {
         generationMs: 900,
         totalVideos: 1,
         totalVideoFrames: 5,
@@ -247,20 +252,18 @@ test('video op: maps addon numeric hasAudio to a boolean in final stats', async 
       }
     },
     async (modelId) => {
-      const chunks = []
-      for await (const chunk of videoOp({
-        modelId,
-        mode: 'txt2vid',
-        prompt: 'a jazz band with synced audio',
-        video_frames: 121
-      })) {
-        chunks.push(chunk)
-      }
+      const { chunks, stats } = await collectVideo(
+        videoOp({
+          modelId,
+          mode: 'txt2vid',
+          prompt: 'a jazz band with synced audio',
+          video_frames: 121
+        })
+      )
 
-      const finalChunk = chunks[chunks.length - 1]
-      t.is(finalChunk?.done, true)
-      t.is(finalChunk?.stats?.hasAudio, true, 'numeric 1 → boolean true')
-      t.is(finalChunk?.stats?.audioSampleRate, 48000)
+      t.is(chunks.length, 1)
+      t.is(stats?.hasAudio, true, 'numeric 1 → boolean true')
+      t.is(stats?.audioSampleRate, 48000)
     }
   )
 })
@@ -285,18 +288,16 @@ test('video op: silent video maps hasAudio 0 to false', async function (t) {
       }
     },
     async (modelId) => {
-      const chunks = []
-      for await (const chunk of videoOp({
-        modelId,
-        mode: 'txt2vid',
-        prompt: 'a silent clip',
-        video_frames: 121
-      })) {
-        chunks.push(chunk)
-      }
+      const { stats } = await collectVideo(
+        videoOp({
+          modelId,
+          mode: 'txt2vid',
+          prompt: 'a silent clip',
+          video_frames: 121
+        })
+      )
 
-      const finalChunk = chunks[chunks.length - 1]
-      t.is(finalChunk?.stats?.hasAudio, false, 'numeric 0 → boolean false')
+      t.is(stats?.hasAudio, false, 'numeric 0 → boolean false')
     }
   )
 })
@@ -844,13 +845,149 @@ test('video op: broad cancel routes through registry and calls model.cancel', as
 
       release()
       const result = await firstChunk
-      t.is(result.value?.done, true, 'cancelled stream still emits final marker')
-
-      await gen.next()
+      t.is(result.done, true, 'the cancelled op returns after cleanup')
+      t.is(result.value?.stats?.totalVideos, 1)
       t.is(getRequestRegistry().get(requestId), null, 'registry slot was freed')
     },
     async function () {
       cancelCalls++
     }
   )
+})
+
+test('video op: early consumer exit settles native work before releasing admission', async (t) => {
+  const [{ diffusionPlugin }, { video: videoOp }, { RequestRejectedByPolicyError }] =
+    await Promise.all([
+      import('@/plugins/builtin/sdcpp-generation/plugin'),
+      import('@/plugins/builtin/sdcpp-generation/ops/video'),
+      import('@/errors')
+    ])
+  let cancelCalls = 0
+  let awaitCalls = 0
+  let settleStarted: () => void = () => {}
+  let release: () => void = () => {}
+  const settling = new Promise<void>((resolve) => {
+    settleStarted = resolve
+  })
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+
+  await withRegisteredVideoModel(
+    async () => ({
+      iterate: async function* () {
+        yield '{"step":1,"total":2}'
+        yield new Uint8Array([82, 73, 70, 70])
+      },
+      await: async () => {
+        awaitCalls++
+        settleStarted()
+        await gate
+        throw new Error('Native generation cancelled')
+      }
+    }),
+    async (modelId) => {
+      const request = {
+        modelId,
+        mode: 'txt2vid' as const,
+        prompt: 'A running fox.',
+        video_frames: 5
+      }
+      const stream = diffusionPlugin.handlers.videoStream.handler(
+        request
+      ) as AsyncGenerator<VideoStreamResponse>
+      try {
+        const first = await stream.next()
+        t.is(first.value?.step, 1, 'the consumer receives a progress frame')
+        const closing = stream.return(undefined as never)
+        const cleanupStarted = await Promise.race([
+          settling.then(() => true),
+          closing.then(() => false)
+        ])
+        t.ok(cleanupStarted, 'closing the stream waits for native settlement')
+        if (!cleanupStarted) return
+
+        t.is(cancelCalls, 1, 'early exit cancels native generation once')
+        t.is(awaitCalls, 1, 'early exit awaits the native response')
+        await t.exception(
+          () => videoOp(request).next(),
+          RequestRejectedByPolicyError as unknown as new () => Error
+        )
+
+        release()
+        await closing
+        const { chunks } = await collectVideo(videoOp(request))
+        t.is(chunks[1]?.data, 'UklGRg==', 'the model admits a request after cleanup')
+        t.is(cancelCalls, 1, 'a completed generation needs no cancellation')
+      } finally {
+        release()
+        await stream.return(undefined as never)
+      }
+    },
+    async () => {
+      cancelCalls++
+    }
+  )
+})
+
+test('video outputs allow an immediate next generation on the same model', async (t) => {
+  const [
+    { diffusionPlugin },
+    { registerPlugin },
+    { video },
+    { close },
+    { useTestCacheDir },
+    { getRequestRegistry }
+  ] = await Promise.all([
+    import('@/plugins/builtin/sdcpp-generation/plugin'),
+    import('@/plugins'),
+    import('@/api/video'),
+    import('@/dispatch'),
+    import('./fixtures/test-cache'),
+    import('@/runtime')
+  ])
+  useTestCacheDir()
+  registerPlugin(diffusionPlugin)
+  const bytes = Buffer.from([82, 73, 70, 70])
+  let runCalls = 0
+  let cancelCalls = 0
+  try {
+    await withRegisteredVideoModel(
+      async () => {
+        runCalls++
+        return {
+          iterate: async function* () {
+            yield bytes
+          }
+        }
+      },
+      async (modelId) => {
+        for (let i = 0; i < 4; i++) {
+          const outputs = await video({
+            modelId,
+            mode: 'txt2vid',
+            prompt: 'A running fox.',
+            video_frames: 5
+          }).outputs
+          t.alike(
+            outputs.map((output) => Array.from(output)),
+            [Array.from(bytes)]
+          )
+          t.is(
+            getRequestRegistry()
+              .list()
+              .filter((ctx) => ctx.modelId === modelId).length,
+            0
+          )
+        }
+      },
+      async () => {
+        cancelCalls++
+      }
+    )
+    t.is(runCalls, 4)
+    t.is(cancelCalls, 0, 'completed videos do not trigger native cancellation')
+  } finally {
+    await close()
+  }
 })

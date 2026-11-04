@@ -49,6 +49,7 @@ describe('model-catalog', () => {
       'llamacpp-completion': 'chat',
       'llamacpp-embedding': 'embedding',
       'llamacpp-decision': 'decision',
+      'llamacpp-rerank': 'rerank',
       'whispercpp-transcription': 'transcription',
       'bci-whispercpp-transcription': 'bci',
       'parakeet-transcription': 'transcription',
@@ -61,6 +62,7 @@ describe('model-catalog', () => {
       'audiogen-ggml': 'audiogen',
       'ggml-vla': 'vla',
       'ggml-classification': 'classification',
+      'ggml-image-embedding': 'image-embedding',
       'onnx-vad': 'vad'
     } satisfies Record<ModelConstant['engine'], string>
     const constants = new Map<string, ModelConstant>()

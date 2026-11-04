@@ -86,3 +86,14 @@ test('the published linux-x64 prebuild builds the CUDA backend', () => {
   assert.equal(publishBuildCi().includeCuda, true)
   assert.match(platformDefines(PUBLISHED_CUDA_HOST), new RegExp(`-D ${CUDA_OPTION}=ON`))
 })
+
+test('MiniMax Core ML uses the registry audiogen feature without extra sidecar features', () => {
+  const speech = namedDependencies(vcpkgManifest.dependencies, SPEECH_PORT)
+  const apple = speech.find((dependency) => dependency.platform === 'osx | ios')
+  assert.ok(apple)
+  assert.ok(apple.features.includes('audiogen'))
+  for (const dependency of speech) {
+    assert.equal(dependency.features.includes('minimax-coreml'), false)
+    assert.equal(dependency.features.includes('coreml'), false)
+  }
+})

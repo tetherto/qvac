@@ -186,13 +186,12 @@ jobs:
             root=$(git show "${CONFIG_REF}:${pj}" | jq -r '.root')
             has_build=$(git show "${CONFIG_REF}:${pj}" | jq -r 'if .targets.build then "true" else "false" end')
 
-            # Derived, not declared, like hasPrebuilds above. package.json is the
-            # only place that knows whether wrappers are generated, and two
-            # packages carry the script with no verifyGenerated flag today.
+            # Derive the wrapper gate from the trusted package manifest.
+            # Package CI configuration cannot disable an existing wrapper check.
             has_check=$(git show "${CONFIG_REF}:packages/${pkg}/package.json" 2>/dev/null \
               | jq -r 'if .scripts["check:generated"] then "true" else "false" end' || echo false)
 
-            # After `+ $onmerge` so the derived value wins over a stale project.json key.
+            # The derived value overrides any verifyGenerated field in project.json.
             row=$(jq -n \
               --arg pkg "$pkg" \
               --arg workdir "$root" \
@@ -209,6 +208,8 @@ jobs:
           [ "$(echo "$rows" | jq 'length')" -gt 0 ] && any="true"
 
           prebuild_rows=$(echo "$rows" | jq -c '[.[] | select(.hasPrebuilds == true)]')
+          # Retain pre/post-publish integration as supported opt-in paths.
+          # No current package selects them; testGateMode enables them per package.
           pre_publish_rows=$(echo "$rows" | jq -c '[.[] | select((.testGateMode // "") | startswith("pre-publish"))]')
           post_integration_rows=$(echo "$rows" | jq -c '[.[] | select(.testGateMode == "post-publish-integration")]')
           verify_generated_rows=$(echo "$rows" | jq -c '[.[] | select(.verifyGenerated == true)]')
@@ -623,8 +624,9 @@ jobs:
       should_run_tests: ${{ steps.gate.outputs.should_run_tests }}
       rows: ${{ steps.gate.outputs.rows }}
     steps:
-      # Per package: #4175 keyed ocr-ggml and translation-nmtcpp on publish-npm
-      # alone; speech packages open on either publish via postIntegrationOnGpr.
+      # Per package: only rows opting into post-publish integration reach this
+      # gate. GPR additionally requires postIntegrationOnGpr. Kept as a supported
+      # opt-in path even though no current package enables post-publish tests.
       - id: gate
         shell: bash
         env:
@@ -691,95 +693,3 @@ jobs:
     with:
       repo_name: ${{ matrix.repoName }}
       published_version: ${{ needs.publish-npm.outputs.published_version }}
-
-  # Post-publish mobile integration. One
-  # static job each because `uses:` cannot take an expression, gated on the
-  # package being in the row set post-build-gate actually selected so a merge
-  # touching only another package does not launch a Device Farm run.
-  mobile-post-publish-decoder-audio:
-    name: Post-publish mobile (decoder-audio)
-    needs: [post-build-gate]
-    if: >-
-      always() && !cancelled() &&
-      needs.post-build-gate.outputs.should_run_tests == 'true' &&
-      contains(fromJSON(needs.post-build-gate.outputs.rows).*.package, 'decoder-audio')
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write
-      id-token: write
-      # The mobile workflow's build-and-test job requests actions: read for the
-      # prebuild_run_id download (#4591). A caller that grants less makes GitHub
-      # reject this whole file at load time, before any job runs.
-      actions: read
-    uses: ./.github/workflows/integration-mobile-test-decoder-audio.yml
-    secrets: inherit
-    with:
-      repository: ${{ github.repository }}
-      ref: ${{ github.sha }}
-
-  mobile-post-publish-asr-ggml:
-    name: Post-publish mobile (asr-ggml)
-    needs: [post-build-gate]
-    if: >-
-      always() && !cancelled() &&
-      needs.post-build-gate.outputs.should_run_tests == 'true' &&
-      contains(fromJSON(needs.post-build-gate.outputs.rows).*.package, 'asr-ggml')
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write
-      id-token: write
-      # The mobile workflow's build-and-test job requests actions: read for the
-      # prebuild_run_id download (#4591). A caller that grants less makes GitHub
-      # reject this whole file at load time, before any job runs.
-      actions: read
-    uses: ./.github/workflows/integration-mobile-test-asr-ggml.yml
-    secrets: inherit
-    with:
-      repository: ${{ github.repository }}
-      ref: ${{ github.sha }}
-
-  mobile-post-publish-bci-whispercpp:
-    name: Post-publish mobile (bci-whispercpp)
-    needs: [post-build-gate]
-    if: >-
-      always() && !cancelled() &&
-      needs.post-build-gate.outputs.should_run_tests == 'true' &&
-      contains(fromJSON(needs.post-build-gate.outputs.rows).*.package, 'bci-whispercpp')
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write
-      id-token: write
-      # The mobile workflow's build-and-test job requests actions: read for the
-      # prebuild_run_id download (#4591). A caller that grants less makes GitHub
-      # reject this whole file at load time, before any job runs.
-      actions: read
-    uses: ./.github/workflows/integration-mobile-test-bci-whispercpp.yml
-    secrets: inherit
-    with:
-      repository: ${{ github.repository }}
-      ref: ${{ github.sha }}
-
-  mobile-post-publish-tts-ggml:
-    name: Post-publish mobile (tts-ggml)
-    needs: [post-build-gate]
-    if: >-
-      always() && !cancelled() &&
-      needs.post-build-gate.outputs.should_run_tests == 'true' &&
-      contains(fromJSON(needs.post-build-gate.outputs.rows).*.package, 'tts-ggml')
-    permissions:
-      contents: read
-      packages: read
-      pull-requests: write
-      id-token: write
-      # The mobile workflow's build-and-test job requests actions: read for the
-      # prebuild_run_id download (#4591). A caller that grants less makes GitHub
-      # reject this whole file at load time, before any job runs.
-      actions: read
-    uses: ./.github/workflows/integration-mobile-test-tts-ggml.yml
-    secrets: inherit
-    with:
-      repository: ${{ github.repository }}
-      ref: ${{ github.sha }}

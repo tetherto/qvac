@@ -75,6 +75,8 @@ fun QvacClient.`pluginInvokeStream`(request: io.tether.qvac.sdk.generated.schema
 suspend fun QvacClient.`rag`(request: io.tether.qvac.sdk.generated.schema.RagRequest): io.tether.qvac.sdk.generated.schema.RagResponse = callTyped(request)
 fun QvacClient.ragWithProgress(request: io.tether.qvac.sdk.generated.schema.RagRequest): Flow<QvacProgressEvent<io.tether.qvac.sdk.generated.schema.RagProgressResponse, io.tether.qvac.sdk.generated.schema.RagResponse>> = progressTyped(request, progressType = "rag:progress")
 
+suspend fun QvacClient.`rerank`(request: io.tether.qvac.sdk.generated.schema.RerankRequest): io.tether.qvac.sdk.generated.schema.RerankResponse = callTyped(request)
+
 suspend fun QvacClient.`resume`(request: io.tether.qvac.sdk.generated.schema.ResumeRequest): io.tether.qvac.sdk.generated.schema.ResumeResponse = callTyped(request)
 
 suspend fun QvacClient.`startRpcServer`(request: io.tether.qvac.sdk.generated.schema.StartRpcServerRequest): io.tether.qvac.sdk.generated.schema.StartRpcServerResponse = callTyped(request)

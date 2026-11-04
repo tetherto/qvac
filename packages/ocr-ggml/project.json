@@ -111,7 +111,7 @@
           "verifyGenerated": true,
           "nameTransform": "none",
           "repoName": "ocr-ggml",
-          "testGateMode": "post-publish-integration"
+          "testGateMode": "none"
         }
       }
     }

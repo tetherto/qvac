@@ -11,6 +11,7 @@ const ENDPOINT_CATEGORY: Record<CanonicalModelType, string> & Record<string, str
   embedding: 'embedding',
   'llamacpp-embedding': 'embedding',
   'llamacpp-decision': 'decision',
+  'llamacpp-rerank': 'rerank',
   whisper: 'transcription',
   'whispercpp-transcription': 'transcription',
   bci: 'bci',
@@ -37,6 +38,7 @@ const ENDPOINT_CATEGORY: Record<CanonicalModelType, string> & Record<string, str
   'ggml-vla': 'vla',
   classification: 'classification',
   'ggml-classification': 'classification',
+  'ggml-image-embedding': 'image-embedding',
   vad: 'vad',
   'onnx-vad': 'vad'
 }

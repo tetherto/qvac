@@ -47,6 +47,15 @@ async function runAudioGen(gen, { caption, opts = {} } = {}) {
 }
 
 async function collectAudioGenResponse(response) {
+  const [{ chunks, stages, stageTotals, sampleRate, channels }, stats] = await Promise.all([
+    collectAudioGenOutput(response),
+    response.await()
+  ])
+
+  return summarizeAudioGenOutput({ chunks, stages, stageTotals, sampleRate, channels, stats })
+}
+
+async function collectAudioGenOutput(response) {
   const chunks = []
   const stages = new Set()
   const stageTotals = {}
@@ -68,8 +77,10 @@ async function collectAudioGenResponse(response) {
     }
   }
 
-  const stats = await response.await()
+  return { chunks, stages, stageTotals, sampleRate, channels }
+}
 
+function summarizeAudioGenOutput({ chunks, stages, stageTotals, sampleRate, channels, stats }) {
   let sampleCount = 0
   for (const chunk of chunks) sampleCount += chunk.length
 

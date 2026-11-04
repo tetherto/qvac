@@ -1,17 +1,38 @@
 ---
 title: "@qvac/diffusion-cpp"
 titleStyle: code
-description: Text-to-image generation from text prompts.
+description: Text-to-image generation and reference image editing.
 schemaType: APIReference
 ---
 
 ## Overview
 
-[Bare module](https://bare.pears.com) that adds support for text-to-image generation in QVAC using [`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp) as the inference engine. 
+[Bare module](https://bare.pears.com) for text-to-image generation and reference image editing in QVAC, using [`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp) as the inference engine.
 
 ## Models
 
-Supports FLUX.2-klein, SD1.x, SD2.x, SDXL, and SD3 model families.
+Supports Qwen-Image-2.1, FLUX.2-klein, SD1.x, SD2.x, SDXL, and SD3 model families.
+
+### Qwen-Image-2.1
+
+Three separate components are required for text-to-image:
+
+- **Diffusion model** (`qwen_image_2.1-Q4_K.gguf`) - the main image transformer.
+- **Text encoder** (`Qwen3VL-8B-Instruct-Q4_K_M.gguf`) - the matching Qwen3-VL encoder.
+- **VAE** (`qwen_image_2.1_vae_bf16.safetensors`) - the 2.1 VAE; earlier Qwen Image and Wan VAEs are incompatible.
+
+Reference editing also requires the **vision projector** (`mmproj-Qwen3VL-8B-Instruct-F16.gguf`) as `files.llmVision`, separate from the video API's `clipVision`.
+
+### Model file reference for Qwen-Image-2.1
+
+| Role | File | Source |
+|------|------|--------|
+| Diffusion model | `qwen_image_2.1-Q4_K.gguf` | [leejet/Qwen-Image-2.1-GGUF](https://huggingface.co/leejet/Qwen-Image-2.1-GGUF/blob/cc11433936a06e9765f7c0c0b1f0436cfd2b9856/qwen_image_2.1-Q4_K.gguf) |
+| Text encoder | `Qwen3VL-8B-Instruct-Q4_K_M.gguf` | [Qwen/Qwen3-VL-8B-Instruct-GGUF](https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct-GGUF/blob/f982a07559d4a2f6c8744d840bf6fccab30eea96/Qwen3VL-8B-Instruct-Q4_K_M.gguf) |
+| VAE | `qwen_image_2.1_vae_bf16.safetensors` | [Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/blob/a8342359c61979b06a8dafb1a47991fe1f30e994/vae/qwen_image_2.1_vae_bf16.safetensors) |
+| Vision projector, required for reference editing | `mmproj-Qwen3VL-8B-Instruct-F16.gguf` | [Qwen/Qwen3-VL-8B-Instruct-GGUF](https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct-GGUF/blob/f982a07559d4a2f6c8744d840bf6fccab30eea96/mmproj-Qwen3VL-8B-Instruct-F16.gguf) |
+
+For SDK configuration and a runnable example, see [Qwen-Image-2.1](/sdk/ai-capabilities/image-generation#qwen-image-21).
 
 ### FLUX.2-klein
 
@@ -209,7 +230,8 @@ const args = {
 | `files.clipL` | — | Absolute path to separate CLIP-L text encoder (SD3) |
 | `files.clipG` | — | Absolute path to separate CLIP-G text encoder (SDXL / SD3) |
 | `files.t5Xxl` | — | Absolute path to separate T5-XXL text encoder (SD3) |
-| `files.llm` | — | Absolute path to Qwen3 LLM text encoder (FLUX.2 [klein]) |
+| `files.llm` | — | Absolute path to the LLM text encoder, Qwen3 for FLUX.2 or Qwen3-VL for Qwen-Image-2.1 |
+| `files.llmVision` | — | Absolute path to the Qwen3-VL vision projector for Qwen-Image-2.1 reference editing |
 | `files.vae` | — | Absolute path to separate VAE file |
 | `files.esrgan` | — | Absolute path to ESRGAN upscaler model for post-generation upscale |
 | `config` | — | Native backend configuration object (see next section) |
@@ -302,18 +324,21 @@ require('bare-fs').writeFileSync('output.png', images[0])
 |-----------|------|---------|-------------|
 | `prompt` | string | — | Text prompt |
 | `negative_prompt` | string | `''` | Things to avoid in the output |
-| `width` | number | `512` | Output width in pixels (multiple of 8) |
-| `height` | number | `512` | Output height in pixels (multiple of 8) |
+| `width` | number | `512` | Output width in pixels, a multiple of 8; Qwen-Image-2.1 requires a multiple of 32 |
+| `height` | number | `512` | Output height in pixels, a multiple of 8; Qwen-Image-2.1 requires a multiple of 32 |
 | `steps` | number | `20` | Number of diffusion steps |
 | `guidance` | number | `3.5` | Distilled guidance scale (FLUX.2) |
-| `cfg_scale` | number | `7.0` | Classifier-free guidance scale (SD1.x / SD2.x) |
+| `cfg_scale` | number | `7.0` | Classifier-free guidance scale for SD and Qwen-Image |
 | `sampling_method` | string | auto | Sampler name; auto-selects `euler` for FLUX.2, `euler_a` for SD1.x |
 | `scheduler` | string | auto | Scheduler; auto-selected per model family |
 | `seed` | number | `-1` | Random seed (-1 for random) |
 | `batch_count` | number | `1` | Number of images to generate |
 | `vae_tiling` | boolean | `false` | Enable VAE tiling (required for large images on 16 GB) |
 | `cache_preset` | string | — | Step-caching preset: `slow`, `medium`, `fast`, `ultra` |
-| `upscale` | boolean \| `{ repeats?: number }` | `false` | Post-generation ESRGAN upscale. Requires `files.esrgan`; `repeats` defaults to `1` |
+| `init_image` | `Uint8Array` | — | Single PNG/JPEG reference, mutually exclusive with `init_images` |
+| `init_images` | `Uint8Array[]` | — | Ordered references for FLUX.2 or Qwen-Image-2.1; requires a model with reference-editing support |
+| `strength` | number | model-dependent | SD/SDXL img2img denoising strength; does not control reference fidelity for FLUX.2 or Qwen-Image-2.1 |
+| `upscale` | boolean \| `{ repeats?: number }` | `false` | Post-generation ESRGAN upscale for RGB output. Requires `files.esrgan`; `repeats` defaults to `1`. Qwen-Image-2.1 RGBA output rejects upscaling |
 
 <Callout type="info">
 Do not set `sampling_method: 'euler_a'` for FLUX.2 models — it will produce random noise. Leave the field unset to let the library auto-select `euler` for flow-matching models.
