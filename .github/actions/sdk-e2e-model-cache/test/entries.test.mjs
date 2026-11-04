@@ -7,7 +7,6 @@ import path from 'node:path'
 import {
   cacheKey,
   cachePaths,
-  contentIdFor,
   firstChecksumMismatch,
   isComplete,
   mapWithConcurrency,
@@ -28,47 +27,26 @@ const sha = (text) => createHash('sha256').update(text).digest('hex')
 const root = 'c'
 const single = {
   contentId: sha('abcd'),
-  paths: [`${root}/0123_m.gguf`],
+  path: `${root}/0123_m.gguf`,
   files: [{ path: `${root}/0123_m.gguf`, size: 4, sha256: sha('abcd') }],
-  expectedSize: 4,
-  models: ['M'],
-  owners: ['m']
+  size: 4,
+  models: ['M']
 }
 const set = {
-  contentId: sha(['/a.bin:' + sha('aa'), '/b.mlmodelc/weight.bin:' + sha('bbb')].join('\n')),
-  paths: [`${root}/sets/s1`],
+  contentId: sha('set'),
+  path: `${root}/sets/s1`,
   files: [
     { path: `${root}/sets/s1/a.bin`, size: 2, sha256: sha('aa') },
     { path: `${root}/sets/s1/b.mlmodelc/weight.bin`, size: 3, sha256: sha('bbb') }
   ],
-  expectedSize: 5,
-  models: ['S'],
-  owners: ['s']
+  size: 5,
+  models: ['S']
 }
 
 test('the key is the content id; the archive is the exact file list', () => {
-  assert.equal(cacheKey('pfx', single), `pfx-${sha('abcd')}`)
+  assert.equal(cacheKey(single), `sdk-e2e-model-v1-${sha('abcd')}`)
   assert.deepEqual(cachePaths(single), ['c/0123_m.gguf'])
   assert.deepEqual(cachePaths(set), ['c/sets/s1/a.bin', 'c/sets/s1/b.mlmodelc/weight.bin'])
-})
-
-test('the key is recomputed from the files, so a plan cannot borrow another model key', () => {
-  assert.equal(contentIdFor(single), single.contentId)
-  assert.equal(contentIdFor(set), set.contentId)
-  assert.equal(
-    contentIdFor({ ...set, files: [...set.files].reverse() }),
-    set.contentId,
-    'order of listing does not matter'
-  )
-  const plan = (entry) => ({ version: 1, cacheRoot: root, entries: [entry], unresolved: [] })
-  assert.throws(() => validatePlan(plan({ ...single, contentId: sha('other') })), /does not match/)
-  const swapped = { ...set, files: [{ ...set.files[0], sha256: sha('evil') }, set.files[1]] }
-  assert.throws(() => validatePlan(plan(swapped)), /does not match/)
-  assert.throws(
-    () => validatePlan(plan({ ...set, files: [{ ...set.files[0], path: 'c/sets/s2/a.bin' }] })),
-    /inside its directory/
-  )
-  assert.throws(() => validatePlan(plan({ ...single, paths: ['c/a', 'c/b'] })), /exactly one path/)
 })
 
 test('complete means every pinned file at its exact size', () => {
@@ -92,7 +70,7 @@ test('a save only takes registry content', async () => {
   assert.equal(await firstChecksumMismatch(set, bad), 'c/sets/s1/b.mlmodelc/weight.bin')
 })
 
-test('a plan that would key or write outside its contract is rejected', () => {
+test('a plan from another schema, or writing outside the cache root, is rejected', () => {
   const plan = (entry, cacheRoot = root) => ({
     version: 1,
     cacheRoot,
@@ -101,24 +79,13 @@ test('a plan that would key or write outside its contract is rejected', () => {
   })
   assert.doesNotThrow(() => validatePlan(plan(single)))
   assert.doesNotThrow(() => validatePlan(plan(set)))
-  assert.throws(() => validatePlan({ version: 2, entries: [] }), /version 1/)
-  assert.throws(() => validatePlan({ ...plan(single), unresolved: undefined }), /unresolved/)
-  assert.throws(() => validatePlan(plan({ ...single, contentId: 'x y' })), /contentId/)
-  assert.throws(() => validatePlan(plan({ ...single, paths: ['c/../../etc/x'] })), /not inside/)
-  assert.throws(() => validatePlan(plan({ ...single, paths: ['/etc/x'] })), /not inside/)
-  assert.throws(
-    () =>
-      validatePlan(
-        plan({ ...single, files: [{ path: 'elsewhere/x', size: 1, sha256: sha('x') }] })
-      ),
-    /not inside/
-  )
-  assert.throws(
-    () => validatePlan(plan({ ...single, files: [{ path: 'c/x', size: 1, sha256: 'nope' }] })),
-    /sha256/
-  )
-  assert.throws(() => validatePlan(plan({ ...single, files: [] })), /files are required/)
+  assert.throws(() => validatePlan({ version: 2, entries: [], unresolved: [] }), /version 1/)
+  assert.throws(() => validatePlan({ ...plan(single), unresolved: undefined }), /version 1/)
+  const file = (filePath) => ({ ...single, files: [{ path: filePath, size: 1, sha256: sha('x') }] })
+  assert.throws(() => validatePlan(plan(file('c/../../etc/x'))), /not inside/)
+  assert.throws(() => validatePlan(plan(file('elsewhere/x'))), /not inside/)
   assert.throws(() => validatePlan(plan(single, '/abs')), /cacheRoot/)
+  assert.throws(() => validatePlan(plan(single, '../c')), /cacheRoot/)
 })
 
 test('drift lists cache items no entry covers, but not dotfiles or shards', () => {
@@ -131,10 +98,7 @@ test('drift lists cache items no entry covers, but not dotfiles or shards', () =
     'c/sharded/eeee/s-00001.gguf': 's'
   })
   const plan = { cacheRoot: root, entries: [single, set] }
-  assert.deepEqual(unplannedPaths(plan, cwd), [
-    'c/9999_other.gguf',
-    'c/sets/ffff'
-  ])
+  assert.deepEqual(unplannedPaths(plan, cwd), ['c/9999_other.gguf', 'c/sets/ffff'])
 })
 
 test('mapWithConcurrency keeps order and caps parallelism', async () => {

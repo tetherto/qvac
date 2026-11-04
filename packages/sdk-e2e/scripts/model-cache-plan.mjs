@@ -2,7 +2,8 @@
 /**
  * Plan the models a CI leg needs and where the SDK keeps each one, for
  * .github/actions/sdk-e2e-model-cache. Selection: the run's tests (`selectRunTests`), their
- * deps, then every model constant the bootstrap would download.
+ * deps, then every model constant the bootstrap would download. Where each model lives comes
+ * from `@qvac/inference/model-cache-layout`, so the inference build the run loads decides.
  *
  *   node scripts/model-cache-plan.mjs --family desktop --suite smoke --out plan.json
  *   node scripts/model-cache-plan.mjs --family desktop,python,electron --out plan.json   # seed
@@ -17,6 +18,7 @@
  *
  * Must run after `npm run build`: it reads the compiled catalog and runners.
  */
+import { createHash } from 'node:crypto'
 import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
 import { dirname, resolve, relative } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -56,6 +58,9 @@ function externalPlatform(config, name) {
   return entry.platform
 }
 
+// The `platform` @qvac/inference sees on each host, which picks its Core ML sets.
+const INFERENCE_PLATFORM = { macos: 'darwin', linux: 'linux', windows: 'win32' }
+
 function hostOs() {
   if (process.platform === 'darwin') return 'macos'
   if (process.platform === 'win32') return 'windows'
@@ -93,8 +98,12 @@ const { RESOURCE_TABLE } = await load('dist/catalog/resource-table.js')
 const { applyResourceTable } = await load('dist/catalog/resource-table-types.js')
 const { ResourceManager } = await load('dist/runners/js/shared/resource-manager.js')
 const { collectTestDeps } = await load('dist/runners/js/shared/collect-test-deps.js')
-const { buildModelCachePlan, mergeModelCacheEntries } = await load(
-  'dist/runners/js/shared/model-cache-plan.js'
+const { getModelCacheLayout } = await import('@qvac/inference/model-cache-layout').catch(
+  (error) => {
+    throw new Error(
+      `@qvac/inference has no model-cache-layout export; build it from this branch (${error.message})`
+    )
+  }
 )
 
 if (!Array.isArray(sdk.models)) {
@@ -144,25 +153,14 @@ function selectRunTestsFallback(tests, options) {
       filters.some((filter) => test.testId.startsWith(filter) || test.metadata?.category === filter)
     )
   }
-  const unknownTestIds = []
   if (options.include) {
-    const catalogIds = new Set(tests.map((test) => test.testId))
-    const keep = new Set(selected.map((test) => test.testId))
-    for (const id of list(options.include)) {
-      if (catalogIds.has(id)) keep.add(id)
-      else unknownTestIds.push(id)
-    }
+    const keep = new Set([...selected.map((test) => test.testId), ...list(options.include)])
     selected = tests.filter((test) => keep.has(test.testId))
   }
 
-  const kept = []
-  const platformSkippedTestIds = []
-  for (const test of selected) {
-    const skipped = test.skip?.platforms?.length && matches(options.platform, test.skip.platforms)
-    if (skipped) platformSkippedTestIds.push(test.testId)
-    else kept.push(test)
-  }
-  return { tests: kept, platformSkippedTestIds, unknownTestIds }
+  const skipped = (test) =>
+    test.skip?.platforms?.length && matches(options.platform, test.skip.platforms)
+  return { tests: selected.filter((test) => !skipped(test)) }
 }
 
 function selectLegTests(platform) {
@@ -175,17 +173,13 @@ function selectLegTests(platform) {
 
 const cacheRoot = values['cache-root'].replace(/\\/g, '/').replace(/\/+$/, '')
 const legs = []
-const entryLists = []
-const unresolved = new Set()
+const constants = []
 
 for (const family of families) {
   const { consumer } = FAMILIES[family]
   const platform = FAMILIES[family].platform(values.os, config)
   const resourcePlatform = FAMILIES[family].resourcePlatform(values.os)
   const selection = selectLegTests(platform)
-  for (const id of selection.unknownTestIds) {
-    console.log(`::warning::--include names "${id}", which is not in the catalog`)
-  }
   const deps = collectTestDeps(selection.tests)
 
   const resources = new ResourceManager()
@@ -198,29 +192,57 @@ for (const family of families) {
       asset: (kind, file) => resolve(projectDir, 'assets', kind, file)
     }
   )
-  const { constants } = await resources.preDownloadConstants({ allowedDeps: deps })
-  const plan = buildModelCachePlan({ constants, registry: sdk.models, os: values.os, cacheRoot })
-  for (const name of plan.unresolved) unresolved.add(name)
-  entryLists.push(plan.entries)
-
-  legs.push({
-    family,
-    consumer,
-    platform,
-    resourcePlatform,
-    selectedTests: selection.tests.length,
-    platformSkippedTests: selection.platformSkippedTestIds.length,
-    deps: [...deps].sort(),
-    entries: plan.entries.length
-  })
+  const leg = await resources.preDownloadConstants({ allowedDeps: deps })
+  constants.push(...leg.constants)
+  legs.push({ family, consumer, platform, resourcePlatform, deps: [...deps].sort() })
   console.log(
     `${family} (${platform}): ${selection.tests.length} test(s), ${deps.size} dep(s), ` +
-      `${constants.length} model constant(s) in ${plan.entries.length} cache entr(ies)`
+      `${leg.constants.length} model constant(s)`
   )
 }
 
-const entries = mergeModelCacheEntries(entryLists)
-const expectedBytes = entries.reduce((sum, entry) => sum + entry.expectedSize, 0)
+const sha256 = (text) => createHash('sha256').update(text, 'utf8').digest('hex')
+const shortHash = (text) => sha256(text).slice(0, 16)
+const byPath = new Map(
+  sdk.models.map((item) => [`${item.registrySource}:${item.registryPath}`, item])
+)
+const byName = new Map(sdk.models.map((item) => [item.name, item]))
+
+// One entry per cached path; aliases of a registry model, and the seed's legs, share it.
+const byLayout = new Map()
+const unresolved = new Set()
+for (const { constant } of constants) {
+  const item =
+    byPath.get(`${constant.registrySource}:${constant.registryPath}`) ?? byName.get(constant.name)
+  const layout = item && getModelCacheLayout(item, INFERENCE_PLATFORM[values.os], shortHash)
+  if (!layout) {
+    unresolved.add(constant.name)
+    continue
+  }
+  const known = byLayout.get(layout.path)
+  if (known) {
+    if (!known.models.includes(constant.name)) known.models.push(constant.name)
+    continue
+  }
+  const single = layout.files.length === 1 && layout.files[0].path === layout.path
+  byLayout.set(layout.path, {
+    // The key: a file's own checksum, or a digest of a set's file names and checksums.
+    contentId: single
+      ? layout.files[0].sha256
+      : sha256(
+          layout.files
+            .map((file) => `${file.path.slice(layout.path.length)}:${file.sha256}`)
+            .sort()
+            .join('\n')
+        ),
+    path: `${cacheRoot}/${layout.path}`,
+    files: layout.files.map((file) => ({ ...file, path: `${cacheRoot}/${file.path}` })),
+    size: layout.files.reduce((sum, file) => sum + file.size, 0),
+    models: [constant.name]
+  })
+}
+
+const entries = [...byLayout.values()].sort((a, b) => (a.path < b.path ? -1 : 1))
 const plan = {
   version: 1,
   os: values.os,
@@ -229,16 +251,17 @@ const plan = {
   entries,
   unresolved: [...unresolved].sort()
 }
+const bytes = entries.reduce((sum, entry) => sum + entry.size, 0)
 
 const outPath = resolve(values.out)
 mkdirSync(dirname(outPath), { recursive: true })
 writeFileSync(outPath, `${JSON.stringify(plan, null, 2)}\n`)
 
 if (plan.unresolved.length > 0) {
-  console.log(`::warning::No registry entry for ${plan.unresolved.join(', ')}; these stay uncached`)
+  console.log(`::warning::No cache layout for ${plan.unresolved.join(', ')}; these stay uncached`)
 }
 console.log(
-  `📋 ${entries.length} model cache entr(ies), ${(expectedBytes / 1e9).toFixed(1)} GB, ` +
+  `📋 ${entries.length} model cache entr(ies), ${(bytes / 1e9).toFixed(1)} GB, ` +
     `written to ${relative(process.cwd(), outPath) || outPath}`
 )
 

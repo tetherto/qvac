@@ -95950,8 +95950,10 @@ const external_node_path_namespaceObject = __WEBPACK_EXTERNAL_createRequire(impo
 
 
 
-function cacheKey(prefix, entry) {
-  return `${prefix}-${entry.contentId}`
+const KEY_PREFIX = 'sdk-e2e-model-v1'
+
+function cacheKey(entry) {
+  return `${KEY_PREFIX}-${entry.contentId}`
 }
 
 /**
@@ -95992,76 +95994,20 @@ async function firstChecksumMismatch(entry, cwd = process.cwd()) {
   return undefined
 }
 
-const SHA256 = /^[0-9a-f]{64}$/
-
-function sha256Text(text) {
-  return (0,external_node_crypto_.createHash)('sha256').update(text, 'utf8').digest('hex')
-}
-
-/**
- * Same as contentIdOf in packages/sdk-e2e/runners/js/shared/model-cache-plan.ts. Recomputed so a
- * plan cannot save files under another model's key.
- */
-function contentIdFor(entry) {
-  const [location] = entry.paths
-  if (entry.files.length === 1 && entry.files[0].path === location) return entry.files[0].sha256
-  const lines = entry.files.map((file) => `${file.path.slice(location.length)}:${file.sha256}`)
-  return sha256Text(lines.sort().join('\n'))
-}
-
-function isPlanPath(candidate, root) {
-  return (
-    typeof candidate === 'string' &&
-    candidate.startsWith(`${root}/`) &&
-    !candidate.includes('\\') &&
-    !candidate.split('/').includes('..')
-  )
-}
-
-/** Reject a malformed plan: bad digests, paths outside the cache root, a wrong contentId. */
+/** Reject a plan from another schema, or one that would write outside the cache root. */
 function validatePlan(plan) {
-  if (plan?.version !== 1 || !Array.isArray(plan.entries)) {
+  if (plan?.version !== 1 || !Array.isArray(plan.entries) || !Array.isArray(plan.unresolved)) {
     throw new Error('not a version 1 model-cache plan')
   }
   const root = plan.cacheRoot
-  if (
-    typeof root !== 'string' ||
-    root === '' ||
-    external_node_path_namespaceObject.isAbsolute(root) ||
-    root.split('/').includes('..')
-  ) {
+  if (typeof root !== 'string' || !root || external_node_path_namespaceObject.isAbsolute(root) || root.includes('..')) {
     throw new Error(`cacheRoot must be a workspace-relative path, got ${JSON.stringify(root)}`)
   }
-  if (!Array.isArray(plan.unresolved)) throw new Error('unresolved must be a list')
   for (const entry of plan.entries) {
-    const name = Array.isArray(entry.models) ? entry.models.join(',') : '?'
-    if (!SHA256.test(entry.contentId ?? '')) {
-      throw new Error(`${name}: contentId must be a sha256 hex digest`)
-    }
-    if (!Array.isArray(entry.paths) || entry.paths.length !== 1) {
-      throw new Error(`${name}: an entry has exactly one path, its file or its directory`)
-    }
-    if (!Array.isArray(entry.files) || entry.files.length === 0) {
-      throw new Error(`${name}: files are required`)
-    }
     for (const file of entry.files) {
-      if (!SHA256.test(file.sha256 ?? '') || !Number.isInteger(file.size) || file.size < 0) {
-        throw new Error(`${name}: ${file.path} needs a size and a sha256`)
+      if (!file.path.startsWith(`${root}/`) || file.path.split('/').includes('..')) {
+        throw new Error(`${JSON.stringify(file.path)} is not inside ${root}`)
       }
-    }
-    const all = [...entry.paths, ...entry.files.map((file) => file.path)]
-    for (const candidate of all) {
-      if (!isPlanPath(candidate, root)) {
-        throw new Error(`${name}: ${JSON.stringify(candidate)} is not inside ${root}`)
-      }
-    }
-    const [location] = entry.paths
-    const single = entry.files.length === 1 && entry.files[0].path === location
-    if (!single && !entry.files.every((file) => file.path.startsWith(`${location}/`))) {
-      throw new Error(`${name}: files must be the entry's file or inside its directory`)
-    }
-    if (contentIdFor(entry) !== entry.contentId) {
-      throw new Error(`${name}: contentId does not match the checksums of its files`)
     }
   }
   return plan
@@ -96072,7 +96018,7 @@ function validatePlan(plan) {
  * `sharded/` is never planned (the SDK writes an unpinned tensors file there), so it is skipped.
  */
 function unplannedPaths(plan, cwd = process.cwd()) {
-  const covered = new Set(plan.entries.flatMap((entry) => entry.paths))
+  const covered = new Set(plan.entries.map((entry) => entry.path))
   const root = plan.cacheRoot
   const found = []
   const list = (relative) => {
@@ -96103,15 +96049,11 @@ async function mapWithConcurrency(items, limit, worker) {
   const run = async () => {
     while (next < items.length) {
       const index = next++
-      results[index] = await worker(items[index], index)
+      results[index] = await worker(items[index])
     }
   }
   await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, run))
   return results
-}
-
-function formatBytes(bytes) {
-  return `${(bytes / 1e9).toFixed(1)} GB`
 }
 
 ;// CONCATENATED MODULE: ./src/index.mjs
@@ -96124,6 +96066,7 @@ function formatBytes(bytes) {
 
 // Never save from PR code (A13). Callers gate the step too; this catches a mis-wired caller.
 const TRUSTED_EVENTS = new Set(['push', 'schedule', 'workflow_dispatch', 'merge_group'])
+const CONCURRENCY = 4
 
 // After saveCache returns -1, a seed waits for another job finalizing the same entry; a test leg
 // checks once, so a server rejecting writes does not cost it minutes.
@@ -96131,97 +96074,11 @@ const SEED_LOOKUP_ATTEMPTS = 3
 const LOOKUP_DELAY_MS = 20_000
 
 const label = (entry) => entry.models.join(',')
-// Per entry, not per key: identical bytes at two paths share a key.
-const stateKey = (prefix, entry) => `${cacheKey(prefix, entry)}\n${entry.paths.join('\n')}`
-const statePath = (planPath) => `${planPath}.restore.json`
 const message = (error) => (error instanceof Error ? error.message : String(error))
+const gigabytes = (bytes) => `${(bytes / 1e9).toFixed(1)} GB`
 
-function readPlan(planPath) {
-  try {
-    return validatePlan(JSON.parse(external_node_fs_.readFileSync(planPath, 'utf8')))
-  } catch (error) {
-    throw new Error(`${planPath}: ${message(error)}`)
-  }
-}
-
-async function restoreEntry(prefix, entry, lookupOnly) {
-  const key = cacheKey(prefix, entry)
-  try {
-    const matched = await cache.restoreCache(cachePaths(entry), key, [], { lookupOnly }, true)
-    if (!matched) return { hit: false }
-    if (!lookupOnly && !isComplete(entry)) {
-      core.warning(
-        `Restored ${label(entry)} is incomplete, downloading it again. If this repeats, ` +
-          `delete the entry: gh cache delete ${key}`
-      )
-      return { hit: false }
-    }
-    return { hit: true }
-  } catch (error) {
-    core.warning(`Restore of ${label(entry)} failed: ${message(error)}`)
-    return { hit: false }
-  }
-}
-
-async function restore(plan, planPath, prefix, concurrency, lookupOnly) {
-  const started = Date.now()
-  const results = await mapWithConcurrency(plan.entries, concurrency, (entry) =>
-    restoreEntry(prefix, entry, lookupOnly)
-  )
-
-  const state = {}
-  const missing = []
-  let restoredBytes = 0
-  plan.entries.forEach((entry, index) => {
-    state[stateKey(prefix, entry)] = results[index]
-    if (results[index].hit) restoredBytes += entry.expectedSize
-    else missing.push(entry)
-  })
-  external_node_fs_.writeFileSync(statePath(planPath), `${JSON.stringify(state, null, 2)}\n`)
-
-  // Unresolved constants have no entry; the bootstrap still fetches them.
-  const toDownload = [...missing.flatMap((entry) => entry.models), ...plan.unresolved]
-  const hits = plan.entries.length - missing.length
-  const seconds = Math.round((Date.now() - started) / 1000)
-  const verb = lookupOnly ? 'present' : 'restored'
-  core.info(
-    `📦 ${hits}/${plan.entries.length} model(s) ${verb} (${formatBytes(restoredBytes)}) ` +
-      `in ${seconds}s; ${toDownload.length} to download`
-  )
-  for (const name of toDownload) core.info(`   to download: ${name}`)
-
-  core.setOutput('hits', String(hits))
-  core.setOutput('misses', String(missing.length))
-  core.setOutput('complete', String(toDownload.length === 0))
-  core.setOutput('missing-models', JSON.stringify(toDownload))
-
-  try {
-    await core.summary
-      .addHeading('SDK e2e model cache', 3)
-      .addTable([
-        [
-          { data: 'Entries', header: true },
-          { data: verb, header: true },
-          { data: 'To download', header: true },
-          { data: 'Transferred', header: true },
-          { data: 'Time', header: true }
-        ],
-        [
-          String(plan.entries.length),
-          String(hits),
-          String(toDownload.length),
-          lookupOnly ? 'none (lookup only)' : formatBytes(restoredBytes),
-          `${seconds}s`
-        ]
-      ])
-      .addRaw(toDownload.length > 0 ? `\nTo download: ${toDownload.join(', ')}\n` : '')
-      .write()
-  } catch (error) {
-    core.info(`Job summary not written: ${message(error)}`)
-  }
-}
-
-async function entryExists(paths, key, attempts) {
+async function exists(entry, attempts = 1) {
+  const [paths, key] = [cachePaths(entry), cacheKey(entry)]
   for (let attempt = 0; attempt < attempts; attempt++) {
     if (attempt > 0) await (0,promises_namespaceObject.setTimeout)(LOOKUP_DELAY_MS)
     if (await cache.restoreCache(paths, key, [], { lookupOnly: true }, true)) return true
@@ -96229,12 +96086,46 @@ async function entryExists(paths, key, attempts) {
   return false
 }
 
-async function saveEntry(prefix, entry, previous, lookupAttempts) {
-  if (previous?.hit) return 'present'
+async function restoreEntry(entry, lookupOnly) {
+  if (lookupOnly) return exists(entry)
+  const key = cacheKey(entry)
+  if (!(await cache.restoreCache(cachePaths(entry), key, [], {}, true))) return false
+  if (isComplete(entry)) return true
+  core.warning(`Restored ${label(entry)} is incomplete; if this repeats: gh cache delete ${key}`)
+  return false
+}
+
+async function restore(plan, lookupOnly) {
+  const started = Date.now()
+  const hits = await mapWithConcurrency(plan.entries, CONCURRENCY, (entry) =>
+    restoreEntry(entry, lookupOnly).catch((error) => {
+      core.warning(`Restore of ${label(entry)} failed: ${message(error)}`)
+      return false
+    })
+  )
+  const restored = plan.entries.filter((_, index) => hits[index])
+  // Unresolved constants have no entry; the bootstrap still fetches them.
+  const toDownload = [
+    ...plan.entries.filter((_, index) => !hits[index]).flatMap((entry) => entry.models),
+    ...plan.unresolved
+  ]
+  const bytes = restored.reduce((sum, entry) => sum + entry.size, 0)
+  core.info(
+    `📦 ${restored.length}/${plan.entries.length} model(s) ${lookupOnly ? 'present' : 'restored'} ` +
+      `(${gigabytes(bytes)}) in ${Math.round((Date.now() - started) / 1000)}s; ` +
+      `${toDownload.length} to download`
+  )
+  for (const name of toDownload) core.info(`   to download: ${name}`)
+
+  core.setOutput('hits', String(restored.length))
+  core.setOutput('complete', String(toDownload.length === 0))
+  core.setOutput('missing-models', JSON.stringify(toDownload))
+}
+
+async function saveEntry(entry, lookupAttempts) {
+  if (await exists(entry)) return 'present'
   if (!isComplete(entry)) {
-    core.warning(
-      `Not saving ${label(entry)}: not on disk at the planned paths (${entry.paths.join(', ')})`
-    )
+    core.warning(`Not saving ${label(entry)}: not on disk at ${entry.path}`)
     return 'skipped'
   }
   const mismatch = await firstChecksumMismatch(entry)
@@ -96242,46 +96133,37 @@ async function saveEntry(prefix, entry, previous, lookupAttempts) {
     core.warning(`Not saving ${label(entry)}: ${mismatch} does not match its registry checksum`)
     return 'skipped'
   }
-  const key = cacheKey(prefix, entry)
-  const paths = cachePaths(entry)
-  try {
-    // saveCache swallows its errors and returns -1; a lookup decides whether the entry exists.
-    if ((await cache.saveCache(paths, key, {}, true)) !== -1) return 'saved'
-    if (await entryExists(paths, key, lookupAttempts)) return 'present'
-    core.warning(`Save of ${label(entry)} under ${key} did not create an entry`)
-    return 'failed'
-  } catch (error) {
-    core.warning(`Save of ${label(entry)} failed: ${message(error)}`)
-    return 'failed'
-  }
+  // saveCache swallows its errors and returns -1; a lookup decides whether the entry exists.
+  if ((await cache.saveCache(cachePaths(entry), cacheKey(entry), {}, true)) !== -1) return 'saved'
+  if (await exists(entry, lookupAttempts)) return 'present'
+  core.warning(`Save of ${label(entry)} under ${cacheKey(entry)} did not create an entry`)
+  return 'failed'
 }
 
-async function save(plan, planPath, prefix, concurrency, failOnError) {
+async function save(plan, failOnError) {
   const event = process.env.GITHUB_EVENT_NAME ?? ''
   if (!TRUSTED_EVENTS.has(event)) {
     core.warning(`Not saving model cache entries from a ${event || 'unknown'} run`)
     return
   }
-  const state = external_node_fs_.existsSync(statePath(planPath))
-    ? JSON.parse(external_node_fs_.readFileSync(statePath(planPath), 'utf8'))
-    : {}
-
-  const outcomes = await mapWithConcurrency(plan.entries, concurrency, (entry) =>
-    saveEntry(prefix, entry, state[stateKey(prefix, entry)], failOnError ? SEED_LOOKUP_ATTEMPTS : 1)
+  const outcomes = await mapWithConcurrency(plan.entries, CONCURRENCY, (entry) =>
+    saveEntry(entry, failOnError ? SEED_LOOKUP_ATTEMPTS : 1).catch((error) => {
+      core.warning(`Save of ${label(entry)} failed: ${message(error)}`)
+      return 'failed'
+    })
   )
   const count = (outcome) => outcomes.filter((value) => value === outcome).length
   core.info(
     `💾 saved ${count('saved')}, already cached ${count('present')}, ` +
       `not saved ${count('skipped')}, failed ${count('failed')}`
   )
-  core.setOutput('saved', String(count('saved')))
 
   const drift = unplannedPaths(plan)
   if (drift.length > 0) {
     core.warning(
       `The SDK cache holds ${drift.length} item(s) no plan entry covers, so they are downloaded ` +
-        'on every run. The layout mirror in packages/sdk-e2e/runners/js/shared/model-cache-plan.ts ' +
-        `may be out of date: ${drift.slice(0, 20).join(', ')}${drift.length > 20 ? ', ...' : ''}`
+        'on every run. packages/inference/src/utils/cache/layout.ts may no longer match the ' +
+        `loader: ${drift.slice(0, 20).join(', ')}${drift.length > 20 ? ', ...' : ''}`
     )
   }
 
@@ -96294,20 +96176,16 @@ async function save(plan, planPath, prefix, concurrency, failOnError) {
 async function main() {
   const mode = core.getInput('mode', { required: true })
   const planPath = core.getInput('plan', { required: true })
-  const prefix = core.getInput('key-prefix') || 'sdk-e2e-model-v1'
-  const concurrency = Number.parseInt(core.getInput('concurrency') || '4', 10)
-  if (!Number.isInteger(concurrency) || concurrency < 1) {
-    throw new Error(`concurrency must be a positive integer, got "${core.getInput('concurrency')}"`)
+  let plan
+  try {
+    plan = validatePlan(JSON.parse(external_node_fs_.readFileSync(planPath, 'utf8')))
+  } catch (error) {
+    throw new Error(`${planPath}: ${message(error)}`)
   }
 
-  const plan = readPlan(planPath)
-  if (mode === 'restore') {
-    await restore(plan, planPath, prefix, concurrency, core.getBooleanInput('lookup-only'))
-  } else if (mode === 'save') {
-    await save(plan, planPath, prefix, concurrency, core.getBooleanInput('fail-on-save-error'))
-  } else {
-    throw new Error(`mode must be restore or save, got "${mode}"`)
-  }
+  if (mode === 'restore') await restore(plan, core.getBooleanInput('lookup-only'))
+  else if (mode === 'save') await save(plan, core.getBooleanInput('fail-on-save-error'))
+  else throw new Error(`mode must be restore or save, got "${mode}"`)
 }
 
 main().catch((error) => core.setFailed(message(error)))

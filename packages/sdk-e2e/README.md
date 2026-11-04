@@ -361,8 +361,8 @@ invalidates only the models it changed:
 1. `scripts/model-cache-plan.mjs` resolves the leg's tests the way the run will (suite, filter, include,
    platform skips; `selectRunTests` from `@qvac/test-suite`), collects the ResourceManager deps they
    declare, and lists every model constant the bootstrap would download for them, with every file the SDK
-   keeps for it, at its exact path, size and registry checksum (`runners/js/shared/model-cache-plan.ts`
-   mirrors the SDK's cache layout from `packages/inference`, Core ML sets included).
+   keeps for it, at its exact path, size and registry checksum. The layout comes from
+   `@qvac/inference/model-cache-layout`, the same rules the loader uses, Core ML sets included.
 2. `.github/actions/sdk-e2e-model-cache` restores those entries. Keys derive from the registry's
    `sha256Checksum`, so desktop, Electron, Python and Snap share one copy of a model (macOS keeps a model
    with Core ML bundles as its own entry), and a branch that is behind `main` still hits every model it
@@ -375,8 +375,8 @@ invalidates only the models it changed:
    it reaches `main`.
 
 The SDK verifies every file against the registry checksum when it loads it, so a damaged entry costs a
-download, never a wrong result. A save warns about anything the SDK wrote that no entry covers: that is
-the layout mirror drifting from the SDK. To see what a selection would restore:
+download, never a wrong result. A save warns about anything the SDK wrote that no entry covers. To see
+what a selection would restore (with `@qvac/inference` built from this branch):
 
 ```bash
 npm run build

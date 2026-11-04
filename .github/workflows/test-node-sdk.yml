@@ -353,7 +353,7 @@ jobs:
       - name: Save models cache
         if: >-
           !cancelled() &&
-          steps.models-cache.outcome == 'success' &&
+          steps.models-cache.outputs.complete == 'false' &&
           contains(fromJSON('["push","schedule","workflow_dispatch","merge_group"]'), github.event_name)
         continue-on-error: true
         uses: ./.sdk-e2e-workflow/.github/actions/sdk-e2e-model-cache

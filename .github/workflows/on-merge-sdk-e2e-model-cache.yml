@@ -15,9 +15,9 @@ on:
       - "packages/sdk-e2e/runners/js/shared/resource-manager.ts"
       - "packages/sdk-e2e/runners/js/shared/collect-test-deps.ts"
       - "packages/sdk-e2e/runners/js/shared/bootstrap-deps.ts"
-      - "packages/sdk-e2e/runners/js/shared/model-cache-plan.ts"
       - "packages/sdk-e2e/scripts/model-cache-*.mjs"
       - "packages/inference/src/models/registry/**"
+      - "packages/inference/src/utils/cache/layout.ts"
       - "packages/sdk/package.json"
       - "packages/sdk-e2e/package.json"
       - ".github/actions/sdk-e2e-model-cache/**"
@@ -207,7 +207,7 @@ jobs:
 
       # Also after a failed download, to keep what arrived.
       - name: Save models cache
-        if: ${{ !cancelled() && steps.models-cache.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.models-cache.outputs.complete == 'false' }}
         uses: ./.github/actions/sdk-e2e-model-cache
         with:
           mode: save
