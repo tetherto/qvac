@@ -105,7 +105,7 @@
             "pnpm exec bare-make generate --platform=linux --arch=arm64",
             "pnpm exec bare-make build",
             "pnpm exec bare-make install",
-            "node scripts/smoke-packaged.cjs"
+            "GGML_RPC_NO_RDMA=1 node scripts/smoke-packaged.cjs"
           ],
           "ci": {
             "runner": "ubuntu_2204_arm"

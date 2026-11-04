@@ -2994,3 +2994,13 @@ test("ggml-rpc-server on the CI contract keeps main's build and test legs", () =
     ["linux-arm64", "linux-x64"],
   );
 });
+
+// As main's prebuild smoke test, the arm64 Linux one checks the TCP-only path: fabric's ci:system puts libibverbs on
+// that build host and its device node is not a usable RDMA device, so GGML_RPC_NO_RDMA keeps RDMA out of the check.
+test("RPC server prebuilds smoke-test without the Linux RDMA runtime", () => {
+  const { targets } = JSON.parse(read("packages/ggml-rpc-server/project.json"));
+  const smoke = targets.build.configurations["linux-arm64"].commands.filter((c) => /smoke-packaged\.cjs/.test(c));
+  assert.deepEqual(smoke, ["GGML_RPC_NO_RDMA=1 node scripts/smoke-packaged.cjs"]);
+  const script = read("packages/ggml-rpc-server/scripts/smoke-packaged.cjs");
+  assert.match(script, /process\.env\.GGML_RPC_NO_RDMA/, "the smoke test honours GGML_RPC_NO_RDMA");
+});
