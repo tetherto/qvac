@@ -15,7 +15,13 @@ export const embedInputPartSchema = z.union([
 ])
 export const embedInputSchema = z.union([
   z.string().min(1, 'Text cannot be empty'),
-  z.array(embedInputPartSchema).min(1, 'Input parts cannot be empty')
+  z
+    .array(embedInputPartSchema)
+    .min(1, 'Input parts cannot be empty')
+    .refine(
+      (parts) => parts.some((part) => typeof part !== 'string' || part.length > 0),
+      'Input cannot be empty'
+    )
 ])
 const textEmbedParamsSchema = z.object({
   modelId: z.string().describe('The identifier of the embedding model to use'),

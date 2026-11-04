@@ -51,6 +51,20 @@ test('embed inputs: rejects ambiguous, empty and malformed requests', (t) => {
   t.ok(embedParamsSchema.safeParse({ modelId: 'model', inputs: [['', { media }]] }).success)
 })
 
+test('embed inputs: each parts input needs non-empty text or media', (t) => {
+  for (const inputs of [[['']], [['', '']], ['query', ['']]]) {
+    const params = { modelId: 'model', inputs }
+    t.absent(embedParamsSchema.safeParse(params).success)
+    t.absent(embedRequestSchema.safeParse({ type: 'embed', ...params }).success)
+  }
+  for (const parts of [['', 'query', ''], ['', { media }, ''], [' ']]) {
+    const params = { modelId: 'model', inputs: [parts] }
+    t.alike(embedParamsSchema.parse(params), params)
+    const request = { type: 'embed', ...params }
+    t.alike(embedRequestSchema.parse(request), request)
+  }
+})
+
 test('embed inputs: reads base64 and files without changing input order', async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-embed-'))
   t.teardown(() => fs.rmSync(dir, { recursive: true, force: true }))
