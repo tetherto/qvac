@@ -29,8 +29,10 @@ The SDK returns raw, mono, signed 16-bit PCM samples as a plain `number[]`. With
 
 ```ts
 const result = textToSpeech({ modelId, text: 'Hello.' })
-const sampleRate = await result.sampleRate
 for await (const chunk of result.chunkStream) {
+  // The run starts when chunkStream is first iterated, so sampleRate
+  // resolves once the first chunk is in; await it inside the loop.
+  const sampleRate = await result.sampleRate
   // chunk: Int16Array, one per engine frame
   player.write(chunk, sampleRate)
 }

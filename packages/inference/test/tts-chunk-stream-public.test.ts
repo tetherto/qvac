@@ -1,6 +1,6 @@
 import test from 'brittle'
 import { registerModel, unregisterModel } from '@/runtime/model-registry'
-import { registerPlugin } from '@/plugins/registry'
+import { hasPlugin, registerPlugin } from '@/plugins/registry'
 import { ttsPlugin } from '@/plugins/builtin/tts-ggml/plugin'
 import { textToSpeech } from '@/api/text-to-speech'
 
@@ -40,10 +40,12 @@ function fakeModel(opts: { chunks: Chunk[]; gate?: Promise<void>; fail?: Error }
   return { model, calls }
 }
 
-// Once per process: the registry rejects a second registration of the type.
-registerPlugin(ttsPlugin)
-
+// Registered when each test starts, not at module load: the whole-suite run
+// shares one process, and other files' `clearPlugins()` calls run between this
+// file's import and its tests, which would leave dispatch with no plugin. The
+// registry rejects a second registration of the type, hence the guard.
 function withModel(modelId: string, model: unknown) {
+  if (!hasPlugin(ttsPlugin.modelType)) registerPlugin(ttsPlugin)
   registerModel(modelId, {
     model: model as never,
     path: '/tmp/supertonic.gguf',
