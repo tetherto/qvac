@@ -215,6 +215,7 @@
           "cd build && ./tts_ggml_tests --gtest_filter='-*RealGguf*'",
           "ASAN_OPTIONS=alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1 LSAN_OPTIONS=suppressions=$PWD/.lsan-suppressions.txt QVAC_TEST_CHATTERBOX_T3_GGUF=$PWD/models/chatterbox-t3-mtl.gguf QVAC_TEST_CHATTERBOX_S3GEN_GGUF=$PWD/models/chatterbox-s3gen-mtl.gguf QVAC_TEST_SUPERTONIC_GGUF=$PWD/models/supertonic.gguf pnpm run test:cpp:run",
           "pnpm run coverage:cpp:report",
+          "node --test scripts/__tests__/run-cpp-fuzz.test.js",
           "pnpm run fuzz:build",
           "pnpm run fuzz:run"
         ]

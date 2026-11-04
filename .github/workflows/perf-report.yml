@@ -21,13 +21,9 @@ on:
         type: choice
         required: true
         options:
-          - "On PR Trigger (nx)"
-          - "Integration Tests (LLM)"
-          - "Mobile Integration Tests (LLM)"
-          - "Mobile Integration Tests (Parakeet)"
-          - "Benchmarks"
           - "PR build and test"
           - "Mobile tests"
+          - "Benchmarks"
       runs:
         description: "Number of recent runs to aggregate"
         type: number
@@ -72,9 +68,16 @@ jobs:
             ARTIFACT_ADDON="llamacpp-llm"
             FILTER_ARGS=(--filter "gemma4-vl|qwen3.5-vl")
           fi
-          # The contract groups name a package's perf artifacts <slug>-perf-*.
+          # The contract names perf artifacts <slug>-perf-<config>-<n>, and <slug>-perf-mobile-<platform>-<n> on Mobile tests;
+          # llm's and translation's slugs differ from their report names.
+          SLUG="$ARTIFACT_ADDON"
+          case "$ARTIFACT_ADDON" in
+            llamacpp-llm) SLUG=llm-llamacpp ;;
+            nmtcpp) SLUG=translation-nmtcpp ;;
+          esac
           case "$PERF_WORKFLOW" in
-            "PR build and test"|"Mobile tests"|"Benchmarks") FILTER_ARGS+=(--artifact-pattern "${ARTIFACT_ADDON}-perf-*") ;;
+            "PR build and test"|"Benchmarks") FILTER_ARGS+=(--artifact-pattern "${SLUG}-perf-*") ;;
+            "Mobile tests") FILTER_ARGS+=(--artifact-pattern "${SLUG}-perf-mobile-*") ;;
           esac
           # ACE-Step rows arrive in two differently shaped artifacts (desktop
           # rtf-benchmark-*.json and the canonical mobile report), which the
@@ -119,20 +122,24 @@ jobs:
           echo "=== Vision/LLM (Desktop) ==="
           node scripts/perf-report/aggregate.js \
             --addon llamacpp-llm \
-            --workflow "Integration Tests (LLM)" \
+            --workflow "PR build and test" \
+            --artifact-pattern "llm-llamacpp-perf-*" \
             --runs 6 \
             --output reports/llamacpp-llm-performance.md \
             --output-json reports/llamacpp-llm-performance.json \
-            --output-html reports/llamacpp-llm-performance.html || true
+            --output-html reports/llamacpp-llm-performance.html \
+            || echo "::warning::Vision/LLM (Desktop): no runs or artifacts found"
 
           echo "=== Vision/LLM (Mobile) ==="
           node scripts/perf-report/aggregate.js \
             --addon llamacpp-llm \
-            --workflow "Mobile Integration Tests (LLM)" \
+            --workflow "Mobile tests" \
+            --artifact-pattern "llm-llamacpp-perf-mobile-*" \
             --runs 6 \
             --output reports/llamacpp-llm-mobile-performance.md \
             --output-json reports/llamacpp-llm-mobile-performance.json \
-            --output-html reports/llamacpp-llm-mobile-performance.html || true
+            --output-html reports/llamacpp-llm-mobile-performance.html \
+            || echo "::warning::Vision/LLM (Mobile): no runs or artifacts found"
 
           # QVAC-18298: VLM perf-regression section — re-aggregate the LLM
           # runs filtered to the Qwen3.5-VL + Gemma4-VL rows. Platform x
@@ -141,31 +148,38 @@ jobs:
           echo "=== VLM (Desktop) ==="
           node scripts/perf-report/aggregate.js \
             --addon llamacpp-llm \
-            --workflow "Integration Tests (LLM)" \
+            --workflow "PR build and test" \
+            --artifact-pattern "llm-llamacpp-perf-*" \
             --runs 6 \
             --filter "gemma4-vl|qwen3.5-vl" \
             --output reports/vlm-performance.md \
             --output-json reports/vlm-performance.json \
-            --output-html reports/vlm-performance.html || true
+            --output-html reports/vlm-performance.html \
+            || echo "::warning::VLM (Desktop): no runs or artifacts found"
 
           echo "=== VLM (Mobile) ==="
           node scripts/perf-report/aggregate.js \
             --addon llamacpp-llm \
-            --workflow "Mobile Integration Tests (LLM)" \
+            --workflow "Mobile tests" \
+            --artifact-pattern "llm-llamacpp-perf-mobile-*" \
             --runs 6 \
             --filter "gemma4-vl|qwen3.5-vl" \
             --output reports/vlm-mobile-performance.md \
             --output-json reports/vlm-mobile-performance.json \
-            --output-html reports/vlm-mobile-performance.html || true
+            --output-html reports/vlm-mobile-performance.html \
+            || echo "::warning::VLM (Mobile): no runs or artifacts found"
 
+          # asr's mobile runs, Parakeet included, upload <slug>-perf-mobile-* from the contract's Mobile tests.
           echo "=== Parakeet (Mobile) ==="
           node scripts/perf-report/aggregate.js \
-            --addon parakeet \
-            --workflow "Mobile Integration Tests (Parakeet)" \
+            --addon asr-ggml \
+            --workflow "Mobile tests" \
+            --artifact-pattern "asr-ggml-perf-mobile-*" \
             --runs 6 \
             --output reports/parakeet-mobile-performance.md \
             --output-json reports/parakeet-mobile-performance.json \
-            --output-html reports/parakeet-mobile-performance.html || true
+            --output-html reports/parakeet-mobile-performance.html ||
+            echo "::warning::Parakeet (Mobile): no Mobile tests runs or asr-ggml-perf-mobile-* artifacts found"
 
           echo "=== Diffusion (Desktop) ==="
           node scripts/perf-report/aggregate.js \

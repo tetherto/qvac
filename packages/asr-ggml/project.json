@@ -234,6 +234,7 @@
         "commands": [
           "ASAN_OPTIONS=alloc_dealloc_mismatch=0:detect_leaks=0:abort_on_error=1 LSAN_OPTIONS=suppressions=$PWD/.lsan-suppressions.txt QVAC_TEST_GGUF=$PWD/models/sortformer-4spk-v1.q4_0.gguf npm run test:cpp:run",
           "npm run coverage:cpp:report",
+          "node --test scripts/__tests__/run-cpp-fuzz.test.js",
           "npm run fuzz:build",
           "npm run fuzz:run"
         ]
