@@ -169,11 +169,11 @@
     "bare-path": "^3.0.0"
   },
   "optionalDependencies": {
-    "@qvac/diffusion-cpp-linux-x64": "0.33.0",
-    "@qvac/diffusion-cpp-linux-arm64": "0.33.0",
-    "@qvac/diffusion-cpp-darwin-arm64": "0.33.0",
-    "@qvac/diffusion-cpp-darwin-x64": "0.33.0",
-    "@qvac/diffusion-cpp-win32-x64": "0.33.0"
+    "@qvac/diffusion-cpp-linux-x64": "0.34.0",
+    "@qvac/diffusion-cpp-linux-arm64": "0.34.0",
+    "@qvac/diffusion-cpp-darwin-arm64": "0.34.0",
+    "@qvac/diffusion-cpp-darwin-x64": "0.34.0",
+    "@qvac/diffusion-cpp-win32-x64": "0.34.0"
   },
   "engines": {
     "bare": ">=1.24.0"
