@@ -57,7 +57,7 @@ class Socket extends EventEmitter {
     microtask(() => done(null))
   }
 }
-function fixture(host?: string) {
+function fixture(host?: string, accept?: Parameters<typeof createLanDiscovery>[0]['accept']) {
   let entries = [lan]
   const sockets: Socket[] = []
   const messages: string[] = []
@@ -65,6 +65,7 @@ function fixture(host?: string) {
   const resource = createLanDiscovery(
     {
       ...(host ? { host } : {}),
+      ...(accept ? { accept } : {}),
       onmessage: (_frame, address) => messages.push(address),
       onstop: (error) => {
         if (error) errors.push(error)
@@ -405,4 +406,91 @@ test('LAN startup cancellation before bind settles and normal resume reports act
     await resource.close()
   }
   t.is(getRegisteredResourceCounts().swarms, 0)
+})
+
+test('LAN irrelevant traffic consumes raw capacity without consuming useful admission', async (t) => {
+  let checked = 0
+  const f = fixture(undefined, (packet) => {
+    checked++
+    return packet[0] === 1
+  })
+  try {
+    await f.resource.start()
+    const socket = f.sockets[0]
+    const valid = Buffer.alloc(55, 1)
+    for (let i = 0; i < 256; i++) {
+      socket.emit('message', Buffer.alloc(54), { address: '192.168.1.3', family: 'IPv4' })
+      socket.emit('message', valid, { address: '10.0.0.3', family: 'IPv4' })
+      socket.emit('message', Buffer.alloc(55), { address: '192.168.1.3', family: 'IPv4' })
+    }
+    socket.emit('message', valid, { address: '192.168.1.3', family: 'IPv6' })
+    socket.emit('message', valid, { address: '192.168.1.4', family: 'IPv4' })
+    t.alike(f.messages, ['192.168.1.4'])
+    t.is(checked, 257, 'size, family and subnet checks precede protocol acceptance')
+  } finally {
+    await f.resource.close()
+  }
+})
+
+test('LAN raw and useful ceilings bound sustained work and reserve capacity for another source', async (t) => {
+  let checked = 0
+  const f = fixture(undefined, (packet) => {
+    checked++
+    return packet[0] === 1
+  })
+  try {
+    await f.resource.start()
+    const socket = f.sockets[0]
+    const packet = Buffer.alloc(55, 1)
+    for (let i = 0; i < 1000; i++) {
+      socket.emit('message', packet, { address: '192.168.1.3', family: 'IPv4' })
+    }
+    for (let i = 0; i < 16; i++) {
+      socket.emit('message', packet, { address: '192.168.1.4', family: 'IPv4' })
+    }
+    t.is(f.messages.filter((host) => host === '192.168.1.3').length, 32)
+    t.is(f.messages.filter((host) => host === '192.168.1.4').length, 16)
+    for (let i = 0; i < 10000; i++) {
+      socket.emit('message', packet, { address: '192.168.1.5', family: 'IPv4' })
+    }
+    t.ok(checked <= 1024, 'raw ceiling bounds protocol work even during sustained traffic')
+    const delivered = f.messages.length
+    socket.emit('message', packet, { address: '192.168.1.6', family: 'IPv4' })
+    t.is(f.messages.length, delivered, 'valid traffic above the raw ceiling is dropped')
+    await new Promise<void>((resolve) => setTimeout(resolve, 1050))
+    for (let host = 1; host <= 9; host++) {
+      for (let i = 0; i < 32; i++) {
+        socket.emit('message', packet, { address: `192.168.1.${host}`, family: 'IPv4' })
+      }
+    }
+    t.is(
+      f.messages.length - delivered,
+      256,
+      'useful admission has its own ceiling after window reset'
+    )
+  } finally {
+    await f.resource.close()
+  }
+})
+
+test('LAN useful source counters are bounded and reset each receive window', async (t) => {
+  const f = fixture(undefined, () => true)
+  try {
+    await f.resource.start()
+    const socket = f.sockets[0]
+    const packet = Buffer.alloc(55)
+    for (let host = 1; host <= 128; host++) {
+      socket.emit('message', packet, { address: `192.168.1.${host}`, family: 'IPv4' })
+    }
+    t.is(f.messages.length, 64, 'new source counters stop at their storage bound')
+    socket.emit('message', packet, { address: '192.168.1.1', family: 'IPv4' })
+    t.is(f.messages.length, 65, 'existing counters remain usable when source storage is full')
+    socket.emit('message', packet, { address: '192.168.1.200', family: 'IPv4' })
+    t.is(f.messages.length, 65)
+    await new Promise<void>((resolve) => setTimeout(resolve, 1050))
+    socket.emit('message', packet, { address: '192.168.1.200', family: 'IPv4' })
+    t.is(f.messages.at(-1), '192.168.1.200')
+  } finally {
+    await f.resource.close()
+  }
 })

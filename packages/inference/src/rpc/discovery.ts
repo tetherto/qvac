@@ -218,6 +218,7 @@ export async function discoverRpcEndpoints(
   }
 
   const transport = (deps.createTransport ?? createLanDiscovery)({
+    accept: (frame) => !!parseAnnouncement(frame, hash),
     onmessage(frame, host) {
       if (Date.now() >= deadline || ctx.signal.aborted || transport.suspended) return
       const announcement = parseAnnouncement(frame, hash)

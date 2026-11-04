@@ -82,6 +82,14 @@ session. The original deadline, 16 starts per source and 128 starts per lookup
 survive suspension. Source records and endpoint attempt records each remain
 bounded by 128.
 
+Each receiver drops raw datagrams above 1024 per one-second window before protocol
+parsing. Size, IPv4 family, connected-subnet source and protocol checks run before
+useful admission. Protocol checks stay in discovery and include header, version,
+topic and nonzero port. Useful admission permits 256 announcements per window,
+32 per source address and at most 64 source counters. Counters reset with the
+window. Invalid traffic can consume raw capacity but cannot spend useful capacity;
+traffic above the raw ceiling can still suppress discovery.
+
 `rpcServerStatusStream` reports current owned servers and subsequent changes,
 including normal advertisement suspension, terminal failure, recovery action and
 structured errors with their original cause. Subscribe without a server ID before

@@ -10,6 +10,11 @@ export const DISCOVERY_GROUP = '239.255.77.76'
 export const DISCOVERY_PORT = 49764
 export const ANNOUNCEMENT_BYTES = 55
 
+const RAW_DATAGRAMS_PER_SECOND = 1024
+const USEFUL_ANNOUNCEMENTS_PER_SECOND = 256
+const SOURCE_ANNOUNCEMENTS_PER_SECOND = 32
+const MAX_ANNOUNCEMENT_SOURCES = 64
+
 export interface LanInterface {
   name: string
   address: string
@@ -71,6 +76,7 @@ export interface LanDiscovery {
 
 interface LanOptions {
   host?: string
+  accept?(frame: Buffer, host: string): boolean
   onmessage?(frame: Buffer, host: string): void
   onstart?(): void
   onstop?(error?: Error): void
@@ -202,18 +208,42 @@ export function createLanDiscovery(
         for (const entry of selected) socket.addMembership(DISCOVERY_GROUP, entry.address)
         let window = Date.now()
         let packets = 0
+        let useful = 0
+        const sources = new Map<string, number>()
         socket.on('message', (frame, remote) => {
           if (state !== 'active' || activeScope.disposed) return
           if (Date.now() - window >= 1000) {
             window = Date.now()
             packets = 0
+            useful = 0
+            sources.clear()
           }
-          if (++packets > 256 || frame.length !== ANNOUNCEMENT_BYTES || remote.family !== 'IPv4') {
+          if (
+            ++packets > RAW_DATAGRAMS_PER_SECOND ||
+            frame.length !== ANNOUNCEMENT_BYTES ||
+            remote.family !== 'IPv4'
+          ) {
             return
           }
           try {
             checkNetwork()
-            if (isLocalSource(remote.address, selected)) options.onmessage?.(frame, remote.address)
+            if (
+              !isLocalSource(remote.address, selected) ||
+              options.accept?.(frame, remote.address) === false
+            ) {
+              return
+            }
+            const count = sources.get(remote.address) ?? 0
+            if (
+              useful >= USEFUL_ANNOUNCEMENTS_PER_SECOND ||
+              count >= SOURCE_ANNOUNCEMENTS_PER_SECOND ||
+              (!sources.has(remote.address) && sources.size >= MAX_ANNOUNCEMENT_SOURCES)
+            ) {
+              return
+            }
+            useful++
+            sources.set(remote.address, count + 1)
+            options.onmessage?.(frame, remote.address)
           } catch (error) {
             fail(error as Error)
           }

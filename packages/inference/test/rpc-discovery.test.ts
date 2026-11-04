@@ -1,5 +1,7 @@
 import test from 'brittle'
 import { Buffer } from 'bare-buffer'
+import EventEmitter from 'bare-events'
+import type { createSocket } from 'bare-dgram'
 import { advertiseRpcServer, discoverRpcEndpoints, parseAnnouncement } from '@/rpc/discovery'
 import { rpcTopic } from '@/rpc/network'
 import { ANNOUNCEMENT_BYTES, type LanDiscovery, createLanDiscovery } from '@/rpc/lan'
@@ -470,4 +472,50 @@ test('RPC expired resident candidates release capacity for a fresh source', asyn
   await new Promise<void>((resolve) => setTimeout(resolve, 3100))
   transport.announce('10.0.0.65')
   t.alike(await result, [{ url: '10.0.0.65:50052', ...inventory }])
+})
+
+test('RPC protocol admission survives irrelevant bursts and source flooding before inventory probes', async (t) => {
+  class Receiver extends EventEmitter {
+    bind(_port: number, _address: string, done: () => void) {
+      done()
+    }
+    close(done: () => void) {
+      this.emit('close')
+      done()
+    }
+    addMembership() {}
+  }
+  const registry = createRequestRegistry()
+  await using ctx = await registry.begin({ requestId: 'packet-admission', kind: 'rpcDiscovery' })
+  const socket = new Receiver()
+  const probes: string[] = []
+  const result = discoverRpcEndpoints('shared', 200, ctx, {
+    createTransport: (options) =>
+      createLanDiscovery(options, {
+        interfaces: () => [{ name: 'en0', address: '192.168.1.2', netmask: '255.255.255.0' }],
+        socket: (() => socket) as unknown as typeof createSocket
+      }),
+    probe: async (host, port) => {
+      probes.push(`${host}:${port}`)
+      return host === '192.168.1.4' ? inventory : undefined
+    }
+  })
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  const packet = (host: string, value: Buffer) =>
+    socket.emit('message', value, { address: host, family: 'IPv4' })
+  for (let i = 0; i < 256; i++) {
+    packet('192.168.1.3', Buffer.alloc(54))
+    packet('10.0.0.3', frame())
+    packet('192.168.1.3', frame('other'))
+  }
+  for (let port = 1; port <= 64; port++) packet('192.168.1.3', frame('shared', port))
+  packet('192.168.1.4', frame())
+  packet('192.168.1.4', frame('shared', 50053))
+  t.alike(await result, [
+    { url: '192.168.1.4:50052', ...inventory },
+    { url: '192.168.1.4:50053', ...inventory }
+  ])
+  t.ok(probes.filter((url) => url.startsWith('192.168.1.3:')).length <= 8)
+  t.ok(probes.includes('192.168.1.4:50052'))
+  t.is(getRegisteredResourceCounts().swarms, 0)
 })
