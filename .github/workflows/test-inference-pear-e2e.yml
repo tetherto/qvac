@@ -82,13 +82,28 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
 
-      # Keeps the registry download off the release path.
+      # Keeps the registry download off the release path. Keyed on the checksum
+      # of the model worker.mjs loads, so other registry edits keep the cache.
+      - name: Model cache key
+        id: model-key
+        shell: bash
+        run: |
+          node - <<'EOF'
+          const fs = require('fs')
+          const worker = fs.readFileSync('packages/inference/e2e/pear/app/worker.mjs', 'utf8')
+          const models = fs.readFileSync('packages/inference/src/models/registry/models.ts', 'utf8')
+          const name = /modelSrc: (\w+)/.exec(worker)?.[1]
+          const sha = new RegExp(`name: '${name}',[^}]*?sha256Checksum: '([0-9a-f]{64})'`).exec(models)?.[1]
+          if (!sha) console.log(`::warning::No checksum for ${name}; using a fixed cache key`)
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `key=pear-e2e-models-${sha ?? 'unknown'}\n`)
+          EOF
+
       - name: Restore model cache
         id: models
         uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
         with:
           path: .pear-e2e-models
-          key: pear-e2e-models-${{ hashFiles('packages/inference/e2e/pear/app/worker.mjs', 'packages/inference/src/models/registry/models.ts') }}
+          key: ${{ steps.model-key.outputs.key }}
           enableCrossOsArchive: true
 
       - name: Download inference dist artifact
