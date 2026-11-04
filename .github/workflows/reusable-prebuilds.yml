@@ -456,10 +456,6 @@ jobs:
           gfx: ${{ inputs.rocm-gfx }}
           sha256: ${{ inputs.rocm-sha256 }}
 
-      - if: ${{ inputs.include-xdna && matrix.platform == 'linux' && matrix.arch == 'x64' }}
-        name: Setup XRT and IRON for the XDNA backend
-        uses: tetherto/qvac/.github/actions/setup-xdna@48260f3d77e807a226a63afc159d39e265eca3a3 # XDNA toolchain setup
-
       # QVAC-24442: the arm64 runner has no GPU, which is fine. The toolkit is
       # compile-only and the CUDA backend is a runtime-loaded module that never
       # engages without a device.
