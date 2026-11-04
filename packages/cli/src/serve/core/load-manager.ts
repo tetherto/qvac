@@ -146,10 +146,7 @@ export function createLoadManager(
       if (!entry) throw new Error(`Model "${alias}" not registered`)
       if (entry.state === registry.STATES.READY) return
 
-      const displaySrc =
-        typeof entry.modelSrc === 'string'
-          ? entry.modelSrc || 'bundled weights'
-          : entry.modelSrc.src
+      const displaySrc = typeof entry.modelSrc === 'string' ? entry.modelSrc : entry.modelSrc.src
       logger.info(`Loading model "${alias}" from ${displaySrc}...`)
       registry.setLoading(alias)
 
