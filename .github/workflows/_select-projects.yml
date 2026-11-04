@@ -41,6 +41,12 @@ on:
       any:
         description: true when any package was selected
         value: ${{ jobs.select.outputs.any }}
+      base:
+        description: The commit the selection compared from, a merge base for a PR; empty when nothing was compared
+        value: ${{ jobs.select.outputs.base }}
+      head:
+        description: The commit the selection compared to; empty when nothing was compared
+        value: ${{ jobs.select.outputs.head }}
 
 permissions:
   contents: read
@@ -54,6 +60,8 @@ jobs:
       projects: ${{ steps.select.outputs.projects }}
       runners: ${{ steps.select.outputs.runners }}
       any: ${{ steps.select.outputs.any }}
+      base: ${{ steps.select.outputs.base }}
+      head: ${{ steps.select.outputs.head }}
     steps:
       # Actions and settings both come from here, so this is a full checkout of the trusted ref.
       - name: Checkout actions and settings

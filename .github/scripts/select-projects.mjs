@@ -557,6 +557,8 @@ function main(env) {
   })
   // affected stays null for "every tagged package": no change worth comparing, or commits that could not be fetched.
   let affected = null
+  // The commits compared, for a package's own checks to diff; empty when nothing was compared.
+  let compared = { base: '', head: '' }
   if (range.explicit) {
     affected = Object.values(graph.nodes)
       .filter(
@@ -569,6 +571,7 @@ function main(env) {
   } else if (!range.all) {
     try {
       const { base, head } = shas(range)
+      compared = { base, head }
       console.log(`Comparing ${base}..${head}`)
       affected = JSON.parse(
         nx(['show', 'projects', '--affected', `--base=${base}`, `--head=${head}`, '--json'])
@@ -609,7 +612,7 @@ function main(env) {
     )
   appendFileSync(
     env.GITHUB_OUTPUT,
-    `matrices=${JSON.stringify(result.matrices)}\nprojects=${JSON.stringify(result.projects)}\nrunners=${JSON.stringify(labels)}\nany=${result.projects.length > 0}\n`
+    `matrices=${JSON.stringify(result.matrices)}\nprojects=${JSON.stringify(result.projects)}\nrunners=${JSON.stringify(labels)}\nany=${result.projects.length > 0}\nbase=${compared.base}\nhead=${compared.head}\n`
   )
 }
 

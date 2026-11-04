@@ -200,6 +200,9 @@ jobs:
       NX_DAEMON: "false"
       NX_NO_CLOUD: "true"
       PROJECT: ${{ matrix.project.name }}
+      # The commits the selection compared, for a package whose checks run only on some of its changes.
+      BASE_SHA: ${{ needs.select.outputs.base }}
+      HEAD_SHA: ${{ needs.select.outputs.head }}
       SOURCE: >-
         ${{ needs.train.outputs.source || (contains(matrix.project.sources, 'workspace') && 'workspace')
         || (contains(matrix.project.sources, 'npm') && 'npm') || (contains(matrix.project.sources, 'self') && 'self') || '' }}
