@@ -379,30 +379,34 @@ class FFmpegDecoder {
         // Track codec info in stats
         run.stats.codecName = stream.codec.name;
         run.stats.inputSampleRate = stream.codecParameters.sampleRate;
-        const packet = new ffmpegRuntime.Packet();
-        const raw = new ffmpegRuntime.Frame();
-        const resampler = new ffmpegRuntime.Resampler(stream.codecParameters.sampleRate, stream.codecParameters.channelLayout, stream.codecParameters.format, OUTPUT_SAMPLE_RATE, OUTPUT_CHANNEL_LAYOUT, OUTPUT_FORMAT);
-        const decoder = stream.decoder();
-        decoder.open();
-        // Auto-detect encoder delay: lossy codecs need ~400ms skipped to remove artifacts
-        const codecName = stream.codec.name.toLowerCase();
-        const SKIP_MS = {
-            mp3: 400,
-            vorbis: 400,
-            opus: 150,
-            aac: 300,
-        };
-        const skipMs = SKIP_MS[codecName] || 0;
-        run.samplesSkipped = 0;
-        run.totalSkipSamples = Math.floor((OUTPUT_SAMPLE_RATE * skipMs) / 1000);
-        if (this._activeRun === run) {
-            this.samplesSkipped = 0;
-            this.totalSkipSamples = run.totalSkipSamples;
-        }
-        if (run.totalSkipSamples > 0) {
-            this.logger.info(`[FFmpegDecoder] Skipping ${skipMs}ms (${run.totalSkipSamples} samples) for ${codecName} to remove encoder artifacts`);
-        }
+        let packet = null;
+        let raw = null;
+        let resampler = null;
+        let decoder = null;
         try {
+            packet = new ffmpegRuntime.Packet();
+            raw = new ffmpegRuntime.Frame();
+            resampler = new ffmpegRuntime.Resampler(stream.codecParameters.sampleRate, stream.codecParameters.channelLayout, stream.codecParameters.format, OUTPUT_SAMPLE_RATE, OUTPUT_CHANNEL_LAYOUT, OUTPUT_FORMAT);
+            decoder = stream.decoder();
+            decoder.open();
+            // Auto-detect encoder delay: lossy codecs need ~400ms skipped to remove artifacts
+            const codecName = stream.codec.name.toLowerCase();
+            const SKIP_MS = {
+                mp3: 400,
+                vorbis: 400,
+                opus: 150,
+                aac: 300,
+            };
+            const skipMs = SKIP_MS[codecName] || 0;
+            run.samplesSkipped = 0;
+            run.totalSkipSamples = Math.floor((OUTPUT_SAMPLE_RATE * skipMs) / 1000);
+            if (this._activeRun === run) {
+                this.samplesSkipped = 0;
+                this.totalSkipSamples = run.totalSkipSamples;
+            }
+            if (run.totalSkipSamples > 0) {
+                this.logger.info(`[FFmpegDecoder] Skipping ${skipMs}ms (${run.totalSkipSamples} samples) for ${codecName} to remove encoder artifacts`);
+            }
             await this._processPacket(format, packet, raw, decoder, resampler, run);
             const output = new ffmpegRuntime.Frame();
             try {
@@ -424,10 +428,10 @@ class FFmpegDecoder {
             }
         }
         finally {
-            decoder.destroy();
-            resampler.destroy();
-            raw.destroy();
-            packet.destroy();
+            decoder?.destroy();
+            resampler?.destroy();
+            raw?.destroy();
+            packet?.destroy();
         }
     }
     async _collectStreamData(audioStream, run) {
