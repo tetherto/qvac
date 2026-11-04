@@ -3,10 +3,11 @@
 // on the CI contract, checks their project.json against the standard (docs/ci/workflow-standard.md), and turns each
 // target's configurations into job rows.
 
-import { appendFileSync, readFileSync } from 'node:fs'
+import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { CPP_TEST_KEYS, PREBUILD_KEYS } from './prebuild-status/lib.mjs'
 
@@ -318,6 +319,46 @@ export function shas(range, run = git) {
   }
 }
 
+const LOCKFILE_SELECTION = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '../actions/nx-project-matrix/lockfile-selection.mjs'
+)
+
+// main's lockfile selection, which Nx misses since nx.json sets projectsAffectedByDependencyUpdates to []: a lockfile
+// change adds the packages whose installed dependencies changed and their dependents, and a root package.json, .npmrc
+// or pnpmfile change selects every package. Returns lockfile-selection.mjs's { mode: 'all' | '', extra: [names] }.
+export function lockfileSelection({ base, head }, run = git, root = '.') {
+  const paths = run(['diff', '--name-only', base, head])
+  if (!paths.split('\n').includes('pnpm-lock.yaml')) return { mode: '', extra: [] }
+  const dir = mkdtempSync(join(tmpdir(), 'lockfile-'))
+  const files = []
+  for (const name of ['pnpm-lock.yaml', 'pnpm-workspace.yaml']) {
+    for (const [rev, side] of [
+      [base, 'base'],
+      [head, 'head']
+    ]) {
+      const file = join(dir, `${side}-${name}`)
+      // A revision without the file leaves no file, which lockfile-selection.mjs reads as every package.
+      try {
+        writeFileSync(file, run(['show', `${rev}:${name}`]))
+      } catch {}
+      files.push(file)
+    }
+  }
+  return JSON.parse(
+    execFileSync('node', [LOCKFILE_SELECTION, root, ...files], {
+      input: `${paths}\n`,
+      encoding: 'utf8'
+    })
+  )
+}
+
+// The graph's projects a list names, by Nx name or package directory.
+const byName = (graph, names) =>
+  Object.values(graph.nodes)
+    .filter((n) => names.includes(n.name) || names.includes(n.data.root.split('/').pop()))
+    .map((n) => n.name)
+
 function main(env) {
   const event = JSON.parse(readFileSync(env.GITHUB_EVENT_PATH, 'utf8'))
   const targets = env.TARGETS.split(/[\s,]+/).filter(Boolean)
@@ -343,12 +384,7 @@ function main(env) {
   // affected stays null for "every tagged package": no change worth comparing, or commits that could not be fetched.
   let affected = null
   if (range.explicit) {
-    affected = Object.values(graph.nodes)
-      .filter(
-        (n) =>
-          range.explicit.includes(n.name) || range.explicit.includes(n.data.root.split('/').pop())
-      )
-      .map((n) => n.name)
+    affected = byName(graph, range.explicit)
   } else if (!range.all) {
     try {
       const { base, head } = shas(range)
@@ -356,7 +392,20 @@ function main(env) {
       affected = JSON.parse(
         nx(['show', 'projects', '--affected', `--base=${base}`, `--head=${head}`, '--json'])
       )
+      const lock = lockfileSelection({ base, head })
+      if (lock.mode === 'all') {
+        console.log(
+          '::notice::pnpm-lock.yaml changed in a way no single package owns; selecting every tagged package'
+        )
+        affected = null
+      } else if (lock.extra.length) {
+        console.log(
+          `::notice::installed dependencies changed in ${lock.extra.join(' ')} and their dependents; selected too`
+        )
+        affected = [...new Set([...affected, ...byName(graph, lock.extra)])]
+      }
     } catch (e) {
+      affected = null
       console.log(
         `::warning::could not compare ${range.base}..${range.head}, selecting every tagged package: ${e.message}`
       )
