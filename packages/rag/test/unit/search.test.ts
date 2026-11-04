@@ -228,11 +228,13 @@ test('an aborted signal cancels the search', async (t) => {
     'already aborted'
   )
 
-  // Aborts on the second check, i.e. between scan batches.
+  // `aborted` is read by input validation, at scan entry, then once per scored
+  // batch. Aborting on the fourth read means the first batch was scored and the
+  // scan stopped at the check before the second.
   let checks = 0
   const midScan = {
     get aborted() {
-      return ++checks > 1
+      return ++checks > 3
     }
   } as AbortSignal
   await rejectsWithCode(
@@ -241,6 +243,7 @@ test('an aborted signal cancels the search', async (t) => {
     ERR_CODES.OPERATION_CANCELLED,
     'aborted between batches'
   )
+  t.is(checks, 4, 'the scan scored one batch before stopping')
 
   await rejectsWithCode(
     t,
