@@ -1,4 +1,11 @@
-import type { TranscribeSegment } from '@qvac/sdk'
+import type { TranscribeSegment as SdkTranscribeSegment } from '@qvac/sdk'
+
+export type TranscribeSegment = SdkTranscribeSegment & {
+  language?: string
+  noSpeechProb?: number
+  speakerTurnNext?: boolean
+  tokens?: { text: string; startMs: number; endMs: number; probability: number }[]
+}
 
 export type TimedTranscriptionFormat = 'srt' | 'vtt' | 'verbose_json'
 

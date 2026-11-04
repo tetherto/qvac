@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import type { TranscribeSegment } from '@qvac/sdk'
+import type { TranscribeSegment } from '@/lib/api/lib/transcription-response'
 import {
   formatTimedTranscription,
   isTimedTranscriptionFormat

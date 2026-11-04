@@ -68,7 +68,7 @@ class Reply implements HttpReply {
     return this
   }
   send(payload?: unknown): this {
-    if (this.raw.writableEnded) return this
+    if (this.raw.writableEnded || this.raw.destroyed) return this
     if (payload instanceof Readable) {
       this.taken = true
       payload.once('error', (error) => this.raw.destroy(error))
