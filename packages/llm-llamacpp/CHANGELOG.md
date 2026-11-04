@@ -5,10 +5,12 @@
 ### Changed
 
 - `@qvac/fabric` dependency bumped `^0.25.0` -> `^0.26.0`, which carries
-  `qvac-fabric` `11259.2.0#2` -> `11739.0.0`
+  `qvac-fabric` `11259.2.0` -> `11739.0.0`
   ([#5331](https://github.com/tetherto/qvac/pull/5331)):
-  a rebase onto upstream llama.cpp b11739, TurboVec 1.1.2 and an mtmd
-  tiled-image fix. A caret on a `0.x` version locks the minor, so `^0.25.0`
+  a rebase onto upstream llama.cpp b11739, TurboVec 1.1.2, an mtmd
+  image-resize fix, and Linux CUDA, Jetson and HIP backend modules that load
+  in hosts without libstdc++ (such as `bare-sidecar`) instead of falling back
+  to the CPU. A caret on a `0.x` version locks the minor, so `^0.25.0`
   would not have resolved `0.26.0` on its own. The mobile dev dependencies
   `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.26.0` with it.
 - `@qvac/fabric` 0.26.0 changes the `common` library's API and is not
@@ -23,8 +25,7 @@
 ### Fixed
 
 - Dynamic image resizing rounds half-way dimensions to even, as the reference
-  implementation does, and tiled images keep their chunk geometry, so image
-  prompt token counts can differ from 0.67.0
+  implementation does, so image prompt token counts can differ from 0.67.0
   ([#5331](https://github.com/tetherto/qvac/pull/5331)).
 
 ## [0.67.0] - 2026-11-02
