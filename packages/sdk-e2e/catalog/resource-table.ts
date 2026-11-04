@@ -109,6 +109,12 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: { ctx_size: 4096, tools: true }
   },
 
+  'tools-no-shared-cache': {
+    constant: { $const: 'QWEN3_1_7B_INST_Q4' },
+    type: 'llamacpp-completion',
+    config: { ctx_size: 4096, tools: true, cache_share_across_keys: false }
+  },
+
   'prefill-llm': {
     constant: { $const: 'QWEN3_5_0_8B_MULTIMODAL_Q4_K_M' },
     type: 'llamacpp-completion',
