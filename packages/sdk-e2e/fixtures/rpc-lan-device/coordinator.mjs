@@ -1,9 +1,15 @@
 import http from 'node:http'
 import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { collectBuildMetadata } from './build-metadata.mjs'
+import { describeError } from './diagnostics.mjs'
 import {
   startRpcServer,
   stopRpcServer,
   discoverRpcServers,
+  rpcServerStatusStream,
+  subscribeServerLogs,
   loadModel,
   completion,
   unloadModel,
@@ -15,7 +21,42 @@ const model = process.env.QVAC_RPC_LAN_MODEL_PATH
 if (!model || !fs.existsSync(model))
   throw new Error('Set QVAC_RPC_LAN_MODEL_PATH to a cached GGUF model')
 const topic = `qvac-rpc-lan-device-${Date.now()}`
-const server = await startRpcServer({ allowNonLoopbackHost: true, discoveryTopic: topic })
+const sdk = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../sdk')
+const metadata = {
+  ...(await collectBuildMetadata(sdk)),
+  model: { filename: path.basename(model), bytes: fs.statSync(model).size }
+}
+const lanAddresses = process.env.QVAC_RPC_LAN_ADDRESSES?.split(',')
+const nativeLogs = []
+const health = []
+const unsubscribeLogs = subscribeServerLogs((record) => {
+  const captured = { ...record, message: record.message.slice(0, 1024), at: Date.now() }
+  nativeLogs.push(captured)
+  if (nativeLogs.length > 64) nativeLogs.shift()
+  console.log('NATIVE', JSON.stringify(captured))
+})
+const statusController = new AbortController()
+void (async () => {
+  for await (const status of rpcServerStatusStream({}, { signal: statusController.signal })) {
+    const captured = {
+      ...status,
+      reason: status.reason.slice(0, 512),
+      error: status.error && describeError(status.error),
+      at: Date.now()
+    }
+    health.push(captured)
+    if (health.length > 16) health.shift()
+    console.log('HEALTH', JSON.stringify(captured))
+  }
+})().catch((error) => {
+  if (!statusController.signal.aborted) console.error('HEALTH_STREAM_FAILED', error)
+})
+const server = await startRpcServer({
+  allowNonLoopbackHost: true,
+  discoveryTopic: topic,
+  host: process.env.QVAC_RPC_LAN_HOST,
+  lanAddresses
+})
 const host = server.url.split(':')[0]
 const tasks = new Map([
   ['android', []],
@@ -41,7 +82,14 @@ const api = http.createServer(async (request, response) => {
   try {
     const url = new URL(request.url, 'http://localhost')
     if (url.pathname === '/info')
-      return reply(response, { topic, server, peers: Object.fromEntries(peers) })
+      return reply(response, {
+        topic,
+        server,
+        peers: Object.fromEntries(peers),
+        metadata,
+        health,
+        nativeLogs
+      })
     if (url.pathname === '/results') return reply(response, results)
     if (url.pathname === '/enqueue' && request.method === 'POST') {
       const task = await json(request)
@@ -88,12 +136,17 @@ const api = http.createServer(async (request, response) => {
       return stream.pipe(response)
     }
     if (url.pathname === '/discover')
-      return reply(response, await discoverRpcServers({ topic, timeoutMs: 5000 }))
+      return reply(response, await discoverRpcServers({ topic, timeoutMs: 5000, lanAddresses }))
     if (url.pathname === '/infer' && request.method === 'POST') {
       const options = await json(request)
-      const servers = (await discoverRpcServers({ topic, timeoutMs: 5000 })).filter(
-        ({ url }) => !options.remoteOnly || url !== server.url
-      )
+      const started = Date.now()
+      const servers = (
+        await discoverRpcServers({
+          topic,
+          timeoutMs: 5000,
+          lanAddresses: options.lanAddresses ?? lanAddresses
+        })
+      ).filter(({ url }) => !options.remoteOnly || url !== server.url)
       if (!servers.length) throw new Error('No remote servers discovered')
       const devices = getRpcDeviceMap(servers).filter(
         (device) => device.totalMemory > 0 && device.freeMemory > 0
@@ -123,7 +176,18 @@ const api = http.createServer(async (request, response) => {
         let text = ''
         for await (const token of run.tokenStream) text += token
         if (!text.toLowerCase().includes('hello')) throw new Error(`Unexpected completion: ${text}`)
-        return reply(response, { text, servers, devices })
+        return reply(response, {
+          text,
+          servers,
+          devices,
+          metadata,
+          executionEvidence: {
+            status: 'pending-external-verification',
+            required:
+              'Native server graph or tensor execution records tied to the selected endpoints',
+            nativeLogs: nativeLogs.filter(({ at }) => at >= started)
+          }
+        })
       } finally {
         await unloadModel({ modelId, autoClose: false })
       }
@@ -136,6 +200,8 @@ const api = http.createServer(async (request, response) => {
 await new Promise((resolve) => api.listen(19764, host, resolve))
 console.log('READY', JSON.stringify({ coordinator: `http://${host}:19764`, topic, server }))
 async function stop() {
+  statusController.abort()
+  unsubscribeLogs()
   api.closeAllConnections()
   api.close()
   await stopRpcServer({ serverId: server.serverId })

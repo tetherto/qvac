@@ -25,10 +25,12 @@ module.exports = (config) => {
       qvacMulticastLock = it
     }
     if (!lock.isHeld) lock.acquire()
+    android.util.Log.i("QvacRpcLan", "multicast_lock held=\${lock.isHeld} action=resume elapsedMs=\${android.os.SystemClock.elapsedRealtime()}")
   }
 
   override fun onPause() {
     qvacMulticastLock?.let { if (it.isHeld) it.release() }
+    android.util.Log.i("QvacRpcLan", "multicast_lock held=\${qvacMulticastLock?.isHeld ?: false} action=pause elapsedMs=\${android.os.SystemClock.elapsedRealtime()}")
     super.onPause()
   }
 `

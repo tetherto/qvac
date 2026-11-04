@@ -1,5 +1,6 @@
 import {
   startRpcServer,
+  rpcServerStatusStream,
   getRpcDeviceMap,
   stopRpcServer,
   discoverRpcServers,
@@ -24,7 +25,12 @@ export class RpcServerExecutor extends BaseExecutor<typeof rpcServerTests> {
     'rpc-server-empty-discovery': this.empty.bind(this),
     'rpc-server-unknown-stop': this.unknown.bind(this),
     'rpc-server-unsafe-advertisement': this.unsafe.bind(this),
-    'rpc-server-cancel-discovery': this.cancelDiscovery.bind(this)
+    'rpc-server-cancel-discovery': this.cancelDiscovery.bind(this),
+    'rpc-server-status-lifecycle': this.statusLifecycle.bind(this),
+    'rpc-server-status-abort': this.statusAbort.bind(this),
+    'rpc-server-status-invalid-id': this.invalidStatus.bind(this),
+    'rpc-server-lan-invalid-serve': this.invalidLanServe.bind(this),
+    'rpc-server-lan-invalid-lookup': this.invalidLanLookup.bind(this)
   }
 
   async deviceMap(_params: object, expectation: Expectation): Promise<TestResult> {
@@ -132,6 +138,131 @@ export class RpcServerExecutor extends BaseExecutor<typeof rpcServerTests> {
       )
       await Promise.allSettled([selected, other])
     }
+  }
+
+  async statusLifecycle(_params: object, expectation: Expectation): Promise<TestResult> {
+    const server = await startRpcServer()
+    let stopped = false
+    const controller = new AbortController()
+    const updates = rpcServerStatusStream(
+      { serverId: server.serverId },
+      { signal: controller.signal }
+    )
+    try {
+      const snapshot = await updates.next()
+      if (
+        snapshot.done ||
+        snapshot.value.serverId !== server.serverId ||
+        snapshot.value.url !== server.url ||
+        snapshot.value.nativeState !== 'owned' ||
+        snapshot.value.advertisement !== 'inactive' ||
+        snapshot.value.recovery !== 'none' ||
+        snapshot.value.error
+      ) {
+        throw new Error('Unexpected owned server status snapshot')
+      }
+      await stopRpcServer({ serverId: server.serverId })
+      stopped = true
+      const update = await updates.next()
+      if (
+        update.done ||
+        update.value.serverId !== server.serverId ||
+        update.value.nativeState !== 'stopped' ||
+        update.value.advertisement !== 'inactive'
+      ) {
+        throw new Error('Missing stopped status update')
+      }
+      return ValidationHelpers.validate('owned inactive snapshot; stopped update', expectation)
+    } finally {
+      controller.abort()
+      try {
+        await updates.return(undefined)
+      } finally {
+        if (!stopped) await stopRpcServer({ serverId: server.serverId })
+      }
+    }
+  }
+
+  async statusAbort(_params: object, expectation: Expectation): Promise<TestResult> {
+    const server = await startRpcServer()
+    const controller = new AbortController()
+    const updates = rpcServerStatusStream(
+      { serverId: server.serverId },
+      { signal: controller.signal }
+    )
+    try {
+      const initial = await updates.next()
+      if (initial.done || initial.value.nativeState !== 'owned')
+        throw new Error('Missing owned server snapshot')
+      const quiet = updates.next()
+      controller.abort()
+      if (!(await quiet).done) throw new Error('Aborted quiet status subscription did not end')
+      const unused = rpcServerStatusStream(
+        { serverId: server.serverId },
+        { signal: controller.signal }
+      )
+      if (!(await unused.next()).done)
+        throw new Error('Already aborted subscription emitted a status')
+      const current = rpcServerStatusStream({ serverId: server.serverId })
+      try {
+        const snapshot = await current.next()
+        if (
+          snapshot.done ||
+          snapshot.value.serverId !== server.serverId ||
+          snapshot.value.nativeState !== 'owned'
+        )
+          throw new Error('Subscription cancellation lost native ownership')
+      } finally {
+        await current.return(undefined)
+      }
+      return ValidationHelpers.validate(
+        'quiet subscription cancelled; server still owned; unused subscription closed',
+        expectation
+      )
+    } finally {
+      controller.abort()
+      try {
+        await updates.return(undefined)
+      } finally {
+        await stopRpcServer({ serverId: server.serverId })
+      }
+    }
+  }
+
+  async invalidStatus(_params: object, expectation: Expectation): Promise<TestResult> {
+    return this.expectError(async () => {
+      const controller = new AbortController()
+      const updates = rpcServerStatusStream({ serverId: '' }, { signal: controller.signal })
+      try {
+        await updates.next()
+      } finally {
+        controller.abort()
+        await updates.return(undefined)
+      }
+    }, expectation)
+  }
+
+  async invalidLanServe(_params: object, expectation: Expectation): Promise<TestResult> {
+    return this.expectError(async () => {
+      const server = await startRpcServer({
+        lanAddresses: ['8.8.8.8'],
+        allowNonLoopbackHost: true,
+        discoveryTopic: 'invalid-lan-selection'
+      })
+      await stopRpcServer({ serverId: server.serverId })
+    }, expectation)
+  }
+
+  async invalidLanLookup(_params: object, expectation: Expectation): Promise<TestResult> {
+    return this.expectError(
+      () =>
+        discoverRpcServers({
+          topic: 'invalid-lan-selection',
+          lanAddresses: ['8.8.8.8'],
+          timeoutMs: 100
+        }),
+      expectation
+    )
   }
 
   async expectError(work: () => Promise<unknown>, expectation: Expectation): Promise<TestResult> {

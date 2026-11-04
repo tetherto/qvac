@@ -46,6 +46,42 @@ export const rpcServerTests = [
   rpcServerUnsafeAdvertisement,
   rpcServerCancelDiscovery,
   {
+    testId: 'rpc-server-status-lifecycle',
+    params: {},
+    expectation: {
+      validation: 'contains-all',
+      contains: ['owned inactive snapshot', 'stopped update']
+    },
+    metadata: { category: 'rpc-server', dependency: 'none', estimatedDurationMs: 10000 }
+  },
+  {
+    testId: 'rpc-server-status-abort',
+    params: {},
+    expectation: {
+      validation: 'contains-all',
+      contains: ['quiet subscription cancelled', 'server still owned', 'unused subscription closed']
+    },
+    metadata: { category: 'rpc-server', dependency: 'none', estimatedDurationMs: 10000 }
+  },
+  {
+    testId: 'rpc-server-status-invalid-id',
+    params: {},
+    expectation: { validation: 'throws-error', errorContains: 'server' },
+    metadata: { category: 'rpc-server', dependency: 'none', estimatedDurationMs: 5000 }
+  },
+  {
+    testId: 'rpc-server-lan-invalid-serve',
+    params: {},
+    expectation: { validation: 'throws-error', errorContains: 'match' },
+    metadata: { category: 'rpc-server', dependency: 'none', estimatedDurationMs: 5000 }
+  },
+  {
+    testId: 'rpc-server-lan-invalid-lookup',
+    params: {},
+    expectation: { validation: 'throws-error', errorContains: 'match' },
+    metadata: { category: 'rpc-server', dependency: 'none', estimatedDurationMs: 5000 }
+  },
+  {
     testId: 'rpc-server-device-map',
     params: {},
     expectation: {

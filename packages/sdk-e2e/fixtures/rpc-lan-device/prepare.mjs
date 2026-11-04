@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { collectBuildMetadata } from './build-metadata.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const output = process.argv[2]
@@ -50,13 +51,25 @@ const pkg = {
 const write = (name, value) =>
   fs.writeFileSync(path.join(output, name), JSON.stringify(value, null, 2) + '\n')
 write('package.json', pkg)
-write('device-config.json', { coordinator: parsed.origin, engine: path.basename(pin) })
+write('device-config.json', {
+  coordinator: parsed.origin,
+  engine: path.basename(pin),
+  modelSrc: process.env.QVAC_RPC_LAN_MODEL_SRC ?? `${parsed.origin}/model.gguf`,
+  host: process.env.QVAC_RPC_LAN_HOST ?? null,
+  lanAddresses: process.env.QVAC_RPC_LAN_ADDRESSES?.split(',') ?? null,
+  metadata: await collectBuildMetadata(sdk, pkg.dependencies['react-native-bare-kit'])
+})
+write('tsconfig.json', {
+  extends: 'expo/tsconfig.base',
+  compilerOptions: { strict: true, noEmit: true, target: 'ES2022', lib: ['ES2022', 'DOM'] },
+  include: ['App.tsx', '*.d.mts', 'device-config.json']
+})
 write('qvac.config.json', {
   plugins: ['@qvac/sdk/llamacpp-completion/plugin'],
   rpcServerProvider: '@qvac/sdk/ggml-rpc-server/provider',
   includeAudioDecoder: false,
   loggerConsoleOutput: true,
-  loggerLevel: 'info'
+  loggerLevel: 'debug'
 })
 write('app.json', {
   expo: {
@@ -84,6 +97,14 @@ write('app.json', {
   }
 })
 fs.copyFileSync(path.join(here, 'App.tsx'), path.join(output, 'App.tsx'))
+for (const file of [
+  'lifecycle-coordinator.mjs',
+  'lifecycle-coordinator.d.mts',
+  'diagnostics.mjs',
+  'diagnostics.d.mts'
+]) {
+  fs.copyFileSync(path.join(here, file), path.join(output, file))
+}
 fs.copyFileSync(
   path.join(here, 'withMulticastLock.cjs'),
   path.join(output, 'plugins/withMulticastLock.cjs')
