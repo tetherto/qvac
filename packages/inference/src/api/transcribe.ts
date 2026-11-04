@@ -563,6 +563,7 @@ export function processLineConversation(
           speaking: response.vad.speaking,
           probability: response.vad.probability,
           ...(response.vad.source && { source: response.vad.source }),
+          ...(response.vad.timestamp !== undefined && { timestamp: response.vad.timestamp }),
           ...(response.vad.speakerId !== undefined && { speakerId: response.vad.speakerId })
         }
       }

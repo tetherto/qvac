@@ -1043,6 +1043,10 @@
             "backendId": {
               "type": "number"
             },
+            "gpuFallbackReason": {
+              "description": "Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
+              "type": "number"
+            },
             "emittedFrames": {
               "description": "MiniMax only: semantic frames the autoregressive stage emitted (25 per second). Below the frame cap when the song ended at the model end-of-sequence.",
               "type": "number"
@@ -1623,6 +1627,10 @@
             "backendId": {
               "type": "number"
             },
+            "gpuFallbackReason": {
+              "description": "Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
+              "type": "number"
+            },
             "emittedFrames": {
               "description": "MiniMax only: semantic frames the autoregressive stage emitted (25 per second). Below the frame cap when the song ended at the model end-of-sequence.",
               "type": "number"
@@ -2048,6 +2056,10 @@
               "type": "number"
             },
             "backendId": {
+              "type": "number"
+            },
+            "gpuFallbackReason": {
+              "description": "Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
               "type": "number"
             },
             "emittedFrames": {
@@ -3121,9 +3133,11 @@
               "type": "number"
             },
             "encoderTime": {
+              "description": "Parakeet encoder time, or the MOSS audio-encoder time, in ms.",
               "type": "number"
             },
             "decoderTime": {
+              "description": "Parakeet decoder time, or the MOSS decode time, in ms.",
               "type": "number"
             },
             "melSpecTime": {
@@ -3190,6 +3204,26 @@
             },
             "encoderUsedCoreml": {
               "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
+              "type": "number"
+            },
+            "aoscActive": {
+              "description": "Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.",
+              "type": "number"
+            },
+            "prefillTime": {
+              "description": "MOSS: prompt prefill time, in ms.",
+              "type": "number"
+            },
+            "audioTokens": {
+              "description": "MOSS: audio tokens fed to the decoder.",
+              "type": "number"
+            },
+            "promptTokens": {
+              "description": "MOSS: prompt tokens prefilled before decoding.",
+              "type": "number"
+            },
+            "generatedTokens": {
+              "description": "MOSS: tokens the decoder generated.",
               "type": "number"
             }
           },
@@ -3495,9 +3529,11 @@
               "type": "number"
             },
             "encoderTime": {
+              "description": "Parakeet encoder time, or the MOSS audio-encoder time, in ms.",
               "type": "number"
             },
             "decoderTime": {
+              "description": "Parakeet decoder time, or the MOSS decode time, in ms.",
               "type": "number"
             },
             "melSpecTime": {
@@ -3564,6 +3600,26 @@
             },
             "encoderUsedCoreml": {
               "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
+              "type": "number"
+            },
+            "aoscActive": {
+              "description": "Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.",
+              "type": "number"
+            },
+            "prefillTime": {
+              "description": "MOSS: prompt prefill time, in ms.",
+              "type": "number"
+            },
+            "audioTokens": {
+              "description": "MOSS: audio tokens fed to the decoder.",
+              "type": "number"
+            },
+            "promptTokens": {
+              "description": "MOSS: prompt tokens prefilled before decoding.",
+              "type": "number"
+            },
+            "generatedTokens": {
+              "description": "MOSS: tokens the decoder generated.",
               "type": "number"
             }
           },
@@ -13981,8 +14037,12 @@
                       "maximum": 9007199254740991
                     },
                     "useGPU": {
-                      "description": "Enable the linked GPU backend, including Metal. Default false.",
+                      "description": "Select a GPU automatically when `backend` is `auto`, including Metal. Default false.",
                       "type": "boolean"
+                    },
+                    "backend": {
+                      "description": "Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `metal`, or an exact ggml device name such as `CUDA0`. An explicit selection overrides `useGPU` and the load fails if it is unavailable.",
+                      "type": "string"
                     },
                     "backendsDir": {
                       "description": "Directory containing dynamically loaded ggml backend libraries.",
@@ -22085,6 +22145,7 @@
                 "audiogen-ggml",
                 "ggml-vla",
                 "ggml-classification",
+                "ggml-image-embedding",
                 "onnx-vad"
               ],
               "description": "Canonical inference engine identifier.",
@@ -22233,6 +22294,7 @@
                   "audiogen-ggml",
                   "ggml-vla",
                   "ggml-classification",
+                  "ggml-image-embedding",
                   "onnx-vad"
                 ],
                 "description": "Canonical inference engine identifier.",
@@ -22412,6 +22474,7 @@
                   "audiogen-ggml",
                   "ggml-vla",
                   "ggml-classification",
+                  "ggml-image-embedding",
                   "onnx-vad"
                 ],
                 "description": "Canonical inference engine identifier.",
@@ -23905,6 +23968,14 @@
             "enhancerBackendId": {
               "type": "number"
             },
+            "denoiserBackendDevice": {
+              "description": "LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed.",
+              "type": "number"
+            },
+            "denoiserBackendId": {
+              "description": "LavaSR denoiser backend family, same codes as `backendId`.",
+              "type": "number"
+            },
             "codecSidecarLoaded": {
               "description": "Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired.",
               "type": "number"
@@ -24102,6 +24173,14 @@
             "enhancerBackendId": {
               "type": "number"
             },
+            "denoiserBackendDevice": {
+              "description": "LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed.",
+              "type": "number"
+            },
+            "denoiserBackendId": {
+              "description": "LavaSR denoiser backend family, same codes as `backendId`.",
+              "type": "number"
+            },
             "codecSidecarLoaded": {
               "description": "Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired.",
               "type": "number"
@@ -24242,9 +24321,11 @@
               "type": "number"
             },
             "encoderTime": {
+              "description": "Parakeet encoder time, or the MOSS audio-encoder time, in ms.",
               "type": "number"
             },
             "decoderTime": {
+              "description": "Parakeet decoder time, or the MOSS decode time, in ms.",
               "type": "number"
             },
             "melSpecTime": {
@@ -24311,6 +24392,26 @@
             },
             "encoderUsedCoreml": {
               "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
+              "type": "number"
+            },
+            "aoscActive": {
+              "description": "Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.",
+              "type": "number"
+            },
+            "prefillTime": {
+              "description": "MOSS: prompt prefill time, in ms.",
+              "type": "number"
+            },
+            "audioTokens": {
+              "description": "MOSS: audio tokens fed to the decoder.",
+              "type": "number"
+            },
+            "promptTokens": {
+              "description": "MOSS: prompt tokens prefilled before decoding.",
+              "type": "number"
+            },
+            "generatedTokens": {
+              "description": "MOSS: tokens the decoder generated.",
               "type": "number"
             }
           },
@@ -24442,6 +24543,10 @@
               "type": "boolean"
             },
             "probability": {
+              "type": "number"
+            },
+            "timestamp": {
+              "description": "Parakeet: event time in seconds from the start of the streaming session.",
               "type": "number"
             },
             "source": {
@@ -24750,9 +24855,11 @@
               "type": "number"
             },
             "encoderTime": {
+              "description": "Parakeet encoder time, or the MOSS audio-encoder time, in ms.",
               "type": "number"
             },
             "decoderTime": {
+              "description": "Parakeet decoder time, or the MOSS decode time, in ms.",
               "type": "number"
             },
             "melSpecTime": {
@@ -24819,6 +24926,26 @@
             },
             "encoderUsedCoreml": {
               "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
+              "type": "number"
+            },
+            "aoscActive": {
+              "description": "Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.",
+              "type": "number"
+            },
+            "prefillTime": {
+              "description": "MOSS: prompt prefill time, in ms.",
+              "type": "number"
+            },
+            "audioTokens": {
+              "description": "MOSS: audio tokens fed to the decoder.",
+              "type": "number"
+            },
+            "promptTokens": {
+              "description": "MOSS: prompt tokens prefilled before decoding.",
+              "type": "number"
+            },
+            "generatedTokens": {
+              "description": "MOSS: tokens the decoder generated.",
               "type": "number"
             }
           },
@@ -24950,6 +25077,10 @@
               "type": "boolean"
             },
             "probability": {
+              "type": "number"
+            },
+            "timestamp": {
+              "description": "Parakeet: event time in seconds from the start of the streaming session.",
               "type": "number"
             },
             "source": {

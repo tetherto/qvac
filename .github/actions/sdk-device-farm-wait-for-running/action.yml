@@ -16,17 +16,28 @@ inputs:
     description: "Seconds between get-run polling attempts."
     required: false
     default: "15"
+  unmetered-wait-minutes:
+    description: "Minutes to wait for a free UNMETERED slot before stopping the queued runs; 0 disables."
+    required: false
+    default: "0"
+
+outputs:
+  slot-timeout:
+    description: "true when the runs were stopped for lack of an UNMETERED slot."
+    value: ${{ steps.wait.outputs.slot-timeout }}
 
 runs:
   using: composite
   steps:
     - name: Wait for Device Farm runs
+      id: wait
       shell: node {0}
       env:
         PLATFORM: ${{ inputs.platform }}
         RUN_ARNS_DIRECTORY: ${{ inputs.run-arns-directory }}
         START_TIMEOUT_MINUTES: ${{ inputs.start-timeout-minutes }}
         POLL_INTERVAL_SECONDS: ${{ inputs.poll-interval-seconds }}
+        UNMETERED_WAIT_MINUTES: ${{ inputs.unmetered-wait-minutes }}
       run: |
         const fs = require('fs');
         const path = require('path');
@@ -41,6 +52,8 @@ runs:
           'PREPARING',
           'UNKNOWN',
         ]);
+        // Waiting for an UNMETERED slot.
+        const queuedStatuses = new Set(['PENDING', 'PENDING_CONCURRENCY']);
         const terminalStatuses = new Set([
           'COMPLETED',
           'STOPPED',
@@ -151,6 +164,23 @@ runs:
           }
         }
 
+        function stopQueuedRun(run) {
+          console.log(`[device-farm-wait] Stopping ${run.name}: status=${run.status} reason=no UNMETERED slot`);
+          try {
+            execFileSync('aws', ['devicefarm', 'stop-run', '--arn', run.arn], {
+              encoding: 'utf8',
+              stdio: ['ignore', 'pipe', 'pipe'],
+            });
+            return true;
+          } catch (error) {
+            const stderr = error.stderr ? String(error.stderr).trim() : '';
+            console.log(
+              `[device-farm-wait] stop-run failed for ${run.name}: ${error.message}${stderr ? ` stderr=${stderr}` : ''}`,
+            );
+            return false;
+          }
+        }
+
         function stopActiveRuns(runs, reason) {
           for (const run of runs) {
             stopRun(run, reason);
@@ -168,20 +198,26 @@ runs:
           const runArnsDirectory = process.env.RUN_ARNS_DIRECTORY || './run-arns';
           const timeoutMinutes = parsePositiveInteger(process.env.START_TIMEOUT_MINUTES, 90, 'START_TIMEOUT_MINUTES');
           const pollIntervalSeconds = parsePositiveInteger(process.env.POLL_INTERVAL_SECONDS, 15, 'POLL_INTERVAL_SECONDS');
-          const timeoutMs = timeoutMinutes * 60 * 1000;
+          const unmeteredWaitMinutes = Math.max(Number(process.env.UNMETERED_WAIT_MINUTES) || 0, 0);
+          const unmeteredWaitMs = unmeteredWaitMinutes * 60 * 1000;
+          // A run that gets a slot late still has the full start timeout.
+          const totalTimeoutMinutes = timeoutMinutes + unmeteredWaitMinutes;
+          const timeoutMs = totalTimeoutMinutes * 60 * 1000;
           const pollIntervalMs = pollIntervalSeconds * 1000;
           const startedAt = Date.now();
           const runs = readRunArns(runArnsDirectory);
 
           console.log(`[device-farm-wait] Waiting for ${runs.length} ${platform} Device Farm run(s); producer starts when the first run enters RUNNING`);
-          console.log(`[device-farm-wait] timeout=${timeoutMinutes}m pollInterval=${pollIntervalSeconds}s`);
+          console.log(`[device-farm-wait] timeout=${totalTimeoutMinutes}m unmeteredWait=${unmeteredWaitMinutes}m pollInterval=${pollIntervalSeconds}s`);
           appendSummary(`### ${platform} Device Farm readiness`);
-          appendSummary(`Waiting up to ${timeoutMinutes} minute(s) for at least one of ${runs.length} run(s) to enter \`RUNNING\`.`);
+          appendSummary(`Waiting up to ${totalTimeoutMinutes} minute(s) for at least one of ${runs.length} run(s) to enter \`RUNNING\`.`);
 
           while (true) {
             for (const run of runs) {
               try {
+                run.readOk = false;
                 const latest = getRun(run);
+                run.readOk = true;
                 run.status = latest.status;
                 run.result = latest.result;
                 run.message = latest.message;
@@ -222,12 +258,29 @@ runs:
             }
 
             const elapsedMs = Date.now() - startedAt;
+            const activeRuns = runs.filter((run) => !terminalStatuses.has(run.status));
+            // Decide on fresh reads only, so a run that just got a slot is never stopped.
+            const stillQueued = activeRuns.every((run) => run.readOk && queuedStatuses.has(run.status));
+            if (unmeteredWaitMs > 0 && elapsedMs >= unmeteredWaitMs && stillQueued) {
+              console.log(
+                `[device-farm-wait] No UNMETERED slot within ${unmeteredWaitMinutes}m: ${statusSummary(runs)}`,
+              );
+              const stopped = activeRuns.map(stopQueuedRun).every(Boolean);
+              if (!stopped) {
+                appendSummary(`Device Farm readiness failed: could not stop the queued UNMETERED run(s).`);
+                process.exit(1);
+              }
+              appendSummary(`No UNMETERED slot within ${unmeteredWaitMinutes} minute(s); stopped the queued run(s).`);
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, 'slot-timeout=true\n', 'utf8');
+              return;
+            }
+
             if (elapsedMs >= timeoutMs) {
               console.log(
-                `[device-farm-wait] Timed out after ${timeoutMinutes}m before any run entered RUNNING: ${statusSummary(runs)}`,
+                `[device-farm-wait] Timed out after ${totalTimeoutMinutes}m before any run entered RUNNING: ${statusSummary(runs)}`,
               );
-              stopActiveRuns(runs, `did not enter RUNNING within ${timeoutMinutes}m`);
-              appendSummary(`Device Farm readiness timed out after ${timeoutMinutes} minute(s): ${statusSummary(runs)}.`);
+              stopActiveRuns(runs, `did not enter RUNNING within ${totalTimeoutMinutes}m`);
+              appendSummary(`Device Farm readiness timed out after ${totalTimeoutMinutes} minute(s): ${statusSummary(runs)}.`);
               process.exit(1);
             }
 

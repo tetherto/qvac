@@ -53,9 +53,7 @@ LayaModel::LayaModel(
     const std::string& modelGgufPath,
     const std::unordered_map<std::string, std::string>& config,
     const std::string& backendsDir)
-    : loader_(
-          "LayaModel", loadHooks(), modelGgufPath, checkConfig(config),
-          backendsDir) {}
+    : loader_(loadHooks(), modelGgufPath, checkConfig(config), backendsDir) {}
 
 LlamaModelLoader::Hooks LayaModel::loadHooks() {
   return {
