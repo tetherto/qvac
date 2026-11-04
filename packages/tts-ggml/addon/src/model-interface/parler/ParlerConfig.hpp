@@ -80,6 +80,7 @@ struct ParlerConfig {
   // validateConfig.
   std::optional<int> nGpuLayers;
   std::optional<bool> useGpu;
+  std::string backend;
   std::string backendsDir;
   // Unset preserves EngineOptions defaults. Empty compute units and unset
   // strict mode inherit the engine's environment/default policy.

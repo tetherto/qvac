@@ -22854,6 +22854,7 @@ class ModelRegistryGetModelResponseModelEngine(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
+    ggml_image_embedding = "ggml-image-embedding"
     onnx_vad = "onnx-vad"
 
 
@@ -22996,6 +22997,7 @@ class ModelRegistryListResponseModelsItemEngine(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
+    ggml_image_embedding = "ggml-image-embedding"
     onnx_vad = "onnx-vad"
 
 
@@ -23160,6 +23162,7 @@ class ModelRegistrySearchResponseModelsItemEngine(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
+    ggml_image_embedding = "ggml-image-embedding"
     onnx_vad = "onnx-vad"
 
 

@@ -734,15 +734,15 @@ Configure a classification model:
 {
   "serve": {
     "models": {
-      "classifier": { "type": "ggml-classification" }
+      "classifier": { "model": "MOBILENETV3_3CLASS_V3_FP16" }
     }
   }
 }
 ```
 
-An alias without `src` loads the addon's bundled MobileNetV3-Small, whose labels are `food`,
-`report` and `other`. Set `src` to the path of a GGUF classifier to use your own; its labels
-come from the GGUF metadata.
+`MOBILENETV3_3CLASS_V3_FP16` is a MobileNetV3-Small whose labels are `food`, `report` and
+`other`. To use your own GGUF classifier, set `type` to `ggml-classification` and `src` to its
+path; its labels come from the GGUF metadata.
 
 ### `GET /qvac/v1/registry/models`
 
