@@ -69,11 +69,12 @@ jobs:
             FILTER_ARGS=(--filter "gemma4-vl|qwen3.5-vl")
           fi
           # The contract names perf artifacts <slug>-perf-<config>-<n>, and <slug>-perf-mobile-<platform>-<n> on Mobile tests;
-          # llm's and translation's slugs differ from their report names.
+          # llm's, translation's and Parakeet's slugs differ from their report names.
           SLUG="$ARTIFACT_ADDON"
           case "$ARTIFACT_ADDON" in
             llamacpp-llm) SLUG=llm-llamacpp ;;
             nmtcpp) SLUG=translation-nmtcpp ;;
+            parakeet) SLUG=asr-ggml ;;
           esac
           case "$PERF_WORKFLOW" in
             "PR build and test"|"Benchmarks") FILTER_ARGS+=(--artifact-pattern "${SLUG}-perf-*") ;;
@@ -106,14 +107,11 @@ jobs:
         run: |
           mkdir -p reports
 
-          # "On PR Trigger (nx)", not "Integration Tests (nx)": the latter runs
-          # via workflow_call, and a called run is listed under its caller, so
-          # querying it by name finds nothing. --addon still selects the right
-          # artifact, and runs without one simply contribute nothing.
           echo "=== Translation ==="
           node scripts/perf-report/aggregate.js \
             --addon nmtcpp \
-            --workflow "On PR Trigger (nx)" \
+            --workflow "PR build and test" \
+            --artifact-pattern "translation-nmtcpp-perf-*" \
             --runs 6 \
             --output reports/nmtcpp-performance.md \
             --output-json reports/nmtcpp-performance.json \

@@ -84,10 +84,6 @@ jobs:
             # sanity-checks only. Requiring a prebuild status here would poll to
             # the 180 minute deadline for a status nothing is going to post.
             shared-ci:
-              - ".github/workflows/*-nx.yml"
-              - ".github/workflows/prebuilds-*.yml"
-              - ".github/workflows/cpp-tests-*.yml"
-              - ".github/workflows/integration-test-*.yml"
               # The package CI contract's shared workflows and the script that selects their rows.
               - ".github/workflows/_*.yml"
               - ".github/workflows/pr-build-test.yml"
