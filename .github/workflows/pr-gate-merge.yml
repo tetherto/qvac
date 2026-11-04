@@ -88,6 +88,13 @@ jobs:
               - ".github/workflows/prebuilds-*.yml"
               - ".github/workflows/cpp-tests-*.yml"
               - ".github/workflows/integration-test-*.yml"
+              # The package CI contract's shared workflows and the script that selects their rows.
+              - ".github/workflows/_*.yml"
+              - ".github/workflows/pr-build-test.yml"
+              - ".github/workflows/pr-checks.yml"
+              - ".github/workflows/mobile-tests.yml"
+              - ".github/workflows/cache-warm.yml"
+              - ".github/scripts/select-projects.mjs"
             # No prebuilds-<pkg>.yml line for on-pr-nx packages: on-pr-nx only
             # triggers on packages/**, so a PR touching just that file would
             # wait to the deadline for a status nothing posts. shared-ci covers it.
