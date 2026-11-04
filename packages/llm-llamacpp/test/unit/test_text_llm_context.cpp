@@ -594,7 +594,11 @@ TEST_F(TextLlmContextTest, ToolsPromptTokenizesWithToolDefinitions) {
   auto stats = model->runtimeStats();
   int cacheTokens = static_cast<int>(getStatValue(stats, "CacheTokens"));
   int promptTokens = static_cast<int>(getStatValue(stats, "promptTokens"));
-  EXPECT_EQ(cacheTokens, 0);
+  int generatedTokens =
+      static_cast<int>(getStatValue(stats, "generatedTokens"));
+  // A request without a key keeps exactly the state it decoded for the next
+  // one.
+  EXPECT_EQ(cacheTokens, promptTokens + generatedTokens);
   // prompt tokens with tools
   EXPECT_GT(promptTokens, 200);
 }

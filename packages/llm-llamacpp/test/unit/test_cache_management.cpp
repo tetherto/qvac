@@ -22,6 +22,7 @@
 
 #include "model-interface/CacheManager.hpp"
 #include "model-interface/LlamaModel.hpp"
+#include "model-interface/MtmdLlmContext.hpp"
 #include "model-interface/SequenceDriver.hpp"
 #include "model-interface/TextLlmContext.hpp"
 #include "test_common.hpp"
@@ -419,7 +420,10 @@ TEST_F(CacheManagementTest, SwitchAndResetChain) {
   EXPECT_TRUE(fs::exists(session2_path));
 }
 
-TEST_F(CacheManagementTest, CacheClearedWhenNoCacheKey) {
+// A request without a key leaves the keyed conversation's file as it was and
+// keeps its own state in memory only, for the prefix a later request may
+// share with it.
+TEST_F(CacheManagementTest, NoCacheKeyKeepsItsStateOutOfFiles) {
   if (!hasValidModel()) {
     FAIL() << "Test model not found";
   }
@@ -438,6 +442,8 @@ TEST_F(CacheManagementTest, CacheClearedWhenNoCacheKey) {
   });
 
   EXPECT_TRUE(fs::exists(session1_path));
+  const auto session1Size = fs::file_size(session1_path);
+  const auto session1Time = fs::last_write_time(session1_path);
 
   EXPECT_NO_THROW({
     processPromptString(
@@ -446,9 +452,11 @@ TEST_F(CacheManagementTest, CacheClearedWhenNoCacheKey) {
   });
 
   EXPECT_TRUE(fs::exists(session1_path));
+  EXPECT_EQ(fs::file_size(session1_path), session1Size);
+  EXPECT_TRUE(fs::last_write_time(session1_path) == session1Time);
 
   auto stats = model->runtimeStats();
-  EXPECT_EQ(getStatValue(stats, "CacheTokens"), 0.0);
+  EXPECT_GT(getStatValue(stats, "CacheTokens"), 0.0);
 
   qvac_lib_inference_addon_cpp::RuntimeStats stats3;
   EXPECT_NO_THROW({
@@ -524,10 +532,11 @@ TEST_F(CacheManagementTest, SingleShotInferenceAfterCacheCleared) {
         R"([{"role": "user", "content": "What is ethereum? Answer shortly."}])");
   });
 
+  // The single-shot request keeps its state in memory instead of clearing it.
   auto stats2 = model->runtimeStats();
   double cacheTokens2 = getStatValue(stats2, "CacheTokens");
   EXPECT_GT(cacheTokens1, 0.0);
-  EXPECT_EQ(cacheTokens2, 0.0);
+  EXPECT_GT(cacheTokens2, 0.0);
 }
 
 TEST_F(CacheManagementTest, CacheToNoCacheToCache) {
@@ -555,8 +564,9 @@ TEST_F(CacheManagementTest, CacheToNoCacheToCache) {
         model,
         R"([{"role": "user", "content": "What is ethereum? Answer shortly."}])");
     auto stats2 = model->runtimeStats();
-    EXPECT_EQ(getStatValue(stats2, "CacheTokens"), 0.0);
+    EXPECT_GT(getStatValue(stats2, "CacheTokens"), 0.0);
   });
+  EXPECT_FALSE(fs::exists(session2_path));
 
   EXPECT_NO_THROW({
     processPromptWithCacheOptions(
@@ -1214,8 +1224,9 @@ TEST_F(CacheManagementTest, PersistToWithNoCacheKeyIsNoOp) {
 
   EXPECT_FALSE(fs::exists(session1_path));
 
+  // The state stays in memory only.
   auto stats = model->runtimeStats();
-  EXPECT_EQ(getStatValue(stats, "CacheTokens"), 0.0);
+  EXPECT_GT(getStatValue(stats, "CacheTokens"), 0.0);
 }
 
 TEST_F(CacheManagementTest, CorruptCacheTokenMetadataThrowsAndCleansMemory) {
@@ -2029,6 +2040,15 @@ TEST(PrimeSystemAndToolsTest, SavedPrefillIsReusedAfterAReload) {
   }
   ASSERT_TRUE(fs::exists(primedFile));
 
+  // Measured on a model of its own: in the same one the question's state
+  // would serve the cold run too.
+  KeyedRun cold;
+  {
+    auto fresh = loadHybridToolsModel(modelPath, "1");
+    ASSERT_TRUE(fresh->isLoaded());
+    cold = runKeyed(*fresh, systemAndToolsInput(true), coldFile, false);
+  }
+
   auto model = loadHybridToolsModel(modelPath, "1");
   ASSERT_TRUE(model->isLoaded());
   auto* text =
@@ -2039,8 +2059,6 @@ TEST(PrimeSystemAndToolsTest, SavedPrefillIsReusedAfterAReload) {
   EXPECT_EQ(text->lastCacheReuseForTesting(), static_cast<size_t>(primedTokens))
       << "the question did not continue from the saved system prompt and "
          "tools";
-  const KeyedRun cold =
-      runKeyed(*model, systemAndToolsInput(true), coldFile, false);
   EXPECT_EQ(question.promptTokens, cold.promptTokens - primedTokens);
 
   model.reset();
@@ -2618,8 +2636,8 @@ TEST(CacheHistoryCheckpointTest, BatchedHybridThinkingChatReusesTheHistory) {
 
 namespace {
 
-std::unique_ptr<LlamaModel>
-loadBatchedModel(const char* cacheRamMib = nullptr) {
+std::unique_ptr<LlamaModel> loadBatchedModel(
+    const char* cacheRamMib = nullptr, const char* shareAcrossKeys = nullptr) {
   std::unordered_map<std::string, std::string> config;
   config["device"] = test_common::getTestDevice();
   config["gpu_layers"] = test_common::getTestGpuLayers();
@@ -2630,6 +2648,9 @@ loadBatchedModel(const char* cacheRamMib = nullptr) {
   config["seed"] = "5";
   if (cacheRamMib != nullptr) {
     config["cache_ram_mib"] = cacheRamMib;
+  }
+  if (shareAcrossKeys != nullptr) {
+    config["cache_share_across_keys"] = shareAcrossKeys;
   }
   config["backendsDir"] = test_common::getTestBackendsDir().string();
   std::string path = test_common::BaseTestModelPath::get();
@@ -2645,6 +2666,7 @@ struct BatchedTurn {
   std::string output;
   size_t reuse = 0;
   size_t fileCheckpointReads = 0;
+  int32_t visionEncodeTiles = 0;
 };
 
 class BatchedCacheHarness {
@@ -2659,26 +2681,38 @@ public:
          this](const common_params& params, uint32_t seqId, llama_pos ceiling) {
           std::unique_ptr<SequenceDriver> built =
               original(params, seqId, ceiling);
-          driver_ = dynamic_cast<TextLlmContext*>(built.get());
+          driver_ = built.get();
           return built;
         });
   }
 
   BatchedTurn
   run(const std::string& input, const std::string& cacheKey,
-      bool saveAfter = false) {
-    BatchedTurn turn;
+      bool saveAfter = false, const std::string& baseKey = "") {
     LlamaModel::Prompt prompt;
     prompt.input = input;
     prompt.cacheKey = cacheKey;
+    prompt.baseCacheKey = baseKey;
+    return run(std::move(prompt), saveAfter);
+  }
+
+  BatchedTurn run(LlamaModel::Prompt prompt, bool saveAfter = false) {
+    BatchedTurn turn;
     bool read = false;
     prompt.outputCallback = [&](const std::string&) {
-      if (!read && driver_ != nullptr) {
-        turn.reuse = driver_->lastCacheReuseForTesting();
-        turn.fileCheckpointReads = driver_->fileCheckpointReadsForTesting();
-        read = true;
+      if (read) {
+        return;
+      }
+      read = true;
+      if (auto* text = dynamic_cast<TextLlmContext*>(driver_)) {
+        turn.reuse = text->lastCacheReuseForTesting();
+        turn.fileCheckpointReads = text->fileCheckpointReadsForTesting();
+      } else if (auto* mtmd = dynamic_cast<MtmdLlmContext*>(driver_)) {
+        turn.reuse = mtmd->lastCacheReuseForTesting();
+        turn.visionEncodeTiles = mtmd->getVisionEncodeTiles();
       }
     };
+    const std::string cacheKey = prompt.cacheKey;
     const auto outputs = model_.processPromptBatch({prompt});
     turn.output = outputs.empty() ? std::string() : outputs.front();
     if (saveAfter) {
@@ -2696,7 +2730,7 @@ private:
   LlamaModel& model_;
   qvac_lib_inference_addon_llama::batching::ContinuousBatchScheduler*
       scheduler_;
-  TextLlmContext* driver_ = nullptr;
+  SequenceDriver* driver_ = nullptr;
 };
 
 std::string userTurns(const std::vector<std::string>& turns) {
@@ -2811,9 +2845,9 @@ TEST(BatchedCacheResidencyTest, RamTierRestoresAnEvictedConversation) {
   }
 }
 
-// Requests without a cacheKey have nothing to be found by, so they are never
-// parked.
-TEST(BatchedCacheResidencyTest, KeylessRequestsAreNotParked) {
+// Requests without a cacheKey park anonymously: their state stays in its
+// sequence for the prefix later requests share with it.
+TEST(BatchedCacheResidencyTest, KeylessRequestsParkAnonymously) {
   if (!fs::exists(test_common::BaseTestModelPath::get())) {
     GTEST_SKIP() << "base test model not found";
   }
@@ -2821,11 +2855,12 @@ TEST(BatchedCacheResidencyTest, KeylessRequestsAreNotParked) {
   ASSERT_TRUE(model->isLoaded());
   BatchedCacheHarness harness(*model);
   harness.run(userTurns({"Say hello."}), "");
-  EXPECT_TRUE(harness.scheduler().parkedSeqIds().empty());
+  const std::vector<uint32_t> parked = harness.scheduler().parkedSeqIds();
+  ASSERT_EQ(parked.size(), 1u);
   auto* mem = llama_get_memory(model->getContext());
   ASSERT_NE(mem, nullptr);
-  EXPECT_EQ(llama_memory_seq_pos_max(mem, 0), -1);
-  EXPECT_EQ(llama_memory_seq_pos_max(mem, 1), -1);
+  EXPECT_GE(
+      llama_memory_seq_pos_max(mem, static_cast<llama_seq_id>(parked[0])), 0);
 }
 
 // Deleting the file a parked conversation was loaded from drops the
@@ -2878,7 +2913,8 @@ TEST(BatchedCacheResidencyTest, SameKeyPromptsRunInOrder) {
 
 namespace {
 
-std::unique_ptr<LlamaModel> loadSinglePromptModel(const char* cacheRamMib) {
+std::unique_ptr<LlamaModel> loadSinglePromptModel(
+    const char* cacheRamMib, const char* shareAcrossKeys = nullptr) {
   std::unordered_map<std::string, std::string> config;
   config["device"] = test_common::getTestDevice();
   config["gpu_layers"] = test_common::getTestGpuLayers();
@@ -2888,6 +2924,9 @@ std::unique_ptr<LlamaModel> loadSinglePromptModel(const char* cacheRamMib) {
   config["seed"] = "5";
   if (cacheRamMib != nullptr) {
     config["cache_ram_mib"] = cacheRamMib;
+  }
+  if (shareAcrossKeys != nullptr) {
+    config["cache_share_across_keys"] = shareAcrossKeys;
   }
   config["backendsDir"] = test_common::getTestBackendsDir().string();
   std::string path = test_common::BaseTestModelPath::get();
@@ -2902,18 +2941,26 @@ struct SingleTurn {
   size_t reuse = 0;
 };
 
-SingleTurn
-runSingle(LlamaModel& model, const std::string& input, const std::string& key) {
+SingleTurn runSingle(LlamaModel& model, const LlamaModel::Prompt& prompt) {
+  SingleTurn turn;
+  turn.output = model.processPrompt(prompt);
+  LlmContext* context = LlamaModelTestPeer::llmContext(model);
+  if (auto* text = dynamic_cast<TextLlmContext*>(context)) {
+    turn.reuse = text->lastCacheReuseForTesting();
+  } else if (auto* mtmd = dynamic_cast<MtmdLlmContext*>(context)) {
+    turn.reuse = mtmd->lastCacheReuseForTesting();
+  }
+  return turn;
+}
+
+SingleTurn runSingle(
+    LlamaModel& model, const std::string& input, const std::string& key,
+    const std::string& baseKey = "") {
   LlamaModel::Prompt prompt;
   prompt.input = input;
   prompt.cacheKey = key;
-  SingleTurn turn;
-  turn.output = model.processPrompt(prompt);
-  if (auto* text = dynamic_cast<TextLlmContext*>(
-          LlamaModelTestPeer::llmContext(model))) {
-    turn.reuse = text->lastCacheReuseForTesting();
-  }
-  return turn;
+  prompt.baseCacheKey = baseKey;
+  return runSingle(model, prompt);
 }
 
 } // namespace
@@ -3167,21 +3214,27 @@ TEST(ExplicitSaveTest, SinglePromptEphemeralConversationIsNeverWritten) {
   {
     auto model = loadSinglePromptModel(nullptr);
     ASSERT_TRUE(model->isLoaded());
+    auto* text =
+        dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(*model));
+    ASSERT_NE(text, nullptr);
     const std::string first = userTurns({"Say one word: apple."});
+    const std::string other = userTurns({"Say one word: pear."});
     ASSERT_FALSE(model->processPrompt(keyedPrompt(first, a, true)).empty());
-    ASSERT_FALSE(model->processPrompt(keyedPrompt(first, b, true)).empty());
+    ASSERT_FALSE(model->processPrompt(keyedPrompt(other, b, true)).empty());
+    const size_t shared = text->lastCacheReuseForTesting();
     EXPECT_FALSE(fs::exists(a)) << "the key switch wrote an ephemeral chat";
 
-    // Switching back starts cold: the ephemeral chat was dropped.
+    // Switching back finds nothing of a's own, the ephemeral chat was
+    // dropped: only the prefix it shares with b's chat is reused.
     const SingleTurn back = runSingle(*model, first, a);
-    EXPECT_EQ(back.reuse, 0u);
+    EXPECT_EQ(back.reuse, shared);
 
     // b stays active and ephemeral; an explicit save still writes it.
-    ASSERT_FALSE(model->processPrompt(keyedPrompt(first, b, true)).empty());
+    ASSERT_FALSE(model->processPrompt(keyedPrompt(other, b, true)).empty());
     ASSERT_NO_THROW(model->saveCache(b));
     EXPECT_TRUE(fs::exists(b));
     fs::remove(b);
-    ASSERT_FALSE(model->processPrompt(keyedPrompt(first, b, true)).empty());
+    ASSERT_FALSE(model->processPrompt(keyedPrompt(other, b, true)).empty());
   }
   EXPECT_FALSE(fs::exists(b)) << "the unload wrote an ephemeral chat";
   for (const auto& key : {a, b}) {
@@ -3629,6 +3682,1402 @@ TEST(BatchedCheckpointStoreTest, StoredCheckpointsSkipTheFileSection) {
       << "the reloaded conversation restored no checkpoint and reprocessed "
          "the whole history";
 
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+namespace {
+
+// A system prompt long enough that reusing it shows in the reuse count.
+std::string fruitStallRules() {
+  std::string rules = "You run the till of a fruit stall.";
+  for (int i = 1; i <= 12; ++i) {
+    rules += " Rule " + std::to_string(i) +
+             ": reply with one lowercase word and nothing else.";
+  }
+  return rules;
+}
+
+std::string fruitQuestion(const std::string& fruit) {
+  return chatInput(
+      {{"system", fruitStallRules()},
+       {"user", "Say one word: " + fruit + "."}});
+}
+
+std::string unrelatedQuestion() {
+  return chatInput(
+      {{"system", "You translate words into French."},
+       {"user", "Translate: house."}});
+}
+
+TextLlmContext& textContext(LlamaModel& model) {
+  auto* text =
+      dynamic_cast<TextLlmContext*>(LlamaModelTestPeer::llmContext(model));
+  EXPECT_NE(text, nullptr);
+  return *text;
+}
+
+std::string bytesOf(const std::string& path) {
+  std::ifstream in(path, std::ios::binary);
+  return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+}
+
+// Entries the shared system prompt is sure to cover: the rules are well over
+// a hundred tokens.
+constexpr size_t K_SHARED_RULES_TOKENS = 100;
+
+} // namespace
+
+// A new key with no state of its own starts from the conversation the switch
+// set aside, reconciled down to the prefix they share; the conversation's
+// file is written as before and never touched again.
+TEST(CrossKeyPrefixTest, NewKeyStartsFromTheConversationSetAside) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_aside_a.bin", "cross_aside_b.bin", "cross_aside_c.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadSinglePromptModel(nullptr);
+  ASSERT_TRUE(model->isLoaded());
+  runSingle(*model, fruitQuestion("apple"), keys[0]);
+
+  const SingleTurn banana = runSingle(*model, fruitQuestion("banana"), keys[1]);
+  EXPECT_GT(banana.reuse, K_SHARED_RULES_TOKENS)
+      << "the new key reprocessed the shared system prompt";
+  EXPECT_TRUE(mentions(banana.output, "banana")) << banana.output;
+  ASSERT_TRUE(fs::exists(keys[0])) << "the switch did not save the first chat";
+  const std::string firstFile = bytesOf(keys[0]);
+
+  const SingleTurn cherry = runSingle(*model, fruitQuestion("cherry"), keys[2]);
+  EXPECT_GT(cherry.reuse, K_SHARED_RULES_TOKENS);
+  EXPECT_TRUE(fs::exists(keys[1]));
+  EXPECT_EQ(bytesOf(keys[0]), firstFile)
+      << "starting from another conversation changed its file";
+  EXPECT_EQ(textContext(*model).donorAdoptionsForTesting(), 0u)
+      << "the conversation in place served, nothing had to be copied";
+
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// Requests without a key keep their state in memory, so the next one reuses
+// the prefix they share, and no file is written for them.
+TEST(CrossKeyPrefixTest, RequestsWithoutAKeyReuseTheResidentPrefix) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::string key = "cross_keyless_after.bin";
+  fs::remove(key);
+  auto model = loadSinglePromptModel(nullptr);
+  ASSERT_TRUE(model->isLoaded());
+  const SingleTurn apple = runSingle(*model, fruitQuestion("apple"), "");
+  EXPECT_EQ(apple.reuse, 0u);
+  const SingleTurn banana = runSingle(*model, fruitQuestion("banana"), "");
+  EXPECT_GT(banana.reuse, K_SHARED_RULES_TOKENS);
+  EXPECT_TRUE(mentions(banana.output, "banana")) << banana.output;
+
+  const SingleTurn cherry = runSingle(*model, fruitQuestion("cherry"), key);
+  EXPECT_GT(cherry.reuse, K_SHARED_RULES_TOKENS)
+      << "a keyed request did not start from the state left without a key";
+  model.reset();
+  EXPECT_TRUE(fs::exists(key));
+  fs::remove(key);
+}
+
+// With the RAM tier, a conversation switched away from lends its state to a
+// new key that shares its prefix, and stays in the tier for its own key.
+TEST(CrossKeyPrefixTest, TheRamTierLendsAConversationAndKeepsIt) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_ram_a.bin", "cross_ram_x.bin", "cross_ram_c.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadSinglePromptModel("512");
+  ASSERT_TRUE(model->isLoaded());
+  const SingleTurn apple = runSingle(*model, fruitQuestion("apple"), keys[0]);
+  runSingle(*model, unrelatedQuestion(), keys[1]);
+
+  const SingleTurn cherry = runSingle(*model, fruitQuestion("cherry"), keys[2]);
+  EXPECT_EQ(textContext(*model).donorAdoptionsForTesting(), 1u);
+  EXPECT_GT(cherry.reuse, K_SHARED_RULES_TOKENS)
+      << "the new key did not start from the conversation in RAM";
+  EXPECT_TRUE(mentions(cherry.output, "cherry")) << cherry.output;
+
+  const SingleTurn again = runSingle(
+      *model,
+      chatInput(
+          {{"system", fruitStallRules()},
+           {"user", "Say one word: apple."},
+           {"assistant", apple.output},
+           {"user", "Again."}}),
+      keys[0]);
+  EXPECT_GT(again.reuse, cherry.reuse)
+      << "the lending conversation lost its own state";
+  for (const auto& key : keys) {
+    EXPECT_FALSE(fs::exists(key)) << key << " was written before unload";
+  }
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// Without the RAM tier, a conversation that was written to its file lends it
+// to a new key that shares its prefix; the file is read, not changed.
+TEST(CrossKeyPrefixTest, AFileLendsAConversationAndStaysAsItWas) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_file_a.bin", "cross_file_x.bin", "cross_file_c.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadSinglePromptModel(nullptr);
+  ASSERT_TRUE(model->isLoaded());
+  runSingle(*model, fruitQuestion("apple"), keys[0]);
+  runSingle(*model, unrelatedQuestion(), keys[1]);
+  ASSERT_TRUE(fs::exists(keys[0]));
+  const std::string lent = bytesOf(keys[0]);
+
+  const SingleTurn cherry = runSingle(*model, fruitQuestion("cherry"), keys[2]);
+  EXPECT_EQ(textContext(*model).donorAdoptionsForTesting(), 1u);
+  EXPECT_GT(cherry.reuse, K_SHARED_RULES_TOKENS)
+      << "the new key did not start from the conversation's file";
+  EXPECT_TRUE(mentions(cherry.output, "cherry")) << cherry.output;
+  EXPECT_EQ(bytesOf(keys[0]), lent);
+
+  // A deleted file lends nothing: the caller dropped that conversation.
+  runSingle(*model, unrelatedQuestion(), keys[1]);
+  fs::remove(keys[0]);
+  fs::remove(keys[2]);
+  const SingleTurn date =
+      runSingle(*model, fruitQuestion("date"), "cross_file_d.bin");
+  EXPECT_EQ(textContext(*model).donorAdoptionsForTesting(), 1u)
+      << "a request started from a file its caller deleted";
+  EXPECT_LT(date.reuse, K_SHARED_RULES_TOKENS);
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  fs::remove("cross_file_d.bin");
+}
+
+// A `baseCacheKey` file this process never used serves a new conversation
+// that shares its prefix, and is read, not changed. Without it the same
+// request starts cold.
+TEST(CrossKeyPrefixTest, ABaseCacheKeyServesANewConversation) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_base_primed.bin", "cross_base_d.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  {
+    auto primer = loadSinglePromptModel(nullptr);
+    ASSERT_TRUE(primer->isLoaded());
+    runSingle(*primer, fruitQuestion("apple"), keys[0]);
+    primer->saveCache(keys[0]);
+  }
+  ASSERT_TRUE(fs::exists(keys[0]));
+  const std::string base = bytesOf(keys[0]);
+
+  auto model = loadSinglePromptModel(nullptr);
+  ASSERT_TRUE(model->isLoaded());
+  EXPECT_LT(
+      runSingle(*model, fruitQuestion("date"), "").reuse, K_SHARED_RULES_TOKENS)
+      << "test setup: the file is not a source without baseCacheKey";
+  runSingle(*model, unrelatedQuestion(), "");
+
+  const SingleTurn cherry =
+      runSingle(*model, fruitQuestion("cherry"), keys[1], keys[0]);
+  EXPECT_EQ(textContext(*model).donorAdoptionsForTesting(), 1u);
+  EXPECT_GT(cherry.reuse, K_SHARED_RULES_TOKENS)
+      << "the request did not start from its baseCacheKey";
+  EXPECT_TRUE(mentions(cherry.output, "cherry")) << cherry.output;
+  EXPECT_EQ(bytesOf(keys[0]), base);
+  model->saveCache(keys[1]);
+  EXPECT_TRUE(fs::exists(keys[1]));
+  EXPECT_EQ(bytesOf(keys[0]), base) << "the base file was written";
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// A copy that fails leaves the key with what its own state served, turns its
+// file lacks included, instead of nothing.
+TEST(CrossKeyPrefixTest, AFailedCopyKeepsWhatTheKeyServed) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_failed_copy_base.bin", "cross_failed_copy_a.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadSinglePromptModel(nullptr);
+  ASSERT_TRUE(model->isLoaded());
+  const SingleTurn apple = runSingle(*model, fruitQuestion("apple"), keys[1]);
+  const std::string again = chatInput(
+      {{"system", fruitStallRules()},
+       {"user", "Say one word: apple."},
+       {"assistant", apple.output},
+       {"user", "Again."}});
+  {
+    auto primer = loadSinglePromptModel(nullptr);
+    ASSERT_TRUE(primer->isLoaded());
+    LlamaModel::Prompt prime;
+    prime.input = again;
+    prime.cacheKey = keys[0];
+    prime.prefill = true;
+    primer->processPrompt(prime);
+    primer->saveCache(keys[0]);
+  }
+  // The file serves the whole prompt, but its state is cut short after the
+  // ledger header, so it cannot load.
+  uint32_t header[3] = {};
+  {
+    std::ifstream in(keys[0], std::ios::binary);
+    ASSERT_TRUE(in.read(reinterpret_cast<char*>(header), sizeof(header)));
+  }
+  fs::resize_file(
+      keys[0], sizeof(header) + header[2] * sizeof(llama_token) + 16);
+
+  const SingleTurn next = runSingle(*model, again, keys[1], keys[0]);
+  EXPECT_EQ(textContext(*model).donorAdoptionsForTesting(), 0u)
+      << "test setup: the cut file loaded";
+  EXPECT_GT(next.reuse, K_SHARED_RULES_TOKENS)
+      << "the failed copy left the key with nothing";
+  EXPECT_TRUE(mentions(next.output, "apple")) << next.output;
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// On the batch path, `baseCacheKey` serves a request from a file this
+// process never used. The file comes from a batched model too: a state file
+// loads only into a context with as many KV streams as the one that wrote it.
+TEST(CrossKeyPrefixTest, BatchBaseCacheKeyServesANewConversation) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_batch_base_primed.bin", "cross_batch_base_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  {
+    auto primer = loadBatchedModel();
+    ASSERT_TRUE(primer->isLoaded());
+    BatchedCacheHarness(*primer).run(fruitQuestion("apple"), keys[0], true);
+  }
+  ASSERT_TRUE(fs::exists(keys[0]));
+  const std::string base = bytesOf(keys[0]);
+
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  const BatchedTurn banana =
+      harness.run(fruitQuestion("banana"), keys[1], false, keys[0]);
+  EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 1u);
+  EXPECT_GT(banana.reuse, K_SHARED_RULES_TOKENS)
+      << "the request did not start from its baseCacheKey";
+  EXPECT_TRUE(mentions(banana.output, "banana")) << banana.output;
+  model.reset();
+  EXPECT_EQ(bytesOf(keys[0]), base);
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// With `cache_share_across_keys` off, a request reuses only its own key's
+// state: a request without a key resets afterwards, and a new key starts cold
+// whatever another conversation or its `baseCacheKey` holds.
+TEST(CrossKeyPrefixTest, TurnedOffARequestReusesOnlyItsOwnKey) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {"cross_off_a.bin", "cross_off_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadSinglePromptModel(nullptr, "false");
+  ASSERT_TRUE(model->isLoaded());
+  runSingle(*model, fruitQuestion("apple"), "");
+  EXPECT_EQ(LlamaModelTestPeer::llmContext(*model)->getNPast(), 0)
+      << "a request without a key kept its state";
+
+  const SingleTurn apple = runSingle(*model, fruitQuestion("apple"), keys[0]);
+  EXPECT_EQ(apple.reuse, 0u);
+  const SingleTurn banana =
+      runSingle(*model, fruitQuestion("banana"), keys[1], keys[0]);
+  ASSERT_TRUE(fs::exists(keys[0])) << "test setup: the switch saved the chat";
+  EXPECT_EQ(banana.reuse, 0u) << "a new key started from another conversation";
+  EXPECT_EQ(textContext(*model).donorAdoptionsForTesting(), 0u);
+  EXPECT_TRUE(mentions(banana.output, "banana")) << banana.output;
+
+  const SingleTurn again = runSingle(
+      *model,
+      chatInput(
+          {{"system", fruitStallRules()},
+           {"user", "Say one word: apple."},
+           {"assistant", apple.output},
+           {"user", "Again."}}),
+      keys[0]);
+  EXPECT_GT(again.reuse, K_SHARED_RULES_TOKENS) << "the key lost its own state";
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// The batch counterpart: with `cache_share_across_keys` off, a request
+// without a key parks nothing, and a new key starts cold beside another
+// conversation's parked state.
+TEST(CrossKeyPrefixTest, TurnedOffBatchKeepsEachKeyToItsOwnState) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_off_batch_a.bin", "cross_off_batch_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadBatchedModel(nullptr, "false");
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  harness.run(fruitQuestion("apple"), "");
+  EXPECT_TRUE(harness.scheduler().parkedSeqIds().empty())
+      << "a request without a key parked its state";
+
+  harness.run(fruitQuestion("apple"), keys[0]);
+  const BatchedTurn banana = harness.run(fruitQuestion("banana"), keys[1]);
+  EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 0u);
+  EXPECT_EQ(banana.reuse, 0u) << "a new key started from another conversation";
+  EXPECT_TRUE(mentions(banana.output, "banana")) << banana.output;
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// A batch call wipes the memory the single-prompt context kept in place, even
+// when it is refused: the next single prompt must not reuse cells that are
+// gone.
+TEST(CrossKeyPrefixTest, ABatchCallDropsTheStateKeptInPlace) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  auto model = loadSinglePromptModel(nullptr);
+  ASSERT_TRUE(model->isLoaded());
+  runSingle(*model, fruitQuestion("apple"), "");
+  LlamaModel::Prompt batched;
+  batched.input = fruitQuestion("pear");
+  EXPECT_THROW(model->processPromptBatch({batched}), qvac_errors::StatusError)
+      << "test setup: parallel = 1 refuses a batch";
+
+  SingleTurn banana;
+  ASSERT_NO_THROW(banana = runSingle(*model, fruitQuestion("banana"), ""));
+  EXPECT_EQ(banana.reuse, 0u) << "the request reused wiped memory";
+  EXPECT_TRUE(mentions(banana.output, "banana")) << banana.output;
+}
+
+// A hybrid model cannot trim its memory, so another conversation serves only
+// as far as it is a prefix of the new prompt: a primed system prompt in a
+// file serves a new key that asks a question on top of it.
+TEST(CrossKeyPrefixTest, HybridStartsFromAPrimedSystemPromptFile) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const std::vector<std::string> keys = {
+      "cross_hybrid_primed.bin", "cross_hybrid_x.bin", "cross_hybrid_q.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadHybridChatModel(modelPath, nullptr);
+  ASSERT_TRUE(model->isLoaded());
+  const KeyedRun primed = runKeyed(
+      *model,
+      chatInput({{"system", fruitStallRules()}}),
+      keys[0],
+      /*prefill=*/true);
+  ASSERT_GT(primed.cacheTokens, 0);
+  runKeyed(*model, unrelatedQuestion(), keys[1], false);
+  ASSERT_TRUE(fs::exists(keys[0]));
+
+  const KeyedRun question =
+      runKeyed(*model, fruitQuestion("apple"), keys[2], false);
+  TextLlmContext& text = textContext(*model);
+  EXPECT_EQ(text.donorAdoptionsForTesting(), 1u);
+  EXPECT_EQ(
+      text.lastCacheReuseForTesting(), static_cast<size_t>(primed.cacheTokens))
+      << "the question did not continue from the primed system prompt";
+  EXPECT_GT(question.cacheTokens, primed.cacheTokens);
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// A new key on a free sequence starts from a copy of the conversation parked
+// in another sequence, which stays parked and serves its own key as before.
+TEST(CrossKeyPrefixTest, BatchCopiesAnotherParkedConversation) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_batch_copy_a.bin", "cross_batch_copy_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  const BatchedTurn apple = harness.run(fruitQuestion("apple"), keys[0]);
+  const BatchedTurn banana = harness.run(fruitQuestion("banana"), keys[1]);
+  EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 1u);
+  EXPECT_GT(banana.reuse, K_SHARED_RULES_TOKENS)
+      << "the new key did not start from the parked conversation";
+  EXPECT_TRUE(mentions(banana.output, "banana")) << banana.output;
+
+  const uint64_t residentBefore = harness.scheduler().residentHitsForTesting();
+  const BatchedTurn again = harness.run(
+      chatInput(
+          {{"system", fruitStallRules()},
+           {"user", "Say one word: apple."},
+           {"assistant", apple.output},
+           {"user", "Again."}}),
+      keys[0]);
+  EXPECT_EQ(harness.scheduler().residentHitsForTesting(), residentBefore + 1)
+      << "the lending conversation lost its parked state";
+  EXPECT_GT(again.reuse, banana.reuse);
+  for (const auto& key : keys) {
+    EXPECT_FALSE(fs::exists(key)) << key << " was written";
+  }
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// When every sequence holds a parked conversation, the one evicted for a new
+// key is written to its file as before and its cells serve the prefix the
+// new key shares with them.
+TEST(CrossKeyPrefixTest, BatchEvictedConversationServesTheNextKey) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_batch_evict_a.bin",
+      "cross_batch_evict_x.bin",
+      "cross_batch_evict_c.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  harness.run(fruitQuestion("apple"), keys[0]);
+  harness.run(unrelatedQuestion(), keys[1]);
+  const uint64_t donorsBefore = harness.scheduler().donorHitsForTesting();
+  const BatchedTurn cherry = harness.run(fruitQuestion("cherry"), keys[2]);
+  EXPECT_TRUE(fs::exists(keys[0])) << "the evicted conversation was not saved";
+  EXPECT_GT(cherry.reuse, K_SHARED_RULES_TOKENS)
+      << "the new key did not reuse the evicted conversation's cells";
+  EXPECT_EQ(harness.scheduler().donorHitsForTesting(), donorsBefore)
+      << "the cells in place served, nothing had to be copied";
+  EXPECT_TRUE(mentions(cherry.output, "cherry")) << cherry.output;
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// Requests without a key park their state anonymously: the next request
+// starts from it, and nothing is written.
+TEST(CrossKeyPrefixTest, BatchRequestsWithoutAKeyShareTheirPrefix) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  harness.run(fruitQuestion("apple"), "");
+  EXPECT_EQ(harness.scheduler().parkedSeqIds().size(), 1u)
+      << "the request without a key was not parked";
+  const BatchedTurn banana = harness.run(fruitQuestion("banana"), "");
+  EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 1u);
+  EXPECT_GT(banana.reuse, K_SHARED_RULES_TOKENS);
+  EXPECT_TRUE(mentions(banana.output, "banana")) << banana.output;
+}
+
+// A hybrid model's recurrent state is shared by the copy until the new
+// sequence decodes: answering on the copy must leave the parked primed state
+// intact, so a question on the primed key answers as it does on a model that
+// never made the copy.
+TEST(CrossKeyPrefixTest, BatchHybridCopyLeavesThePrimedStateIntact) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const std::vector<std::string> keys = {
+      "cross_batch_hybrid_primed.bin", "cross_batch_hybrid_q.bin"};
+  const auto prime = [&keys](LlamaModel& model) {
+    LlamaModel::Prompt prompt;
+    prompt.input = chatInput({{"system", fruitStallRules()}});
+    prompt.cacheKey = keys[0];
+    prompt.prefill = true;
+    model.processPromptBatch({prompt});
+    return getStatValue(model.runtimeStats(), "CacheTokens");
+  };
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  std::string reference;
+  {
+    auto model = loadHybridChatModel(modelPath, "2");
+    ASSERT_TRUE(model->isLoaded());
+    BatchedCacheHarness harness(*model);
+    ASSERT_GT(prime(*model), 0);
+    reference = harness.run(fruitQuestion("banana"), keys[0]).output;
+  }
+  fs::remove(keys[0]);
+
+  auto model = loadHybridChatModel(modelPath, "2");
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  const double primedTokens = prime(*model);
+  ASSERT_GT(primedTokens, 0);
+
+  const BatchedTurn onCopy = harness.run(fruitQuestion("apple"), keys[1]);
+  EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 1u);
+  EXPECT_EQ(onCopy.reuse, static_cast<size_t>(primedTokens))
+      << "the new key did not continue from the primed system prompt";
+  const BatchedTurn onPrimed = harness.run(fruitQuestion("banana"), keys[0]);
+  EXPECT_EQ(onPrimed.reuse, static_cast<size_t>(primedTokens));
+  EXPECT_EQ(onPrimed.output, reference)
+      << "answering on the copy changed the primed state";
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// Generation decodes the last prompt token again, which a hybrid model can
+// only back up to through a checkpoint: a new key generating exactly the
+// prompt another key primed starts from that key's checkpoint, as the primed
+// key itself does, instead of from nothing.
+TEST(CrossKeyPrefixTest, BatchHybridExactPromptStartsFromTheDonorsCheckpoint) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const std::vector<std::string> keys = {
+      "cross_batch_exact_primed.bin", "cross_batch_exact_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadHybridChatModel(modelPath, "2");
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  LlamaModel::Prompt prime;
+  prime.input = fruitQuestion("apple");
+  prime.cacheKey = keys[0];
+  prime.prefill = true;
+  model->processPromptBatch({prime});
+
+  const BatchedTurn onCopy = harness.run(fruitQuestion("apple"), keys[1]);
+  EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 1u);
+  EXPECT_GT(onCopy.reuse, K_SHARED_RULES_TOKENS)
+      << "the new key decoded the whole prompt the donor holds";
+  const BatchedTurn onPrimed = harness.run(fruitQuestion("apple"), keys[0]);
+  EXPECT_EQ(onCopy.reuse, onPrimed.reuse);
+  EXPECT_EQ(onCopy.output, onPrimed.output);
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// The checkpoint a new key starts from becomes its own: saved with the key
+// and loaded in a fresh model, the same prompt starts from it again.
+TEST(CrossKeyPrefixTest, BatchHybridKeyKeepsTheCheckpointItStartedFrom) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found()) {
+    GTEST_SKIP() << modelPath.missingMessage();
+  }
+  const std::vector<std::string> keys = {
+      "cross_batch_kept_primed.bin", "cross_batch_kept_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  {
+    auto model = loadHybridChatModel(modelPath, "2");
+    ASSERT_TRUE(model->isLoaded());
+    BatchedCacheHarness harness(*model);
+    LlamaModel::Prompt prime;
+    prime.input = fruitQuestion("apple");
+    prime.cacheKey = keys[0];
+    prime.prefill = true;
+    model->processPromptBatch({prime});
+    harness.run(fruitQuestion("apple"), keys[1], /*saveAfter=*/true);
+    ASSERT_EQ(harness.scheduler().donorHitsForTesting(), 1u)
+        << "test setup: the new key did not start from the primed one";
+  }
+  ASSERT_TRUE(fs::exists(keys[1]));
+
+  auto model = loadHybridChatModel(modelPath, "2");
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  const BatchedTurn again = harness.run(fruitQuestion("apple"), keys[1]);
+  EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 0u);
+  EXPECT_GT(again.reuse, K_SHARED_RULES_TOKENS)
+      << "the key's file kept no checkpoint of the state it started from";
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// A second key primed with the prompt another parked conversation already
+// holds decodes nothing, so its copy must be complete before it is saved:
+// the copy's file answers like the file of the conversation it came from.
+TEST(CrossKeyPrefixTest, BatchPrimedCopyIsSavedWhole) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_batch_saved_copy_a.bin", "cross_batch_saved_copy_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  {
+    auto model = loadBatchedModel();
+    ASSERT_TRUE(model->isLoaded());
+    BatchedCacheHarness harness(*model);
+    for (const auto& key : keys) {
+      LlamaModel::Prompt prompt;
+      prompt.input = chatInput({{"system", fruitStallRules()}});
+      prompt.cacheKey = key;
+      prompt.prefill = true;
+      model->processPromptBatch({prompt});
+      model->saveCache(key);
+    }
+    ASSERT_EQ(harness.scheduler().donorHitsForTesting(), 1u)
+        << "test setup: the second key did not copy the first";
+  }
+  const auto answerFrom = [](const std::string& key) {
+    auto model = loadBatchedModel();
+    EXPECT_TRUE(model->isLoaded());
+    return BatchedCacheHarness(*model).run(fruitQuestion("banana"), key);
+  };
+  const BatchedTurn original = answerFrom(keys[0]);
+  const BatchedTurn copy = answerFrom(keys[1]);
+  EXPECT_GT(copy.reuse, K_SHARED_RULES_TOKENS);
+  EXPECT_EQ(copy.reuse, original.reuse);
+  EXPECT_EQ(copy.output, original.output)
+      << "the copy was saved before its state arrived";
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// A conversation parked without a key is evicted before any keyed one, even
+// a more recent one: dropping it writes nothing.
+TEST(CrossKeyPrefixTest, BatchEvictsAnonymousStatesFirst) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_batch_anon_a.bin", "cross_batch_anon_c.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  harness.run(fruitQuestion("apple"), keys[0]);
+  harness.run(unrelatedQuestion(), "");
+  harness.run(fruitQuestion("cherry"), keys[1]);
+  EXPECT_FALSE(fs::exists(keys[0]))
+      << "the keyed conversation was evicted before the anonymous one";
+  const uint64_t residentBefore = harness.scheduler().residentHitsForTesting();
+  harness.run(fruitQuestion("apple"), keys[0]);
+  EXPECT_EQ(harness.scheduler().residentHitsForTesting(), residentBefore + 1);
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// A prompt too long for the context is refused before another
+// conversation's state is copied in, so the key keeps its own.
+TEST(CrossKeyPrefixTest, ARefusedPromptKeepsTheKeysOwnState) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_refused_a.bin", "cross_refused_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadSinglePromptModel(nullptr);
+  ASSERT_TRUE(model->isLoaded());
+  const SingleTurn apple = runSingle(*model, fruitQuestion("apple"), keys[0]);
+  const auto continuing = [&apple](const std::string& last) {
+    return chatInput(
+        {{"system", fruitStallRules()},
+         {"user", "Say one word: apple."},
+         {"assistant", apple.output},
+         {"user", last}});
+  };
+  // The second key continues the first, so it serves more of the long
+  // prompt below than the first key's own state does.
+  runSingle(*model, continuing("Say one word: banana."), keys[1]);
+
+  std::string tooLong = "Say one word: banana.";
+  for (int i = 0; i < 3000; ++i) {
+    tooLong += " filler";
+  }
+  EXPECT_ANY_THROW(runSingle(*model, continuing(tooLong), keys[0]));
+  EXPECT_EQ(textContext(*model).donorAdoptionsForTesting(), 0u)
+      << "the refused prompt replaced the key's state with another one";
+
+  const SingleTurn again = runSingle(*model, continuing("Again."), keys[0]);
+  EXPECT_GT(again.reuse, K_SHARED_RULES_TOKENS);
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// A new key whose first request fails before it runs never owned the
+// conversation set aside in place: switching away or unloading writes
+// nothing to its file, and the memory still serves the next key.
+TEST(CrossKeyPrefixTest, AFailedFirstRequestSavesNoOtherConversation) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_failed_first_b.bin", "cross_failed_first_c.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadSinglePromptModel(nullptr);
+  ASSERT_TRUE(model->isLoaded());
+  runSingle(*model, fruitQuestion("apple"), "");
+
+  std::string tooLong = "Say one word: banana.";
+  for (int i = 0; i < 3000; ++i) {
+    tooLong += " filler";
+  }
+  EXPECT_ANY_THROW(runSingle(
+      *model,
+      chatInput({{"system", fruitStallRules()}, {"user", tooLong}}),
+      keys[0]));
+  EXPECT_ANY_THROW(model->saveCache(keys[0]))
+      << "saveCache wrote a conversation the key never ran";
+  EXPECT_FALSE(fs::exists(keys[0]));
+
+  const SingleTurn cherry = runSingle(*model, fruitQuestion("cherry"), keys[1]);
+  EXPECT_FALSE(fs::exists(keys[0]))
+      << "the switch wrote the conversation without a key to the failed key";
+  EXPECT_GT(cherry.reuse, K_SHARED_RULES_TOKENS)
+      << "the conversation set aside in place stopped serving";
+  model.reset();
+  EXPECT_FALSE(fs::exists(keys[0]));
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// A request its generation budget refuses is refused before any other state
+// is copied in, even one sharing more of the prompt that would not load: the
+// key keeps its unsaved turns, and the unload writes them to its file.
+TEST(CrossKeyPrefixTest, ARefusedBudgetKeepsTheKeysUnsavedTurns) {
+  if (!fs::exists(test_common::BaseTestModelPath::get())) {
+    GTEST_SKIP() << "base test model not found";
+  }
+  const std::string key = "cross_failed_copy_a.bin";
+  const std::string base = "cross_failed_copy_base.bin";
+  fs::remove(key);
+  fs::remove(base);
+  std::string saved;
+  std::vector<std::pair<std::string, std::string>> chat = {
+      {"system", fruitStallRules()}, {"user", "Say one word: apple."}};
+  BatchedTurn banana;
+  {
+    auto model = loadBatchedModel();
+    ASSERT_TRUE(model->isLoaded());
+    BatchedCacheHarness harness(*model);
+    chat.emplace_back(
+        "assistant", harness.run(chatInput(chat), key, true).output);
+    ASSERT_TRUE(fs::exists(key));
+    saved = bytesOf(key);
+    chat.emplace_back("user", "Say one word: banana.");
+    banana = harness.run(chatInput(chat), key);
+    chat.emplace_back("assistant", banana.output);
+    chat.emplace_back("user", "Say one word: cherry.");
+    {
+      // A single-prompt model writes a state file the batched model cannot
+      // load, sharing more of the next prompt than the key's own state.
+      auto single = loadSinglePromptModel(nullptr);
+      ASSERT_TRUE(single->isLoaded());
+      LlamaModel::Prompt prime;
+      prime.input = chatInput(chat);
+      prime.cacheKey = base;
+      prime.prefill = true;
+      single->processPrompt(prime);
+      single->saveCache(base);
+    }
+    ASSERT_TRUE(fs::exists(base));
+
+    LlamaModel::Prompt next;
+    next.input = chatInput(chat);
+    next.cacheKey = key;
+    next.baseCacheKey = base;
+    next.generationParams.n_predict = 4000;
+    EXPECT_ANY_THROW(model->processPromptBatch({next}))
+        << "test setup: the generation budget refuses the request";
+    EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 0u);
+    EXPECT_EQ(harness.scheduler().parkedSeqIds().size(), 1u)
+        << "the refused request dropped the key's unsaved turns";
+  }
+  EXPECT_NE(bytesOf(key), saved)
+      << "the unload did not write the key's unsaved turns";
+  fs::remove(base);
+
+  auto model = loadBatchedModel();
+  ASSERT_TRUE(model->isLoaded());
+  const BatchedTurn cherry =
+      BatchedCacheHarness(*model).run(chatInput(chat), key);
+  EXPECT_GT(cherry.reuse, banana.reuse)
+      << "the key's file lost the banana turn";
+  model.reset();
+  fs::remove(key);
+}
+
+namespace {
+
+std::unique_ptr<LlamaModel> loadVisionModel(
+    const std::string& modelPath, const std::string& projectionPath,
+    const char* parallel = nullptr, const char* shareAcrossKeys = nullptr) {
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = test_common::getTestDevice();
+  config["gpu_layers"] = test_common::getTestGpuLayers();
+  config["ctx_size"] = parallel != nullptr ? "8192" : "4096";
+  config["n_predict"] = "12";
+  config["temp"] = "0";
+  config["seed"] = "5";
+  if (parallel != nullptr) {
+    config["parallel"] = parallel;
+  }
+  if (shareAcrossKeys != nullptr) {
+    config["cache_share_across_keys"] = shareAcrossKeys;
+  }
+  config["backendsDir"] = test_common::getTestBackendsDir().string();
+  std::string path = modelPath;
+  std::string projection = projectionPath;
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::move(projection), std::move(config));
+  model->waitForLoadInitialization();
+  return model;
+}
+
+std::string smolVlmPath() {
+  return test_common::BaseTestModelPath::get(
+      "SmolVLM-500M-Instruct-Q8_0.gguf", "SmolVLM-500M-Instruct.gguf");
+}
+
+std::string smolVlmProjectionPath() {
+  return test_common::BaseTestModelPath::get(
+      "mmproj-SmolVLM-500M-Instruct-Q8_0.gguf",
+      "mmproj-SmolVLM-500M-Instruct.gguf");
+}
+
+std::string qwen35ProjectionPath() {
+  return test_common::BaseTestModelPath::get("mmproj-Qwen3.5-0.8B-F16.gguf");
+}
+
+// A fixture from the package `media/` dir; the tests run from the package
+// root or from build/test/unit.
+std::vector<uint8_t> readMediaFixture(const std::string& name) {
+  for (const std::string& root : {"../../../media/", "media/"}) {
+    std::ifstream file(root + name, std::ios::binary);
+    if (file) {
+      return {
+          std::istreambuf_iterator<char>(file),
+          std::istreambuf_iterator<char>()};
+    }
+  }
+  return {};
+}
+
+constexpr const char* K_ANIMAL = "What animal is this? Answer in one word.";
+constexpr const char* K_COLOUR =
+    "What colour is this animal? Answer in one word.";
+
+// A system prompt, then the image `imageName` with `question`: the addon
+// puts a media message's marker at the start of the next user message.
+LlamaModel::Prompt imageQuestion(
+    const std::string& imageName, const std::string& question,
+    const std::string& key, const std::string& baseKey = "") {
+  nlohmann::json messages = nlohmann::json::array(
+      {{{"role", "system"},
+        {"content", "You look at images and answer in one word."}},
+       {{"role", "user"}, {"type", "media"}, {"content", ""}},
+       {{"role", "user"}, {"content", question}}});
+  LlamaModel::Prompt prompt;
+  prompt.input = messages.dump();
+  prompt.media.push_back(readMediaFixture(imageName));
+  prompt.cacheKey = key;
+  prompt.baseCacheKey = baseKey;
+  return prompt;
+}
+
+MtmdLlmContext& visionContext(LlamaModel& model) {
+  auto* mtmd =
+      dynamic_cast<MtmdLlmContext*>(LlamaModelTestPeer::llmContext(model));
+  EXPECT_NE(mtmd, nullptr);
+  return *mtmd;
+}
+
+// The media fixtures are checked in: a missing one fails the test.
+bool visionModelsFound(const std::string& model, const std::string& mmproj) {
+  if (!fs::exists(model) || !fs::exists(mmproj)) {
+    return false;
+  }
+  for (const char* fixture : {"elephant.jpg", "news-paper.jpg"}) {
+    if (readMediaFixture(fixture).empty()) {
+      ADD_FAILURE() << fixture << " media fixture not found";
+      return false;
+    }
+  }
+  return true;
+}
+
+} // namespace
+
+// A new key with the same image starts from the conversation set aside and
+// does not encode the image again; another image is encoded.
+TEST(CrossKeyMultimodalTest, NewKeyReusesTheImageSetAside) {
+  if (!visionModelsFound(smolVlmPath(), smolVlmProjectionPath())) {
+    GTEST_SKIP() << "SmolVLM model or projection not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_vision_a.bin", "cross_vision_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadVisionModel(smolVlmPath(), smolVlmProjectionPath());
+  ASSERT_TRUE(model->isLoaded());
+  MtmdLlmContext& mtmd = visionContext(*model);
+
+  const SingleTurn animal =
+      runSingle(*model, imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+  EXPECT_GT(mtmd.getVisionEncodeTiles(), 0);
+  EXPECT_TRUE(mentions(animal.output, "elephant")) << animal.output;
+
+  const SingleTurn colour =
+      runSingle(*model, imageQuestion("elephant.jpg", K_COLOUR, keys[1]));
+  EXPECT_EQ(mtmd.getVisionEncodeTiles(), 0)
+      << "the new key encoded the image again";
+  EXPECT_GT(colour.reuse, 0u);
+  ASSERT_TRUE(fs::exists(keys[0])) << "the switch did not save the first chat";
+  const std::string firstFile = bytesOf(keys[0]);
+
+  runSingle(*model, imageQuestion("news-paper.jpg", K_ANIMAL, ""));
+  EXPECT_GT(mtmd.getVisionEncodeTiles(), 0) << "another image was not encoded";
+  EXPECT_EQ(bytesOf(keys[0]), firstFile);
+
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// With `cache_share_across_keys` off, a request without a key is reset
+// afterwards and a new key encodes the image again rather than start from
+// another conversation.
+TEST(CrossKeyMultimodalTest, TurnedOffANewKeyEncodesTheImageAgain) {
+  if (!visionModelsFound(smolVlmPath(), smolVlmProjectionPath())) {
+    GTEST_SKIP() << "SmolVLM model or projection not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_vision_off_a.bin", "cross_vision_off_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model =
+      loadVisionModel(smolVlmPath(), smolVlmProjectionPath(), nullptr, "false");
+  ASSERT_TRUE(model->isLoaded());
+  MtmdLlmContext& mtmd = visionContext(*model);
+  runSingle(*model, imageQuestion("elephant.jpg", K_ANIMAL, ""));
+  EXPECT_EQ(LlamaModelTestPeer::llmContext(*model)->getNPast(), 0)
+      << "a request without a key kept its state";
+
+  runSingle(*model, imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+  EXPECT_GT(mtmd.getVisionEncodeTiles(), 0);
+  runSingle(*model, imageQuestion("elephant.jpg", K_COLOUR, keys[1]));
+  EXPECT_GT(mtmd.getVisionEncodeTiles(), 0)
+      << "the new key started from another conversation's image";
+  EXPECT_EQ(mtmd.donorAdoptionsForTesting(), 0u);
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// A prompt too long for the context is refused before another
+// conversation's image state is copied in, so the key keeps its own.
+TEST(CrossKeyMultimodalTest, ARefusedPromptKeepsTheKeysOwnState) {
+  if (!visionModelsFound(smolVlmPath(), smolVlmProjectionPath())) {
+    GTEST_SKIP() << "SmolVLM model or projection not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_vision_refused_a.bin", "cross_vision_refused_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadVisionModel(smolVlmPath(), smolVlmProjectionPath());
+  ASSERT_TRUE(model->isLoaded());
+  MtmdLlmContext& mtmd = visionContext(*model);
+  const SingleTurn animal =
+      runSingle(*model, imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+  const auto continuing = [&](const std::string& key, const std::string& last) {
+    LlamaModel::Prompt prompt = imageQuestion("elephant.jpg", K_ANIMAL, key);
+    nlohmann::json messages = nlohmann::json::parse(prompt.input);
+    messages.push_back({{"role", "assistant"}, {"content", animal.output}});
+    messages.push_back({{"role", "user"}, {"content", last}});
+    prompt.input = messages.dump();
+    return prompt;
+  };
+  // The second key continues the first, so it serves more of the long
+  // prompt below than the first key's own state does.
+  runSingle(*model, continuing(keys[1], K_COLOUR));
+
+  std::string tooLong = K_COLOUR;
+  for (int i = 0; i < 6000; ++i) {
+    tooLong += " filler";
+  }
+  EXPECT_ANY_THROW(runSingle(*model, continuing(keys[0], tooLong)));
+  EXPECT_EQ(mtmd.donorAdoptionsForTesting(), 0u)
+      << "the refused prompt replaced the key's state with another one";
+
+  // The second key serves no more of this prompt than the first key's own
+  // state does, so only a lost state would make it a donor.
+  const SingleTurn again =
+      runSingle(*model, imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+  EXPECT_EQ(mtmd.donorAdoptionsForTesting(), 0u)
+      << "the key's next request started from another conversation";
+  EXPECT_GT(again.reuse, 0u) << "the key lost its own state";
+  EXPECT_EQ(mtmd.getVisionEncodeTiles(), 0)
+      << "the key encoded its image again";
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// A request without a key leaves its image in memory for the next request.
+TEST(CrossKeyMultimodalTest, RequestsWithoutAKeyLeaveTheirImage) {
+  if (!visionModelsFound(smolVlmPath(), smolVlmProjectionPath())) {
+    GTEST_SKIP() << "SmolVLM model or projection not found";
+  }
+  const std::string key = "cross_vision_keyless.bin";
+  fs::remove(key);
+  auto model = loadVisionModel(smolVlmPath(), smolVlmProjectionPath());
+  ASSERT_TRUE(model->isLoaded());
+  MtmdLlmContext& mtmd = visionContext(*model);
+  runSingle(*model, imageQuestion("elephant.jpg", K_ANIMAL, ""));
+  EXPECT_GT(mtmd.getVisionEncodeTiles(), 0);
+
+  const SingleTurn colour =
+      runSingle(*model, imageQuestion("elephant.jpg", K_COLOUR, key));
+  EXPECT_EQ(mtmd.getVisionEncodeTiles(), 0)
+      << "the keyed request encoded the image the keyless one left";
+  EXPECT_GT(colour.reuse, 0u);
+  model.reset();
+  EXPECT_TRUE(fs::exists(key));
+  fs::remove(key);
+}
+
+// A new key whose first request fails before it runs never owned the image
+// conversation set aside in place: switching away or unloading writes
+// nothing to its file, and the memory still serves the next key.
+TEST(CrossKeyMultimodalTest, AFailedFirstRequestSavesNoOtherConversation) {
+  if (!visionModelsFound(smolVlmPath(), smolVlmProjectionPath())) {
+    GTEST_SKIP() << "SmolVLM model or projection not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_vision_failed_first_b.bin", "cross_vision_failed_first_c.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadVisionModel(smolVlmPath(), smolVlmProjectionPath());
+  ASSERT_TRUE(model->isLoaded());
+  MtmdLlmContext& mtmd = visionContext(*model);
+  runSingle(*model, imageQuestion("elephant.jpg", K_ANIMAL, ""));
+
+  std::string tooLong = K_COLOUR;
+  for (int i = 0; i < 6000; ++i) {
+    tooLong += " filler";
+  }
+  EXPECT_ANY_THROW(
+      runSingle(*model, imageQuestion("elephant.jpg", tooLong, keys[0])));
+  EXPECT_ANY_THROW(model->saveCache(keys[0]))
+      << "saveCache wrote a conversation the key never ran";
+  EXPECT_FALSE(fs::exists(keys[0]));
+
+  const SingleTurn colour =
+      runSingle(*model, imageQuestion("elephant.jpg", K_COLOUR, keys[1]));
+  EXPECT_FALSE(fs::exists(keys[0]))
+      << "the switch wrote the conversation without a key to the failed key";
+  EXPECT_EQ(mtmd.getVisionEncodeTiles(), 0)
+      << "the conversation set aside in place stopped serving";
+  EXPECT_GT(colour.reuse, 0u);
+  model.reset();
+  EXPECT_FALSE(fs::exists(keys[0]));
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// `baseCacheKey` serves a fresh model a primed image, and the file stays as
+// it was.
+TEST(CrossKeyMultimodalTest, ABaseCacheKeyServesAPrimedImage) {
+  if (!visionModelsFound(smolVlmPath(), smolVlmProjectionPath())) {
+    GTEST_SKIP() << "SmolVLM model or projection not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_vision_base_primed.bin", "cross_vision_base_d.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  {
+    auto primer = loadVisionModel(smolVlmPath(), smolVlmProjectionPath());
+    ASSERT_TRUE(primer->isLoaded());
+    runSingle(*primer, imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+    primer->saveCache(keys[0]);
+  }
+  ASSERT_TRUE(fs::exists(keys[0]));
+  const std::string base = bytesOf(keys[0]);
+
+  auto model = loadVisionModel(smolVlmPath(), smolVlmProjectionPath());
+  ASSERT_TRUE(model->isLoaded());
+  MtmdLlmContext& mtmd = visionContext(*model);
+  const SingleTurn colour = runSingle(
+      *model, imageQuestion("elephant.jpg", K_COLOUR, keys[1], keys[0]));
+  EXPECT_EQ(mtmd.donorAdoptionsForTesting(), 1u);
+  EXPECT_EQ(mtmd.getVisionEncodeTiles(), 0)
+      << "the request did not start from its baseCacheKey";
+  EXPECT_GT(colour.reuse, 0u);
+  model.reset();
+  EXPECT_EQ(bytesOf(keys[0]), base) << "the base file was written";
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// On the batch path a new key copies the image from another parked
+// conversation, which keeps its own state. The copy answers exactly as the
+// lending key's own state does.
+TEST(CrossKeyMultimodalTest, BatchCopiesAParkedImage) {
+  if (!visionModelsFound(smolVlmPath(), smolVlmProjectionPath())) {
+    GTEST_SKIP() << "SmolVLM model or projection not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_vision_batch_a.bin", "cross_vision_batch_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  BatchedTurn reference;
+  {
+    auto model = loadVisionModel(smolVlmPath(), smolVlmProjectionPath(), "2");
+    ASSERT_TRUE(model->isLoaded());
+    BatchedCacheHarness harness(*model);
+    harness.run(imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+    reference = harness.run(imageQuestion("elephant.jpg", K_COLOUR, keys[0]));
+  }
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadVisionModel(smolVlmPath(), smolVlmProjectionPath(), "2");
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  const BatchedTurn animal =
+      harness.run(imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+  EXPECT_TRUE(mentions(animal.output, "elephant")) << animal.output;
+
+  const BatchedTurn colour =
+      harness.run(imageQuestion("elephant.jpg", K_COLOUR, keys[1]));
+  EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 1u);
+  EXPECT_EQ(colour.visionEncodeTiles, 0)
+      << "the new key encoded the image again";
+  EXPECT_GT(colour.reuse, 0u);
+  EXPECT_EQ(colour.reuse, reference.reuse);
+  EXPECT_EQ(colour.output, reference.output)
+      << "the copied image state differs from the one it came from";
+
+  const uint64_t residentBefore = harness.scheduler().residentHitsForTesting();
+  harness.run(imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+  EXPECT_EQ(harness.scheduler().residentHitsForTesting(), residentBefore + 1)
+      << "the lending conversation lost its parked state";
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// On a hybrid M-RoPE model, which cannot trim its memory, a new key that
+// continues another conversation's image question starts from that
+// conversation's end-of-history checkpoint, on both paths, and the image is
+// not encoded again.
+TEST(CrossKeyMultimodalTest, HybridStartsFromAnotherConversationsCheckpoint) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found() ||
+      !visionModelsFound(modelPath.path, qwen35ProjectionPath())) {
+    GTEST_SKIP() << "Qwen3.5 model or projection not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_vision_hybrid_a.bin", "cross_vision_hybrid_b.bin"};
+  const auto followUp = [&keys]() {
+    LlamaModel::Prompt prompt =
+        imageQuestion("elephant.jpg", K_ANIMAL, keys[1]);
+    nlohmann::json messages = nlohmann::json::parse(prompt.input);
+    messages.push_back({{"role", "assistant"}, {"content", "Elephant."}});
+    messages.push_back({{"role", "user"}, {"content", K_COLOUR}});
+    prompt.input = messages.dump();
+    return prompt;
+  };
+  for (const char* parallel : {static_cast<const char*>(nullptr), "2"}) {
+    SCOPED_TRACE(parallel == nullptr ? "single prompt" : "batch");
+    for (const auto& key : keys) {
+      fs::remove(key);
+    }
+    auto model =
+        loadVisionModel(modelPath.path, qwen35ProjectionPath(), parallel);
+    ASSERT_TRUE(model->isLoaded());
+    if (parallel == nullptr) {
+      MtmdLlmContext& mtmd = visionContext(*model);
+      runSingle(*model, imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+      ASSERT_GT(mtmd.getVisionEncodeTiles(), 0);
+      const SingleTurn colour = runSingle(*model, followUp());
+      EXPECT_EQ(mtmd.getVisionEncodeTiles(), 0)
+          << "the new key encoded the image again";
+      EXPECT_GT(colour.reuse, 0u);
+    } else {
+      BatchedCacheHarness harness(*model);
+      harness.run(imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+      const BatchedTurn colour = harness.run(followUp());
+      EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 1u);
+      EXPECT_EQ(colour.visionEncodeTiles, 0)
+          << "the new key encoded the image again";
+      EXPECT_GT(colour.reuse, 0u);
+      const uint64_t residentBefore =
+          harness.scheduler().residentHitsForTesting();
+      harness.run(imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+      EXPECT_EQ(
+          harness.scheduler().residentHitsForTesting(), residentBefore + 1)
+          << "the lending conversation lost its parked state";
+    }
+    model.reset();
+    for (const auto& key : keys) {
+      fs::remove(key);
+    }
+  }
+}
+
+// A new key generating exactly the image prompt another key primed starts
+// from that key's checkpoint, as the primed key itself does, without encoding
+// the image again (see the text case in CrossKeyPrefixTest).
+TEST(CrossKeyMultimodalTest, HybridExactPromptStartsFromTheDonorsCheckpoint) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found() ||
+      !visionModelsFound(modelPath.path, qwen35ProjectionPath())) {
+    GTEST_SKIP() << "Qwen3.5 model or projection not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_vision_exact_primed.bin", "cross_vision_exact_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  auto model = loadVisionModel(modelPath.path, qwen35ProjectionPath(), "2");
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  LlamaModel::Prompt prime = imageQuestion("elephant.jpg", K_ANIMAL, keys[0]);
+  prime.prefill = true;
+  model->processPromptBatch({prime});
+
+  const BatchedTurn onCopy =
+      harness.run(imageQuestion("elephant.jpg", K_ANIMAL, keys[1]));
+  EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 1u);
+  EXPECT_EQ(onCopy.visionEncodeTiles, 0)
+      << "the new key encoded the image the donor holds";
+  EXPECT_GT(onCopy.reuse, 0u);
+  const BatchedTurn onPrimed =
+      harness.run(imageQuestion("elephant.jpg", K_ANIMAL, keys[0]));
+  EXPECT_EQ(onPrimed.visionEncodeTiles, 0);
+  EXPECT_EQ(onCopy.reuse, onPrimed.reuse);
+  EXPECT_EQ(onCopy.output, onPrimed.output);
+  model.reset();
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+}
+
+// The checkpoint a new key starts from becomes its own: saved with the key
+// and loaded in a fresh model, the same image prompt starts from it again
+// without encoding the image.
+TEST(CrossKeyMultimodalTest, HybridKeyKeepsTheCheckpointItStartedFrom) {
+  const test_common::TestModelPath modelPath = hybridModelPath();
+  if (!modelPath.found() ||
+      !visionModelsFound(modelPath.path, qwen35ProjectionPath())) {
+    GTEST_SKIP() << "Qwen3.5 model or projection not found";
+  }
+  const std::vector<std::string> keys = {
+      "cross_vision_kept_primed.bin", "cross_vision_kept_b.bin"};
+  for (const auto& key : keys) {
+    fs::remove(key);
+  }
+  {
+    auto model = loadVisionModel(modelPath.path, qwen35ProjectionPath(), "2");
+    ASSERT_TRUE(model->isLoaded());
+    BatchedCacheHarness harness(*model);
+    LlamaModel::Prompt prime = imageQuestion("elephant.jpg", K_ANIMAL, keys[0]);
+    prime.prefill = true;
+    model->processPromptBatch({prime});
+    harness.run(imageQuestion("elephant.jpg", K_ANIMAL, keys[1]));
+    ASSERT_EQ(harness.scheduler().donorHitsForTesting(), 1u)
+        << "test setup: the new key did not start from the primed one";
+    model->saveCache(keys[1]);
+  }
+  ASSERT_TRUE(fs::exists(keys[1]));
+
+  auto model = loadVisionModel(modelPath.path, qwen35ProjectionPath(), "2");
+  ASSERT_TRUE(model->isLoaded());
+  BatchedCacheHarness harness(*model);
+  const BatchedTurn again =
+      harness.run(imageQuestion("elephant.jpg", K_ANIMAL, keys[1]));
+  EXPECT_EQ(harness.scheduler().donorHitsForTesting(), 0u);
+  EXPECT_EQ(again.visionEncodeTiles, 0)
+      << "the key's file kept no checkpoint of the state it started from";
+  EXPECT_GT(again.reuse, 0u);
   model.reset();
   for (const auto& key : keys) {
     fs::remove(key);

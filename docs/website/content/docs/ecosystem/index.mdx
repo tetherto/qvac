@@ -75,11 +75,9 @@ QVAC is Tether's answer to centralized AI by ensuring AI is not tied to massive 
   <Card href="/sdk/ai-capabilities/decisions" title={<span className="inline-flex items-center gap-2"><ListChecks className="size-4 text-[var(--color-fd-primary)]" />Decisions</span>}>
     Answer choice, ordinal-score, and statement-probability questions about text for routing and evaluation via Laya.
   </Card>
-  {/* Parked until the cutoff publishes the line that carries the page.
   <Card href="/sdk/ai-capabilities/reranking" title={<span className="inline-flex items-center gap-2"><ArrowDownWideNarrow className="size-4 text-[var(--color-fd-primary)]" />Reranking</span>}>
     Score documents by relevance to a query to reorder search and retrieval results via a cross-encoder reranker.
   </Card>
-  */}
 </Cards>
 
 ## System overview
@@ -119,15 +117,7 @@ QVAC is Tether's answer to centralized AI by ensuring AI is not tied to massive 
   System overview diagram
 </object>
 
-_The SDK is the main entry point for using QVAC_. It is type-safe and exposes all QVAC capabilities through a unified interface. Two clients share that interface — JS/TS (`@qvac/sdk`, running on Node.js, [Bare](https://bare.pears.com), and [Expo](https://expo.dev)) and Python (`tetherto-qvac-sdk`, asyncio-native) — and both call into the same underlying runtime, so capabilities and behavior are identical either way.
-
-{/*
-  The three-client wording, waiting on the Kotlin release. Swap it for the
-  paragraph above once `content/_unpublished/sdk/kotlin-sdk.mdx` is published,
-  and uncomment the Kotlin card below in the same move.
-
-  _The SDK is the main entry point for using QVAC_. It is type-safe and exposes all QVAC capabilities through a unified interface. Three clients share that interface — JS/TS (`@qvac/sdk`, running on Node.js, [Bare](https://bare.pears.com), and [Expo](https://expo.dev)), Python (`tetherto-qvac-sdk`, asyncio-native), and Kotlin (`io.tether:qvac-sdk-kotlin`, plus an Android runtime artifact) — and all call into the same underlying runtime, so capabilities and behavior are identical.
-*/}
+_The SDK is the main entry point for using QVAC_. It is type-safe and exposes all QVAC capabilities through a unified interface. Three clients share that interface — JS/TS (`@qvac/sdk`, running on Node.js, [Bare](https://bare.pears.com), and [Expo](https://expo.dev)), Python (`tetherto-qvac-sdk`, asyncio-native), and Kotlin (`io.tether:qvac-sdk-kotlin`, plus an Android runtime artifact) — and all call into the same underlying runtime, so capabilities and behavior are identical.
 
 Additionally, QVAC provides a CLI with development tools and an HTTP server that wraps QVAC and exposes an [**OpenAI-compatible API**](https://ecosystem.openai.com/docs/api-reference). _You can use the HTTP server as a local model provider to connect any AI tool, harness, or system._
 
@@ -147,15 +137,9 @@ Choose how you want to start with QVAC:
   <Card href="/sdk/python-sdk" icon={<SiPython className="text-[var(--color-fd-primary)]" size={20} />} title="Python SDK">
     Install `tetherto-qvac-sdk`, run the quickstart, and drive the same worker from Python.
   </Card>
-  {/*
-    Waiting on the Kotlin release, like the three-client paragraph above.
-    The href is line-scoped, as its siblings are, so uncommenting it once
-    `content/_unpublished/sdk/kotlin-sdk.mdx` is published needs no edit.
-
-    <Card href="/sdk/kotlin-sdk" icon={<SiKotlin className="text-[var(--color-fd-primary)]" size={20} />} title="Kotlin SDK">
-      Add the KMP client or an embedded Android profile and use coroutine-native APIs.
-    </Card>
-  */}
+  <Card href="/sdk/kotlin-sdk" icon={<SiKotlin className="text-[var(--color-fd-primary)]" size={20} />} title="Kotlin SDK">
+    Add the KMP client or an embedded Android profile and use coroutine-native APIs.
+  </Card>
   <Card href="https://qvac.tether.io/products/workbench/" icon={<MonitorPlay className="text-[var(--color-fd-primary)]" />} title="See QVAC in practice">
     Try QV.AC, our flagship desktop and mobile assistant app built with QVAC.
   </Card>

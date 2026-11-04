@@ -10,8 +10,8 @@ const file_paths_1 = require("./file-paths");
  *
  * Concurrent calls run one at a time within this addon.
  *
- * A model the engine cannot read resolves to `status: "error"`; only a broken
- * request rejects.
+ * A malformed request, a model the engine cannot read, or an ESRGAN output
+ * above the pixel limit rejects.
  */
 async function assessFit(request) {
     if (request.mode !== undefined && request.mode !== 'diffusion' && request.mode !== 'upscale' && request.mode !== 'world') {

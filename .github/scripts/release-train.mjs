@@ -3,7 +3,6 @@
 //   release-train.mjs resolve <ref> <base-sha> <head-sha> [--check-npm]
 //   release-train.mjs slugs <train>
 //   release-train.mjs projects <train>
-//   release-train.mjs from-npm <train>
 //   release-train.mjs published-commit <release-train-<train>-x.y.z>
 //   release-train.mjs exclude <train>
 //   release-train.mjs linked <train>
@@ -15,8 +14,9 @@
 //
 // resolve prints the train and the packages whose version moved between the two
 // commits; publish, wait and tag take that list. Inside a workflow the results
-// go to GITHUB_OUTPUT. exclude takes the train's fromNpm packages out of
-// pnpm-workspace.yaml, for the release commit.
+// go to GITHUB_OUTPUT. exclude takes every workspace package the train depends
+// on outside itself out of pnpm-workspace.yaml, for the release commit, and
+// linked fails if the install still links one.
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
@@ -30,6 +30,7 @@ import {
   linkedOutsideTrain,
   loadTrain,
   movedProjects,
+  outsideTrain,
   parseBranch,
   parseLsRemote,
   parseNpmView,
@@ -41,6 +42,7 @@ import {
   shasumMismatches,
   slugOf,
   stageManifest,
+  workspaceDirs,
 } from './lib/release-train.mjs'
 
 const CATALOG = '.github/release-trains.json'
@@ -95,6 +97,32 @@ function fail (errors) {
 
 function train (name) {
   return loadTrain(name, readRepoJson(CATALOG), readRepoJson('nx.json'))
+}
+
+// The packages the train installs from npm, read from the files on disk.
+function outsideOnDisk (resolved) {
+  const workspace = readFileSync(join(repoRoot, WORKSPACE), 'utf8')
+  const subdirs = (parent) => {
+    const path = join(repoRoot, parent)
+    return existsSync(path) ? readdirSync(path, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name) : []
+  }
+  const manifest = (dir) => {
+    const path = join(repoRoot, dir, 'package.json')
+    return existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null
+  }
+  return outsideTrain(resolved.projects, workspaceDirs(workspace, subdirs).map((dir) => ({ dir, manifest: manifest(dir) })))
+}
+
+// The same, read from a commit.
+function outsideAt (resolved, sha) {
+  const workspace = gitShow(sha, WORKSPACE) ?? ''
+  const subdirs = (parent) => capture('git', ['ls-tree', '-d', '--name-only', sha, `${parent}/`])
+    .split('\n').filter(Boolean).map((path) => path.slice(parent.length + 1))
+  const manifest = (dir) => {
+    const text = gitShow(sha, `${dir}/package.json`)
+    return text && JSON.parse(text)
+  }
+  return outsideTrain(resolved.projects, workspaceDirs(workspace, subdirs).map((dir) => ({ dir, manifest: manifest(dir) })))
 }
 
 function projectRoots (names) {
@@ -154,7 +182,7 @@ function resolveTrain ([ref, base, headRef], options) {
       versionPlans: capture('git', ['ls-tree', '-r', '--name-only', head, '--', '.nx/version-plans']).split('\n').filter(Boolean),
       manifests: Object.fromEntries(projects.map((project) => [project.name, manifestAt(head, project)])),
       workspace: gitShow(head, WORKSPACE) ?? '',
-      fromNpm: resolved.fromNpm.map((dir) => ({ dir, name: manifestAt(head, { dir })?.name ?? null })),
+      outside: outsideAt(resolved, head),
     })
     if (options['check-npm']) {
       for (const project of moved) {
@@ -191,47 +219,38 @@ function printProjects ([name]) {
   console.log(train(name).projects.join(','))
 }
 
-function printFromNpm ([name]) {
-  console.log(JSON.stringify(train(name).fromNpm))
-}
-
 function printPublishedCommit ([ref]) {
   const branch = parseBranch(ref ?? '')
   if (!branch) fail([`usage: published-commit <release-train-<train>-x.y.z>; got '${ref}'`])
   console.log(publishedCommit(train(branch.train), branch.version, (name, version) => npmView(`${name}@${version}`, 'gitHead')))
 }
 
-function excludeFromNpm ([name]) {
+function excludeOutside ([name]) {
   const path = join(repoRoot, WORKSPACE)
   const before = readFileSync(path, 'utf8')
-  const after = excludeFromWorkspace(before, train(name).fromNpm)
+  const dirs = outsideOnDisk(train(name)).map((pkg) => pkg.dir)
+  const after = excludeFromWorkspace(before, dirs)
   if (after === before) {
-    console.log(`${WORKSPACE} already leaves out every fromNpm package of the '${name}' train`)
+    console.log(`${WORKSPACE} already leaves out every package the '${name}' train installs from npm`)
     return
   }
   writeFileSync(path, after)
-  console.log(`${WORKSPACE}: left out ${train(name).fromNpm.join(', ')}. Run \`pnpm install --lockfile-only\` next.`)
+  console.log(`${WORKSPACE}: left out ${dirs.join(', ')}. Run \`pnpm install --lockfile-only\` next.`)
 }
 
 function checkLinked ([name]) {
   const resolved = train(name)
-  const list = (filter, depth) => JSON.parse(capture('pnpm', ['--filter', filter, 'list', '--depth', depth, '--json']))[0]
   const deps = linkedOutsideTrain(resolved.projects, (project) => {
-    const entry = list(project, '0')
-    return ['dependencies', 'optionalDependencies', 'peerDependencies'].flatMap((field) =>
+    const entry = JSON.parse(capture('pnpm', ['--filter', project, 'list', '--depth', '0', '--json']))[0]
+    return ['dependencies', 'devDependencies', 'optionalDependencies', 'peerDependencies'].flatMap((field) =>
       Object.entries(entry?.[field] ?? {}).map(([dep, resolution]) => ({ name: dep, version: resolution.version ?? '' })))
   })
-  const errors = []
-  for (const dep of deps) {
-    const { version } = list(dep.name, '-1')
-    if (isPublished(dep.name, version)) {
-      console.log(`${dep.name}@${version} is on npm (linked by ${dep.dependents.join(', ')})`)
-    } else {
-      errors.push(`${dep.name}@${version} is linked from the workspace but not on npm. ` +
-        `${dep.dependents.join(', ')} would build against code no consumer can install. Release it first, or lower the range.`)
-    }
+  if (deps.length) {
+    fail(deps.map((dep) => `${dep.name} is linked from the workspace for ${dep.dependents.join(', ')}; ` +
+      `the '${name}' train installs it from npm. Run \`node .github/scripts/release-train.mjs exclude ${name}\` ` +
+      'and `pnpm install --lockfile-only`, and commit both files'))
   }
-  if (errors.length) fail(errors)
+  console.log(`The '${name}' train links no package outside itself`)
 }
 
 function packTrain ([name, dest]) {
@@ -383,9 +402,8 @@ const commands = {
   resolve: resolveTrain,
   slugs: printSlugs,
   projects: printProjects,
-  'from-npm': printFromNpm,
   'published-commit': printPublishedCommit,
-  exclude: excludeFromNpm,
+  exclude: excludeOutside,
   linked: checkLinked,
   pack: packTrain,
   stage: stagePackage,

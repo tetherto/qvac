@@ -80,9 +80,6 @@ class LlamaInterface {
         }
         this._handle = this._binding.createInstance(this, configurationParams, outputCb, null);
     }
-    loadWeights(weightsData) {
-        return Promise.resolve(this._binding.loadWeights(this._handle, weightsData));
-    }
     /**
      * Moves addon to the LISTENING state after all the initialization is done
      */
@@ -153,6 +150,14 @@ class LlamaInterface {
         if (!this._handle)
             return Promise.reject(new Error("Model is not loaded"));
         return Promise.resolve(this._binding.discardCache(this._handle, cacheKey));
+    }
+    /**
+     * Tokens `params` takes on the loaded model (see `LlmLlamacpp.calcTokens`).
+     */
+    calcTokens(params) {
+        if (!this._handle)
+            return Promise.reject(new Error("Model is not loaded"));
+        return Promise.resolve(this._binding.calcTokens(this._handle, params));
     }
     /**
      * Run finetuning when native binding provides support.

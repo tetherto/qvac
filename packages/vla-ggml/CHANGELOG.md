@@ -1,5 +1,59 @@
 # Changelog
 
+## [0.35.0] - 2026-11-04
+
+### Breaking
+
+- `load({ backend })` with a GPU family list no longer falls back to CPU. When
+  the host has no usable GPU at all, the backend fails to init, or the weights
+  fail to load on the device, `load()` rejects with `FAILED_TO_LOAD_WEIGHTS`.
+  A named family that is absent still falls through to another accepted GPU,
+  as before. On Jetson Orin 8GB a failed 3.7 GB `cudaMalloc` used to leave
+  `backend: 'cuda'` running on CPU at 50x the latency with only a log line to
+  show for it.
+  `'auto'` keeps the CPU fallback, and so does a list that names it, such as
+  `'cuda,auto'`.
+
+### Added
+
+- Bounded FuzzTest coverage for `safetensors_lite`, the custom length-prefixed
+  header parser used by the π₀.₅ / GR00T parity tests. Linux C++ CI runs the
+  suite after unit tests. Boundary tests cover both file and memory readers,
+  with isolated temporary fixtures for concurrent runs. No public addon API changes.
+
+### Changed
+
+- π₀.₅ `run()` takes 1 to `hparams.numCameras` images instead of exactly
+  `numCameras`. Checkpoints fine-tuned with an empty camera slot, such as
+  `lerobot/pi05_libero_finetuned_v044` with its `empty_camera_0` third view,
+  run by passing only the real views. Native inference already accepted the
+  range; only the JS validator rejected it.
+- `@qvac/fabric` dependency bumped `^0.25.0` -> `^0.26.0`, which carries
+  `qvac-fabric` `11259.2.0` -> `11739.0.0`
+  ([#5331](https://github.com/tetherto/qvac/pull/5331)):
+  a rebase onto upstream llama.cpp b11739, TurboVec 1.1.2, an mtmd
+  image-resize fix, and Linux CUDA, Jetson and HIP backend modules that load
+  in hosts without libstdc++ (such as `bare-sidecar`) instead of falling back
+  to the CPU. A caret on a `0.x` version locks the minor, so `^0.25.0`
+  would not have resolved `0.26.0` on its own. The mobile dev dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.26.0` with it.
+- `@qvac/fabric` 0.26.0 changes the `common` library's API and is not
+  ABI-compatible with 0.25.x, so every addon loaded in one process must resolve
+  the same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.26.0` together.
+- This package needed no code change for the new fabric.
+
+### Fixed
+
+- `sim/requirements.txt` and `scripts/requirements-pi05-oracle.txt` pinned
+  `lerobot==0.5.2`, which is not on PyPI. Both pin `0.5.1` now.
+
+- Cap the safetensors header length at 16 MiB so a corrupt length field cannot
+  allocate before JSON parsing. `open()` checks that length before reading the
+  payload, so a bad header on a large file is rejected without allocating it.
+
+- Native and coverage builds reset fuzz mode when reusing the CMake build tree.
+
 ## [0.34.1] - 2026-10-29
 
 ### Changed

@@ -860,6 +860,13 @@ class AudioEditStreamResponseStats(GeneratedBaseModel):
     real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
+    gpu_fallback_reason: Annotated[
+        float | None,
+        Field(
+            alias="gpuFallbackReason",
+            description="Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
+        ),
+    ] = None
     emitted_frames: Annotated[
         float | None,
         Field(
@@ -1469,6 +1476,13 @@ class AudioGenStreamResponseStats(GeneratedBaseModel):
     real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
+    gpu_fallback_reason: Annotated[
+        float | None,
+        Field(
+            alias="gpuFallbackReason",
+            description="Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
+        ),
+    ] = None
     emitted_frames: Annotated[
         float | None,
         Field(
@@ -1887,6 +1901,13 @@ class AudioUnderstandResponseStats(GeneratedBaseModel):
     real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
+    gpu_fallback_reason: Annotated[
+        float | None,
+        Field(
+            alias="gpuFallbackReason",
+            description="Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
+        ),
+    ] = None
     emitted_frames: Annotated[
         float | None,
         Field(
@@ -2876,8 +2897,20 @@ class BciTranscribeResponseStats(GeneratedBaseModel):
     whisper_decode_time: Annotated[float | None, Field(alias="whisperDecodeTime")] = (
         None
     )
-    encoder_time: Annotated[float | None, Field(alias="encoderTime")] = None
-    decoder_time: Annotated[float | None, Field(alias="decoderTime")] = None
+    encoder_time: Annotated[
+        float | None,
+        Field(
+            alias="encoderTime",
+            description="Parakeet encoder time, or the MOSS audio-encoder time, in ms.",
+        ),
+    ] = None
+    decoder_time: Annotated[
+        float | None,
+        Field(
+            alias="decoderTime",
+            description="Parakeet decoder time, or the MOSS decode time, in ms.",
+        ),
+    ] = None
     mel_spec_time: Annotated[float | None, Field(alias="melSpecTime")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
@@ -2960,6 +2993,36 @@ class BciTranscribeResponseStats(GeneratedBaseModel):
             description="Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
         ),
     ] = None
+    aosc_active: Annotated[
+        float | None,
+        Field(
+            alias="aoscActive",
+            description="Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.",
+        ),
+    ] = None
+    prefill_time: Annotated[
+        float | None,
+        Field(alias="prefillTime", description="MOSS: prompt prefill time, in ms."),
+    ] = None
+    audio_tokens: Annotated[
+        float | None,
+        Field(
+            alias="audioTokens", description="MOSS: audio tokens fed to the decoder."
+        ),
+    ] = None
+    prompt_tokens: Annotated[
+        float | None,
+        Field(
+            alias="promptTokens",
+            description="MOSS: prompt tokens prefilled before decoding.",
+        ),
+    ] = None
+    generated_tokens: Annotated[
+        float | None,
+        Field(
+            alias="generatedTokens", description="MOSS: tokens the decoder generated."
+        ),
+    ] = None
 
 
 class BciTranscribeResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
@@ -2969,6 +3032,19 @@ class BciTranscribeResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
     speaker_id: Annotated[int, Field(alias="speakerId", ge=0, le=9007199254740991)]
     start_ms: Annotated[float, Field(alias="startMs", ge=0.0)]
     end_ms: Annotated[float, Field(alias="endMs", ge=0.0)]
+
+
+class BciTranscribeResponseSegmentTokensItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    text: str
+    start_ms: Annotated[float, Field(alias="startMs", ge=0.0)]
+    end_ms: Annotated[float, Field(alias="endMs", ge=0.0)]
+    probability: Annotated[
+        float,
+        Field(description="Decoder probability of the token (0–1).", ge=0.0, le=1.0),
+    ]
 
 
 class BciTranscribeResponseSegment(GeneratedBaseModel):
@@ -3011,6 +3087,34 @@ class BciTranscribeResponseSegment(GeneratedBaseModel):
         Field(
             alias="startsWord",
             description="Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
+        ),
+    ] = None
+    language: Annotated[
+        str | None,
+        Field(
+            description="Language the segment's window was decoded in, as an ISO 639-1 code such as `en`; the detected language under `language: 'auto'`. Whisper engine only."
+        ),
+    ] = None
+    no_speech_prob: Annotated[
+        float | None,
+        Field(
+            alias="noSpeechProb",
+            description="Probability (0–1) that the segment's window holds no speech, the value `no_speech_thold` is compared against. Whisper engine only.",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
+    speaker_turn_next: Annotated[
+        bool | None,
+        Field(
+            alias="speakerTurnNext",
+            description="A speaker turn follows this segment. Whisper engine only, with `tdrz_enable` on a tinydiarize model.",
+        ),
+    ] = None
+    tokens: Annotated[
+        list[BciTranscribeResponseSegmentTokensItem] | None,
+        Field(
+            description="Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`."
         ),
     ] = None
 
@@ -3219,8 +3323,20 @@ class BciTranscribeStreamResponseStats(GeneratedBaseModel):
     whisper_decode_time: Annotated[float | None, Field(alias="whisperDecodeTime")] = (
         None
     )
-    encoder_time: Annotated[float | None, Field(alias="encoderTime")] = None
-    decoder_time: Annotated[float | None, Field(alias="decoderTime")] = None
+    encoder_time: Annotated[
+        float | None,
+        Field(
+            alias="encoderTime",
+            description="Parakeet encoder time, or the MOSS audio-encoder time, in ms.",
+        ),
+    ] = None
+    decoder_time: Annotated[
+        float | None,
+        Field(
+            alias="decoderTime",
+            description="Parakeet decoder time, or the MOSS decode time, in ms.",
+        ),
+    ] = None
     mel_spec_time: Annotated[float | None, Field(alias="melSpecTime")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
@@ -3303,6 +3419,36 @@ class BciTranscribeStreamResponseStats(GeneratedBaseModel):
             description="Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
         ),
     ] = None
+    aosc_active: Annotated[
+        float | None,
+        Field(
+            alias="aoscActive",
+            description="Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.",
+        ),
+    ] = None
+    prefill_time: Annotated[
+        float | None,
+        Field(alias="prefillTime", description="MOSS: prompt prefill time, in ms."),
+    ] = None
+    audio_tokens: Annotated[
+        float | None,
+        Field(
+            alias="audioTokens", description="MOSS: audio tokens fed to the decoder."
+        ),
+    ] = None
+    prompt_tokens: Annotated[
+        float | None,
+        Field(
+            alias="promptTokens",
+            description="MOSS: prompt tokens prefilled before decoding.",
+        ),
+    ] = None
+    generated_tokens: Annotated[
+        float | None,
+        Field(
+            alias="generatedTokens", description="MOSS: tokens the decoder generated."
+        ),
+    ] = None
 
 
 class BciTranscribeStreamResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
@@ -3312,6 +3458,19 @@ class BciTranscribeStreamResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
     speaker_id: Annotated[int, Field(alias="speakerId", ge=0, le=9007199254740991)]
     start_ms: Annotated[float, Field(alias="startMs", ge=0.0)]
     end_ms: Annotated[float, Field(alias="endMs", ge=0.0)]
+
+
+class BciTranscribeStreamResponseSegmentTokensItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    text: str
+    start_ms: Annotated[float, Field(alias="startMs", ge=0.0)]
+    end_ms: Annotated[float, Field(alias="endMs", ge=0.0)]
+    probability: Annotated[
+        float,
+        Field(description="Decoder probability of the token (0–1).", ge=0.0, le=1.0),
+    ]
 
 
 class BciTranscribeStreamResponseSegment(GeneratedBaseModel):
@@ -3354,6 +3513,34 @@ class BciTranscribeStreamResponseSegment(GeneratedBaseModel):
         Field(
             alias="startsWord",
             description="Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
+        ),
+    ] = None
+    language: Annotated[
+        str | None,
+        Field(
+            description="Language the segment's window was decoded in, as an ISO 639-1 code such as `en`; the detected language under `language: 'auto'`. Whisper engine only."
+        ),
+    ] = None
+    no_speech_prob: Annotated[
+        float | None,
+        Field(
+            alias="noSpeechProb",
+            description="Probability (0–1) that the segment's window holds no speech, the value `no_speech_thold` is compared against. Whisper engine only.",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
+    speaker_turn_next: Annotated[
+        bool | None,
+        Field(
+            alias="speakerTurnNext",
+            description="A speaker turn follows this segment. Whisper engine only, with `tdrz_enable` on a tinydiarize model.",
+        ),
+    ] = None
+    tokens: Annotated[
+        list[BciTranscribeStreamResponseSegmentTokensItem] | None,
+        Field(
+            description="Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`."
         ),
     ] = None
     window_start_timestep: Annotated[
@@ -11439,6 +11626,32 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigAudioFormat(Enum):
     s16le = "s16le"
 
 
+class MainGpu1(RootModel[int]):
+    root: Annotated[
+        int,
+        Field(
+            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+            ge=0,
+            le=2147483647,
+        ),
+    ]
+
+
+class MainGpu2(RootModel[str]):
+    root: Annotated[
+        str,
+        Field(
+            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+            pattern="^\\d+$",
+        ),
+    ]
+
+
+class LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMainGpu(Enum):
+    dedicated = "dedicated"
+    integrated = "integrated"
+
+
 class LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams(
     GeneratedBaseModel
 ):
@@ -11453,7 +11666,20 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams(
         None
     )
     gpu_device: Annotated[
-        float | None, Field(description="GPU device index to use.")
+        float | None,
+        Field(
+            description="GPU device index to use (legacy GPU/IGPU ordinal). Cannot be combined with `main-gpu`."
+        ),
+    ] = None
+    main_gpu: Annotated[
+        MainGpu1
+        | MainGpu2
+        | LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMainGpu
+        | None,
+        Field(
+            alias="main-gpu",
+            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+        ),
     ] = None
 
 
@@ -11725,6 +11951,12 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfig(GeneratedBaseModel):
     initial_prompt: Annotated[
         str | None,
         Field(description="Initial prompt (context) prepended to the transcription."),
+    ] = None
+    carry_initial_prompt: Annotated[
+        bool | None,
+        Field(
+            description="Prepend `initial_prompt` to every decode window instead of only the first. Default false."
+        ),
     ] = None
     language: Annotated[
         str | None,
@@ -12372,7 +12604,32 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
         bool | None,
         Field(
             alias="streamingEnergyVad",
-            description="CTC/TDT/Nemotron-only energy-based voice-activity hint; affects speech segmentation but adds no new event types. For standalone VAD `speaking`/`probability` events, use the whisper engine. Default false.",
+            description="Run the engine's RMS energy detector on CTC, TDT, RNN-T, and Nemotron streaming sessions and emit `{ type: 'vad', source: 'energy' }` events on each speech/silence transition. Tune it with `streamingEnergyVadThresholdDb`, `streamingEnergyVadWindowMs`, and `streamingEnergyVadHangoverMs`. Default false.",
+        ),
+    ] = None
+    streaming_energy_vad_threshold_db: Annotated[
+        float | None,
+        Field(
+            alias="streamingEnergyVadThresholdDb",
+            description="Energy-VAD speech threshold in dBFS RMS; audio above it counts as speech. Default -35.",
+        ),
+    ] = None
+    streaming_energy_vad_window_ms: Annotated[
+        int | None,
+        Field(
+            alias="streamingEnergyVadWindowMs",
+            description="Energy-VAD RMS window in ms; the engine caps it at 1000. Default 30.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    streaming_energy_vad_hangover_ms: Annotated[
+        int | None,
+        Field(
+            alias="streamingEnergyVadHangoverMs",
+            description="Silence the energy VAD requires before leaving the speaking state, in ms. Default 200.",
+            ge=0,
+            le=9007199254740991,
         ),
     ] = None
     streaming_left_context_ms: Annotated[
@@ -12475,6 +12732,20 @@ class LoadModelSrcRequestParakeetTranscriptionModelConfig(GeneratedBaseModel):
             description="AOSC: FIFO-overflow pop-out count. Default 144.",
             gt=0,
             le=9007199254740991,
+        ),
+    ] = None
+    prewarm: Annotated[
+        bool | None,
+        Field(
+            description="Run one synthetic encoder pass while loading so the first request does not pay the GPU shader or kernel compile; Nemotron 3 Diarization also runs one streaming chunk. Default false."
+        ),
+    ] = None
+    prewarm_audio_seconds: Annotated[
+        float | None,
+        Field(
+            alias="prewarmAudioSeconds",
+            description="Length of the prewarm pass in seconds of audio; must be greater than 0. Default 1.",
+            gt=0.0,
         ),
     ] = None
     long_form_window_frames: Annotated[
@@ -12619,7 +12890,13 @@ class LoadModelSrcRequestMossTranscribeModelConfig(GeneratedBaseModel):
         bool | None,
         Field(
             alias="useGPU",
-            description="Enable the linked GPU backend, including Metal. Default false.",
+            description="Select a GPU automatically when `backend` is `auto`, including Metal. Default false.",
+        ),
+    ] = None
+    backend: Annotated[
+        str | None,
+        Field(
+            description="Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `metal`, or an exact ggml device name such as `CUDA0`. An explicit selection overrides `useGPU` and the load fails if it is unavailable."
         ),
     ] = None
     backends_dir: Annotated[
@@ -12731,6 +13008,17 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfigFlashAttention(Enum):
     auto = "auto"
 
 
+class MainGpu3(RootModel[int]):
+    root: Annotated[
+        int,
+        Field(
+            description="GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ]
+
+
 class LoadModelSrcRequestLlamacppEmbeddingModelConfigMainGpu(Enum):
     integrated = "integrated"
     dedicated = "dedicated"
@@ -12830,7 +13118,7 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfig(GeneratedBaseModel):
         ),
     ] = None
     main_gpu: Annotated[
-        MainGpu | LoadModelSrcRequestLlamacppEmbeddingModelConfigMainGpu | None,
+        MainGpu3 | LoadModelSrcRequestLlamacppEmbeddingModelConfigMainGpu | None,
         Field(
             alias="mainGpu",
             description="GPU to use on multi-GPU systems: a device index, or `'integrated'`/`'dedicated'` to restrict selection to that class.",
@@ -12947,7 +13235,7 @@ class LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttn(Enum):
     auto = "auto"
 
 
-class MainGpu2(RootModel[int]):
+class MainGpu4(RootModel[int]):
     root: Annotated[
         int, Field(description="GPU index or device class.", ge=0, le=9007199254740991)
     ]
@@ -13040,7 +13328,7 @@ class LoadModelSrcRequestLlamacppDecisionModelConfig(GeneratedBaseModel):
         ),
     ] = None
     main_gpu: Annotated[
-        MainGpu2 | LoadModelSrcRequestLlamacppDecisionModelConfigMainGpu | None,
+        MainGpu4 | LoadModelSrcRequestLlamacppDecisionModelConfigMainGpu | None,
         Field(alias="main-gpu", description="GPU index or device class."),
     ] = None
     split_mode: Annotated[
@@ -13246,7 +13534,7 @@ class LoadModelSrcRequestLlamacppRerankModelConfig(GeneratedBaseModel):
         ),
     ] = None
     main_gpu: Annotated[
-        MainGpu2 | LoadModelSrcRequestLlamacppRerankModelConfigMainGpu | None,
+        MainGpu4 | LoadModelSrcRequestLlamacppRerankModelConfigMainGpu | None,
         Field(alias="main-gpu", description="GPU index or device class."),
     ] = None
     split_mode: Annotated[
@@ -18598,7 +18886,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigDevice(Enum):
     cpu = "cpu"
 
 
-class MainGpu4(RootModel[int]):
+class MainGpu6(RootModel[int]):
     root: Annotated[
         int,
         Field(
@@ -20397,7 +20685,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         ),
     ] = None
     main_gpu: Annotated[
-        MainGpu4 | LoadModelSrcRequestSdcppGenerationModelConfigMainGpu | None,
+        MainGpu6 | LoadModelSrcRequestSdcppGenerationModelConfigMainGpu | None,
         Field(
             alias="main-gpu",
             description='GPU to pin when `device` is "gpu": a GPU-device index, "integrated", or "dedicated" (the discrete GPU with the most VRAM). Omit to let the backend choose the first enumerated device. Resolved against the addon\'s own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. "integrated" with no integrated GPU, "dedicated" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).',
@@ -21970,6 +22258,32 @@ class ReloadConfigRequestModelConfigAudioFormat(Enum):
     s16le = "s16le"
 
 
+class MainGpu7(RootModel[int]):
+    root: Annotated[
+        int,
+        Field(
+            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+            ge=0,
+            le=2147483647,
+        ),
+    ]
+
+
+class MainGpu8(RootModel[str]):
+    root: Annotated[
+        str,
+        Field(
+            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+            pattern="^\\d+$",
+        ),
+    ]
+
+
+class ReloadConfigRequestModelConfigContextParamsMainGpu(Enum):
+    dedicated = "dedicated"
+    integrated = "integrated"
+
+
 class ReloadConfigRequestModelConfigContextParams(GeneratedBaseModel):
     model: Annotated[
         str | None,
@@ -21982,7 +22296,17 @@ class ReloadConfigRequestModelConfigContextParams(GeneratedBaseModel):
         None
     )
     gpu_device: Annotated[
-        float | None, Field(description="GPU device index to use.")
+        float | None,
+        Field(
+            description="GPU device index to use (legacy GPU/IGPU ordinal). Cannot be combined with `main-gpu`."
+        ),
+    ] = None
+    main_gpu: Annotated[
+        MainGpu7 | MainGpu8 | ReloadConfigRequestModelConfigContextParamsMainGpu | None,
+        Field(
+            alias="main-gpu",
+            description="GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+        ),
     ] = None
 
 
@@ -22249,6 +22573,12 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
         str | None,
         Field(description="Initial prompt (context) prepended to the transcription."),
     ] = None
+    carry_initial_prompt: Annotated[
+        bool | None,
+        Field(
+            description="Prepend `initial_prompt` to every decode window instead of only the first. Default false."
+        ),
+    ] = None
     language: Annotated[
         str | None,
         Field(description="Transcription language (ISO 639-1) or `'auto'` to detect."),
@@ -22506,6 +22836,7 @@ class ModelRegistryGetModelResponseModelEngine(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
+    ggml_image_embedding = "ggml-image-embedding"
     onnx_vad = "onnx-vad"
 
 
@@ -22648,6 +22979,7 @@ class ModelRegistryListResponseModelsItemEngine(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
+    ggml_image_embedding = "ggml-image-embedding"
     onnx_vad = "onnx-vad"
 
 
@@ -22812,6 +23144,7 @@ class ModelRegistrySearchResponseModelsItemEngine(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
+    ggml_image_embedding = "ggml-image-embedding"
     onnx_vad = "onnx-vad"
 
 
@@ -23741,6 +24074,20 @@ class TextToSpeechResponseStats(GeneratedBaseModel):
     enhancer_backend_id: Annotated[float | None, Field(alias="enhancerBackendId")] = (
         None
     )
+    denoiser_backend_device: Annotated[
+        float | None,
+        Field(
+            alias="denoiserBackendDevice",
+            description="LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed.",
+        ),
+    ] = None
+    denoiser_backend_id: Annotated[
+        float | None,
+        Field(
+            alias="denoiserBackendId",
+            description="LavaSR denoiser backend family, same codes as `backendId`.",
+        ),
+    ] = None
     codec_sidecar_loaded: Annotated[
         float | None,
         Field(
@@ -23939,6 +24286,20 @@ class TextToSpeechStreamResponseStats(GeneratedBaseModel):
     enhancer_backend_id: Annotated[float | None, Field(alias="enhancerBackendId")] = (
         None
     )
+    denoiser_backend_device: Annotated[
+        float | None,
+        Field(
+            alias="denoiserBackendDevice",
+            description="LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed.",
+        ),
+    ] = None
+    denoiser_backend_id: Annotated[
+        float | None,
+        Field(
+            alias="denoiserBackendId",
+            description="LavaSR denoiser backend family, same codes as `backendId`.",
+        ),
+    ] = None
     codec_sidecar_loaded: Annotated[
         float | None,
         Field(
@@ -24057,8 +24418,20 @@ class TranscribeResponseStats(GeneratedBaseModel):
     whisper_decode_time: Annotated[float | None, Field(alias="whisperDecodeTime")] = (
         None
     )
-    encoder_time: Annotated[float | None, Field(alias="encoderTime")] = None
-    decoder_time: Annotated[float | None, Field(alias="decoderTime")] = None
+    encoder_time: Annotated[
+        float | None,
+        Field(
+            alias="encoderTime",
+            description="Parakeet encoder time, or the MOSS audio-encoder time, in ms.",
+        ),
+    ] = None
+    decoder_time: Annotated[
+        float | None,
+        Field(
+            alias="decoderTime",
+            description="Parakeet decoder time, or the MOSS decode time, in ms.",
+        ),
+    ] = None
     mel_spec_time: Annotated[float | None, Field(alias="melSpecTime")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
@@ -24141,6 +24514,36 @@ class TranscribeResponseStats(GeneratedBaseModel):
             description="Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
         ),
     ] = None
+    aosc_active: Annotated[
+        float | None,
+        Field(
+            alias="aoscActive",
+            description="Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.",
+        ),
+    ] = None
+    prefill_time: Annotated[
+        float | None,
+        Field(alias="prefillTime", description="MOSS: prompt prefill time, in ms."),
+    ] = None
+    audio_tokens: Annotated[
+        float | None,
+        Field(
+            alias="audioTokens", description="MOSS: audio tokens fed to the decoder."
+        ),
+    ] = None
+    prompt_tokens: Annotated[
+        float | None,
+        Field(
+            alias="promptTokens",
+            description="MOSS: prompt tokens prefilled before decoding.",
+        ),
+    ] = None
+    generated_tokens: Annotated[
+        float | None,
+        Field(
+            alias="generatedTokens", description="MOSS: tokens the decoder generated."
+        ),
+    ] = None
 
 
 class TranscribeResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
@@ -24150,6 +24553,19 @@ class TranscribeResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
     speaker_id: Annotated[int, Field(alias="speakerId", ge=0, le=9007199254740991)]
     start_ms: Annotated[float, Field(alias="startMs", ge=0.0)]
     end_ms: Annotated[float, Field(alias="endMs", ge=0.0)]
+
+
+class TranscribeResponseSegmentTokensItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    text: str
+    start_ms: Annotated[float, Field(alias="startMs", ge=0.0)]
+    end_ms: Annotated[float, Field(alias="endMs", ge=0.0)]
+    probability: Annotated[
+        float,
+        Field(description="Decoder probability of the token (0–1).", ge=0.0, le=1.0),
+    ]
 
 
 class TranscribeResponseSegment(GeneratedBaseModel):
@@ -24194,6 +24610,34 @@ class TranscribeResponseSegment(GeneratedBaseModel):
             description="Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
         ),
     ] = None
+    language: Annotated[
+        str | None,
+        Field(
+            description="Language the segment's window was decoded in, as an ISO 639-1 code such as `en`; the detected language under `language: 'auto'`. Whisper engine only."
+        ),
+    ] = None
+    no_speech_prob: Annotated[
+        float | None,
+        Field(
+            alias="noSpeechProb",
+            description="Probability (0–1) that the segment's window holds no speech, the value `no_speech_thold` is compared against. Whisper engine only.",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
+    speaker_turn_next: Annotated[
+        bool | None,
+        Field(
+            alias="speakerTurnNext",
+            description="A speaker turn follows this segment. Whisper engine only, with `tdrz_enable` on a tinydiarize model.",
+        ),
+    ] = None
+    tokens: Annotated[
+        list[TranscribeResponseSegmentTokensItem] | None,
+        Field(
+            description="Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`."
+        ),
+    ] = None
 
 
 class TranscribeResponseVadSource(Enum):
@@ -24217,6 +24661,12 @@ class TranscribeResponseVad(GeneratedBaseModel):
     ] = None
     speaking: bool
     probability: float
+    timestamp: Annotated[
+        float | None,
+        Field(
+            description="Parakeet: event time in seconds from the start of the streaming session."
+        ),
+    ] = None
     source: Annotated[
         TranscribeResponseVadSource | None,
         Field(
@@ -24389,6 +24839,15 @@ class TranscribeStreamRequestParakeetStreamingConfig(GeneratedBaseModel):
     ] = None
     emit_partials: Annotated[bool | None, Field(alias="emitPartials")] = None
     emit_energy_vad: Annotated[bool | None, Field(alias="emitEnergyVad")] = None
+    energy_vad_threshold_db: Annotated[
+        float | None, Field(alias="energyVadThresholdDb")
+    ] = None
+    energy_vad_window_ms: Annotated[
+        int | None, Field(alias="energyVadWindowMs", gt=0, le=9007199254740991)
+    ] = None
+    energy_vad_hangover_ms: Annotated[
+        int | None, Field(alias="energyVadHangoverMs", ge=0, le=9007199254740991)
+    ] = None
     emit_speaker_vad: Annotated[bool | None, Field(alias="emitSpeakerVad")] = None
     diarization_threshold: Annotated[
         float | None, Field(alias="diarizationThreshold", ge=0.0, le=1.0)
@@ -24464,8 +24923,20 @@ class TranscribeStreamResponseStats(GeneratedBaseModel):
     whisper_decode_time: Annotated[float | None, Field(alias="whisperDecodeTime")] = (
         None
     )
-    encoder_time: Annotated[float | None, Field(alias="encoderTime")] = None
-    decoder_time: Annotated[float | None, Field(alias="decoderTime")] = None
+    encoder_time: Annotated[
+        float | None,
+        Field(
+            alias="encoderTime",
+            description="Parakeet encoder time, or the MOSS audio-encoder time, in ms.",
+        ),
+    ] = None
+    decoder_time: Annotated[
+        float | None,
+        Field(
+            alias="decoderTime",
+            description="Parakeet decoder time, or the MOSS decode time, in ms.",
+        ),
+    ] = None
     mel_spec_time: Annotated[float | None, Field(alias="melSpecTime")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
@@ -24548,6 +25019,36 @@ class TranscribeStreamResponseStats(GeneratedBaseModel):
             description="Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
         ),
     ] = None
+    aosc_active: Annotated[
+        float | None,
+        Field(
+            alias="aoscActive",
+            description="Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.",
+        ),
+    ] = None
+    prefill_time: Annotated[
+        float | None,
+        Field(alias="prefillTime", description="MOSS: prompt prefill time, in ms."),
+    ] = None
+    audio_tokens: Annotated[
+        float | None,
+        Field(
+            alias="audioTokens", description="MOSS: audio tokens fed to the decoder."
+        ),
+    ] = None
+    prompt_tokens: Annotated[
+        float | None,
+        Field(
+            alias="promptTokens",
+            description="MOSS: prompt tokens prefilled before decoding.",
+        ),
+    ] = None
+    generated_tokens: Annotated[
+        float | None,
+        Field(
+            alias="generatedTokens", description="MOSS: tokens the decoder generated."
+        ),
+    ] = None
 
 
 class TranscribeStreamResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
@@ -24557,6 +25058,19 @@ class TranscribeStreamResponseSegmentSpeakerSegmentsItem(GeneratedBaseModel):
     speaker_id: Annotated[int, Field(alias="speakerId", ge=0, le=9007199254740991)]
     start_ms: Annotated[float, Field(alias="startMs", ge=0.0)]
     end_ms: Annotated[float, Field(alias="endMs", ge=0.0)]
+
+
+class TranscribeStreamResponseSegmentTokensItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    text: str
+    start_ms: Annotated[float, Field(alias="startMs", ge=0.0)]
+    end_ms: Annotated[float, Field(alias="endMs", ge=0.0)]
+    probability: Annotated[
+        float,
+        Field(description="Decoder probability of the token (0–1).", ge=0.0, le=1.0),
+    ]
 
 
 class TranscribeStreamResponseSegment(GeneratedBaseModel):
@@ -24601,6 +25115,34 @@ class TranscribeStreamResponseSegment(GeneratedBaseModel):
             description="Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
         ),
     ] = None
+    language: Annotated[
+        str | None,
+        Field(
+            description="Language the segment's window was decoded in, as an ISO 639-1 code such as `en`; the detected language under `language: 'auto'`. Whisper engine only."
+        ),
+    ] = None
+    no_speech_prob: Annotated[
+        float | None,
+        Field(
+            alias="noSpeechProb",
+            description="Probability (0–1) that the segment's window holds no speech, the value `no_speech_thold` is compared against. Whisper engine only.",
+            ge=0.0,
+            le=1.0,
+        ),
+    ] = None
+    speaker_turn_next: Annotated[
+        bool | None,
+        Field(
+            alias="speakerTurnNext",
+            description="A speaker turn follows this segment. Whisper engine only, with `tdrz_enable` on a tinydiarize model.",
+        ),
+    ] = None
+    tokens: Annotated[
+        list[TranscribeStreamResponseSegmentTokensItem] | None,
+        Field(
+            description="Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`."
+        ),
+    ] = None
 
 
 class TranscribeStreamResponseVadSource(Enum):
@@ -24624,6 +25166,12 @@ class TranscribeStreamResponseVad(GeneratedBaseModel):
     ] = None
     speaking: bool
     probability: float
+    timestamp: Annotated[
+        float | None,
+        Field(
+            description="Parakeet: event time in seconds from the start of the streaming session."
+        ),
+    ] = None
     source: Annotated[
         TranscribeStreamResponseVadSource | None,
         Field(

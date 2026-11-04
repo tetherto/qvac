@@ -12,7 +12,7 @@ const { name, version } = require("../package.json") as {
   version: string;
 };
 
-// This library has error code range from 8001 to 9000
+// Reservations are maintained in packages/error/code-ranges.json, excluding OCR's block.
 export const ERR_CODES = Object.freeze({
   FAILED_TO_LOAD_WEIGHTS: 8001,
   FAILED_TO_CANCEL: 8002,
