@@ -10,7 +10,8 @@ import {
   buildWavHeader,
   buildStreamingWavHeader,
   buildWavBuffer,
-  speechAliasKey
+  speechAliasKey,
+  speechInstructFor
 } from '@/serve/extensions/openai/audio'
 import { parseOpenAIOptions } from '@/serve/extensions/openai/config'
 import { speechEncodeArgs, ENCODED_SPEECH_FORMATS } from '@/serve/lib/audio-transcode'
@@ -292,5 +293,19 @@ describe('parseOpenAIOptions — audio.speech.maxInputChars', () => {
         /serve\.openai\.audio\.speech\.maxInputChars must be a positive integer or null/
       )
     }
+  })
+})
+
+describe('speechInstructFor', () => {
+  it('forwards a trimmed instructions string to CosyVoice3 models', () => {
+    assert.equal(speechInstructFor('cosyvoice3', '  请用广东话表达。 '), '请用广东话表达。')
+  })
+
+  it('returns undefined for other engines, blank text, and non-strings', () => {
+    assert.equal(speechInstructFor('chatterbox', 'speak softly'), undefined)
+    assert.equal(speechInstructFor(undefined, 'speak softly'), undefined)
+    assert.equal(speechInstructFor('cosyvoice3', '   '), undefined)
+    assert.equal(speechInstructFor('cosyvoice3', undefined), undefined)
+    assert.equal(speechInstructFor('cosyvoice3', 42), undefined)
   })
 })

@@ -32,7 +32,8 @@ import {
   mapResponseFormat,
   pcmContentType,
   resolveSampleRate,
-  speechAliasKey
+  speechAliasKey,
+  speechInstructFor
 } from '@/serve/extensions/openai/audio'
 import {
   transcodeWav,
@@ -140,8 +141,13 @@ as usual; a failure after it arrives as a final \`{ "error": ... }\` event.
 \`model_not_found\`; \`502\` \`speech_empty\`, \`transcode_failed\`; \`503\`
 \`transcode_unavailable\`, \`model_not_ready\`.
 
+**\`instructions\`** reaches CosyVoice3 aliases (\`ttsEngine\` \`cosyvoice3\`)
+as the engine's per-request \`instruct\` control, a raw natural-language
+instruction such as a Chinese dialect, emotion or speaking style. Other engines
+have no free-text voice control, so there it is an ignored param.
+
 **Ignored params** (logged, returned in \`X-QVAC-Ignored-Params\` header):
-\`speed\`, \`instructions\`.
+\`speed\`; \`instructions\` on every engine but CosyVoice3.
 `.trim(),
   voices: `
 List the configured TTS voices. Returns the OpenAI \`voice\` names mapped under
@@ -465,6 +471,11 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       for (const key of SPEECH_UNSUPPORTED_PARAMS) {
         if ((body as Record<string, unknown>)[key] !== undefined) ignoredParams.push(key)
       }
+      const instruct = speechInstructFor(ttsEngine, body.instructions)
+      if (body.instructions !== undefined && ttsEngine !== 'cosyvoice3') {
+        ctx.logger.warn('Ignoring unsupported param: instructions')
+        ignoredParams.push('instructions')
+      }
 
       ctx.logger.info(
         `  speech model=${alias} voice=${voice} format=${formatMapping.format} chars=${input.length} ` +
@@ -478,6 +489,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           format: formatMapping.format === 'pcm' ? 'pcm' : 'wav',
           fallbackSampleRate: resolveSampleRate(registryEntry.config),
           ignoredParams,
+          ...(instruct !== undefined ? { instruct } : {}),
           ...(openai.textToSpeechStreamOverride !== undefined
             ? { streamFn: openai.textToSpeechStreamOverride }
             : {})
@@ -489,7 +501,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         modelId: sdkModelId,
         text: input,
         inputType: 'text',
-        stream: true
+        stream: true,
+        ...(instruct !== undefined ? { instruct } : {})
       })
       // A client that disconnects mid-synthesis should stop the engine, not
       // just stop receiving — same binding completions and transcriptions use.
@@ -630,6 +643,8 @@ interface StreamSpeechOptions {
   format: 'wav' | 'pcm'
   fallbackSampleRate: number
   ignoredParams: string[]
+  /** CosyVoice3 per-request natural-language control (OpenAI `instructions`). */
+  instruct?: string
   streamFn?: typeof textToSpeechStream
 }
 
@@ -641,7 +656,8 @@ async function streamSpeech(
   const logger = req.server.qvac.logger
   const session = await (opts.streamFn ?? textToSpeechStream)({
     modelId: opts.sdkModelId,
-    inputType: 'text'
+    inputType: 'text',
+    ...(opts.instruct !== undefined ? { instruct: opts.instruct } : {})
   })
   req.bindCancel(session.requestId)
   session.write(opts.input)

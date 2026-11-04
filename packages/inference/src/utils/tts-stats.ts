@@ -43,33 +43,73 @@ export function appendPcm(target: number[], samples: ArrayLike<number>) {
   for (let i = 0; i < samples.length; i++) target.push(samples[i]!)
 }
 
-// Field-for-field, apart from `audioDurationMs` -> `audioDuration`, which keeps
-// the name the SDK has always exposed.
+/**
+ * The addon stats that keep their name on the wire. `audioDurationMs` is the
+ * one rename (`audioDuration`, the name the SDK has always exposed) and is
+ * handled on its own below. Every entry is a key of both the addon's stats and
+ * `ttsStatsSchema`, so a field added to one side without the other fails to
+ * compile here rather than being dropped silently.
+ */
+const TTS_FORWARDED_STATS = [
+  'totalTime',
+  'realTimeFactor',
+  'tokensPerSecond',
+  'totalSamples',
+  'generatedFrames',
+  'firstAudioMs',
+  'backendDevice',
+  'backendId',
+  'gpuUnsupported',
+  'enhancerBackendDevice',
+  'enhancerBackendId',
+  'denoiserBackendDevice',
+  'denoiserBackendId',
+  'codecSidecarLoaded',
+  'codecOnCoreml',
+  // Chatterbox
+  't3Ms',
+  's3genMs',
+  't3Tokens',
+  // CosyVoice3 / Audio8
+  'stageTotalMs',
+  // CosyVoice3
+  'lmPrefillMs',
+  'lmDecodeMs',
+  'flowFrontendMs',
+  'ditEulerMs',
+  'hiftF0Ms',
+  'hiftSourceMs',
+  'hiftStftMs',
+  'hiftDecodeMs',
+  'decodeSteps',
+  'speechTokens',
+  'flowFrames',
+  'melFrames',
+  'textIds',
+  'promptSpeechTokens',
+  // Audio8
+  'voiceEncodeMs',
+  'promptMs',
+  'prefillMs',
+  'sampleMs',
+  'fastDecodeMs',
+  'slowDecodeMs',
+  'codecLatentMs',
+  'codecSynthMs',
+  'resampleMs'
+] as const satisfies readonly (keyof AddonTtsStats & keyof TtsStats)[]
+
+// Presence, not truthiness: `backendDevice: 0` (CPU) and a zero stage time are
+// real reports, so only `undefined` is dropped.
 export function collectTtsStats(response: { stats?: AddonTtsStats }): TtsStats {
   const stats = response.stats
   if (!stats) return {}
 
-  return {
-    ...(stats.audioDurationMs !== undefined && { audioDuration: stats.audioDurationMs }),
-    ...(stats.totalTime !== undefined && { totalTime: stats.totalTime }),
-    ...(stats.realTimeFactor !== undefined && { realTimeFactor: stats.realTimeFactor }),
-    ...(stats.tokensPerSecond !== undefined && { tokensPerSecond: stats.tokensPerSecond }),
-    ...(stats.totalSamples !== undefined && { totalSamples: stats.totalSamples }),
-    ...(stats.generatedFrames !== undefined && { generatedFrames: stats.generatedFrames }),
-    ...(stats.backendDevice !== undefined && { backendDevice: stats.backendDevice }),
-    ...(stats.backendId !== undefined && { backendId: stats.backendId }),
-    ...(stats.gpuUnsupported !== undefined && { gpuUnsupported: stats.gpuUnsupported }),
-    ...(stats.enhancerBackendDevice !== undefined && {
-      enhancerBackendDevice: stats.enhancerBackendDevice
-    }),
-    ...(stats.enhancerBackendId !== undefined && { enhancerBackendId: stats.enhancerBackendId }),
-    ...(stats.denoiserBackendDevice !== undefined && {
-      denoiserBackendDevice: stats.denoiserBackendDevice
-    }),
-    ...(stats.denoiserBackendId !== undefined && { denoiserBackendId: stats.denoiserBackendId }),
-    ...(stats.codecSidecarLoaded !== undefined && {
-      codecSidecarLoaded: stats.codecSidecarLoaded
-    }),
-    ...(stats.codecOnCoreml !== undefined && { codecOnCoreml: stats.codecOnCoreml })
+  const out: TtsStats = {}
+  if (stats.audioDurationMs !== undefined) out.audioDuration = stats.audioDurationMs
+  for (const key of TTS_FORWARDED_STATS) {
+    const value = stats[key]
+    if (value !== undefined) out[key] = value
   }
+  return out
 }

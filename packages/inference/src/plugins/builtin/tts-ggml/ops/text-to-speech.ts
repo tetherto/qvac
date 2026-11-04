@@ -20,11 +20,15 @@ import {
   type ParlerJobOptions
 } from '@/plugins/builtin/tts-ggml/ops/parler-options'
 import { bindTtsCancel, cancelIfAborted } from '@/plugins/builtin/tts-ggml/ops/cancel-binding'
+import {
+  resolveVoiceJobOptions,
+  type VoiceJobOptions
+} from '@/plugins/builtin/tts-ggml/ops/voice-options'
 
 type RunStreamModel = {
   runStream: (
     text: string,
-    options?: ParlerJobOptions & { locale?: string; maxChunkScalars?: number }
+    options?: ParlerJobOptions & VoiceJobOptions & { locale?: string; maxChunkScalars?: number }
   ) => Promise<{
     iterate: () => AsyncIterable<TtsStreamChunk>
     stats?: AddonTtsStats
@@ -77,6 +81,7 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
   const model = getModel(modelId)
   const mossJobOptions = getMossJobOptions(model, request)
   assertParlerJobOptionsSupported(model, parlerJobOptions, 'textToSpeech')
+  const voiceJobOptions = await resolveVoiceJobOptions(model, request, 'textToSpeech')
 
   // MOSS streams natively: one job over the whole text, emitting a chunk every
   // `streamChunkTokens` codec frames while the backbone is still generating.
@@ -111,13 +116,15 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
     const streamOpts =
       sentenceStreamLocale !== undefined ||
       sentenceStreamMaxChunkScalars !== undefined ||
-      Object.keys(parlerJobOptions).length > 0
+      Object.keys(parlerJobOptions).length > 0 ||
+      Object.keys(voiceJobOptions).length > 0
         ? {
             ...(sentenceStreamLocale !== undefined ? { locale: sentenceStreamLocale } : {}),
             ...(sentenceStreamMaxChunkScalars !== undefined
               ? { maxChunkScalars: sentenceStreamMaxChunkScalars }
               : {}),
-            ...parlerJobOptions
+            ...parlerJobOptions,
+            ...voiceJobOptions
           }
         : undefined
 
@@ -181,6 +188,7 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
       ? { maxChunkScalars: sentenceStreamMaxChunkScalars }
       : {}),
     ...parlerJobOptions,
+    ...voiceJobOptions,
     ...mossJobOptions
   })) as unknown as TtsResponse
 
