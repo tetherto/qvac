@@ -32,7 +32,8 @@
         "command": "node ci/python.mjs unit"
       },
       "metadata": {
-        "setup": ["python"]
+        "setup": ["python"],
+        "sources": ["self"]
       }
     },
     "verify:generated": {
