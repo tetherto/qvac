@@ -42,22 +42,32 @@
     },
     "gte-large_fp16-00001-of-00005.gguf": {
       "s3Path": "qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00001-of-00005.gguf",
+      "sha256": "81c871b0433ed75adb4b1888f4396248c0a587f509f45050b2b65de9b8e86a3b",
+      "bytes": 156815424,
       "dest": "test/model/gte-large_fp16-00001-of-00005.gguf"
     },
     "gte-large_fp16-00002-of-00005.gguf": {
       "s3Path": "qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00002-of-00005.gguf",
+      "sha256": "da7f5a2e0ba4f6769599cb7d2735f19a8022eb065973d7584081cf67617a064d",
+      "bytes": 159721216,
       "dest": "test/model/gte-large_fp16-00002-of-00005.gguf"
     },
     "gte-large_fp16-00003-of-00005.gguf": {
       "s3Path": "qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00003-of-00005.gguf",
+      "sha256": "d95b830af36d2dfa1d4c7c156ac59be767a5f9b5d37288533d3add7a90ec3822",
+      "bytes": 159737792,
       "dest": "test/model/gte-large_fp16-00003-of-00005.gguf"
     },
     "gte-large_fp16-00004-of-00005.gguf": {
       "s3Path": "qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00004-of-00005.gguf",
+      "sha256": "6def2c28f1b6314403a39c54250d870333d273e31446717f8670a4e1d5861d20",
+      "bytes": 159721120,
       "dest": "test/model/gte-large_fp16-00004-of-00005.gguf"
     },
     "gte-large_fp16-00005-of-00005.gguf": {
       "s3Path": "qvac_models_compiled/ggml/gte-large_fp6/2025-08-21/gte-large_fp16-00005-of-00005.gguf",
+      "sha256": "f5ff10900f675900a1838536746d23ccc6adcfed074f89f7a4ac4d3167401d08",
+      "bytes": 33608768,
       "dest": "test/model/gte-large_fp16-00005-of-00005.gguf"
     },
     "laya-multilingual-Q8_0.gguf": {
