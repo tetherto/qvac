@@ -23,19 +23,23 @@ function randomId(): string {
   return crypto.randomUUID()
 }
 
-export interface ReasoningSegment {
+/** One `message` or `reasoning` output item, in the order the model produced it. */
+export interface OutputSegment {
+  type: 'message' | 'reasoning'
   id: string
   text: string
-  /** Streamed after the message item opened, so it follows the message in `output`. */
-  afterMessage?: boolean
 }
 
 export interface BuildResponseObjectParams {
   id: string
   modelAlias: string
+  /** The answer, all message text joined; `output_text`. */
   text: string
-  /** Model reasoning, each segment returned as a `reasoning` output item. */
-  reasoning?: ReasoningSegment[]
+  /**
+   * Message and reasoning items in order. Without it, `output` holds one
+   * message carrying `text`.
+   */
+  items?: OutputSegment[]
   toolCalls: ToolCall[] | null | undefined
   createdAtSec: number
   metadata: Record<string, unknown> | null | undefined
@@ -71,20 +75,16 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
   const msgId = params.messageItemId ?? messageId()
   const output: unknown[] = []
 
-  const reasoning = params.reasoning ?? []
-  for (const r of reasoning) {
-    if (!r.afterMessage) output.push(reasoningItem(r.id, r.text))
-  }
-
-  output.push({
-    type: 'message',
-    id: msgId,
-    status: 'completed',
-    role: 'assistant',
-    content: [{ type: 'output_text', text: params.text || '', annotations: [] }]
-  })
-  for (const r of reasoning) {
-    if (r.afterMessage) output.push(reasoningItem(r.id, r.text))
+  if (params.items) {
+    for (const item of params.items) {
+      output.push(
+        item.type === 'message'
+          ? messageItem(item.id, item.text)
+          : reasoningItem(item.id, item.text)
+      )
+    }
+  } else {
+    output.push(messageItem(msgId, params.text || ''))
   }
 
   const openaiCalls = sdkToolCallsToOpenai(params.toolCalls)
@@ -170,5 +170,15 @@ export function reasoningItem(id: string, text: string): Record<string, unknown>
     status: 'completed',
     summary: [],
     content: [{ type: 'reasoning_text', text }]
+  }
+}
+
+export function messageItem(id: string, text: string): Record<string, unknown> {
+  return {
+    type: 'message',
+    id,
+    status: 'completed',
+    role: 'assistant',
+    content: [{ type: 'output_text', text, annotations: [] }]
   }
 }

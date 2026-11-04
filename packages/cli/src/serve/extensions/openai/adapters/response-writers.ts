@@ -18,9 +18,10 @@ import {
   buildResponseObject,
   functionCallOutputItemId,
   messageId,
+  messageItem,
   reasoningItem,
   reasoningItemId,
-  type ReasoningSegment
+  type OutputSegment
 } from '@/serve/extensions/openai/adapters/responses-shape'
 import {
   RESPONSES_DEFAULT_TTL_SEC,
@@ -65,6 +66,124 @@ export interface ResponsesHandlerParams {
   previousResponseId: string | null
 }
 
+type SendEvent = (event: Record<string, unknown>) => void
+
+interface OutputTimeline {
+  text: (token: string) => void
+  reasoning: (token: string) => void
+  /** Drops the items so far from the answer; a `tool_search` round streamed them. */
+  newTurn: () => void
+  /** Closes the open item and returns the answer's items, always with a message. */
+  finish: () => { items: OutputSegment[]; nextOutputIndex: number }
+}
+
+// Output items in the order the model produces them. Each item finishes before
+// the next starts, so text that follows reasoning opens a new message item.
+// Streaming passes `send` to emit the matching SSE events; blocking does not.
+function createOutputTimeline(send?: SendEvent): OutputTimeline {
+  type Open = OutputSegment & { outputIndex: number }
+  let nextOutputIndex = 0
+  let open: Open | undefined
+  let turn: Open[] = []
+
+  function start(type: OutputSegment['type']): Open {
+    const item: Open = {
+      type,
+      id: type === 'message' ? messageId() : reasoningItemId(),
+      text: '',
+      outputIndex: nextOutputIndex++
+    }
+    open = item
+    turn.push(item)
+    const part = type === 'message' ? 'output_text' : 'reasoning_text'
+    send?.({
+      type: 'response.output_item.added',
+      output_index: item.outputIndex,
+      item:
+        type === 'message'
+          ? { type: 'message', id: item.id, status: 'in_progress', role: 'assistant', content: [] }
+          : { type: 'reasoning', id: item.id, status: 'in_progress', summary: [], content: [] }
+    })
+    send?.({
+      type: 'response.content_part.added',
+      item_id: item.id,
+      output_index: item.outputIndex,
+      content_index: 0,
+      part: { type: part, text: '' }
+    })
+    return item
+  }
+
+  function close(): void {
+    const item = open
+    if (!item) return
+    open = undefined
+    const part = item.type === 'message' ? 'output_text' : 'reasoning_text'
+    send?.({
+      type: item.type === 'message' ? 'response.output_text.done' : 'response.reasoning_text.done',
+      item_id: item.id,
+      output_index: item.outputIndex,
+      content_index: 0,
+      text: item.text
+    })
+    send?.({
+      type: 'response.content_part.done',
+      item_id: item.id,
+      output_index: item.outputIndex,
+      content_index: 0,
+      part: { type: part, text: item.text }
+    })
+    send?.({
+      type: 'response.output_item.done',
+      output_index: item.outputIndex,
+      item:
+        item.type === 'message'
+          ? messageItem(item.id, item.text)
+          : reasoningItem(item.id, item.text)
+    })
+  }
+
+  function add(type: OutputSegment['type'], token: string): void {
+    let item = open
+    if (item?.type !== type) {
+      close()
+      item = start(type)
+    }
+    item.text += token
+    send?.({
+      type: type === 'message' ? 'response.output_text.delta' : 'response.reasoning_text.delta',
+      item_id: item.id,
+      output_index: item.outputIndex,
+      content_index: 0,
+      delta: token
+    })
+  }
+
+  return {
+    text: (token) => add('message', token),
+    reasoning: (token) => add('reasoning', token),
+    newTurn: () => {
+      close()
+      turn = []
+    },
+    finish: () => {
+      if (!turn.some((item) => item.type === 'message')) start('message')
+      close()
+      return {
+        items: turn.map(({ type, id, text }) => ({ type, id, text })),
+        nextOutputIndex
+      }
+    }
+  }
+}
+
+function answerText(items: OutputSegment[]): string {
+  return items
+    .filter((item) => item.type === 'message')
+    .map((item) => item.text)
+    .join('')
+}
+
 export async function writeBlockingResponse(
   res: ServerResponse,
   p: ResponsesHandlerParams,
@@ -76,11 +195,12 @@ export async function writeBlockingResponse(
   let turnHistory = p.history
   let drained
   let total: DrainedOpenAICompletion | undefined
-  const thoughts: string[] = []
+  const timeline = createOutputTimeline()
   for (let round = 0; ; round++) {
-    drained = await drainCompletion(runTurn(turnHistory))
+    // As in streaming, only the answering turn's items belong in the response.
+    if (round > 0) timeline.newTurn()
+    drained = await drainCompletion(runTurn(turnHistory), timeline.text, timeline.reasoning)
     total = accumulateUsage(total, drained)
-    if (drained.thinking) thoughts.push(drained.thinking)
     if (round >= MAX_TOOL_SEARCH_ROUNDS) break
     const extended = foldToolSearch(
       p.tools,
@@ -91,17 +211,17 @@ export async function writeBlockingResponse(
     if (!extended) break
     turnHistory = extended
   }
-  const { text, toolCalls, toolErrors, stats, stopReason, completionTokens } = stripToolSearchCalls(
+  const { toolCalls, toolErrors, stats, stopReason, completionTokens } = stripToolSearchCalls(
     p.tools,
     total ?? drained
   )
-  const thinking = thoughts.join('\n\n')
+  const { items } = timeline.finish()
 
   const responseObject = buildResponseObject({
     id: p.rid,
     modelAlias: p.modelAlias,
-    text,
-    ...(thinking ? { reasoning: [{ id: reasoningItemId(), text: thinking }] } : {}),
+    text: answerText(items),
+    items,
     toolCalls,
     createdAtSec: p.createdAtSec,
     metadata: p.metadata,
@@ -149,14 +269,6 @@ export async function writeStreamingResponse(
   p: ResponsesHandlerParams,
   runTurn: RunTurn
 ): Promise<Record<string, unknown>> {
-  const msgId = messageId()
-  let fullText = ''
-  let nextOutputIndex = 0
-  let messageIndex: number | undefined
-  type StreamedReasoning = ReasoningSegment & { outputIndex: number }
-  const reasoning: StreamedReasoning[] = []
-  let openReasoning: StreamedReasoning | undefined
-
   sendSSE(res, {
     type: 'response.created',
     response: {
@@ -168,128 +280,20 @@ export async function writeStreamingResponse(
     }
   })
 
-  // Items open in the order the model produces them. Each run of reasoning gets
-  // its own item, closed by the next answer text; the message opens once.
-  const closeReasoning = () => {
-    const r = openReasoning
-    if (!r) return
-    openReasoning = undefined
-    sendSSE(res, {
-      type: 'response.reasoning_text.done',
-      item_id: r.id,
-      output_index: r.outputIndex,
-      content_index: 0,
-      text: r.text,
-      response_id: p.rid
-    })
-    sendSSE(res, {
-      type: 'response.content_part.done',
-      item_id: r.id,
-      output_index: r.outputIndex,
-      content_index: 0,
-      part: { type: 'reasoning_text', text: r.text },
-      response_id: p.rid
-    })
-    sendSSE(res, {
-      type: 'response.output_item.done',
-      output_index: r.outputIndex,
-      item: reasoningItem(r.id, r.text),
-      response_id: p.rid
-    })
-  }
-
-  const openMessage = (): number => {
-    closeReasoning()
-    if (messageIndex !== undefined) return messageIndex
-    messageIndex = nextOutputIndex++
-    sendSSE(res, {
-      type: 'response.output_item.added',
-      output_index: messageIndex,
-      item: { type: 'message', id: msgId, status: 'in_progress', role: 'assistant', content: [] },
-      sequence_number: 0,
-      response_id: p.rid
-    })
-    sendSSE(res, {
-      type: 'response.content_part.added',
-      item_id: msgId,
-      output_index: messageIndex,
-      content_index: 0,
-      part: { type: 'output_text', text: '' },
-      response_id: p.rid
-    })
-    return messageIndex
-  }
-
   // Every turn streams live. Tool-call syntax is framed into `toolCall` events
   // by the normalizer, so a search turn emits no text deltas to withhold; what
   // it can emit is a preamble, which is fine to show. Only the SSE stream is
   // held open across a search round.
-  const sendDelta = (token: string) =>
-    sendSSE(res, {
-      type: 'response.output_text.delta',
-      item_id: msgId,
-      output_index: openMessage(),
-      content_index: 0,
-      delta: token,
-      response_id: p.rid
-    })
-
-  const sendReasoningDelta = (token: string) => {
-    if (!openReasoning) {
-      openReasoning = {
-        id: reasoningItemId(),
-        text: '',
-        outputIndex: nextOutputIndex++,
-        afterMessage: messageIndex !== undefined
-      }
-      reasoning.push(openReasoning)
-      sendSSE(res, {
-        type: 'response.output_item.added',
-        output_index: openReasoning.outputIndex,
-        item: {
-          type: 'reasoning',
-          id: openReasoning.id,
-          status: 'in_progress',
-          summary: [],
-          content: []
-        },
-        response_id: p.rid
-      })
-      sendSSE(res, {
-        type: 'response.content_part.added',
-        item_id: openReasoning.id,
-        output_index: openReasoning.outputIndex,
-        content_index: 0,
-        part: { type: 'reasoning_text', text: '' },
-        response_id: p.rid
-      })
-    }
-    openReasoning.text += token
-    sendSSE(res, {
-      type: 'response.reasoning_text.delta',
-      item_id: openReasoning.id,
-      output_index: openReasoning.outputIndex,
-      content_index: 0,
-      delta: token,
-      response_id: p.rid
-    })
-  }
+  const timeline = createOutputTimeline((event) => sendSSE(res, { ...event, response_id: p.rid }))
 
   let turnHistory = p.history
   let drained
   let total: DrainedOpenAICompletion | undefined
   for (let round = 0; ; round++) {
-    // Only the answering turn's text belongs in the final response object; a
+    // Only the answering turn's items belong in the final response object; a
     // search turn's preamble was streamed but is not part of the answer.
-    fullText = ''
-    drained = await drainCompletion(
-      runTurn(turnHistory),
-      (token) => {
-        fullText += token
-        sendDelta(token)
-      },
-      sendReasoningDelta
-    )
+    if (round > 0) timeline.newTurn()
+    drained = await drainCompletion(runTurn(turnHistory), timeline.text, timeline.reasoning)
     total = accumulateUsage(total, drained)
 
     const extended =
@@ -311,36 +315,7 @@ export async function writeStreamingResponse(
     total ?? drained
   )
   const hasToolCalls = toolCalls.length > 0
-  const msgIndex = openMessage()
-  const firstCallIndex = nextOutputIndex
-
-  sendSSE(res, {
-    type: 'response.output_text.done',
-    item_id: msgId,
-    output_index: msgIndex,
-    content_index: 0,
-    text: fullText,
-    response_id: p.rid
-  })
-  sendSSE(res, {
-    type: 'response.content_part.done',
-    item_id: msgId,
-    output_index: msgIndex,
-    content_index: 0,
-    response_id: p.rid
-  })
-  sendSSE(res, {
-    type: 'response.output_item.done',
-    output_index: msgIndex,
-    item: {
-      type: 'message',
-      id: msgId,
-      status: 'completed',
-      role: 'assistant',
-      content: [{ type: 'output_text', text: fullText, annotations: [] }]
-    },
-    response_id: p.rid
-  })
+  const { items, nextOutputIndex: firstCallIndex } = timeline.finish()
 
   const openaiCalls = sdkToolCallsToOpenai(toolCalls)
   const fcItemIds = hasToolCalls ? (openaiCalls ?? []).map(() => functionCallOutputItemId()) : []
@@ -398,16 +373,8 @@ export async function writeStreamingResponse(
   const responseObject = buildResponseObject({
     id: p.rid,
     modelAlias: p.modelAlias,
-    text: fullText,
-    ...(reasoning.length > 0
-      ? {
-          reasoning: reasoning.map(({ id, text, afterMessage }) => ({
-            id,
-            text,
-            ...(afterMessage ? { afterMessage } : {})
-          }))
-        }
-      : {}),
+    text: answerText(items),
+    items,
     toolCalls,
     createdAtSec: p.createdAtSec,
     metadata: p.metadata,
@@ -417,7 +384,6 @@ export async function writeStreamingResponse(
     parallelToolCalls: p.parallelToolCalls,
     previousResponseId: p.previousResponseId,
     store: p.storeEnabled,
-    messageItemId: msgId,
     completionTokens,
     ...(hasToolCalls ? { functionCallItemIds: fcItemIds } : {}),
     ...(stopReason !== undefined ? { stopReason } : {}),

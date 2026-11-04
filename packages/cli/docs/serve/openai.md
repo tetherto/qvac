@@ -292,9 +292,11 @@ built-in tools (`web_search`, `file_search`, `code_interpreter`).
 
 `usage.input_tokens` is the prompt size reported by the SDK, and
 `total_tokens` is input plus output. Reasoning from `<think>` models is
-returned as a `reasoning` output item (`reasoning_text` content) ahead of the
-message, never in `output_text`; streaming sends it as
-`response.reasoning_text.delta` events.
+returned in `reasoning` output items (`reasoning_text` content), never in
+`output_text`. Items follow the order the model produced them, buffered and
+streamed alike, so answer text after a later reasoning block starts a new
+`message` item; streaming finishes each item before adding the next and sends
+reasoning as `response.reasoning_text.delta` events.
 
 ### Examples
 

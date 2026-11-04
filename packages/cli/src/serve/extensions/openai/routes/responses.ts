@@ -88,8 +88,10 @@ constrain generation with the chat template's tool grammar.
 **\`parallel_tool_calls\`**: \`true\` (default) lets one response carry several
 tool calls; \`false\` limits it to one.
 
-**Reasoning** from models that emit \`<think>\` blocks is returned as a
-\`reasoning\` output item ahead of the message, not in \`output_text\`.
+**Reasoning** from models that emit \`<think>\` blocks is returned in
+\`reasoning\` output items, not in \`output_text\`. Items keep the order the
+model produced them, so answer text after a later reasoning block starts a new
+\`message\` item.
 
 **Streaming** (\`stream: true\`) emits the OpenAI Responses SSE event sequence
 (\`response.created\` → \`response.reasoning_text.delta\` … →

@@ -147,7 +147,10 @@ describe('buildResponseObject', () => {
       id: 'resp_r',
       modelAlias: 'm',
       text: 'The answer is 4.',
-      reasoning: [{ id: 'rs_1', text: '2 + 2 is 4.' }],
+      items: [
+        { type: 'reasoning', id: 'rs_1', text: '2 + 2 is 4.' },
+        { type: 'message', id: 'msg_1', text: 'The answer is 4.' }
+      ],
       toolCalls: [],
       createdAtSec: 1,
       metadata: undefined,
@@ -266,6 +269,8 @@ function baseHandlerParams(): ResponsesHandlerParams {
 function fakeCompletion(opts: {
   text: string
   thinking?: string
+  /** Interleaved reasoning and text, emitted after `thinking` and `text`. */
+  steps?: Array<{ think: string } | { text: string }>
   toolCalls: ToolCall[]
   stats?: CompletionStats
   stopReason?: string
@@ -276,6 +281,11 @@ function fakeCompletion(opts: {
     let seq = 0
     if (opts.thinking) yield { type: 'thinkingDelta', seq: seq++, text: opts.thinking }
     if (opts.text) yield { type: 'contentDelta', seq: seq++, text: opts.text }
+    for (const step of opts.steps ?? []) {
+      yield 'think' in step
+        ? { type: 'thinkingDelta', seq: seq++, text: step.think }
+        : { type: 'contentDelta', seq: seq++, text: step.text }
+    }
     for (const call of opts.toolCalls) yield { type: 'toolCall', seq: seq++, call }
     if (opts.stats !== undefined) yield { type: 'completionStats', seq: seq++, stats: opts.stats }
     yield { type: 'completionDone', seq: seq++, stopReason: opts.stopReason ?? 'eos' }
@@ -399,13 +409,83 @@ describe('writeBlockingResponse', () => {
   })
 })
 
+describe('writeBlockingResponse: item order matches streaming', () => {
+  function captureRes(): { res: ServerResponse; body: () => any } {
+    let bodyStr = ''
+    let sent = false
+    const res = {
+      setHeader: (): void => {},
+      writeHead: (): void => {
+        sent = true
+      },
+      end(payload?: string | Buffer): void {
+        if (typeof payload === 'string') bodyStr = payload
+      },
+      get headersSent(): boolean {
+        return sent
+      }
+    } as unknown as ServerResponse
+    return { res, body: () => JSON.parse(bodyStr) }
+  }
+
+  it('keeps items in the order the model produced them', async () => {
+    const { res, body } = captureRes()
+    const result = fakeCompletion({
+      text: '',
+      steps: [{ think: 'First.' }, { text: 'Partial ' }, { think: 'Second.' }, { text: 'answer.' }],
+      toolCalls: []
+    })
+    await writeBlockingResponse(res, baseHandlerParams(), () => result)
+    const parsed = body()
+    assert.deepEqual(
+      parsed.output.map((o: { type: string }) => o.type),
+      ['reasoning', 'message', 'reasoning', 'message']
+    )
+    assert.equal(parsed.output_text, 'Partial answer.')
+  })
+
+  it('keeps only the answering turn after a search preamble', async () => {
+    const { res, body } = captureRes()
+    const deferredTool = {
+      type: 'function' as const,
+      name: 'create_issue',
+      description: 'Open a new issue on a repository',
+      deferLoading: true,
+      parameters: { type: 'object' as const, properties: { title: { type: 'string' as const } } }
+    }
+    const turns = [
+      fakeCompletion({
+        text: 'Looking that up. ',
+        toolCalls: [{ id: 'c1', name: 'tool_search', arguments: { query: 'create_issue' } }]
+      }),
+      fakeCompletion({ thinking: 'The tool is loaded now.', text: 'Opened it.', toolCalls: [] })
+    ]
+    let turn = 0
+    await writeBlockingResponse(
+      res,
+      { ...baseHandlerParams(), tools: [deferredTool] },
+      () => turns[turn++]!
+    )
+    const parsed = body()
+    assert.equal(turn, 2)
+    assert.deepEqual(
+      parsed.output.map((o: { type: string }) => o.type),
+      ['reasoning', 'message']
+    )
+    assert.equal(parsed.output_text, 'Opened it.')
+  })
+})
+
 describe('historyPrefixFromStoredResponse', () => {
   it('replays the answer without the reasoning item', () => {
     const responseObject = buildResponseObject({
       id: 'resp_prev',
       modelAlias: 'm',
       text: 'Hello!',
-      reasoning: [{ id: 'rs_1', text: 'The user wants a greeting.' }],
+      items: [
+        { type: 'reasoning', id: 'rs_1', text: 'The user wants a greeting.' },
+        { type: 'message', id: 'msg_1', text: 'Hello!' }
+      ],
       toolCalls: [],
       createdAtSec: 1,
       metadata: undefined,

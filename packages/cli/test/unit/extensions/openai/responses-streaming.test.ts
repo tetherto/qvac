@@ -309,7 +309,7 @@ describe('writeStreamingResponse: reasoning', () => {
 })
 
 describe('writeStreamingResponse: reasoning after answer text', () => {
-  it('gives reasoning that follows answer text an item of its own', async () => {
+  it('finishes each item before the next, so text after reasoning opens a new message', async () => {
     const holder = createStreamResponse()
     const result = fakeStreamCompletion({
       tokens: [],
@@ -335,14 +335,26 @@ describe('writeStreamingResponse: reasoning after answer text', () => {
     assert.deepEqual(
       events
         .filter((e) => e['type'] === 'response.output_text.delta')
-        .map((e) => e['output_index']),
-      [1, 1]
+        .map((e) => [e['delta'], e['output_index']]),
+      [
+        ['Partial ', 1],
+        ['answer.', 3]
+      ]
     )
+
+    // An item is done before the next is added: added/done alternate by index.
+    const lifecycle = events
+      .filter(
+        (e) =>
+          e['type'] === 'response.output_item.added' || e['type'] === 'response.output_item.done'
+      )
+      .map((e) => `${e['type'] === 'response.output_item.added' ? '+' : '-'}${e['output_index']}`)
+    assert.deepEqual(lifecycle, ['+0', '-0', '+1', '-1', '+2', '-2', '+3', '-3'])
 
     const output = completed['output'] as Array<Record<string, unknown>>
     assert.deepEqual(
       output.map((o) => o['type']),
-      ['reasoning', 'message', 'reasoning']
+      ['reasoning', 'message', 'reasoning', 'message']
     )
     assert.equal(output[0]!['id'], reasoningDeltas[0]!['item_id'])
     assert.equal(output[2]!['id'], reasoningDeltas[1]!['item_id'])
@@ -438,13 +450,15 @@ describe('writeStreamingResponse: deferred tools', () => {
       events.filter((e) => e['type'] === 'response.reasoning_text.delta').map((e) => e['delta']),
       ['The tool is loaded now.']
     )
+    // The search turn's preamble was streamed but is not part of the answer.
     const output = completed['output'] as Array<Record<string, unknown>>
     assert.deepEqual(
       output.map((o) => o['type']),
-      ['message', 'reasoning']
+      ['reasoning', 'message']
     )
-    assert.deepEqual(output[1]!['content'], [
+    assert.deepEqual(output[0]!['content'], [
       { type: 'reasoning_text', text: 'The tool is loaded now.' }
     ])
+    assert.equal(completed['output_text'], 'Opened it.')
   })
 })
