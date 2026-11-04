@@ -32,6 +32,16 @@ function llama(
   }
 }
 
+// Shared fit results roll out independently across addon packages. Keep these
+// fixtures structural so the SDK consumer leg also compiles against the latest
+// published package set while exercising the common runtime contract.
+function shared(
+  engine: 'tts-ggml' | 'audiogen-ggml',
+  devices: ReturnType<typeof device>[]
+): FitProbeResult {
+  return { engine, result: { status: 'fits', devices, stats: {} } } as never
+}
+
 test('a shared fit result keeps GPU and CPU demand separate', (t) => {
   const outcome = classifyFit(
     llama([device('Metal', 4 * 1024 ** 3), device('CPU', 1024 ** 3)]),
@@ -137,14 +147,7 @@ test('the diffusion placement stands in for a reason string', (t) => {
 
 test('a speech projection carries the device the engine measured', (t) => {
   const outcome = classifyFit(
-    {
-      engine: 'tts-ggml',
-      result: {
-        status: 'fits',
-        devices: [device('Metal', 2 * 1024 ** 3), device('CPU', 128 * 1024 ** 2)],
-        stats: {}
-      }
-    },
+    shared('tts-ggml', [device('Metal', 2 * 1024 ** 3), device('CPU', 128 * 1024 ** 2)]),
     PROVENANCE
   )
 
@@ -162,17 +165,7 @@ test('a speech projection carries the device the engine measured', (t) => {
 })
 
 test('an engine reporting only a total has no breakdown', (t) => {
-  const outcome = classifyFit(
-    {
-      engine: 'audiogen-ggml',
-      result: {
-        status: 'fits',
-        devices: [device('Metal', 3 * 1024 ** 3)],
-        stats: {}
-      }
-    },
-    PROVENANCE
-  )
+  const outcome = classifyFit(shared('audiogen-ggml', [device('Metal', 3 * 1024 ** 3)]), PROVENANCE)
 
   t.absent(outcome.projection?.weightsBytes)
   t.absent(outcome.projection?.contextBytes)

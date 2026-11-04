@@ -4,7 +4,7 @@ import fs from 'bare-fs'
 import os from 'bare-os'
 import path from 'bare-path'
 
-import type { BciFitRequest, BciFitResult } from '@qvac/bci-whispercpp'
+import type { BciFitRequest } from '@qvac/bci-whispercpp'
 
 import { BCI_EMBEDDER, BCI_WINDOWED } from '@/models/registry/index'
 import { getPlugin, registerPlugin, unregisterPlugin } from '@/plugins/registry'
@@ -13,7 +13,6 @@ import { ModelType } from '@/schemas/index'
 import { projectFitFromLoad } from '@/model-fit/description/project'
 import type { FitBlobBinding, FitStubEntry } from '@/model-fit/description/fetch'
 import type { FitProbeRequest } from '@/model-fit/run/engine'
-import type { FitRunResult } from '@/model-fit/run/run'
 
 /**
  * The projection `assessModelFit` runs for a BCI load before download: the
@@ -89,7 +88,7 @@ interface Seen {
   embedder: string | undefined
 }
 
-function bciResult(embedderReadable: boolean): BciFitResult {
+function bciResult(embedderReadable: boolean) {
   const embedderBytes = embedderReadable ? EMBEDDER_BYTES : 0
   if (!embedderReadable) return { status: 'unknown', devices: [], stats: {} }
   return {
@@ -122,7 +121,7 @@ function bciResult(embedderReadable: boolean): BciFitResult {
  */
 function bciFitter() {
   const seen: Seen[] = []
-  const runFit = async (probe: FitProbeRequest): Promise<FitRunResult> => {
+  const runFit = async (probe: FitProbeRequest) => {
     if (probe.engine !== 'bci-whispercpp') throw new Error(`unexpected engine ${probe.engine}`)
 
     const { request } = probe
@@ -133,7 +132,9 @@ function bciFitter() {
 
     return {
       status: 'completed',
-      probe: { engine: 'bci-whispercpp', result: bciResult(embedder !== undefined) }
+      // This exercises the shared fit contract before every compatible BCI
+      // package range necessarily resolves to the same published release.
+      probe: { engine: 'bci-whispercpp', result: bciResult(embedder !== undefined) } as never
     }
   }
   return { seen, runFit: runFit as never }
