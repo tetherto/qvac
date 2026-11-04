@@ -548,7 +548,14 @@ class QVACRegistryClient extends ReadyResource {
 
     const clear = options.clearBlocksOnCancel
     if (clear === undefined) return true
-    return Boolean(typeof clear === 'function' ? clear() : clear)
+    if (typeof clear !== 'function') return Boolean(clear)
+    // A throwing policy must not skip the release or mask the download error.
+    try {
+      return Boolean(clear())
+    } catch (err) {
+      this.logger.warn('clearBlocksOnCancel threw; clearing blocks', { error: err?.message })
+      return true
+    }
   }
 
   _releaseDownload(core, blobs, rangeDownload, blockStart, blockEnd, opts = {}) {

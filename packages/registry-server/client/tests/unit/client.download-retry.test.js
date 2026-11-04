@@ -683,6 +683,67 @@ test('downloadModel reads a clearBlocksOnCancel callback at cancel time', async 
   t.is(released.clears.length, 0, 'callback value at cancel time is honoured')
 })
 
+for (const [label, thrown] of [
+  ['an Error', new Error('policy failed')],
+  ['null', null],
+  ['undefined', undefined]
+]) {
+  test(`downloadModel clears and keeps the cancel error when clearBlocksOnCancel throws ${label}`, async (t) => {
+    const dir = await tmp(t)
+    const client = makeClient(t)
+    const released = recordReleases(client)
+    const signal = { aborted: false }
+    client._streamBlobToFile = cancellingStream(client, signal)
+
+    await t.exception(
+      () =>
+        client.downloadModel('models/tiny.gguf', 's3', {
+          outputFile: path.join(dir, 'model.gguf'),
+          signal,
+          clearBlocksOnCancel: () => {
+            throw thrown
+          }
+        }),
+      /Download cancelled/
+    )
+
+    t.alike(released.clears, [{ start: 0, end: 10 }], 'falls back to clearing')
+    t.ok(released.destroyed > 0, 'replication stopped')
+    t.is(released.closed, 1, 'core closed')
+  })
+
+  test(`downloadBlob clears and keeps the cancel error when clearBlocksOnCancel throws ${label}`, async (t) => {
+    const dir = await tmp(t)
+    const client = makeClient(t)
+    // lunte-disable-next-line require-await
+    client.ready = async () => {}
+    const released = recordReleases(client)
+    const signal = { aborted: false }
+    client._streamBlobToFile = cancellingStream(client, signal)
+    const blobBinding = {
+      coreKey: Buffer.alloc(32),
+      blockOffset: 3,
+      blockLength: 7,
+      byteLength: 700
+    }
+
+    await t.exception(
+      () =>
+        client.downloadBlob(blobBinding, {
+          outputFile: path.join(dir, 'blob.bin'),
+          signal,
+          clearBlocksOnCancel: () => {
+            throw thrown
+          }
+        }),
+      /Download cancelled/
+    )
+
+    t.alike(released.clears, [{ start: 3, end: 10 }], 'falls back to clearing')
+    t.is(released.closed, 1, 'core closed')
+  })
+}
+
 test('downloadBlob keeps cached blocks on cancel when clearBlocksOnCancel is false', async (t) => {
   const dir = await tmp(t)
   const outputFile = path.join(dir, 'blob.bin')
