@@ -110,6 +110,11 @@ on:
         type: string
         required: false
         default: "6550da740ac8565ec2f1dc886f6ec6425af1df79588d773594163b0778832560"
+      include-xdna:
+        description: "Validate provisioned XRT and install pinned IRON for Linux x64 XDNA builds"
+        type: boolean
+        required: false
+        default: false
       include-cuda:
         description: >-
           Install a pinned CUDA toolkit on the linux build so a consumer's
@@ -448,6 +453,10 @@ jobs:
           rocm-version: ${{ inputs.rocm-version }}
           gfx: ${{ inputs.rocm-gfx }}
           sha256: ${{ inputs.rocm-sha256 }}
+
+      - if: ${{ inputs.include-xdna && matrix.platform == 'linux' && matrix.arch == 'x64' }}
+        name: Setup XRT and IRON for the XDNA backend
+        uses: tetherto/qvac/.github/actions/setup-xdna@48260f3d77e807a226a63afc159d39e265eca3a3 # XDNA toolchain setup
 
       # QVAC-24442: the arm64 runner has no GPU, which is fine. The toolkit is
       # compile-only and the CUDA backend is a runtime-loaded module that never
