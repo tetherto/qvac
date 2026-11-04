@@ -69,13 +69,84 @@ describe('createNamedKvCacheRetention', () => {
     })
     const deleted: string[] = []
     const r = retention(dir, deleted)
-    const release = r.acquire('responses-busy')
+    const release = await r.acquire('responses-busy')
     assert.equal(await r.sweep({ all: true }), 1)
     assert.deepEqual(deleted, ['responses-idle'])
 
     release()
     await r.sweep()
     assert.deepEqual(deleted, ['responses-idle', 'responses-busy'])
+  })
+
+  it('skips a key taken during the sweep and makes its request wait for a deletion', async (t) => {
+    const dir = await cacheDir(t, {
+      'responses-a': { bytes: 10, ageMs: 30 * HOUR_MS },
+      'responses-b': { bytes: 10, ageMs: 29 * HOUR_MS }
+    })
+    const deleted: string[] = []
+    let finishA!: () => void
+    const r = createNamedKvCacheRetention({
+      prefix: 'responses-',
+      dir,
+      idleTtlMs: 24 * HOUR_MS,
+      now: () => NOW,
+      deleteKey: (key) => {
+        deleted.push(key)
+        return key === 'responses-a'
+          ? new Promise<void>((resolve) => {
+              finishA = resolve
+            })
+          : Promise.resolve()
+      }
+    })
+
+    const sweep = r.sweep()
+    while (deleted.length === 0) await new Promise((resolve) => setImmediate(resolve))
+    assert.deepEqual(deleted, ['responses-a'])
+
+    // b is taken while a's deletion is pending: the sweep must leave it alone.
+    const releaseB = await r.acquire('responses-b')
+    // A request for a waits until a's deletion finishes.
+    let acquiredA = false
+    const acquireA = r.acquire('responses-a').then((release) => {
+      acquiredA = true
+      return release
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.equal(acquiredA, false)
+
+    finishA()
+    assert.equal(await sweep, 1)
+    assert.deepEqual(deleted, ['responses-a'])
+    ;(await acquireA)()
+    releaseB()
+  })
+
+  it('looks under SNAP_USER_COMMON when set, like the SDK', async (t) => {
+    const home = await mkdtemp(join(tmpdir(), 'qvac-kv-snap-'))
+    t.after(() => rm(home, { recursive: true, force: true }))
+    await mkdir(join(home, '.qvac', 'kv-cache', 'responses-old', 'model'), { recursive: true })
+    const file = join(home, '.qvac', 'kv-cache', 'responses-old', 'model', 'config.bin')
+    await writeFile(file, Buffer.alloc(10))
+    await utimes(file, new Date(NOW - 30 * HOUR_MS), new Date(NOW - 30 * HOUR_MS))
+    const previous = process.env['SNAP_USER_COMMON']
+    process.env['SNAP_USER_COMMON'] = home
+    t.after(() => {
+      if (previous === undefined) delete process.env['SNAP_USER_COMMON']
+      else process.env['SNAP_USER_COMMON'] = previous
+    })
+
+    const deleted: string[] = []
+    const r = createNamedKvCacheRetention({
+      prefix: 'responses-',
+      now: () => NOW,
+      deleteKey: (key) => {
+        deleted.push(key)
+        return Promise.resolve()
+      }
+    })
+    await r.sweep()
+    assert.deepEqual(deleted, ['responses-old'])
   })
 
   it('treats a missing cache directory as empty', async () => {

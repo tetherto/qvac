@@ -26,8 +26,11 @@ export interface NamedKvCacheRetentionOptions {
 }
 
 export interface NamedKvCacheRetention {
-  /** Marks a key in use until the returned release runs; in-use keys are never swept. */
-  acquire: (key: string) => () => void
+  /**
+   * Marks a key in use until the returned release runs; in-use keys are never
+   * swept. Waits first if that key is being deleted.
+   */
+  acquire: (key: string) => Promise<() => void>
   /** Deletes idle and over-quota caches, or with `all`, every cache not in use. */
   sweep: (opts?: { all?: boolean }) => Promise<number>
   /** Starts a sweep unless one ran within the sweep interval. */
@@ -47,7 +50,8 @@ interface CacheEntry {
 export function createNamedKvCacheRetention(
   opts: NamedKvCacheRetentionOptions
 ): NamedKvCacheRetention {
-  const dir = opts.dir ?? join(homedir(), '.qvac', 'kv-cache')
+  // The same home the Node SDK gives its worker: Snap's HOME can be revision-scoped.
+  const dir = opts.dir ?? join(process.env['SNAP_USER_COMMON'] || homedir(), '.qvac', 'kv-cache')
   const maxBytes = opts.maxBytes ?? 4 * GiB
   const idleTtlMs = opts.idleTtlMs ?? 24 * HOUR_MS
   const sweepIntervalMs = opts.sweepIntervalMs ?? 5 * 60 * 1000
@@ -55,10 +59,12 @@ export function createNamedKvCacheRetention(
   const deleteKey =
     opts.deleteKey ?? ((kvCacheKey: string) => deleteCache({ kvCacheKey }).then(() => undefined))
   const inUse = new Map<string, number>()
+  const deleting = new Map<string, Promise<void>>()
   let lastSweepMs = Number.NEGATIVE_INFINITY
   let sweeping: Promise<number> | undefined
 
-  function acquire(key: string): () => void {
+  async function acquire(key: string): Promise<() => void> {
+    while (deleting.has(key)) await deleting.get(key)!.catch(() => undefined)
     inUse.set(key, (inUse.get(key) ?? 0) + 1)
     let released = false
     return () => {
@@ -97,7 +103,15 @@ export function createNamedKvCacheRetention(
     for (const entry of idle) {
       const expired = now() - entry.lastUsedMs > idleTtlMs
       if (!all && !expired && total <= maxBytes) continue
-      await deleteKey(entry.key)
+      // A request may have taken the key while an earlier deletion awaited.
+      if (inUse.has(entry.key)) continue
+      const deletion = deleteKey(entry.key)
+      deleting.set(entry.key, deletion)
+      try {
+        await deletion
+      } finally {
+        deleting.delete(entry.key)
+      }
       total -= entry.bytes
       deleted++
     }

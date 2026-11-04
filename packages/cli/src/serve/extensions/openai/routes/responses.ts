@@ -270,7 +270,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       }
 
       const releaseCache =
-        sdk.kvCache !== undefined ? responsesKvCacheRetention.acquire(sdk.kvCache) : undefined
+        sdk.kvCache !== undefined ? await responsesKvCacheRetention.acquire(sdk.kvCache) : undefined
       try {
         if (streaming) {
           initSSE(reply, { [VOLATILE_HEADER]: RESPONSES_VOLATILE_STUB })
