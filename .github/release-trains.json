@@ -6,7 +6,7 @@
       "project": "@qvac/sdk",
       "name": "QVAC SDK"
     },
-    "checks": ["shared-runtime-libs", "sdk-python", "package-checks"],
+    "checks": ["shared-runtime-libs", "sdk-python", "package-checks", "pear-e2e"],
     "packageChecks": ".github/sdk-pod-checks.json"
   },
   "cli": {
