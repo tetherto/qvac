@@ -29,8 +29,10 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { pipeline } from 'node:stream/promises'
 import https from 'node:https'
+import { createRequire } from 'node:module'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+const { isS3Only } = createRequire(import.meta.url)('./model-source.js')
 const MANIFEST_PATH = resolve(__dirname, '../test/integration/models.manifest.json')
 const HUGGING_FACE_HOST = 'huggingface.co'
 const SHA256_PATTERN = /^[0-9a-f]{64}$/i
@@ -254,6 +256,10 @@ async function main() {
   try {
     for (const [name, entry] of Object.entries(manifest.models)) {
       if (args.only && args.only !== name) continue
+      if (isS3Only(entry)) {
+        console.log(`skip ${name} (s3Path entry; pins come from the model registry)`)
+        continue
+      }
       if (entry.sha256 && !args.force) {
         console.log(`skip ${name} (already pinned; use --force to recompute)`)
         continue

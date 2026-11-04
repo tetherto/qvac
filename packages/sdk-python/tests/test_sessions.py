@@ -100,6 +100,14 @@ async def test_conversation_session_routes_typed_events():
     transport = FakeDuplexTransport(
         [
             _t(vad={"speaking": True, "probability": 0.9}),
+            _t(
+                vad={
+                    "speaking": False,
+                    "probability": 0.1,
+                    "source": "energy",
+                    "timestamp": 1.25,
+                }
+            ),
             _t(end_of_turn={"source": "whisper", "silenceDurationMs": 700}),
             _t(end_of_turn={"source": "parakeet"}),
             _t(text="hello"),
@@ -111,6 +119,7 @@ async def test_conversation_session_routes_typed_events():
     events = [event async for event in session]
     assert events == [
         VadEvent(speaking=True, probability=0.9),
+        VadEvent(speaking=False, probability=0.1, timestamp=1.25),
         EndOfTurnEvent(source="whisper", silence_duration_ms=700),
         EndOfTurnEvent(source="parakeet", silence_duration_ms=None),
         TextEvent(text="hello"),
