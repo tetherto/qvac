@@ -286,9 +286,12 @@ under `serve.models` (any alias whose endpoint category is `chat`).
 > not durable. Pass `store: false` in the request body to skip persistence
 > entirely.
 
-Intentionally rejected with `400`: `conversation`, `background: true`, and
-built-in tools (`web_search`, `file_search`, `code_interpreter`).
-`function`-typed tools work normally.
+Intentionally rejected with `400`: `conversation` and `background: true`.
+
+`function` tools work normally, and so do the functions inside a `namespace`
+tool: the model sees each as `<namespace>__<name>`, and its calls come back
+with `name` and `namespace` split again. Built-in tools (`web_search`,
+`file_search`, `code_interpreter`, …) are left out of the request and logged.
 
 `instructions` and every `system` or `developer` input item are merged, in
 order, into one leading system message, so chat templates that reject a

@@ -41,7 +41,6 @@ import {
   validateResponsesStatefulOptions,
   normalizeResponsesInputItemsForStorage,
   historyPrefixFromStoredResponse,
-  UnsupportedToolTypeError,
   InvalidResponsesConversationError,
   InvalidResponsesBackgroundError,
   responsesBody,
@@ -1027,15 +1026,67 @@ describe('openaiResponsesToolsToSdk', () => {
         parameters: { type: 'object', properties: {} }
       }
     ])
-    assert.ok(t && t.length === 1)
-    assert.equal(t[0]!.name, 'fn')
+    assert.equal(t.tools?.length, 1)
+    assert.equal(t.tools[0]!.name, 'fn')
   })
 
-  it('throws on web_search', () => {
-    assert.throws(
-      () => openaiResponsesToolsToSdk([{ type: 'web_search' }]),
-      UnsupportedToolTypeError
+  it('leaves out built-in tools and reports their types', () => {
+    const t = openaiResponsesToolsToSdk([
+      { type: 'web_search' },
+      { type: 'function', name: 'fn' },
+      { type: 'web_search' }
+    ])
+    assert.deepEqual(
+      t.tools?.map((tool) => tool.name),
+      ['fn']
     )
+    assert.deepEqual(t.skippedTypes, ['web_search'])
+    assert.equal(openaiResponsesToolsToSdk([{ type: 'web_search' }]).tools, undefined)
+  })
+
+  it('flattens namespace tools under qualified names', () => {
+    const t = openaiResponsesToolsToSdk([
+      {
+        type: 'namespace',
+        name: 'mcp__node_repl',
+        tools: [{ type: 'function', name: 'js', description: 'Run JS' }]
+      },
+      {
+        type: 'namespace',
+        name: 'mcp__codex_apps__gmail',
+        tools: [{ type: 'function', name: '_search_emails' }]
+      },
+      { type: 'namespace', name: 'mcp__cua_repl', tools: [{ type: 'function', name: 'js' }] }
+    ])
+    assert.deepEqual(
+      t.tools?.map((tool) => tool.name),
+      ['mcp__node_repl__js', 'mcp__codex_apps__gmail__search_emails', 'mcp__cua_repl__js']
+    )
+    assert.equal(t.tools![0]!.description, 'Run JS')
+    assert.deepEqual(t.namespaces.get('mcp__codex_apps__gmail__search_emails'), {
+      namespace: 'mcp__codex_apps__gmail',
+      name: '_search_emails'
+    })
+  })
+})
+
+describe('openaiResponsesInputToHistory: namespaced calls', () => {
+  it('replays a namespaced function_call under its qualified name', () => {
+    const h = openaiResponsesInputToHistory(
+      [
+        {
+          type: 'function_call',
+          call_id: 'c1',
+          namespace: 'mcp__node_repl',
+          name: 'js',
+          arguments: '{"code":"1+1"}'
+        },
+        { type: 'function_call_output', call_id: 'c1', output: '2' }
+      ],
+      undefined
+    )
+    assert.equal(h[0]!.toolCalls![0]!.name, 'mcp__node_repl__js')
+    assert.equal(h[1]!.toolName, 'mcp__node_repl__js')
   })
 })
 

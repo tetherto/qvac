@@ -121,6 +121,66 @@ describe('responses: Codex tool loop', () => {
   })
 })
 
+describe('responses: Codex tool shapes', () => {
+  // Codex groups MCP tools in `namespace` tools and adds built-ins like web_search.
+  const codexTools = [
+    { type: 'web_search', external_web_access: false },
+    {
+      type: 'namespace',
+      name: 'mcp__files',
+      description: 'Workspace files.',
+      tools: [
+        {
+          type: 'function',
+          name: 'read_file',
+          description: 'Read a file and return its contents.',
+          parameters: {
+            type: 'object',
+            properties: { path: { type: 'string' } },
+            required: ['path']
+          }
+        }
+      ]
+    }
+  ]
+
+  it('calls a namespaced tool and answers from its result', async () => {
+    const first = await responses({
+      input: [developer, question],
+      tools: codexTools,
+      tool_choice: 'required'
+    })
+    assert.equal(first.statusCode, 200, first.body)
+    const call = functionCalls(first.json())[0]
+    assert.equal(call?.name, 'read_file')
+    assert.equal(call?.namespace, 'mcp__files')
+
+    const res = await responses({
+      input: [
+        developer,
+        question,
+        {
+          type: 'function_call',
+          call_id: call.call_id,
+          namespace: call.namespace,
+          name: call.name,
+          arguments: call.arguments
+        },
+        {
+          type: 'function_call_output',
+          call_id: call.call_id,
+          output: '{\n  "name": "acme-widgets",\n  "version": "1.2.0"\n}'
+        }
+      ],
+      tools: codexTools
+    })
+    assert.equal(res.statusCode, 200, res.body)
+    const body = res.json() as any
+    assert.equal(body.status, 'completed')
+    assert.match(body.output_text, /acme-widgets/)
+  })
+})
+
 describe('chat completions: developer messages', () => {
   it('keeps tools available with a developer message', async () => {
     const res = await server().inject({

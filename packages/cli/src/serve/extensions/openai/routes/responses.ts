@@ -16,7 +16,6 @@ import {
   InvalidResponsesBackgroundError,
   InvalidResponsesConversationError,
   toSdkResponsesArgs,
-  UnsupportedToolTypeError,
   type ResponsesHistoryItem
 } from '@/serve/extensions/openai/schemas/responses'
 import {
@@ -77,10 +76,14 @@ addressable via GET / DELETE / input_items.
 **Rejections**:
 - \`conversation\` → \`400 conversation_not_supported\` (Conversation persistence not implemented)
 - \`background: true\` → \`400 background_not_supported\` (only synchronous responses)
-- \`tools[].type\` other than \`function\` (e.g. \`web_search\`, \`file_search\`, \`code_interpreter\`) → \`400 invalid_tool_type\`
 - structured output (\`json_object\`/\`json_schema\`) combined with non-empty \`tools\` → \`400 invalid_response_format\`
 - \`tools\` on a model loaded without \`config.tools: true\` → \`400 tools_not_enabled\`
 - \`tool_choice\` demanding a tool with no matching \`tools\` entry → \`400 invalid_tool_choice\`
+
+**Tools**: \`function\` tools, and the functions inside a \`namespace\` tool (the
+model sees them as \`<namespace>__<name>\`; calls come back with \`name\` and
+\`namespace\` split again). Built-in tool types (\`web_search\`,
+\`file_search\`, …) are left out of the request and logged.
 
 **\`tool_choice\`**: \`"auto"\` (default), \`"none"\`, \`"required"\`, or
 \`{ type: 'function', name }\` to force one tool. \`required\` and a named tool
@@ -142,9 +145,6 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         if (err instanceof InvalidResponsesBackgroundError) {
           throw new HttpError(400, 'background_not_supported', err.message)
         }
-        if (err instanceof UnsupportedToolTypeError) {
-          throw new HttpError(400, 'invalid_tool_type', err.message)
-        }
         if (err instanceof InvalidResponseFormatError) {
           throw new HttpError(400, 'invalid_response_format', err.message)
         }
@@ -152,6 +152,10 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           throw new HttpError(400, 'invalid_tool_choice', err.message)
         }
         throw err
+      }
+
+      if (sdk.skippedToolTypes.length > 0) {
+        ctx.logger.info(`Ignoring unsupported tool types: ${sdk.skippedToolTypes.join(', ')}`)
       }
 
       assertToolsEnabled(req.qvacModel!.entry.config, sdk.tools, req.qvacModel!.alias)
@@ -213,6 +217,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         sdkModelId: params.sdkModelId,
         history: params.history,
         ...(params.tools !== undefined ? { tools: params.tools } : {}),
+        toolNamespaces: sdk.toolNamespaces,
         ...(params.generationParams !== undefined
           ? { generationParams: params.generationParams }
           : {}),

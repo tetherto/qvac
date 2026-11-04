@@ -64,16 +64,6 @@ export const RESPONSES_UNSUPPORTED_PARAMS = [
   'remove_thinking_from_context'
 ] as const
 
-export class UnsupportedToolTypeError extends Error {
-  readonly toolType: string
-
-  constructor(toolType: string) {
-    super(`Unsupported tool type "${toolType}" for Responses API.`)
-    this.name = 'UnsupportedToolTypeError'
-    this.toolType = toolType
-  }
-}
-
 export class InvalidResponsesConversationError extends Error {
   constructor() {
     super('"conversation" is not supported by this server (no Conversation persistence).')
@@ -121,35 +111,67 @@ export function extractResponsesResponseFormat(
   return undefined
 }
 
-interface ResponsesFunctionTool {
+interface ResponsesTool {
   type: string
   name?: string
   description?: string
   parameters?: Record<string, unknown>
+  tools?: ResponsesTool[]
 }
 
-export function openaiResponsesToolsToSdk(
-  tools: ResponsesFunctionTool[] | undefined
-): Tool[] | undefined {
-  if (!tools || tools.length === 0) return undefined
+/** The tool a client declared inside a `namespace`, keyed by the name the model sees. */
+export type ToolNamespaces = ReadonlyMap<string, { namespace: string; name: string }>
 
-  return tools
-    .map((t): Tool | null => {
-      if (t.type === 'function') {
-        const name = typeof t.name === 'string' ? t.name : ''
-        if (!name) return null
-        return {
-          type: 'function',
-          name,
-          description: typeof t.description === 'string' ? t.description : '',
-          parameters: normalizeToolParameters(
-            t.parameters ?? { type: 'object', properties: {} }
-          ) as Tool['parameters']
-        }
+export interface ResponsesTools {
+  tools: Tool[] | undefined
+  namespaces: ToolNamespaces
+  /** Built-in tool types (`web_search`, …) this server cannot run; left out of the request. */
+  skippedTypes: string[]
+}
+
+// The model sees one flat list, and names repeat across namespaces (Codex
+// declares `js` in two MCP servers), so a namespaced tool gets a qualified name.
+export function qualifiedToolName(namespace: string, name: string): string {
+  return `${namespace}__${name.replace(/^_+/, '')}`
+}
+
+function functionTool(t: ResponsesTool, name: string): Tool {
+  return {
+    type: 'function',
+    name,
+    description: typeof t.description === 'string' ? t.description : '',
+    parameters: normalizeToolParameters(
+      t.parameters ?? { type: 'object', properties: {} }
+    ) as Tool['parameters']
+  }
+}
+
+export function openaiResponsesToolsToSdk(tools: ResponsesTool[] | undefined): ResponsesTools {
+  const out: Tool[] = []
+  const namespaces = new Map<string, { namespace: string; name: string }>()
+  const skippedTypes = new Set<string>()
+
+  for (const t of tools ?? []) {
+    if (t.type === 'function') {
+      if (typeof t.name === 'string' && t.name) out.push(functionTool(t, t.name))
+    } else if (t.type === 'namespace' && typeof t.name === 'string' && t.name) {
+      for (const inner of t.tools ?? []) {
+        if (inner.type !== 'function' || typeof inner.name !== 'string' || !inner.name) continue
+        const qualified = qualifiedToolName(t.name, inner.name)
+        if (namespaces.has(qualified)) continue
+        namespaces.set(qualified, { namespace: t.name, name: inner.name })
+        out.push(functionTool(inner, qualified))
       }
-      throw new UnsupportedToolTypeError(t.type)
-    })
-    .filter((t): t is Tool => t !== null)
+    } else {
+      skippedTypes.add(t.type)
+    }
+  }
+
+  return {
+    tools: out.length > 0 ? out : undefined,
+    namespaces,
+    skippedTypes: [...skippedTypes]
+  }
 }
 
 function inputTextPart(text: string): Record<string, unknown> {
@@ -172,9 +194,11 @@ export interface ResponsesHistoryItem extends ToolTurnFields {
 // A `function_call` item joins the assistant turn right before it (its text, or
 // the calls made alongside it); otherwise it starts a new one.
 function pushFunctionCall(history: ResponsesHistoryItem[], item: Record<string, unknown>): void {
+  const name = typeof item['name'] === 'string' ? item['name'] : ''
+  const namespace = item['namespace']
   const call = {
     ...(typeof item['call_id'] === 'string' && { id: item['call_id'] }),
-    name: typeof item['name'] === 'string' ? item['name'] : '',
+    name: typeof namespace === 'string' && namespace ? qualifiedToolName(namespace, name) : name,
     arguments: parseToolCallArguments(item['arguments'] ?? {})
   }
   const last = history[history.length - 1]
@@ -390,6 +414,8 @@ export type ResponsesBody = z.infer<typeof responsesBody>
 export interface SdkResponsesArgs {
   history: ResponsesHistoryItem[]
   tools: Tool[] | undefined
+  toolNamespaces: ToolNamespaces
+  skippedToolTypes: string[]
   generationParams: GenerationParams | undefined
   responseFormat: ResponseFormat | undefined
   storeEnabled: boolean
@@ -407,9 +433,11 @@ export function toSdkResponsesArgs(body: ResponsesBody): SdkResponsesArgs {
   const { previousResponseId, storeEnabled } = validateResponsesStatefulOptions(
     body as Record<string, unknown>
   )
-  const tools = openaiResponsesToolsToSdk(
-    body.tools as Parameters<typeof openaiResponsesToolsToSdk>[0]
-  )
+  const {
+    tools,
+    namespaces: toolNamespaces,
+    skippedTypes: skippedToolTypes
+  } = openaiResponsesToolsToSdk(body.tools as Parameters<typeof openaiResponsesToolsToSdk>[0])
   const responseFmt = extractResponsesResponseFormat(body as Record<string, unknown>)
   const instructions = typeof body.instructions === 'string' ? body.instructions : undefined
   const inputItems = normalizeResponsesInputItemsForStorage(body.input)
@@ -427,6 +455,8 @@ export function toSdkResponsesArgs(body: ResponsesBody): SdkResponsesArgs {
   return {
     history,
     tools,
+    toolNamespaces,
+    skippedToolTypes,
     generationParams: withParallelToolCalls(
       withToolChoice(
         extractGenerationParams(body as Record<string, unknown>, 'max_output_tokens'),
