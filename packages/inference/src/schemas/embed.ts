@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { trackedRequestSchema } from '@/schemas/request-base'
 
 export const embedMediaSourceSchema = z
   .discriminatedUnion('type', [
@@ -51,17 +52,16 @@ const batchEmbedParamsSchema = z.object({
   text: z.never().optional()
 })
 export const embedParamsSchema = z.union([textEmbedParamsSchema, batchEmbedParamsSchema])
-const requestFields = {
-  type: z.literal('embed'),
-  requestId: z
-    .string()
-    .min(1)
-    .optional()
-    .describe('Caller-generated identifier for cancellation with cancel({ requestId }).')
-}
+const requestFields = { type: z.literal('embed') }
 export const embedRequestSchema = z.union([
-  textEmbedParamsSchema.extend(requestFields).meta({ title: 'EmbedTextRequest' }),
-  batchEmbedParamsSchema.extend(requestFields).meta({ title: 'EmbedInputsRequest' })
+  textEmbedParamsSchema
+    .extend(requestFields)
+    .extend(trackedRequestSchema.shape)
+    .meta({ title: 'EmbedTextRequest' }),
+  batchEmbedParamsSchema
+    .extend(requestFields)
+    .extend(trackedRequestSchema.shape)
+    .meta({ title: 'EmbedInputsRequest' })
 ])
 
 export const embedStatsSchema = z.object({

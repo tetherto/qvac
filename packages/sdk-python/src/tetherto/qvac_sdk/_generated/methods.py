@@ -33,6 +33,8 @@ from . import (
     CancelResponse,
     ClassifyRequest,
     ClassifyResponse,
+    CloseSessionRequest,
+    CloseSessionResponse,
     CompletionOrchestrateRequest,
     CompletionOrchestrateResponse,
     CompletionStreamRequest,
@@ -73,6 +75,8 @@ from . import (
     ModelRegistrySearchResponse,
     OcrStreamRequest,
     OcrStreamResponse,
+    OpenSessionRequest,
+    OpenSessionResponse,
     PluginInvokeRequest,
     PluginInvokeResponse,
     PluginInvokeStreamRequest,
@@ -183,6 +187,13 @@ async def classify(
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     async for chunk in transport.call_stream(payload):
         yield ClassifyResponse.model_validate(chunk)
+
+
+async def close_session(
+    transport: Transport, params: CloseSessionRequest
+) -> CloseSessionResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return CloseSessionResponse.model_validate(await transport.call(payload))
 
 
 async def completion_orchestrate(
@@ -368,6 +379,13 @@ async def ocr_stream(
         yield OcrStreamResponse.model_validate(chunk)
 
 
+async def open_session(
+    transport: Transport, params: OpenSessionRequest
+) -> OpenSessionResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return OpenSessionResponse.model_validate(await transport.call(payload))
+
+
 async def plugin_invoke(
     transport: Transport, params: PluginInvokeRequest
 ) -> PluginInvokeResponse:
@@ -535,6 +553,7 @@ __all__ = [
     "bci_transcribe_stream",
     "cancel",
     "classify",
+    "close_session",
     "completion_orchestrate",
     "completion_stream",
     "decide",
@@ -557,6 +576,7 @@ __all__ = [
     "model_registry_list",
     "model_registry_search",
     "ocr_stream",
+    "open_session",
     "plugin_invoke",
     "plugin_invoke_stream",
     "rag",

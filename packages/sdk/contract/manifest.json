@@ -55,6 +55,12 @@
       "responseSchema": "schema.json#/$defs/classify.response"
     },
     {
+      "name": "closeSession",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/closeSession.request",
+      "responseSchema": "schema.json#/$defs/closeSession.response"
+    },
+    {
       "name": "completionOrchestrate",
       "callShape": "duplex",
       "requestSchema": "schema.json#/$defs/completionOrchestrate.request",
@@ -179,6 +185,12 @@
       "callShape": "server-stream",
       "requestSchema": "schema.json#/$defs/ocrStream.request",
       "responseSchema": "schema.json#/$defs/ocrStream.response"
+    },
+    {
+      "name": "openSession",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/openSession.request",
+      "responseSchema": "schema.json#/$defs/openSession.response"
     },
     {
       "name": "pluginInvoke",

@@ -27,6 +27,8 @@ suspend fun QvacClient.`cancel`(request: io.tether.qvac.sdk.generated.schema.Can
 
 fun QvacClient.`classify`(request: io.tether.qvac.sdk.generated.schema.ClassifyRequest): Flow<io.tether.qvac.sdk.generated.schema.ClassifyResponse> = streamTyped(request)
 
+suspend fun QvacClient.`closeSession`(request: io.tether.qvac.sdk.generated.schema.CloseSessionRequest): io.tether.qvac.sdk.generated.schema.CloseSessionResponse = callTyped(request)
+
 fun QvacClient.`completionOrchestrate`(request: io.tether.qvac.sdk.generated.schema.CompletionOrchestrateRequest, input: Flow<ByteArray>): Flow<io.tether.qvac.sdk.generated.schema.CompletionOrchestrateResponse> = duplexTyped(request, input)
 
 fun QvacClient.`completionStream`(request: io.tether.qvac.sdk.generated.schema.CompletionStreamRequest): Flow<io.tether.qvac.sdk.generated.schema.CompletionStreamResponse> = streamTyped(request)
@@ -67,6 +69,8 @@ suspend fun QvacClient.`modelRegistryList`(request: io.tether.qvac.sdk.generated
 suspend fun QvacClient.`modelRegistrySearch`(request: io.tether.qvac.sdk.generated.schema.ModelRegistrySearchRequest): io.tether.qvac.sdk.generated.schema.ModelRegistrySearchResponse = callTyped(request)
 
 fun QvacClient.`ocrStream`(request: io.tether.qvac.sdk.generated.schema.OcrStreamRequest): Flow<io.tether.qvac.sdk.generated.schema.OcrStreamResponse> = streamTyped(request)
+
+suspend fun QvacClient.`openSession`(request: io.tether.qvac.sdk.generated.schema.OpenSessionRequest): io.tether.qvac.sdk.generated.schema.OpenSessionResponse = callTyped(request)
 
 suspend fun QvacClient.`pluginInvoke`(request: io.tether.qvac.sdk.generated.schema.PluginInvokeRequest): io.tether.qvac.sdk.generated.schema.PluginInvokeResponse = callTyped(request)
 

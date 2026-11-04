@@ -8,6 +8,8 @@ import type {
 } from '@/schemas/assess-model-fit'
 import type { ModelSrcInput } from '@/schemas/model-src-utils'
 import type { RuntimeContext } from '@/schemas/runtime-context'
+import type { AbortSignalLike } from '@/schemas/common'
+import { trackedRequestSchema } from '@/schemas/request-base'
 
 /**
  * Granularity at which the addon can cancel.
@@ -28,6 +30,15 @@ export interface PluginHandlerCancel {
 }
 
 /**
+ * Request lifecycle handed to a handler reached through `pluginInvoke`. The
+ * engine registers that request itself, so the handler only has to forward
+ * the abort to its native job.
+ */
+export interface PluginHandlerContext {
+  signal: AbortSignalLike
+}
+
+/**
  * Definition for a plugin handler with explicit Zod schemas.
  * Each handler must define its request/response schemas for validation.
  */
@@ -41,7 +52,11 @@ export interface PluginHandlerDefinition<
   duplex?: boolean
   handler: TRequest extends z.ZodType<infer I>
     ? TResponse extends z.ZodType<infer O>
-      ? (request: I, inputStream?: AsyncIterable<Buffer>) => Promise<O> | AsyncGenerator<O>
+      ? (
+          request: I,
+          inputStream?: AsyncIterable<Buffer>,
+          context?: PluginHandlerContext
+        ) => Promise<O> | AsyncGenerator<O>
       : never
     : never
   /**
@@ -210,28 +225,34 @@ export interface QvacPlugin<
 }
 
 // Non-streaming plugin invoke
-export const pluginInvokeRequestSchema = z.object({
-  type: z.literal('pluginInvoke'),
-  modelId: z.string(),
-  handler: z.string(),
-  params: z.unknown()
-})
+export const pluginInvokeRequestSchema = z
+  .object({
+    type: z.literal('pluginInvoke'),
+    modelId: z.string(),
+    handler: z.string(),
+    params: z.unknown()
+  })
+  .extend(trackedRequestSchema.shape)
 
 export const pluginInvokeResponseSchema = z.object({
   type: z.literal('pluginInvoke'),
+  requestId: z.string().optional().describe('Identity of the request.'),
   result: z.unknown()
 })
 
 // Streaming plugin invoke
-export const pluginInvokeStreamRequestSchema = z.object({
-  type: z.literal('pluginInvokeStream'),
-  modelId: z.string(),
-  handler: z.string(),
-  params: z.unknown()
-})
+export const pluginInvokeStreamRequestSchema = z
+  .object({
+    type: z.literal('pluginInvokeStream'),
+    modelId: z.string(),
+    handler: z.string(),
+    params: z.unknown()
+  })
+  .extend(trackedRequestSchema.shape)
 
 export const pluginInvokeStreamResponseSchema = z.object({
   type: z.literal('pluginInvokeStream'),
+  requestId: z.string().optional().describe('Identity of the request, on the terminal frame.'),
   result: z.unknown(),
   done: z.boolean().optional()
 })

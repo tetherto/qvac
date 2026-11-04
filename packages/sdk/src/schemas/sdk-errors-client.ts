@@ -26,6 +26,8 @@ export const SDK_CLIENT_ERROR_CODES = {
   WORKER_CRASHED: 50205,
   WORKER_SHUTDOWN: 50206,
   WORKER_STARTUP_FAILED: 50207,
+  SESSION_INVALIDATED: 50208,
+  MODEL_HANDLE_INVALIDATED: 50209,
 
   // Build/Bundle Errors (50,600-50,799)
   SDK_NOT_FOUND_IN_NODE_MODULES: 50600,
@@ -130,6 +132,16 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.WORKER_SHUTDOWN]: {
     name: 'WORKER_SHUTDOWN',
     message: () => `SDK is shutting down — in-flight RPC call aborted`
+  },
+  [SDK_CLIENT_ERROR_CODES.SESSION_INVALIDATED]: {
+    name: 'SESSION_INVALIDATED',
+    message: (sessionId: string, reason: string) =>
+      `Session "${sessionId}" is no longer usable (${reason}); open a new session`
+  },
+  [SDK_CLIENT_ERROR_CODES.MODEL_HANDLE_INVALIDATED]: {
+    name: 'MODEL_HANDLE_INVALIDATED',
+    message: (modelId: string, sessionId: string) =>
+      `Model "${modelId}" was held by session "${sessionId}", which is no longer usable; load it again through a new session`
   },
   [SDK_CLIENT_ERROR_CODES.WORKER_STARTUP_FAILED]: {
     name: 'WORKER_STARTUP_FAILED',
