@@ -24,7 +24,7 @@ const WIN32_RETURN =
 const COPIES = [
   '.github/actions/sdk-e2e-prepare-inference/prepare.mjs',
   '.github/actions/sdk-e2e-prepare-test-suite/prepare.mjs',
-  'packages/sdk/e2e/scripts/build-local-inference.mjs'
+  'packages/sdk-e2e/scripts/build-local-inference.mjs'
 ]
 
 test('win32 emits file: + posixified drive path, not a WHATWG file URL', () => {

@@ -5,6 +5,8 @@
 
 #include "addon/TTSErrors.hpp"
 #include "model-interface/BackendUtils.hpp"
+#include "model-interface/DenoiserLoader.hpp"
+#include "model-interface/EnhancerLoader.hpp"
 
 using qvac::ttsggml::backendDeviceCode;
 using qvac::ttsggml::backendIdFromName;
@@ -67,6 +69,26 @@ TEST(BackendUtils, BackendIdUnknownReturnsSentinel) {
 TEST(BackendUtils, BackendDeviceCodeMatchesGgmlEnum) {
   EXPECT_EQ(backendDeviceCode(tts_cpp::BackendDevice::CPU), 0);
   EXPECT_EQ(backendDeviceCode(tts_cpp::BackendDevice::GPU), 1);
+  EXPECT_EQ(backendDeviceCode(tts_cpp::BackendDevice::CoreML), 2);
+}
+
+TEST(BackendUtils, LavaSRCoreMLReportsFrameworkPlacement) {
+  for (const auto* name :
+       {"coreml-cpu", "coreml-gpu", "coreml-ane", "coreml-all"}) {
+    EXPECT_EQ(qvac::ttsggml::denoiserBackendDeviceFromName(name), 2);
+    EXPECT_EQ(qvac::ttsggml::denoiserBackendIdFromName(name), 99);
+  }
+  EXPECT_EQ(qvac::ttsggml::denoiserBackendDeviceFromName("scalar"), 0);
+  EXPECT_EQ(qvac::ttsggml::denoiserBackendDeviceFromName("CPU"), 0);
+  EXPECT_EQ(qvac::ttsggml::denoiserBackendDeviceFromName("MTL0"), 1);
+}
+
+TEST(BackendUtils, LavaSRCoreMLCannotBeSilentlyDisabledWithoutGguf) {
+  const tts_cpp::lavasr::CoreMLOptions coreml{"/model.mlmodelc", "CPU_AND_NE"};
+  EXPECT_ANY_THROW(qvac::ttsggml::loadEnhancer("", false, "test: ", 0, coreml));
+  EXPECT_ANY_THROW(qvac::ttsggml::loadDenoiser("", false, "test: ", coreml));
+  EXPECT_EQ(qvac::ttsggml::loadEnhancer("", true, "test: ").backendDevice, -1);
+  EXPECT_EQ(qvac::ttsggml::loadDenoiser("", true, "test: ").backendDevice, -1);
 }
 
 TEST(TTSErrors, ToStringCoversAllKnownCodes) {

@@ -102,11 +102,14 @@ export const audioSpeechBody = z
     response_format: z.string().optional(),
     speed: z.union([z.number(), z.string()]).optional(),
     instructions: z.string().optional(),
-    stream_format: z.string().optional()
+    stream_format: z
+      .string()
+      .optional()
+      .describe('`audio` (default) returns the audio body; `sse` streams `speech.audio.*` events.')
   })
   .passthrough()
 
-export const SPEECH_UNSUPPORTED_PARAMS = ['speed', 'instructions', 'stream_format'] as const
+export const SPEECH_UNSUPPORTED_PARAMS = ['speed', 'instructions'] as const
 
 export const voiceObject = z.object({
   id: z.string(),

@@ -27,7 +27,7 @@ const wavField = {
 }
 function timedWavField() {
   const fixturePath = fileURLToPath(
-    new URL('../../../../sdk/e2e/assets/audio/transcription-short-wav.wav', import.meta.url)
+    new URL('../../../../sdk-e2e/assets/audio/transcription-short-wav.wav', import.meta.url)
   )
   assert.ok(existsSync(fixturePath), `Timed transcription fixture is missing: ${fixturePath}`)
   return {

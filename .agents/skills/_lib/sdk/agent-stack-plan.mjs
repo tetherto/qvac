@@ -322,12 +322,20 @@ function recommendVersion (entry, spec, bySlug) {
   }
 }
 
-/** npm name → name of the release train that publishes it. */
+/**
+ * npm name → names of the release trains that publish it, smallest first.
+ * `loadTrain` accepts two trains that share a group only when one holds the
+ * other, so each list runs from a train to the trains that hold it.
+ */
 export function trainsByPackage (catalog, nxJson) {
+  const trains = Object.keys(catalog)
+    .map((name) => loadTrain(name, catalog, nxJson))
+    .sort((a, b) => a.projects.length - b.projects.length)
   const out = new Map()
-  for (const name of Object.keys(catalog)) {
-    for (const project of loadTrain(name, catalog, nxJson).projects) {
-      out.set(project, name)
+  for (const train of trains) {
+    for (const project of train.projects) {
+      if (!out.has(project)) out.set(project, [])
+      out.get(project).push(train.name)
     }
   }
   return out
@@ -336,18 +344,21 @@ export function trainsByPackage (catalog, nxJson) {
 /**
  * A train publishes every package in it (`checkRelease` in
  * .github/scripts/lib/release-train.mjs rejects a train branch where one does
- * not move). Once any member needs a release, the members with no reason of
- * their own get the `train` reason.
+ * not move). A package that needs a release starts the smallest train that
+ * holds it, and a package in several started trains goes with the largest.
+ * Members of a started train with no reason of their own get the `train`
+ * reason.
  */
-function applyTrainReleases (packages, trainOf) {
+function applyTrainReleases (packages, trainsOf) {
   const active = new Set()
   for (const entry of packages) {
-    const train = trainOf.get(entry.npmName)
-    if (train && entry.needsRelease) active.add(train)
+    const trains = trainsOf.get(entry.npmName)
+    if (trains && entry.needsRelease) active.add(trains[0])
   }
   for (const entry of packages) {
-    const train = trainOf.get(entry.npmName)
-    if (!train) continue
+    const trains = trainsOf.get(entry.npmName)
+    if (!trains) continue
+    const train = trains.findLast((name) => active.has(name)) ?? trains[0]
     entry.train = train
     if (
       active.has(train) &&
@@ -432,8 +443,8 @@ function inspectPackage (spec, ctx) {
  * Everything after the per-package inspection. `packages` holds one entry per
  * STACK spec, in STACK order.
  */
-export function finalizePlan (packages, trainOf) {
-  applyTrainReleases(packages, trainOf)
+export function finalizePlan (packages, trainsOf) {
+  applyTrainReleases(packages, trainsOf)
 
   // Second pass: deps against finalized lower recommendations.
   const bySlug = new Map(packages.map((entry) => [entry.slug, entry]))
@@ -483,8 +494,8 @@ function renderMarkdown (plan) {
     '',
     `Base: \`${plan.baseRef}\` · npm: ${plan.npmQueried ? 'queried' : 'skipped'}`,
     '',
-    '| Package | Local | npm | Needs release | Suggested | Why |',
-    '|---|---|---|---|---|---|'
+    '| Package | Local | npm | Needs release | Suggested | Train | Why |',
+    '|---|---|---|---|---|---|---|'
   ]
 
   for (const p of plan.packages) {
@@ -494,7 +505,7 @@ function renderMarkdown (plan) {
         ? 'yes'
         : 'no'
     lines.push(
-      `| ${p.npmName} | ${p.localVersion} | ${p.publishedVersion || '?'} | ${needs} | ${p.recommendation?.suggested || '—'} | ${p.recommendation?.rationale || 'aligned'} |`
+      `| ${p.npmName} | ${p.localVersion} | ${p.publishedVersion || '?'} | ${needs} | ${p.recommendation?.suggested || '—'} | ${p.needsRelease ? p.train || '—' : '—'} | ${p.recommendation?.rationale || 'aligned'} |`
     )
   }
   lines.push('')

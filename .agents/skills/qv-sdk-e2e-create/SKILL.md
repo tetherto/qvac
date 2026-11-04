@@ -1,7 +1,7 @@
 ---
 name: qv-sdk-e2e-create
 description: >
-  Plans and scaffolds e2e tests in packages/sdk/e2e for a new or changed public SDK API. Use when
+  Plans and scaffolds e2e tests in packages/sdk-e2e for a new or changed public SDK API. Use when
   adding or modifying SDK functionality that is exposed to consumers. Enforces happy / sad / error
   coverage, deterministic model-output assertions, resource and skip entries for every leg (desktop,
   mobile, Electron, Snap), smoke-suite selection, and local validation with run:local.
@@ -9,7 +9,7 @@ description: >
 
 # SDK e2e Test Creation
 
-Plan and scaffold e2e tests in `packages/sdk/e2e` for a new or changed SDK feature exposed through
+Plan and scaffold e2e tests in `packages/sdk-e2e` for a new or changed SDK feature exposed through
 the public API.
 
 ## When to use this skill
@@ -26,7 +26,7 @@ Use when:
 Do NOT use for:
 
 - Internal refactors that don't change the public surface.
-- Unit tests inside `packages/sdk/` (this skill covers only the e2e suite under `packages/sdk/e2e`).
+- Unit tests inside `packages/sdk/` (this skill covers only the e2e suite under `packages/sdk-e2e`).
 
 ## Workflow
 
@@ -34,8 +34,8 @@ Investigate first, then propose a concrete plan. Only ask the user for informati
 recovered from code or context.
 
 1. **Read the feature.** Identify the new/changed exports, inputs, return type, model dependencies, and
-   any existing examples under `packages/sdk/examples/` or tests under `packages/sdk/e2e/tests/`.
-2. **Find comparable tests.** Look for an analogous existing feature in `tests/test-definitions.ts`
+   any existing examples under `packages/sdk/examples/` or tests under `packages/sdk-e2e/catalog/`.
+2. **Find comparable tests.** Look for an analogous existing feature in `catalog/test-definitions.ts`
    and its body or executor. Mirror its style unless there's reason to deviate.
 3. **Determine model-output testability** (§"Model-output strategy"). Propose a specific validator
    and a specific prompt/input that makes the output deterministic enough to assert.
@@ -74,7 +74,7 @@ Pick the strongest achievable strategy:
 6. **Error path** — `throws-error` with a substring that is stable across SDK versions.
 7. **Named assertion** — for deterministic but non-trivial checks like cosine similarity against a
    reference vector, assert with `named:` and implement it for both clients, in
-   `tests/shared/step-bindings.ts` and `python/qvac_e2e/assertions.py`. Avoid a `function`
+   `runners/js/shared/step-bindings.ts` and `runners/python/qvac_e2e/assertions.py`. Avoid a `function`
    expectation: it is a JavaScript closure, so a non-JS client reports the test `incomplete`.
 
 If the model's output is inherently non-deterministic and cannot be constrained, say so in the plan and
@@ -96,7 +96,7 @@ More cases are encouraged for multi-branch features.
 ## Body and placement
 
 **Prefer a declarative body.** A definition with `steps` runs through the shared step interpreter,
-with no executor, on every consumer whose `tests/<leg>/consumer.ts` sets `executor.stepBindings`.
+with no executor, on every consumer whose `runners/js/<leg>/consumer.ts` sets `executor.stepBindings`.
 Check that for each leg the test runs on: elsewhere the definition goes to the executors and fails
 with `No handler found` or `Unknown test`. Mobile has no interpreter, because the step bindings
 import `node:*`, so a step-only test needs a mobile executor or a `mobile` skip. Write an executor
@@ -104,28 +104,28 @@ only for a body that cannot be data.
 
 Executor placement, when one is needed:
 
-- Pure SDK API, no Node stdlib, no RN APIs → `tests/shared/executors/`.
+- Pure SDK API, no Node stdlib, no RN APIs → `runners/js/shared/executors/`.
 - Needs `node:fs`, `node:path`, `process.cwd()`, or other Node-only APIs →
-  `tests/shared/executors/node/`.
-- Needs RN `Platform`, bundled assets, or anything specific to React Native → `tests/mobile/executors/`.
+  `runners/js/shared/executors/node/`.
+- Needs RN `Platform`, bundled assets, or anything specific to React Native → `runners/js/mobile/executors/`.
 
-Never import `node:*` into code mobile loads: `tests/mobile/` and `tests/shared/executors/` outside
+Never import `node:*` into code mobile loads: `runners/js/mobile/` and `runners/js/shared/executors/` outside
 `node/`.
 
 Placement does not register an executor. Add it to the `handlers: [...]` array of every compatible
-consumer: `tests/desktop/consumer.ts`, `tests/mobile/consumer.ts`, and `tests/electron/consumer.ts`
+consumer: `runners/js/desktop/consumer.ts`, `runners/js/mobile/consumer.ts`, and `runners/js/electron/consumer.ts`
 (also used by the Snap). A scheduled test with no matching executor fails with `No handler found`.
 
 ## Platforms
 
 Evaluate every leg on its own — desktop, mobile, Electron, Snap — rather than treating desktop-only
-coverage as automatic. Leg names are in `tests/platform-vocabulary.md`.
+coverage as automatic. Leg names are in `catalog/platform-vocabulary.md`.
 
-- **Models** are declared once in `tests/shared/resource-table.ts`, not in the consumers. `on` limits
+- **Models** are declared once in `catalog/resource-table.ts`, not in the consumers. `on` limits
   an entry to some platforms and matches by segment prefix, so `electron` does not cover the Snap
   (`snap-linux`) — name `snap` too. A leg that runs a test whose entry it leaves out throws
   `Unknown dependency`. Regenerate the JSON copy with `npm run emit:resource-table`.
-- **Skips** are data in `tests/platform-skips.ts`, not `SkipExecutor`s in consumers. Name every leg
+- **Skips** are data in `catalog/platform-skips.ts`, not `SkipExecutor`s in consumers. Name every leg
   the test must not run on, listing `snap` alongside `electron`, with a clear reason. Record a
   deliberate change with `node scripts/check-skip-matrix.mjs --write`.
 - **Mobile** — address these in the plan; if the feature cannot run on mobile at all, document the
@@ -154,12 +154,12 @@ Required before landing. Provide the exact commands for every compatible local c
 the task complete until the user confirms those tests pass locally.
 
 ```bash
-cd packages/sdk/e2e
+cd packages/sdk-e2e
 
-# If packages/sdk (outside e2e) or packages/inference changed
+# If packages/sdk or packages/inference changed
 npm run install:build:full
 
-# Otherwise (only test code in packages/sdk/e2e changed)
+# Otherwise (only test code in packages/sdk-e2e changed)
 npm run install:build
 
 npx qvac-test run:local:desktop --filter <feature>-
@@ -172,7 +172,7 @@ diff lines of its own — `install:build:sdk` trusts the published `@qvac/infere
 be behind the checked-out `packages/inference` source from unrelated merged work.
 
 Before pushing, run the cheap gates listed under "Developing new tests" in
-[`packages/sdk/e2e/README.md`](../../../packages/sdk/e2e/README.md).
+[`packages/sdk-e2e/README.md`](../../../packages/sdk-e2e/README.md).
 
 ## Quality checklist
 
@@ -188,11 +188,12 @@ Before presenting the plan:
 
 Before marking scaffolding complete:
 
-- [ ] Test definitions aggregated in `tests/test-definitions.ts`.
+- [ ] Test definitions aggregated in `catalog/test-definitions.ts`; any SDK wire type they need
+      comes from `catalog/wire-types.ts`, never from `@qvac/sdk`.
 - [ ] Every leg that runs a step-only test sets `executor.stepBindings` in its consumer.
 - [ ] Executors registered in every compatible consumer, Electron included (it covers the Snap);
-      unsupported legs skipped in `tests/platform-skips.ts`.
-- [ ] Models added to `tests/shared/resource-table.ts` with `on` naming every leg that runs the
+      unsupported legs skipped in `catalog/platform-skips.ts`.
+- [ ] Models added to `catalog/resource-table.ts` with `on` naming every leg that runs the
       tests, `snap` included; JSON copy regenerated.
 - [ ] README's cheap gates pass.
 - [ ] User has confirmed the new tests pass through each compatible local consumer command.
@@ -203,12 +204,12 @@ Before marking scaffolding complete:
 
 - Templates and the expectation table → [`references/scaffolding.md`](references/scaffolding.md).
 - Executor placement, smoke policy, rebuild flow, cheap gates →
-  [`packages/sdk/e2e/AGENTS.md`](../../../packages/sdk/e2e/AGENTS.md) and
-  [`packages/sdk/e2e/README.md`](../../../packages/sdk/e2e/README.md).
+  [`packages/sdk-e2e/AGENTS.md`](../../../packages/sdk-e2e/AGENTS.md) and
+  [`packages/sdk-e2e/README.md`](../../../packages/sdk-e2e/README.md).
 - Expectation schema → `@qvac/test-suite` `dist/schemas/expectations.js`.
 - Existing examples:
-  - Declarative body: `packages/sdk/e2e/tests/tts-moss-tests.ts` (step-only, no executor).
-  - Strong output assertion: `packages/sdk/e2e/tests/translation-bergamot-tests.ts`
+  - Declarative body: `packages/sdk-e2e/catalog/tts-moss-tests.ts` (step-only, no executor).
+  - Strong output assertion: `packages/sdk-e2e/catalog/translation-bergamot-tests.ts`
     (`contains-any` over expected French tokens).
-  - Error path: `packages/sdk/e2e/tests/vision-tests.ts` (`throws-error` with `errorContains`).
-  - Shape fallback: `packages/sdk/e2e/tests/completion-tests.ts` (`type: "string"`).
+  - Error path: `packages/sdk-e2e/catalog/vision-tests.ts` (`throws-error` with `errorContains`).
+  - Shape fallback: `packages/sdk-e2e/catalog/completion-tests.ts` (`type: "string"`).

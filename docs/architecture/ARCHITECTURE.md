@@ -168,7 +168,7 @@ Worker-backed clients use the same JSON request/response envelopes over differen
 - TypeScript Node/Bun/Electron clients use `bare-rpc` over a Unix socket or Windows named pipe.
 - Expo clients use `bare-rpc` over the BareKit worklet IPC bridge.
 - Python clients use `bare-rpc-python` over loopback TCP (`127.0.0.1:0`) because asyncio has no cross-platform Unix-socket/named-pipe server.
-- Kotlin JVM clients (`JvmBareRpcTransport`) also use `bare-rpc` framing over loopback TCP.
+- Kotlin clients use `bare-rpc-kotlin`: the JVM transport over loopback TCP, the Android transport over the BareKit worklet IPC bridge.
 
 Any local user can reach a loopback port, so on TCP endpoints the worker first sends a per-session token it receives in `QVAC_IPC_AUTH_TOKEN` (environment, not argv); the client drops every connection that does not present it.
 
@@ -292,6 +292,7 @@ Most packages live in this monorepo under `packages/`. Integration plugins live 
 | `cli` | `@qvac/cli` | CLI tooling (`qvac bundle sdk`, verification, release helpers) |
 | `ai-sdk-provider` | `@qvac/ai-sdk-provider` | Vercel AI SDK provider integration |
 | `test-suite` | `@qvac/test-suite` | Distributed MQTT test-orchestration framework (`qvac-test` CLI) driving the SDK e2e suites across desktop, Electron, Snap, Android, and iOS |
+| `sdk-e2e` | - | Private, unpublished SDK e2e suite: the test catalog, its executors and consumers, and the cross-client conformance corpus |
 | `plugins/opencode` | `@qvac/opencode-plugin` | OpenCode integration |
 | `plugins/openclaw` | `@qvac/openclaw-plugin` | OpenClaw integration |
 | `docs/website` | - | Documentation site (Next.js / Fumadocs) |
@@ -310,7 +311,7 @@ Most packages live in this monorepo under `packages/`. Integration plugins live 
 | `diffusion-cpp` | `@qvac/diffusion-cpp` | Image/video generation and upscaling |
 | `audiogen-ggml` | `@qvac/audiogen-ggml` | Text-conditioned audio generation |
 | `vla-ggml` | `@qvac/vla-ggml` | Vision-language-action inference |
-| `classification-ggml` | `@qvac/classification-ggml` | Image classification |
+| `classification-ggml` | `@qvac/classification-ggml` | MobileNet image classification and MegaLoc image embeddings |
 
 **Support Libraries**
 

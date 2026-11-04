@@ -24,10 +24,10 @@ import {
 } from '@/plugins/builtin/llamacpp-completion/ops/kv-cache-session'
 import type { DisposableScope } from '@/runtime/disposable-scope'
 import { detectToolDialect, prependToolsToHistory } from '@/utils/tool-integration'
-import { resolveDeferredTools, toWireTool, withDeferredToolChoice } from '@/utils/tools/defer'
+import { resolveDeferredTools, toWireTool } from '@/utils/tools/defer'
 import { parseToolCalls } from '@/utils/tools/index'
 import { getResponseFormatJsonSchema } from '@/utils/response-format'
-import { buildAutoCacheSaveHistory, type CacheMessage } from '@/utils/index'
+import { buildAutoCacheSaveHistory, normalizeCacheMessage, type CacheMessage } from '@/utils/index'
 import { getEngineLogger } from '@/logging/index'
 import type { Logger } from '@/logging/types'
 import { AttachmentNotFoundError } from '@/errors/index'
@@ -83,6 +83,15 @@ interface ChatHistory {
 // dep bump propagates and is harmless once it has.
 export type CompletionGenerationParams = GenerationParams & {
   json_schema?: string
+}
+
+export function withParallelToolCalls(
+  generationParams: CompletionGenerationParams | undefined
+): CompletionGenerationParams {
+  return {
+    ...generationParams,
+    parallel_tool_calls: generationParams?.parallel_tool_calls ?? true
+  }
 }
 
 type CompletionRunOptions = Pick<RunOptions, 'cacheKey' | 'prefill'> & {
@@ -178,7 +187,7 @@ export function seedConfiguredSystemPrompt<T extends { role: string; content: st
   return [{ role: 'system', content: configured } as T, ...history]
 }
 
-type CacheRunOptions = Pick<RunOptions, 'cacheKey'>
+type CacheRunOptions = Pick<RunOptions, 'cacheKey' | 'prefill'>
 
 type CacheOwningModel = AnyModel & {
   saveCache?(cacheKey: string): Promise<void>
@@ -242,6 +251,9 @@ async function* processModelResponse(
     ...(generationParams && { generationParams }),
     ...(cacheOptions?.cacheKey !== undefined && {
       cacheKey: cacheOptions.cacheKey
+    }),
+    ...(cacheOptions?.prefill !== undefined && {
+      prefill: cacheOptions.prefill
     })
   }
   const hasRunOptions = Object.keys(runOptions).length > 0
@@ -307,6 +319,7 @@ export async function* completion(
     history: requestHistory,
     modelId,
     kvCache,
+    prefill,
     tools,
     generationParams,
     responseFormat
@@ -317,13 +330,11 @@ export async function* completion(
   const modelConfig = getModelConfig(modelId)
   const history = seedConfiguredSystemPrompt(requestHistory, modelConfig)
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true
-  // With deferred tools the prompt and the parser see different lists: the
-  // prompt carries the always-loaded ones plus `tool_search` and its catalog,
-  // while the parser also accepts whatever earlier searches appended to the
-  // history. `null` when nothing defers, which leaves the existing path alone.
+  // With deferred tools the prompt carries the always-loaded ones, `tool_search`
+  // and its catalog, and whatever earlier searches loaded. `null` when nothing
+  // defers, which leaves the existing path alone.
   const deferred = resolveDeferredTools(tools, history)
   const toolsToRender = deferred?.toolsToRender ?? tools?.map(toWireTool)
-  const callableTools = deferred?.callableTools ?? toolsToRender
   const toolsActive = !!toolsToRender?.length && toolsEnabled
   const dialect =
     tools && tools.length > 0 ? (params.toolDialect ?? detectToolDialect(modelId)) : undefined
@@ -345,10 +356,7 @@ export async function* completion(
       }
     }
   }
-  mergedGenerationParams = withDeferredToolChoice(
-    mergedGenerationParams,
-    toolsActive ? deferred : null
-  )
+  mergedGenerationParams = withParallelToolCalls(mergedGenerationParams)
 
   const model = getModel(modelId)
 
@@ -396,7 +404,7 @@ export async function* completion(
     return yield* processModelResponse(
       model,
       prompt,
-      callableTools,
+      toolsToRender,
       mergedGenerationParams,
       undefined,
       dialect,
@@ -434,7 +442,8 @@ export async function* completion(
     turn = await session.beginTurn({
       kind: 'auto',
       configHash,
-      history: cacheMessages,
+      history: prefill ? cacheMessages.map(normalizeCacheMessage) : cacheMessages,
+      ...(toolsActive && toolsToRender ? { tools: toolsToRender } : {}),
       signal
     })
   }
@@ -449,9 +458,9 @@ export async function* completion(
   const result = yield* processModelResponse(
     model,
     prompt,
-    callableTools,
+    toolsToRender,
     mergedGenerationParams,
-    { cacheKey: turn.cachePath },
+    { cacheKey: turn.cachePath, ...(prefill !== undefined && { prefill }) },
     dialect,
     setActiveResponse
   )
@@ -465,7 +474,23 @@ export async function* completion(
   }
 
   // Auto-cache path.
-  //
+  if (prefill && !signal.aborted && !result.stoppedAtContextBoundary) {
+    await saveCacheFile(model, turn.cachePath, requestLogger)
+    const cacheInfo = await getCurrentCacheInfo(
+      modelId,
+      configHash,
+      history.map(toCacheMessage).map(normalizeCacheMessage),
+      toolsActive ? toolsToRender : undefined
+    )
+    await session.commitTurn(
+      turn,
+      // Renaming to the held path would reacquire its non-reentrant write lock.
+      cacheInfo.cachePath === turn.cachePath
+        ? { kind: 'static' }
+        : { kind: 'autoRename', targetCachePath: cacheInfo.cachePath }
+    )
+    return result
+  }
   // Tool-call turns: the auto-cache key is derived from
   // `result.responseText`, which here is raw tool-call markup rather
   // than a clean assistant message. There's no safe post-response key
@@ -498,7 +523,12 @@ export async function* completion(
 
   await saveCacheFile(model, turn.cachePath, requestLogger)
   const savedHistory = buildAutoCacheSaveHistory(history.map(toCacheMessage), result.responseText)
-  const postResponseCacheInfo = await getCurrentCacheInfo(modelId, configHash, savedHistory)
+  const postResponseCacheInfo = await getCurrentCacheInfo(
+    modelId,
+    configHash,
+    savedHistory,
+    toolsActive ? toolsToRender : undefined
+  )
 
   await session.commitTurn(turn, {
     kind: 'autoRename',

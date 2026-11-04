@@ -636,3 +636,30 @@ for (const method of ['runStream', 'runStreaming']) {
     })
   }
 }
+
+for (const method of ['runStream', 'runStreaming', 'streamOutput']) {
+  test(`Audio8: ${method} enables native PCM streaming without changing batch jobs`, async (t) => {
+    const binding = new RecordingBinding()
+    const model = createMockedAudio8Model({ binding })
+    await model.load()
+    const text = 'The first audio should arrive while the rest is generated.'
+    async function* source() {
+      yield text
+    }
+    const response =
+      method === 'runStream'
+        ? await model.runStream(text)
+        : method === 'runStreaming'
+          ? await model.runStreaming(source(), { accumulateSentences: false })
+          : await model.run({ input: text, streamOutput: true })
+    await response.onUpdate(() => {}).await()
+    t.ok(binding.jobs.length > 0)
+    t.ok(binding.jobs.every((job) => job.streamOutput === true))
+    binding.jobs.length = 0
+    const batch = await model.run({ input: text })
+    await batch.onUpdate(() => {}).await()
+    t.is(binding.jobs.length, 1)
+    t.absent(binding.jobs[0].streamOutput)
+    await model.unload()
+  })
+}

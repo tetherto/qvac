@@ -4,14 +4,19 @@
 
 ### Changed
 
-- `@qvac/fabric` dependency bumped `^0.22.0` -> `^0.23.0`, which carries
-  `qvac-fabric` `11018.2.0` -> `11259.0.0`, a rebase onto upstream llama.cpp
-  b11259 ([#5171](https://github.com/tetherto/qvac/pull/5171)). A caret on a
-  `0.x` version locks the minor, so `^0.22.0` would not have resolved `0.23.0`
+- `@qvac/fabric` dependency bumped `^0.22.0` -> `^0.24.0`, which carries
+  `qvac-fabric` `11018.2.0` -> `11259.1.0`, a rebase onto upstream llama.cpp
+  b11259 ([#5171](https://github.com/tetherto/qvac/pull/5171),
+  [#5339](https://github.com/tetherto/qvac/pull/5339),
+  [#5374](https://github.com/tetherto/qvac/pull/5374)). A caret on a
+  `0.x` version locks the minor, so `^0.22.0` would not have resolved `0.24.0`
   on its own. The native API changes, so the native addon is rebuilt against
-  the 0.23.0 headers.
+  the 0.24.0 headers.
+- The mobile dev dependencies `@qvac/fabric-android-arm64` /
+  `@qvac/fabric-ios` take a caret, `^0.24.0`, instead of an exact pin, so a
+  later fabric patch no longer needs a manifest change.
 - Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
-  `@qvac/fabric-ios` to `0.23.0` together.
+  `@qvac/fabric-ios` to `0.24.0` together.
 
 ## [0.16.1] - 2026-10-15
 

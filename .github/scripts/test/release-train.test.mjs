@@ -1,20 +1,30 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   changelogSection,
   checkRelease,
   compareVersions,
+  excludeFromWorkspace,
   linkedOutsideTrain,
   loadTrain,
   movedProjects,
+  outsideTrain,
   parseBranch,
   parseLsRemote,
+  parseNpmView,
   planTags,
+  publishedCommit,
   publishedElsewhere,
   rangeErrors,
   readRepoJson,
+  repoRoot,
   satisfies,
+  shasumMismatches,
   stageManifest,
+  workspaceDirs,
+  workspaceEntries,
 } from '../lib/release-train.mjs'
 
 const NX_JSON = {
@@ -27,8 +37,10 @@ const NX_JSON = {
 }
 const CATALOG = {
   sdk: { groups: ['engine', 'agentstack'], anchorGroup: 'engine', githubRelease: { project: '@qvac/sdk', name: 'QVAC SDK' } },
+  cli: { groups: ['agentstack'], anchorProject: '@qvac/cli' },
 }
 const TRAIN = loadTrain('sdk', CATALOG, NX_JSON)
+const CLI_TRAIN = loadTrain('cli', CATALOG, NX_JSON)
 
 // The Releases page is SDK-only (ci-trust-policy.test.mjs); release-train.yml
 // cuts a release for whichever package the catalog names.
@@ -47,14 +59,29 @@ test('rejects a train the config cannot release', () => {
     () => loadTrain('sdk', { sdk: { ...CATALOG.sdk, groups: ['engine', 'tools'] } }, NX_JSON),
     /'tools', which nx.json does not declare/,
   )
+  const withTools = { release: { groups: { ...NX_JSON.release.groups, tools: { projects: ['@qvac/rag'], projectsRelationship: 'fixed' } } } }
   assert.throws(
-    () => loadTrain('sdk', { ...CATALOG, other: { groups: ['agentstack'], anchorGroup: 'agentstack' } }, NX_JSON),
-    /'agentstack' is in both 'sdk' and 'other'/,
+    () => loadTrain('sdk', { ...CATALOG, other: { groups: ['agentstack', 'tools'], anchorGroup: 'tools' } }, withTools),
+    /'sdk' and 'other' share release group 'agentstack', so one must hold every group of the other/,
   )
   assert.throws(
     () => loadTrain('sdk', { sdk: { ...CATALOG.sdk, anchorGroup: 'agentstack' } }, NX_JSON),
     /must be one of its groups and "fixed"/,
   )
+  assert.throws(
+    () => loadTrain('cli', { cli: { ...CATALOG.cli, anchorProject: '@qvac/sdk' } }, NX_JSON),
+    /anchorProject @qvac\/sdk must be in the train/,
+  )
+  assert.throws(
+    () => loadTrain('cli', { cli: { ...CATALOG.cli, anchorGroup: 'agentstack' } }, NX_JSON),
+    /replaces anchorGroup/,
+  )
+})
+
+test('a train inside another, versioned by one project', () => {
+  assert.deepEqual(CLI_TRAIN.projects, ['@qvac/cli'])
+  assert.deepEqual(CLI_TRAIN.anchorProjects, ['@qvac/cli'])
+  assert.deepEqual(TRAIN.anchorProjects, ['@qvac/inference', '@qvac/sdk'])
   assert.throws(
     () => loadTrain('sdk', { sdk: { ...CATALOG.sdk, githubRelease: { project: '@qvac/rag' } } }, NX_JSON),
     /@qvac\/rag is not in the train/,
@@ -171,14 +198,155 @@ test('rejects a committed version plan, which nx would apply to the next train',
   ])
 })
 
+const WORKSPACE_YAML = `packages:
+  - "packages/*"
+  # sdk-kotlin is a Gradle package
+  - "!packages/sdk-kotlin"
+  - "plugins/*"
+
+linkWorkspacePackages: true
+`
+
+function checkCli (workspace) {
+  return checkRelease({
+    branch: { train: 'cli', version: '0.16.0' },
+    train: CLI_TRAIN,
+    moved: [MOVED[2]],
+    versionAtHead: (name) => VERSIONS[name],
+    changelogAt: () => '## [0.16.0]\n\n- notes\n',
+    manifests: { '@qvac/cli': MANIFESTS['@qvac/cli'] },
+    workspace,
+    outside: [{ dir: 'packages/sdk', name: '@qvac/sdk' }],
+  })
+}
+
+test('a train installs the packages outside it from npm only once they leave the workspace', () => {
+  const [error] = checkCli(WORKSPACE_YAML)
+  assert.match(error, /^packages\/sdk is in the pnpm workspace, but the 'cli' train installs @qvac\/sdk from npm/)
+  assert.deepEqual(checkCli(excludeFromWorkspace(WORKSPACE_YAML, ['packages/sdk'])), [])
+})
+
+const DIRS = { packages: ['inference', 'sdk', 'cli', 'rag', 'embed', 'lint-config', 'docs'], plugins: ['opencode'] }
+const PACKAGES = [
+  { dir: 'packages/inference', manifest: { name: '@qvac/inference', dependencies: { '@qvac/rag': '^0.9.0', zod: '^4.0.0' }, optionalDependencies: { '@qvac/embed': '^0.53.0' } } },
+  { dir: 'packages/sdk', manifest: { name: '@qvac/sdk', dependencies: { '@qvac/inference': '^0.22.0', '@qvac/rag': '^0.9.0' }, devDependencies: { '@qvac/lint-config': '^1.0.0' } } },
+  { dir: 'packages/cli', manifest: { name: '@qvac/cli', peerDependencies: { '@qvac/sdk': '^0.22.0' } } },
+  { dir: 'packages/rag', manifest: { name: '@qvac/rag' } },
+  { dir: 'packages/embed', manifest: { name: '@qvac/embed' } },
+  { dir: 'packages/lint-config', manifest: { name: '@qvac/lint-config' } },
+  { dir: 'packages/docs', manifest: null },
+]
+
+test('finds every workspace directory, the ones the workspace leaves out too', () => {
+  const yaml = 'packages:\n  - "packages/*"\n  - "!packages/rag"\n  - packages/registry/client\n  - "plugins/*"\n'
+  assert.deepEqual(workspaceDirs(yaml, (parent) => DIRS[parent] ?? []), [
+    ...DIRS.packages.map((dir) => `packages/${dir}`),
+    'packages/registry/client',
+    'plugins/opencode',
+  ])
+  assert.throws(() => workspaceDirs('packages:\n  - "packages/**"\n', () => []), /"packages\/\*\*" is neither a directory nor <dir>\/\*/)
+})
+
+test('installs every workspace dependency outside the train from npm, development ones too', () => {
+  assert.deepEqual(outsideTrain(['@qvac/inference', '@qvac/sdk', '@qvac/cli'], PACKAGES), [
+    { name: '@qvac/embed', dir: 'packages/embed' },
+    { name: '@qvac/lint-config', dir: 'packages/lint-config' },
+    { name: '@qvac/rag', dir: 'packages/rag' },
+  ])
+  assert.deepEqual(outsideTrain(['@qvac/cli'], PACKAGES), [{ name: '@qvac/sdk', dir: 'packages/sdk' }])
+})
+
+test('rejects a package name two directories share, and a train package the workspace lacks', () => {
+  assert.throws(
+    () => outsideTrain(['@qvac/cli'], [...PACKAGES, { dir: 'packages/rag-copy', manifest: { name: '@qvac/rag' } }]),
+    /@qvac\/rag is the name of both packages\/rag and packages\/rag-copy/,
+  )
+  assert.throws(() => outsideTrain(['@qvac/gone'], PACKAGES), /No workspace package is named @qvac\/gone/)
+})
+
+test('every train in the repo finds its packages and the ones it installs from npm', () => {
+  const catalog = readRepoJson('.github/release-trains.json')
+  const nxJson = readRepoJson('nx.json')
+  const workspace = readFileSync(join(repoRoot, 'pnpm-workspace.yaml'), 'utf8')
+  const subdirs = (parent) => readdirSync(join(repoRoot, parent), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory()).map((entry) => entry.name)
+  const packages = workspaceDirs(workspace, subdirs).map((dir) => {
+    const path = join(repoRoot, dir, 'package.json')
+    return { dir, manifest: existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null }
+  })
+  for (const name of Object.keys(catalog)) {
+    const outside = outsideTrain(loadTrain(name, catalog, nxJson).projects, packages)
+    assert.ok(outside.length > 0, `train '${name}'`)
+  }
+})
+
+test('leaves a package out of the workspace once, after the other entries', () => {
+  const excluded = excludeFromWorkspace(WORKSPACE_YAML, ['packages/sdk'])
+  assert.deepEqual(workspaceEntries(excluded), ['packages/*', '!packages/sdk-kotlin', 'plugins/*', '!packages/sdk'])
+  assert.ok(excluded.endsWith('linkWorkspacePackages: true\n'))
+  assert.equal(excludeFromWorkspace(excluded, ['packages/sdk']), excluded)
+})
+
 const HEAD = 'a'.repeat(40)
 const OTHER = 'b'.repeat(40)
 
 test('refuses to publish the rest of a train from another commit', () => {
-  const gitHeads = { '@qvac/inference': OTHER, '@qvac/sdk': HEAD }
-  assert.deepEqual(publishedElsewhere(MOVED, (project) => gitHeads[project.name] ?? null, HEAD), [
+  const views = { '@qvac/inference': { found: true, value: OTHER }, '@qvac/sdk': { found: true, value: HEAD } }
+  assert.deepEqual(publishedElsewhere(MOVED, (project) => views[project.name] ?? { found: false, value: null }, HEAD), [
     `@qvac/inference@0.22.0 was published from ${OTHER}, not ${HEAD}; cut a new train branch`,
   ])
+})
+
+test('treats a version npm has without a gitHead as published elsewhere, and one it does not have as unpublished', () => {
+  const views = { '@qvac/inference': { found: true, value: null }, '@qvac/sdk': { found: false, value: null } }
+  assert.deepEqual(publishedElsewhere(MOVED, (project) => views[project.name] ?? { found: false, value: null }, HEAD), [
+    `@qvac/inference@0.22.0 is on npm without a gitHead, so it was not published from ${HEAD}; cut a new train branch`,
+  ])
+})
+
+test('reads the published commit from the anchor package, and fails until npm has a commit for it', () => {
+  const asked = []
+  const gitHeadOf = (view) => (name, version) => {
+    asked.push(`${name}@${version}`)
+    return view
+  }
+  assert.equal(publishedCommit(TRAIN, '0.22.0', gitHeadOf({ found: true, value: HEAD })), HEAD)
+  assert.equal(publishedCommit(CLI_TRAIN, '0.17.0', gitHeadOf({ found: true, value: HEAD })), HEAD)
+  assert.deepEqual(asked, ['@qvac/inference@0.22.0', '@qvac/cli@0.17.0'])
+  assert.throws(
+    () => publishedCommit(CLI_TRAIN, '0.17.0', gitHeadOf({ found: false, value: null })),
+    /@qvac\/cli@0\.17\.0 is not on npm; the train has not published yet/,
+  )
+  assert.throws(
+    () => publishedCommit(CLI_TRAIN, '0.17.0', gitHeadOf({ found: true, value: null })),
+    /@qvac\/cli@0\.17\.0 has no commit as its gitHead on npm/,
+  )
+  assert.throws(
+    () => publishedCommit(CLI_TRAIN, '0.17.0', gitHeadOf({ found: true, value: 'refs/heads/main' })),
+    /has no commit as its gitHead on npm/,
+  )
+})
+
+test('tells a version npm does not serve apart from a field it does not have', () => {
+  const e404 = JSON.stringify({ error: { code: 'E404', summary: 'No match found for version 0.17.0' } })
+  assert.deepEqual(parseNpmView({ status: 1, stdout: e404, stderr: '' }), { found: false, value: null })
+  assert.deepEqual(parseNpmView({ status: 0, stdout: '', stderr: '' }), { found: true, value: null })
+  assert.deepEqual(parseNpmView({ status: 0, stdout: `"${HEAD}"\n`, stderr: '' }), { found: true, value: HEAD })
+  assert.throws(
+    () => parseNpmView({ status: 1, stdout: JSON.stringify({ error: { code: 'E503' } }), stderr: 'Service Unavailable' }),
+    /exit 1: Service Unavailable/,
+  )
+  assert.throws(() => parseNpmView({ status: 1, stdout: '', stderr: 'getaddrinfo ENOTFOUND' }), /ENOTFOUND/)
+})
+
+test('compares sha1 only for the versions this run published', () => {
+  const served = { '@qvac/inference': 'aaa', '@qvac/sdk': 'bbb', '@qvac/cli': 'ccc' }
+  const built = { '@qvac/inference': 'aaa', '@qvac/sdk': 'xxx', '@qvac/cli': 'yyy' }
+  const mismatches = (published) => shasumMismatches(MOVED, published, (project) => served[project.name], (project) => built[project.name])
+  assert.deepEqual(mismatches(['@qvac/inference', '@qvac/sdk']), [
+    '@qvac/sdk@0.22.0 on npm has sha1 bbb; the built tarball has xxx',
+  ])
+  assert.deepEqual(mismatches([]), [])
 })
 
 test('points every train dependency, direct or not, at its tarball', () => {
@@ -209,9 +377,9 @@ test('tags each package at its npm gitHead, once, and fails on a tag elsewhere',
     { name: '@qvac/ai-sdk-provider', version: '0.10.0' },
   ]
   const onOrigin = { 'cli-v0.16.0': HEAD, 'ai-sdk-provider-v0.10.0': OTHER }
-  const plan = planTags(moved, { releaseProject: '@qvac/sdk', remoteCommit: (tag) => onOrigin[tag] ?? null, gitHeadOf: () => HEAD })
+  const plan = planTags(moved, { remoteCommit: (tag) => onOrigin[tag] ?? null, gitHeadOf: () => HEAD })
   assert.deepEqual(plan, {
-    create: [{ tag: 'inference-v0.21.0', commit: HEAD }],
+    create: [{ tag: 'inference-v0.21.0', commit: HEAD }, { tag: 'sdk-v0.21.0', commit: HEAD }],
     existing: ['cli-v0.16.0'],
     conflicts: [{ tag: 'ai-sdk-provider-v0.10.0', commit: OTHER, expected: HEAD }],
   })

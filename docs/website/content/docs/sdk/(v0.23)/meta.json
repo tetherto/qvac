@@ -9,6 +9,7 @@
     "system-requirements",
     "js-ts-sdk",
     "python-sdk",
+    "kotlin-sdk",
     "configuration",
     "---Models---",
     "...models",

@@ -1,0 +1,8 @@
+{
+  "name": "xrt",
+  "version": "2.25.0",
+  "description": "Thin wrapper that exposes the system-installed AMD XRT (Xilinx Runtime) to vcpkg consumers on Linux: its CMake configs (xrt, with XRT::xrt_coreutil, and aiebu) and, to dependent portfiles, its install root and xclbinutil. XRT is not built here: the runtime has to be the system one, matched to the installed NPU driver plugin (libxrt_driver_xdna). Located via XILINX_XRT (what XRT's setup.sh exports), default /opt/xilinx/xrt. Requires XRT 2.25 or newer.",
+  "homepage": "https://github.com/Xilinx/XRT",
+  "license": "Apache-2.0",
+  "supports": "linux & x64"
+}

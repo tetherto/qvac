@@ -131,6 +131,16 @@ The following script shows text-to-video generation using Wan 2.1 T2V 1.3B with 
 
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_txt2vid.py title="diffusion_txt2vid.py" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Image-to-video (WAN 2.1)
@@ -152,6 +162,16 @@ The following script shows image-to-video generation using Wan 2.1 I2V with its 
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/diffusion-img2vid.ts title="diffusion-img2vid.ts" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_img2vid.py title="diffusion_img2vid.py" lineNumbers
 
 ```
 
@@ -183,6 +203,16 @@ The following script shows text-to-video generation with Wan 2.2 TI2V-5B Turbo (
 
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_txt2vid_wan22.py title="diffusion_txt2vid_wan22.py" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Text-to-video with audio (LTX-2)
@@ -204,6 +234,16 @@ The following script loads LTX-2 with its split layout (diffusion model + Gemma 
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/diffusion-txt2vid-ltx.ts title="diffusion-txt2vid-ltx.ts" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_txt2vid_ltx.py title="diffusion_txt2vid_ltx.py" lineNumbers
 
 ```
 
@@ -235,6 +275,16 @@ The following script animates a first-frame `init_image` with LTX-2. Unlike WAN 
 
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_img2vid_ltx.py title="diffusion_img2vid_ltx.py" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Reference-conditioned text-to-video (LTX-2 IC-LoRA)
@@ -256,6 +306,16 @@ The following script conditions LTX-2 on a composite reference sheet so the gene
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/diffusion-ic-lora-ltx.ts title="diffusion-ic-lora-ltx.ts" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_ic_lora_ltx.py title="diffusion_ic_lora_ltx.py" lineNumbers
 
 ```
 
@@ -287,6 +347,16 @@ The following script loads MiniMax-H3 with its split layout (diffusion model + Q
 
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_txt2vid_minimax_h3.py title="diffusion_txt2vid_minimax_h3.py" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Image-to-video (MiniMax-H3)
@@ -313,13 +383,17 @@ The following script animates a first-frame image with MiniMax-H3. It uses the s
 
 </WrapCode>
 </Tab>
-</Tabs>
 
-<Callout type="info">
-  The Python client supports this capability through the same worker. A
-  dedicated Python example is not yet published — see the [Python
-  SDK](/sdk/python-sdk) for the API surface.
-</Callout>
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_img2vid_minimax_h3.py title="diffusion_img2vid_minimax_h3.py" lineNumbers
+
+```
+
+</WrapCode>
+</Tab>
+</Tabs>
 
 <Callout type="success">
   **Tip:** all examples throughout this documentation are self-contained and

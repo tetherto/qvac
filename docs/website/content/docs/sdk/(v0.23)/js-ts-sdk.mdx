@@ -166,6 +166,11 @@ Follow these instructions to run any example in this documentation:
   ```bash
   npm i -D tsx typescript
   ```
+  Then run the file with `tsx` in place of `node`:
+  ```bash
+  QVAC_CONFIG_PATH=./qvac.config.json npx tsx quickstart.ts
+  ```
+  `tsx` strips the types and runs the file, so no `tsconfig.json` is needed. Save a companion module in TypeScript too — `shared.ts`, not `shared.js` — so the example's `./shared` import resolves to it.
 
 ## Configuration
 

@@ -77,6 +77,14 @@ The following script shows how to ingest documents into a built-in RAG workspace
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/rag_managed.py title="rag_managed.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 <Callout type="info">
@@ -103,6 +111,14 @@ The following script keeps the documents in a plain `Map`, embeds them with `emb
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/rag_turbovec.py title="rag_turbovec.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 <Callout type="info">
@@ -112,6 +128,16 @@ TurboVec quantises vectors (`VectorIndexStorage.TURBOVEC_Q4` by default, `TURBOV
 ### External vector DB
 
 #### MongoDB
+
+This example needs two things the SDK does not provide: a MongoDB driver, and a deployment with Atlas Vector Search. Install the driver for the language you are using — `npm i "mongodb@^7.5.0"` for JavaScript and TypeScript, or `pip install "pymongo>=4.13"` for Python. Those are the versions these docs are tested against.
+
+One way to get a deployment is the Atlas local container:
+
+```bash
+docker run -p 27017:27017 --name atlas-local mongodb/mongodb-atlas-local
+```
+
+The script connects to `mongodb://localhost:27017/?directConnection=true`; edit that connection string if your deployment lives elsewhere.
 
 The following script stores each document in MongoDB alongside its vector, builds a vector search index over it, and retrieves matches with a `$vectorSearch` aggregation that [pre-filters](https://www.mongodb.com/docs/vector-search/query/aggregation-stages/vector-search-stage/#pre-filter-search-data) by category:
 
@@ -131,9 +157,29 @@ The following script stores each document in MongoDB alongside its vector, build
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/rag_mongodb.py title="rag_mongodb.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 #### SQLite
+
+This example needs the vector extension for SQLite, which arrives differently per language. JavaScript and TypeScript use a SQLite WASM build that has the extension compiled in; Python uses the standard library's `sqlite3` module and loads the extension from a prebuilt binary. Install the one for the language you are using:
+
+```bash
+# JavaScript and TypeScript
+npm i "@sqliteai/sqlite-wasm@3.50.4-sync.0.8.30-vector.0.9.23"
+
+# Python
+pip install "sqliteai-vector>=1.1"
+```
+
+Those are the versions these docs are tested against. Loading an extension also needs a Python configured with `--enable-loadable-sqlite-extensions`. Most distribution and python.org builds are; `pyenv`'s default build is not, and no package you install changes that — pass `-p` to `virtualenv` (or `--python` to `uv venv`) to base the environment on an interpreter that qualifies. The example checks before it starts and tells you if yours does not. The database is in-memory, so there is nothing else to set up.
 
 The following script shows the same workflow using `embed()` plus a SQLite vector index:
 
@@ -153,11 +199,15 @@ The following script shows the same workflow using `embed()` plus a SQLite vecto
 ```
 </WrapCode>
 </Tab>
-</Tabs>
 
-<Callout type="info">
-The Python client supports this capability through the same worker. A dedicated Python example is not yet published — see the [Python SDK](/sdk/python-sdk) for the API surface.
-</Callout>
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/rag_sqlite.py title="rag_sqlite.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
 
 <Callout type="success">
 **Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).

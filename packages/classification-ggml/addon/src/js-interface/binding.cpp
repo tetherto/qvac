@@ -26,7 +26,7 @@ js_value_t* classification_ggml_exports(js_env_t* env, js_value_t* exports) {
   V("runJob", classification_ggml::bindings::runJob)
 
   V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
-  V("activate", qvac_lib_inference_addon_cpp::JsInterface::activate)
+  V("activate", classification_ggml::bindings::activate)
   V("cancel", qvac_lib_inference_addon_cpp::JsInterface::cancel)
   V("destroyInstance",
     qvac_lib_inference_addon_cpp::JsInterface::destroyInstance)

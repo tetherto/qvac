@@ -32,7 +32,8 @@ Invoke: `/qv-agent-stack-sync` or `/qv-agent-stack-sync --plan`.
 
 A train releases every package in it, so once one train package needs a
 release, `--plan` gives the others a patch with `Released with the <train>
-train`. Release them with `qv-release-train` instead of `--prepare-cascade` and
+train`. The `Train` column names the smallest train that holds every package
+needing a release. Release them with `qv-release-train` instead of `--prepare-cascade` and
 `--promote`: one branch, one release PR, one publish run, and no wait for each
 layer to reach npm.
 

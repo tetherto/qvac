@@ -1,6 +1,7 @@
 import Fastify from 'fastify'
 import type { FastifyInstance } from 'fastify'
 import cors from '@fastify/cors'
+import multipart from '@fastify/multipart'
 import { z } from 'zod'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
@@ -21,7 +22,7 @@ import {
 } from '@/serve/core/extensions'
 import { createHostMatcher } from '@/serve/core/host-check'
 import { IDENTITY_NONCE_PATTERN, IDENTITY_PATH, identityProof } from '@/serve/core/identity'
-import { shutdownSDK } from '@/serve/core/lifecycle'
+import { runtimeSuspendedError, shutdownSDK } from '@/serve/core/lifecycle'
 import authPlugin from '@/serve/core/plugins/auth'
 import cancelBridgePlugin from '@/serve/core/plugins/cancel-bridge'
 import contextPlugin from '@/serve/core/plugins/context'
@@ -29,6 +30,8 @@ import errorHandlerPlugin from '@/serve/core/plugins/error-handler'
 import { HttpError } from '@/serve/lib/http-error'
 
 const MAX_BODY_BYTES = 100 * 1024 * 1024
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024
+const MAX_UPLOAD_FILES = 10
 
 export interface CoreServerOptions {
   host: string
@@ -131,6 +134,11 @@ export async function createCoreServer(
 
   await app.register(cancelBridgePlugin)
 
+  // On the root instance so every extension's routes can take uploads.
+  await app.register(multipart, {
+    limits: { fileSize: MAX_UPLOAD_BYTES, files: MAX_UPLOAD_FILES }
+  })
+
   if (options.apiKey) {
     const apiKey = options.apiKey
     await app.register(authPlugin, { apiKey })
@@ -146,6 +154,47 @@ export async function createCoreServer(
       async (req) => ({ proof: identityProof(apiKey, req.query.nonce, req.socket.localPort ?? 0) })
     )
   }
+
+  // A body-less POST is a CORS simple request: a browser sends it cross-site
+  // without a preflight, so admin routes check the Origin themselves.
+  const matchAdminOrigin = createCorsOriginMatcher(corsOrigins)
+  function adminOriginAllowed(origin: string | undefined): boolean {
+    let allowed = false
+    matchAdminOrigin(origin, (_error, ok) => {
+      allowed = ok === true
+    })
+    return allowed
+  }
+
+  // After auth, so an unauthenticated caller learns nothing about the opt-in.
+  // lunte-disable-next-line require-await
+  app.addHook('onRequest', async (req) => {
+    const config = req.routeOptions.config
+    if (config?.admin === true && !ctx.serveConfig.enableAdmin) {
+      throw new HttpError(
+        403,
+        'admin_disabled',
+        'This endpoint is admin-only. Start the server with --enable-admin or serve.enableAdmin: true.'
+      )
+    }
+    if (config?.admin === true && !adminOriginAllowed(req.headers.origin)) {
+      throw new HttpError(
+        403,
+        'origin_not_allowed',
+        'Admin endpoints refuse browser requests from an origin outside --cors-origin or serve.cors.origins.'
+      )
+    }
+    if (
+      ctx.runtime.state !== 'active' &&
+      config?.allowWhileSuspended !== true &&
+      req.routeOptions.url !== undefined &&
+      req.method !== 'OPTIONS' &&
+      !isIntrospectionPath(req.url) &&
+      req.routeOptions.url !== IDENTITY_PATH
+    ) {
+      throw runtimeSuspendedError(ctx.runtime.state)
+    }
+  })
 
   // lunte-disable-next-line require-await
   app.addHook('onRequest', async (req) => {
@@ -177,7 +226,8 @@ export async function createCoreServer(
 }
 
 function isIntrospectionPath(url: string): boolean {
-  return url === '/openapi.json' || url === '/docs' || url.startsWith('/docs/')
+  const path = url.split('?')[0]!
+  return path === '/openapi.json' || path === '/docs' || path.startsWith('/docs/')
 }
 
 // Swagger UI is same-origin with the API, so `--docs` trusts the loopback

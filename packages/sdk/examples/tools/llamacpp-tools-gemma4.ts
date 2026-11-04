@@ -8,9 +8,9 @@
  * frames, which are stripped from contentDelta and forwarded as thinkingDelta
  * when captureThinking is true.
  *
- * The dialect is auto-detected from the model name/path when the file name
- * contains "gemma4" or "gemma-4". Pass toolDialect: "gemma4" explicitly to
- * completion() if auto-detection does not pick it up for a given file name.
+ * The dialect is auto-detected when the model name or file name contains
+ * "gemma4" or "gemma-4", or when the GGUF architecture is `gemma4`. Pass
+ * toolDialect: "gemma4" explicitly to completion() if detection does not pick it up.
  *
  * Usage:
  *   node dist/examples/tools/llamacpp-tools-gemma4.js <model-url>

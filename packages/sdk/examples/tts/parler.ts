@@ -5,7 +5,7 @@ import {
   type ModelProgressUpdate,
   TTS_MINI_V1_EN_PARLER_TTS_Q8_0
 } from '@qvac/sdk'
-import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './utils'
+import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './utils.js'
 
 // Parler-TTS (GGML): description-conditioned speech with per-call voice controls.
 // Uses the registry-hosted Mini v1 Q8_0 model and its native 44.1 kHz output.

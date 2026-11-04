@@ -403,7 +403,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         )
       }
 
-      const record = openai.ephemeralFiles.get(fileId)
+      const record = ctx.files.get(fileId)
       if (record === null) {
         throw new HttpError(
           404,
@@ -455,7 +455,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
       openai.vectorStores.setEmbedding(id, embedding.entry.alias)
       recordChunkAttributions(ctx, id, fileId, record.fileName, ingestResult.processed)
-      openai.ephemeralFiles.remove(fileId)
+      ctx.files.remove(fileId)
 
       return {
         id: fileId,

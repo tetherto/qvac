@@ -57,7 +57,7 @@ function mapAddonEvent(rawEvent, rawData, rawError) {
             return null;
         }
     }
-    if (Array.isArray(rawData)) {
+    if (Array.isArray(rawData) || rawData instanceof Float32Array) {
         return { type: "Output", data: rawData, error: null };
     }
     if (rawData && typeof rawData === "object") {
@@ -91,11 +91,10 @@ class ClassificationInterface {
         }
         this.handle = this.binding.createInstance(this, configurationParams, outputCallback);
     }
-    activate() {
+    async activate() {
         if (!this.handle)
             throw new Error("Classification addon is not initialized");
-        this.binding.activate(this.handle);
-        return Promise.resolve();
+        await this.binding.activate(this.handle);
     }
     async runJob(input) {
         if (!this.handle)

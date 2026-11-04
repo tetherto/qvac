@@ -119,6 +119,11 @@ export function currentVersionOf(software: DocumentedSoftware): string | null {
  * context needed to use the release (QVAC-21379). The exclusion is stated
  * here because a corpus that drops pages silently cannot be told apart from
  * documentation that was never written.
+ *
+ * No line publishes a release-notes page today — each line's sidebar entry
+ * links to that minor's GitHub release — so `withheld` is 0 everywhere and
+ * every sentence it governs goes unsaid. The parameter and the sentences stay
+ * because the page model may come back.
  */
 export function corpusHeader(
   scope:

@@ -34,7 +34,6 @@ target_sources(
   PRIVATE
   ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/utils.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AsyncWeightsLoader.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/BackendSelection.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/logging.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
@@ -43,6 +42,9 @@ target_sources(
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModelLoader.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LayaModel.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/RerankModel.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MultimodalEmbedder.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ImagePixelLimit.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/AudioLengthLimit.cpp
 )
 target_include_directories(
   ${embed-llamacpp}

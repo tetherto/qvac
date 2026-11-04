@@ -10,3 +10,7 @@ async function runClassify (options = {}) { // eslint-disable-line no-unused-var
 async function runErrorCases (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/error-cases.test.js', options)
 }
+
+async function runMegaloc (options = {}) { // eslint-disable-line no-unused-vars
+  return runIntegrationModule('../integration/megaloc.test.js', options)
+}

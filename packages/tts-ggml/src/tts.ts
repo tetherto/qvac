@@ -4,10 +4,11 @@ import {
 } from "./lib/error";
 
 export interface TTSConfigurationParams {
-  [key: string]: string | number | boolean | string[] | undefined;
+  [key: string]: string | number | boolean | string[] | number[] | Float32Array | Record<string, string> | undefined;
 }
 
 export interface TTSJobData {
+  streamOutput?: boolean;
   type: string;
   input: string;
   // Parler per-call voice-description/template fields (siblings of `input`),

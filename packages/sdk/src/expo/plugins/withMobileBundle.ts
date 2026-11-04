@@ -16,9 +16,9 @@ const { withDangerousMod } = configPlugins
 const DEFERRED_MODULES = ['expo-file-system', 'react-native-bare-kit']
 
 /**
- * Desktop-only spawn path, deferred so bare-pack does not walk `bare-process`
- * -> `bare-posix` (no `android-arm64` prebuild). Mobile runs the engine fitter
- * in process instead, so it never reaches this.
+ * Desktop-only spawn path. `bare-runtime` maps `process` to `bare-process`
+ * under Bare, which pulls `bare-posix` (no `android-arm64` prebuild), so
+ * bare-pack must not walk it.
  */
 const MOBILE_UNSUPPORTED_MODULES = ['bare-runtime/spawn']
 

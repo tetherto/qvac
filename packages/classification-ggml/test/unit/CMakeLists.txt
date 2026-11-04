@@ -10,9 +10,12 @@ set(TEST_SOURCES
   classification_model_test.cpp
   preprocessor_test.cpp
   backend_env.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ClassificationModel.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/mobilenet/ClassificationModel.cpp
   ${CMAKE_SOURCE_DIR}/addon/src/model-interface/ImagePreprocessor.cpp
-  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/MobileNetGraph.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/mobilenet/MobileNetGraph.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/megaloc/MegaLocModel.cpp
+  ${CMAKE_SOURCE_DIR}/addon/src/model-interface/megaloc/MegaLocPreprocessor.cpp
+  megaloc_test.cpp
 )
 
 add_executable(addon-test ${TEST_SOURCES})

@@ -182,11 +182,17 @@ struct PromptRenderResult {
  * for models that don't support tools.
  *
  * On a tools-stripped retry `inputs.tools` is cleared so callers never see a
- * tool list the prompt does not carry.
+ * tool list the prompt does not carry. Dropped tools and the legacy fallback
+ * are logged at ERROR.
+ *
+ * With @p forRequest false the render only measures a prompt: those logs drop
+ * to DEBUG, and the second render that checks whether a successful render
+ * left the tools out is skipped, so `toolDefinitionsDropped` then reports
+ * only a template that rejected the tools or the legacy renderer.
  */
 PromptRenderResult getPrompt(
     const struct common_chat_templates* tmpls,
-    struct common_chat_templates_inputs& inputs);
+    struct common_chat_templates_inputs& inputs, bool forRequest = true);
 
 /**
  * @brief The reasoning markers an earlier assistant turn carries, for cutting
@@ -208,6 +214,40 @@ std::optional<ReasoningTags> historyReasoningTags(
 /// text, false, true)`). Injected so the conversion below is testable
 /// without a model.
 using Tokenizer = std::function<std::vector<llama_token>(const std::string&)>;
+
+/// True when any message has role `user` or `tool`.
+[[nodiscard]] bool hasUserTurn(const std::vector<common_chat_msg>& messages);
+
+/**
+ * @brief Renders a conversation without a user turn, with or without tools,
+ * whose chat template only renders it, or its tools, once a user turn exists.
+ *
+ * Qwen3.5 / Qwen3.8 raise "No user query found" on a system prompt alone,
+ * with or without tools, so `getPrompt` falls back to a render without the
+ * tools, or to the legacy renderer when there are none. Here the conversation
+ * is rendered with a placeholder user message instead, and only the text in
+ * front of the placeholder's content is kept: the part every later request
+ * with the same system prompt and tools starts with. A prefill of it leaves a
+ * cache that is an exact prefix of that request, so the request prefills only
+ * its own user turn.
+ *
+ * The cut is the common prefix of renders with several placeholder contents,
+ * so it holds wherever the template puts the tools, and it is moved back
+ * until its tokens are an exact prefix of every one of those renders' tokens.
+ *
+ * Returns `std::nullopt`, leaving the request to `getPrompt`, when:
+ * - `inputs` has a user or tool turn, or is not rendered by Jinja;
+ * - the template already renders the conversation, and its tools, without a
+ *   user turn;
+ * - a placeholder render or tool-prefix check fails, or the tools affect
+ *   text beyond the final token-safe cut.
+ *
+ * On success `prompt` is the cut text, `generationPrompt` is empty and
+ * `toolDefinitionsDropped` is false.
+ */
+[[nodiscard]] std::optional<PromptRenderResult> renderWithoutUserTurn(
+    const struct common_chat_templates* tmpls,
+    const common_chat_templates_inputs& inputs, const Tokenizer& tokenize);
 
 /**
  * @brief Configures every template-derived sampling field in one pass: the
@@ -294,6 +334,19 @@ ResolvedToolChoice resolveToolChoice(
 void requireToolChoiceHonoured(
     common_chat_tool_choice choice, bool toolDefinitionsDropped,
     bool toolGrammarApplied, const char* logTag);
+
+/**
+ * @brief Tokens @p messages and @p tools take as the opening request of a
+ * fresh conversation, rendered the way `tokenizeChat` renders one with no
+ * per-request overrides. @p tokenize must add BOS the way a fresh prompt does.
+ *
+ * The tools are validated like a request's (`resolveToolChoice`).
+ */
+[[nodiscard]] size_t countRenderedChatTokens(
+    const struct common_chat_templates* tmpls,
+    const std::vector<common_chat_msg>& messages,
+    const std::vector<common_chat_tool>& tools, bool useJinja,
+    bool enableThinking, const Tokenizer& tokenize);
 
 std::string getThinkingForcedOpenText(
     const std::string& generationPrompt, const std::string& thinkingStartTag);

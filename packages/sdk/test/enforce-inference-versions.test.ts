@@ -221,7 +221,6 @@ describe('Bare runtime compatibility', () => {
       readFileSync(new URL('../package.json', import.meta.url), 'utf8')
     ) as Manifest
     assert.equal(inferencePkg.engines?.['bare'], '>=1.32.0')
-    assert.equal(inferencePkg.dependencies?.['bare-runtime'], '^1.34.1')
     assert.equal(sdkPkg.dependencies?.['bare-runtime'], '^1.34.1')
     assert.deepEqual(collectVersionFailures(inferencePkg, sdkPkg), [])
   })

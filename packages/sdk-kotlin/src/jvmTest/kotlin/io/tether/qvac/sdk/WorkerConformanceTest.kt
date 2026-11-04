@@ -15,7 +15,7 @@ class WorkerConformanceTest {
     @Test fun sharedCorpus(): Unit = runBlocking {
         assumeTrue("Enable with QVAC_RUN_CONFORMANCE=1 and build the workspace worker", System.getenv("QVAC_RUN_CONFORMANCE") == "1")
         val sdk = Path.of(System.getenv("QVAC_TEST_SDK_DIR") ?: "../sdk").toAbsolutePath().normalize()
-        val cases = Json.parseToJsonElement(Files.readString(sdk.resolve("e2e/conformance/cases.json"))).jsonObject.getValue("cases").jsonArray
+        val cases = Json.parseToJsonElement(Files.readString(sdk.resolveSibling("sdk-e2e").resolve("catalog/conformance/cases.json"))).jsonObject.getValue("cases").jsonArray
         assertTrue(cases.isNotEmpty())
         val home = Path.of(System.getenv("QVAC_E2E_HOME") ?: "build/e2e-home").toAbsolutePath()
         Files.createDirectories(home)

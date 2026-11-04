@@ -1,6 +1,6 @@
 import test from 'brittle'
 import type { Tool } from '@/schemas'
-import { parseToolCalls, detectToolDialectFromName } from '@/utils/tools'
+import { parseToolCalls, matchToolDialectFromName } from '@/utils/tools'
 import { parseHarmonyFormat } from '@/utils/tools/parsers/harmony'
 import { parseQwen35Format } from '@/utils/tools/parsers/qwen35'
 import { parseGemma4NativeFormat } from '@/utils/tools/parsers/gemma4native'
@@ -212,7 +212,7 @@ test('matched-but-failed: complete Hermes frame with broken JSON keeps PARSE_ERR
   t.is(errors[0]?.code, 'PARSE_ERROR')
 })
 
-test('detectToolDialectFromName: LFM names and paths → pythonic', (t) => {
+test('matchToolDialectFromName: LFM names and paths → pythonic', (t) => {
   const cases: Array<[string | undefined, string]> = [
     ['LFM_2_5_1_2B_INST_Q4_K_M', '/Users/x/.qvac/models/abc_lfm-2.5-1.2b-instruct-Q4_K_M.gguf'],
     [undefined, '/Users/x/.qvac/models/23238f141f948551_LFM2-1.2B-Tool-Q4_K_M.gguf'],
@@ -221,15 +221,14 @@ test('detectToolDialectFromName: LFM names and paths → pythonic', (t) => {
   ]
 
   for (const [name, path] of cases) {
-    t.is(detectToolDialectFromName(name, path), 'pythonic')
+    t.is(matchToolDialectFromName(name, path), 'pythonic')
   }
 })
 
-// Single negative pin: with the explicit qwen|hermes|mistral allowlist gone,
-// every non-LFM model (Qwen, Hermes, Mistral, Llama tool-calling fine-tunes,
-// unknowns, empty paths) routes to "hermes" via the catch-all. The hermes
-// parser chain is the catch-all; it also covers unknown JSON-payload models.
-test('detectToolDialectFromName: non-LFM models default to hermes', (t) => {
+// Single negative pin: every model outside the dialect patterns (Qwen, Hermes,
+// Mistral, Llama tool-calling fine-tunes, unknowns, empty paths) matches no
+// name, so detection moves on to the GGUF architecture and then "hermes".
+test('matchToolDialectFromName: names outside the dialect patterns match nothing', (t) => {
   const cases: Array<[string | undefined, string]> = [
     ['QWEN3_1_7B_INST_Q4', '/Users/x/.qvac/models/abc_Qwen3-1.7B-Q4_K_M.gguf'],
     [undefined, '/cache/foo_qwen3-1.7b.gguf'],
@@ -237,10 +236,9 @@ test('detectToolDialectFromName: non-LFM models default to hermes', (t) => {
     ['MISTRAL_7B_INSTRUCT', '/Users/x/.qvac/models/abc_Mistral-7B-Instruct-v0.3-Q4_K_M.gguf'],
     [undefined, '/cache/abc_Mistral-Nemo-Instruct-2407.gguf'],
     // Llama tool-calling fine-tunes (mradermacher, nguyenthanhthuan, etc.)
-    // empirically emit OpenAI-style JSON, not pythonic, so they fall through
-    // the catch-all rather than being auto-routed to pythonic. Callers with
-    // a pythonic-emitting Llama variant should use `completion({ toolDialect:
-    // "pythonic" })` to opt in.
+    // emit OpenAI-style JSON, not pythonic, so no name pattern claims them.
+    // Callers with a pythonic-emitting Llama variant should use
+    // `completion({ toolDialect: "pythonic" })` to opt in.
     [
       'LLAMA_TOOL_CALLING_1B_INST_Q4_K_M',
       '/Users/x/.qvac/models/abc_Llama_3.2_1B_Intruct_Tool_Calling_V2.Q4_K_M.gguf'
@@ -264,7 +262,7 @@ test('detectToolDialectFromName: non-LFM models default to hermes', (t) => {
     // gemma-40b contains 'gemma-4' as a substring but the trailing '0' (digit) blocks the gemma4 lookahead
     [undefined, '/cache/abc_gemma-40b-Q4_K_M.gguf'],
     // DSML only exists from DeepSeek V3.2 onwards — older DeepSeek releases and
-    // the DeepSeek-derived OCR models must keep the hermes chain
+    // the DeepSeek-derived OCR models must not match it
     [undefined, '/cache/abc_DeepSeek-V2-Lite-Chat-Q4_K_M.gguf'],
     [undefined, '/cache/abc_DeepSeek-V3.1-Q4_K_M.gguf'],
     ['DEEPSEEK_R1_DISTILL_Q4', '/Users/x/.qvac/models/abc_deepseek-r1-distill-qwen-7b.gguf'],
@@ -272,7 +270,7 @@ test('detectToolDialectFromName: non-LFM models default to hermes', (t) => {
   ]
 
   for (const [name, path] of cases) {
-    t.is(detectToolDialectFromName(name, path), 'hermes')
+    t.is(matchToolDialectFromName(name, path), undefined, `name=${name} path=${path}`)
   }
 })
 
@@ -582,7 +580,7 @@ test('parseToolCalls(default): Harmony frame in default chain still parses', (t)
   t.alike(toolCalls[0]?.arguments, { city: 'Paris' })
 })
 
-test('detectToolDialectFromName: GPT-OSS variants → harmony', (t) => {
+test('matchToolDialectFromName: GPT-OSS variants → harmony', (t) => {
   const cases: Array<[string | undefined, string]> = [
     ['gpt-oss-20b', '/cache/gpt-oss-20b-Q4_K_M.gguf'],
     ['GPT_OSS_120B_INST_Q4_K_M', '/Users/x/.qvac/models/abc_gpt-oss-120b-Q4_K_M.gguf'],
@@ -592,11 +590,11 @@ test('detectToolDialectFromName: GPT-OSS variants → harmony', (t) => {
   ]
 
   for (const [name, path] of cases) {
-    t.is(detectToolDialectFromName(name, path), 'harmony', `name=${name} path=${path}`)
+    t.is(matchToolDialectFromName(name, path), 'harmony', `name=${name} path=${path}`)
   }
 })
 
-test('detectToolDialectFromName: Qwen3.5, Qwen3.6, and Qwen3.8 variants → qwen35', (t) => {
+test('matchToolDialectFromName: Qwen3.5, Qwen3.6, and Qwen3.8 variants → qwen35', (t) => {
   const cases: Array<[string | undefined, string]> = [
     [undefined, '/cache/abc_Qwen3.5-7B-Instruct-Q4_K_M.gguf'],
     ['QWEN3_5_7B_INST_Q4', '/Users/x/.qvac/models/abc_qwen3.5-7b-instruct.gguf'],
@@ -614,11 +612,11 @@ test('detectToolDialectFromName: Qwen3.5, Qwen3.6, and Qwen3.8 variants → qwen
   ]
 
   for (const [name, path] of cases) {
-    t.is(detectToolDialectFromName(name, path), 'qwen35', `name=${name} path=${path}`)
+    t.is(matchToolDialectFromName(name, path), 'qwen35', `name=${name} path=${path}`)
   }
 })
 
-test('detectToolDialectFromName: Gemma 4 variants → gemma4', (t) => {
+test('matchToolDialectFromName: Gemma 4 variants → gemma4', (t) => {
   const cases: Array<[string | undefined, string]> = [
     [undefined, '/cache/abc_gemma4-9b-it-Q4_K_M.gguf'],
     ['GEMMA4_27B_IT_Q4', '/Users/x/.qvac/models/abc_gemma-4-27b-it.gguf'],
@@ -626,7 +624,7 @@ test('detectToolDialectFromName: Gemma 4 variants → gemma4', (t) => {
   ]
 
   for (const [name, path] of cases) {
-    t.is(detectToolDialectFromName(name, path), 'gemma4', `name=${name} path=${path}`)
+    t.is(matchToolDialectFromName(name, path), 'gemma4', `name=${name} path=${path}`)
   }
 })
 
@@ -1612,7 +1610,7 @@ test('parseToolCalls(default): DSML is recovered without explicit dialect', (t) 
   t.alike(toolCalls[0]?.arguments, { city: 'Berlin' })
 })
 
-test('detectToolDialectFromName: DeepSeek V3.2 / V4 variants → dsml', (t) => {
+test('matchToolDialectFromName: DeepSeek V3.2 / V4 variants → dsml', (t) => {
   const cases: Array<[string | undefined, string]> = [
     [undefined, '/cache/abc_DeepSeek-V4-Flash-0731-UD-IQ2_M-00001-of-00003.gguf'],
     ['DEEPSEEK_V4_FLASH_UD_IQ2_M', '/Users/x/.qvac/models/abc_deepseek-v4-flash.gguf'],
@@ -1622,11 +1620,11 @@ test('detectToolDialectFromName: DeepSeek V3.2 / V4 variants → dsml', (t) => {
   ]
 
   for (const [name, path] of cases) {
-    t.is(detectToolDialectFromName(name, path), 'dsml', `name=${name} path=${path}`)
+    t.is(matchToolDialectFromName(name, path), 'dsml', `name=${name} path=${path}`)
   }
 })
 
-test('detectToolDialectFromName: DeepSeek sizes and quants are not DSML versions', (t) => {
+test('matchToolDialectFromName: DeepSeek sizes and quants are not DSML versions', (t) => {
   const cases: Array<[string | undefined, string]> = [
     [undefined, '/cache/abc_deepseek-32b-instruct-Q4_K_M.gguf'],
     ['DEEPSEEK_32B_INSTRUCT', '/Users/x/.qvac/models/abc_deepseek-32b-instruct.gguf'],
@@ -1634,7 +1632,7 @@ test('detectToolDialectFromName: DeepSeek sizes and quants are not DSML versions
   ]
 
   for (const [name, path] of cases) {
-    t.is(detectToolDialectFromName(name, path), 'hermes', `name=${name} path=${path}`)
+    t.is(matchToolDialectFromName(name, path), undefined, `name=${name} path=${path}`)
   }
 })
 

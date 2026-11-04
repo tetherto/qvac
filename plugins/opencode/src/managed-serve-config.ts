@@ -1,3 +1,4 @@
+import type { QvacManagedOptions } from '@qvac/ai-sdk-provider'
 import { findCatalogEntry } from '@qvac/ai-sdk-provider/models'
 
 import { mergeOptions, optionsFromEnv } from './options.js'
@@ -13,6 +14,7 @@ export interface ManagedServeHostConfig {
   readonly upstreamTimeoutMs: number
   readonly debug: boolean
   readonly logFile: string | undefined
+  readonly serveBinPath: string | undefined
 }
 
 function numberFromEnv(value: string | undefined, fallback: number): number {
@@ -34,6 +36,28 @@ export function resolveManagedServeHostConfig(env: NodeJS.ProcessEnv): ManagedSe
     readyTimeoutMs: options.readyTimeoutMs,
     upstreamTimeoutMs: numberFromEnv(env['QVAC_UPSTREAM_TIMEOUT_MS'], 300_000),
     debug: options.debug,
-    logFile: env['QVAC_HOST_LOG']
+    logFile: env['QVAC_HOST_LOG'],
+    serveBinPath: options.serveBinPath
+  }
+}
+
+export function managedServeOptions(config: ManagedServeHostConfig): QvacManagedOptions {
+  return {
+    mode: 'managed',
+    reuse: true,
+    closeOnParentExit: true,
+    models: [
+      {
+        name: config.modelId,
+        config: {
+          ctx_size: config.ctxSize,
+          reasoning_budget: config.reasoningBudget,
+          tools: config.tools
+        },
+        default: true
+      }
+    ],
+    serveStartTimeout: config.readyTimeoutMs,
+    ...(config.serveBinPath !== undefined ? { serveBinPath: config.serveBinPath } : {})
   }
 }

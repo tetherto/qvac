@@ -15,6 +15,11 @@ on:
         description: >-
           PR head SHA to checkout. When empty, falls back to `github.sha`.
         type: string
+      use-merge-base:
+        description: "Compare formatting and changed sources from the common ancestor of sha and HEAD"
+        type: boolean
+        required: false
+        default: false
       workdir:
         default: "."
         type: string
@@ -116,6 +121,14 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: false
 
+      - name: Resolve common ancestor for C++ checks
+        if: inputs.use-merge-base
+        shell: bash
+        run: |
+          git merge-base "$BASE_SHA" HEAD > "$RUNNER_TEMP/cpp-lint-base"
+          read -r lint_base < "$RUNNER_TEMP/cpp-lint-base"
+          printf 'BASE_SHA=%s\n' "$lint_base" >> "$GITHUB_ENV"
+
       - name: Setup AWS + Windows CLI
         uses: tetherto/qvac/.github/actions/setup-aws-prebuild@2e2c94d66a50c8b8851824314e343ede5297eb1f
         with:
@@ -178,17 +191,11 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: npm install
 
-      # Local install, not `npm install -g`. The global pin is bare-make
-      # 1.8.0, whose cmake-toolchains selects system clang. node_modules/.bin
-      # is prepended so generate and the vcpkg toolchain's
-      # find_program(bare-make) both use the current package.
-      - name: Install current bare-make locally
+      # Its bin directory goes first on PATH, so generate, the vcpkg toolchain's
+      # find_program(bare-make) and the format check all use bare's tools.
+      - name: Install the locked bare toolchain
         shell: bash
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          npm install --no-save --ignore-scripts bare-make
-          echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
-          ./node_modules/.bin/bare-make --version
+        run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
 
       # Must sit between npm install and bare-make generate: the overlay
       # rewrites node_modules/@qvac/fabric/prebuilds in place, and generate is

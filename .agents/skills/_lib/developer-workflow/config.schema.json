@@ -26,46 +26,6 @@
         "customFieldName": { "type": "string" }
       }
     },
-    "asana": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "tokenEnv": { "type": "string" },
-        "tokenShellFallback": { "type": "boolean" },
-        "workspace": { "$ref": "#/$defs/namedGid" },
-        "user": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "gid": { "type": "string" },
-            "name": { "type": "string" },
-            "email": { "type": "string" }
-          }
-        },
-        "project": { "$ref": "#/$defs/namedGid" },
-        "customFields": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "gid": { "type": "string" },
-              "name": { "type": "string" },
-              "type": { "type": "string" }
-            },
-            "required": ["gid"]
-          }
-        },
-        "statusOptions": {
-          "type": "object",
-          "additionalProperties": { "type": "string" }
-        },
-        "sections": {
-          "type": "object",
-          "additionalProperties": { "$ref": "#/$defs/namedGid" }
-        }
-      }
-    },
     "slack": {
       "type": "object",
       "additionalProperties": false,
@@ -82,31 +42,6 @@
         "dir": { "type": "string" },
         "enabled": { "type": "boolean" }
       }
-    },
-    "watchedDependencies": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "ticket": { "type": "string" },
-          "asanaTaskGid": { "type": "string" },
-          "name": { "type": "string" },
-          "unblocks": { "type": "string" }
-        },
-        "required": ["asanaTaskGid", "name"]
-      }
-    }
-  },
-  "$defs": {
-    "namedGid": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "gid": { "type": "string" },
-        "name": { "type": "string" }
-      },
-      "required": ["gid"]
     }
   }
 }

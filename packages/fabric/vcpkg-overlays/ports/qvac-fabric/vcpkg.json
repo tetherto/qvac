@@ -1,6 +1,6 @@
 {
   "name": "qvac-fabric",
-  "version": "11259.0.0",
+  "version": "11739.0.0",
   "description": "LLM inference in C/C++",
   "homepage": "https://github.com/tetherto/qvac-fabric-llm.cpp",
   "license": "MIT",
@@ -99,18 +99,37 @@
     "vector-index": {
       "description": "Build and install the ggml vector index library."
     },
+    "webgpu": {
+      "description": "Build ggml's WebGPU backend (ggml-webgpu on Google Dawn, driven natively through webgpu.h; no browser involved). Opt-in on every platform and orthogonal to gpu-backends: Dawn targets Vulkan on Linux/Windows/Android and Metal on Apple. Dawn comes from microsoft/vcpkg's dawn port, which the consumer pins: route dawn, vulkan-headers, vulkan-utility-libraries and vcpkg-get-python-packages to microsoft/vcpkg in vcpkg-configuration.json, override dawn to 20260410.140140 (the version the fabric ggml-webgpu compiles against), and list dawn as a top-level dependency with default-features false so its Linux x11/gl/gles defaults stay off. Needed by the speech stack (speech-cpp[webgpu]).",
+      "dependencies": [
+        {
+          "name": "dawn",
+          "default-features": false,
+          "features": [
+            {
+              "name": "metal",
+              "platform": "osx | ios"
+            },
+            {
+              "name": "vulkan",
+              "platform": "(windows & !uwp) | linux | android"
+            }
+          ]
+        }
+      ]
+    },
     "xdna-backend": {
       "description": "Build the AMD XDNA (Ryzen AI NPU) backend as a runtime-loaded module, libqvac-ggml-xdna.so, with its kernel artifacts next to it. The module links XRT's C++ API, so it is built against the system libstdc++ (dynamically) in a configure of its own. Requires the system XRT (through the xrt port) and QVAC_XDNA_IRON_PYTHON, an interpreter with IRON (mlir-aie + llvm-aie). Where XRT is not installed the module fails to load and is skipped.",
       "supports": "linux & x64",
       "dependencies": [
-        "xrt",
         {
           "name": "qvac-fabric",
           "default-features": false,
           "features": [
             "gpu-backends"
           ]
-        }
+        },
+        "xrt"
       ]
     }
   }

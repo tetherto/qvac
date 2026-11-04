@@ -89,6 +89,7 @@ TEST_F(BatchGroupCancelTest, CancelByIdCancelsOnlyTargetedGroup) {
 
   std::atomic<bool> groupTokenSeen = false;
   std::atomic<size_t> keepPieces = 0;
+  std::string kept;
 
   std::vector<LlamaModel::Prompt> group;
   group.push_back(makePrompt(
@@ -105,7 +106,8 @@ TEST_F(BatchGroupCancelTest, CancelByIdCancelsOnlyTargetedGroup) {
 
   auto keepPrompt = makePrompt(
       "Write a long, detailed, multi-paragraph essay about ocean currents.");
-  keepPrompt.outputCallback = [&keepPieces](const std::string&) {
+  keepPrompt.outputCallback = [&keepPieces, &kept](const std::string& piece) {
+    kept += piece;
     keepPieces.fetch_add(1);
   };
 
@@ -137,7 +139,7 @@ TEST_F(BatchGroupCancelTest, CancelByIdCancelsOnlyTargetedGroup) {
       keepFuture.wait_for(std::chrono::seconds(120)),
       std::future_status::ready);
   const std::vector<std::string> cancelled = groupFuture.get();
-  const std::string kept = keepFuture.get();
+  EXPECT_EQ(keepFuture.get(), "");
 
   ASSERT_EQ(cancelled.size(), 2u);
   EXPECT_FALSE(kept.empty()) << "untargeted single job must run to completion";

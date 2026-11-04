@@ -203,6 +203,12 @@
       }
     },
     {
+      "name": "rerank",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/rerank.request",
+      "responseSchema": "schema.json#/$defs/rerank.response"
+    },
+    {
       "name": "resume",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/resume.request",

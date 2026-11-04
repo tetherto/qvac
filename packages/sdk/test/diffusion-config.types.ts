@@ -20,3 +20,12 @@ acceptConfig({ control_net_cpu: true })
 acceptConfig({ max_vram: true })
 // @ts-expect-error streaming requires a boolean
 acceptConfig({ stream_layers: 'true' })
+
+acceptConfig({
+  mode: 'diffusion',
+  llmModelSrc: '/models/encoder.gguf',
+  projectionModelSrc: '/models/projector.gguf',
+  vaeModelSrc: '/models/vae.safetensors'
+})
+// @ts-expect-error the projector uses the shared model-source type
+acceptConfig({ projectionModelSrc: true })

@@ -61,7 +61,8 @@ interface TranslationNmtcppConstructor {
     new (args: TranslationNmtcppArgs): TranslationNmtcpp;
     /**
      * Assess a model before loading it, using current device memory. Concurrent
-     * calls run one at a time. A malformed request rejects.
+     * calls run one at a time. A model or vocabulary that cannot be read, no
+     * usable device, or a malformed request rejects.
      */
     assessFit(request: TranslationNmtcpp.FitRequest): Promise<TranslationNmtcpp.FitResult>;
     /**
@@ -85,15 +86,32 @@ declare namespace TranslationNmtcpp {
         /** Additional free memory to reserve, in bytes. */
         marginBytes?: number;
     }
-    interface FitResult {
-        status: "fits" | "does-not-fit" | "error";
-        reason: string;
-        /** CPU or selected GGML device name. */
-        backend: string;
-        modelBytes: number;
-        requiredBytes: number;
+    /**
+     * `unknown` is a load with no reliable verdict: a `main-gpu` selection,
+     * memory that cannot be read, no CPU device for the host row, or a load
+     * between the allowance and the source bytes.
+     */
+    type FitStatus = "fits" | "does-not-fit" | "unknown";
+    interface FitDevice {
+        /** The PCI bus ID when the backend reports one, the device name otherwise. */
+        id: string;
+        name: string;
+        /** Memory the host owns: the host CPU, and a GPU that shares the host's memory. */
+        unified: boolean;
+        /** The weight-load allowance on the selected device; the staged source bytes on the host. */
+        usedBytes: number;
         freeBytes: number;
-        report: string;
+        totalBytes: number;
+    }
+    type FitStats = Record<string, never>;
+    interface FitResult {
+        status: FitStatus;
+        /**
+         * The selected GPU, then the host CPU, which stages a discrete GPU's source
+         * bytes. One CPU row for a load on the CPU, and none for `unknown`.
+         */
+        devices: FitDevice[];
+        stats: FitStats;
     }
     interface TranslationNmtcppFiles {
         model: string;

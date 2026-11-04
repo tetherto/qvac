@@ -1,18 +1,10 @@
 name: "Setup XDNA toolchain (XRT + IRON)"
 description: >-
-  Installs AMD XRT under /opt/xilinx/xrt and an IRON (mlir-aie + llvm-aie)
-  Python venv on a linux-x64 runner, and exports XILINX_XRT and
-  QVAC_XDNA_IRON_PYTHON so a consumer's qvac-fabric xdna-backend feature can
-  build libqvac-ggml-xdna.so and its NPU kernels. No NPU is required on the
-  runner (compile-only). XRT is built from source at the commit amd/xdna-driver
-  pins and its .deb packages are cached, since AMD publishes no Ubuntu 22.04
-  packages.
+  Validates the runner-provisioned AMD XRT installation and installs an IRON
+  (mlir-aie + llvm-aie) Python venv for compiling the XDNA backend and NPU
+  kernels. No NPU is required on the runner (compile-only).
 
 inputs:
-  xrt-ref:
-    description: "Xilinx/XRT commit to build (the one amd/xdna-driver pins)"
-    required: false
-    default: "a29919c035c05d0a368ef6ce09d372976618dee1"
   mlir-aie-version:
     description: "mlir-aie (IRON) release; its requirement files pin llvm-aie and eudsl"
     required: false
@@ -21,91 +13,20 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Select XRT cache key
-      id: key
-      shell: bash
-      env:
-        XRT_REF: ${{ inputs.xrt-ref }}
-      run: |
-        . /etc/os-release
-        echo "key=xrt-debs-${ID}${VERSION_ID}-${{ runner.arch }}-${XRT_REF}" >> "$GITHUB_OUTPUT"
-
-    # Restore on every trigger (including fork PRs); save is a separate,
-    # trusted-only step below. Same shape as setup-rocm.
-    - name: Restore XRT packages cache
-      id: cache-xrt
-      uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-      with:
-        path: ${{ runner.temp }}/xrt-debs
-        key: ${{ steps.key.outputs.key }}
-
-    - name: Build XRT packages
-      if: steps.cache-xrt.outputs.cache-hit != 'true'
-      shell: bash
-      env:
-        XRT_REF: ${{ inputs.xrt-ref }}
-      run: |
-        set -euo pipefail
-        src="$RUNNER_TEMP/xrt-src"
-        rm -rf "$src" && mkdir -p "$src"
-        git -C "$src" init -q
-        git -C "$src" remote add origin https://github.com/Xilinx/XRT.git
-        git -C "$src" fetch -q --depth 1 origin "$XRT_REF"
-        git -C "$src" checkout -q FETCH_HEAD
-        # The Ubuntu list from XRT's src/runtime_src/tools/scripts/xrtdeps.sh,
-        # less dkms (the -npu build has no kernel driver), and pybind11 from
-        # apt. The runners only allow sudo for apt-get, so the script itself
-        # cannot run.
-        pkgs=(cppcheck curl elfutils file g++ gcc gdb git gnuplot graphviz
-          libboost-dev libboost-filesystem-dev libboost-program-options-dev
-          libcurl4-openssl-dev libdrm-dev libdw-dev libelf-dev libffi-dev
-          libgtest-dev libjpeg-dev libjson-glib-dev libopencv-core-dev
-          libpng-dev libprotoc-dev libssl-dev libsystemd-dev libtiff5-dev
-          libudev-dev libyaml-dev linux-libc-dev lm-sensors lsb-release make
-          ocl-icd-dev ocl-icd-libopencl1 ocl-icd-opencl-dev opencl-headers
-          pciutils perl rapidjson-dev pkg-config protobuf-compiler python3
-          libpython3-dev python3-breathe python3-pip python3-sphinx
-          python3-sphinx-rtd-theme python3-yaml sphinx-common strace
-          systemtap-sdt-dev unzip uuid-dev dmidecode pybind11-dev)
-        command -v cmake >/dev/null || pkgs+=(cmake)
-        sudo apt-get install -y "${pkgs[@]}"
-        # Keep a host-baked ROCm out of XRT's configure (its HIP bindings)
-        # and its libraries off the build's loader path.
-        unset ROCM_PATH HIP_PATH LD_LIBRARY_PATH
-        # build.sh initializes the submodules itself.
-        (cd "$src/build" && ./build.sh -npu -opt -j "$(nproc)")
-        mkdir -p "$RUNNER_TEMP/xrt-debs"
-        shopt -s nullglob
-        debs=("$src"/build/Release/xrt_*-base.deb "$src"/build/Release/xrt_*-base-dev.deb "$src"/build/Release/xrt_*-npu.deb)
-        if [ "${#debs[@]}" -ne 3 ]; then
-          echo "::error::expected the base, base-dev and npu XRT packages, found: ${debs[*]}"
-          exit 1
-        fi
-        cp "${debs[@]}" "$RUNNER_TEMP/xrt-debs/"
-        rm -rf "$src"
-
-    - name: Save XRT packages cache (trusted contexts)
-      if: >-
-        steps.cache-xrt.outputs.cache-hit != 'true' &&
-        (github.event.pull_request.head.repo.full_name == '' ||
-         github.event.pull_request.head.repo.full_name == github.repository)
-      uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
-      with:
-        path: ${{ runner.temp }}/xrt-debs
-        key: ${{ steps.key.outputs.key }}
-
-    - name: Install XRT
+    - name: Verify provisioned XRT
       shell: bash
       run: |
         set -euo pipefail
-        sudo apt-get install -y "$RUNNER_TEMP"/xrt-debs/*.deb uuid-dev
-        for f in share/cmake/XRT/xrt-config.cmake share/cmake/AIEBU/aiebu-config.cmake bin/xclbinutil; do
-          if [ ! -e "/opt/xilinx/xrt/$f" ]; then
-            echo "::error::/opt/xilinx/xrt/$f missing after installing XRT"
+        root="${XILINX_XRT:-/opt/xilinx/xrt}"
+        for f in share/cmake/XRT/xrt-config.cmake share/cmake/AIEBU/aiebu-config.cmake bin/xclbinutil lib/libxrt_coreutil.so.2; do
+          if [ ! -e "$root/$f" ]; then
+            echo "::error::$root/$f missing; provision the builder with XRT 2.25 or newer (base, base-dev and npu packages)"
             exit 1
           fi
         done
-        grep -m1 '^set(XRT_VERSION' /opt/xilinx/xrt/share/cmake/XRT/xrt-config.cmake
+        grep -m1 '^set(XRT_VERSION' "$root/share/cmake/XRT/xrt-config.cmake"
+        "$root/bin/xclbinutil" --version
+        echo "XILINX_XRT=$root" >> "$GITHUB_ENV"
 
     - name: Setup Python for IRON
       id: python
@@ -143,7 +64,6 @@ runs:
     - name: Export XRT environment
       shell: bash
       run: |
-        echo "XILINX_XRT=/opt/xilinx/xrt" >> "$GITHUB_ENV"
         # Merge, not assign: setup-cuda and setup-rocm set the same var.
         keep="XILINX_XRT;QVAC_XDNA_IRON_PYTHON"
         if [ -n "${VCPKG_KEEP_ENV_VARS:-}" ]; then

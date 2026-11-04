@@ -112,7 +112,7 @@ on:
         default: "6550da740ac8565ec2f1dc886f6ec6425af1df79588d773594163b0778832560"
       include-xdna:
         description: >-
-          Install AMD XRT and IRON on the linux-x64 build so a consumer's
+          Validate provisioned AMD XRT and install IRON on the linux-x64 build so a consumer's
           qvac-fabric xdna-backend feature builds libqvac-ggml-xdna.so and its
           NPU kernels, and verify the module's linkage and kernels after
           install. No NPU is needed on the runner (compile-only). Only affects
@@ -170,6 +170,17 @@ on:
           Fail the linux-x64 job unless the install tree contains exactly one
           *ggml-cuda.so. Off by default because other include-cuda callers do
           not all install that module name.
+        type: boolean
+        required: false
+        default: false
+      verify-linux-module-cxx-runtime:
+        description: >-
+          Fail a Linux job when a shipped .so or .bare NEEDs a shared C++
+          runtime or leaves C++ runtime symbols undefined, so it loads only in
+          hosts that map one (bare-sidecar maps none). Off by default until each
+          package's prebuilds pass it. With include-xdna, the XDNA module must
+          instead link the system XRT/libstdc++ ABI; other modules retain the
+          static-runtime rule.
         type: boolean
         required: false
         default: false
@@ -408,10 +419,16 @@ jobs:
             default { Write-Host "Unknown arch '$env:INPUT_ARCH'; CMAKE_GENERATOR_PLATFORM left unset" }
           }
 
-      - name: Setup Bare tooling
-        uses: tetherto/qvac/.github/actions/setup-bare-tooling@ef3d614873ab1ed71aaa07c3df7b23d2760fb12b
+      # What setup-bare-tooling does, except the toolchain comes from the
+      # checkout's lock further down: a pinned action installs the lock from its
+      # own commit, so a lock bump would not be what the prebuilds build with.
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          shell_type: ${{ matrix.platform == 'win32' && 'powershell' || 'bash' }}
+          node-version: lts/*
+
+      - name: Install the Bare runtime
+        run: npm install -g --force bare-runtime
 
       - name: Setup Apple Clang
         uses: tetherto/qvac/.github/actions/setup-apple-clang@6e8d3c306a462a58589396cda428d65e015f0d8b
@@ -478,17 +495,12 @@ jobs:
         shell: bash
         run: npm install
 
-      # Local install, not `npm install -g`. The global pin is bare-make
-      # 1.8.0, whose cmake-toolchains selects system clang. node_modules/.bin
-      # is prepended so generate and the vcpkg toolchain's
-      # find_program(bare-make) both use the current package.
-      - name: Install current bare-make locally
-        working-directory: ${{ env.WORKDIR }}
+      # After the SDK setup steps, so nothing they add to PATH shadows the locked
+      # toolchain that generate and the vcpkg toolchain's find_program(bare-make)
+      # use.
+      - name: Install the locked bare toolchain
         shell: bash
-        run: |
-          npm install --no-save --ignore-scripts bare-make
-          echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
-          ./node_modules/.bin/bare-make --version
+        run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
 
       - if: ${{ inputs.fabric-overlay-artifact != '' }}
         name: Download fabric-prebuilds for overlay
@@ -720,6 +732,7 @@ jobs:
         if: >-
           inputs.desktop-smoke-command != '' &&
           (matrix.platform == 'linux' || matrix.platform == 'darwin' || matrix.platform == 'win32')
+        timeout-minutes: 15
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         env:
@@ -810,6 +823,17 @@ jobs:
         with:
           platform: ${{ matrix.platform }}
           workdir: ${{ env.WORKDIR }}
+
+      - name: Verify Linux C++ runtime ABI
+        if: ${{ inputs.verify-linux-module-cxx-runtime && matrix.platform == 'linux' }}
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        env:
+          WITH_XDNA: ${{ inputs.include-xdna && matrix.arch == 'x64' }}
+        run: |
+          args=()
+          if [ "$WITH_XDNA" = "true" ]; then args+=(--xdna); fi
+          node "${{ github.workspace }}/.github/scripts/check-linux-module-cxx-runtime.mjs" "prebuilds/linux-${{ matrix.arch }}" "${args[@]}"
 
       # Guards against regressing the static-runtime build: addons must link the
       # static MSVC runtime, so shipped .bare/.dll/.exe files must not import

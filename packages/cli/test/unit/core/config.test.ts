@@ -59,6 +59,81 @@ describe('resolveExplicitServeModel', () => {
   })
 })
 
+describe('sdcpp-generation endpoint categories', () => {
+  for (const [mode, category] of [
+    [undefined, 'image'],
+    ['diffusion', 'image'],
+    ['video', 'video'],
+    ['upscale', 'upscale'],
+    ['world', 'world']
+  ] as const) {
+    it(`gives mode ${mode ?? '(unset)'} the ${category} category`, () => {
+      const config = mode === undefined ? {} : { mode }
+      for (const type of ['sdcpp-generation', 'diffusion']) {
+        assert.equal(resolveExplicitServeModel(type, config).endpointCategory, category)
+      }
+    })
+  }
+
+  it('resolves a model constant by its configured mode', () => {
+    const r = resolveModelConstant('upscaler', {
+      model: 'REALESRGAN_X4PLUS',
+      config: { mode: 'upscale' }
+    })
+    assert.equal(r.sdkType, 'sdcpp-generation')
+    assert.equal(r.endpointCategory, 'upscale')
+  })
+
+  for (const mode of ['upscal', 'IMAGE', 5]) {
+    it(`refuses mode ${JSON.stringify(mode)} when the alias is resolved`, () => {
+      assert.throws(
+        () => resolveModelConstant('upscaler', { model: 'REALESRGAN_X4PLUS', config: { mode } }),
+        {
+          message:
+            'serve.models.upscaler.config.mode: expected one of "diffusion", "video", "upscale", ' +
+            `"world", got ${JSON.stringify(mode)}`
+        }
+      )
+    })
+  }
+
+  it('refuses an unknown mode on an explicit entry', () => {
+    assert.throws(
+      () =>
+        parseServeConfig(
+          {
+            serve: {
+              models: {
+                art: { src: '/m.gguf', type: 'sdcpp-generation', config: { mode: 'upscal' } }
+              }
+            }
+          },
+          {}
+        ),
+      /^Error: serve\.models\.art\.config\.mode: expected one of/
+    )
+  })
+
+  it('leaves other model types alone when their config carries a mode', () => {
+    const r = resolveExplicitServeModel('llamacpp-completion', { mode: 'upscale' })
+    assert.equal(r.endpointCategory, 'chat')
+  })
+})
+
+describe('legacy model type aliases', () => {
+  for (const [alias, category] of [
+    ['bci', 'bci'],
+    ['audiogen', 'audiogen'],
+    ['vla', 'vla'],
+    ['classification', 'classification'],
+    ['ocr', 'ocr']
+  ] as const) {
+    it(`maps ${alias} to ${category}`, () => {
+      assert.equal(resolveExplicitServeModel(alias, {}).endpointCategory, category)
+    })
+  }
+})
+
 describe('resolveModelConstant', () => {
   it('resolves a constant to its registry src and canonical engine', () => {
     const r = resolveModelConstant('alias', { model: 'WHISPER_EN_TINY_Q8_0' })
@@ -170,6 +245,47 @@ describe('resolveNestedModelSrcConstants', () => {
   it('leaves bare filenames alone', () => {
     const out = resolveNestedModelSrcConstants({ s3genModelSrc: 's3gen.gguf' })
     assert.equal(out['s3genModelSrc'], 's3gen.gguf')
+  })
+})
+
+describe('parseServeConfig src', () => {
+  it('requires src for an alias without a model constant', () => {
+    assert.throws(
+      () => parseServeConfig({ serve: { models: { cls: { type: 'ggml-classification' } } } }, {}),
+      /serve\.models\.cls: "src" is required/
+    )
+    assert.throws(
+      () => parseServeConfig({ serve: { models: { ocr: { type: 'ggml-ocr' } } } }, {}),
+      /serve\.models\.ocr: "src" is required/
+    )
+  })
+
+  it('loads the classifier from its model constant', () => {
+    const cfg = parseServeConfig(
+      { serve: { models: { cls: { model: 'MOBILENETV3_3CLASS_V3_FP16' } } } },
+      {}
+    )
+    const cls = cfg.models.get('cls')!
+    assert.equal(cls.endpointCategory, 'classification')
+    assert.equal(
+      typeof cls.modelSrc === 'object' && cls.modelSrc.name,
+      'MOBILENETV3_3CLASS_V3_FP16'
+    )
+  })
+})
+
+describe('parseServeConfig enableAdmin', () => {
+  it('is off unless the flag or serve.enableAdmin turns it on', () => {
+    assert.equal(parseServeConfig({}, {}).enableAdmin, false)
+    assert.equal(parseServeConfig({}, { enableAdmin: true }).enableAdmin, true)
+    assert.equal(parseServeConfig({ serve: { enableAdmin: true } }, {}).enableAdmin, true)
+  })
+
+  it('rejects a non-boolean serve.enableAdmin', () => {
+    assert.throws(
+      () => parseServeConfig({ serve: { enableAdmin: 'yes' } }, {}),
+      /serve\.enableAdmin must be a boolean/
+    )
   })
 })
 

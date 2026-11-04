@@ -2,31 +2,130 @@
 
 ## [Unreleased]
 
-### Added
+## [0.34.0] - 2026-11-04
 
-- Bounded FuzzTest coverage for GGUF video-capability inspection
-  (`inspectVideoModelCapabilities`), including a cap on untrusted GGUF string
-  lengths. Linux C++ CI runs the suite after unit tests. The inspector
-  compiles without stable-diffusion.cpp, so ASan and LeakSanitizer stay at
-  full strength. No public addon API changes.
+### Features
+
+- Windows loads the Vulkan backend at runtime from
+  `qvac-diffusion-ggml-vulkan.dll`, shipped next to the addon, as Android and
+  Linux already do. The addon no longer imports `vulkan-1.dll`, so it loads on
+  a Windows host without a Vulkan runtime
+  ([#5382](https://github.com/tetherto/qvac/pull/5382)).
+- Requires ggml `2026-08-11#4` from the QVAC registry.
+
+## [0.33.0] - 2026-10-30
 
 ### Breaking
 
-- `binding.js` is now `module.exports = require('#host-addon')`, a specifier
-  the Bare module lexer can follow, so `bare-pack` bundles an app that
-  requires `@qvac/diffusion-cpp`. `#host-addon` maps each host to its platform
-  package alone, with no fallback.
-- The meta package is no longer an addon. Each platform package is an ordinary
-  one: its module is built as `qvac__diffusion-cpp-<suffix>` (every iOS host
-  shares `ios`) and sits at `prebuilds/<host>/qvac__diffusion-cpp-<suffix>.bare`,
-  with its ggml backends in `prebuilds/<host>/qvac__diffusion-cpp-<suffix>/`.
-- The addon finds its ggml backends itself, next to the loaded module. An
-  explicit `backendsDir` is now scanned as given rather than as a prebuilds
-  root under which `<host>/<module>` is appended. The JavaScript wrappers no
-  longer default `backendsDir` to the package `prebuilds/` directory.
-- A source build is loadable once `npm run link:platform` (part of
-  `build:native`, `build:vulkan`, and `build:cuda`) stages it as the host's
-  platform package in `node_modules/`.
+- `assessFit` returns `{ status, devices, stats }`: the GPU devices the
+  placement uses, then the host. `status` is `fits`, `does-not-fit` or
+  `unknown`; a placement the fitter had to change is `does-not-fit`. An
+  invalid request or a load the engine cannot measure rejects
+  ([#5477](https://github.com/tetherto/qvac/pull/5477)).
+
+### CUDA Support
+
+- Add CUDA acceleration on Linux ARM64 and x64, including DGX Spark and RTX 5090.
+- Automatically fall back to Vulkan or CPU when CUDA is unavailable.
+- Add a FLUX.2 Klein 4B CUDA example and setup instructions.
+
+## [0.32.1] - 2026-10-29
+
+This patch moves the addon to stable-diffusion-cpp `2026-08-11#8`. It retains
+the existing model support and JavaScript API.
+
+### Bug Fixes
+
+Memory fitting plans on the integrated GPUs when there is no discrete GPU,
+caps the free memory of a GPU that shares host memory at the host's, and on an
+iOS device plans against the app's own memory limit.
+
+The addon requires stable-diffusion-cpp `2026-08-11#8` from the QVAC registry
+while retaining the existing registry baseline
+([#5446](https://github.com/tetherto/qvac/pull/5446)).
+
+## [0.32.0] - 2026-10-29
+
+### Features
+
+- Add optional `GenerationParams.custom_sigmas` for explicit image sampling
+  schedules. Values must be finite, non-negative, strictly decreasing at float
+  precision, and end in zero. The schedule overrides `scheduler` and `steps`;
+  its length minus one determines the step count.
+- Add a Qwen-Image-2.1-Turbo recipe using Euler, CFG 1, and the model's fixed
+  eight-step schedule. Set `QWEN_TURBO=1` and provide `QWEN_TURBO_MODEL` to use
+  Turbo weights with the existing Qwen examples and shared components.
+
+### Fixes
+
+- Enable VAE tiling with `vae_tile_size: 64` in the Qwen example for output
+  areas of at least 2048×2048 pixels, avoiding the full-frame CUDA decode
+  assertion observed during 2K validation. Tile sizes use native latent units.
+
+Existing requests without `custom_sigmas` retain ordinary sampling behavior.
+
+### Pull Requests
+
+- [#5415](https://github.com/tetherto/qvac/pull/5415) - QVAC-27530 feat: support Qwen-Image-2.1-Turbo sampling.
+
+## [0.31.0] - 2026-10-21
+
+This release adds Qwen-Image-2.1 generation and reference editing, including
+RGBA images. It also ships the platform packaging changes and native build
+and validation improvements merged since 0.30.0.
+
+## Features
+
+Qwen-Image-2.1 supports text-to-image generation, single-reference editing,
+and ordered multi-reference composition through `ImgStableDiffusion`.
+The optional `files.llmVision` field supplies the vision projector for loading
+and fit estimation. Reference inputs and generated PNGs retain alpha when
+the loaded model supports RGBA; existing models keep their RGB decoding path.
+Five runnable examples cover generation, editing, composition, transparent
+generation, and background removal, with a hash-verified model downloader.
+
+The addon now requires `stable-diffusion-cpp >= 2026-08-11#7` from the QVAC
+registry, incorporating the merged native Qwen integration without a local
+port overlay.
+
+## Breaking Changes
+
+The package now loads its native binary from a version-locked platform
+package through `#host-addon`. Desktop installs select the host's binary
+instead of downloading every platform. Source builds must run
+`npm run link:platform`, which is included in the native build scripts.
+The meta package is no longer itself an addon; consumers loading a native
+binary directly must use the platform package's module and layout.
+
+The addon discovers ggml backends beside the loaded native module. If you
+set `backendsDir` explicitly, pass the actual backend directory: it is now
+scanned directly instead of appending the host and module subdirectories.
+Remove the override to use automatic discovery.
+
+Unsupported `init_images` requests on SD1/SD2/SDXL now reject through native
+validation after job submission. Await `response.await()` to handle the error
+and update any handling that matches the former JavaScript error text.
+Input type, empty-array, and mutual-exclusion checks remain in JavaScript.
+
+## Other
+
+Reference conditioning follows the loaded model's capabilities. FLUX.2 no
+longer requires `prediction: 'flux2_flow'` for routing, but callers should keep
+it for the single-reference size fallback and `@imageN` prompt warnings.
+Leave prediction automatic for Qwen-Image-2.1. ESRGAN rejects RGBA output
+before generation because it accepts RGB images only.
+
+Linux x64 and arm64 release prebuilds now provision CUDA. Bounded FuzzTest
+coverage validates GGUF video-capability inspection, including limits on
+untrusted string lengths, without linking stable-diffusion.cpp so address
+and leak sanitizers remain fully enabled.
+
+## Pull Requests
+
+- [#5128](https://github.com/tetherto/qvac/pull/5128) - QVAC-25542 feat: add Qwen-Image-2.1 support to diffusion-cpp.
+- [#5044](https://github.com/tetherto/qvac/pull/5044) - QVAC-25559 feat[build]: split diffusion-cpp into per-platform packages.
+- [#4607](https://github.com/tetherto/qvac/pull/4607) - test[diffusion-cpp]: bounded FuzzTest for GGUF video-capability inspect.
+- [#5251](https://github.com/tetherto/qvac/pull/5251) - ci(diffusion-cpp): provision CUDA for Linux prebuilds.
 
 ## [0.30.0] - 2026-10-14
 

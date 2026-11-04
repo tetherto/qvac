@@ -35,6 +35,26 @@ test('aggregateEvents: extracts stats from completionStats event', (t) => {
   t.is(result.stats?.tokensPerSecond, 50)
 })
 
+test('aggregateEvents: carries the speculative draft counters, zeros included', (t) => {
+  const events: CompletionEvent[] = [
+    { type: 'contentDelta', seq: 0, text: 'hi' },
+    { type: 'completionStats', seq: 1, stats: { draftTokens: 0, draftAcceptedTokens: 0 } },
+    { type: 'completionDone', seq: 2 }
+  ]
+  const result = aggregateEvents(events)
+  t.alike(result.stats, { draftTokens: 0, draftAcceptedTokens: 0 })
+})
+
+test('buildFinalFromEvents: omits draft counters the stats did not carry', (t) => {
+  const events: CompletionEvent[] = [
+    { type: 'contentDelta', seq: 0, text: 'hi' },
+    { type: 'completionStats', seq: 1, stats: { tokensPerSecond: 42 } },
+    { type: 'completionDone', seq: 2 }
+  ]
+  const { final } = buildFinalFromEvents(events, new Map())
+  t.alike(final.stats, { tokensPerSecond: 42 })
+})
+
 test('aggregateEvents: collects toolCall events', (t) => {
   const call: ToolCall = { id: 'c1', name: 'echo', arguments: { msg: 'hi' } }
   const events: CompletionEvent[] = [

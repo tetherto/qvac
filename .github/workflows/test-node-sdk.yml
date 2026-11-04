@@ -212,6 +212,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           sparse-checkout: |
             ${{ inputs.project-directory }}
+            ${{ inputs.working-directory }}
             packages/inference
             ${{ inputs.consumer == 'python' && 'packages/sdk-python' || '' }}
             .github/actions/sdk-e2e-fail-on-failures

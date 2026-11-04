@@ -1,5 +1,46 @@
 # Changelog
 
+## [0.11.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/ai-sdk-provider/v/0.11.0
+
+QVAC AI SDK Provider 0.11.0 follows `@qvac/cli` 0.18.0 and adds nine model constants: the TranscribePsy Parakeet transcription models and new Qwen3.5 and Qwen3.8 chat models. Provider behavior is unchanged, and no constant is removed.
+
+## Dependency Alignment
+
+The optional `@qvac/cli` peer is now `^0.18.0`. A 0.x caret range does not cross a minor, so `^0.17.0` would not accept CLI 0.18. External mode is unchanged.
+
+## Model Changes
+
+### Added
+
+Transcription:
+
+- `PARAKEET_TRANSCRIBEPSY_250M_Q8_0`
+- `PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0`
+
+Chat:
+
+- `QWEN3_5_0_8B_MTP_Q4_K_M`
+- `QWEN3_5_2B_MTP_Q4_K_M`
+- `QWEN3_5_4B_MTP_Q4_K_M`
+- `QWEN3_5_9B_MTP_Q4_K_M`
+- `QWEN3_5_4B_DFLASH_Q8_0`
+- `QWEN3_8_27B_DFLASH2_Q8_0`
+- `QWEN3_8_FLASH_NEXT_177B_DFLASH2_Q8_0`
+
+## [0.10.1]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/ai-sdk-provider/v/0.10.1
+
+This patch moves the provider onto `@qvac/cli` 0.17 and raises its AI SDK dependency floors. Provider behavior is unchanged.
+
+## Dependency Alignment
+
+The optional `@qvac/cli` peer is now `^0.17.0`. A 0.x caret range does not cross a minor, so `^0.16.0` would not accept CLI 0.17.
+
+`@ai-sdk/provider` now needs `^4.0.10` and `@ai-sdk/provider-utils` `^5.0.35`. Older versions lack the `FilesV4` stream types the provider builds against, so an install that resolved them could fail to type-check.
+
 ## [0.10.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/ai-sdk-provider/v/0.10.0

@@ -173,6 +173,42 @@ AUDIOGEN_ACESTEP_V15_SFT_Q8_0 = ModelConstant(
     params="",
 )
 
+AUDIOGEN_ACESTEP_V15_TURBO_BF16 = ModelConstant(
+    name="AUDIOGEN_ACESTEP_V15_TURBO_BF16",
+    src="registry://s3/qvac_models_compiled/ggml/acestep/2026-10-28/acestep-v15-turbo-BF16.gguf",
+    registry_path="qvac_models_compiled/ggml/acestep/2026-10-28/acestep-v15-turbo-BF16.gguf",
+    registry_source="s3",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=2050940,
+    blob_block_length=73115,
+    blob_byte_offset=134380631617,
+    model_id="acestep-v15-turbo-BF16.gguf",
+    expected_size=4791642080,
+    sha256_checksum="c7b463b728cdce2f3d4e5205fc5747d0344ebfea37f19542f5236cd8a76cf462",
+    addon="audiogen",
+    engine="audiogen-ggml",
+    quantization="bf16",
+    params="",
+)
+
+AUDIOGEN_ACESTEP_V15_TURBO_F16 = ModelConstant(
+    name="AUDIOGEN_ACESTEP_V15_TURBO_F16",
+    src="registry://s3/qvac_models_compiled/ggml/acestep/2026-10-28/acestep-v15-turbo-F16.gguf",
+    registry_path="qvac_models_compiled/ggml/acestep/2026-10-28/acestep-v15-turbo-F16.gguf",
+    registry_source="s3",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=2124056,
+    blob_block_length=73115,
+    blob_byte_offset=139172330753,
+    model_id="acestep-v15-turbo-F16.gguf",
+    expected_size=4791642112,
+    sha256_checksum="90a7f7680fb0e9149e6febda599568f48ca5423f1dbda24e333b74e06a714374",
+    addon="audiogen",
+    engine="audiogen-ggml",
+    quantization="fp16",
+    params="",
+)
+
 AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M = ModelConstant(
     name="AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M",
     src="registry://s3/qvac_models_compiled/ggml/acestep/2026-07-22/acestep-v15-turbo-Q4_K_M.gguf",
@@ -2279,6 +2315,24 @@ DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_TENSORS = ModelConstant(
     params="2x7B",
 )
 
+EMBEDDINGGEMMA_2_Q8_0 = ModelConstant(
+    name="EMBEDDINGGEMMA_2_Q8_0",
+    src="registry://hf/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/embeddinggemma-2-Q8_0.gguf",
+    registry_path="ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/embeddinggemma-2-Q8_0.gguf",
+    registry_source="hf",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=2211992,
+    blob_block_length=4729,
+    blob_byte_offset=144934876963,
+    model_id="embeddinggemma-2-Q8_0.gguf",
+    expected_size=309855456,
+    sha256_checksum="2188ac1deca4b77dffefd603c2776a9d76d9d74ec01841392982ebb840b09135",
+    addon="embeddings",
+    engine="llamacpp-embedding",
+    quantization="q8_0",
+    params="",
+)
+
 EMBEDDINGGEMMA_300M_BF16 = ModelConstant(
     name="EMBEDDINGGEMMA_300M_BF16",
     src="registry://hf/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300M-BF16.gguf",
@@ -3647,6 +3701,24 @@ MEDGEMMA_4B_IT_Q8_0_SHARD = ModelConstant(
     params="4B",
 )
 
+MMPROJ_EMBEDDINGGEMMA_2_Q8_0 = ModelConstant(
+    name="MMPROJ_EMBEDDINGGEMMA_2_Q8_0",
+    src="registry://hf/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/mmproj-embeddinggemma-2-Q8_0.gguf",
+    registry_path="ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/mmproj-embeddinggemma-2-Q8_0.gguf",
+    registry_source="hf",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=2216722,
+    blob_block_length=8466,
+    blob_byte_offset=145244759043,
+    model_id="mmproj-embeddinggemma-2-Q8_0.gguf",
+    expected_size=554821024,
+    sha256_checksum="c4a8a52691ecef40618438928bdf9e68379b854e24166f292592353db0aab64f",
+    addon="embeddings",
+    engine="llamacpp-embedding",
+    quantization="q8_0",
+    params="",
+)
+
 MMPROJ_GEMMA4_2B_MULTIMODAL_BF16 = ModelConstant(
     name="MMPROJ_GEMMA4_2B_MULTIMODAL_BF16",
     src="registry://hf/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/mmproj-google_gemma-4-E2B-it-bf16.gguf",
@@ -4241,6 +4313,24 @@ MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0_1 = ModelConstant(
     params="460M",
 )
 
+MOBILENETV3_3CLASS_V3_FP16 = ModelConstant(
+    name="MOBILENETV3_3CLASS_V3_FP16",
+    src="registry://s3/qvac_models_compiled/ggml/mobilenetv3-3class/2026-10-28/mobilenetv3_3class_v3_fp16.gguf",
+    registry_path="qvac_models_compiled/ggml/mobilenetv3-3class/2026-10-28/mobilenetv3_3class_v3_fp16.gguf",
+    registry_source="s3",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=2050891,
+    blob_block_length=48,
+    blob_byte_offset=134377529985,
+    model_id="mobilenetv3_3class_v3_fp16.gguf",
+    expected_size=3084800,
+    sha256_checksum="faaa680c62f989d642032114c8892e9f43e9f2487ff7a350941715c7de9ffb6c",
+    addon="classification",
+    engine="ggml-classification",
+    quantization="fp16",
+    params="2.5M",
+)
+
 MOE_35B_INST_IQ2_XXS = ModelConstant(
     name="MOE_35B_INST_IQ2_XXS",
     src="registry://hf/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF/resolve/d8f684f08d2950ea9d2db6a35ef7dada0707858b/Kwaipilot_KAT-Coder-V2.5-Dev-IQ2_XXS.gguf",
@@ -4673,6 +4763,42 @@ PARAKEET_INDIC_CONFORMER_600M_Q8_0 = ModelConstant(
     params="600M",
 )
 
+PARAKEET_MOSAIC_COMPACT_Q4_0_Q8_0_Q3_K_IQ3_S = ModelConstant(
+    name="PARAKEET_MOSAIC_COMPACT_Q4_0_Q8_0_Q3_K_IQ3_S",
+    src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact.gguf",
+    registry_path="qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact.gguf",
+    registry_source="s3",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=2026488,
+    blob_block_length=5182,
+    blob_byte_offset=132778538615,
+    model_id="parakeet-mosaic-compact.gguf",
+    expected_size=339564832,
+    sha256_checksum="8229311ec51911e7f305413f8d9430b1e0d357101ffb3b75d32feed6b8520780",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="q4_0/q8_0/q3_k/iq3_s",
+    params="0.6B",
+)
+
+PARAKEET_MOSAIC_Q4_0_Q8_0 = ModelConstant(
+    name="PARAKEET_MOSAIC_Q4_0_Q8_0",
+    src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic.gguf",
+    registry_path="qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic.gguf",
+    registry_source="s3",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=1999840,
+    blob_block_length=7427,
+    blob_byte_offset=131032418925,
+    model_id="parakeet-mosaic.gguf",
+    expected_size=486693152,
+    sha256_checksum="9e17114b5773d1b1ed9b6a4fafb0f46427a3bb9a80b77e645c24576bda9188ef",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="q4_0/q8_0",
+    params="0.6B",
+)
+
 PARAKEET_NEMOTRON_0_6B_F16 = ModelConstant(
     name="PARAKEET_NEMOTRON_0_6B_F16",
     src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.f16.gguf",
@@ -4725,6 +4851,24 @@ PARAKEET_NEMOTRON_0_6B_Q8_0 = ModelConstant(
     engine="parakeet-transcription",
     quantization="q8_0",
     params="0.6B",
+)
+
+PARAKEET_NEMOTRON_3_DIARIZATION_Q4_K = ModelConstant(
+    name="PARAKEET_NEMOTRON_3_DIARIZATION_Q4_K",
+    src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-10-22/Nemotron-3-Diarization.converted.q4_k.gguf",
+    registry_path="qvac_models_compiled/ggml/parakeet/2026-10-22/Nemotron-3-Diarization.converted.q4_k.gguf",
+    registry_source="s3",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=1998954,
+    blob_block_length=885,
+    blob_byte_offset=130974449965,
+    model_id="Nemotron-3-Diarization.converted.q4_k.gguf",
+    expected_size=57942048,
+    sha256_checksum="4639dd46782618087f64960fe350950a10712a174d45e7f5d5780a96ffe878ae",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="q4_k",
+    params="99.2M",
 )
 
 PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0 = ModelConstant(
@@ -4943,6 +5087,42 @@ PARAKEET_TDT_1_1B_Q8_0 = ModelConstant(
     params="1.1B",
 )
 
+PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0 = ModelConstant(
+    name="PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0",
+    src="registry://hf/qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml.gguf",
+    registry_path="qvac/TranscribePsy-250M-EU-sub-coreml/resolve/929aa4a3df0ec24232fe206dce5e933caf072897/transcribepsy-250m-eu-sub-coreml.gguf",
+    registry_source="hf",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=1780751,
+    blob_block_length=265,
+    blob_byte_offset=116675069421,
+    model_id="transcribepsy-250m-eu-sub-coreml.gguf",
+    expected_size=17313056,
+    sha256_checksum="9b7a82f33891a8f55917333b58b920878fdcca3d29a1e92d4748c228ba6eb882",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="q8_0",
+    params="250M",
+)
+
+PARAKEET_TRANSCRIBEPSY_250M_Q8_0 = ModelConstant(
+    name="PARAKEET_TRANSCRIBEPSY_250M_Q8_0",
+    src="registry://hf/qvac/TranscribePsy-250M-EU-sub-gguf/resolve/92460e0a8e7dc20f2fb126198bdd9eebb9ba2dc7/transcribepsy-250m-eu-sub.gguf",
+    registry_path="qvac/TranscribePsy-250M-EU-sub-gguf/resolve/92460e0a8e7dc20f2fb126198bdd9eebb9ba2dc7/transcribepsy-250m-eu-sub.gguf",
+    registry_source="hf",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=1781017,
+    blob_block_length=4653,
+    blob_byte_offset=116692385165,
+    model_id="transcribepsy-250m-eu-sub.gguf",
+    expected_size=304879584,
+    sha256_checksum="a93ef324d38e410b5e49389db95d06364eddbb890b74a69f311e482d2fda6f4b",
+    addon="parakeet",
+    engine="parakeet-transcription",
+    quantization="q8_0",
+    params="250M",
+)
+
 PARAKEET_UNIFIED_0_6B_F16 = ModelConstant(
     name="PARAKEET_UNIFIED_0_6B_F16",
     src="registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/parakeet-unified-en-0.6b.f16.gguf",
@@ -5159,6 +5339,24 @@ QWEN3_4B_Q4_K_M = ModelConstant(
     params="4B",
 )
 
+QWEN3_5_0_8B_MTP_Q4_K_M = ModelConstant(
+    name="QWEN3_5_0_8B_MTP_Q4_K_M",
+    src="registry://hf/unsloth/Qwen3.5-0.8B-MTP-GGUF/resolve/cf8a611f6ed2c2060046219a19f12cd3d5ecd67c/Qwen3.5-0.8B-Q4_K_M.gguf",
+    registry_path="unsloth/Qwen3.5-0.8B-MTP-GGUF/resolve/cf8a611f6ed2c2060046219a19f12cd3d5ecd67c/Qwen3.5-0.8B-Q4_K_M.gguf",
+    registry_source="hf",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=1785671,
+    blob_block_length=8388,
+    blob_byte_offset=116997328557,
+    model_id="Qwen3.5-0.8B-Q4_K_M.gguf",
+    expected_size=549698976,
+    sha256_checksum="ac7c9d7a1b3e3695bb3bd50f8ceaa97f9c93e99ccc3d3d1a620301b6dd6d3d86",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="q4_k_m",
+    params="0.8B",
+)
+
 QWEN3_5_0_8B_MULTIMODAL_Q4_K_M = ModelConstant(
     name="QWEN3_5_0_8B_MULTIMODAL_Q4_K_M",
     src="registry://hf/unsloth/Qwen3.5-0.8B-GGUF/resolve/6ab461498e2023f6e3c1baea90a8f0fe38ab64d0/Qwen3.5-0.8B-Q4_K_M.gguf",
@@ -5211,6 +5409,24 @@ QWEN3_5_0_8B_MULTIMODAL_Q8_0 = ModelConstant(
     engine="llamacpp-completion",
     quantization="q8_0",
     params="0.8B",
+)
+
+QWEN3_5_2B_MTP_Q4_K_M = ModelConstant(
+    name="QWEN3_5_2B_MTP_Q4_K_M",
+    src="registry://hf/unsloth/Qwen3.5-2B-MTP-GGUF/resolve/e05864f8066d874d5f85aaff007ae57a2a7d1efe/Qwen3.5-2B-Q4_K_M.gguf",
+    registry_path="unsloth/Qwen3.5-2B-MTP-GGUF/resolve/e05864f8066d874d5f85aaff007ae57a2a7d1efe/Qwen3.5-2B-Q4_K_M.gguf",
+    registry_source="hf",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=1794060,
+    blob_block_length=20292,
+    blob_byte_offset=117547049325,
+    model_id="Qwen3.5-2B-Q4_K_M.gguf",
+    expected_size=1329851808,
+    sha256_checksum="18c92228fc1498a02506f64593f7cc8cc02f406f732a217c6ba99ad1254d4f0b",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="q4_k_m",
+    params="2B",
 )
 
 QWEN3_5_2B_MULTIMODAL_Q4_K_M = ModelConstant(
@@ -5267,6 +5483,42 @@ QWEN3_5_2B_MULTIMODAL_Q8_0 = ModelConstant(
     params="2B",
 )
 
+QWEN3_5_4B_DFLASH_Q8_0 = ModelConstant(
+    name="QWEN3_5_4B_DFLASH_Q8_0",
+    src="registry://hf/AtomicChat/Qwen3.5-4B-DFlash-GGUF/resolve/50b43bb3a4c1c973dc65ed4460f74dc98878cc12/Qwen3.5-4B-DFlash.Q8_0.gguf",
+    registry_path="AtomicChat/Qwen3.5-4B-DFlash-GGUF/resolve/50b43bb3a4c1c973dc65ed4460f74dc98878cc12/Qwen3.5-4B-DFlash.Q8_0.gguf",
+    registry_source="hf",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=1947166,
+    blob_block_length=10455,
+    blob_byte_offset=127580781133,
+    model_id="Qwen3.5-4B-DFlash.Q8_0.gguf",
+    expected_size=685133984,
+    sha256_checksum="f0689eadab0d46468bc2629bb2706f4aba7f794b63e1c9f6eb291269d572a52b",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="q8_0",
+    params="4B",
+)
+
+QWEN3_5_4B_MTP_Q4_K_M = ModelConstant(
+    name="QWEN3_5_4B_MTP_Q4_K_M",
+    src="registry://hf/unsloth/Qwen3.5-4B-MTP-GGUF/resolve/86835bf9949e4d14d6860f7910b1340ad4f271a9/Qwen3.5-4B-Q4_K_M.gguf",
+    registry_path="unsloth/Qwen3.5-4B-MTP-GGUF/resolve/86835bf9949e4d14d6860f7910b1340ad4f271a9/Qwen3.5-4B-Q4_K_M.gguf",
+    registry_source="hf",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=1814353,
+    blob_block_length=43259,
+    blob_byte_offset=118876922925,
+    model_id="Qwen3.5-4B-Q4_K_M.gguf",
+    expected_size=2834975040,
+    sha256_checksum="3874209241c9a397e2f62cd3f70f80fd2dfbf0dfccb6838416bdb48a714e8630",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="q4_k_m",
+    params="4B",
+)
+
 QWEN3_5_4B_MULTIMODAL_Q4_K_M = ModelConstant(
     name="QWEN3_5_4B_MULTIMODAL_Q4_K_M",
     src="registry://hf/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf",
@@ -5301,6 +5553,24 @@ QWEN3_5_4B_MULTIMODAL_Q6_K = ModelConstant(
     engine="llamacpp-completion",
     quantization="q6_k",
     params="4B",
+)
+
+QWEN3_5_9B_MTP_Q4_K_M = ModelConstant(
+    name="QWEN3_5_9B_MTP_Q4_K_M",
+    src="registry://hf/unsloth/Qwen3.5-9B-MTP-GGUF/resolve/9716a636ee4bddc3fed678220b7a33dd2a4160ae/Qwen3.5-9B-Q4_K_M.gguf",
+    registry_path="unsloth/Qwen3.5-9B-MTP-GGUF/resolve/9716a636ee4bddc3fed678220b7a33dd2a4160ae/Qwen3.5-9B-Q4_K_M.gguf",
+    registry_source="hf",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=1857613,
+    blob_block_length=89552,
+    blob_byte_offset=121711926029,
+    model_id="Qwen3.5-9B-Q4_K_M.gguf",
+    expected_size=5868826976,
+    sha256_checksum="e8dd94817e95d6c0939102049d068418269978377b13616c4726235e232841fe",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="q4_k_m",
+    params="9B",
 )
 
 QWEN3_5_9B_MULTIMODAL_Q4_K_M = ModelConstant(
@@ -5447,6 +5717,24 @@ QWEN3_8B_INST_Q4_K_M = ModelConstant(
     params="8B",
 )
 
+QWEN3_8_27B_DFLASH2_Q8_0 = ModelConstant(
+    name="QWEN3_8_27B_DFLASH2_Q8_0",
+    src="registry://hf/incoai/Qwen3.8-27B-DFlash2-GGUF/resolve/144eb06583b4fb0b6e54bc814b16a206a240f4d2/Qwen3.8-27B-DFlash2-Q8_0.gguf",
+    registry_path="incoai/Qwen3.8-27B-DFlash2-GGUF/resolve/144eb06583b4fb0b6e54bc814b16a206a240f4d2/Qwen3.8-27B-DFlash2-Q8_0.gguf",
+    registry_source="hf",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=1957622,
+    blob_block_length=31379,
+    blob_byte_offset=128265920685,
+    model_id="Qwen3.8-27B-DFlash2-Q8_0.gguf",
+    expected_size=2056414816,
+    sha256_checksum="651a1b2930c9825080480f79cf38057e681c9b175d580a357c14f67cf77ccf49",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="q8_0",
+    params="27B",
+)
+
 QWEN3_8_27B_MULTIMODAL_UD_Q4_K_XL = ModelConstant(
     name="QWEN3_8_27B_MULTIMODAL_UD_Q4_K_XL",
     src="registry://hf/unsloth/Qwen3.8-27B-GGUF/resolve/fdd03b8bbd279c1694563650e79d85a2373d9934/Qwen3.8-27B-UD-Q4_K_XL.gguf",
@@ -5481,6 +5769,24 @@ QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL = ModelConstant(
     engine="llamacpp-completion",
     quantization="UD-Q8_K_XL",
     params="27B",
+)
+
+QWEN3_8_FLASH_NEXT_177B_DFLASH2_Q8_0 = ModelConstant(
+    name="QWEN3_8_FLASH_NEXT_177B_DFLASH2_Q8_0",
+    src="registry://hf/incoai/Qwen3.8-Flash-Next-DFlash2-GGUF/resolve/4f5a39be8f0a9e9a573ac9824251830a8f4096d9/Qwen3.8-Flash-Next-DFlash2-Q8_0.gguf",
+    registry_path="incoai/Qwen3.8-Flash-Next-DFlash2-GGUF/resolve/4f5a39be8f0a9e9a573ac9824251830a8f4096d9/Qwen3.8-Flash-Next-DFlash2-Q8_0.gguf",
+    registry_source="hf",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=1989002,
+    blob_block_length=9951,
+    blob_byte_offset=130322342317,
+    model_id="Qwen3.8-Flash-Next-DFlash2-Q8_0.gguf",
+    expected_size=652101024,
+    sha256_checksum="541f4d6ee230747a34d4a2c6890e6e08cc8b19c461226dc1829701a544e46e8a",
+    addon="llm",
+    engine="llamacpp-completion",
+    quantization="q8_0",
+    params="177B",
 )
 
 QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q2_K_XL_SHARD = ModelConstant(
@@ -6704,6 +7010,24 @@ TTS_LM_MULTILINGUAL_AUDIO8_FP16 = ModelConstant(
     addon="tts",
     engine="tts-ggml",
     quantization="fp16",
+    params="0.6B",
+)
+
+TTS_LM_MULTILINGUAL_AUDIO8_Q4_0 = ModelConstant(
+    name="TTS_LM_MULTILINGUAL_AUDIO8_Q4_0",
+    src="registry://s3/qvac_models_compiled/ggml/audio8/2026-10-28/audio8-lm-q4_0.gguf",
+    registry_path="qvac_models_compiled/ggml/audio8/2026-10-28/audio8-lm-q4_0.gguf",
+    registry_source="s3",
+    blob_core_key="dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+    blob_block_offset=2202372,
+    blob_block_length=9619,
+    blob_byte_offset=144304484419,
+    model_id="audio8-lm-q4_0.gguf",
+    expected_size=630374592,
+    sha256_checksum="1bbf6c214017cb3d02499da8946e0e2a8d9fa9555db7f1a954e21bd22c257e64",
+    addon="tts",
+    engine="tts-ggml",
+    quantization="q4_0",
     params="0.6B",
 )
 
@@ -8247,6 +8571,8 @@ __all__ = [
     "AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0",
     "AUDIOGEN_ACESTEP_V15_BASE_Q4_K_M",
     "AUDIOGEN_ACESTEP_V15_SFT_Q8_0",
+    "AUDIOGEN_ACESTEP_V15_TURBO_BF16",
+    "AUDIOGEN_ACESTEP_V15_TURBO_F16",
     "AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M",
     "AUDIOGEN_ACESTEP_V15_TURBO_Q8_0",
     "AUDIOGEN_MOSS_SFX_V2_F16",
@@ -8364,6 +8690,7 @@ __all__ = [
     "DEEPSEEK_V4_304B_INST_UD_IQ2_M_SHARD",
     "DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_SHARD",
     "DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_TENSORS",
+    "EMBEDDINGGEMMA_2_Q8_0",
     "EMBEDDINGGEMMA_300M_BF16",
     "EMBEDDINGGEMMA_300M_F32",
     "EMBEDDINGGEMMA_300M_Q4_0",
@@ -8440,6 +8767,7 @@ __all__ = [
     "MEDGEMMA_4B_IT_Q4_1_TENSORS",
     "MEDGEMMA_4B_IT_Q8_0",
     "MEDGEMMA_4B_IT_Q8_0_SHARD",
+    "MMPROJ_EMBEDDINGGEMMA_2_Q8_0",
     "MMPROJ_GEMMA4_2B_MULTIMODAL_BF16",
     "MMPROJ_GEMMA4_2B_MULTIMODAL_F16",
     "MMPROJ_GEMMA4_2B_MULTIMODAL_Q8_0",
@@ -8473,6 +8801,7 @@ __all__ = [
     "MMPROJ_TERNARY_BONSAI_2_27B_MULTIMODAL_Q8_0",
     "MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0",
     "MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0_1",
+    "MOBILENETV3_3CLASS_V3_FP16",
     "MOE_35B_INST_IQ2_XXS",
     "MOE_35B_INST_Q4_K_M",
     "MOE_35B_INST_Q8_0",
@@ -8497,9 +8826,12 @@ __all__ = [
     "PARAKEET_INDIC_CONFORMER_600M_F16",
     "PARAKEET_INDIC_CONFORMER_600M_Q4_0",
     "PARAKEET_INDIC_CONFORMER_600M_Q8_0",
+    "PARAKEET_MOSAIC_COMPACT_Q4_0_Q8_0_Q3_K_IQ3_S",
+    "PARAKEET_MOSAIC_Q4_0_Q8_0",
     "PARAKEET_NEMOTRON_0_6B_F16",
     "PARAKEET_NEMOTRON_0_6B_Q4_0",
     "PARAKEET_NEMOTRON_0_6B_Q8_0",
+    "PARAKEET_NEMOTRON_3_DIARIZATION_Q4_K",
     "PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0",
     "PARAKEET_SORTFORMER_4SPK_V1_F16",
     "PARAKEET_SORTFORMER_4SPK_V1_Q4_0",
@@ -8512,6 +8844,8 @@ __all__ = [
     "PARAKEET_TDT_0_6B_V3_Q8_0",
     "PARAKEET_TDT_1_1B_F16",
     "PARAKEET_TDT_1_1B_Q8_0",
+    "PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0",
+    "PARAKEET_TRANSCRIBEPSY_250M_Q8_0",
     "PARAKEET_UNIFIED_0_6B_F16",
     "PARAKEET_UNIFIED_0_6B_Q4_0",
     "PARAKEET_UNIFIED_0_6B_Q8_0",
@@ -8524,14 +8858,19 @@ __all__ = [
     "QWEN3_4B_INST_Q4_SHARD",
     "QWEN3_4B_INST_Q4_TENSORS",
     "QWEN3_4B_Q4_K_M",
+    "QWEN3_5_0_8B_MTP_Q4_K_M",
     "QWEN3_5_0_8B_MULTIMODAL_Q4_K_M",
     "QWEN3_5_0_8B_MULTIMODAL_Q6_K",
     "QWEN3_5_0_8B_MULTIMODAL_Q8_0",
+    "QWEN3_5_2B_MTP_Q4_K_M",
     "QWEN3_5_2B_MULTIMODAL_Q4_K_M",
     "QWEN3_5_2B_MULTIMODAL_Q6_K",
     "QWEN3_5_2B_MULTIMODAL_Q8_0",
+    "QWEN3_5_4B_DFLASH_Q8_0",
+    "QWEN3_5_4B_MTP_Q4_K_M",
     "QWEN3_5_4B_MULTIMODAL_Q4_K_M",
     "QWEN3_5_4B_MULTIMODAL_Q6_K",
+    "QWEN3_5_9B_MTP_Q4_K_M",
     "QWEN3_5_9B_MULTIMODAL_Q4_K_M",
     "QWEN3_5_9B_MULTIMODAL_Q6_K",
     "QWEN3_600M_INST_Q4",
@@ -8540,8 +8879,10 @@ __all__ = [
     "QWEN3_6_35B_A3B_MULTIMODAL_Q4_K_M",
     "QWEN3_6_35B_A3B_MULTIMODAL_Q6_K_XL",
     "QWEN3_8B_INST_Q4_K_M",
+    "QWEN3_8_27B_DFLASH2_Q8_0",
     "QWEN3_8_27B_MULTIMODAL_UD_Q4_K_XL",
     "QWEN3_8_27B_MULTIMODAL_UD_Q8_K_XL",
+    "QWEN3_8_FLASH_NEXT_177B_DFLASH2_Q8_0",
     "QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q2_K_XL_SHARD",
     "QWEN3_8_FLASH_NEXT_177B_MULTIMODAL_UD_Q4_K_XL_SHARD",
     "REALESRGAN_X4PLUS",
@@ -8610,6 +8951,7 @@ __all__ = [
     "TTS_LARGE_V1_EN_PARLER_TTS_FP32",
     "TTS_LARGE_V1_EN_PARLER_TTS_Q8_0",
     "TTS_LM_MULTILINGUAL_AUDIO8_FP16",
+    "TTS_LM_MULTILINGUAL_AUDIO8_Q4_0",
     "TTS_LM_MULTILINGUAL_AUDIO8_Q8_0",
     "TTS_MECAB_IPADIC_CHATTERBOX",
     "TTS_MINI_V1_EN_PARLER_TTS_FP16",

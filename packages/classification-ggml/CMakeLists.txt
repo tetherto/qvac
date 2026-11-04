@@ -36,9 +36,11 @@ if(NOT BUILD_FUZZING)
 
   set(ADDON_SOURCES
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ClassificationModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/mobilenet/ClassificationModel.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ImagePreprocessor.cpp
-    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MobileNetGraph.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/mobilenet/MobileNetGraph.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/megaloc/MegaLocModel.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/megaloc/MegaLocPreprocessor.cpp
   )
 
   target_sources(

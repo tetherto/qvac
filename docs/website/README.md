@@ -55,13 +55,19 @@ npm run serve
 
 ## Cutting a documentation line
 
-A versioned collection — SDK, CLI — publishes its current line, whose folder is
-a Fumadocs group so its pages answer at the version-less paths, and every line
-cut before it, whose folders are plain so their pages carry the version. A line
-is never retired: it is the only record of how that release behaved. Cut the
-next line as soon as a release goes live, not when the next one is being
-prepared, so the version-less paths serve what was just released and new
-material has a folder to land in.
+A versioned collection — SDK, CLI — publishes one folder per line it has cut:
+the parenthesized one is a Fumadocs group, so its pages answer at the
+version-less paths, and every plain one carries its version in the URL. A line
+is never retired: it is the only record of how that release behaved.
+
+The line still being written is not among them. It lives at
+`content/_unpublished/<collection>/next/`, which nothing builds and no URL
+reaches, under a fixed name so the path a feature PR writes to does not move.
+
+A cut publishes the line of the version being released. Cut at the **release
+cutoff** — step 6 of [`../ci/RELEASE-TRAIN.md`](../ci/RELEASE-TRAIN.md) for a
+train, step 1 of the release flow in [`../gitflow.md`](../gitflow.md) for a
+single package.
 
 One command does the whole thing, from `docs/website`:
 
@@ -70,27 +76,41 @@ bun run scripts/cut-line.ts sdk v0.18
 ```
 
 It refuses a collection that is not versioned, a version that is not above the
-current line, a destination already on disk, and a working tree that already
-carries changes — the cut is reviewed as its own diff. Review what it did, then
-`npm run build` and `npm test`.
+line last cut, a missing development line, a destination already on disk, and a
+working tree that already carries changes — the cut is reviewed as its own
+diff. Review what it did, then `npm run build` and `npm test`.
 
 The command is a convenience, not a dependency. What it does is the following,
-and doing it by hand is the same cut. For `@qvac/sdk` going from `0.17` to
-`0.18`:
+and doing it by hand is the same cut. For `@qvac/sdk` releasing `0.18`, with
+`0.17` the line last cut:
 
 ```bash
 # 1. Preserve the outgoing line, which keeps serving what it served.
 git mv 'content/docs/sdk/(v0.17)' content/docs/sdk/v0.17
 
-# 2. Open the coming one as a copy, complete from the first build.
-cp -r content/docs/sdk/v0.17 'content/docs/sdk/(v0.18)'
+# 2. Publish the line the sprint was written into — a copy, so the
+#    development line stays where it is and becomes v0.19's.
+cp -r content/_unpublished/sdk/next 'content/docs/sdk/(v0.18)'
 ```
+
+Step 2 is a copy and not a move on purpose. Nothing is deleted and the
+development line is never renamed, so a feature PR opened before the cutoff and
+merged after it lands in the path it was written to — git has no deletion to
+pair its edits against.
+
+Step 1 **is** a rename, and the folder it opens in step 2 is byte-identical to
+it wherever the sprint changed nothing. A PR that edits the outgoing group and
+merges after the cut therefore gives git two exact rename candidates per page,
+and git picks one, which is QVAC-27286. The `Documentation lines` job in
+`.github/workflows/docs-website-pr-checks.yml` fails such a PR until it is
+rebased — it is not a required check, so it asks rather than withholds — and
+`qv-docs-cutoff` lists the PRs a cut will strand before making it.
 
 Then edit the two hand-maintained inputs:
 
 - `src/lib/versions.ts` — the SDK gains `{ version: 'v0.18', folder: '(v0.18)' }`
   at the top and its `v0.17` entry's folder becomes plain. The older entries stay
-  as they are.
+  as they are. The development line is not in this file; it is not published.
 - `public/_redirects` — the line just preserved needs the pair every dotted
   segment needs, because the CDN reads `v0.17` as a file request and so never
   normalizes the trailing slash:
@@ -106,25 +126,20 @@ Then edit the two hand-maintained inputs:
 Then move the currency marker. A page that states in its own title which series
 it documents also states whether that series is current, and the parentheses
 are the only other place currency is recorded, so nothing else can maintain the
-claim. Today that is the SDK's two generated reference pages: `v0.17.x (latest)`
-becomes plain `v0.17.x` in the preserved line, and `v0.18.x (latest)` in the new
-one.
+claim. Today that is the SDK's generated API summary: `v0.17.x (latest)` becomes
+plain `v0.17.x` in the preserved line, and `v0.18.x (latest)` in the new one.
+The development line carries no marker.
 
-Then empty the new line's `reference/release-notes.mdx`, keeping its
-frontmatter and replacing its body with a line stating the release has not
-shipped. The two generated pages are treated differently on purpose:
+Then retarget the new line's release-notes link. `reference/meta.json` carries
+the sidebar entry as an external link to that minor's GitHub release:
 
-- The **API summary** keeps the copy. The release that renders it is reviewed
-  as a diff, and against the previous line's summary only the part of the
-  surface that actually moved shows up.
-- The **release notes** share nothing with the line before them. Keeping them
-  would make that same diff a wholesale replacement, and would publish the
-  previous release's notes under the new line's title for as long as the line
-  goes unreleased.
+```
+"external:[Release Notes](https://github.com/tetherto/qvac/releases/tag/sdk-v0.18.0)"
+```
 
-The page itself stays either way: `reference/meta.json` lists it, so removing
-it would drop it from the sidebar. Its `description` names a version too, so it
-is rewritten to the line being opened.
+The copy brought the development line's tag with it, so rewrite it to the line
+being opened. The tag exists within days: the release follows the cutoff, and
+production is not promoted until it has.
 
 Everything else follows: the sidebars come from the `meta.json` files the copy
 brought with it, and the switcher, canonicals, agent artifacts, `versions.json`,

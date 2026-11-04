@@ -29,7 +29,7 @@ runs:
           }
 
           const MARKER = '<!-- sdk-e2e-impacted -->';
-          const E2E_PREFIX = 'packages/sdk/e2e/';
+          const E2E_PREFIX = 'packages/sdk-e2e/';
           const SAFE_PATH = /^[A-Za-z0-9._/-]+$/;
           const SAFE_TEST_ID = /^[A-Za-z0-9._-]+$/;
           const KNOWN_VIA = new Set([

@@ -9,19 +9,7 @@ if [[ -z "$sdk_version" ]]; then
   exit 1
 fi
 
-artifacts=(
-  qvac-sdk-android
-  qvac-sdk-android-assistant
-  qvac-sdk-android-llm
-  qvac-sdk-android-speech
-  qvac-sdk-android-vision
-  qvac-sdk-android-media
-  qvac-sdk-android-robotics
-)
-
-for artifact in "${artifacts[@]}"; do
-  echo "Verifying io.tether:$artifact"
-  ./gradlew --no-daemon -p consumer-smoke clean :app:assembleDebug \
-    -PqvacArtifact="$artifact" \
-    -PqvacVersion="$sdk_version"
-done
+# consumer-smoke has one product flavour per published runtime artifact.
+# Extra arguments go to Gradle, e.g. -PqvacProfile=aio to check one artifact.
+./gradlew --no-daemon -p consumer-smoke clean :app:checkDebugBuild \
+  -PqvacVersion="$sdk_version" "$@"

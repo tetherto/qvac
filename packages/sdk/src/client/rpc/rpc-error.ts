@@ -4,6 +4,7 @@ import {
   InferenceCancelledError,
   type InferenceCancelledPartial,
   ContextOverflowError,
+  ModelRegistryModelNotFoundError,
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
@@ -147,6 +148,13 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
   REQUEST_ID_CONFLICT: (response) => {
     return new RequestIdConflictError(
       readStringField(response.typedFields, 'requestId', ''),
+      response.cause
+    )
+  },
+  QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND: (response) => {
+    return new ModelRegistryModelNotFoundError(
+      readStringField(response.typedFields, 'registrySource', ''),
+      readStringField(response.typedFields, 'registryPath', ''),
       response.cause
     )
   },

@@ -1,5 +1,241 @@
 # Changelog
 
+## [0.68.0] - 2026-11-04
+
+### Breaking
+
+- Removed model-weight streaming. `files.model` now accepts exactly one absolute
+  disk path: a single GGUF or only its first shard. All shards must already be
+  in the same directory. Multiple paths and weight buffers are rejected;
+  the `loadWeights()` API has been removed
+  ([#5398](https://github.com/tetherto/qvac/pull/5398)).
+- Renamed `pickPrimaryGgufPath` to `validateModelPath`. `files.model` is typed
+  as a one-element tuple so TypeScript also rejects multi-path model inputs
+  ([#5398](https://github.com/tetherto/qvac/pull/5398)).
+- Removed addon-side shard-name expansion. Fabric discovers and reads disk
+  shards from the first GGUF, preventing excessive allocation from a shard
+  count embedded in a filename. Tensor-name companion files are not needed
+  ([#5398](https://github.com/tetherto/qvac/pull/5398)).
+- Generated-token streaming, multimodal input, caching and finetuning remain
+  supported.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.25.0` -> `^0.26.0`, which carries
+  `qvac-fabric` `11259.2.0` -> `11739.0.0`
+  ([#5331](https://github.com/tetherto/qvac/pull/5331)):
+  a rebase onto upstream llama.cpp b11739, TurboVec 1.1.2, an mtmd
+  image-resize fix, and Linux CUDA, Jetson and HIP backend modules that load
+  in hosts without libstdc++ (such as `bare-sidecar`) instead of falling back
+  to the CPU. A caret on a `0.x` version locks the minor, so `^0.25.0`
+  would not have resolved `0.26.0` on its own. The mobile dev dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.26.0` with it.
+- `@qvac/fabric` 0.26.0 changes the `common` library's API and is not
+  ABI-compatible with 0.25.x, so every addon loaded in one process must resolve
+  the same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.26.0` together.
+- The addon is ported to fabric's `common_batch`, `common_speculative_process()`
+  and `common_chat_prompt` APIs
+  ([#5331](https://github.com/tetherto/qvac/pull/5331)).
+
+### Fixed
+
+- Dynamic image resizing rounds half-way dimensions to even, as the reference
+  implementation does, so image prompt token counts can differ from 0.67.0
+  ([#5331](https://github.com/tetherto/qvac/pull/5331)).
+
+## [0.67.0] - 2026-11-02
+
+### Added
+
+- `baseCacheKey` run option: a `cacheKey` file a request starts from when
+  nothing in memory serves more of its prompt, such as a primed system prompt
+  shared by many conversations. The file is read, never written
+  ([#5417](https://github.com/tetherto/qvac/pull/5417)).
+- `cache_share_across_keys` load config: `'false'` keeps every request to
+  its own `cacheKey`'s state, for a model whose callers must not learn
+  whether another conversation shares their prompt. Default `'true'`
+  ([#5417](https://github.com/tetherto/qvac/pull/5417),
+  [#5422](https://github.com/tetherto/qvac/pull/5422)).
+- A user message's `content` may be an ordered array of parts
+  (`{ type: 'text', text }` and `{ type: 'media', content: pathOrBytes }`), so
+  one turn can interleave text and media. Each media part renders as an
+  `<__media__>` marker at its position, the prompt llama-server builds from an
+  OpenAI content-parts request, instead of the split turns the one-message-per-
+  part workaround produces. Media parts on non-user messages and unknown part
+  types are rejected with `InvalidInputFormat`
+  ([#5504](https://github.com/tetherto/qvac/pull/5504)).
+
+### Changed
+
+- A request reuses the longest prompt prefix it shares with any
+  conversation the model holds (in memory, in another batch slot, in the RAM
+  tier, or in a `cacheKey` file used in this process), not only its own
+  `cacheKey`'s. The other conversation is copied, never changed. On
+  multimodal models an image the two share is not encoded again.
+  Encoder-decoder models, and loads with `cache_share_across_keys: 'false'`,
+  are unchanged ([#5417](https://github.com/tetherto/qvac/pull/5417),
+  [#5422](https://github.com/tetherto/qvac/pull/5422)).
+- An image is now identified by the SHA-256 of its encoded bytes, not by a
+  hash of its pixels, so a multimodal cache file written by an earlier version
+  re-encodes its images once (on hybrid and sliding-window models its next
+  turn may start cold) ([#5422](https://github.com/tetherto/qvac/pull/5422)).
+- A request without a `cacheKey` keeps its state in memory for the next
+  request instead of resetting the context, unless the load sets
+  `cache_share_across_keys: 'false'`; it is never written to a file.
+  `CacheTokens` after such a request reports the tokens kept
+  ([#5417](https://github.com/tetherto/qvac/pull/5417),
+  [#5422](https://github.com/tetherto/qvac/pull/5422)).
+
+## [0.66.0] - 2026-10-30
+
+### Breaking
+
+- JSON nested deeper than 128 levels, which used to be accepted, is rejected:
+  a prompt, including `tool_calls` arguments, with `InvalidInputFormat`, and a
+  `generationParams.json_schema` with `InvalidArgument`
+  ([#5430](https://github.com/tetherto/qvac/pull/5430)).
+- A tool with an empty `name` is rejected with `InvalidInputFormat` instead of
+  `InvalidArgument` ([#5430](https://github.com/tetherto/qvac/pull/5430)).
+- `assessFit` returns `{ status, devices, stats }`: a row per device, then the
+  host CPU, and the resolved `ctxSize` and `gpuLayers`. `status` is `fits`,
+  `does-not-fit` or `unknown`. An unreadable model or an invalid request
+  rejects ([#5469](https://github.com/tetherto/qvac/pull/5469)).
+- On an iOS device, `assessFit` checks the load and its margin against the
+  app's memory limit ([#5469](https://github.com/tetherto/qvac/pull/5469)).
+
+### Added
+
+- `LlmLlamacpp.calcTokens({ text?, history?, tools? })`: counts the tokens a
+  text takes on the loaded model, or a conversation rendered by its chat
+  template as a fresh `run()` would, without running it. It answers while
+  requests are generating
+  ([#5353](https://github.com/tetherto/qvac/pull/5353)).
+
+### Fixed
+
+- Deeply nested JSON in a prompt, `tool_calls` arguments or
+  `generationParams.json_schema` no longer crashes the process with a stack
+  overflow ([#5430](https://github.com/tetherto/qvac/pull/5430)).
+- A tool with no top-level `name`, or a non-string `name` or `description`,
+  and any entry with a non-string `role` or `type`, is rejected with
+  `InvalidInputFormat` instead of picojson's raw type-mismatch error
+  ([#5430](https://github.com/tetherto/qvac/pull/5430)).
+
+## [0.65.1] - 2026-10-29
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.24.0` -> `^0.25.0`, which carries
+  `qvac-fabric` `11259.1.0` -> `11259.2.0`
+  ([#5435](https://github.com/tetherto/qvac/pull/5435)): a bound on the PNG
+  zlib decode, an RPC server graph-cache fix, DeepSeek V4.1 Flash and CUDA
+  top-k fixes. A caret on a `0.x` version locks the minor, so `^0.24.0` would
+  not have resolved `0.25.0` on its own. The mobile dev dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.25.0` with it.
+- `@qvac/fabric` 0.25.0 changes the layout of `common_params` and
+  `common_chat_msg`, so every addon loaded in one process must resolve the
+  same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.25.0` together.
+- Image inputs go through the bounded PNG decode, so a small PNG with a large
+  deflate stream no longer makes mtmd allocate gigabytes. No API change for
+  this package.
+
+## [0.65.0] - 2026-10-27
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.23.1` -> `^0.24.0`, which carries
+  `qvac-fabric` `11259.0.1` -> `11259.1.0`
+  ([#5374](https://github.com/tetherto/qvac/pull/5374)): an opt-in deferred
+  gated delta net state commit for Qwen3.5 / Qwen3.5-MoE speculative decoding
+  and the two ggml ops it adds. A caret on a `0.x` version locks the minor, so
+  `^0.23.1` would not have resolved `0.24.0` on its own. The mobile dev
+  dependencies `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to
+  `^0.24.0` with it.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.24.0` together.
+- Speculative decoding on Qwen3.5 / Qwen3.5-MoE can commit the gated delta
+  net state once per accepted block instead of keeping a state per draft
+  token, with `LLAMA_GDN_DEFERRED=1` set in the environment and the
+  recurrent states offloaded. Without it, decoding is unchanged.
+- The RPC protocol moves 111 -> 112, so RPC offload needs a
+  `@qvac/ggml-rpc-server` on `@qvac/fabric` 0.24.0; a server on 0.23.x
+  refuses the connection. No API change for this package.
+
+## [0.64.3] - 2026-10-26
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.23.0` -> `^0.23.1`, which carries
+  `qvac-fabric` `11259.0.0` -> `11259.0.1`
+  ([#5339](https://github.com/tetherto/qvac/pull/5339)). `@qvac/fabric` 0.23.1
+  requires the matching `@qvac/fabric-android-arm64` / `@qvac/fabric-ios`, so
+  the mobile dev dependencies move to `^0.23.1`. They now take a caret, so a
+  later fabric patch no longer needs a manifest change.
+- Mobile apps must move `@qvac/fabric` and `@qvac/fabric-android-arm64` or
+  `@qvac/fabric-ios` to `0.23.1` together.
+- `assessFit` counts a Gemma 4 assistant given as `spec-draft-model`, and a
+  DFlash draft model that borrows the model's embeddings and output head,
+  in the verdict and the per-device figures. fabric 11259.0.1 measures a
+  draft that borrows from the target next to it, at the target's context;
+  before, both were left out. An MTP draft that cannot be measured is still
+  refused with `unsupported-config`.
+- On Apple GPUs, decode runs fabric's faster Metal kernels: few-row MMA
+  mat-mul for the remaining quant types, a faster MXFP4 mat-vec, and
+  `RMS_NORM`, `ROPE` and the residual `ADD` fused into single-row
+  Q4_0/MXFP4 mat-vecs.
+
+## [0.64.2] - 2026-10-23
+
+### Added
+
+- External MTP heads: `spec-type: 'draft-mtp'` accepts `spec-draft-model`, as
+  llama-server's `--spec-type draft-mtp -md <head>`, to draft for a model
+  without MTP layers, or a Gemma 4 assistant for its Gemma 4 model. The head
+  is placed like the model, and the load's fit and `assessFit` count its
+  weights and context; fabric cannot measure a Gemma 4 assistant, so they
+  leave it out. A head with another hidden width or vocabulary than the
+  model fails the load, and `assessFit` refuses it with `unsupported-config`
+  ([#5232](https://github.com/tetherto/qvac/pull/5232)).
+
+### Fixed
+
+- `assessFit` with `spec-type: 'draft-mtp'` now counts the MTP draft context
+  in its per-device figures (`devices`, `deviceBytes`, `hostBytes`), not only
+  in its verdict, so their totals match what the load uses. As in fabric's
+  fit, the draft side's rows follow the placement the load asked for
+  ([#5232](https://github.com/tetherto/qvac/pull/5232)).
+- `assessFit` refuses `spec-type: 'draft-mtp'` on a model without MTP layers
+  with `unsupported-config`, as the load fails, instead of projecting the
+  load without the MTP context
+  ([#5232](https://github.com/tetherto/qvac/pull/5232)).
+- `assessFit` reports `model-unreadable` for a `spec-draft-model` that is not
+  a regular file, such as a directory, as the load rejects it, instead of
+  projecting the load without it
+  ([#5232](https://github.com/tetherto/qvac/pull/5232)).
+
+## [0.64.1] - 2026-10-23
+
+### Fixed
+
+- Tool schemas and past tool-call arguments now keep the caller's key order.
+  They were sorted alphabetically before reaching the chat template, so the
+  tool-call grammar rejected arguments written in the declared order and models
+  dropped fields, wrote broken values or never finished the call. The README's
+  tool-calling section documents the order the grammar enforces
+  ([#5272](https://github.com/tetherto/qvac/pull/5272)).
+- A single streamed `run()` on a model loaded with `parallel >= 2` no longer
+  repeats its complete answer as the final chunk. Text and tool-call markup
+  are delivered once, while batch results and terminal statistics are preserved
+  ([#5295](https://github.com/tetherto/qvac/pull/5295)).
+- Prefilling a system prompt and tools with `prefill: true` now preserves a
+  reusable prefix on chat templates that require a user turn, including Qwen3.5.
+  The prefill generates no answer; a later text or image question can reuse the
+  prefix when the system prompt, tools and rendering settings match. Templates
+  without a safe reusable prefix retain normal rendering
+  ([#5256](https://github.com/tetherto/qvac/pull/5256)).
+
 ## [0.64.0] - 2026-10-20
 
 ### Added

@@ -17,12 +17,35 @@ const engineDetection_1 = require("./engineDetection");
 const engineIds_1 = require("./engineIds");
 const cosyvoice_1 = require("./engines/cosyvoice");
 const moss_1 = require("./engines/moss");
+const fabricOptions_1 = require("./fabricOptions");
 const modelFiles_1 = require("./modelFiles");
 const optionValidation_1 = require("./optionValidation");
 const pocketConfig_1 = require("./pocketConfig");
 const { platform } = bareOs;
 const MIN_OUTPUT_SAMPLE_RATE = 8000;
 const MAX_OUTPUT_SAMPLE_RATE = 192000;
+const LAVASR_COREML_COMPUTE_UNITS = [
+    "CPU_ONLY",
+    "CPU_AND_GPU",
+    "CPU_AND_NE",
+    "ALL",
+];
+function validateLavaSRCoreML(options, ggufPath, stage) {
+    const modelPath = options?.coremlModelPath;
+    const computeUnits = options?.coremlComputeUnits;
+    if (modelPath === undefined && computeUnits === undefined)
+        return;
+    if (typeof modelPath !== "string" || modelPath.trim().length === 0) {
+        throw new Error(`${stage}.coremlModelPath must be a non-empty string`);
+    }
+    if (typeof computeUnits !== "string" ||
+        !LAVASR_COREML_COMPUTE_UNITS.includes(computeUnits)) {
+        throw new Error(`${stage}.coremlComputeUnits must be CPU_ONLY, CPU_AND_GPU, CPU_AND_NE or ALL`);
+    }
+    if (!ggufPath) {
+        throw new Error(`${stage} Core ML requires the corresponding LavaSR GGUF path`);
+    }
+}
 function resolveDefaultLazySessionLoading(lazySessionLoading) {
     if (lazySessionLoading != null)
         return lazySessionLoading;
@@ -111,13 +134,24 @@ function settingsFromOptions(options) {
         maxFrames: options.maxFrames,
         minNewTokens: options.minNewTokens,
         normalizeNumbers: options.normalizeNumbers,
+        coremlDecoder: options.coremlDecoder,
+        coremlComputeUnits: options.coremlComputeUnits,
+        coremlStrict: options.coremlStrict,
         ...(0, moss_1.mossVoiceSettings)(options),
     };
 }
 function resolveBackendPaths(files, options, config) {
+    const enhancerGgufPath = resolveEnhancerGgufPath(files, options.enhancer);
+    const denoiserGgufPath = resolveDenoiserGgufPath(files, options.denoiser);
+    validateLavaSRCoreML(options.enhancer, enhancerGgufPath, "enhancer");
+    validateLavaSRCoreML(options.denoiser, denoiserGgufPath, "denoiser");
     return {
-        enhancerGgufPath: resolveEnhancerGgufPath(files, options.enhancer),
-        denoiserGgufPath: resolveDenoiserGgufPath(files, options.denoiser),
+        enhancerGgufPath,
+        denoiserGgufPath,
+        enhancerCoremlModelPath: options.enhancer?.coremlModelPath,
+        enhancerCoremlComputeUnits: options.enhancer?.coremlComputeUnits,
+        denoiserCoremlModelPath: options.denoiser?.coremlModelPath,
+        denoiserCoremlComputeUnits: options.denoiser?.coremlComputeUnits,
         backendsDir: (0, modelFiles_1.firstNonEmpty)(options.backendsDir, config.backendsDir),
         openclCacheDir: (0, modelFiles_1.firstNonEmpty)(options.openclCacheDir, config.openclCacheDir),
         vulkanCacheDir: (0, modelFiles_1.firstNonEmpty)(options.vulkanCacheDir, config.vulkanCacheDir),
@@ -139,6 +173,7 @@ function resolveEngineSetup(options) {
     const config = { ...(options.config || {}) };
     const outputSampleRate = validateOutputSampleRate(config.outputSampleRate);
     const engineType = (0, engineDetection_1.detectEngineType)(options.engine, files);
+    (0, fabricOptions_1.validateBackendOption)(engineType, config.backend);
     const mossVoice = (0, moss_1.mossVoiceSettings)(options);
     const pocket = engineType === engineIds_1.ENGINE_POCKET
         ? resolvePocketSetup(files, options, config)
@@ -150,6 +185,7 @@ function resolveEngineSetup(options) {
         dialogue: mossVoice.dialogueReferences !== undefined,
     });
     const settings = settingsFromOptions(options);
+    Object.assign(settings, (0, fabricOptions_1.resolveFabricOptions)(engineType, options));
     const backend = resolveBackendPaths(files, options, config);
     const setup = {
         engineType,

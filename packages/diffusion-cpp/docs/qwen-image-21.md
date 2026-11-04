@@ -125,12 +125,104 @@ ESRGAN accepts RGB images only. Qwen-Image-2.1's four-channel output cannot use
 `upscale: true`; the addon rejects that option before generation. Keep upscaling
 disabled to preserve the RGBA output.
 
-The initial backport covers regular text-to-image and reference editing. Turbo,
-prefix KV caching, and broad LoRA compatibility are not validated by this recipe.
-Hardware validation is limited to RTX 5090 CUDA; other ticket targets need
-separate runs.
+The base-model measurements below cover text-to-image and reference editing
+on RTX 5090 CUDA. Turbo has separate NVIDIA GB10 measurements below.
+Prefix KV caching and broad LoRA compatibility remain unvalidated.
 
-## Measured validation
+## Turbo recipe
+
+Qwen-Image-2.1-Turbo uses the same architecture with different diffusion weights,
+CFG 1, and a fixed eight-step schedule. The addon accepts `custom_sigmas` for
+image generation and forwards it to the engine's existing sampling API. Values
+must be finite, non-negative and strictly decreasing after conversion to float,
+with a final zero. The array overrides `scheduler` and `steps`; its length minus
+one is the effective step count. Omit it to retain normal scheduling.
+
+The [official Turbo configuration](https://huggingface.co/Qwen/Qwen-Image-2.1-Turbo/blob/main/model_index.json)
+contains eight sampling values. The native API also needs a terminal zero:
+
+```js
+const sampling = {
+  sampling_method: 'euler',
+  cfg_scale: 1,
+  steps: 8,
+  custom_sigmas: [1, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0]
+}
+```
+
+After rebuilding the addon, provide a compatible Turbo diffusion GGUF or
+safetensors file explicitly. The existing downloader supplies the base model
+and shared components; it does not download Turbo weights. The example reuses
+the Qwen-2.1 encoder, VAE and optional vision projector from `QWEN_MODELS_DIR`.
+
+```sh
+QWEN_TURBO=1 QWEN_TURBO_MODEL=/absolute/path/to/turbo.gguf \
+  npm run generate:qwen:text-to-image
+QWEN_TURBO=1 QWEN_TURBO_MODEL=/absolute/path/to/turbo.gguf \
+  npm run generate:qwen:edit -- /absolute/path/to/reference.png
+```
+
+Turbo mode fixes the schedule at eight steps and ignores `QWEN_STEPS`. Default
+output filenames gain a `-turbo` suffix. Other example overrides still apply.
+The default 512×512 size is a development smoke-test size; the official model
+examples use approximately 2K resolution. No engine or registry pin change is
+needed for the custom-sigma API.
+
+For output areas of 2048×2048 pixels or larger, the example enables VAE tiling
+with `vae_tile_size: 64`. When calling `run()` directly at those sizes, pass
+`vae_tiling: true` and `vae_tile_size: 64` as well. The native tile size is in
+latent units (64 corresponds to 1024 output pixels for Qwen-Image-2.1), not
+output pixels. Enabling tiling alone leaves the default tile size of 512, which
+still covers the entire 2K latent grid. Full-frame decoding at 2048×2048 hit
+the CUDA backend's `s02 <= uint32_t::max()` assertion on the validated stack;
+the smaller tiles avoid that path.
+
+### Measured Turbo validation
+
+Validated on 2026-10-28 on NVIDIA DGX Spark (GB10, Linux ARM64), with CUDA,
+eight CPU threads, flash attention, Euler sampling, CFG 1 and seed 42.
+The diffusion checkpoint was
+[`qwen-image-2.1-turbo-Q8_0.gguf`](https://huggingface.co/unsloth/Qwen-Image-2.1-Turbo-GGUF/blob/5d1f9f759ea877ae556cda88dbec958b62ad3809/qwen-image-2.1-turbo-Q8_0.gguf)
+from revision `5d1f9f759ea877ae556cda88dbec958b62ad3809`, SHA-256
+`399d2ddc3636f36456e2f5bfa57187da4e38721bc046430317f42a9eab5b1712`.
+The encoder, projector and VAE were the same pinned files as the downloader
+above; all four files were checksum-verified.
+
+The rebuilt addon used cached `stable-diffusion-cpp 2026-08-11#9` and
+`ggml 2026-08-11#5` libraries. This validates the addon with that native stack;
+the minimum dependency versions were not rebuilt for this run.
+
+| Public API operation at 512×512 | Request time |
+| --- | ---: |
+| Text-to-image | 5.15 s |
+| Single-reference color edit | 9.91 s |
+| Transparent generation | 4.56 s |
+| Transparent reference edit | 9.91 s |
+| Two-reference composition | 16.31 s |
+
+These are single smoke-test observations, excluding model load, with one model
+instance reused across requests. Every request reported eight completed
+denoising steps even with `steps: 30` and `scheduler: 'karras'`, confirming that
+the explicit schedule takes precedence. Missing terminal zero, duplicate sigmas
+and a JavaScript NaN entry were rejected; subsequent valid requests succeeded.
+
+All five PNGs were 512×512 RGBA. Visual inspection confirmed the red-to-blue
+teapot edit and the ordered two-teapot composition. Transparent generation and
+editing retained alpha values spanning 0–255, with near-transparent backgrounds;
+this is a smoke check, not a claim of pixel-exact cutout edges or parity with
+the official pipeline. Other Turbo quantizations and platforms remain untested.
+
+A separate 2048×2048 portrait request completed in 184.90 s with the same
+sampling settings and `vae_tile_size: 64`: eight denoising steps followed by
+nine VAE decode tiles. Model load took 2.89 s separately.
+
+The full native test binary passed 281 tests, including all five custom-sigma
+tests; 35 tests skipped because their other-model fixtures were absent.
+TypeScript compilation and lint passed. The JavaScript unit suite passed
+137 tests with 519 assertions using Bare 1.36.0. All 51 Node tests passed,
+including regression coverage for automatic VAE tiling in the 2K example.
+
+## Measured base-model validation
 
 Validated on one RTX 5090 (32 GB), CUDA 13.3, using physical GPU 0 only.
 All timings below use the pinned files above, 512×512, 30 Euler steps, CFG 6,

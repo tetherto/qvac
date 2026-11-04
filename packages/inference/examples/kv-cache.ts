@@ -23,10 +23,14 @@ try {
     modelConfig: { ctx_size: 2048 }
   })
 
-  console.log('▸ First turn (builds the cache):')
+  const systemHistory = [{ role: 'system', content: 'You are a helpful assistant. Be brief.' }]
+  await completion({ modelId, history: systemHistory, stream: false, kvCache: true, prefill: true })
+    .final
+
+  console.log('▸ First question (reuses the prepared system prompt):')
   const first = completion({
     modelId,
-    history: [{ role: 'user', content: 'What is the capital of France?' }],
+    history: [...systemHistory, { role: 'user', content: 'What is the capital of France?' }],
     stream: true,
     kvCache: true
   })
@@ -40,6 +44,7 @@ try {
   const second = completion({
     modelId,
     history: [
+      ...systemHistory,
       { role: 'user', content: 'What is the capital of France?' },
       { role: 'assistant', content: final1.cacheableAssistantContent ?? final1.contentText },
       { role: 'user', content: 'What about Germany?' }

@@ -26,6 +26,7 @@ on:
     types: [labeled, opened, synchronize]
     paths:
       - "packages/sdk/**"
+      - "packages/sdk-e2e/**"
       - "packages/inference/**"
       - "packages/test-suite/**"
 
@@ -238,7 +239,7 @@ jobs:
           # contract/models.json carries the model -> engine link the engine
           # relation resolves through; without it that relation is a no-op.
           sparse-checkout: |
-            packages/sdk/e2e
+            packages/sdk-e2e
             packages/sdk/contract
             packages/sdk/src/client/api
             packages/inference/src/registry.ts
@@ -274,7 +275,7 @@ jobs:
 
       - name: Compute impacted tests
         id: impacted
-        working-directory: packages/sdk/e2e
+        working-directory: packages/sdk-e2e
         env:
           ESBUILD_MODULE: ${{ runner.temp }}/mapper/node_modules/esbuild/lib/main.js
         run: >-

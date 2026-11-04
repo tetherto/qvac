@@ -8,7 +8,7 @@ on:
       - 'packages/inference/package.json'
       - 'packages/inference/src/schemas/**'
       - 'packages/sdk/src/worker/**'
-      - 'packages/sdk/e2e/conformance/**'
+      - 'packages/sdk-e2e/catalog/conformance/**'
       - 'packages/sdk/contract/**'
       - 'packages/sdk/package.json'
       - '.github/workflows/on-pr-sdk-kotlin-e2e.yml'

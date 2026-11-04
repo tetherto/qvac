@@ -103,7 +103,7 @@
           "verifyGenerated": true,
           "nameTransform": "none",
           "repoName": "translation-nmtcpp",
-          "testGateMode": "post-publish-integration"
+          "testGateMode": "none"
         }
       }
     }

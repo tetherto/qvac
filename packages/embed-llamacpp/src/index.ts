@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
-import fs = require("bare-fs");
 import path = require("bare-path");
 import QvacLogger = require("@qvac/logging");
 import { assessFit as assessFitImpl } from "./fit";
@@ -13,11 +12,12 @@ import {
 import {
   BertInterface,
   mapAddonEvent,
-  pickPrimaryGgufPath,
+  validateModelPath,
+  toBertJobInput,
   type Addon,
   type AddonConfigurationParams,
   type BertBinding,
-  type BertJobInput,
+  type EmbedRunInput,
   type GGMLConfig,
 } from "./addon";
 import { LayaDecisions, LayaInterface, mapLayaEvent } from "./laya";
@@ -29,8 +29,13 @@ export type {
   AddonConfigurationParams,
   RuntimeStats,
   Addon,
+  EmbedMediaPart,
+  EmbedInputPart,
+  EmbedMultimodalInput,
+  EmbedBatchInput,
+  EmbedRunInput,
 } from "./addon";
-export { BertInterface, pickPrimaryGgufPath } from "./addon";
+export { BertInterface, validateModelPath } from "./addon";
 export { LayaDecisions, LayaInterface, mapLayaEvent } from "./laya";
 export type {
   LayaConfig,
@@ -64,6 +69,7 @@ export type {
   EmbedFitDevice,
   EmbedFitRequest,
   EmbedFitResult,
+  EmbedFitStats,
   EmbedFitStatus
 } from "./fit";
 export type { QvacResponse };
@@ -73,7 +79,15 @@ type RunExclusive = <T>(fn: () => Promise<T>) => Promise<T>;
 const RUN_BUSY_ERROR_MESSAGE = "Cannot set new job: a job is already set or being processed";
 
 export interface GGMLBertArgs {
-  files: { model: string[] };
+  /**
+   * `model`: exactly one absolute disk path: a GGUF file or the first GGUF
+   * shard. Fabric reads the other shards from the same directory. Weight
+   * buffers, multiple paths and tensor-name files are not supported.
+   * `projectionModel`: optional projection model (mmproj) that lets `run()`
+   * embed images and audio, for multimodal embedding models such as
+   * EmbeddingGemma 2.
+   */
+  files: { model: [string]; projectionModel?: string };
   config?: GGMLConfig;
   logger?: QvacLogger | Console | null;
   opts?: { stats?: boolean };
@@ -87,25 +101,26 @@ export class GGMLBert {
   opts: { stats?: boolean };
   state: { configLoaded: boolean };
 
-  private readonly _files: string[];
+  private readonly _modelPath: string;
+  private readonly _projectionModelPath: string;
   private readonly _config: GGMLConfig;
   private readonly _job: JobHandler;
   private readonly _run: RunExclusive;
   private _hasActiveResponse: boolean;
 
   constructor({ files, config = {} as GGMLConfig, logger = null, opts = {} }: GGMLBertArgs) {
-    if (!files || !Array.isArray(files.model) || files.model.length === 0) {
-      throw new TypeError("files.model must be a non-empty array of absolute paths");
-    }
-    for (const [i, entry] of files.model.entries()) {
-      if (typeof entry !== "string" || entry.length === 0) {
-        throw new TypeError(`files.model[${i}] must be an absolute path string`);
+    this._modelPath = validateModelPath(files?.model);
+    if (files.projectionModel !== undefined) {
+      if (typeof files.projectionModel !== "string" || files.projectionModel.length === 0) {
+        throw new TypeError("files.projectionModel must be an absolute path string");
       }
-      if (!path.isAbsolute(entry)) {
-        throw new TypeError(`files.model[${i}] must be an absolute path (got: ${entry})`);
+      if (!path.isAbsolute(files.projectionModel)) {
+        throw new TypeError(
+          `files.projectionModel must be an absolute path (got: ${files.projectionModel})`,
+        );
       }
     }
-    this._files = files.model;
+    this._projectionModelPath = files.projectionModel ?? "";
     this._config = config;
     this.logger = new QvacLogger(logger as QvacLogger.LoggerInterface);
     this.opts = opts;
@@ -127,19 +142,16 @@ export class GGMLBert {
 
   private async _load(): Promise<void> {
     this.logger.info("Starting model load");
-    const primaryGgufPath = pickPrimaryGgufPath(this._files);
     const configurationParams: AddonConfigurationParams = {
-      path: primaryGgufPath,
+      path: this._modelPath,
       config: this._config,
+      projectionPath: this._projectionModelPath,
     };
 
     this.logger.info("Creating addon with configuration:", configurationParams);
 
     try {
       this.addon = this._createAddon(configurationParams);
-      if (this._files.length > 1) {
-        await this._streamShards();
-      }
       this.logger.info("Activating addon");
       await this.addon.activate();
     } catch (loadError) {
@@ -154,23 +166,15 @@ export class GGMLBert {
     this.logger.info("Model load completed successfully");
   }
 
-  private async _streamShards(): Promise<void> {
-    for (const filePath of this._files) {
-      const filename = path.basename(filePath);
-      const stream = fs.createReadStream(filePath);
-      for await (const chunk of stream) {
-        await this.addon!.loadWeights({ filename, chunk, completed: false });
-      }
-      await this.addon!.loadWeights({ filename, chunk: null, completed: true });
-      this.logger.info(`Streamed weights for ${filename}`);
-    }
-  }
-
-  async run(input: string | string[]): Promise<QvacResponse> {
+  /**
+   * Embed text, or text mixed with images and audio when the model was given
+   * `files.projectionModel`. See {@link EmbedRunInput} for the input shapes.
+   */
+  async run(input: EmbedRunInput): Promise<QvacResponse> {
     return this._run(() => this._runInternal(input));
   }
 
-  private async _runInternal(text: string | string[]): Promise<QvacResponse> {
+  private async _runInternal(input: EmbedRunInput): Promise<QvacResponse> {
     if (!this.addon) {
       throw new Error("Addon not initialized. Call load() first.");
     }
@@ -178,11 +182,17 @@ export class GGMLBert {
       throw new Error(RUN_BUSY_ERROR_MESSAGE);
     }
 
-    this.logger.info("Starting inference embeddings for text:", text);
-    // Array input → type: 'sequences' (batched pass); string input → type: 'text'.
-    const inputData: BertJobInput = Array.isArray(text)
-      ? { type: "sequences", input: text }
-      : { type: "text", input: text };
+    const inputData = toBertJobInput(input);
+    if (inputData.type === "multimodal") {
+      if (!this._projectionModelPath) {
+        throw new TypeError("media input needs files.projectionModel");
+      }
+      this.logger.info(
+        `Starting inference embeddings for ${inputData.input?.length ?? 0} multimodal input(s)`,
+      );
+    } else {
+      this.logger.info("Starting inference embeddings for text:", input);
+    }
 
     const response = this._job.start();
 
@@ -290,7 +300,7 @@ export default GGMLBert;
 
 const cjsExports = GGMLBert as typeof GGMLBert & {
   default?: typeof GGMLBert;
-  pickPrimaryGgufPath?: typeof pickPrimaryGgufPath;
+  validateModelPath?: typeof validateModelPath;
   GGMLBert?: typeof GGMLBert;
   BertInterface?: typeof BertInterface;
   LayaDecisions?: typeof LayaDecisions;
@@ -302,7 +312,7 @@ const cjsExports = GGMLBert as typeof GGMLBert & {
   assessFit?: typeof assessFitImpl;
 };
 cjsExports.default = GGMLBert;
-cjsExports.pickPrimaryGgufPath = pickPrimaryGgufPath;
+cjsExports.validateModelPath = validateModelPath;
 cjsExports.GGMLBert = GGMLBert;
 cjsExports.BertInterface = BertInterface;
 cjsExports.LayaDecisions = LayaDecisions;
