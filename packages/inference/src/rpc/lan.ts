@@ -397,8 +397,9 @@ export function createLanDiscovery(
         }
         await start()
       } catch (error) {
-        if (!(error instanceof LanSelectionError)) throw error
-        await suspend(error)
+        if (!options.host && !(error instanceof LanSelectionError)) throw error
+        // Advertisement failure stays local; shared cleanup failures still reject.
+        await suspend(error as Error)
       }
     },
     async close() {
