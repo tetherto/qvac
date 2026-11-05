@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Pocket GPU selection and metadata-only memory preflight with an optional byte budget.
+- Explicit native backend/device selection, opt-in WebGPU builds and stable accelerator stats.
+- Independent MOSS text/audio sampling and configurable context/generation budgets.
+- Parler decoder Core ML, compute-policy and strict/fallback controls.
+- Supertonic precision, environment, in-memory voice tensors and callable warm-up.
+- CosyVoice3 greedy decoding, forced token trajectories and owned speech-token output.
+
 - Explicit LavaSR Core ML models and compute policies in the enhancer and
   denoiser options.
 - Optional Chatterbox Turbo and Multilingual Core ML sidecars on Apple
@@ -29,9 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Update the shared `speech-cpp` native dependency to `2026-10-30`
+- Update the shared `speech-cpp` native dependency to `2026-10-29`
   ([#5420](https://github.com/tetherto/qvac/pull/5420),
   [#5447](https://github.com/tetherto/qvac/pull/5447)).
+- Update the shared `speech-cpp` native dependency to `2026-11-03`
+  ([registry #474](https://github.com/tetherto/qvac-registry-vcpkg/pull/474)).
 - `assessFit` names the device by its ggml device name (`CPU`, `CUDA0`,
   `MTL0`, `GPUOpenCL`), counts Android's OpenCL GPU as sharing host memory,
   and gives a device that reports no memory of its own the host's free and

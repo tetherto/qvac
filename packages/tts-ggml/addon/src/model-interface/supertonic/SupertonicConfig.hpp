@@ -1,7 +1,9 @@
 #pragma once
 
+#include <map>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <tts-cpp/lavasr/coreml.h>
 
@@ -16,6 +18,14 @@ struct SupertonicConfig {
    * engine checks the tensor sizes against the model at construction.
    */
   std::string voiceJsonPath;
+  std::vector<float> voiceStyleTtl;
+  std::vector<float> voiceStyleDp;
+  std::string precision;
+  std::optional<int> f16Attn;
+  std::optional<int> f16Weights;
+  std::vector<std::string> f16WeightsDenyList;
+  std::optional<int> kvAttnType;
+  std::map<std::string, std::string> vulkanEnvOverrides;
   std::string language = "en";
   std::optional<int> steps;
   /** Exact rate multiplier. Mutually exclusive with `pace` (engine rejects). */
@@ -50,6 +60,7 @@ struct SupertonicConfig {
    */
   std::optional<bool> useGpu;
   std::string noiseNpyPath;
+  std::string backend;
   std::string backendsDir;
   std::string openclCacheDir;
 
