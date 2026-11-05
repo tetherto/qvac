@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+#include <inference-addon-cpp/Errors.hpp>
 
 #include "model-interface/GenerationParamsApply.hpp"
 #include "utils/ChatTemplateUtils.hpp"
@@ -221,6 +222,22 @@ TEST(TemplateDerivedSamplingTest, ToolChoiceDoesNotCountAsSamplerOverride) {
   EXPECT_FALSE(overrides.hasOverrides())
       << "tool_choice is a render override; it must not force a no-op "
          "common_sampler_init in applyGenerationParamsToContext";
+}
+
+TEST(
+    TemplateDerivedSamplingTest,
+    ParallelToolCallsDoesNotCountAsSamplerOverride) {
+  GenerationParams overrides;
+  overrides.parallel_tool_calls = false;
+  EXPECT_FALSE(overrides.hasOverrides())
+      << "parallel_tool_calls is a render override, like tool_choice";
+}
+
+TEST(TemplateDerivedSamplingTest, ParallelToolCallsReachesRenderOverrides) {
+  GenerationParams overrides;
+  EXPECT_FALSE(renderOverridesFrom(overrides).parallelToolCalls.has_value());
+  overrides.parallel_tool_calls = false;
+  EXPECT_EQ(renderOverridesFrom(overrides).parallelToolCalls, false);
 }
 
 TEST(TemplateDerivedSamplingTest, OutputFormatGrammarSuppressesToolGrammar) {
@@ -504,15 +521,13 @@ TEST(
 
 // Regression: the reasoning-budget markers and the reasoning *detector* must
 // be built from the same source. `selectReasoningTagSource`, which drives
-// detection and so EOS-inside-reasoning substitution, has always fallen back
+// detection, has always fallen back
 // to the model-family table when the template exposes no thinking tags. The
 // budget used to read the template alone and therefore tokenised nothing, so
 // fabric built no reasoning-budget sampler (`common/sampling.cpp` needs both
 // marker lists non-empty). `grammar_should_apply` then returns true for the
 // whole request, which arms the lazy tool grammar *inside* `<think>` — the one
-// thing the budget sampler is there to prevent — and makes the substitution
-// accept in both contexts feed the grammar the close tag instead of skipping
-// it, where a triggered grammar throws.
+// thing the budget sampler is there to prevent.
 TEST(TemplateDerivedSamplingTest, ReasoningBudgetFallsBackToModelFamilyTags) {
   common_params params = paramsWithoutReasoningBudget();
   // toolRender() carries no thinking tags at all: this is the tagless
@@ -628,6 +643,40 @@ TEST(GenerationParamsApplyTest, InstallingASchemaClearsToolGrammarCompanions) {
   EXPECT_FALSE(sampling.grammar_lazy);
   EXPECT_TRUE(sampling.grammar_triggers.empty());
   EXPECT_TRUE(sampling.preserved_tokens.empty());
+}
+
+// fabric's schema-to-grammar conversion recurses per level, so a schema deep
+// enough to overflow a worker thread's stack is rejected before it runs.
+TEST(GenerationParamsApplyTest, DeeplyNestedSchemaIsRejected) {
+  // A schema whose objects nest @p depth levels.
+  const auto nestedSchema = [](int depth) {
+    std::string schema;
+    for (int i = 1; i < depth; ++i) {
+      schema += R"({"type":"array","items":)";
+    }
+    return schema + R"({"type":"string"})" + std::string(depth - 1, '}');
+  };
+  int nPredict = -1;
+
+  common_params_sampling accepted;
+  GenerationParams atLimit;
+  atLimit.json_schema = nestedSchema(128);
+  applyGenerationOverridesToSampling(accepted, nPredict, atLimit);
+  EXPECT_EQ(accepted.grammar.type, COMMON_GRAMMAR_TYPE_OUTPUT_FORMAT);
+
+  for (const int depth : {129, 2001}) {
+    common_params_sampling sampling;
+    GenerationParams overrides;
+    overrides.json_schema = nestedSchema(depth);
+    try {
+      applyGenerationOverridesToSampling(sampling, nPredict, overrides);
+      ADD_FAILURE() << "accepted a schema nested " << depth << " levels";
+    } catch (const qvac_errors::StatusError& e) {
+      EXPECT_NE(e.codeString().find("InvalidArgument"), std::string::npos)
+          << e.codeString() << " " << e.what();
+    }
+    EXPECT_EQ(sampling.grammar.type, COMMON_GRAMMAR_TYPE_NONE);
+  }
 }
 
 // The same clear applies to a per-request `grammar`, which is USER-typed and

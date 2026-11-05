@@ -278,21 +278,22 @@ The response comes back as a single JSON payload with the model's answer. Add `"
 | **Multimodal** | LLM inference over text, images, and other media in one context. |
 | **Image generation** | Text-to-image and image-to-image generation via a Diffusion backend. |
 | **Video generation** | Text-to-video and image-to-video generation via a Diffusion backend. |
-| **Music generation** | Generate music from text, lyrics, and musical controls via [ACE-Step](https://github.com/ace-step/ACE-Step-1.5) or [MiniMax-Music3](https://huggingface.co/MiniMaxAI/MiniMax-Music3) (desktop). |
-| **Transcription** | Speech-to-text via a [Whisper backend](https://github.com/tetherto/qvac/tree/main/packages/asr-ggml) or [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3). |
+| **Music generation** | Generate music from text, lyrics, and musical controls via [ACE-Step](https://github.com/ace-step/ACE-Step-1.5) or [MiniMax-Music3](https://huggingface.co/MiniMaxAI/MiniMax-Music3) (desktop). Native dependency versions are declared in the [AudioGen manifest](packages/audiogen-ggml/vcpkg.json). |
+| **Transcription** | Speech-to-text via a [Whisper backend](https://github.com/tetherto/qvac/tree/main/packages/asr-ggml), [NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3), [TranscribePsy](https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-gguf), or [MOSS-Transcribe-Diarize](https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize) (speaker-labelled transcripts with hotwords, fused CPU encoder attention and metadata-only memory fit via `assessFit`). |
+| **Speaker diarization** | Whisper tinydiarize speaker turns, four-speaker Sortformer, up to eight-speaker [Nemotron 3 Diarization](https://huggingface.co/nvidia/Nemotron-3-Diarization), [Parakeet text per speaker turn](packages/asr-ggml/README.md#parakeet--text-per-speaker-turn) with a separate diarizer, and speaker-labelled MOSS-Transcribe-Diarize transcripts through [`@qvac/asr-ggml`](packages/asr-ggml/README.md). The addon exposes native Parakeet backend selection and streaming token IDs, finality and event timing, delivering transcript chunks before their end-of-turn boundary. |
 | **Audio decoding** | [FFmpeg audio decoder](packages/decoder-audio/README.md) with streaming PCM output and a default 64 MiB decoded-output limit. |
-| **Text-to-Speech** | Speech synthesis via a GGML backend. |
+| **Text-to-Speech** | Speech synthesis with [selective MOSS Delay text projection on Metal and single-reference MOSS-TTSD preparation](packages/tts-ggml/README.md#moss), [incremental Audio8 PCM streaming](packages/tts-ggml/README.md#audio8), speech-to-speech replies and text-to-sound-effects generation via a GGML backend, with [memory preflight for MOSS-SoundEffect](packages/tts-ggml/README.md#moss-soundeffect-fit), [LavaSR denoising on Android Mali GPUs](packages/tts-ggml/README.md#denoiser) with [explicit Core ML denoiser/enhancer options on Apple](packages/tts-ggml/README.md#lavasr-core-ml), and [Pocket TTS](packages/tts-ggml/README.md#pocket-tts) (CPU, Metal, CUDA, Vulkan and OpenCL through the addon). [Native engine controls](packages/tts-ggml/README.md#native-engine-controls) expose MOSS sampling/budgets, Supertonic precision/warm-up, Parler Core ML selection and CosyVoice token replay. Exact native dependency versions are declared in the [package manifest](packages/tts-ggml/vcpkg.json). [CosyVoice3 Core ML sidecars](packages/tts-ggml/README.md#cosyvoice3-core-ml-sidecars) are optional on Apple platforms. Re-export existing CosyVoice3 LM sidecars after upgrading. |
 | **Translation** | Neural machine translation, via Fabric LLM and [Bergamot](https://browser.mt). |
 | **BCI** | Brain–computer interface transcription via [a Whisper backend](https://github.com/tetherto/qvac/tree/main/packages/bci-whispercpp). |
 | **VLA** | Vision-language-action for robot control via [a GGML backend](https://github.com/tetherto/qvac/tree/main/packages/vla-ggml). |
 | **OCR** | Extract text from images via ONNX Runtime or GGML backends. See [OCR GPU selection (`main-gpu`)](packages/ocr-ggml/README.md#shared-gpu-selection-main-gpu) to select a GGML GPU by registry index or device class. |
-| **Image classification** | Classify images into labels with confidence scores via [a GGML backend](https://github.com/tetherto/qvac/tree/main/packages/classification-ggml). |
+| **Image classification and embeddings** | Classify images with MobileNet or generate MegaLoc descriptors for image retrieval via [a GGML/Fabric backend](https://github.com/tetherto/qvac/tree/main/packages/classification-ggml). |
 
 ## Peer-to-peer
 
 QVAC's built-in P2P capabilities let you build unstoppable internet systems without depending on centralized infrastructure:
 
-- **Fetch models:** download AI models directly from peers through a distributed model registry, removing the need for centralized model hosting and distribution.
+- **Fetch models:** download AI models directly from peers through a distributed model registry, removing the need for centralized model hosting and distribution. The registry also serves weightless descriptions of models, their settings and tensor list without the weights, so whether a model fits in memory can be assessed before it is downloaded.
 - **Blind relays:** route traffic through relay peers when devices cannot connect directly across NATs and firewalls, keeping the network connected without centralized infrastructure.
 
 ## Resources

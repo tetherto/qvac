@@ -28,7 +28,7 @@ and iOS. `qvac doctor` reports both, in two distinct sections of its output:
 
 | Requirement                                 | Notes                                                                                                                                      |
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Node.js `>= 18.0.0`                         | Node 18 is end-of-life; prefer `>= 20`. Matches `engines.node`.                                                                            |
+| Node.js `^22.21.0 \|\| >=24.9.0`            | Bundling (`qvac bundle sdk`) needs Node 22.21+ on the 22 line or 24.9+. Matches `engines.node`.                                            |
 | Supported CLI host                          | `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `win32-x64`. The `qvac` CLI cannot run on mobile; those are deploy targets only. |
 | Total RAM `>= 2 GB` (recommended `>= 4 GB`) | Below 4 GB, most LLMs will fail to load.                                                                                                   |
 
@@ -66,7 +66,6 @@ they are missing but does not fail.
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | `ffmpeg`                               | Microphone capture, transcription examples, and the built-in audio decoder. Install from [ffmpeg.org](https://ffmpeg.org/download.html). |
 | [Bare](https://bare.pears.com) runtime | Running the SDK under Bare directly (Node and Bun are supported out of the box).                                                         |
-| [Bun](https://bun.sh)                  | Building the SDK from source or running the monorepo development workflow.                                                               |
 
 ## Project
 

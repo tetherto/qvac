@@ -51,10 +51,10 @@ function createMockedParlerModel({
 test('Parler: explicit engine option routes to parler', (t) => {
   const model = createMockedParlerModel()
   t.is(model.getEngineType(), TTSGgml.ENGINE_PARLER, 'engine: parler detected')
-  t.is(model._parlerModelPath, './models/parler-mini-v1-q8_0.gguf')
-  t.absent(model._t3ModelPath, 'no t3 path on parler')
-  t.absent(model._s3genModelPath, 'no s3gen path on parler')
-  t.absent(model._supertonicModelPath, 'no supertonic path on parler')
+  t.is(model._setup.paths.parlerModelPath, './models/parler-mini-v1-q8_0.gguf')
+  t.absent(model._setup.paths.t3ModelPath, 'no t3 path on parler')
+  t.absent(model._setup.paths.s3genModelPath, 'no s3gen path on parler')
+  t.absent(model._setup.paths.supertonicModelPath, 'no supertonic path on parler')
 })
 
 test('Parler: parlerModel file path alone routes to parler engine', (t) => {
@@ -65,7 +65,7 @@ test('Parler: parlerModel file path alone routes to parler engine', (t) => {
 test('Parler: invalid engine error message lists parler', (t) => {
   t.exception(
     () => new TTSGgml({ engine: 'parakeet' }),
-    /'chatterbox', 'supertonic', 'cosyvoice3', 'parler', 'audio8', 'moss' or 'pocket'/,
+    /'chatterbox', 'supertonic', 'cosyvoice3', 'parler', 'audio8', 'moss', 'moss-sfx', 'moss-speech' or 'pocket'/,
     'engine validation message includes parler'
   )
 })
@@ -84,7 +84,7 @@ test('Parler: modelDir auto-detect ranks variant then quant tier', async (t) => 
     const model = new TTSGgml({ files: { modelDir: tmpRoot } })
     t.is(model.getEngineType(), TTSGgml.ENGINE_PARLER, 'modelDir with parler GGUFs detected')
     t.is(
-      model._parlerModelPath,
+      model._setup.paths.parlerModelPath,
       path.join(tmpRoot, 'parler-mini-v1-q8_0.gguf'),
       'mini beats indic; q8_0 beats f16; bare parler.gguf ignored'
     )
@@ -421,5 +421,50 @@ test('Parler: reload merges description/template + sampling knobs', async (t) =>
   // reload can switch GPU intent (parler is no longer CPU-only).
   await model.reload({ useGPU: true })
   t.is(model._buildTtsParams().useGPU, true, 'reload({useGPU:true}) forwards useGPU')
+  await model.unload()
+})
+
+test('Parler Core ML: load and reload forward complete config to the native interface', async (t) => {
+  const model = createMockedParlerModel({
+    extra: { coremlDecoder: true, coremlStrict: true, coremlComputeUnits: 'cpu_and_ane' }
+  })
+  const configs = []
+  model._createAddon = (params, outputCb) => {
+    configs.push({ ...params })
+    return new TTSInterface(new MockedBinding(), params, outputCb)
+  }
+  await model.load()
+  t.is(configs[0].coremlDecoder, true)
+  t.is(configs[0].coremlStrict, true)
+  t.is(configs[0].coremlComputeUnits, 'cpu_and_ane')
+  await model.reload({ coremlDecoder: false, coremlStrict: false })
+  t.is(configs[1].coremlDecoder, false)
+  t.is(configs[1].coremlStrict, false)
+  t.is(configs[1].coremlComputeUnits, 'cpu_and_ane')
+  await t.exception(model.reload({ coremlComputeUnits: 'ane' }), /coremlComputeUnits/)
+  t.is(configs.length, 2, 'invalid reload never recreates the addon')
+  const response = await model.run({ input: 'Still loaded.' })
+  await response.await()
+  await model.unload()
+})
+
+test('Parler Core ML: every job API rejects load-only options before dispatch', async (t) => {
+  const binding = new RecordingBinding()
+  const model = createMockedParlerModel({ binding })
+  await model.load()
+  for (const fields of [
+    { coremlDecoder: false },
+    { coremlStrict: false },
+    { coremlComputeUnits: 'cpu_only' }
+  ]) {
+    await t.exception(model.run({ input: 'x', ...fields }), /constructor or reload/)
+    await t.exception(
+      model.run({ input: 'x', streamOutput: true, ...fields }),
+      /constructor or reload/
+    )
+    await t.exception(model.runStream('x', fields), /constructor or reload/)
+    await t.exception(model.runStreaming(['x'], fields), /constructor or reload/)
+  }
+  t.is(binding.jobs.length, 0)
   await model.unload()
 })

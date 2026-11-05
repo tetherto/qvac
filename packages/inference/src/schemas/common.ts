@@ -1,3 +1,11 @@
+import {
+  startRpcServerRequestSchema,
+  startRpcServerResponseSchema,
+  stopRpcServerRequestSchema,
+  stopRpcServerResponseSchema,
+  discoverRpcServersRequestSchema,
+  discoverRpcServersResponseSchema
+} from '@/schemas/rpc-server'
 import { z } from 'zod'
 import { perCallProfilingSchema } from '@/schemas/profiling'
 import { heartbeatRequestSchema, heartbeatResponseSchema } from '@/schemas/heartbeat'
@@ -102,6 +110,8 @@ import {
   stateRequestSchema,
   stateResponseSchema
 } from '@/schemas/lifecycle'
+import { decideRequestSchema, decideResponseSchema } from '@/schemas/decision'
+import { rerankRequestSchema, rerankResponseSchema } from '@/schemas/rerank'
 import { classifyRequestSchema, classifyResponseSchema } from '@/schemas/classification'
 import {
   audioEditStreamRequestSchema,
@@ -116,6 +126,9 @@ export const requestSchema = z.union([
   audioGenStreamRequestSchema,
   audioEditStreamRequestSchema,
   audioUnderstandRequestSchema,
+  startRpcServerRequestSchema,
+  stopRpcServerRequestSchema,
+  discoverRpcServersRequestSchema,
   heartbeatRequestSchema,
   loadModelRequestSchema,
   downloadAssetRequestSchema,
@@ -155,13 +168,18 @@ export const requestSchema = z.union([
   suspendRequestSchema,
   resumeRequestSchema,
   stateRequestSchema,
-  classifyRequestSchema
+  classifyRequestSchema,
+  decideRequestSchema,
+  rerankRequestSchema
 ])
 
 export const responseSchema = z.discriminatedUnion('type', [
   audioGenStreamResponseSchema,
   audioEditStreamResponseSchema,
   audioUnderstandResponseSchema,
+  startRpcServerResponseSchema,
+  stopRpcServerResponseSchema,
+  discoverRpcServersResponseSchema,
   heartbeatResponseSchema,
   loadModelResponseSchema,
   downloadAssetResponseSchema,
@@ -205,8 +223,17 @@ export const responseSchema = z.discriminatedUnion('type', [
   suspendResponseSchema,
   resumeResponseSchema,
   stateResponseSchema,
-  classifyResponseSchema
+  classifyResponseSchema,
+  decideResponseSchema,
+  rerankResponseSchema
 ])
+
+/** Structural `AbortSignal`: fits the global one and bare-abort-controller's. */
+export interface AbortSignalLike {
+  readonly aborted: boolean
+  addEventListener(type: 'abort', listener: () => void, options?: { once?: boolean }): void
+  removeEventListener(type: 'abort', listener: () => void): void
+}
 
 export const rpcOptionsSchema = z.object({
   timeout: z
@@ -233,3 +260,6 @@ export const rpcOptionsSchema = z.object({
 export type Request = z.input<typeof requestSchema>
 export type Response = z.infer<typeof responseSchema>
 export type RPCOptions = z.infer<typeof rpcOptionsSchema>
+
+/** `signal` ends only streams with `endsOnAbort` (the log stream); stop inference with `cancel`. */
+export type AbortableRPCOptions = RPCOptions & { signal?: AbortSignalLike }

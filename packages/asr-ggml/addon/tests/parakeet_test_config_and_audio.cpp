@@ -42,6 +42,19 @@ TEST(ParakeetStreamingConfig, DefaultsUseNamedConstants) {
       ParakeetConfig::DEFAULT_STREAMING_SPK_CACHE_UPDATE_PERIOD);
 }
 
+TEST(ParakeetStreamingConfig, DistinguishesOmittedAndExplicitLeftContext) {
+  ParakeetConfig omitted;
+  ParakeetConfig explicitContext;
+  explicitContext.streamingChunkLeftContextMs = 80;
+  EXPECT_EQ(
+      omitted.streamingChunkLeftContextMs,
+      ParakeetConfig::DEFAULT_STREAMING_CHUNK_LEFT_CONTEXT_MS);
+  EXPECT_NE(
+      omitted.streamingChunkLeftContextMs,
+      explicitContext.streamingChunkLeftContextMs);
+  EXPECT_EQ(explicitContext.streamingChunkLeftContextMs, 80);
+}
+
 TEST(ParakeetStreamingGetters, ResolveDefaultsByDetectedModelType) {
   ParakeetConfig c = makeCpuTestConfig();
   c.streamingChunkMs = 0;

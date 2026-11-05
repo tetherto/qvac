@@ -85,3 +85,13 @@ test('getFirstShardPath: normalizes shard groups with a non-gguf extension', asy
     '/models/weights-00001-of-00006.bin'
   )
 })
+
+test('getModelShardFiles: lists the tensors file then every shard in order', async (t) => {
+  const { getModelShardFiles } = await import('@/utils/shard-utils')
+  t.alike(getModelShardFiles('/models/model.gguf'), ['/models/model.gguf'])
+  t.alike(getModelShardFiles('/models/model-00002-of-00002.gguf'), [
+    '/models/model.tensors.txt',
+    '/models/model-00001-of-00002.gguf',
+    '/models/model-00002-of-00002.gguf'
+  ])
+})

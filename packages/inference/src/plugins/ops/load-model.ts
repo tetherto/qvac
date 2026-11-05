@@ -1,3 +1,5 @@
+import type { AbortSignal } from 'bare-abort-controller'
+
 import {
   loadModelServerParamsSchema,
   normalizeModelType,
@@ -18,10 +20,15 @@ import {
   PluginNotFoundError,
   ModelFileNotFoundError,
   ModelFileNotFoundInDirError,
-  ModelFileLocateFailedError
+  ModelFileLocateFailedError,
+  ModelFitRefusedError,
+  InferenceCancelledError
 } from '@/errors/index'
 import { ensureAddonLoggerReady, getPlugin } from '@/plugins/index'
-import { runAdvisoryFitCheck } from '@/resources/model-fit/native-probe/advisory-fit'
+import { runAdvisoryFitCheck } from '@/model-fit/load-check'
+import { refusesLoad, resolveModelFitPolicy, runsProbe } from '@/schemas/model-fit-policy'
+import { getConfig } from '@/runtime/state'
+import { resolveToolDialect } from '@/utils/tools/dialect'
 import { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import { getEngineLogger } from '@/logging/index'
@@ -32,9 +39,14 @@ export interface LoadModelResult {
   timing?: LoadTimingStats
 }
 
+export interface LoadModelOptions {
+  collectTiming?: boolean
+  request?: { signal: AbortSignal; requestId: string }
+}
+
 export async function loadModel(
   params: LoadModelServerParams,
-  options?: { collectTiming?: boolean }
+  options?: LoadModelOptions
 ): Promise<LoadModelResult> {
   const {
     modelId,
@@ -43,7 +55,7 @@ export async function loadModel(
     artifacts,
     modelName
   } = loadModelServerParamsSchema.parse(params)
-  const { modelConfig, modelType: rawModelType } = modelOptions
+  const { modelConfig, modelType: rawModelType, modelFitPolicy } = modelOptions
 
   // Normalize modelType to canonical form (handles aliases and custom types)
   const modelType = normalizeModelType(rawModelType)
@@ -94,20 +106,32 @@ export async function loadModel(
     }
   }
 
-  // Advisory: every outcome — including a projected insufficiency — continues
-  // to the ordinary load below. Runs after config resolution and path
-  // validation so it sees the same state the real load uses, and before
-  // `createModel()` so it never competes with the native load for device
-  // memory. The outcome is stored on the registry entry and returned by
-  // `getLoadedModelInfo` as `fitProbe`.
-  const fitProbe = await runAdvisoryFitCheck({
-    modelId,
-    modelType: modelType as CanonicalModelType,
-    modelPath,
-    modelConfig,
-    artifacts,
-    isShardedModel
-  })
+  // Runs after config resolution and path validation so it sees the same state
+  // the real load uses, and before `createModel()` so it never competes with
+  // the native load for device memory.
+  const fitPolicy = resolveModelFitPolicy(modelFitPolicy, getConfig().modelFitPolicy)
+  const request = options?.request
+  const fitProbe = runsProbe(fitPolicy)
+    ? await runAdvisoryFitCheck(
+        {
+          modelId,
+          modelType: modelType as CanonicalModelType,
+          modelPath,
+          modelConfig,
+          artifacts,
+          isShardedModel
+        },
+        request !== undefined ? { signal: request.signal } : {}
+      )
+    : undefined
+
+  if (request?.signal.aborted === true) {
+    throw new InferenceCancelledError(request.requestId)
+  }
+
+  if (refusesLoad(fitPolicy, fitProbe?.verdict)) {
+    throw new ModelFitRefusedError(modelType, fitProbe!.reason, fitProbe!.message)
+  }
 
   // Load the addon's logger before the addon itself runs. Plugins that defer
   // their logging module do so to keep registration free of native loads, so
@@ -134,13 +158,19 @@ export async function loadModel(
 
     logger.info(`${modelType} model ${modelId} loaded`)
 
+    const toolDialect =
+      'completionStream' in plugin.handlers
+        ? await resolveToolDialect(modelName, modelPath)
+        : undefined
+
     registerModel(modelId, {
       model: result.model,
       path: modelPath,
       config: modelConfig,
       modelType: modelType as CanonicalModelType,
       name: modelName,
-      fitProbe
+      fitProbe,
+      toolDialect
     })
 
     const loadResult: LoadModelResult =

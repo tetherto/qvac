@@ -1,0 +1,3 @@
+# Generated from catalog/resource-table.ts and catalog/platform-policy.ts by emit-resource-table.mjs,
+# and checked against them by check:resource-table -- the generator owns this formatting, not prettier.
+catalog/resources/*.json

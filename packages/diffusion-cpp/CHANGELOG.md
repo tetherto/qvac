@@ -1,5 +1,275 @@
 # Changelog
 
+## [Unreleased]
+
+## [0.34.0] - 2026-11-04
+
+### Features
+
+- Windows loads the Vulkan backend at runtime from
+  `qvac-diffusion-ggml-vulkan.dll`, shipped next to the addon, as Android and
+  Linux already do. The addon no longer imports `vulkan-1.dll`, so it loads on
+  a Windows host without a Vulkan runtime
+  ([#5382](https://github.com/tetherto/qvac/pull/5382)).
+- Requires ggml `2026-08-11#4` from the QVAC registry.
+
+## [0.33.0] - 2026-10-30
+
+### Breaking
+
+- `assessFit` returns `{ status, devices, stats }`: the GPU devices the
+  placement uses, then the host. `status` is `fits`, `does-not-fit` or
+  `unknown`; a placement the fitter had to change is `does-not-fit`. An
+  invalid request or a load the engine cannot measure rejects
+  ([#5477](https://github.com/tetherto/qvac/pull/5477)).
+
+### CUDA Support
+
+- Add CUDA acceleration on Linux ARM64 and x64, including DGX Spark and RTX 5090.
+- Automatically fall back to Vulkan or CPU when CUDA is unavailable.
+- Add a FLUX.2 Klein 4B CUDA example and setup instructions.
+
+## [0.32.1] - 2026-10-29
+
+This patch moves the addon to stable-diffusion-cpp `2026-08-11#8`. It retains
+the existing model support and JavaScript API.
+
+### Bug Fixes
+
+Memory fitting plans on the integrated GPUs when there is no discrete GPU,
+caps the free memory of a GPU that shares host memory at the host's, and on an
+iOS device plans against the app's own memory limit.
+
+The addon requires stable-diffusion-cpp `2026-08-11#8` from the QVAC registry
+while retaining the existing registry baseline
+([#5446](https://github.com/tetherto/qvac/pull/5446)).
+
+## [0.32.0] - 2026-10-29
+
+### Features
+
+- Add optional `GenerationParams.custom_sigmas` for explicit image sampling
+  schedules. Values must be finite, non-negative, strictly decreasing at float
+  precision, and end in zero. The schedule overrides `scheduler` and `steps`;
+  its length minus one determines the step count.
+- Add a Qwen-Image-2.1-Turbo recipe using Euler, CFG 1, and the model's fixed
+  eight-step schedule. Set `QWEN_TURBO=1` and provide `QWEN_TURBO_MODEL` to use
+  Turbo weights with the existing Qwen examples and shared components.
+
+### Fixes
+
+- Enable VAE tiling with `vae_tile_size: 64` in the Qwen example for output
+  areas of at least 2048×2048 pixels, avoiding the full-frame CUDA decode
+  assertion observed during 2K validation. Tile sizes use native latent units.
+
+Existing requests without `custom_sigmas` retain ordinary sampling behavior.
+
+### Pull Requests
+
+- [#5415](https://github.com/tetherto/qvac/pull/5415) - QVAC-27530 feat: support Qwen-Image-2.1-Turbo sampling.
+
+## [0.31.0] - 2026-10-21
+
+This release adds Qwen-Image-2.1 generation and reference editing, including
+RGBA images. It also ships the platform packaging changes and native build
+and validation improvements merged since 0.30.0.
+
+## Features
+
+Qwen-Image-2.1 supports text-to-image generation, single-reference editing,
+and ordered multi-reference composition through `ImgStableDiffusion`.
+The optional `files.llmVision` field supplies the vision projector for loading
+and fit estimation. Reference inputs and generated PNGs retain alpha when
+the loaded model supports RGBA; existing models keep their RGB decoding path.
+Five runnable examples cover generation, editing, composition, transparent
+generation, and background removal, with a hash-verified model downloader.
+
+The addon now requires `stable-diffusion-cpp >= 2026-08-11#7` from the QVAC
+registry, incorporating the merged native Qwen integration without a local
+port overlay.
+
+## Breaking Changes
+
+The package now loads its native binary from a version-locked platform
+package through `#host-addon`. Desktop installs select the host's binary
+instead of downloading every platform. Source builds must run
+`npm run link:platform`, which is included in the native build scripts.
+The meta package is no longer itself an addon; consumers loading a native
+binary directly must use the platform package's module and layout.
+
+The addon discovers ggml backends beside the loaded native module. If you
+set `backendsDir` explicitly, pass the actual backend directory: it is now
+scanned directly instead of appending the host and module subdirectories.
+Remove the override to use automatic discovery.
+
+Unsupported `init_images` requests on SD1/SD2/SDXL now reject through native
+validation after job submission. Await `response.await()` to handle the error
+and update any handling that matches the former JavaScript error text.
+Input type, empty-array, and mutual-exclusion checks remain in JavaScript.
+
+## Other
+
+Reference conditioning follows the loaded model's capabilities. FLUX.2 no
+longer requires `prediction: 'flux2_flow'` for routing, but callers should keep
+it for the single-reference size fallback and `@imageN` prompt warnings.
+Leave prediction automatic for Qwen-Image-2.1. ESRGAN rejects RGBA output
+before generation because it accepts RGB images only.
+
+Linux x64 and arm64 release prebuilds now provision CUDA. Bounded FuzzTest
+coverage validates GGUF video-capability inspection, including limits on
+untrusted string lengths, without linking stable-diffusion.cpp so address
+and leak sanitizers remain fully enabled.
+
+## Pull Requests
+
+- [#5128](https://github.com/tetherto/qvac/pull/5128) - QVAC-25542 feat: add Qwen-Image-2.1 support to diffusion-cpp.
+- [#5044](https://github.com/tetherto/qvac/pull/5044) - QVAC-25559 feat[build]: split diffusion-cpp into per-platform packages.
+- [#4607](https://github.com/tetherto/qvac/pull/4607) - test[diffusion-cpp]: bounded FuzzTest for GGUF video-capability inspect.
+- [#5251](https://github.com/tetherto/qvac/pull/5251) - ci(diffusion-cpp): provision CUDA for Linux prebuilds.
+
+## [0.30.0] - 2026-10-14
+
+### Breaking
+
+- `assessFit` returns a Promise; the synchronous binding is removed
+  ([#5010](https://github.com/tetherto/qvac/pull/5010)). The fit runs on a worker thread so the JavaScript loop keeps
+  running, and concurrent calls run one at a time within the addon. A model
+  the fitter cannot read still resolves with `status: 'error'`; a malformed
+  request rejects instead of throwing. Change
+  `const fit = assessFit(request)` to `const fit = await assessFit(request)`.
+
+### Changed
+
+- `@qvac/infer-base` dependency raised `^0.6.2` -> `^0.8.0`
+  ([#5069](https://github.com/tetherto/qvac/pull/5069)). `^0.6.2` never took 0.7.0 or 0.8.0; 0.8.0 adds an
+  optional `retainOutput: false` on `QvacResponse` and
+  `createJobHandler().start()` for consuming output events through
+  `onUpdate()` without keeping every chunk in memory ([#5028](https://github.com/tetherto/qvac/pull/5028)).
+  Retention stays enabled by default and this package does not pass the option, so there is no API or
+  runtime behaviour change for this package.
+
+## [0.29.2] - 2026-10-13
+
+This patch reduces the size of the Windows native addon to address the npm
+package-size failure. It retains the existing model support and JavaScript API.
+
+## Bug Fixes
+
+Windows builds now export only Bare's registration entry points and optimize
+across the addon, ggml, and stable-diffusion libraries. The linker can discard
+unused code and shader data and combine identical sections, reducing the
+shipped binary without removing model or GPU features.
+
+The addon consumes the published ggml `2026-08-11#2` and stable-diffusion-cpp
+`2026-08-11#6` hotfixes while retaining the existing registry baseline. The
+logging include order also ensures libuv types are declared before the shared
+JavaScript logging headers are compiled.
+
+## Pull Requests
+
+- [#5007](https://github.com/tetherto/qvac/pull/5007) - Reduce diffusion Windows
+  binaries using registry hotfixes.
+
+## [0.29.1] - 2026-10-13
+
+### Changed
+
+- `qvac-lib-inference-addon-cpp` dependency floor raised `1.4.0` -> `1.5.0`
+  ([#5030](https://github.com/tetherto/qvac/pull/5030)). The new library adds
+  `JsAsyncTask::run(env, work, marshal)`, which resolves a Promise with a value
+  marshalled on the JavaScript loop, and includes `<uv.h>` from headers that
+  use libuv types now that libjs no longer includes it from `<js.h>`.
+  Compile-time only; no API or runtime behaviour change for this package.
+
+## [0.29.0] - 2026-10-12
+
+### Added
+
+- Metadata-only `assessFit` support for standalone ESRGAN (`mode: 'upscale'`)
+  and ABot-World (`mode: 'world'`), without loading model weights.
+- ABot-World fit estimates for a stated session length using
+  `workload.walkSteps`, with a default of 100 walk steps, including retained
+  latent history and the configured placement and streaming budgets.
+
+### Changed
+
+- Include ESRGAN weights, tiled computation, full-image buffers, and repeated
+  upscale passes in standalone and post-generation memory estimates.
+- Use checkpoint metadata to validate ESRGAN's actual output scale against
+  image limits, and account for shared host/GPU memory on Apple Silicon.
+- Build against the published `stable-diffusion-cpp` registry port
+  `2026-08-11#5` without a temporary engine overlay.
+
+### Pull Requests
+
+- [#4939](https://github.com/tetherto/qvac/pull/4939) - QVAC-26761 feat[api]:
+  add ESRGAN and ABot memory fit.
+
+## [0.28.1] - 2026-10-09
+
+### Fixed
+
+- Rebuild the Android addon and Vulkan/OpenCL backends with NDK r29
+  (`29.0.14206865`) to match the application's C++ runtime. The 0.28.0 npm
+  binaries were built with NDK r30 before the shared NDK selection fixes merged.
+
+### Pull Requests
+
+- [#4915](https://github.com/tetherto/qvac/pull/4915) - Pin the shared Android
+  build host to NDK r29.
+- [#4916](https://github.com/tetherto/qvac/pull/4916) - Update Android build
+  callers to use the pinned build host.
+- [#4933](https://github.com/tetherto/qvac/pull/4933) - Align Bare's NDK selector
+  with the pinned NDK used by vcpkg.
+
+## [0.28.0] - 2026-10-07
+
+### Added
+
+- MiniMax-H3 FL2VA ConvRot text-to-video and image-to-video examples with
+  synchronized audio, model download script, and FLUX.2-generated I2V keyframes.
+
+### Changed
+
+- Route H3 image-to-video first-frame conditioning through the native video job
+  and require the video VAE encoder for that mode.
+
+### Pull Requests
+
+- [#4789](https://github.com/tetherto/qvac/pull/4789) - QVAC-24827 feat:
+  MiniMax H3 text-to-video and image-to-video.
+
+## [0.27.0] - 2026-10-02
+
+### Added
+
+- Configurable `max_image_pixels` and `max_job_pixels` limits for image and
+  video models. Standalone ESRGAN accepts `max_image_pixels`; ABot-World
+  accepts `maxImagePixels`.
+
+### Changed
+
+- Decoded inputs default to 64 Mi pixels per image and 128 Mi pixels retained
+  by a multi-reference image or video job. Larger inputs and longer video
+  guidance sequences can raise the configured limits explicitly; independent
+  format, dimension, compressed-size, PNG inflate, and JPEG scan safeguards
+  remain in force.
+
+### Fixed
+
+- Validate PNG/JPEG input sizes, source-data budgets, inflated PNG data, and
+  progressive JPEG scans before full decoding, with specific errors for
+  invalid or over-limit inputs across image, video, ESRGAN, and ABot-World.
+- Check projected ESRGAN output against the per-image limit before generation
+  and each upscale pass.
+- Preserve compatibility with PNGs carrying bounded trailing inflated data
+  and JPEGs carrying padding before the frame header.
+
+### Pull Requests
+
+- [#4738](https://github.com/tetherto/qvac/pull/4738) - QVAC-25637 fix: bound
+  diffusion image decoding before allocation.
+
 ## [0.26.0] - 2026-09-28
 
 ### Added

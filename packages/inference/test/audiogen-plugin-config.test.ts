@@ -190,6 +190,38 @@ test('AudioGen plugin creates a MiniMax engine from resolved artifacts', (t) => 
   t.is(internals._defaultCfgScale, 1.8)
 })
 
+test('AudioGen plugin hands the MiniMax device to the engine', async (t) => {
+  const context: ResolveContext = {
+    modelSrc: '',
+    modelType: 'audiogen-ggml',
+    resolveModelPath: async function (source) {
+      return `/resolved/${typeof source === 'string' ? source : source.src}`
+    }
+  }
+  const resolved = await resolveAudioGenConfig(
+    {
+      engine: 'minimax',
+      lmModelSrc: 'minimax-lm.gguf',
+      synthModelSrc: 'minimax-synth.gguf',
+      device: 'gpu'
+    },
+    context
+  )
+  t.alike(resolved.config, { engine: 'minimax', device: 'gpu' })
+
+  const result = audioGenPlugin.createModel({
+    modelId: 'minimax-gpu-model',
+    modelPath: '',
+    modelConfig: resolved.config,
+    artifacts: resolved.artifacts
+  })
+  const internals = result.model as unknown as {
+    _configuration: { device?: string; useGPU?: boolean }
+  }
+  t.is(internals._configuration.device, 'gpu', 'a GPU-less host fails the load instead')
+  t.is(internals._configuration.useGPU, false, 'the addon reads device ahead of the switch')
+})
+
 test('AudioGen load config survives device-default resolution', (t) => {
   const config = {
     textEncModelSrc: 'text-encoder.gguf',

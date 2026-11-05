@@ -1,4 +1,10 @@
 node_modules/
+__pycache__/
+*.pyc
+test/fixtures/*.gguf
+model.safetensors
+fabric/
+ggml-build/
 package-lock.json
 build/
 prebuilds/

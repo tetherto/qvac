@@ -16,6 +16,19 @@ const hosts = ['ios-arm64-simulator']
 const canonical = (url) =>
   url.protocol === 'file:' ? pathToFileURL(fs.realpathSync(fileURLToPath(url))) : url
 
+function hostAddonPackages(pkg) {
+  const names = new Set()
+  const walk = (target) => {
+    if (typeof target === 'string') {
+      if (target.startsWith(pkg.name + '-')) names.add(target)
+    } else if (target && typeof target === 'object') {
+      Object.values(target).forEach(walk)
+    }
+  }
+  walk(pkg.imports && pkg.imports['#host-addon'])
+  return names
+}
+
 async function main() {
   const bundle = await pack(
     pathToFileURL(path.join(source, 'test/pocket-worklet/pocket-worklet.cjs')),
@@ -42,6 +55,11 @@ async function main() {
       ...pkg.dependencies,
       ...pkg.optionalDependencies,
       ...pkg.peerDependencies
+    }
+    // A source checkout declares its platform packages only through
+    // "#host-addon"; `npm run link:platform` stages them in node_modules.
+    for (const name of hostAddonPackages(pkg)) {
+      if (!(name in dependencies)) dependencies[name] = '*'
     }
     for (const name of Object.keys(dependencies)) {
       const found = (req.resolve.paths(name) || [])

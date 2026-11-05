@@ -26,12 +26,13 @@ export async function writeConfigDir(t: TestContext, config: unknown): Promise<s
   return dir
 }
 
-// Small real models (LLM, embedding, Whisper) that load over P2P from the
-// registry, with stable aliases the real-model tests reference.
+// Small real models load over P2P from the registry, with stable aliases
+// the real-model tests reference.
 export const E2E = {
   llm: 'test-llm',
   embed: 'test-embed',
   embedLazy: 'test-embed-lazy',
+  decision: 'test-decision',
   whisper: 'test-whisper',
   whisperTranslate: 'test-whisper-translate',
   video: 'test-video'
@@ -50,6 +51,12 @@ export const MODEL_CONFIG = {
       'test-embed': { model: 'EMBEDDINGGEMMA_300M_Q4_0', preload: true, default: true },
       // preload:false — exercises real lazy-load on first request.
       'test-embed-lazy': { model: 'EMBEDDINGGEMMA_300M_Q4_0', preload: false },
+      'test-decision': {
+        model: 'LAYA_MULTILINGUAL_322M_Q8_0',
+        type: 'llamacpp-decision',
+        preload: true,
+        config: { device: 'cpu', threads: 2, 'threads-batch': 2 }
+      },
       'test-whisper': { model: 'WHISPER_EN_TINY_Q8_0', preload: true },
       'test-whisper-translate': {
         model: 'WHISPER_EN_TINY_Q8_0',

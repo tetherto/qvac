@@ -377,6 +377,7 @@ test('functional prestage mappings cover every configured mobile shard runner', 
   const mappings = functionalModelsByTest(FUNCTIONAL_MANIFEST)
   const configured = Object.values(mobileGroups.android).flat()
   assert.deepEqual(Object.keys(mappings).sort(), configured.sort())
+  assert.deepEqual(selectFunctionalEntries(mappings, 'runMossFitTest|runMossSfxFitTest'), [])
 })
 
 test('selectFunctionalEntries regex-matches runner names and deduplicates shared targets', () => {

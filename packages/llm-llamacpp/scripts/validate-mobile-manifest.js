@@ -16,7 +16,8 @@
 //   3. every model name resolves in test/integration/models.manifest.json — the
 //      single source of truth for url + sha256 + bytes
 //   4. every manifest url is byte-identical to that pinned, commit-hashed url.
-//      `/resolve/main/` is a moving target and must never appear here.
+//      `/resolve/main/` is a moving target and must never appear here. Models
+//      pinned by `s3Path` instead (no HF url) carry no url here.
 //   5. every model a grouped test names literally in its OWN source appears in
 //      its OWN manifest entry, unless the test opts out with a marker:
 //        // prestage-ignore: <model.gguf> — <why it must not be pre-staged>
@@ -43,6 +44,7 @@
 //   node scripts/validate-mobile-manifest.js --fix    # repin urls (rule 4 only)
 const fs = require('fs')
 const path = require('path')
+const { isS3Only } = require('./model-source')
 
 const repoRoot = path.resolve(__dirname, '..')
 const integrationDir = path.join(repoRoot, 'test', 'integration')
@@ -225,6 +227,10 @@ function pinnedUrlFor(integrationManifest, name) {
   return entry.urls[0]
 }
 
+function isS3Staged(integrationManifest, name) {
+  return isS3Only(integrationManifest.models && integrationManifest.models[name])
+}
+
 function knownTestFunctions() {
   const known = new Map()
   for (const file of fs.readdirSync(integrationDir).filter((f) => f.endsWith('.test.js'))) {
@@ -236,7 +242,8 @@ function knownTestFunctions() {
 function validate({ mobileManifest, testGroups, integrationManifest, sources }) {
   const errors = []
   const known = knownTestFunctions()
-  const isModel = (name) => pinnedUrlFor(integrationManifest, name) !== null
+  const isModel = (name) =>
+    pinnedUrlFor(integrationManifest, name) !== null || isS3Staged(integrationManifest, name)
 
   // Rule 1 — every grouped test is pre-staged.
   for (const [platform, groups] of Object.entries(testGroups)) {
@@ -283,6 +290,18 @@ function validate({ mobileManifest, testGroups, integrationManifest, sources }) 
     }
     for (const model of models) {
       const pinned = pinnedUrlFor(integrationManifest, model.name)
+      if (!pinned && isS3Staged(integrationManifest, model.name)) {
+        if (model.url !== undefined) {
+          errors.push(
+            problem(
+              `${test}: ${model.name} is pinned by s3Path, so it must not carry a url`,
+              'the device gets it from the presigned US-bucket mirror, not from this url',
+              'run `node scripts/validate-mobile-manifest.js --fix`'
+            )
+          )
+        }
+        continue
+      }
       if (!pinned) {
         errors.push(
           problem(
@@ -440,6 +459,9 @@ function repinUrls(mobileManifest, integrationManifest) {
       const pinned = pinnedUrlFor(integrationManifest, model.name)
       if (pinned && model.url !== pinned) {
         model.url = pinned
+        changed++
+      } else if (!pinned && isS3Staged(integrationManifest, model.name) && 'url' in model) {
+        delete model.url
         changed++
       }
     }

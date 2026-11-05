@@ -21,7 +21,7 @@ if(BUILD_FUZZING AND NOT BUILD_TESTING)
 endif()
 
 # ggml runtime is the shared @qvac/fabric prebuild (dynamically linked, loaded
-# once per process); sets qvac_fabric_target + BACKENDS_SUBDIR_VALUE.
+# once per process); sets qvac_fabric_target.
 qvac_addon_use_fabric()
 
 if(NOT BUILD_FUZZING)
@@ -42,6 +42,7 @@ target_sources(
     ${PROJECT_SOURCE_DIR}/addon/src/js-interface/binding.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OcrLazyInitializeBackend.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OcrBackendSelection.cpp
+    ${PROJECT_SOURCE_DIR}/addon/src/model-interface/OcrFit.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/Pipeline.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/DecodeImage.cpp
     ${PROJECT_SOURCE_DIR}/addon/src/model-interface/easyocr/gguf_loader.cpp
@@ -82,7 +83,7 @@ target_link_libraries(
     ${OpenCV_LIBS}
 )
 qvac_addon_link_fabric(${ocr-ggml} ${qvac_fabric_target})
-qvac_addon_finalize(${ocr-ggml} SUBDIR "${BACKENDS_SUBDIR_VALUE}")
+qvac_addon_finalize(${ocr-ggml})
 
 if(ANDROID)
   target_link_libraries(${ocr-ggml} PRIVATE log)

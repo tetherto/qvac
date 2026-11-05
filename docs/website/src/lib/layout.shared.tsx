@@ -10,6 +10,9 @@ import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
 export function baseOptions(): BaseLayoutProps {
   return {
     nav: {
+      // `/` only exists as a redirect to this page, so the logo targets it
+      // directly rather than sending every visitor through an extra hop.
+      url: '/ecosystem',
       title: (
         <img
           src="/qvac-logo.svg"

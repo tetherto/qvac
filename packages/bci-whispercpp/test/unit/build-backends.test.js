@@ -47,6 +47,10 @@ function versionFloorOf(dependency) {
   return dependency['version>=']
 }
 
+function overridesOf(port) {
+  return (vcpkgManifest.overrides ?? []).filter((entry) => entry.name === port)
+}
+
 test('[build] the CUDA build is opt-in behind a dedicated CMake option', (t) => {
   t.ok(
     new RegExp(`option\\(${CUDA_CMAKE_OPTION} "[^"]+" OFF\\)`).test(cmakeSource),
@@ -90,8 +94,10 @@ test('[build] the cuda feature is confined to the platforms that have NVIDIA GPU
   t.is(cudaSpeechDependency().platform, DESKTOP_PLATFORM)
 })
 
-test('[build] the cuda feature requires a speech-cpp that declares it', (t) => {
-  t.ok(versionFloorOf(cudaSpeechDependency()) >= versionFloorOf(desktopSpeechDependency()))
+test('[build] the cuda feature takes the speech-cpp that the overrides pin', (t) => {
+  t.is(overridesOf(SPEECH_PORT).length, 1)
+  t.is(versionFloorOf(cudaSpeechDependency()), undefined)
+  t.is(versionFloorOf(desktopSpeechDependency()), undefined)
 })
 
 test('[build] no direct CUDA linkage - the hybrid MODULE backend carries its own', (t) => {

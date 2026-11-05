@@ -47,6 +47,10 @@ const config: TranslationNmtcppConfig = {
   temperature: 0.7,
 };
 
+const fit: Promise<{ status: string; devices: { usedBytes: number }[] }> =
+  TranslationNmtcpp.assessFit({ files, config });
+void fit.then((result) => result.devices.map((row) => row.usedBytes));
+
 const model = new TranslationNmtcpp({
   files,
   params: { mode, srcLang: from, dstLang: to },

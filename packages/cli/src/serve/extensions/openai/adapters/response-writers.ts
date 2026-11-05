@@ -13,6 +13,7 @@ import {
   stripToolSearchCalls
 } from '@/serve/lib/tool-search'
 import type { GenerationParams, ResponseFormat } from '@/serve/extensions/openai/schemas/common'
+import type { ResponsesHistoryItem } from '@/serve/extensions/openai/schemas/responses'
 import {
   buildResponseObject,
   functionCallOutputItemId,
@@ -39,12 +40,12 @@ export interface ResponseWriterContext {
  * it again with the search results appended, so the caller owns per-turn setup
  * (cancellation binding in particular) rather than the writer.
  */
-export type RunTurn = (history: Array<{ role: string; content: string }>) => CompletionRun
+export type RunTurn = (history: ResponsesHistoryItem[]) => CompletionRun
 
 export interface ResponsesHandlerParams {
   ctx: ResponseWriterContext
   sdkModelId: string
-  history: Array<{ role: string; content: string }>
+  history: ResponsesHistoryItem[]
   tools?: Tool[] | undefined
   generationParams?: GenerationParams | undefined
   responseFormat?: ResponseFormat | undefined

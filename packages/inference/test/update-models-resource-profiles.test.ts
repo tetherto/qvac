@@ -420,3 +420,17 @@ test('generateResourceProfilesFileContent: emits a self-contained generated modu
   t.ok(content.includes('"artifactBytes":2500000000'))
   t.ok(content.includes('"architecture":"qwen35"'))
 })
+
+test('unified ASR registry entries use their explicit MOSS family tag', (t) => {
+  const model = processRegistryModel({
+    engine: '@qvac/asr-ggml',
+    path: 'models/moss-transcribe-diarize-q8_0.gguf',
+    source: 's3',
+    tags: ['transcription', 'diarization', 'moss-transcribe', 'gguf'],
+    quantization: 'q8_0',
+    params: '',
+    sha256: ''
+  } as Parameters<typeof processRegistryModel>[0])
+  t.is(model?.engine, 'moss-transcribe')
+  t.is(model?.addon, 'moss-transcribe')
+})

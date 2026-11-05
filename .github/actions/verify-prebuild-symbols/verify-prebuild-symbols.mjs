@@ -28,14 +28,14 @@
 //      (see packages/asr-ggml/symbols.map for the fix template).
 //
 // A DT_NEEDED provider does not have to sit in the scanned prebuilds/ tree. A shared
-// runtime like @qvac/fabric (`qvac__fabric@0.bare`) ships in node_modules, not beside
+// runtime like @qvac/fabric (`qvac__fabric-<host>@0.bare`) ships in node_modules, not beside
 // the addon, and is pre-loaded (`require('@qvac/fabric')` in binding.js) before the
 // addon is dlopen'd -- so its `ggml_*` exports resolve the addon's UND engine symbols
 // at runtime. Point the check at it with `--provider-dir <path>` (repeatable) and its
 // binaries join DT_NEEDED resolution exactly like co-located libs, with two twists:
 //   * they are indexed by their real DT_SONAME (read from the binary), not their
 //     on-disk basename -- the addon's DT_NEEDED is the ABI-versioned soname
-//     `qvac__fabric@0.bare` while the staged file is the unversioned `qvac__fabric.bare`,
+//     `qvac__fabric-<host>@0.bare` while the staged file is the unversioned `qvac__fabric-<host>.bare`,
 //     so a basename key would never match.
 //   * they are never themselves checked (a runtime legitimately carries its own UND
 //     backend symbols + engine exports that would false-positive the UND / export checks).
@@ -261,8 +261,8 @@ function neededOf (tools, path, format) {
 }
 
 // The DT_SONAME a binary advertises -- this is what a consumer's DT_NEEDED holds,
-// and it can diverge from the on-disk filename (e.g. `qvac__fabric@0.bare` soname
-// staged as `qvac__fabric.bare`). ELF-only; '' when absent or readelf unavailable.
+// and it can diverge from the on-disk filename (e.g. `qvac__fabric-<host>@0.bare` soname
+// staged as `qvac__fabric-<host>.bare`). ELF-only; '' when absent or readelf unavailable.
 function sonameOf (tools, path, format) {
   if (format !== 'elf' || !tools.readelf) return ''
   let out = ''
@@ -308,14 +308,14 @@ function main () {
   // their declared dependencies. Co-located libs are keyed by on-disk basename
   // (filename == soname for qvac's backend libs today). External --provider-dir
   // trees are keyed by their real DT_SONAME instead, since a shared runtime's soname
-  // diverges from its staged filename (`qvac__fabric@0.bare` vs `qvac__fabric.bare`);
+  // diverges from its staged filename (`qvac__fabric-<host>@0.bare` vs `qvac__fabric-<host>.bare`);
   // provider exports are never themselves checked.
   const exportsBySoname = new Map()
   const fmtByPath = new Map()
 
   function addExports (key, exported) {
     const prev = exportsBySoname.get(key)
-    // Union across hosts/dirs: the same key (e.g. qvac__fabric@0.bare) appears once
+    // Union across hosts/dirs: the same key (e.g. qvac__fabric-linux-x64@0.bare) appears once
     // per platform subdir; each exports the same C ABI, so merging is correct.
     if (prev) for (const s of exported) prev.add(s)
     else exportsBySoname.set(key, new Set(exported))
@@ -366,7 +366,7 @@ function main () {
     // against the shared index. That index keys co-located libs by on-disk basename
     // (filename == soname for qvac's backend libs today) and --provider-dir libs by
     // their real DT_SONAME, so a shared runtime whose soname diverges from its staged
-    // filename (`qvac__fabric@0.bare` vs `qvac__fabric.bare`) still resolves. A binary
+    // filename (`qvac__fabric-<host>@0.bare` vs `qvac__fabric-<host>.bare`) still resolves. A binary
     // that does not DT_NEEDED a provider gets nothing from it -- so the pool cannot
     // mask a genuine UND on an addon that merely has the provider in node_modules.
     // (Latent fragility: a co-located backend lib whose soname diverged from its

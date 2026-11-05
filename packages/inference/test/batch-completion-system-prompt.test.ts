@@ -20,6 +20,7 @@ type RecordedPrompt = {
   id?: string
   messages: { role?: string; type?: string; name?: string; content?: string }[]
   toolChoice?: string | undefined
+  parallelToolCalls?: boolean | undefined
 }
 
 function registerRecordingBatchModel(
@@ -33,13 +34,16 @@ function registerRecordingBatchModel(
         const received = addonPrompts as Array<{
           id?: string
           prompt: RecordedPrompt['messages']
-          runOptions?: { generationParams?: { tool_choice?: string } }
+          runOptions?: {
+            generationParams?: { tool_choice?: string; parallel_tool_calls?: boolean }
+          }
         }>
         for (const [index, entry] of received.entries()) {
           prompts.push({
             id: entry.id ?? String(index),
             messages: entry.prompt,
-            toolChoice: entry.runOptions?.generationParams?.tool_choice
+            toolChoice: entry.runOptions?.generationParams?.tool_choice,
+            parallelToolCalls: entry.runOptions?.generationParams?.parallel_tool_calls
           })
         }
         const ids = received.map((prompt, index) => prompt.id ?? String(index))
@@ -195,7 +199,7 @@ test('batchCompletionStream: a deferred tool sends a catalog, not its schema', a
   clearRegistry()
 })
 
-test('batchCompletionStream: a prompt with a loaded deferred tool runs without the tool grammar', async (t) => {
+test('batchCompletionStream: a prompt with a loaded deferred tool declares it and keeps the grammar', async (t) => {
   clearRegistry()
 
   const modelId = `batch-defer-choice-${Date.now()}`
@@ -229,14 +233,67 @@ test('batchCompletionStream: a prompt with a loaded deferred tool runs without t
   for await (const _ of gen) void _
 
   const byId = new Map(prompts.map((prompt) => [prompt.id, prompt]))
+  const declared = (id: string) =>
+    byId
+      .get(id)!
+      .messages.filter((entry) => entry.type === 'function')
+      .map((entry) => entry.name)
+  t.alike(declared('fresh'), ['tool_search'], 'nothing loaded: only the search tool is declared')
+  t.alike(declared('loaded'), ['tool_search', 'calculate_area'], 'the loaded tool is declared')
   t.is(byId.get('fresh')!.toolChoice, undefined, 'nothing loaded: the grammar stays on')
-  t.is(byId.get('loaded')!.toolChoice, 'none', 'a loaded tool turns the grammar off')
+  t.is(byId.get('loaded')!.toolChoice, undefined, 'a loaded tool keeps the grammar on')
+  t.is(byId.get('auto')!.toolChoice, 'auto', 'an explicit "auto" is passed through')
+  t.is(byId.get('caller')!.toolChoice, 'required', 'a caller choice is passed through')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
+test('batchCompletionStream: parallel_tool_calls reaches the addon as true unless the prompt sets it', async (t) => {
+  clearRegistry()
+
+  const modelId = `batch-parallel-tool-calls-${Date.now()}`
+  const prompts: RecordedPrompt[] = []
+  registerRecordingBatchModel(modelId, prompts, { tools: true })
+
+  const tools = [
+    {
+      type: 'function',
+      name: 'calculate_area',
+      description: 'Invoke calculate_area.',
+      parameters: {
+        type: 'object',
+        properties: { height: { type: 'integer', description: 'height' } },
+        required: ['height']
+      }
+    }
+  ]
+  const handler = llmPlugin.handlers.batchCompletionStream.handler as unknown as LooseHandler
+  const gen = handler({
+    modelId,
+    requestId: `${modelId}-batch`,
+    stream: true,
+    prompts: [
+      { id: 'unset', history: [user('Area?')], tools },
+      {
+        id: 'single',
+        history: [user('Area?')],
+        tools,
+        generationParams: { parallel_tool_calls: false }
+      },
+      { id: 'no-tools', history: [user('Capital of France?')] }
+    ]
+  })
+  for await (const _ of gen) void _
+
+  const byId = new Map(prompts.map((prompt) => [prompt.id, prompt]))
+  t.is(byId.get('unset')!.parallelToolCalls, true, 'unset reaches the addon as true')
+  t.is(byId.get('single')!.parallelToolCalls, false, 'an explicit false is kept')
   t.is(
-    byId.get('auto')!.toolChoice,
-    'none',
-    'an explicit "auto" is the default and is treated the same'
+    byId.get('no-tools')!.parallelToolCalls,
+    true,
+    'a prompt without tools carries the default too'
   )
-  t.is(byId.get('caller')!.toolChoice, 'required', 'a stronger caller choice is kept')
 
   unregisterModel(modelId)
   clearRegistry()

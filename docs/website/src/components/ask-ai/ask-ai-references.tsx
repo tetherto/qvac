@@ -2,6 +2,7 @@
 
 import { BookOpen, ExternalLink } from 'lucide-react';
 
+import { lineLabelOf } from '@/lib/retrieval-filter';
 import type { AskAIReference } from './use-ask-ai-chat';
 
 /**
@@ -106,8 +107,18 @@ export function AskAIReferences({ references }: { references: AskAIReference[] }
                 <BookOpen className="size-3.5" aria-hidden="true" />
               </span>
               <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="truncate text-xs font-medium text-fd-popover-foreground">
-                  {referenceTitle(reference)}
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate text-xs font-medium text-fd-popover-foreground">
+                    {referenceTitle(reference)}
+                  </span>
+                  {/* A citation from a line other than the current one says
+                      which release it describes, so an answer read on its own
+                      is never mistaken for the current documentation. */}
+                  {lineLabelOf(reference.url) && (
+                    <span className="shrink-0 rounded border border-fd-border px-1 text-[0.65rem] leading-normal text-fd-muted-foreground">
+                      {lineLabelOf(reference.url)}
+                    </span>
+                  )}
                 </span>
                 <span className="truncate text-[0.7rem] leading-snug text-fd-muted-foreground">
                   {formatDisplayUrl(reference.url)}

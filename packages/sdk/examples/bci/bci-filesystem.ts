@@ -5,14 +5,14 @@
  * (whisper.cpp) addon in one shot via `bciTranscribe`, and prints the
  * decoded transcript.
  *
- * Usage: bun run examples/bci/bci-filesystem.ts <neural-bin-file-path>
+ * Usage: npx tsx examples/bci/bci-filesystem.ts <neural-bin-file-path>
  */
 import { loadModel, unloadModel, bciTranscribe, BCI_WINDOWED } from '@qvac/sdk'
 
 const args = process.argv.slice(2)
 
 if (!args[0]) {
-  console.error('Usage: bun run examples/bci/bci-filesystem.ts <neural-bin-file-path>')
+  console.error('Usage: npx tsx examples/bci/bci-filesystem.ts <neural-bin-file-path>')
   process.exit(1)
 }
 

@@ -50,13 +50,8 @@ test('generationParamsSchema: rejects reasoning_budget other values', (t) => {
   )
 })
 
-test('generationParamsSchema: accepts remove_thinking_from_context boolean', (t) => {
-  t.is(generationParamsSchema.safeParse({ remove_thinking_from_context: true }).success, true)
-  t.is(generationParamsSchema.safeParse({ remove_thinking_from_context: false }).success, true)
-})
-
-test('generationParamsSchema: rejects non-boolean remove_thinking_from_context', (t) => {
-  t.is(generationParamsSchema.safeParse({ remove_thinking_from_context: 1 }).success, false)
+test('generationParamsSchema: rejects remove_thinking_from_context', (t) => {
+  t.is(generationParamsSchema.safeParse({ remove_thinking_from_context: true }).success, false)
 })
 
 test('toolDialectSchema: accepts qwen35, gemma4 and dsml', (t) => {
@@ -134,6 +129,12 @@ test('generationParamsSchema: accepts tool_choice modes and a tool name, rejects
   )
 })
 
+test('generationParamsSchema: accepts a boolean parallel_tool_calls only', (t) => {
+  t.is(generationParamsSchema.safeParse({ parallel_tool_calls: true }).success, true)
+  t.is(generationParamsSchema.safeParse({ parallel_tool_calls: false }).success, true)
+  t.is(generationParamsSchema.safeParse({ parallel_tool_calls: 'true' }).success, false)
+})
+
 const weatherTool = {
   type: 'function' as const,
   name: 'get_weather',
@@ -146,6 +147,44 @@ const baseCompletion = {
   history: [{ role: 'user', content: 'Weather in Lugano?' }],
   stream: true
 }
+
+test('completion schemas: prefill requires a cache and cannot force tool output', (t) => {
+  const schemas = [
+    [completionClientParamsSchema, {}],
+    [completionStreamRequestSchema, { type: 'completionStream' }],
+    [completionOrchestrateRequestSchema, { type: 'completionOrchestrate' }]
+  ] as const
+  for (const [schema, type] of schemas) {
+    const base = { ...baseCompletion, ...type }
+    for (const prefill of [undefined, false]) {
+      t.ok(schema.safeParse({ ...base, prefill }).success)
+    }
+    for (const kvCache of [true, 'chat']) {
+      const prime = { ...base, prefill: true, kvCache }
+      t.ok(schema.safeParse(prime).success)
+      for (const tool_choice of ['auto', 'none']) {
+        t.ok(schema.safeParse({ ...prime, generationParams: { tool_choice } }).success)
+      }
+      for (const tool_choice of ['required', 'get_weather', 'tool_search']) {
+        const tools = [weatherTool, { ...weatherTool, name: 'later', deferLoading: true }]
+        const result = schema.safeParse({ ...prime, tools, generationParams: { tool_choice } })
+        t.is(result.success, false)
+        t.ok(
+          !result.success && result.error.issues.some((issue) => issue.message.includes('prefill'))
+        )
+      }
+    }
+    for (const kvCache of [undefined, false]) {
+      const result = schema.safeParse({ ...base, prefill: true, kvCache })
+      t.ok(
+        !result.success &&
+          result.error.issues.some((issue) => issue.message.includes('prefill requires kvCache'))
+      )
+    }
+    t.is(schema.safeParse({ ...base, prefill: true, kvCache: '' }).success, false)
+    t.is(schema.safeParse({ ...base, prefill: 'true', kvCache: true }).success, false)
+  }
+})
 
 function acceptsCompletion(params: Record<string, unknown>): boolean {
   return completionClientParamsSchema.safeParse({ ...baseCompletion, ...params }).success

@@ -1,0 +1,15 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../dist/catalog",
+    // The catalog depends on no client: `@qvac/sdk` resolves to an empty module,
+    // so importing from it fails here even where the SDK is installed.
+    "paths": {
+      "@qvac/sdk": ["./no-client-imports.d.ts"],
+      "@qvac/sdk/*": ["./no-client-imports.d.ts"]
+    }
+  },
+  "include": ["./**/*.ts"],
+  "exclude": []
+}

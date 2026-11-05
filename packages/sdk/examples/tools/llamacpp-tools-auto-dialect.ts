@@ -1,12 +1,13 @@
 /**
  * Tool-calling example with automatic dialect detection.
  *
- * The SDK infers the tool-call format from the model name/path. It supports
- * model families such as Qwen3.5/3.6, Gemma4, GPT-OSS, DeepSeek V3.2/V4, and
- * LFM without requiring a toolDialect override.
+ * The SDK infers the tool-call format from the model name or file name, and
+ * from the GGUF architecture when the name matches no known pattern. It
+ * supports model families such as Qwen3.5/3.6/3.8, Gemma4, GPT-OSS,
+ * DeepSeek V3.2/V4, and LFM without requiring a toolDialect override.
  *
  * Usage:
- *   bun run bare:example dist/examples/tools/llamacpp-tools-auto-dialect.js <model-src>
+ *   node dist/examples/tools/llamacpp-tools-auto-dialect.js <model-src>
  */
 import { completion, loadModel, unloadModel, type ToolCall } from '@qvac/sdk'
 import { tools, mockExecute } from './shared'

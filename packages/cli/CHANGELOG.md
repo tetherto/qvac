@@ -1,5 +1,698 @@
 # Changelog
 
+## [0.18.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.18.0
+
+QVAC CLI 0.18.0 moves to `@qvac/sdk@^0.23.0`. The QVAC surface of `qvac serve` gains OCR, image classification, image upscaling, music generation and editing, and read access to the live model registry. Context overflow now returns a client error instead of a server error, and failed streams close cleanly.
+
+## Breaking Changes
+
+### Context overflow returns `400 context_length_exceeded`
+
+A request that does not fit the model's context used to fail as `500 internal_error`. It now returns `400 context_length_exceeded` with type `invalid_request_error`, so clients can tell a request that is too long from a server failure. A streaming response that overflows mid-stream sends the same envelope as an SSE error frame. Any other unexpected mid-stream error now reads `An internal error occurred.` instead of repeating the raw SDK message.
+
+**Before:**
+
+```json
+// HTTP 500
+{ "error": { "type": "server_error", "code": "internal_error", "message": "..." } }
+```
+
+**After:**
+
+```json
+// HTTP 400
+{
+  "error": {
+    "code": "context_length_exceeded",
+    "type": "invalid_request_error",
+    "message": "The request exceeds the model's context capacity. Shorten the input, start a new conversation, or increase ctx_size."
+  }
+}
+```
+
+### Paging errors have their own codes
+
+An invalid `limit` or `offset` on `/v1/models/catalog`, `/v1/videos` and the Responses `input_items` list returns `400 invalid_limit` or `400 invalid_offset` instead of `400 invalid_request`. Clients that match on `invalid_request` for these parameters need to match the new codes.
+
+### `/v1/images/edits` forwards every uploaded image
+
+With several `image` or `image[]` files, the server used to edit with the first and ignore the rest. It now forwards every file, in upload order, as SDK `init_images`, and the model must support multiple references. A single file still uses `init_image`, so send one image to a single-reference model.
+
+### Deferred tools with reserved or clashing names are not offered
+
+A deferred tool is no longer offered or loaded if its name is empty, is `auto`, `none` or `required`, or collides with an eager tool, `tool_search` or an earlier deferred tool once characters outside `A-Za-z0-9-` fold to `-`. Rename such tools.
+
+### Changes inherited from `@qvac/sdk` 0.23
+
+- **`pooling: "rank"` is rejected.** An embedding alias whose config sets `pooling: "rank"` now fails validation. Remove the field.
+- **Remote RPC servers must speak protocol 112.** An alias with `rpc-servers` works only with `@qvac/ggml-rpc-server` 0.7.x on the remote hosts. Protocol 111 servers are rejected.
+- **The model fit runs inside the worker.** Load-time fit checks and `POST /qvac/v1/models/fit` run in the SDK worker. If the fitter crashes, the worker and every model it holds go down with it.
+- **One image or video generation per model.** A second concurrent generation on the same alias is rejected with `429 request_rejected_by_policy`.
+
+## New APIs
+
+### OCR
+
+`POST /qvac/v1/ocr` reads text from a PNG, JPEG or BMP image sent as a multipart file, a base64 data URL or a `/v1/files` id. It returns text blocks with bounding boxes and confidence, and `stream: true` sends them as server-sent events.
+
+```bash
+curl -sS http://localhost:11434/qvac/v1/ocr -F model=ocr-en -F image=@receipt.png
+# { "object": "ocr", "model": "ocr-en", "blocks": [{ "text": "...", "bbox": [...], "confidence": 0.98 }], "stats": { ... } }
+```
+
+### Image classification
+
+`POST /qvac/v1/classifications` labels a PNG or JPEG image and returns the top results with their confidence. A `classification` alias can omit `src` to use the default classifier.
+
+```bash
+curl -sS http://localhost:11434/qvac/v1/classifications -F model=classifier -F image=@photo.jpg
+# { "object": "classification", "model": "classifier", "results": [{ "label": "food", "confidence": 0.93 }, ...] }
+```
+
+### Image upscaling
+
+`POST /qvac/v1/images/upscale` runs an ESRGAN upscaler over an image, up to four times, and answers in the `/v1/images` response shape.
+
+```bash
+curl -sS http://localhost:11434/qvac/v1/images/upscale \
+  -F model=upscaler -F image=@photo.png -F repeats=1
+```
+
+### Music generation, editing and understanding
+
+`/qvac/v1/audio/generations` and `/qvac/v1/audio/edits` start ACE-Step jobs that you can list, poll, download and delete. `/content` returns WAV, or mp3, flac, opus or aac when the system `ffmpeg` is available. `POST /qvac/v1/audio/understandings` describes a recording with a caption, tempo, key, time signature and language. Jobs are kept in memory, so they do not survive a restart.
+
+```bash
+curl -sS http://localhost:11434/qvac/v1/audio/generations -H 'Content-Type: application/json' \
+  -d '{ "model": "music", "caption": "calm lofi piano", "lyrics": "[Instrumental]", "duration": 30 }'
+
+curl -sS "http://localhost:11434/qvac/v1/audio/generations/audiogen_…/content?format=mp3" -o song.mp3
+```
+
+### Live model registry
+
+`GET /qvac/v1/registry/models` lists registry models with search, addon, engine and quantization filters and paging. `GET /qvac/v1/registry/models/lookup` fetches one entry by `registrySource` and `registryPath`, and returns `404 model_not_found` when the registry has no such model.
+
+```bash
+curl -sS "http://localhost:11434/qvac/v1/registry/models?addon=llm&search=qwen3&limit=1"
+```
+
+### Memory fit for ESRGAN and ABot world models
+
+Load-time fit checks and `POST /qvac/v1/models/fit` now cover ESRGAN upscalers and ABot world sessions. A world alias can set `world.fitSteps` (default 100) for the walk length the estimate assumes.
+
+### Multi-reference image edits
+
+Models with multi-reference support, such as FLUX.2 and Qwen-Image-2.1, take several reference images on `/v1/images/edits`.
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/images/edits \
+  -F "image[]=@reference-a.png" \
+  -F "image[]=@reference-b.png" \
+  -F "model=my-diffusion" \
+  -F "prompt=Place the referenced subjects together in one scene."
+```
+
+## Bug Fixes
+
+### Failed streams close cleanly
+
+Errors raised before a stream's headers are sent now return a normal HTTP error instead of a hung or closed socket, and nothing is written after the client disconnects.
+
+### Clearer model load failures
+
+`503 model_load_failed` now summarizes why the worker did not start: its exit code or signal, or that it did not connect before the startup timeout. The full chain, including the worker's stderr, stays in the server log.
+
+### Parameter values stay out of warnings
+
+The warnings `qvac serve` logs for unsupported parameters no longer print the values that were sent.
+
+### Tool search rounds use the tool grammar
+
+Tools loaded by `tool_search` are now declared in the next round's tools block, so that round's tool calls are constrained by the tool grammar.
+
+## [0.17.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.17.0
+
+QVAC CLI 0.17.0 depends on `@qvac/sdk@^0.22.0`, the same SDK line as 0.16.0. Decision models move from `--systemone` to an OpenAI-style `POST /v1/decisions` endpoint under `--openai`, and `qvac serve` now checks the `Host` header of every request. The QVAC surface reports host resources and model fit and runs batch chat completion, `/v1/audio/speech` can stream over SSE, and `/v1/videos` no longer fetches image URLs on private networks.
+
+## Breaking Changes
+
+### `--systemone` is replaced by `POST /v1/decisions`
+
+`--systemone` and `POST /v1/systemone` are removed. Decision aliases are served by `qvac serve --openai` at `POST /v1/decisions`. Questions are an ordered array instead of an object keyed by ID, and `noul` questions become `predicate` questions.
+
+**Before:**
+
+```bash
+qvac serve --systemone
+curl -sS http://127.0.0.1:11434/v1/systemone \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "laya",
+    "state": "Please refund my duplicate payment.",
+    "questions": {
+      "refund": { "type": "noul", "instructions": "A refund is requested." }
+    }
+  }'
+```
+
+**After:**
+
+```bash
+qvac serve --openai
+curl -sS http://127.0.0.1:11434/v1/decisions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "laya",
+    "input": "Please refund my duplicate payment.",
+    "questions": [
+      { "type": "predicate", "name": "refund", "instructions": "A refund is requested." }
+    ]
+  }'
+```
+
+### Host header check on `qvac serve`
+
+A page that rebinds its own domain to `127.0.0.1` could read `/openapi.json` and call the server, because CORS does not apply to a same-origin request. Every request now needs a `Host` that names a loopback host, an IP address, the bind host, the `--public-base-url` host or an allowed host. Anything else gets `403 host_not_allowed`. The port is ignored.
+
+Clients that dial `localhost`, `127.0.0.1`, `[::1]`, any IP address or the exact `--host` value are unaffected. A server reached by another hostname must allow that name.
+
+**Before:**
+
+```bash
+qvac serve --openai --host 0.0.0.0 --api-key-file ./key
+curl -H 'Authorization: Bearer …' http://gpu-box.lan:11434/v1/models   # 200
+```
+
+**After:**
+
+```bash
+qvac serve --openai --host 0.0.0.0 --api-key-file ./key --allowed-host gpu-box.lan
+curl -H 'Authorization: Bearer …' http://gpu-box.lan:11434/v1/models   # 200; 403 host_not_allowed without --allowed-host
+```
+
+## New APIs
+
+### OpenAI Decisions endpoint
+
+`POST /v1/decisions` answers predicate, choice and score questions with a configured local decision model. Input is text or a conversation. Answers keep the order of the questions, typed choice values and optional names. The response carries OpenAI-style token usage. The endpoint returns complete JSON; streaming, batch inputs, images and prompt caching are unsupported.
+
+```bash
+qvac configure --modality decision
+qvac serve --openai
+```
+
+```bash
+curl http://127.0.0.1:11434/v1/decisions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "laya-multilingual-322m-q8-0",
+    "input": "Charged twice",
+    "questions": [{
+      "type": "predicate",
+      "name": "urgent",
+      "instructions": "Does this need immediate attention?"
+    }]
+  }'
+```
+
+### Allowed hosts
+
+`--allowed-host <host>` is repeatable; a leading dot (`.corp.example`) covers subdomains. `serve.allowedHosts` sets the same list in config. `--allow-any-host`, or `"allowedHosts": true`, turns the check off.
+
+```bash
+qvac serve --openai --allowed-host qvac.internal --allowed-host .corp.example
+qvac serve --openai --allow-any-host
+```
+
+```json
+{ "serve": { "allowedHosts": ["qvac.internal"] } }
+```
+
+### System resources and model fit
+
+`GET /qvac/v1/system` reports the host's CPU, memory and GPUs; `?sample=true` adds current load and memory use. `POST /qvac/v1/models/fit` asks whether up to 16 models are likely to fit before loading them. Nothing is downloaded or loaded. An alias is assessed with the config it would load with, and `modelConfig` in the request is merged over it. The verdict is advisory: `likely-fits`, `likely-too-large` or `unknown`.
+
+```bash
+curl -sS "http://localhost:11434/qvac/v1/system?sample=true"
+
+curl -sS http://localhost:11434/qvac/v1/models/fit \
+  -H "Content-Type: application/json" \
+  -d '{"models":[{"model":"my-llm","modelConfig":{"ctx_size":8192}}]}'
+```
+
+### Batch chat completion
+
+`POST /qvac/v1/chat/batch` runs up to 64 chat prompts through one loaded LLM in a single request; the model decodes them together. Each prompt takes the `/v1/chat/completions` request fields, and results come back in prompt order with batch-level `stats`. The alias needs `config.parallel` of 2 or more, otherwise the request returns `400 batch_not_enabled`.
+
+```bash
+curl http://localhost:11434/qvac/v1/chat/batch \
+  -H "Content-Type: application/json" \
+  -d '{"model":"my-llm","prompts":[
+        {"id":"a","messages":[{"role":"user","content":"Reply with only the word CHERRY."}]},
+        {"id":"b","messages":[{"role":"user","content":"Reply with only the word BANANA."}]}]}'
+```
+
+### Streaming speech
+
+`POST /v1/audio/speech` with `stream_format: "sse"` streams `speech.audio.delta` events, one per synthesized sentence, and ends with `speech.audio.done`. It supports `pcm` and `wav`. Encoded formats return `400 unsupported_response_format`, and MOSS-SoundEffect and MOSS-Speech aliases return `400 unsupported_stream_format`. The default `stream_format: "audio"` still returns one body.
+
+```bash
+curl -N http://localhost:11434/v1/audio/speech -H "Content-Type: application/json" \
+  -d '{"model":"my-tts","input":"Hello.","response_format":"pcm","stream_format":"sse"}'
+```
+
+## Bug Fixes
+
+### Video image URLs on private networks
+
+`POST /v1/videos` fetched `input_reference.image_url` from any address, so a caller could make the server connect to loopback, private, link-local or cloud-metadata hosts. The server now fetches only public hosts. It checks every resolved address and every redirect hop. Every fetch failure except the 100 MB limit returns the same message. Data URIs, `file_id` and public HTTP(S) URLs work as before.
+
+### Endpoint categories for image-generation aliases
+
+Every `sdcpp-generation` alias was accepted by `/v1/images/*`, including upscaler and world-mode aliases. The category now comes from `config.mode`: `diffusion` (the default) is `image`, and `video`, `upscale` and `world` are their own categories. A route given an alias of another category returns `400 invalid_model_type`, and an unknown `mode` fails at startup.
+
+## [0.16.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.16.0
+
+QVAC CLI 0.16.0 depends on `@qvac/sdk@0.22.0`. `qvac serve` can prove it holds the API key before a client sends it, mount System One decisions at `/v1/systemone`, keep nested JSON Schema on tools, replay past tool calls as structured history, and default `parallel_tool_calls` to true on tool requests. Loads pick a per-alias `modelFitPolicy` and an ordered GPU backend list. Bundling needs Node `^22.21.0 || >=24.9.0`.
+
+Install `@qvac/cli@0.16.0` with `@qvac/sdk@^0.22.0`. The committed range is `^0.22.0`.
+
+## Breaking Changes
+
+### Node version for `qvac bundle` / bare-pack
+
+bare-pack needs Node `^22.21.0 || >=24.9.0`. Earlier 22.x (including 22.20.0) crashes the lexer. `qvac doctor` and `qvac bundle` refuse those versions instead of native-crashing.
+
+**Before:**
+
+```json
+"engines": { "node": ">=18.0.0" }
+```
+
+```text
+$ node --version
+v22.20.0
+$ qvac doctor
+  ✅ Node.js version — v22.20.0
+$ qvac bundle sdk
+  bare-pack exited with code 134
+```
+
+**After:**
+
+```json
+"engines": { "node": "^22.21.0 || >=24.9.0" }
+```
+
+```text
+$ qvac doctor
+  ❌ Node.js version — v22.20.0
+      Upgrade Node.js to ^22.21.0 || >=24.9.0 (current: v22.20.0); bundling needs Node 22.21+ on the 22 line or 24.9+.
+$ qvac bundle sdk
+  ❌ Bundler Error:
+     bare-pack needs Node ^22.21.0 || >=24.9.0; found Node v22.20.0. Upgrade Node and run the bundle again.
+```
+
+### Per-alias `modelFitPolicy`
+
+Skipping the fit probe was process-wide (`QVAC_ADVISORY_MODEL_FIT=0`) and also disabled the engine verdict for fit assessment. The probe is now per load. `'log'` (default) still runs it and never blocks. `'off'` skips it for that alias only. `'refuse'` fails a load the engine projects will not fit.
+
+**Before:**
+
+```text
+QVAC_ADVISORY_MODEL_FIT=0
+```
+
+**After:**
+
+```json
+{
+  "serve": {
+    "models": {
+      "big": {
+        "model": "GPT_OSS_20B_INST_Q4_K_M",
+        "modelFitPolicy": "refuse",
+        "config": {
+          "ctx_size": 131072,
+          "cache-type-k": "f32",
+          "cache-type-v": "f32"
+        }
+      }
+    }
+  }
+}
+```
+
+### Cached turns send the full conversation
+
+Named KV-cache completions on `qvac serve` send the whole history every turn. `remove_thinking_from_context` is no longer honored on `/v1/chat/completions`, `/v1/completions`, or `/v1/responses`. A changed tool set on a named key reuses the same cache file, trimmed where it differs. A deleted attachment now fails later cached turns, as it does uncached. `stats.promptTokens` on a cached turn counts only the tokens processed that turn; reused cache tokens are excluded.
+
+## New APIs
+
+### Nested JSON Schema on tool parameters
+
+`POST /v1/chat/completions` and `POST /v1/responses` keep nested JSON Schema on tool parameters, including arrays of objects and union types.
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "<alias>",
+    "messages": [{"role": "user", "content": "Plan a trip"}],
+    "tools": [{
+      "type": "function",
+      "function": {
+        "name": "plan_trip",
+        "description": "Plan a trip",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "stops": {
+              "type": "array",
+              "items": {"type": "object", "properties": {"name": {"type": "string"}}}
+            },
+            "budget": {"type": ["number", "null"]}
+          },
+          "required": ["stops"]
+        }
+      }
+    }]
+  }'
+```
+
+### Past tool calls as structured history
+
+Assistant `tool_calls` and following `tool` messages are forwarded as structured history, so the chat template can render them in its own tool-call format.
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "<alias>",
+    "messages": [
+      {"role": "user", "content": "Weather in Paris?"},
+      {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [{
+          "id": "call_1",
+          "type": "function",
+          "function": {"name": "get_weather", "arguments": "{\"city\":\"Paris\"}"}
+        }]
+      },
+      {"role": "tool", "tool_call_id": "call_1", "content": "18C"}
+    ],
+    "tools": [{
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "parameters": {"type": "object", "properties": {"city": {"type": "string"}}}
+      }
+    }]
+  }'
+```
+
+### System One HTTP
+
+`qvac configure` can add a decision alias (`LAYA_MULTILINGUAL_322M_Q8_0`). `qvac serve --systemone` mounts `POST /v1/systemone` for typed choice, score, or noul questions about one state.
+
+```bash
+qvac serve --systemone
+```
+
+```json
+{
+  "serve": {
+    "models": {
+      "laya": {
+        "model": "LAYA_MULTILINGUAL_322M_Q8_0",
+        "type": "llamacpp-decision",
+        "config": { "device": "cpu" }
+      }
+    }
+  }
+}
+```
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/systemone \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "laya",
+    "state": "Please refund my duplicate payment.",
+    "questions": {
+      "refund": { "type": "noul", "instructions": "A refund is requested." }
+    }
+  }'
+```
+
+### MOSS ASR and Nemotron diarization
+
+`qvac serve --openai` transcribes MOSS diarize checkpoints on `/v1/audio/transcriptions`. Multipart `hotwords` and `max_new_tokens` are accepted on MOSS only. Nemotron Sortformer diarization on a Parakeet load returns overlapping speaker segments.
+
+```json
+{
+  "serve": {
+    "models": {
+      "moss": { "model": "MOSS_TRANSCRIBE_DIARIZE_Q8_0" },
+      "nemotron": {
+        "src": "./nemotron-diarization.gguf",
+        "type": "parakeet-transcription"
+      }
+    }
+  }
+}
+```
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/audio/transcriptions \
+  -F model=moss \
+  -F file=@meeting.wav \
+  -F 'hotwords=["Erin"]'
+```
+
+### MOSS TTS 0.11 engines
+
+`qvac configure` adds `moss-sfx` (sound effects from `AUDIOGEN_MOSS_SFX_V2_Q8_0`) and `moss-speech` (spoken replies from `TTS_MOSS_SPEECH_Q8_0` plus `TTS_CODEC_MOSS_SPEECH_F16`). `POST /v1/audio/speech` uses that load config.
+
+```json
+{
+  "serve": {
+    "models": {
+      "sfx": {
+        "src": "AUDIOGEN_MOSS_SFX_V2_Q8_0",
+        "type": "tts",
+        "config": { "ttsEngine": "moss-sfx" }
+      }
+    }
+  }
+}
+```
+
+### GPU backend selection for LLM, embeddings, and VLA
+
+LLM, embedding, and VLA aliases can name an ordered GPU backend list in `serve.models[].config.backend`. Unset uses the native default order. Use `device: "cpu"` for CPU.
+
+```json
+{
+  "serve": {
+    "models": {
+      "chat": {
+        "model": "QWEN3_600M_INST_Q4",
+        "config": { "backend": ["cuda", "vulkan"] }
+      }
+    }
+  }
+}
+```
+
+`qvac configure` accepts the same list as `cuda,vulkan`.
+
+### Serve identity before sending the key
+
+`qvac serve --port 0 --ready-fd <fd>` writes `QVAC_SERVE_READY {"port":…,"pid":…}` on an inherited descriptor (≥ 3) once listening. Clients can then `GET /qvac/identity?nonce=` (22–128 unpadded base64url characters) without auth. The proof is HMAC-SHA256 of `qvac-serve-identity-v1\n<port>\n<nonce>` with the serve key, so a supervisor can confirm the listener holds the key before sending it.
+
+```bash
+qvac serve --openai --api-key-file key --port 0 --ready-fd 3
+# fd 3: QVAC_SERVE_READY {"port":53127,"pid":4242}
+
+curl "http://127.0.0.1:53127/qvac/identity?nonce=$NONCE"
+# {"proof":"<base64url HMAC-SHA256(key, \"qvac-serve-identity-v1\\n53127\\n$NONCE\")>"}
+```
+
+### Forward `parallel_tool_calls`
+
+`POST /v1/chat/completions` and `POST /v1/responses` requests with `tools` pass `parallel_tool_calls` to the SDK, defaulting to `true`. Requests without tools are unchanged. The SDK's own default is one call per response, so an OpenAI client that never sets the field used to get at most one.
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "<alias>",
+    "messages": [{"role": "user", "content": "Weather in Paris and London?"}],
+    "tools": [{
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "parameters": {"type": "object", "properties": {"city": {"type": "string"}}}
+      }
+    }],
+    "parallel_tool_calls": false
+  }'
+```
+
+## Bug Fixes
+
+`POST /qvac/v1/translate` still rejects a `text` array over 100 items after the zod 4.6.6 bump, instead of letting the batch cap fall off the schema.
+
+Registry engine classification stays consistent, so `qvac configure` and `qvac serve` pick the same engine for a catalog entry.
+
+## Model Changes
+
+### Added
+
+```
+MOSS_TRANSCRIBE_DIARIZE_F16
+MOSS_TRANSCRIBE_DIARIZE_Q5_0
+MOSS_TRANSCRIBE_DIARIZE_Q8_0
+PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0
+```
+
+## [0.15.0]
+
+📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.15.0
+
+QVAC CLI 0.15.0 follows `@qvac/sdk` 0.21.0. `qvac serve` maps `defer_loading` on OpenAI tools and runs `tool_search` itself, `/v1/audio/speech` accepts OpenAI `{ id }` voices and MOSS TTS from `qvac configure`, and `POST /qvac/v1/translate` reports stats for that request alone. `qvac bundle` can install missing mobile addon platform packages; `verify bundle` and `doctor` check `engines.bare` against the Bare runtime each host runs.
+
+Install `@qvac/cli@0.15.0` with `@qvac/sdk@^0.21.0`.
+
+## New APIs
+
+### Deferred tools on `qvac serve --openai`
+
+`POST /v1/chat/completions` and `POST /v1/responses` accept `defer_loading: true` (and an optional `group`) on a tool entry or on its `function` object. Deferred parameter schemas stay out of the prompt. The server synthesizes `tool_search`, loads matching definitions, and the HTTP response only carries tool calls the client can execute.
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "<alias>",
+    "messages": [{"role": "user", "content": "open an issue about the flaky test"}],
+    "tools": [{
+      "type": "function",
+      "function": {
+        "name": "create_issue",
+        "description": "Open a new issue on a repository",
+        "parameters": {"type": "object", "properties": {"title": {"type": "string"}}},
+        "defer_loading": true,
+        "group": "github"
+      }
+    }]
+  }'
+```
+
+`tool_choice` naming a deferred tool returns `400 invalid_tool_choice`. Name `tool_search` instead. After a search, the next model round runs without the tool-call grammar unless the request sets a `tool_choice` other than `auto`, so a loaded tool is actually callable. Tools without `defer_loading` are unchanged.
+
+### OpenAI voice objects on `/v1/audio/speech`
+
+`voice` accepts a built-in name (`alloy`, `echo`, …), any other string, or `{ "id": "voice_1234" }`. The object form routes the same way as its `id`. A value that is neither a string nor `{ id }` returns `400 missing_voice`.
+
+```bash
+curl -sS http://127.0.0.1:11434/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{"model":"my-tts","voice":{"id":"alloy"},"input":"Hello from QVAC."}' \
+  --output speech.wav
+```
+
+### Mobile addon install on `qvac bundle`
+
+For `android-arm64` and `ios-*`, `qvac bundle` adds missing addon platform packages (for example `@qvac/tts-ggml-android-arm64`) to the project's `package.json`, pinned to the addon's exact version, then bundles again. Pass `--no-install` to skip. A refused or failed install prints the dependencies to add by hand and still writes the bundle.
+
+```bash
+qvac bundle --host android-arm64
+qvac bundle --host android-arm64 --no-install
+```
+
+### `engines.bare` on verify, bundle, and doctor
+
+`qvac verify bundle`, `qvac bundle`, and `qvac doctor` compare each bundled package's `engines.bare` to the Bare version that host actually runs: react-native-bare-kit on Android/iOS, bare-runtime on desktop. A mismatch fails verify and doctor, and warns from bundle, with the `react-native-bare-kit` release to upgrade to and a per-package override. `--offline` skips GitHub and npm lookups.
+
+`--bare-runtime-version` replaces the version read from react-native-bare-kit for every host, so pin it for desktop builds only (for example Electron), not mobile CI.
+
+```bash
+qvac verify bundle --addons-source ./node_modules --host android-arm64
+qvac verify bundle --addons-source ./node_modules --host darwin-arm64 --offline
+qvac doctor --offline
+```
+
+### World memory controls in `qvac configure`
+
+A diffusion alias in World mode exposes nested `world.paramsBackend`, `world.maxVram`, `world.streamLayers`, and `world.verbosity`. Those fields land in `serve.models[].config` and pass through on load.
+
+```json
+{
+  "serve": {
+    "models": {
+      "abot-world": {
+        "model": "ABOT_WORLD_0_5B_Q8_0",
+        "config": {
+          "mode": "world",
+          "world": {
+            "paramsBackend": "diffusion=cpu",
+            "maxVram": 2,
+            "streamLayers": true,
+            "verbosity": 3
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### MOSS TTS starter
+
+`qvac configure` offers a MOSS speech starter: delay backbone `TTS_DELAY_LLM_MOSS_TTS_F16` plus codec decoder `TTS_CODEC_DECODER_MOSS_TTS_F16`. Add the encoder to clone a voice. `POST /v1/audio/speech` uses that load config (`ttsEngine: "moss"`).
+
+```json
+{
+  "serve": {
+    "models": {
+      "my-moss": {
+        "model": "TTS_DELAY_LLM_MOSS_TTS_F16",
+        "preload": true,
+        "config": {
+          "ttsEngine": "moss",
+          "language": "en",
+          "mossCodecDecoderModelSrc": "TTS_CODEC_DECODER_MOSS_TTS_F16"
+        }
+      }
+    }
+  }
+}
+```
+
+## Bug Fixes
+
+`POST /qvac/v1/translate` `stats` describes that single request only. A batch has no stats, and neither does the first single input after a batch on the same model, whose work the engine cannot separate from the batch.
+
+## Model Changes
+
+### Added
+
+```
+TTS_CODEC_DECODER_MOSS_TTS_F16
+TTS_CODEC_ENCODER_MOSS_TTS_F16
+TTS_DELAY_LLM_MOSS_TTS_F16
+```
+
 ## [0.14.0]
 
 📦 **NPM:** https://www.npmjs.com/package/@qvac/cli/v/0.14.0

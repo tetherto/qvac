@@ -479,6 +479,12 @@ async function _runEndToEnd(t, modelPath, backend, fixtureName) {
   try {
     await model.load({ backend })
 
+    const expectedBackend = process.env.QVAC_VLA_EXPECTED_BACKEND
+    if (backend === 'auto' && fixtureName === 'fixed' && expectedBackend) {
+      const resolvedBackend = (model.backendName || '').toLowerCase()
+      t.ok(resolvedBackend.includes(expectedBackend), `${expectedBackend} selected (${tag})`)
+    }
+
     // Windows has no mmap path to take (smolvla.cpp guards it with
     // `#ifndef _WIN32`), and an accelerator backend legitimately copies into
     // device-local memory, so only a CPU load elsewhere is required to map.

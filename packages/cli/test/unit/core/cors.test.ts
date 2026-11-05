@@ -7,7 +7,12 @@ import { resolveServeApiKey } from '@/serve/core/api-key'
 import { createCorsOriginMatcher, isLoopbackHost, normalizeCorsOrigin } from '@/serve/core/cors'
 import { parseServeConfig } from '@/serve/core/config'
 import { buildServer } from '@/serve/index'
-import { checkNetworkExposure, ServeOptionsError, validateServeStartup } from '@/serve/core/startup'
+import {
+  checkAdminExposure,
+  checkNetworkExposure,
+  ServeOptionsError,
+  validateServeStartup
+} from '@/serve/core/startup'
 
 describe('normalizeCorsOrigin', () => {
   it('normalizes HTTP(S) origins', () => {
@@ -174,6 +179,34 @@ describe('network exposure', () => {
       checkNetworkExposure({ host: '0.0.0.0', allowUnauthenticated: true }) ?? '',
       /Security warning.*0\.0\.0\.0/s
     )
+  })
+
+  it('refuses --enable-admin off loopback without a key, whatever --allow-unauthenticated says', async () => {
+    assert.throws(
+      () => checkAdminExposure({ host: '0.0.0.0', enableAdmin: true }),
+      (error: unknown) => {
+        assert.ok(error instanceof ServeOptionsError)
+        assert.equal(error.option, '--enable-admin')
+        return true
+      }
+    )
+    await assert.rejects(
+      buildServer({
+        projectRoot: tmpdir(),
+        port: 0,
+        host: '0.0.0.0',
+        allowUnauthenticated: true,
+        enableAdmin: true,
+        quiet: true
+      }),
+      (error: unknown) => error instanceof ServeOptionsError && error.option === '--enable-admin'
+    )
+  })
+
+  it('permits --enable-admin on loopback or with a key', () => {
+    checkAdminExposure({ host: '127.0.0.1', enableAdmin: true })
+    checkAdminExposure({ host: '0.0.0.0', apiKey: 'secret', enableAdmin: true })
+    checkAdminExposure({ host: '0.0.0.0', enableAdmin: false })
   })
 
   it('refuses before preload or listen', async () => {

@@ -1,13 +1,17 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ParakeetDriver = void 0;
+exports.assertNoRunOptions = assertNoRunOptions;
 const parakeet_1 = require("./parakeet");
 const error_1 = require("../../lib/error");
 const constants_1 = require("../../lib/constants");
 const audio_1 = require("../../lib/audio");
+const options_1 = require("./options");
 const PARAKEET_CONFIG_KEYS = [
     "maxThreads",
     "useGPU",
+    "backend",
+    "speakerAttribution",
     "sampleRate",
     "channels",
     "captionEnabled",
@@ -60,6 +64,16 @@ const PARAKEET_STREAMING_OPT_KEYS = [
     "chunkRightContextMs",
     "spkCacheUpdatePeriod",
 ];
+/** Rejects per-call `run()` options on an engine that takes none. */
+function assertNoRunOptions(options, engine) {
+    const keys = Object.keys(options ?? {});
+    if (keys.length === 0)
+        return;
+    throw new error_1.QvacErrorAddonASRGgml({
+        code: error_1.ERR_CODES_PARAKEET.INVALID_CONFIG,
+        adds: `${keys.join(", ")}: run options are moss-transcribe only (engine is ${engine})`,
+    });
+}
 function asError(error) {
     return error instanceof Error ? error : new Error(String(error));
 }
@@ -108,8 +122,16 @@ class ParakeetDriver {
         this._files = { model: files.model };
         this.params = config.parakeetConfig || {};
     }
-    validateConfig() {
-        for (const key of Object.keys(this.params)) {
+    validateConfig(params = this.params) {
+        (0, options_1.validateParakeetBackend)(params.backend);
+        (0, options_1.validateSpeakerAttribution)(params.speakerAttribution);
+        if (params.speakerAttribution && params.streaming) {
+            throw new error_1.QvacErrorAddonASRGgml({
+                code: error_1.ERR_CODES_PARAKEET.INVALID_CONFIG,
+                adds: "speakerAttribution uses batch run(), not streaming mode",
+            });
+        }
+        for (const key of Object.keys(params)) {
             if (!PARAKEET_CONFIG_KEYS.includes(key)) {
                 throw new error_1.QvacErrorAddonASRGgml({
                     code: error_1.ERR_CODES_PARAKEET.INVALID_CONFIG,
@@ -135,9 +157,9 @@ class ParakeetDriver {
     async reload(newConfig = {}) {
         const overrides = newConfig;
         this.ctx.logger.debug("Reloading addon with new configuration", overrides);
-        if (overrides.parakeetConfig) {
-            this.params = { ...this.params, ...overrides.parakeetConfig };
-        }
+        const nextParams = { ...this.params, ...overrides.parakeetConfig };
+        this.validateConfig(nextParams);
+        this.params = nextParams;
         const configurationParams = this._buildConfigurationParams();
         await this.cancelActive();
         if (this.ctx.job.active) {
@@ -167,7 +189,8 @@ class ParakeetDriver {
     getBackendInfo() {
         return this.addon?.getBackendInfo?.() ?? null;
     }
-    run(audio) {
+    run(audio, options = {}) {
+        assertNoRunOptions(options, "parakeet");
         const response = this.ctx.job.start();
         void this._pumpBatchAudio(audio).catch((error) => {
             this.ctx.job.fail(asError(error));
@@ -175,8 +198,15 @@ class ParakeetDriver {
         return Promise.resolve(response);
     }
     async createStreamingSession(audio, opts = {}) {
+        if (this.params.speakerAttribution) {
+            throw new error_1.QvacErrorAddonASRGgml({
+                code: error_1.ERR_CODES_PARAKEET.INVALID_CONFIG,
+                adds: "speakerAttribution uses batch run(), not runStreaming()",
+            });
+        }
         const streamingOpts = this._validateStreamingOptions(opts);
         const addon = this._requireAddon();
+        this._assertNemotronChunkMs(this._effectiveStreamingChunkMs(streamingOpts.chunkMs));
         const response = this.ctx.job.start();
         let closing = false;
         const markClosing = () => {
@@ -204,6 +234,39 @@ class ParakeetDriver {
                 return closing;
             },
         };
+    }
+    /**
+     * The cadence the native session will run at, following its own fallback
+     * rules: a run-level `chunkMs` of 0 is ignored (`applyStreamingOverrides`),
+     * a load-time `streamingChunkMs` of 0 means the model default
+     * (`resolveStreamingChunkMs`). `undefined` = the model default, which is
+     * always a trained cadence.
+     */
+    _effectiveStreamingChunkMs(runChunkMs) {
+        if (runChunkMs !== undefined && runChunkMs > 0)
+            return runChunkMs;
+        const loadChunkMs = this.params.streamingChunkMs;
+        if (loadChunkMs !== undefined && loadChunkMs > 0)
+            return loadChunkMs;
+        return undefined;
+    }
+    /**
+     * Nemotron's cache-aware encoder only runs at its trained chunk cadences;
+     * the engine rejects any other `chunkMs` when the session opens. Reject it
+     * here first, before a response is started, so the run settles with a
+     * configuration error instead of a failed session start.
+     */
+    _assertNemotronChunkMs(chunkMs) {
+        if (chunkMs === undefined)
+            return;
+        if (this.getBackendInfo()?.modelType !== "nemotron")
+            return;
+        if (constants_1.NEMOTRON_STREAMING_CHUNK_MS.includes(chunkMs))
+            return;
+        throw new error_1.QvacErrorAddonASRGgml({
+            code: error_1.ERR_CODES_PARAKEET.INVALID_CONFIG,
+            adds: `chunkMs ${chunkMs} is not supported by Nemotron streaming; use one of ${constants_1.NEMOTRON_STREAMING_CHUNK_MS.join(", ")} ms`,
+        });
     }
     _validateStreamingOptions(opts) {
         for (const key of Object.keys(opts)) {
@@ -255,6 +318,8 @@ class ParakeetDriver {
             modelPath: this._files.model || "",
             maxThreads: this.params.maxThreads ?? 4,
             useGPU: this.params.useGPU === true,
+            backend: this.params.backend,
+            speakerAttribution: this.params.speakerAttribution,
             sampleRate: this.params.sampleRate || 16000,
             channels: this.params.channels || 1,
             captionEnabled: this.params.captionEnabled === true,
@@ -300,17 +365,19 @@ class ParakeetDriver {
             return;
         }
         if (event === "Output") {
+            if (Array.isArray(data) && data.length === 0)
+                return;
             // The segment payload passes through untouched; a typed endOfTurn
             // event is additionally synthesized when the (last) segment carries
             // the model's end-of-utterance flag (double-signal).
             this.ctx.job.output(data);
             const segment = lastSegmentOf(data);
-            if (segment?.isEndOfTurn === true) {
+            if (segment?.isEndOfTurn === true && segment.eotConfidence === undefined) {
                 this.ctx.job.output({ type: "endOfTurn", source: "model-eou" });
             }
             return;
         }
-        if (event === "VadState") {
+        if (event === "VadState" || event === "EndOfTurn") {
             // The native payload is already VadEvent-shaped (energy detector or
             // Sortformer speaker activity).
             this.ctx.job.output(data);

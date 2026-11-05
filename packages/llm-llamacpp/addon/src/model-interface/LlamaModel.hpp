@@ -16,9 +16,10 @@
 #include <llama.h>
 #include <picojson/picojson.h>
 
-#include "AsyncWeightsLoader.hpp"
+#include "CacheLedger.hpp"
 #include "CacheManager.hpp"
 #include "ContinuousBatchScheduler.hpp"
+#include "ImagePixelLimit.hpp"
 #include "LlamaFinetuner.hpp"
 #include "LlamaFinetuningHelpers.hpp"
 #include "LlamaFinetuningParams.hpp"
@@ -27,8 +28,6 @@
 #include "LoadFitNormalization.hpp"
 #include "ModelMetadata.hpp"
 #include "common/chat.h"
-#include "inference-addon-cpp/BlobsStream.hpp"
-#include "inference-addon-cpp/GGUFShards.hpp"
 #include "inference-addon-cpp/InitLoader.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 #include "inference-addon-cpp/ModelInterfaces.hpp"
@@ -52,11 +51,6 @@ public:
   LlamaModel(LlamaModel&&) = delete;
   LlamaModel& operator=(LlamaModel&&) = delete;
 
-  /// @brief Resolves shard basenames in-place to absolute paths relative to
-  /// the parent directory of @p modelPath.
-  static void
-  resolveShardPaths(GGUFShards& shards, const std::string& modelPath);
-
   /**
    * The Constructor for llama model.
    * @param modelPath - path to the model file.
@@ -79,7 +73,7 @@ public:
    * Members are destroyed in reverse order of declaration, ensuring
    * llmContext_ is destroyed before backendsHandle_.
    */
-  ~LlamaModel() override = default;
+  ~LlamaModel() override;
 
   std::string getName() const final { return "LlamaModel"; }
   void setWeightsForFile(
@@ -107,7 +101,14 @@ public:
         finetuningParams;
 
     std::string cacheKey;
-    bool saveCacheToDisk = false;
+    /// Keep this conversation in memory only: setting it aside, evicting it
+    /// or unloading the model drops it instead of writing its `cacheKey`
+    /// file. Only an explicit `saveCache` writes it.
+    bool ephemeral = false;
+    /// A `cacheKey` file the request may start from, read and never written:
+    /// it competes with the states in memory, and the one that serves the
+    /// longest prefix of the prompt wins.
+    std::string baseCacheKey;
   };
 
   std::any process(const std::any& input) final;
@@ -156,7 +157,7 @@ public:
   /// Run several prompts in parallel via the continuous-batching session
   /// and return their generated texts in input order. Each output entry
   /// matches the prompt at the same index. Media prompts are accepted on
-  /// multimodal models, and per-prompt cache (`cacheKey` / `saveCacheToDisk`)
+  /// multimodal models, and per-prompt cache (`cacheKey` / `ephemeral`)
   /// round-trips media KV via the shared GGSQ sequence-state format. Throws
   /// when batching is unsupported or any prompt is rejected by the session
   /// (oversize,
@@ -174,6 +175,49 @@ public:
   /// where capacity is a job count instead — an admission check must therefore
   /// take the max of this and the scheduler's job count, never this alone.
   [[nodiscard]] unsigned activeSlots() const;
+
+  /// Writes the conversation kept for @p cacheKey to its file, wherever it is
+  /// kept: the single-prompt session, a parked batch sequence or the RAM
+  /// tier. Waits for a request running on that key to finish, so the file
+  /// always holds a committed state. A no-op when the file already holds the
+  /// conversation. Throws `InvalidArgument` when nothing is kept for the key
+  /// and no file exists, and `UnableToSaveSessionFile` when the write fails
+  /// (the conversation stays in memory, still unsaved).
+  void saveCache(const std::string& cacheKey);
+
+  /// Drops the conversation kept in memory for @p cacheKey without writing
+  /// it: the single-prompt session, a parked batch sequence, the RAM tier and
+  /// its checkpoints. Waits for a request running on that key, like
+  /// `saveCache`. The file, if any, is left alone. A no-op when nothing is
+  /// kept for the key.
+  void discardCache(const std::string& cacheKey);
+
+  /// What `calcTokens` counts. `history` is a `Message[]` in `process`'s JSON
+  /// shape, tool definitions allowed; `tools` holds tool definitions only. A
+  /// tool name in both is a duplicate and throws. A request with none of the
+  /// three, or with no message to render (`tools` alone, or an empty
+  /// `history` without `text`), throws.
+  struct CalcTokensRequest {
+    std::optional<std::string> text;
+    std::optional<std::string> history;
+    std::optional<std::string> tools;
+  };
+
+  /// Tokens @p request takes on this model. `text` alone is counted raw, with
+  /// no chat template and no BOS. With `history` or `tools` the conversation,
+  /// `text` (even empty) appended as a user turn, is rendered by the chat
+  /// template as the opening request of a fresh conversation, with BOS, and
+  /// with the generation prompt when the last turn is a user or tool turn, as
+  /// `process` renders it. `tools` alone has no message to render and throws,
+  /// as `process` does; pass an empty `text` to count a tool list with an
+  /// empty user turn. Tools the template leaves out are not counted, and a
+  /// `prefill` request, which renders without a user turn, can differ. Media is
+  /// not counted. Every invalid request, a media message included, throws
+  /// `InvalidArgument` prefixed `calcTokens:`; a chat template that cannot
+  /// render the conversation fails as it would for `process`. Reads only
+  /// load-time state and never enters the job scheduler, so it runs beside
+  /// in-flight requests.
+  [[nodiscard]] size_t calcTokens(const CalcTokensRequest& request) const;
 
   /**
    * The Reset method.
@@ -245,6 +289,10 @@ public:
       const std::vector<qvac_lib_inference_addon_cpp::JobId>& cancelledJobs);
 
 private:
+  /// Writes every non-ephemeral conversation with unsaved turns to its
+  /// `cacheKey` file: the active single-prompt session, parked batch
+  /// conversations and the RAM tier. Run before a reload and at unload.
+  void flushResidentCaches() noexcept;
   friend class LlamaFinetuner;
   // Unit tests reach internals (scheduler, single-prompt context) through this
   // peer instead of public `*ForTesting()` accessors. See
@@ -284,10 +332,10 @@ private:
   void closeFinetuneCancellationWindow();
 
   /// True for a single Prompt that may run on the scheduler concurrently:
-  /// text generation, or a prefill that persists its cache to disk
-  /// (saveCacheToDisk with a cacheKey). Finetune and live-only prefill (whose
-  /// sole product is warm state in the shared single context, which a lane
-  /// cannot deliver) stay off the concurrent path.
+  /// text generation, or a prefill with a cacheKey (its conversation stays in
+  /// its sequence for the next request on the key). Finetune and keyless
+  /// prefill (whose sole product is warm state in the shared single context,
+  /// which a lane cannot deliver) stay off the concurrent path.
   static bool isConcurrentEligible(const Prompt& prompt);
 
   /// Route a single Prompt through the scheduler as a one-item batch, recording
@@ -325,17 +373,8 @@ private:
   qvac_lib_inference_addon_cpp::RuntimeStats singleRuntimeStatsLocked() const;
 
   struct ReloadableState {
-    ReloadableState(
-        const ConstructionArgs& args, const std::string& loadingContext,
-        ModelMetaData& metadata)
-        : shards_(GGUFShards::expandGGUFIntoShards(args.modelPath)),
-          asyncWeightsLoader_(shards_, initLoader_, loadingContext, &metadata) {
-    }
-
-    GGUFShards shards_;
     friend class InitLoader;
     InitLoader initLoader_;
-    AsyncWeightsLoader asyncWeightsLoader_;
 
     bool isTextLlm_ = false;
 
@@ -349,6 +388,24 @@ private:
 
     /// Set when llama_n_seq_max > 1, null otherwise.
     std::unique_ptr<batching::ContinuousBatchScheduler> batchScheduler_;
+
+    /// Checkpoint policy from the load config (`cache_checkpoints`,
+    /// `cache_checkpoints_max_bytes`, `cache_checkpoint_storage`), applied to
+    /// the single-prompt context and to every batch driver.
+    qvac_lib_inference_addon_llama::cache::CheckpointPolicy
+        cacheCheckpointPolicy_;
+    /// RAM tier budget for conversation states (`cache_ram_mib`).
+    uint64_t cacheRamBytes_ = 0;
+    /// `cache_share_across_keys`, applied to the single-prompt context and to
+    /// every batch driver.
+    bool cacheShareAcrossKeys_ = true;
+    /// The RAM tier itself, shared by the single-prompt cache and the batch
+    /// scheduler.
+    std::shared_ptr<batching::SlotStateCache> ramTier_;
+    /// cacheKey files this model has used, shared by the single-prompt cache
+    /// and the batch scheduler as places to start a request from.
+    std::shared_ptr<qvac_lib_inference_addon_llama::cache::CacheFileIndex>
+        fileIndex_;
 
     // configuration values parsed from configFilemap
     std::optional<load_fit_normalization::NormalizedFitSnapshot>
@@ -384,8 +441,11 @@ private:
   /// decoding via `n_parallel >= 2` (which llama.cpp maps directly to
   /// `n_seq_max`); applies to text and multimodal models alike.
   static bool isMultiBatchActivated(ReloadableState& state);
+  /// Fails the load early when `cache_checkpoints_max_bytes` cannot hold
+  /// `cache_checkpoints` checkpoints of the largest size this context allows.
+  static void validateCheckpointBudget(ReloadableState& state);
 
-  static std::unique_ptr<batching::ContinuousBatchScheduler>
+  std::unique_ptr<batching::ContinuousBatchScheduler>
   initBatchScheduler(ReloadableState& state);
 
   struct ResolvedPrompt {
@@ -407,7 +467,10 @@ private:
   void resetState(bool resetStats = true);
   std::unique_ptr<LlmContext> createContext(
       std::string&& projectionPath, common_params& params,
-      common_init_result_ptr llamaInit);
+      common_init_result_ptr llamaInit,
+      std::unique_ptr<
+          qvac_lib_inference_addon_llama::speculative::SpeculativeRuntime>
+          speculative);
 
   bool loadMedia(const std::vector<uint8_t>& input);
 
@@ -418,9 +481,9 @@ private:
 
   void init(bool acquireLock);
 
-  const std::string loadingContext_;
   ModelMetaData metadata_;
   ConstructionArgs constructionArgs_;
+  uint64_t maxImagePixels_ = image_pixel_limit::DEFAULT_MAX_PIXELS;
 
   /// Shared lock for all methods that read/use state_ members; exclusive lock
   /// only in reload()
@@ -494,13 +557,9 @@ private:
       qvac_lib_inference_addon_cpp::RuntimeStats>
       jobStats_;
 
-  /// Cache keys being persisted by in-flight scheduler runs. Reserved at
-  /// admission in processPromptBatchImpl and released when the run returns;
-  /// a second request saving the same key while it is reserved would race on
-  /// the same file, so its admission is refused. Guarded by
-  /// `inflightSaveKeysMtx_`.
-  std::mutex inflightSaveKeysMtx_;
-  std::unordered_set<std::string> inflightSaveKeys_;
+  /// Held by a single-prompt request for its whole run and by `saveCache`,
+  /// so an explicit save never reads the single-prompt session mid-request.
+  std::mutex singleRunMtx_;
 
   bool isBitnetModel() const;
   void validateBitnetQuantization();

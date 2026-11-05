@@ -33,6 +33,7 @@ function understandResult(
     timesignature: '4/4',
     vocalLanguage: 'en',
     audioCodes: RECOVERED_CODES,
+    seed: 11,
     ...overrides
   }
 }
@@ -186,12 +187,14 @@ test('audioUnderstand streams the description and repeats it on the terminal sta
     'the Int32Array the addon returns is normalized to a plain array'
   )
   t.alike(streamed.understand?.audioCodes, [7, -3, 2048])
+  t.is(streamed.understand?.seed, 11, 'the seed the LM decode used reaches the wire')
 
   const terminal = frames[2]!
   t.is(terminal.done, true)
   t.is(terminal.stopReason, 'completed')
   t.alike(terminal.stats?.understand?.audioCodes, [7, -3, 2048])
   t.is(terminal.stats?.understand?.bpm, 96)
+  t.is(terminal.stats?.understand?.seed, 11)
   t.is(terminal.stats?.audioDurationMs, 12_500)
   t.alike(terminal.diagnostics, {
     selectedBackend: 'metal',

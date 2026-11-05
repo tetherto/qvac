@@ -1,7 +1,7 @@
 /**
  * Real-time Voice Assistant: mic → Whisper (with Silero VAD) → Llama → Supertonic TTS.
  *
- * Usage: bun run examples/voice-assistant/voice-assistant.ts
+ * Usage: npx tsx examples/voice-assistant/voice-assistant.ts
  *
  * Speak a question; the VAD detects when you pause, the utterance is
  * transcribed, sent to the LLM, and the response is spoken back. The loop
@@ -22,8 +22,8 @@ import {
   TTS_EN_SUPERTONIC_Q8_0
 } from '@qvac/sdk'
 import { spawnSync } from 'child_process'
-import { startMicrophone } from '../audio/mic-input'
-import { createWavHeader, int16ArrayToBuffer, playAudio } from '../tts/utils'
+import { startMicrophone } from '../audio/mic-input.js'
+import { createWavHeader, int16ArrayToBuffer, playAudio } from '../tts/utils.js'
 
 const MIC_SAMPLE_RATE = 16000
 const TTS_SAMPLE_RATE = 44100

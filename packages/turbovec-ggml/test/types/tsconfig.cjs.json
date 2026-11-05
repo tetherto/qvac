@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "strict": true,
+    "noEmitOnError": true,
+    "skipLibCheck": true,
+    "esModuleInterop": false,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@qvac/turbovec-ggml": ["../../index"],
+      "@qvac/turbovec-ggml/idMapIndex": ["../../index"]
+    }
+  },
+  "files": ["consumer-cjs.test.ts"]
+}

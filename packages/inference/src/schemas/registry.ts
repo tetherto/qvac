@@ -12,6 +12,7 @@ const modelRegistryEntryAddonSchema = z.enum([
   'tts',
   'ocr',
   'parakeet',
+  'moss-transcribe',
   'diffusion',
   'audiogen',
   'vla',
@@ -29,15 +30,19 @@ export const modelRegistryEngineSchema = z.enum([
   ModelType.whispercppTranscription,
   ModelType.bciWhispercppTranscription,
   ModelType.llamacppEmbedding,
+  ModelType.llamacppDecision,
+  ModelType.llamacppRerank,
   ModelType.nmtcppTranslation,
   ModelType.onnxTts,
   ModelType.ttsGgml,
   ModelType.ggmlOcr,
   ModelType.parakeetTranscription,
+  ModelType.mossTranscribe,
   ModelType.sdcppGeneration,
   ModelType.audiogenGgml,
   ModelType.ggmlVla,
   ModelType.ggmlClassification,
+  'ggml-image-embedding',
   'onnx-vad'
 ])
 

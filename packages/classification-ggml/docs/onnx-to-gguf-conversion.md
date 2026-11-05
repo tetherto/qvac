@@ -22,7 +22,7 @@ MobileNetV3-Small weights for this addon.
 
 ## 4) Integrate with addon
 
-- Replace `weights/mobilenetv3_3class_v3_fp16.gguf`.
+- Replace the test weights at `weights/mobilenetv3_3class_v3_fp16.gguf` and publish the same file to the registry. The npm package does not ship it.
 - Keep API output unchanged (`[{ label, confidence }]`).
 
 ## Known pitfalls
@@ -40,7 +40,7 @@ table `BLOCKS` and the label metadata inside the GGUF, so swapping in
 new classes (or a different fine-tune) does not require any C++ changes
 as long as the architecture stays MobileNetV3-Small.
 
-> The bundled weights in `weights/mobilenetv3_3class_v3_fp16.gguf` were
+> The weights checked in at `weights/mobilenetv3_3class_v3_fp16.gguf` were
 > produced by this exact pipeline. FP16 is numerically identical to the
 > ONNX FP32 reference on representative inputs.
 
@@ -139,11 +139,10 @@ with an external script during development (not bundled in this
 package because it requires PyTorch / onnxruntime) and must not embed
 any private validation data into the public package.
 
-## 4. Update the bundled weights
+## 4. Publish the weights
 
-1. Place the new `.gguf` in `packages/classification-ggml/weights/`.
-2. Keep the filename identical (`mobilenetv3_3class_v3_fp16.gguf`) or
-   update `DEFAULT_WEIGHTS_FILENAME` in `index.js`.
+1. Place the new `.gguf` in `packages/classification-ggml/weights/` so addon tests can load it by path. That file is not published in the npm package.
+2. Publish the same file to the model registry and point `DEFAULT_CLASSIFICATION_MODEL_SRC` in `@qvac/inference` at the new `registry://` URL.
 3. Bump the package version (`package.json` + `CHANGELOG.md`).
 4. Re-run `npm run test:integration` and `npm run test:cpp`.
 

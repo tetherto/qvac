@@ -90,6 +90,7 @@ export function loadModel<S extends ModelDescriptor>(
  *   - fallbackSrc: For a built-in catalog model, an HTTP URL or local file path to load from when the registry is unreachable (validated against the model checksum)
  *   - requireHttpChecksum: Per-call override — reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Defaults to the engine config (false).
  *   - requireSecureTransport: Per-call override — reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source (loopback exempt); when unset, only Hugging Face transport is hardened. Defaults to the engine config (false).
+ *   - modelFitPolicy: Per-call override — "log" reports the engine fitter's verdict and loads anyway, "refuse" rejects a load it projects will not fit, "off" skips the check. Defaults to the engine config ("log").
  *   - onProgress: Callback for download progress updates
  *   - logger: Logger instance for model operation logs
  * @param rpcOptions - Optional RPC options including per-call profiling configuration

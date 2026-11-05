@@ -25,11 +25,20 @@ async function waitFor(condition, what, timeout = 10000) {
   }
 }
 
-test('env terminated while a JsAsyncTask worker is blocked defers teardown until the worker finishes', async (t) => {
+for (const [form, worker] of [
+  ['without a result', './worker-gated-task.js'],
+  ['with a result', './worker-gated-value-task.js']
+]) {
+  test(`env terminated while a JsAsyncTask worker ${form} is blocked defers teardown until the worker finishes`, async (t) => {
+    await gatedTeardown(t, worker)
+  })
+}
+
+async function gatedTeardown(t, worker) {
   t.timeout(60000)
 
   addon.resetGate()
-  const thread = new Thread('./worker-gated-task.js')
+  const thread = new Thread(worker)
 
   // Terminate only once the worker is provably inside its work, so the env
   // teardown genuinely races a running JsAsyncTask rather than a queued one.
@@ -51,7 +60,7 @@ test('env terminated while a JsAsyncTask worker is blocked defers teardown until
   thread.join()
 
   t.is(addon.taskFinished(), 1, 'worker ran to completion under the dying env')
-})
+}
 
 test('runtime survives a terminate sweep across the worker completion window', async (t) => {
   t.timeout(60000)

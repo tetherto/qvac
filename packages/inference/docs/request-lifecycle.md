@@ -25,6 +25,21 @@ Cancellation capability is explicit:
 - soft cancellation stops observing or yielding a result when the addon cannot be
   interrupted safely.
 
+## Caller-ended streams
+
+A stream that waits on a source outside the registry, such as a log subscription,
+can be ended by its caller. Its registry entry declares `endsOnAbort`, and
+dispatch passes it the caller's `signal` (`AbortableRPCOptions`) as
+`StreamHandlerContext.signal`. The handler listens to the signal, so its wait ends
+and its `finally` releases the source. `stream()` then ends without an error, and
+a signal that is already aborted runs nothing. Over RPC, the SDK client destroys
+its response stream and the worker aborts the signal it passed to `stream()`.
+
+Every other stream ignores the signal and runs to its end, even when the client
+has stopped reading. Ending an inference stream early would release its admission
+slot while the native job still runs. Stop an inference run with `cancel`, which
+goes through the registry.
+
 Keep event-stream termination and aggregate-promise outcomes compatible, including
 partial results. Update the plugin declaration, handler, schemas, public surface,
 and focused registry/cancellation tests together. Current source and tests are

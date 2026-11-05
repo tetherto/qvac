@@ -1,6 +1,6 @@
 import test from 'brittle'
 import { AudioGen } from '@qvac/audiogen-ggml'
-import type { AudiogenOutputChunk, AudiogenStats } from '@qvac/audiogen-ggml'
+import type { AudiogenOutputChunk, AudiogenStats, GenerateOptions } from '@qvac/audiogen-ggml'
 import { audioGenStream } from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-stream'
 import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
 import { getRequestRegistry } from '@/runtime/index'
@@ -146,6 +146,107 @@ test('audioGen plugin operation streams progress, PCM, and terminal stats', asyn
   t.is(getRequestRegistry().get(requestId), null)
 })
 
+test('audioGen forwards per-run steps and shift and reports what the run rendered', async (t) => {
+  const modelId = 'audio-gen-operation-metadata'
+  const requestId = 'audio-gen-request-metadata'
+  const metadata = {
+    caption: 'a hopeful indie track with jangly guitars and a driving beat',
+    lyrics: '[verse]\nopen roads',
+    bpm: 112,
+    keyscale: 'D major',
+    beatsPerBar: 4,
+    vocalLanguage: 'en',
+    seed: 1_234_567,
+    codeFrames: 150
+  }
+  const calls: Array<{ caption: string; options: GenerateOptions | undefined }> = []
+  const model = createModel(
+    createResponse(
+      [{ outputArray: new Int16Array([1, -1]), sampleRate: 48000, channels: 2, metadata }],
+      { audioDurationMs: 30_000, totalTimeMs: 9_000, metadata }
+    )
+  )
+  const respond = model.run
+  model.run = async function (caption: string, options?: GenerateOptions) {
+    calls.push({ caption, options })
+    return respond.call(model, caption, options)
+  }
+  registerAudioGenModel(modelId, model)
+  t.teardown(() => {
+    unregisterModel(modelId)
+  })
+
+  const frames = []
+  for await (const frame of audioGenStream({
+    type: 'audioGenStream',
+    requestId,
+    modelId,
+    caption: 'a hopeful indie track',
+    simpleMode: true,
+    bpm: 0,
+    inferenceSteps: 50,
+    shift: 1.5
+  })) {
+    frames.push(frame)
+  }
+
+  t.alike(calls, [
+    {
+      caption: 'a hopeful indie track',
+      options: { bpm: 0, simpleMode: true, inferenceSteps: 50, shift: 1.5 }
+    }
+  ])
+  const terminal = frames.at(-1)
+  t.is(terminal?.done, true)
+  t.alike(terminal?.stats, { audioDurationMs: 30_000, totalTimeMs: 9_000, metadata })
+  t.is(terminal?.stats?.metadata?.seed, 1_234_567, 'an unseeded take can be replayed')
+  t.is(getRequestRegistry().get(requestId), null)
+})
+
+test('audioGen terminal stats carry the MiniMax stage timings', async (t) => {
+  const modelId = 'audio-gen-operation-minimax-stats'
+  const model = createModel(
+    createResponse([{ outputArray: new Int16Array([1, -1]), sampleRate: 44100, channels: 2 }], {
+      audioDurationMs: 12_000,
+      totalTimeMs: 20_000,
+      emittedFrames: 300,
+      arMs: 11_000,
+      conditionMs: 150,
+      flowMs: 7_000,
+      vocoderMs: 1_500,
+      backendDevice: 0,
+      backendId: 0,
+      gpuFallbackReason: 1
+    })
+  )
+  registerAudioGenModel(modelId, model)
+  t.teardown(() => {
+    unregisterModel(modelId)
+  })
+
+  const frames = []
+  for await (const frame of audioGenStream({
+    type: 'audioGenStream',
+    modelId,
+    caption: 'warm cinematic piano'
+  })) {
+    frames.push(frame)
+  }
+
+  t.alike(frames.at(-1)?.stats, {
+    audioDurationMs: 12_000,
+    totalTimeMs: 20_000,
+    emittedFrames: 300,
+    arMs: 11_000,
+    conditionMs: 150,
+    flowMs: 7_000,
+    vocoderMs: 1_500,
+    backendDevice: 0,
+    backendId: 0,
+    gpuFallbackReason: 1
+  })
+})
+
 test('audioGen plugin operation yields indeterminate LM progress', async (t) => {
   const modelId = 'audio-gen-operation-indeterminate-progress'
   const model = createModel(createResponse([{ progress: { stage: 'lm', step: 1, total: -1 } }], {}))
@@ -210,7 +311,7 @@ test('audioGen terminal diagnostics report a GPU fallback reason, or omit it', a
       frames[0]?.diagnostics,
       `${reason} also reaches the symbol`
     )
-    t.absent('gpuFallbackReason' in (frames[0]?.stats ?? {}), 'the raw code stays off the wire')
+    t.is(frames[0]?.stats?.gpuFallbackReason, code, 'the raw code rides on the stats')
   }
 
   // none / not-requested describe a run that never lost a GPU, and an
@@ -240,6 +341,7 @@ test('audioGen terminal diagnostics report a GPU fallback reason, or omit it', a
       { selectedBackend: 'cpu', selectedDevice: 'cpu' },
       `code ${code} carries no fallback`
     )
+    t.is(frames[0]?.stats?.gpuFallbackReason, code, `code ${code} still rides on the stats`)
   }
 })
 

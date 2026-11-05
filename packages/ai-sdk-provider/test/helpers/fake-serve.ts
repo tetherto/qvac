@@ -13,9 +13,10 @@ const FAKE_SERVE = `#!/usr/bin/env node
 const http = require('node:http')
 const args = process.argv.slice(2)
 function arg (name) { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined }
-const port = Number(arg('--port'))
+const port = Number(arg('--port') || 0)
 const host = arg('--host') || '127.0.0.1'
 const apiKey = arg('--api-key')
+const readyFd = arg('--ready-fd')
 const behavior = process.env.FAKE_SERVE_BEHAVIOR || 'healthy'
 
 if (process.env.FAKE_SERVE_ARGV_FILE) {
@@ -23,6 +24,10 @@ if (process.env.FAKE_SERVE_ARGV_FILE) {
 }
 
 if (behavior === 'exit-immediately') { console.error('fake serve boom'); process.exit(3) }
+if (behavior === 'no-ready-fd' && readyFd !== undefined) {
+  console.error("error: unknown option '--ready-fd'")
+  process.exit(1)
+}
 
 // Stand-in for the real serve's \`bare\` inference worker: a stubborn grandchild
 // that ignores SIGTERM and would survive a SIGKILL aimed at the serve pid alone.
@@ -36,6 +41,14 @@ if (behavior === 'spawn-stubborn-worker') {
 }
 
 const server = http.createServer((req, res) => {
+  if (req.url && req.url.indexOf('/qvac/identity') === 0 && apiKey) {
+    const nonce = new URL(req.url, 'http://x').searchParams.get('nonce') || ''
+    const proof = require('node:crypto').createHmac('sha256', apiKey)
+      .update('qvac-serve-identity-v1\\n' + server.address().port + '\\n' + nonce).digest('base64url')
+    res.setHeader('content-type', 'application/json')
+    res.end(JSON.stringify({ proof }))
+    return
+  }
   if (req.url && req.url.indexOf('/v1/models') === 0) {
     if (!apiKey || req.headers.authorization !== 'Bearer ' + apiKey) {
       res.statusCode = 401
@@ -52,7 +65,15 @@ const server = http.createServer((req, res) => {
   res.end()
 })
 
-if (behavior !== 'never-listen') server.listen(port, host)
+if (behavior !== 'never-listen') {
+  server.listen(port, host, () => {
+    if (readyFd === undefined) return
+    const fs = require('node:fs')
+    const signal = JSON.stringify({ port: server.address().port, pid: process.pid })
+    fs.writeSync(Number(readyFd), 'QVAC_SERVE_READY ' + signal + '\\n')
+    fs.closeSync(Number(readyFd))
+  })
+}
 
 if (behavior === 'ignore-sigterm' || behavior === 'spawn-stubborn-worker') {
   process.on('SIGTERM', () => {})

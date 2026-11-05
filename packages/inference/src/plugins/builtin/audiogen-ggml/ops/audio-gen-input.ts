@@ -7,6 +7,7 @@ import {
 } from '@/schemas/audio-gen'
 import { decodeAudioToStream, needsDecoding } from '@/utils/audio/decoder'
 import { AudioFileNotFoundError, InvalidAudioInputError } from '@/errors/index'
+import type { Logger } from '@/logging/index'
 
 const FLOAT32_BYTES = Float32Array.BYTES_PER_ELEMENT
 const STEREO_FRAME_BYTES = FLOAT32_BYTES * AUDIOGEN_INPUT_CHANNELS
@@ -59,6 +60,70 @@ export async function resolveAudioGenPcm(
     }
     default:
       throw new InvalidAudioInputError(`${name} must be a file path or raw PCM bytes`)
+  }
+}
+
+export interface AudioGenAudioInputs {
+  referenceAudio?: AudioGenAudioInput | undefined
+  sourceAudio?: AudioGenAudioInput | undefined
+}
+
+export interface ResolvedAudioGenInputs {
+  referenceAudio: Float32Array | undefined
+  sourceAudio: Float32Array | undefined
+}
+
+export interface ResolveAudioGenInputsOptions {
+  modelId: string
+  logger: Logger
+  /** Hold the source to `[-1, 1]`, which only an edit requires; a reference never is. */
+  normalizedSource?: boolean
+}
+
+/**
+ * Decode a run's reference and source audio concurrently. When both fail, the
+ * source's failure is thrown and the reference's is logged, so neither
+ * diagnostic is lost. A request that always carries a source (an edit) gets
+ * it back decoded.
+ */
+export async function resolveAudioGenInputs(
+  inputs: AudioGenAudioInputs & { sourceAudio: AudioGenAudioInput },
+  options: ResolveAudioGenInputsOptions
+): Promise<ResolvedAudioGenInputs & { sourceAudio: Float32Array }>
+export async function resolveAudioGenInputs(
+  inputs: AudioGenAudioInputs,
+  options: ResolveAudioGenInputsOptions
+): Promise<ResolvedAudioGenInputs>
+export async function resolveAudioGenInputs(
+  inputs: AudioGenAudioInputs,
+  { modelId, logger, normalizedSource = false }: ResolveAudioGenInputsOptions
+): Promise<ResolvedAudioGenInputs> {
+  const [source, reference] = await Promise.allSettled([
+    inputs.sourceAudio
+      ? resolveAudioGenPcm(inputs.sourceAudio, 'sourceAudio', {
+          requireNormalized: normalizedSource
+        })
+      : Promise.resolve(undefined),
+    inputs.referenceAudio
+      ? resolveAudioGenPcm(inputs.referenceAudio, 'referenceAudio')
+      : Promise.resolve(undefined)
+  ])
+  const failures = [source, reference].filter(
+    (result): result is PromiseRejectedResult => result.status === 'rejected'
+  )
+  if (failures.length > 0) {
+    for (const extra of failures.slice(1)) {
+      logger.warn(
+        `[audiogen] additional audio input failure for modelId=${modelId}: ${
+          extra.reason instanceof Error ? extra.reason.message : String(extra.reason)
+        }`
+      )
+    }
+    throw failures[0]!.reason
+  }
+  return {
+    referenceAudio: reference.status === 'fulfilled' ? reference.value : undefined,
+    sourceAudio: source.status === 'fulfilled' ? source.value : undefined
   }
 }
 

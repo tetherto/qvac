@@ -9,7 +9,7 @@ import {
   checkFreeDiskSpace
 } from '@/doctor/checks/hardware'
 import { checkDesktopTargets, checkAndroidTarget, checkIosTarget } from '@/doctor/checks/targets'
-import { checkFfmpeg, checkBareRuntime, checkBun } from '@/doctor/checks/tools'
+import { checkFfmpeg, checkBareRuntime } from '@/doctor/checks/tools'
 import { checkSdkInstalled } from '@/doctor/checks/project'
 
 export type { Check, CheckContext, ProbeFn, ProbeResult } from '@/doctor/check'
@@ -22,8 +22,9 @@ export {
   checkFreeDiskSpace
 } from '@/doctor/checks/hardware'
 export { checkDesktopTargets, checkAndroidTarget, checkIosTarget } from '@/doctor/checks/targets'
-export { checkFfmpeg, checkBareRuntime, checkBun } from '@/doctor/checks/tools'
+export { checkFfmpeg, checkBareRuntime } from '@/doctor/checks/tools'
 export { checkSdkInstalled } from '@/doctor/checks/project'
+export { checkBareEngines } from '@/doctor/checks/engines'
 
 export interface CollectChecksOptions {
   context?: CheckContext | undefined
@@ -56,7 +57,7 @@ export function collectCheckSections(options: CollectChecksOptions = {}): CheckS
     {
       id: 'tools',
       title: 'Optional tools',
-      checks: [checkFfmpeg(ctx), checkBareRuntime(ctx), checkBun(ctx)]
+      checks: [checkFfmpeg(ctx), checkBareRuntime(ctx)]
     },
     {
       id: 'project',

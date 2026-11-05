@@ -1,0 +1,513 @@
+[
+  {
+    "collection": "sdk",
+    "from": "about/how-it-works.mdx",
+    "to": "sdk/how-it-works.mdx",
+    "fromUrl": "/about/how-it-works",
+    "toUrl": "/sdk/how-it-works"
+  },
+  {
+    "collection": "ecosystem",
+    "from": "addons/audiogen-ggml/index.mdx",
+    "to": "ecosystem/addons/audiogen-ggml/index.mdx",
+    "fromUrl": "/addons/audiogen-ggml",
+    "toUrl": "/ecosystem/addons/audiogen-ggml"
+  },
+  {
+    "collection": "ecosystem",
+    "from": "addons/diffusion-cpp/index.mdx",
+    "to": "ecosystem/addons/diffusion-cpp/index.mdx",
+    "fromUrl": "/addons/diffusion-cpp",
+    "toUrl": "/ecosystem/addons/diffusion-cpp"
+  },
+  {
+    "collection": "ecosystem",
+    "from": "addons/embed-llamacpp/index.mdx",
+    "to": "ecosystem/addons/embed-llamacpp/index.mdx",
+    "fromUrl": "/addons/embed-llamacpp",
+    "toUrl": "/ecosystem/addons/embed-llamacpp"
+  },
+  {
+    "collection": "ecosystem",
+    "from": "addons/index.mdx",
+    "to": "ecosystem/addons/index.mdx",
+    "fromUrl": "/addons",
+    "toUrl": "/ecosystem/addons"
+  },
+  {
+    "collection": "ecosystem",
+    "from": "addons/llm-llamacpp/index.mdx",
+    "to": "ecosystem/addons/llm-llamacpp/index.mdx",
+    "fromUrl": "/addons/llm-llamacpp",
+    "toUrl": "/ecosystem/addons/llm-llamacpp"
+  },
+  {
+    "collection": "ecosystem",
+    "from": "addons/ocr-onnx/index.mdx",
+    "to": "ecosystem/addons/index.mdx",
+    "fromUrl": "/addons/ocr-onnx",
+    "toUrl": "/ecosystem/addons"
+  },
+  {
+    "collection": "ecosystem",
+    "from": "addons/transcription-parakeet/index.mdx",
+    "to": "ecosystem/addons/transcription-parakeet/index.mdx",
+    "fromUrl": "/addons/transcription-parakeet",
+    "toUrl": "/ecosystem/addons/transcription-parakeet"
+  },
+  {
+    "collection": "ecosystem",
+    "from": "addons/transcription-whispercpp/index.mdx",
+    "to": "ecosystem/addons/transcription-whispercpp/index.mdx",
+    "fromUrl": "/addons/transcription-whispercpp",
+    "toUrl": "/ecosystem/addons/transcription-whispercpp"
+  },
+  {
+    "collection": "ecosystem",
+    "from": "addons/translation-nmtcpp/index.mdx",
+    "to": "ecosystem/addons/translation-nmtcpp/index.mdx",
+    "fromUrl": "/addons/translation-nmtcpp",
+    "toUrl": "/ecosystem/addons/translation-nmtcpp"
+  },
+  {
+    "collection": "ecosystem",
+    "from": "addons/tts-ggml/index.mdx",
+    "to": "ecosystem/addons/tts-ggml/index.mdx",
+    "fromUrl": "/addons/tts-ggml",
+    "toUrl": "/ecosystem/addons/tts-ggml"
+  },
+  {
+    "collection": "ecosystem",
+    "from": "index.mdx",
+    "to": "ecosystem/index.mdx",
+    "fromUrl": "/",
+    "toUrl": "/ecosystem"
+  },
+  {
+    "collection": "cli",
+    "from": "cli/http-server/connection.mdx",
+    "to": "cli/http-server/connection.mdx",
+    "fromUrl": "/cli/http-server/connection",
+    "toUrl": "/cli/http-server/connection"
+  },
+  {
+    "collection": "cli",
+    "from": "cli/http-server/index.mdx",
+    "to": "cli/http-server/index.mdx",
+    "fromUrl": "/cli/http-server",
+    "toUrl": "/cli/http-server"
+  },
+  {
+    "collection": "cli",
+    "from": "cli/http-server/integration.mdx",
+    "to": "cli/http-server/integration.mdx",
+    "fromUrl": "/cli/http-server/integration",
+    "toUrl": "/cli/http-server/integration"
+  },
+  {
+    "collection": "sdk",
+    "from": "ai-capabilities/batch-processing.mdx",
+    "to": "sdk/ai-capabilities/batch-processing.mdx",
+    "fromUrl": "/ai-capabilities/batch-processing",
+    "toUrl": "/sdk/ai-capabilities/batch-processing"
+  },
+  {
+    "collection": "sdk",
+    "from": "ai-capabilities/bci.mdx",
+    "to": "sdk/ai-capabilities/bci.mdx",
+    "fromUrl": "/ai-capabilities/bci",
+    "toUrl": "/sdk/ai-capabilities/bci"
+  },
+  {
+    "collection": "sdk",
+    "from": "ai-capabilities/fine-tuning.mdx",
+    "to": "sdk/ai-capabilities/fine-tuning.mdx",
+    "fromUrl": "/ai-capabilities/fine-tuning",
+    "toUrl": "/sdk/ai-capabilities/fine-tuning"
+  },
+  {
+    "collection": "sdk",
+    "from": "ai-capabilities/image-classification.mdx",
+    "to": "sdk/ai-capabilities/image-classification.mdx",
+    "fromUrl": "/ai-capabilities/image-classification",
+    "toUrl": "/sdk/ai-capabilities/image-classification"
+  },
+  {
+    "collection": "sdk",
+    "from": "ai-capabilities/image-generation.mdx",
+    "to": "sdk/ai-capabilities/image-generation.mdx",
+    "fromUrl": "/ai-capabilities/image-generation",
+    "toUrl": "/sdk/ai-capabilities/image-generation"
+  },
+  {
+    "collection": "sdk",
+    "from": "ai-capabilities/multimodal.mdx",
+    "to": "sdk/ai-capabilities/multimodal.mdx",
+    "fromUrl": "/ai-capabilities/multimodal",
+    "toUrl": "/sdk/ai-capabilities/multimodal"
+  },
+  {
+    "collection": "sdk",
+    "from": "ai-capabilities/music-generation.mdx",
+    "to": "sdk/ai-capabilities/music-generation.mdx",
+    "fromUrl": "/ai-capabilities/music-generation",
+    "toUrl": "/sdk/ai-capabilities/music-generation"
+  },
+  {
+    "collection": "sdk",
+    "from": "ai-capabilities/ocr.mdx",
+    "to": "sdk/ai-capabilities/ocr.mdx",
+    "fromUrl": "/ai-capabilities/ocr",
+    "toUrl": "/sdk/ai-capabilities/ocr"
+  },
+  {
+    "collection": "sdk",
+    "from": "ai-capabilities/rag.mdx",
+    "to": "sdk/ai-capabilities/rag.mdx",
+    "fromUrl": "/ai-capabilities/rag",
+    "toUrl": "/sdk/ai-capabilities/rag"
+  },
+  {
+    "collection": "sdk",
+    "from": "ai-capabilities/text-embeddings.mdx",
+    "to": "sdk/ai-capabilities/text-embeddings.mdx",
+    "fromUrl": "/ai-capabilities/text-embeddings",
+    "toUrl": "/sdk/ai-capabilities/text-embeddings"
+  },
+  {
+    "collection": "sdk",
+    "from": "ai-capabilities/text-generation.mdx",
+    "to": "sdk/ai-capabilities/text-generation.mdx",
+    "fromUrl": "/ai-capabilities/text-generation",
+    "toUrl": "/sdk/ai-capabilities/text-generation"
+  },
+  {
+    "collection": "sdk",
+    "from": "ai-capabilities/text-to-speech.mdx",
+    "to": "sdk/ai-capabilities/text-to-speech.mdx",
+    "fromUrl": "/ai-capabilities/text-to-speech",
+    "toUrl": "/sdk/ai-capabilities/text-to-speech"
+  },
+  {
+    "collection": "sdk",
+    "from": "ai-capabilities/transcription.mdx",
+    "to": "sdk/ai-capabilities/transcription.mdx",
+    "fromUrl": "/ai-capabilities/transcription",
+    "toUrl": "/sdk/ai-capabilities/transcription"
+  },
+  {
+    "collection": "sdk",
+    "from": "ai-capabilities/translation.mdx",
+    "to": "sdk/ai-capabilities/translation.mdx",
+    "fromUrl": "/ai-capabilities/translation",
+    "toUrl": "/sdk/ai-capabilities/translation"
+  },
+  {
+    "collection": "sdk",
+    "from": "ai-capabilities/video-generation.mdx",
+    "to": "sdk/ai-capabilities/video-generation.mdx",
+    "fromUrl": "/ai-capabilities/video-generation",
+    "toUrl": "/sdk/ai-capabilities/video-generation"
+  },
+  {
+    "collection": "sdk",
+    "from": "ai-capabilities/vla.mdx",
+    "to": "sdk/ai-capabilities/vla.mdx",
+    "fromUrl": "/ai-capabilities/vla",
+    "toUrl": "/sdk/ai-capabilities/vla"
+  },
+  {
+    "collection": "sdk",
+    "from": "ai-capabilities/voice-assistant.mdx",
+    "to": "sdk/ai-capabilities/voice-assistant.mdx",
+    "fromUrl": "/ai-capabilities/voice-assistant",
+    "toUrl": "/sdk/ai-capabilities/voice-assistant"
+  },
+  {
+    "collection": "sdk",
+    "from": "ai-capabilities/world-simulation.mdx",
+    "to": "sdk/ai-capabilities/world-simulation.mdx",
+    "fromUrl": "/ai-capabilities/world-simulation",
+    "toUrl": "/sdk/ai-capabilities/world-simulation"
+  },
+  {
+    "collection": "cli",
+    "from": "cli/index.mdx",
+    "to": "cli/index.mdx",
+    "fromUrl": "/cli",
+    "toUrl": "/cli"
+  },
+  {
+    "collection": "sdk",
+    "from": "configuration/index.mdx",
+    "to": "sdk/configuration/index.mdx",
+    "fromUrl": "/configuration",
+    "toUrl": "/sdk/configuration"
+  },
+  {
+    "collection": "sdk",
+    "from": "configuration/plugins/index.mdx",
+    "to": "sdk/configuration/plugins/index.mdx",
+    "fromUrl": "/configuration/plugins",
+    "toUrl": "/sdk/configuration/plugins"
+  },
+  {
+    "collection": "sdk",
+    "from": "configuration/plugins/write-custom-plugin.mdx",
+    "to": "sdk/configuration/plugins/write-custom-plugin.mdx",
+    "fromUrl": "/configuration/plugins/write-custom-plugin",
+    "toUrl": "/sdk/configuration/plugins/write-custom-plugin"
+  },
+  {
+    "collection": "sdk",
+    "from": "installation.mdx",
+    "to": "sdk/js-ts-sdk.mdx",
+    "fromUrl": "/installation",
+    "toUrl": "/sdk/js-ts-sdk"
+  },
+  {
+    "collection": "sdk",
+    "from": "introduction.mdx",
+    "to": "sdk/index.mdx",
+    "fromUrl": "/introduction",
+    "toUrl": "/sdk"
+  },
+  {
+    "collection": "sdk",
+    "from": "js-ts-sdk.mdx",
+    "to": "sdk/js-ts-sdk.mdx",
+    "fromUrl": "/js-ts-sdk",
+    "toUrl": "/sdk/js-ts-sdk"
+  },
+  {
+    "collection": "sdk",
+    "from": "models/assess-model-fit.mdx",
+    "to": "sdk/models/assess-model-fit.mdx",
+    "fromUrl": "/models/assess-model-fit",
+    "toUrl": "/sdk/models/assess-model-fit"
+  },
+  {
+    "collection": "sdk",
+    "from": "models/download-lifecycle.mdx",
+    "to": "sdk/models/download-lifecycle.mdx",
+    "fromUrl": "/models/download-lifecycle",
+    "toUrl": "/sdk/models/download-lifecycle"
+  },
+  {
+    "collection": "sdk",
+    "from": "models/sharded-models.mdx",
+    "to": "sdk/models/sharded-models.mdx",
+    "fromUrl": "/models/sharded-models",
+    "toUrl": "/sdk/models/sharded-models"
+  },
+  {
+    "collection": "sdk",
+    "from": "p2p-capabilities/blind-relays.mdx",
+    "to": "sdk/p2p-capabilities/blind-relays.mdx",
+    "fromUrl": "/p2p-capabilities/blind-relays",
+    "toUrl": "/sdk/p2p-capabilities/blind-relays"
+  },
+  {
+    "collection": "sdk",
+    "from": "p2p-capabilities/delegated-inference.mdx",
+    "to": "sdk/index.mdx",
+    "fromUrl": "/p2p-capabilities/delegated-inference",
+    "toUrl": "/sdk"
+  },
+  {
+    "collection": "sdk",
+    "from": "python-sdk.mdx",
+    "to": "sdk/python-sdk.mdx",
+    "fromUrl": "/python-sdk",
+    "toUrl": "/sdk/python-sdk"
+  },
+  {
+    "collection": "sdk",
+    "from": "quickstart.mdx",
+    "to": "sdk/js-ts-sdk.mdx",
+    "fromUrl": "/quickstart",
+    "toUrl": "/sdk/js-ts-sdk"
+  },
+  {
+    "collection": "sdk",
+    "from": "reference/api/index.mdx",
+    "to": "sdk/reference/api/index.mdx",
+    "fromUrl": "/reference/api",
+    "toUrl": "/sdk/reference/api"
+  },
+  {
+    "collection": "sdk",
+    "from": "reference/api/v0.10.x.mdx",
+    "to": "sdk/reference/api/v0.10.x.mdx",
+    "fromUrl": "/reference/api/v0.10.x",
+    "toUrl": "/sdk/reference/api/v0.10.x"
+  },
+  {
+    "collection": "sdk",
+    "from": "reference/api/v0.11.x.mdx",
+    "to": "sdk/reference/api/v0.11.x.mdx",
+    "fromUrl": "/reference/api/v0.11.x",
+    "toUrl": "/sdk/reference/api/v0.11.x"
+  },
+  {
+    "collection": "sdk",
+    "from": "reference/api/v0.12.x.mdx",
+    "to": "sdk/reference/api/v0.12.x.mdx",
+    "fromUrl": "/reference/api/v0.12.x",
+    "toUrl": "/sdk/reference/api/v0.12.x"
+  },
+  {
+    "collection": "sdk",
+    "from": "reference/api/v0.13.x.mdx",
+    "to": "sdk/reference/api/v0.13.x.mdx",
+    "fromUrl": "/reference/api/v0.13.x",
+    "toUrl": "/sdk/reference/api/v0.13.x"
+  },
+  {
+    "collection": "sdk",
+    "from": "reference/api/v0.14.x.mdx",
+    "to": "sdk/reference/api/v0.14.x.mdx",
+    "fromUrl": "/reference/api/v0.14.x",
+    "toUrl": "/sdk/reference/api/v0.14.x"
+  },
+  {
+    "collection": "sdk",
+    "from": "reference/api/v0.15.x.mdx",
+    "to": "sdk/reference/api/v0.15.x.mdx",
+    "fromUrl": "/reference/api/v0.15.x",
+    "toUrl": "/sdk/reference/api/v0.15.x"
+  },
+  {
+    "collection": "sdk",
+    "from": "reference/api/v0.8.x.mdx",
+    "to": "sdk/reference/api/v0.8.x.mdx",
+    "fromUrl": "/reference/api/v0.8.x",
+    "toUrl": "/sdk/reference/api/v0.8.x"
+  },
+  {
+    "collection": "sdk",
+    "from": "reference/api/v0.9.x.mdx",
+    "to": "sdk/reference/api/v0.9.x.mdx",
+    "fromUrl": "/reference/api/v0.9.x",
+    "toUrl": "/sdk/reference/api/v0.9.x"
+  },
+  {
+    "collection": "sdk",
+    "from": "reference/release-notes/index.mdx",
+    "to": "sdk/reference/release-notes/index.mdx",
+    "fromUrl": "/reference/release-notes",
+    "toUrl": "/sdk/reference/release-notes"
+  },
+  {
+    "collection": "sdk",
+    "from": "reference/release-notes/v0.10.x.mdx",
+    "to": "sdk/reference/release-notes/v0.10.x.mdx",
+    "fromUrl": "/reference/release-notes/v0.10.x",
+    "toUrl": "/sdk/reference/release-notes/v0.10.x"
+  },
+  {
+    "collection": "sdk",
+    "from": "reference/release-notes/v0.11.x.mdx",
+    "to": "sdk/reference/release-notes/v0.11.x.mdx",
+    "fromUrl": "/reference/release-notes/v0.11.x",
+    "toUrl": "/sdk/reference/release-notes/v0.11.x"
+  },
+  {
+    "collection": "sdk",
+    "from": "reference/release-notes/v0.12.x.mdx",
+    "to": "sdk/reference/release-notes/v0.12.x.mdx",
+    "fromUrl": "/reference/release-notes/v0.12.x",
+    "toUrl": "/sdk/reference/release-notes/v0.12.x"
+  },
+  {
+    "collection": "sdk",
+    "from": "reference/release-notes/v0.13.x.mdx",
+    "to": "sdk/reference/release-notes/v0.13.x.mdx",
+    "fromUrl": "/reference/release-notes/v0.13.x",
+    "toUrl": "/sdk/reference/release-notes/v0.13.x"
+  },
+  {
+    "collection": "sdk",
+    "from": "reference/release-notes/v0.14.x.mdx",
+    "to": "sdk/reference/release-notes/v0.14.x.mdx",
+    "fromUrl": "/reference/release-notes/v0.14.x",
+    "toUrl": "/sdk/reference/release-notes/v0.14.x"
+  },
+  {
+    "collection": "sdk",
+    "from": "reference/release-notes/v0.15.x.mdx",
+    "to": "sdk/reference/release-notes/v0.15.x.mdx",
+    "fromUrl": "/reference/release-notes/v0.15.x",
+    "toUrl": "/sdk/reference/release-notes/v0.15.x"
+  },
+  {
+    "collection": "sdk",
+    "from": "reference/release-notes/v0.8.x.mdx",
+    "to": "sdk/reference/release-notes/v0.8.x.mdx",
+    "fromUrl": "/reference/release-notes/v0.8.x",
+    "toUrl": "/sdk/reference/release-notes/v0.8.x"
+  },
+  {
+    "collection": "sdk",
+    "from": "reference/release-notes/v0.9.x.mdx",
+    "to": "sdk/reference/release-notes/v0.9.x.mdx",
+    "fromUrl": "/reference/release-notes/v0.9.x",
+    "toUrl": "/sdk/reference/release-notes/v0.9.x"
+  },
+  {
+    "collection": "sdk",
+    "from": "runtime/cancellation.mdx",
+    "to": "sdk/runtime/cancellation.mdx",
+    "fromUrl": "/runtime/cancellation",
+    "toUrl": "/sdk/runtime/cancellation"
+  },
+  {
+    "collection": "sdk",
+    "from": "runtime/lifecycle.mdx",
+    "to": "sdk/runtime/lifecycle.mdx",
+    "fromUrl": "/runtime/lifecycle",
+    "toUrl": "/sdk/runtime/lifecycle"
+  },
+  {
+    "collection": "sdk",
+    "from": "runtime/logging.mdx",
+    "to": "sdk/runtime/logging.mdx",
+    "fromUrl": "/runtime/logging",
+    "toUrl": "/sdk/runtime/logging"
+  },
+  {
+    "collection": "sdk",
+    "from": "runtime/profiler.mdx",
+    "to": "sdk/runtime/profiler.mdx",
+    "fromUrl": "/runtime/profiler",
+    "toUrl": "/sdk/runtime/profiler"
+  },
+  {
+    "collection": "sdk",
+    "from": "system-requirements.mdx",
+    "to": "sdk/system-requirements.mdx",
+    "fromUrl": "/system-requirements",
+    "toUrl": "/sdk/system-requirements"
+  },
+  {
+    "collection": "sdk",
+    "from": "troubleshooting.mdx",
+    "to": "sdk/troubleshooting.mdx",
+    "fromUrl": "/troubleshooting",
+    "toUrl": "/sdk/troubleshooting"
+  },
+  {
+    "collection": "sdk",
+    "from": "tutorials/electron.mdx",
+    "to": "sdk/tutorials/electron.mdx",
+    "fromUrl": "/tutorials/electron",
+    "toUrl": "/sdk/tutorials/electron"
+  },
+  {
+    "collection": "sdk",
+    "from": "tutorials/expo.mdx",
+    "to": "sdk/tutorials/expo.mdx",
+    "fromUrl": "/tutorials/expo",
+    "toUrl": "/sdk/tutorials/expo"
+  }
+]

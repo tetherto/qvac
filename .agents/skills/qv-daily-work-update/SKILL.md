@@ -1,6 +1,6 @@
 ---
 name: qv-daily-work-update
-description: Generate a concise end-of-day work update from local diary, GitHub activity, PR queue state, and optional Asana config. Use when the user asks for daily update, EOD update, standup, or what they did today.
+description: Generate a concise end-of-day work update from local diary, GitHub activity, and PR queue state. Use when the user asks for daily update, EOD update, standup, or what they did today.
 disable-model-invocation: true
 ---
 
@@ -35,7 +35,6 @@ node .agents/skills/_lib/developer-workflow/daily-work-update.mjs \
 - Local diary files under `~/.config/qvac-pr-skills/diary/`
 - GitHub PRs authored or reviewed by the current `gh` user
 - PR queue state through `.agents/skills/_lib/pr-skills/pr-status.mjs --json` when queue context is needed
-- Asana through `.agents/skills/_lib/developer-workflow/asana.mjs` when configured
 
 ## Output
 
@@ -74,8 +73,7 @@ Rules:
 - Use normal Markdown bullets (`- `). Do not escape bullets.
 - Use Markdown link syntax for links so the chat renders clickable links: `[label](url)`.
 - PR labels should be short, e.g. `[#123](https://github.com/org/repo/pull/123)`.
-- Asana ticket labels should include ticket and task name when known, e.g. `[QVAC-12345 Task title](https://app.asana.com/...)`.
-- Extract ticket IDs from GitHub PR titles using the configured ticket pattern and resolve them to Asana tasks when possible.
+- Extract ticket IDs from GitHub PR titles using the configured ticket pattern.
 - Collapse PR reviews into summary bullets:
   - `Approved: [#123](...) - [QVAC-12345: task](...), [#124](...) - [QVAC-12346: task](...)`
   - `Commented / Requested changes: [#125](...) - [QVAC-12347: task](...)`

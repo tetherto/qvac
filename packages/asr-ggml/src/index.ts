@@ -9,12 +9,15 @@ import {
 } from "@qvac/infer-base";
 
 import { QvacErrorAddonASRGgml, ERR_CODES } from "./lib/error";
-import { resolveBackendsDir as resolveBackendsDirImpl } from "./lib/backends";
+import { NEMOTRON_STREAMING_CHUNK_MS } from "./lib/constants";
 import {
   assessFit as assessFitImpl,
+  type AsrFitDevice,
   type AsrFitRequest,
   type AsrFitResult,
+  type AsrFitStats,
   type AsrFitStatus,
+  type MossTranscribeFitRequest,
   type ParakeetFitRequest,
   type WhisperFitRequest,
 } from "./lib/fit";
@@ -37,6 +40,7 @@ import {
 import type {
   ASRGgmlFiles,
   ASRGgmlReloadConfig,
+  ASRRunOptions,
   ASRStreamingOptions,
   AsrDriver,
   AsrNativeInterface,
@@ -56,11 +60,22 @@ import {
   type ParakeetConfig,
   type ParakeetEngineConfig,
   type ParakeetStreamingRunConfig,
+  type ParakeetSpeakerAttributionConfig as ParakeetSpeakerAttributionConfigShape,
 } from "./engines/parakeet/driver";
+import {
+  ENGINE_MOSS_TRANSCRIBE,
+  MossTranscribeDriver,
+  type MossTranscribeConfig,
+  type MossTranscribeEngineConfig,
+  type MossTranscribeRunOptions,
+} from "./engines/moss/driver";
 
 const GGUF_MAGIC = [0x47, 0x47, 0x55, 0x46]; // ASCII "GGUF"
 
-type ASRGgmlConfig = WhisperEngineConfig | ParakeetEngineConfig;
+type ASRGgmlConfig =
+  | WhisperEngineConfig
+  | ParakeetEngineConfig
+  | MossTranscribeEngineConfig;
 
 interface ASRGgmlOptions {
   files: ASRGgmlFiles;
@@ -160,7 +175,7 @@ function sniffEngine(modelPath: string): EngineType {
 }
 
 function isKnownEngine(value: unknown): value is EngineType {
-  return value === "whisper" || value === "parakeet";
+  return value === "whisper" || value === "parakeet" || value === ENGINE_MOSS_TRANSCRIBE;
 }
 
 /**
@@ -197,8 +212,11 @@ function resolveModelPath(
 class ASRGgml {
   static readonly ENGINE_WHISPER = "whisper";
   static readonly ENGINE_PARAKEET = "parakeet";
+  static readonly ENGINE_MOSS_TRANSCRIBE = ENGINE_MOSS_TRANSCRIBE;
 
   static readonly ERR_CODES = ERR_CODES;
+  /** Chunk cadences (ms) Nemotron streaming accepts; see `runStreaming()`. */
+  static readonly NEMOTRON_STREAMING_CHUNK_MS = NEMOTRON_STREAMING_CHUNK_MS;
   static readonly Error = QvacErrorAddonASRGgml;
 
   static readonly inferenceManagerConfig = Object.freeze({
@@ -292,7 +310,13 @@ class ASRGgml {
       job: this._job,
       enableStats: this.enableStats,
     };
-    if (this._engineType === "parakeet") {
+    if (this._engineType === ENGINE_MOSS_TRANSCRIBE) {
+      this._driver = new MossTranscribeDriver(
+        ctx,
+        files,
+        (config as MossTranscribeEngineConfig) || { engine: ENGINE_MOSS_TRANSCRIBE },
+      );
+    } else if (this._engineType === "parakeet") {
       this._driver = new ParakeetDriver(
         ctx,
         files,
@@ -424,12 +448,15 @@ class ASRGgml {
     );
   }
 
-  async run(audio: AudioInput): Promise<QvacResponse<ASRRunOutput>> {
+  async run(
+    audio: AudioInput,
+    options: ASRRunOptions = {},
+  ): Promise<QvacResponse<ASRRunOutput>> {
     const runFn = async (): Promise<QvacResponse<ASRRunOutput>> => {
       await this._waitForClosingSessionOrThrow(
         "concurrent run() during an open streaming session",
       );
-      return await this._driver.run(this._driver.normalizeAudio(audio));
+      return await this._driver.run(this._driver.normalizeAudio(audio), options);
     };
 
     if (this.exclusiveRun) {
@@ -484,7 +511,7 @@ class ASRGgml {
       if (!isKnownEngine(configEngine)) {
         throw new QvacErrorAddonASRGgml({
           code: ERR_CODES.INVALID_ENGINE,
-          adds: 'config.engine must be "whisper" or "parakeet"',
+          adds: 'config.engine must be "whisper", "parakeet" or "moss-transcribe"',
         });
       }
       return configEngine;
@@ -543,6 +570,10 @@ type ASRGgmlFilesShape = ASRGgmlFiles;
 type ASRGgmlConfigShape = ASRGgmlConfig;
 type WhisperEngineConfigShape = WhisperEngineConfig;
 type ParakeetEngineConfigShape = ParakeetEngineConfig;
+type MossTranscribeEngineConfigShape = MossTranscribeEngineConfig;
+type MossTranscribeConfigShape = MossTranscribeConfig;
+type MossTranscribeRunOptionsShape = MossTranscribeRunOptions;
+type ASRRunOptionsShape = ASRRunOptions;
 type WhisperConfigShape = WhisperConfig;
 type ParakeetConfigShape = ParakeetConfig;
 type VadParamsShape = VadParams;
@@ -563,9 +594,12 @@ type WhisperRuntimeStatsShape = WhisperRuntimeStats;
 type ParakeetRuntimeStatsShape = ParakeetRuntimeStats;
 type RuntimeStatsShape = RuntimeStats;
 type InferenceClientStateShape = InferenceClientState;
+type AsrFitDeviceShape = AsrFitDevice;
 type AsrFitRequestShape = AsrFitRequest;
 type AsrFitResultShape = AsrFitResult;
+type AsrFitStatsShape = AsrFitStats;
 type AsrFitStatusShape = AsrFitStatus;
+type MossTranscribeFitRequestShape = MossTranscribeFitRequest;
 type ParakeetFitRequestShape = ParakeetFitRequest;
 type WhisperFitRequestShape = WhisperFitRequest;
 
@@ -579,6 +613,10 @@ namespace ASRGgml {
   export type ASRGgmlConfig = ASRGgmlConfigShape;
   export type WhisperEngineConfig = WhisperEngineConfigShape;
   export type ParakeetEngineConfig = ParakeetEngineConfigShape;
+  export type MossTranscribeEngineConfig = MossTranscribeEngineConfigShape;
+  export type MossTranscribeConfig = MossTranscribeConfigShape;
+  export type MossTranscribeRunOptions = MossTranscribeRunOptionsShape;
+  export type ASRRunOptions = ASRRunOptionsShape;
   export type WhisperConfig = WhisperConfigShape;
   export type ParakeetConfig = ParakeetConfigShape;
   export type VadParams = VadParamsShape;
@@ -599,16 +637,19 @@ namespace ASRGgml {
   export type ParakeetRuntimeStats = ParakeetRuntimeStatsShape;
   export type RuntimeStats = RuntimeStatsShape;
   export type InferenceClientState = InferenceClientStateShape;
+  export type AsrFitDevice = AsrFitDeviceShape;
   export type AsrFitRequest = AsrFitRequestShape;
   export type AsrFitResult = AsrFitResultShape;
+  export type AsrFitStats = AsrFitStatsShape;
   export type AsrFitStatus = AsrFitStatusShape;
+  export type MossTranscribeFitRequest = MossTranscribeFitRequestShape;
   export type ParakeetFitRequest = ParakeetFitRequestShape;
   export type WhisperFitRequest = WhisperFitRequestShape;
 
   export import BackendId = BackendIdEnum;
 
-  export const resolveBackendsDir = resolveBackendsDirImpl;
   export const assessFit = assessFitImpl;
+  export type ParakeetSpeakerAttributionConfig = ParakeetSpeakerAttributionConfigShape;
 }
 
 export = ASRGgml;

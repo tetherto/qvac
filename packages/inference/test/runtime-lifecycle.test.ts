@@ -70,6 +70,7 @@ function setup(log: string[], swarmOpts?: MockOptions, storeOpts?: MockOptions) 
 }
 
 test('suspend order: stores before swarms', async function (t) {
+  t.teardown(resetLifecycleState)
   const log: string[] = []
   setup(log)
 
@@ -79,6 +80,7 @@ test('suspend order: stores before swarms', async function (t) {
 })
 
 test('resume order: swarms before stores', async function (t) {
+  t.teardown(resetLifecycleState)
   const log: string[] = []
   setup(log)
 
@@ -90,6 +92,7 @@ test('resume order: swarms before stores', async function (t) {
 })
 
 test('suspend is idempotent when already suspended', async function (t) {
+  t.teardown(resetLifecycleState)
   const log: string[] = []
   setup(log)
 
@@ -104,6 +107,7 @@ test('suspend is idempotent when already suspended', async function (t) {
 })
 
 test('resume is idempotent when already active', async function (t) {
+  t.teardown(resetLifecycleState)
   const log: string[] = []
   setup(log)
 
@@ -116,6 +120,7 @@ test('resume is idempotent when already active', async function (t) {
 })
 
 test('concurrent suspend calls share the same transition', async function (t) {
+  t.teardown(resetLifecycleState)
   const log: string[] = []
   setup(log, { delayMs: 20 })
 
@@ -128,6 +133,7 @@ test('concurrent suspend calls share the same transition', async function (t) {
 })
 
 test('concurrent resume calls share the same transition', async function (t) {
+  t.teardown(resetLifecycleState)
   const log: string[] = []
   setup(log, { delayMs: 20 })
 
@@ -141,6 +147,7 @@ test('concurrent resume calls share the same transition', async function (t) {
 })
 
 test('resume during in-flight suspend waits then resumes', async function (t) {
+  t.teardown(resetLifecycleState)
   const log: string[] = []
   setup(log, { delayMs: 30 })
 
@@ -156,6 +163,7 @@ test('resume during in-flight suspend waits then resumes', async function (t) {
 })
 
 test('suspend during in-flight resume waits then suspends', async function (t) {
+  t.teardown(resetLifecycleState)
   const log: string[] = []
   setup(log, { delayMs: 30 })
 
@@ -174,6 +182,7 @@ test('suspend during in-flight resume waits then suspends', async function (t) {
 })
 
 test('partial suspend failure commits to suspended state', async function (t) {
+  t.teardown(resetLifecycleState)
   const log: string[] = []
   resetLifecycleState()
 
@@ -194,6 +203,7 @@ test('partial suspend failure commits to suspended state', async function (t) {
 })
 
 test('suspend after partial failure is a no-op', async function (t) {
+  t.teardown(resetLifecycleState)
   const log: string[] = []
   resetLifecycleState()
 
@@ -216,6 +226,7 @@ test('suspend after partial failure is a no-op', async function (t) {
 })
 
 test('resume after partial suspend failure repairs state', async function (t) {
+  t.teardown(resetLifecycleState)
   const log: string[] = []
   resetLifecycleState()
 
@@ -239,6 +250,7 @@ test('resume after partial suspend failure repairs state', async function (t) {
 })
 
 test('partial resume failure stays suspended', async function (t) {
+  t.teardown(resetLifecycleState)
   const log: string[] = []
   resetLifecycleState()
 
@@ -262,6 +274,7 @@ test('partial resume failure stays suspended', async function (t) {
 })
 
 test('retry resume after partial failure restores active', async function (t) {
+  t.teardown(resetLifecycleState)
   const log: string[] = []
   resetLifecycleState()
 
@@ -293,6 +306,7 @@ test('retry resume after partial failure restores active', async function (t) {
 })
 
 test('resource unregistered during transition does not fail', async function (t) {
+  t.teardown(resetLifecycleState)
   const log: string[] = []
   resetLifecycleState()
 
@@ -309,6 +323,7 @@ test('resource unregistered during transition does not fail', async function (t)
 })
 
 test('register and unregister updates resource counts', function (t) {
+  t.teardown(resetLifecycleState)
   resetLifecycleState()
 
   const log: string[] = []
@@ -338,6 +353,7 @@ function fakeRequest(type: string): Request {
 }
 
 test('gate allows representative requests when active', function (t) {
+  t.teardown(resetLifecycleState)
   resetLifecycleState()
   t.is(getLifecycleState(), 'active')
 
@@ -351,6 +367,7 @@ test('gate allows representative requests when active', function (t) {
 })
 
 test('gate allows only lifecycle ops and blocks others when suspended', async function (t) {
+  t.teardown(resetLifecycleState)
   const log: string[] = []
   setup(log)
   await suspendRuntime()
@@ -367,6 +384,7 @@ test('gate allows only lifecycle ops and blocks others when suspended', async fu
 })
 
 test('gate error includes request type and lifecycle state', async function (t) {
+  t.teardown(resetLifecycleState)
   const log: string[] = []
   setup(log)
   await suspendRuntime()
@@ -382,6 +400,7 @@ test('gate error includes request type and lifecycle state', async function (t) 
 })
 
 test('gate blocks during transition states (suspending and resuming)', async function (t) {
+  t.teardown(resetLifecycleState)
   // suspending
   const log1: string[] = []
   setup(log1, { delayMs: 50 })
@@ -407,6 +426,7 @@ test('gate blocks during transition states (suspending and resuming)', async fun
 })
 
 test('onResume listeners fire after resume and unregister cleanly', async function (t) {
+  t.teardown(resetLifecycleState)
   const log: string[] = []
   setup(log)
   await suspendRuntime()
@@ -424,6 +444,7 @@ test('onResume listeners fire after resume and unregister cleanly', async functi
 })
 
 test('resetLifecycleState clears onResume listeners', async function (t) {
+  t.teardown(resetLifecycleState)
   const log: string[] = []
   setup(log)
   await suspendRuntime()

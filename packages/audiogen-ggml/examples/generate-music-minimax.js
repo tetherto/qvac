@@ -48,7 +48,11 @@ async function main() {
   const generator = new AudioGen({
     engine: ENGINE_MINIMAX,
     files: { modelDir: requiredModelDir() },
-    config: { threads: numberFromEnv('AUDIOGEN_THREADS') }
+    config: {
+      threads: numberFromEnv('AUDIOGEN_THREADS'),
+      coremlProfileDir: process.env.AUDIOGEN_COREML_PROFILE_DIR,
+      coremlComputeUnits: process.env.AUDIOGEN_COREML_COMPUTE_UNITS
+    }
   })
   try {
     await generator.load()

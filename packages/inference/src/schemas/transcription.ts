@@ -20,16 +20,41 @@ export const audioInputSchema = z.discriminatedUnion('type', [
 const transcribeBaseSchema = z.object({
   modelId: z.string(),
   /**
-   * Initial transcription prompt. Whisper engine only — silently
-   * ignored by the parakeet engine, which has no equivalent prompting
-   * surface in `qvac-parakeet.cpp`.
+   * Initial Whisper context or replacement MOSS transcription instruction.
+   * MOSS prompts cannot be combined with hotwords. Ignored by Parakeet.
    */
   prompt: z.string().optional(),
   metadata: z.boolean().optional()
 })
 
+function utf8Length(value: string): number {
+  let bytes = 0
+  for (const character of value) {
+    const point = character.codePointAt(0) ?? 0
+    bytes += point < 0x80 ? 1 : point < 0x800 ? 2 : point < 0x10000 ? 3 : 4
+  }
+  return bytes
+}
+
 export const transcribeParamsSchema = transcribeBaseSchema.extend({
-  audioChunk: audioInputSchema
+  audioChunk: audioInputSchema,
+  hotwords: z
+    .array(
+      z
+        .string()
+        .min(1)
+        .refine((value) => utf8Length(value) <= 64, 'Hotword exceeds 64 UTF-8 bytes')
+    )
+    .max(64)
+    .optional()
+    .describe('MOSS names and domain terms; at most 64 entries of 64 UTF-8 bytes each.'),
+  maxNewTokens: z
+    .number()
+    .int()
+    .min(0)
+    .max(2147483647)
+    .optional()
+    .describe('MOSS generated-token limit; 0 uses the model default.')
 })
 
 export const transcribeStatsSchema = z.object({
@@ -40,8 +65,14 @@ export const transcribeStatsSchema = z.object({
   totalSegments: z.number().optional(),
   whisperEncodeTime: z.number().optional(),
   whisperDecodeTime: z.number().optional(),
-  encoderTime: z.number().optional(),
-  decoderTime: z.number().optional(),
+  encoderTime: z
+    .number()
+    .optional()
+    .describe('Parakeet encoder time, or the MOSS audio-encoder time, in ms.'),
+  decoderTime: z
+    .number()
+    .optional()
+    .describe('Parakeet decoder time, or the MOSS decode time, in ms.'),
   melSpecTime: z.number().optional(),
   // Backend selection captured once at model load.
   // `0` CPU / `1` GPU; `backendId` codes the GPU family (see the addon's
@@ -84,7 +115,26 @@ export const transcribeStatsSchema = z.object({
   encoderOnCoreml: z
     .number()
     .optional()
-    .describe('Parakeet: `1` when the encoder ran on Core ML, `0` otherwise.')
+    .describe('Parakeet: `1` when a Core ML encoder sidecar loaded, `0` otherwise.'),
+  encoderUsedCoreml: z
+    .number()
+    .optional()
+    .describe(
+      'Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.'
+    ),
+  aoscActive: z
+    .number()
+    .optional()
+    .describe(
+      'Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.'
+    ),
+
+  // MOSS-Transcribe-Diarize counters. Its encode and decode timings arrive on
+  // `encoderTime` / `decoderTime`, and its segment count on `totalSegments`.
+  prefillTime: z.number().optional().describe('MOSS: prompt prefill time, in ms.'),
+  audioTokens: z.number().optional().describe('MOSS: audio tokens fed to the decoder.'),
+  promptTokens: z.number().optional().describe('MOSS: prompt tokens prefilled before decoding.'),
+  generatedTokens: z.number().optional().describe('MOSS: tokens the decoder generated.')
 })
 
 /**
@@ -115,12 +165,42 @@ export const ASR_BACKEND_IDS = Object.freeze({
 
 export type AsrBackendId = (typeof ASR_BACKEND_IDS)[keyof typeof ASR_BACKEND_IDS]
 
+export const transcribeSpeakerSegmentSchema = z.object({
+  speakerId: z.number().int().nonnegative(),
+  startMs: z.number().nonnegative(),
+  endMs: z.number().nonnegative()
+})
+
+export type TranscribeSpeakerSegment = z.infer<typeof transcribeSpeakerSegmentSchema>
+
+export const transcribeTokenSchema = z.object({
+  text: z.string(),
+  startMs: z.number().nonnegative(),
+  endMs: z.number().nonnegative(),
+  probability: z.number().min(0).max(1).describe('Decoder probability of the token (0–1).')
+})
+
+export type TranscribeToken = z.infer<typeof transcribeTokenSchema>
+
 export const transcribeSegmentSchema = z.object({
   text: z.string(),
   startMs: z.number(),
   endMs: z.number(),
   append: z.boolean(),
   id: z.number(),
+  speakerId: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe('Zero-based speaker id for diarized transcription.'),
+  speaker: z.string().optional().describe('MOSS speaker label, such as S01.'),
+  speakerSegments: z
+    .array(transcribeSpeakerSegmentSchema)
+    .optional()
+    .describe(
+      'Offline Sortformer/Nemotron diarization turns, with zero-based speaker ids and millisecond timestamps. Turns may overlap.'
+    ),
   isEndOfTurn: z
     .boolean()
     .optional()
@@ -132,17 +212,53 @@ export const transcribeSegmentSchema = z.object({
     .optional()
     .describe(
       'Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.'
+    ),
+  language: z
+    .string()
+    .optional()
+    .describe(
+      "Language the segment's window was decoded in, as an ISO 639-1 code such as `en`; the detected language under `language: 'auto'`. Whisper engine only."
+    ),
+  noSpeechProb: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe(
+      "Probability (0–1) that the segment's window holds no speech, the value `no_speech_thold` is compared against. Whisper engine only."
+    ),
+  speakerTurnNext: z
+    .boolean()
+    .optional()
+    .describe(
+      'A speaker turn follows this segment. Whisper engine only, with `tdrz_enable` on a tinydiarize model.'
+    ),
+  tokens: z
+    .array(transcribeTokenSchema)
+    .optional()
+    .describe(
+      'Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`.'
     )
 })
 
 export const vadStateEventSchema = z.object({
+  speakerId: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe('Dominant speaker for Parakeet diarization activity; omitted when unavailable.'),
   speaking: z.boolean(),
   probability: z.number(),
+  timestamp: z
+    .number()
+    .optional()
+    .describe('Parakeet: event time in seconds from the start of the streaming session.'),
   source: z
-    .enum(['silero', 'energy'])
+    .enum(['silero', 'energy', 'sortformer'])
     .optional()
     .describe(
-      "Detector behind the event. Only the whisper engine emits VAD events, and they are always `'silero'`. `'energy'` mirrors the addon's `VadEvent` type, where it is reserved: the parakeet engine's energy hint shapes segmentation but emits no VAD events."
+      "Detector behind the event: `'silero'` for Whisper, `'energy'` for Parakeet energy VAD, or `'sortformer'` for Sortformer speaker activity."
     )
 })
 
@@ -217,6 +333,8 @@ export type TranscribeSegment = z.infer<typeof transcribeSegmentSchema>
 export type TranscribeClientParams = {
   modelId: string
   audioChunk: string | Buffer
+  hotwords?: string[]
+  maxNewTokens?: number
   prompt?: string
   metadata?: boolean
 }
@@ -240,6 +358,12 @@ export const parakeetStreamingRunConfigSchema = z.object({
   rightLookaheadMs: z.number().int().nonnegative().optional(),
   emitPartials: z.boolean().optional(),
   emitEnergyVad: z.boolean().optional(),
+  energyVadThresholdDb: z.number().optional(),
+  energyVadWindowMs: z.number().int().positive().optional(),
+  energyVadHangoverMs: z.number().int().nonnegative().optional(),
+  emitSpeakerVad: z.boolean().optional(),
+  diarizationThreshold: z.number().min(0).max(1).optional(),
+  diarizationMinSegmentMs: z.number().int().nonnegative().optional(),
   spkCacheEnable: z.boolean().optional(),
   spkCacheLen: z.number().int().positive().optional(),
   fifoLen: z.number().int().positive().optional(),

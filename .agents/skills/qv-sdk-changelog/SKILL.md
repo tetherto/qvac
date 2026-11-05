@@ -30,6 +30,10 @@ If the user doesn't specify, ask which SDK pod package they want to generate a c
 
 Package slugs match git tags (`sdk`, `inference`, `cli`, `ai-sdk-provider`, `opencode-plugin`, `openclaw-plugin`, …). Directory resolution (including `plugins/*`) is in `scripts/sdk/package-paths.cjs`.
 
+**On a release train** (`qv-release-train`), run this once per train package;
+the changelogs land on the one train branch. Step 7 differs
+there.
+
 **`sdk` and `inference` are lockstep on major.minor.** Two changelogs, two
 releases, engine first: `--package=inference` for `release-inference-<x.y.z>`,
 then `--package=sdk` for `release-sdk-<x.y.z>`. Both notes for the same `x.y.z`
@@ -43,9 +47,14 @@ makes the files disagree.
 Step 2 when that floor is a patch.
 
 The SDK is the consumer-facing full notes. `--package=sdk` also scans
-`packages/inference` (`CHANGELOG_EXTRA_SCAN_DIRS` in
-`scripts/sdk/package-paths.cjs`). The inference changelog is the engine-only
-slice of that same set. A patch on either side is one release of its own.
+`packages/inference`, `packages/sdk-python` and `packages/sdk-kotlin`
+(`CHANGELOG_EXTRA_SCAN_DIRS` in `scripts/sdk/package-paths.cjs`). The Python
+client (`tetherto-qvac-sdk`) and the Kotlin client (`io.tether:qvac-sdk-kotlin`
+and the `io.tether:qvac-sdk-android` AARs) ship at the SDK's version and have
+no changelog of their own; their PRs land in the SDK notes, and their release
+artifacts attach to the SDK's GitHub release, whose body is
+`packages/sdk/CHANGELOG.md`. The inference changelog is the engine-only slice
+of that same set. A patch on either side is one release of its own.
 
 **Working branch (when cutting from a release line):** use
 `chore/<pkg>-<x.y.z>-changelog` (e.g. `chore/sdk-0.17.0-changelog`). Do **not**
@@ -189,6 +198,25 @@ source. Every user-facing add, remove, or rename in that diff must appear in
 `--update-root-changelog` only — do not re-run a full generate. New public
 exports under an older umbrella PR still get their own `api.md` example.
 
+**`--package=sdk` also audits the clients.** The Python and Kotlin clients are
+built from the same commit as `@qvac/sdk`, so `$LAST` is their floor too:
+
+```bash
+git diff "$LAST" HEAD -- packages/sdk-python packages/sdk-kotlin
+```
+
+Changes to a client's public surface (Python wrappers and literals, Kotlin
+client classes and the generated contract types) go in `api.md` and
+`breaking.md` under a `### Python client` / `### Kotlin client` heading, with
+the example in that language. A generated type whose shape changes (an enum
+that becomes a string, a renamed request field) is breaking for that client
+even when the JS API only gained an option. Skip a client whose diff is tests,
+CI or build files only.
+
+A client that has not been published before has no floor: its section
+announces the first release — artifact coordinates, supported targets, how to
+add the repository — instead of a delta.
+
 Fail-stop until the notes match the tree. Then write `CHANGELOG_LLM.md`.
 
 ### Step 4: Generate CHANGELOG_LLM.md (mandatory)
@@ -204,6 +232,10 @@ See [references/changelog-llm-format.md](references/changelog-llm-format.md).
 Skip backmerges, automated bumps, and entries that only repeat a previous
 release. Models body stays concise; the full constant lists live in `models.md`
 and in the LLM `### Added` / `### Removed` blocks.
+
+For `--package=sdk`, the Python and Kotlin client entries from the audit keep
+their `### Python client` / `### Kotlin client` headings under Breaking Changes
+and New APIs, so a reader of one client finds its changes in one place.
 
 After writing the file, rebuild the root aggregate so
 `packages/<package>/CHANGELOG.md` picks up `CHANGELOG_LLM.md` (the aggregator
@@ -224,34 +256,31 @@ committed-file format check would later reject. Every SDK pod package uses prett
 (`[inference] format`, `[sdk] format`, …) loads holepunch; `--no-config` or a
 different parser (quote style, trailing commas) is the usual red we hit.
 
-`bunx prettier` fails with `Cannot find package 'prettier-config-holepunch'`
+`npx prettier` fails with `Cannot find package 'prettier-config-holepunch'`
 when that package is not resolvable, then either skips or formats with a
-fallback CI rejects. **Never `--no-config`.** Do not `bun install` in a package
+fallback CI rejects. **Never `--no-config`.** Do not `npm install` in a package
 whose range names an unpublished lockstep dep (e.g. sdk waiting on inference) —
-run `bunx` from a sibling that already has `node_modules`.
+run `npx prettier` from a sibling that already has `node_modules`.
 
 ```bash
 DIR=$(node -e "console.log(require('./scripts/sdk/package-paths.cjs').getPackageDir('<name>'))")
-bunx prettier --check "$DIR/changelog/<version>/**/*.md" "$DIR/CHANGELOG.md"
+npx prettier --check "$DIR/changelog/<version>/**/*.md" "$DIR/CHANGELOG.md"
 ```
 
 Scope those globs to **this package**. Do not run `changelog/**/*.md` from the
 repo root or another package cwd — that walks every historical version folder.
 
-If it reports problems, fix them — `bunx prettier --write` on the same paths, or
-`bun run format:fix` — and re-run the check until it passes clean. Do this before
+If it reports problems, fix them — `npx prettier --write` on the same paths, or
+`npm run format:fix` — and re-run the check until it passes clean. Do this before
 moving on so the release commit carries only prettier-clean markdown.
 
-**Downstream rendering note:** the docs site reads `CHANGELOG_LLM.md`
-**verbatim** and inlines it under a `### @qvac/<pkg>` subsection of the
-minor series page (one permanent `v<X.Y>.x.mdx` per minor line — see
-`docs/website/docs-workflow.md`). Each headline you write becomes a
-section header on the public docs site (with two levels of demotion to
-fit the nesting), so phrase them as standalone reader-facing prose, not
-internal categories. **Keep headings emoji-free** (e.g. `## Breaking
-Changes`, not `## 💥 Breaking Changes`) — emoji prefixes leak verbatim
-into the public headers; the only allowed emoji is the `📦 **NPM:**`
-line. See the format guide for the full rule.
+**Downstream rendering note:** what you write here is what the public reads.
+`CHANGELOG_LLM.md` is the body of the GitHub release for this version, and the
+documentation site's sidebar links each line straight at it. Phrase every
+headline as standalone reader-facing prose, not an internal category. **Keep
+headings emoji-free** (e.g. `## Breaking Changes`, not `## 💥 Breaking
+Changes`); the only allowed emoji is the `📦 **NPM:**` line. See the format
+guide for the full rule.
 
 ### Step 5: Generate `announcement-post.txt` (mandatory)
 
@@ -309,6 +338,10 @@ release sets both and regenerates the Python client (`SDK_VERSION` and the other
 `_generated/` outputs). Skip this step for any other `--package` value — an
 `--package=inference` release does not touch the SDK.
 
+**On a release train** `nx release version` has already written the
+`@qvac/inference` range; only regenerate the Python client and the Kotlin
+contract (Steps 3 and 3b of `qv-sdk-inference-version`).
+
 Read and follow `.agents/skills/qv-sdk-inference-version/SKILL.md` (Steps 1–4).
 Short form:
 
@@ -325,79 +358,28 @@ cd packages/sdk-python
 published. Include sdk-python generated updates in the release commit. The Python
 client does not get its own changelog — history lives in `packages/sdk/CHANGELOG.md`.
 
-### Step 8: Generate site docs (only when `--package=sdk`)
+### Step 8: Cut the documentation line of the version being released
 
-Generate the documentation-site API reference and release notes for the new
-version **in the same working tree**, so the changelog PR also carries the docs
-update. This replaces the old standalone `docs-release.yml` workflow (which
-opened a second, separate docs PR). Skip this step entirely for any other
-`--package` value — only the SDK release drives the versioned docs site.
+Only for a package with a versioned documentation collection —
+`@qvac/sdk` → `/sdk`, `@qvac/cli` → `/cli`, per
+`docs/website/src/lib/versions.ts`. Any other `--package` value documents
+nothing versioned and skips this step.
 
-Generation is **deterministic**: it runs the existing `docs/website` scripts
-(TypeDoc + Nunjucks render + verbatim `CHANGELOG_LLM.md` inlining). No LLM is
-involved in producing the API reference or release notes here — Step 4 already
-authored `CHANGELOG_LLM.md`, and this step only renders it into the site.
+A release publishes the documentation line written for it. Invoke
+`qv-docs-cutoff` with the version being released, that one collection, and the
+release branch — `release-<package>-<x.y.z>`, which is what tells it the release
+base, since the cutoff publishes the tree the release was cut from and not
+`main`'s tip. It opens **one** PR into `main`, separate from the release PR, and
+reports its URL. Do not approve or merge it: the documentation engineer reviews it, and
+that review is the only gate on the documentation side of the release.
 
-**Prerequisites:**
+This is the same step a release train runs at `docs/ci/RELEASE-TRAIN.md` step
+6; the only difference is that a train cuts every collection it moves and this
+cuts one.
 
-- `docs/website` dependencies installed (`cd docs/website && npm install`).
-- `SDK_PATH` set in `docs/website/.env` pointing at the SDK package root
-  (`packages/sdk`, the directory containing `index.ts` and `tsconfig.json`).
-  Copy `docs/website/.env.example` to `.env` if it doesn't exist yet.
-  `CHANGELOG_REPO_ROOT` defaults to the repo root, so no override is needed
-  when running inside the monorepo.
-
-**1. Generate the API reference + release notes (auto-detects minor vs patch):**
-
-```bash
-cd docs/website
-bun run scripts/release-version.ts <version> --force-extract
-```
-
-This is the exact command the old workflow ran. The dispatcher reads the
-version and forwards to the minor (`X.Y.0`: generate the new series' MDX at
-`reference/{api,release-notes}/v<X.Y>.x.mdx`, rewrite both `index.mdx` shims
-to `<include>` the new series file, and rotate the managed alias block in
-`public/_redirects` so the new `v<X.Y>.x` URL 301s to the shim canonical)
-or patch (`X.Y.Z`, `Z >= 1`: insert the `## vX.Y.Z` section into the target
-series' `v<X.Y>.x.mdx`; for `patch-latest`, also mirror the refreshed
-description onto the release-notes shim) orchestrator. It writes only:
-
-- `docs/website/content/docs/reference/api/**` (API summary MDX)
-- `docs/website/content/docs/reference/release-notes/**` (release notes MDX)
-- `docs/website/src/lib/versions.ts` (version-switcher manifest)
-- `docs/website/public/_redirects` (**minor only** — the managed
-  `# ==== BEGIN latest-series alias (managed) ====` block; patches never
-  touch this file)
-
-Those paths are generated here on release. Capability/CLI/config/runtime prose
-is `/qv-docs-update` on the feature PR. Do not hand-edit `reference/**`.
-
-**2. Verify the site still builds (mandatory):**
-
-```bash
-cd docs/website
-npm run build
-```
-
-A clean build confirms nothing on the website broke. Treat a build failure as
-**fail-stop**: surface the error and do NOT proceed to commit until it's fixed.
-
-**Staging follows the same convention as the other steps.** Like every other
-step, this one only generates files — it never runs `git add` or `git commit`.
-The three surfaces above are part of the release commit (same as Step 7's
-version files: "Include … in the release commit"), and every
-generation/build byproduct is gitignored — exactly like Step 5's
-`announcement-post.txt` — so a normal `git status` review shows only the
-committable files. Let the user review before committing. Generated + gitignored
-byproducts (do not `git add` them):
-
-- `docs/website/scripts/api-docs/api-data.json` (written by `release-version.ts`)
-- `docs/website/.next/`, `.source/`, `out/`, `dist/` (from `npm run build`)
-- `docs/website/next-env.d.ts`
-- `packages/sdk/dist/` (from the `prebuild:examples` build step)
-
-See `docs/website/docs-workflow.md` for the full pipeline reference.
+The documentation does not reach production on merge. After the version is on
+npm, the merged commit goes to `promote-docs-production.yml` — step 3 of the
+release flow in `docs/gitflow.md`, not before.
 
 ## CLI Parameters
 
@@ -428,17 +410,6 @@ Additionally:
 
 - `packages/<package>/CHANGELOG.md` – Aggregated changelog containing all versions (newest → oldest), preferring `CHANGELOG_LLM.md` (human-readable) from each version folder when available, falling back to `CHANGELOG.md`
 
-When `--package=sdk`, Step 8 also generates the documentation-site surfaces
-(commit these alongside the changelog):
-
-- `docs/website/content/docs/reference/api/**` – API reference MDX
-- `docs/website/content/docs/reference/release-notes/**` – Release notes MDX
-- `docs/website/src/lib/versions.ts` – Version-switcher manifest
-- `docs/website/public/_redirects` – **minor releases only** — the managed
-  latest-series alias block (delimited by
-  `# ==== BEGIN latest-series alias (managed) ====` markers). Patch
-  releases never touch this file.
-
 ## Tag Format
 
 Tags follow the pattern: `<package>-v<x.y.z>` and are created on **upstream** (not the fork).
@@ -456,7 +427,7 @@ push, and keep this list to things that are cheap to prevent:
 
 - **Prettier is holepunch, not stock.** `.prettierrc` is `"prettier-config-holepunch"`.
   Never `--no-config`. Resolve holepunch from a package that can install; do not
-  `bun install` against an unpublished lockstep dep. Quote style and trailing
+  `npm install` against an unpublished lockstep dep. Quote style and trailing
   commas on `CHANGELOG_LLM.md` are the usual fail.
 - **Lockstep: pass the floor.** Never run the generator unflagged for `sdk` /
   `inference`. Same `--base-commit` on both. When that floor is a patch, union
@@ -491,17 +462,18 @@ Before completing:
 - [ ] PRs scoped to package path only
 - [ ] Changelog files written to correct version directory
 - [ ] CHANGELOG_LLM.md authored from `changelog/<version>/` after the published-version audit (this package's name on the title/NPM line)
-- [ ] Generated markdown is prettier-clean with **prettier-config-holepunch** resolved (never `--no-config`; do not `bun install` against unpublished lockstep deps)
+- [ ] Generated markdown is prettier-clean with **prettier-config-holepunch** resolved (never `--no-config`; do not `npm install` against unpublished lockstep deps)
 - [ ] announcement-post.txt generated (mandatory, gitignored)
 - [ ] Published-version audit done: `npm view "$PKG@<base-version>" gitHead` vs HEAD under `getPackageDir(<slug>)` (`$DIR`, not `package.json`) matches `api.md` / `breaking.md` / `models.md`
+- [ ] When `--package=sdk`: the same diff over `packages/sdk-python` and `packages/sdk-kotlin` is reflected under `### Python client` / `### Kotlin client` in `api.md` / `breaking.md` and in `CHANGELOG_LLM.md`; a client's first release gets a first-release section
 - [ ] `models.md` is the full added/removed set (inline `CHANGELOG.md` may still use `(and N more)`); catalog-as-API removals are in `breaking.md`
 - [ ] NOTICE updated; JS section not emptied by a failed install
 - [ ] When `--package=sdk`: `qv-sdk-inference-version` run (engine version published, sdk version and `@qvac/inference` range sharing a major.minor, sdk-python regenerated), python `generate.py --check` passing
-- [ ] When `--package=sdk`: site docs generated via `release-version.ts`, `npm run build` passed, and `git status` shows only `reference/api/**`, `reference/release-notes/**`, `src/lib/versions.ts` (and `public/_redirects` on **minor** releases — the managed latest-series alias block) as committable docs changes (byproducts gitignored)
 - [ ] Root CHANGELOG.md rebuilt from all version folders (and picks up CHANGELOG_LLM.md)
 - [ ] Versions sorted in descending semver order
 - [ ] No duplicated versions
 - [ ] Root file is deterministic (fully regenerated)
+- [ ] For a package with a versioned docs collection: `qv-docs-cutoff` invoked, its PR URL reported, neither approved nor merged
 - [ ] Org remote (`upstream` when that is tetherto/qvac) is the push target, not the fork
 
 ## References
@@ -511,5 +483,5 @@ Before completing:
 - LLM changelog format: [references/changelog-llm-format.md](references/changelog-llm-format.md)
 - NOTICE generation: `.agents/skills/qv-notice-generate/SKILL.md`
 - sdk @qvac/inference version: `.agents/skills/qv-sdk-inference-version/SKILL.md`
-- Docs site pipeline (Step 8): `docs/website/docs-workflow.md`
 - Release PR branch naming (org `release-*` push / Merge Guard): `.agents/skills/qv-sdk-pr-create/SKILL.md`
+- Documentation cutoff: `.agents/skills/qv-docs-cutoff/SKILL.md`

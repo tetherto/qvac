@@ -250,7 +250,10 @@ runs:
         # cmake-bare derives the prebuild filename from package.json name
         # (@scope/pkg -> scope__pkg.bare). When we rename @qvac/foo to
         # @tetherto/foo-mono the on-disk bare modules keep their build-time
-        # names (e.g. qvac__fabric.bare); add symlinks so consumers resolve.
+        # names (e.g. qvac__llm-llamacpp.bare); add symlinks so consumers resolve.
+        # Split packages (#host-addon, e.g. @qvac/fabric) build per-host modules
+        # named after their platform packages, which match no old_bare and are
+        # left alone: a renamed meta is an unsliced archive of those binaries.
         old_bare="$(
           node -e "const n=process.argv[1]; console.log(n.replace(/^@/,'').replace('/','__') + '.bare')" "${ORIGINAL_NAME}"
         )"

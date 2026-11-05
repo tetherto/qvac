@@ -66,6 +66,13 @@ export function initializeWorker(): { hasRPCConfig: boolean } {
   return { hasRPCConfig }
 }
 
+// Read once and unset so processes the worker spawns don't inherit it.
+function takeIPCAuthToken() {
+  const token = os.getEnv('QVAC_IPC_AUTH_TOKEN')
+  if (token !== undefined) os.unsetEnv('QVAC_IPC_AUTH_TOKEN')
+  return token
+}
+
 export function ensureRPCSetup() {
   if (rpcInitialized) return
 
@@ -80,7 +87,8 @@ export function ensureRPCSetup() {
     if (ipcSocketPath) {
       logger.info(`Running in desktop mode, connecting to IPC socket: ${ipcSocketPath}`)
       const rpc = createIPCClient(ipcSocketPath, {
-        onDisconnect: () => void shutdownWorker('ipc-disconnect')
+        onDisconnect: () => void shutdownWorker('ipc-disconnect'),
+        authToken: takeIPCAuthToken()
       })
       logger.debug('Desktop IPC client created?', !!rpc)
     } else {

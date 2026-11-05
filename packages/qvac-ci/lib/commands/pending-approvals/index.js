@@ -5,20 +5,23 @@ import { validatePrNumber, validateRepo, validateTeamSlug, exitWithError } from 
 import { helpers } from './helpers.js'
 
 class PendingApprovals extends Command {
-  constructor () {
+  constructor() {
     super({
       name: 'pending-approvals',
       description: 'Check PR approval status and post a review-status comment',
       secrets: [
         { envVar: 'GITHUB_TOKEN', description: 'GitHub token for comment posting' },
         { envVar: 'GITHUB_APP_ID', description: 'App ID for team membership resolution' },
-        { envVar: 'GITHUB_PRIVATE_KEY', description: 'App private key for team membership resolution' }
+        {
+          envVar: 'GITHUB_PRIVATE_KEY',
+          description: 'App private key for team membership resolution'
+        }
       ],
       sanitizer: new helpers.GitHubSanitizer()
     })
   }
 
-  toCommand () {
+  toCommand() {
     const cmd = command(
       'pending-approvals',
       summary(this.description),
@@ -39,21 +42,24 @@ class PendingApprovals extends Command {
     return cmd
   }
 
-  async _run (flags) {
+  async _run(flags) {
     const prNumber = validatePrNumber(flags['pr-number'] || flags.prNumber)
-    const { owner, repo } = validateRepo(
-      flags.repo || process.env.GITHUB_REPOSITORY
-    )
+    const { owner, repo } = validateRepo(flags.repo || process.env.GITHUB_REPOSITORY)
 
     const maintainersTeam = validateTeamSlug(
-      flags['maintainers-team'] || flags.maintainersTeam, '--maintainers-team'
+      flags['maintainers-team'] || flags.maintainersTeam,
+      '--maintainers-team'
     )
     const teamLeadsTeam = validateTeamSlug(
-      flags['team-leads-team'] || flags.teamLeadsTeam, '--team-leads-team'
+      flags['team-leads-team'] || flags.teamLeadsTeam,
+      '--team-leads-team'
     )
     const minApprovals = parseInt(flags['min-approvals'] || flags.minApprovals || '2', 10)
     if (isNaN(minApprovals) || minApprovals < 1) {
-      throw new RangeError('--min-approvals must be a positive integer, got: ' + String(flags['min-approvals'] || flags.minApprovals))
+      throw new RangeError(
+        '--min-approvals must be a positive integer, got: ' +
+          String(flags['min-approvals'] || flags.minApprovals)
+      )
     }
 
     const teams = {

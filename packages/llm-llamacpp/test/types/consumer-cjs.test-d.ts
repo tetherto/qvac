@@ -19,11 +19,19 @@ void missingArgs;
 const missingFiles = new LlmLlamacpp({});
 void missingFiles;
 
-const primary: string = LlmLlamacpp.pickPrimaryGgufPath([
+const primary: string = LlmLlamacpp.validateModelPath([
   "/abs/model-00001-of-00002.gguf",
-  "/abs/model-00002-of-00002.gguf",
 ]);
 void primary;
+
+// @ts-expect-error - model weights must be one disk path
+void new LlmLlamacpp({ files: { model: ["/abs/first.gguf", "/abs/second.gguf"] }, config: { device: "cpu" } });
+// @ts-expect-error - an empty model list is not a disk path
+void new LlmLlamacpp({ files: { model: [] }, config: { device: "cpu" } });
+// @ts-expect-error - weight buffers are not disk paths
+void new LlmLlamacpp({ files: { model: [new Uint8Array(8)] }, config: { device: "cpu" } });
+// @ts-expect-error - the weight streaming API has been removed
+void model.addon?.loadWeights;
 
 // Attached at runtime, deliberately absent from the type surface.
 // @ts-expect-error - not part of the published constructor surface
@@ -35,10 +43,26 @@ const logger = model.logger;
 void logger;
 const state: { configLoaded: boolean } = model.getState();
 void state;
+const saved: Promise<void> = model.saveCache("/abs/session.bin");
+void saved;
+const discarded: Promise<void> = model.discardCache("/abs/session.bin");
+void discarded;
+const counted: Promise<number> = model.calcTokens({
+  text: "Weather in Paris?",
+  history: [{ role: "system", content: "You are a helpful assistant." }],
+  tools: [{ type: "function", name: "get_weather" }],
+});
+void counted;
+const calcInput: LlmLlamacpp.CalcTokensInput = { text: "Hello" };
+void calcInput;
+// @ts-expect-error - history takes Message[], not its JSON text
+void model.calcTokens({ history: "[]" });
 
 const config: LlmLlamacpp.LlamaConfig = {
   device: "gpu",
   parallel: 4,
+  poll: "0",
+  "poll-batch": "0",
   "split-mode": "layer",
 };
 void config;
@@ -80,7 +104,7 @@ const generationParams: LlmLlamacpp.GenerationParams = {
   temp: 0.7,
   json_schema: { type: "object" },
   tool_choice: "required",
-  remove_thinking_from_context: true,
+  parallel_tool_calls: false,
 };
 void generationParams;
 
@@ -88,15 +112,30 @@ const runOptions: LlmLlamacpp.RunOptions = {
   prefill: false,
   generationParams,
   cacheKey: "k",
-  saveCacheToDisk: true,
+  baseCacheKey: "base",
+  ephemeral: false,
   rejectWhenBusy: true,
 };
 void runOptions;
+
+// @ts-expect-error - saveCacheToDisk was removed; use saveCache(cacheKey)
+const removedSave: LlmLlamacpp.RunOptions = { saveCacheToDisk: true };
+void removedSave;
+
+// @ts-expect-error - baseCacheKey is a cacheKey file path
+const badBaseCacheKey: LlmLlamacpp.RunOptions = { baseCacheKey: 1 };
+void badBaseCacheKey;
 
 const messages: LlmLlamacpp.Message[] = [
   { role: "user", content: "hello" },
   { role: "user", type: "media", content: new Uint8Array([1, 2, 3]) },
   { type: "function", name: "get_weather", parameters: { type: "object" } },
+  {
+    role: "assistant",
+    content: "",
+    tool_calls: [{ id: "call_1", name: "get_weather", arguments: { city: "Paris" } }],
+  },
+  { role: "tool", content: "18C", tool_call_id: "call_1", name: "get_weather" },
 ];
 void messages;
 
@@ -160,11 +199,12 @@ const stats: LlmLlamacpp.RuntimeStats = {
   CacheTokens: 4,
   generatedTokens: 5,
   promptTokens: 6,
-  thinkingBlockDiscards: 0,
   toolDefinitionsDropped: 0,
   avgConcurrentSeq: 1,
   backendDevice: "gpu",
   stopReason: "eos",
+  draftTokens: 8,
+  draftAcceptedTokens: 6,
 };
 void stats;
 const numericLike: LlmLlamacpp.NumericLike = "42";
@@ -196,3 +236,6 @@ const addonType: LlmLlamacpp.Addon | null = null;
 void addonType;
 const args: LlmLlamacpp.LlmLlamacppArgs = { files: { model: ["/a.gguf"] }, config: {} };
 void args;
+
+const fit: Promise<LlmLlamacpp.FitResult> = LlmLlamacpp.assessFit({ modelPath: "/abs/model.gguf" });
+void fit;

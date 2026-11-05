@@ -21,7 +21,7 @@ const vaeModelSrc = process.argv[7] || FLUX_2_KLEIN_4B_VAE
 if (!inputPath) {
   console.error('✖ input image path is required')
   console.error(
-    'Usage: bun run bare:example dist/examples/diffusion-flux2-klein-img2img.js <inputImage> [prompt] [outputDir] [diffusionModelSrc] [llmModelSrc] [vaeModelSrc]'
+    'Usage: node dist/examples/diffusion-flux2-klein-img2img.js <inputImage> [prompt] [outputDir] [diffusionModelSrc] [llmModelSrc] [vaeModelSrc]'
   )
   process.exit(1)
 }

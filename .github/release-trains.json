@@ -1,0 +1,18 @@
+{
+  "sdk": {
+    "groups": ["engine", "agentstack"],
+    "anchorGroup": "engine",
+    "githubRelease": {
+      "project": "@qvac/sdk",
+      "name": "QVAC SDK"
+    },
+    "checks": ["shared-runtime-libs", "sdk-python", "package-checks", "pear-e2e"],
+    "packageChecks": ".github/sdk-pod-checks.json"
+  },
+  "cli": {
+    "groups": ["agentstack"],
+    "anchorProject": "@qvac/cli",
+    "checks": ["package-checks"],
+    "packageChecks": ".github/sdk-pod-checks.json"
+  }
+}

@@ -11,7 +11,7 @@
  *
  */
 
-import { bundleSdk } from '@/commands'
+import { bundleSdk } from '@qvac/sdk/commands'
 import { existsSync, rmSync } from 'fs'
 import path from 'path'
 

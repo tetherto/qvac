@@ -2,13 +2,25 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <span>
+#include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
+
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
+#include <os/proc.h>
+#endif
+#endif
 
 #include <common/arg.h>
 #include <common/common.h>
@@ -22,172 +34,122 @@
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
 #include "model-interface/BertModel.hpp"
+#include "model-interface/LayaModel.hpp"
 #include "model-interface/LlamaLazyInitializeBackend.hpp"
+#include "model-interface/RerankModel.hpp"
+#include "model-interface/utils.hpp"
+#include "utils/AppMemoryBudget.hpp"
 
 namespace qvac_lib_inference_addon_embed {
-
-/// Options llama answers by writing to stdout and calling `exit(0)`, or by
-/// rewriting state shared with every later load in this process.
-inline bool isProcessScopedOption(const common_arg& option) {
-  static const std::unordered_set<std::string> excluded = {
-      "--usage",
-      "--help",
-      "--version",
-      "--completion-bash",
-      "--cache-list",
-      "--cache-rm",
-      "--list-devices",
-      "--rpc",
-      "--log-disable",
-      "--log-file",
-      "--log-colors",
-      "--log-prefix",
-      "--log-timestamps",
-      "--log-verbose",
-      "--verbose",
-      "--verbosity"};
-
-  for (const char* arg : option.args) {
-    if (excluded.contains(arg)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/// Applies a load's settings, in llama's own CLI spelling, by dispatching each
-/// through llama's argument table, so tensor splits, MoE placement and tensor
-/// buffer overrides are parsed exactly as the loader reads them.
-///
-/// Returns a reason when the load cannot be represented, empty on success.
-inline std::optional<std::string> applyLlamaLoadParams(
-    js_env_t* env, qvac_lib_inference_addon_cpp::js::Object request,
-    common_params& params) {
-  namespace js = qvac_lib_inference_addon_cpp::js;
-
-  auto supplied = request.getOptionalProperty<js::Object>(env, "params");
-  if (!supplied.has_value()) {
-    return std::nullopt;
-  }
-
-  // The load parses with `LLAMA_EXAMPLE_EMBEDDING` (BertModel.cpp), which
-  // inherits every common option and adds the embedding-only ones.
-  auto parser = common_params_parser_init(
-      params, LLAMA_EXAMPLE_EMBEDDING, [](int, char**) {});
-
-  std::unordered_map<std::string, common_arg*> options;
-  std::unordered_map<std::string, bool> polarity;
-  for (common_arg& option : parser.options) {
-    // Options that print and terminate, or rewrite process-wide state, are no
-    // part of a load. llama implements the first group with `exit(0)`.
-    if (isProcessScopedOption(option)) {
-      continue;
-    }
-    for (const char* arg : option.args) {
-      options[arg] = &option;
-      polarity[arg] = true;
-    }
-    for (const char* arg : option.args_neg) {
-      options[arg] = &option;
-      polarity[arg] = false;
-    }
-  }
-
-  std::unordered_map<const common_arg*, bool> appliedBooleans;
-
-  js_value_t* names = nullptr;
-  JS(js_get_property_names(env, *supplied, &names));
-  auto keys = js::Array::fromValue(names);
-  const size_t count = keys.size(env);
-
-  for (size_t index = 0; index < count; ++index) {
-    const std::string key =
-        keys.get<js::String>(env, index).as<std::string>(env);
-    const std::string value =
-        supplied->getProperty<js::String>(env, key.c_str())
-            .as<std::string>(env);
-    const std::string arg = "--" + key;
-
-    const auto found = options.find(arg);
-    if (found == options.end()) {
-      return "unsupported-config";
-    }
-
-    common_arg& option = *found->second;
-    try {
-      if (option.handler_bool != nullptr) {
-        bool requested = true;
-        if (!value.empty()) {
-          if (common_arg_utils::is_truthy(value)) {
-            requested = true;
-          } else if (common_arg_utils::is_falsey(value)) {
-            requested = false;
-          } else {
-            return "unsupported-config";
-          }
-        }
-        const bool effective = polarity.at(arg) == requested;
-        // Two spellings of one option are distinct keys here, so a load that
-        // gives both is only representable when they agree.
-        const auto [applied, first] =
-            appliedBooleans.emplace(&option, effective);
-        if (!first && applied->second != effective) {
-          return "unsupported-config";
-        }
-        option.handler_bool(params, effective);
-      } else if (option.handler_void != nullptr) {
-        // A valueless flag can only assert itself, so a load asking for its
-        // opposite describes a placement this path cannot express.
-        if (!value.empty() && !common_arg_utils::is_truthy(value)) {
-          return "unsupported-config";
-        }
-        option.handler_void(params);
-      } else if (option.handler_int != nullptr) {
-        option.handler_int(params, std::stoi(value));
-      } else if (option.handler_string != nullptr) {
-        option.handler_string(params, value);
-      } else {
-        return "unsupported-config";
-      }
-    } catch (const std::exception&) {
-      return "unsupported-config";
-    }
-  }
-
-  // llama reads both lists to their terminator rather than by size.
-  if (!params.tensor_buft_overrides.empty()) {
-    params.tensor_buft_overrides.push_back({nullptr, nullptr});
-  }
-  if (!params.kv_overrides.empty()) {
-    params.kv_overrides.emplace_back();
-    params.kv_overrides.back().key[0] = '\0';
-  }
-  return std::nullopt;
-}
 
 // ── assessFit ────────────────────────────────────────────────────────────
 //
 // Projects one model against the memory free right now. Args: [request].
+// Returns a Promise of the projection.
 //
-// Takes no instance and loads nothing: the fitter reads GGUF metadata only. A
-// model it cannot read is an "error" status rather than a throw.
+// Takes no instance and loads nothing: the fitter reads GGUF metadata only.
+// Resolves to "fits" or "does-not-fit" with the memory the load takes on each
+// device, or "unknown" for a load the fitter cannot project. A model it cannot
+// read, or an invalid request, rejects.
 //
-// `common_fit_params` rewrites only the parameters it had to change, and
-// restores every one of them on a status other than success. On
-// `does-not-fit` the figures therefore describe the load as asked for, which
-// is the demand that exceeded the machine. It is not thread safe, so the call
-// is serialised here.
+// The request is copied into plain C++ on the JS thread, both no-alloc probes
+// run on a worker thread, and the result is marshalled back on the JS thread.
 
-inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+struct FitRequest {
+  std::string modelPath;
+  std::string projectionModel;
+  std::unordered_map<std::string, std::string> config;
+  std::optional<double> minCtxSize;
+  std::optional<double> marginBytes;
+};
+
+struct FitDevice {
+  std::string id;
+  std::string name;
+  bool unified;
+  double usedBytes;
+  double freeBytes;
+  double totalBytes;
+};
+
+// The load as the fit resolved it: on "fits" the context and layer count the
+// fitter settled on, on "does-not-fit" the ones the load asked for.
+struct FitStats {
+  double ctxSize;
+  double gpuLayers;
+};
+
+struct FitResult {
+  std::string status;
+  std::vector<FitDevice> devices;
+  std::optional<FitStats> stats;
+};
+
+inline FitResult unknownResult() { return FitResult{"unknown", {}, {}}; }
+
+[[noreturn]] inline void throwFitError(
+    qvac_errors::general_error::GeneralErrorCode code,
+    const std::string& message) {
+  throw qvac_errors::StatusError(code, "assessFit: " + message);
+}
+
+// The PCI bus ID when the backend reports one, so the same GPU matches across
+// addons built on different backends; the device name otherwise.
+//
+// Unified marks memory the host owns: the CPU, an integrated GPU, a GPU that
+// says it shares host memory, Android's OpenCL GPU, and a device that reports
+// no memory of its own. A unified device that reports none takes the CPU's
+// figures.
+inline FitDevice fitDevice(
+    ggml_backend_dev_t device, double usedBytes, double freeBytes,
+    double totalBytes) {
+  ggml_backend_dev_props props{};
+  ggml_backend_dev_get_props(device, &props);
+  const bool reportsNoMemory = totalBytes == 0;
+#if defined(__ANDROID__)
+  const char* registry =
+      ggml_backend_reg_name(ggml_backend_dev_backend_reg(device));
+  const bool androidOpenCl =
+      registry != nullptr && std::strcmp(registry, "OpenCL") == 0;
+#else
+  const bool androidOpenCl = false;
+#endif
+  const bool unified = props.memory_unified ||
+                       props.type == GGML_BACKEND_DEVICE_TYPE_IGPU ||
+                       props.type == GGML_BACKEND_DEVICE_TYPE_CPU ||
+                       androidOpenCl || reportsNoMemory;
+  if (unified && reportsNoMemory) {
+    if (ggml_backend_dev_t host =
+            ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU)) {
+      size_t hostFree = 0;
+      size_t hostTotal = 0;
+      ggml_backend_dev_memory(host, &hostFree, &hostTotal);
+      freeBytes = static_cast<double>(hostFree);
+      totalBytes = static_cast<double>(hostTotal);
+    }
+  }
+  return {
+      props.device_id != nullptr ? props.device_id : props.name,
+      props.name,
+      unified,
+      usedBytes,
+      freeBytes,
+      totalBytes};
+}
+
+inline FitRequest parseFitRequest(js_env_t* env, js_callback_info_t* info) {
   using namespace qvac_lib_inference_addon_cpp;
-
-  static std::mutex fitMutex;
 
   JsArgsParser args(env, info);
   auto request = args.getJsObject(0, "request");
 
-  const std::string modelPath =
+  FitRequest parsed;
+  parsed.modelPath =
       request.getProperty<js::String>(env, "modelPath").as<std::string>(env);
+  parsed.projectionModel = request
+                               .getOptionalPropertyAs<js::String, std::string>(
+                                   env, "projectionModel")
+                               .value_or("");
 
   auto number = [&](const char* name) -> std::optional<double> {
     auto value = request.getOptionalProperty<js::Number>(env, name);
@@ -197,70 +159,126 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     return value->as<double>(env);
   };
 
+  // The config map `loadModel` takes, parsed by the code that load itself runs.
+  if (auto config = request.getOptionalProperty<js::Object>(env, "config");
+      config.has_value()) {
+    js_value_t* names = nullptr;
+    JS(js_get_property_names(env, *config, &names));
+    auto keys = js::Array::fromValue(names);
+    const size_t count = keys.size(env);
+    for (size_t index = 0; index < count; ++index) {
+      const std::string key =
+          keys.get<js::String>(env, index).as<std::string>(env);
+      parsed.config[key] = config->getProperty<js::String>(env, key.c_str())
+                               .as<std::string>(env);
+    }
+  }
+
+  parsed.minCtxSize = number("minCtxSize");
+  parsed.marginBytes = number("marginBytes");
+  return parsed;
+}
+
+// `common_fit_params` rewrites only the parameters it had to change, and
+// restores every one of them on a status other than success. On
+// `does-not-fit` the figures therefore describe the load as asked for, which
+// is the demand that exceeded the machine. It is not thread safe and swaps the
+// global llama logger, so setup, fit and breakdown are serialised here. The
+// worker takes the lock, never the JS thread.
+inline FitResult runFit(FitRequest request) {
+  static std::mutex fitMutex;
+  const std::lock_guard<std::mutex> lock(fitMutex);
+  const std::string& modelPath = request.modelPath;
+  auto configFilemap = std::move(request.config);
+
+  // `LlamaModelLoader::init` takes both out of the map before parsing.
+  const auto takeConfig = [&configFilemap](const char* key) {
+    std::string value;
+    if (auto it = configFilemap.find(key); it != configFilemap.end()) {
+      value = it->second;
+      configFilemap.erase(it);
+    }
+    return value;
+  };
+  const std::string backendsDir = takeConfig("backendsDir");
+  const std::string openclCacheDir = takeConfig("openclCacheDir");
+
+  // A projector is a second resident file, with its own compute buffers, that
+  // the fitter does not count: a multimodal load would be projected as if it
+  // were text only, so it is unknown, as an mmproj is in @qvac/llm-llamacpp.
+  if (!request.projectionModel.empty()) {
+    return unknownResult();
+  }
+  // The options go through the same function load uses: without a projection
+  // model it refuses any of them, as load does.
+  try {
+    takeMultimodalOptions(configFilemap, /* hasProjectionModel = */ false);
+  } catch (const std::exception& e) {
+    throwFitError(qvac_errors::general_error::InvalidArgument, e.what());
+  }
+
   // `common_fit_params` reads ggml's global device registry and loads nothing
   // itself, so whatever is registered here is its whole view of the machine.
   // The handle holds the reference count for the call: a model unloading on
   // another thread would otherwise free the backend underneath it.
-  auto backendsDir =
-      request.getOptionalProperty<js::String>(env, "backendsDir");
-  LlamaBackendsHandle backendsHandle(
-      backendsDir.has_value() ? backendsDir->as<std::string>(env)
-                              : std::string());
-
-  auto errorResult = [&](const char* reason) {
-    auto result = js::Object::create(env);
-    result.setProperty(
-        env, "status", js::String::create(env, std::string("error")));
-    result.setProperty(
-        env, "reason", js::String::create(env, std::string(reason)));
-    result.setProperty(env, "gpuLayers", js::Number::create(env, 0));
-    result.setProperty(env, "ctxSize", js::Number::create(env, 0));
-    result.setProperty(env, "devices", js::Array::create(env));
-    result.setProperty(env, "deviceBytes", js::Number::create(env, 0));
-    result.setProperty(env, "hostBytes", js::Number::create(env, 0));
-    result.setProperty(env, "trainCtxSize", js::Number::create(env, 0));
-    result.setProperty(env, "expertCount", js::Number::create(env, 0));
-    return result;
-  };
+  LlamaBackendsHandle backendsHandle(backendsDir, openclCacheDir);
 
   // An empty registry would still yield a verdict, measured against a machine
   // the fitter cannot see.
   if (ggml_backend_dev_count() == 0) {
-    return errorResult("no-backend-device");
+    throwFitError(
+        qvac_errors::general_error::InternalError,
+        "no ggml backend device is registered");
   }
 
   // A path llama cannot open reaches it as a `runtime_error` carrying no
-  // filename, which reports as a model it could not read either way. Naming
-  // the cause here keeps that distinct from a load it cannot represent.
+  // filename, so the file is opened here first to name the cause.
   if (std::FILE* file = std::fopen(modelPath.c_str(), "rb")) {
     std::fclose(file);
   } else {
-    return errorResult("model-unreadable");
+    throwFitError(
+        qvac_errors::general_error::InvalidArgument,
+        "cannot open " + modelPath);
+  }
+
+  // The fitter measures device memory, and a cpu load's weights stay
+  // file-backed, so it would project `fits` for nearly any model.
+  if (auto device = configFilemap.find("device");
+      device != configFilemap.end() && device->second == "cpu") {
+    return unknownResult();
   }
 
   common_params loadParams;
+  try {
+    loadParams = setupParams(modelPath, std::move(configFilemap)).params;
+  } catch (const std::exception& e) {
+    throwFitError(qvac_errors::general_error::InvalidArgument, e.what());
+  }
   loadParams.embedding = true;
-  if (auto applied = applyLlamaLoadParams(env, request, loadParams);
-      applied.has_value()) {
-    return errorResult(applied->c_str());
+
+  // A second resident file the projection does not count, so a load carrying
+  // one would come back understated.
+  if (!loadParams.lora_adapters.empty()) {
+    return unknownResult();
   }
 
-  // `BertModel::init` applies both to every embedding load: a non-causal model
-  // decodes one ubatch at a time, and a single sequence needs no split cache.
+  // `BertModel::configureParams` applies both to every embedding load: a
+  // non-causal model decodes one ubatch at a time, and a single sequence needs
+  // no split cache but must still admit every sequence id (sized below, once
+  // the context is pinned).
   loadParams.n_ubatch = loadParams.n_batch;
-  if (loadParams.n_parallel == 1) {
+  const bool unifiedFallback = loadParams.n_parallel == 1;
+  if (unifiedFallback) {
     loadParams.kv_unified = true;
   }
 
   // The fitter reduces the context only when it is 0, so an embedding load
   // left unset would be projected at a reduced context it never runs at.
-  // `BertModel::init` pins it to the trained context, or caps it there.
-  // A file the metadata reader rejects is reported by the fit below, which
-  // owns the unreadable-model verdict.
+  // `BertModel::configureParams` pins it to the trained context, or caps it
+  // there. A file the metadata reader rejects is reported by the fit below.
   try {
     ModelMetaData metadata;
-    metadata.parse(
-        modelPath, {}, false, qvac_lib_infer_llamacpp_embed::errors::ADDON_ID);
+    metadata.parse(modelPath, qvac_lib_infer_llamacpp_embed::errors::ADDON_ID);
     const auto architecture = metadata.tryGetString("general.architecture");
     if (architecture.has_value() && !architecture->empty()) {
       const auto trainedCtx =
@@ -274,26 +292,33 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
     }
   } catch (const std::exception&) {
   }
+  if (unifiedFallback) {
+    loadParams.n_parallel = unifiedSequenceLimit(loadParams);
+  }
 
   llama_model_params mparams = common_model_params_to_llama(loadParams);
   llama_context_params cparams = common_context_params_to_llama(loadParams);
 
   // `fit-ctx 0` stores `UINT32_MAX` in the signed field to mean "do not
   // reduce", so the round trip through unsigned restores the sentinel.
-  auto requestedMinCtx = number("minCtxSize");
+  const auto requestedMinCtx = request.minCtxSize;
   if (requestedMinCtx.has_value() &&
       (!std::isfinite(*requestedMinCtx) || *requestedMinCtx < 0)) {
-    return errorResult("unsupported-config");
+    throwFitError(
+        qvac_errors::general_error::InvalidArgument,
+        "minCtxSize must be a non-negative count");
   }
   const uint32_t minCtx =
       requestedMinCtx.has_value()
           ? static_cast<uint32_t>(*requestedMinCtx)
           : static_cast<uint32_t>(loadParams.fit_params_min_ctx);
 
-  auto requestedMargin = number("marginBytes");
+  const auto requestedMargin = request.marginBytes;
   if (requestedMargin.has_value() &&
       (!std::isfinite(*requestedMargin) || *requestedMargin < 0)) {
-    return errorResult("unsupported-config");
+    throwFitError(
+        qvac_errors::general_error::InvalidArgument,
+        "marginBytes must be a non-negative byte count");
   }
 
   // In/out: the fitter rewrites only the entries still holding a llama
@@ -306,7 +331,9 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   // llama walks this array to its `{nullptr, nullptr}` terminator, so a list
   // that does not fit with the terminator would be read past its end.
   if (loadParams.tensor_buft_overrides.size() > buftOverrides.size()) {
-    return errorResult("unsupported-config");
+    throwFitError(
+        qvac_errors::general_error::InvalidArgument,
+        "override-tensor: more tensor overrides than llama accepts");
   }
   std::copy_n(
       loadParams.tensor_buft_overrides.begin(),
@@ -314,20 +341,23 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
       buftOverrides.begin());
   // `fit_params_target` already holds one entry per device, and `fit-target`
   // fills it, so it carries both llama's default and the load's own override.
-  std::vector<size_t> margins =
-      requestedMargin.has_value()
-          ? std::vector<size_t>(
-                llama_max_devices(), static_cast<size_t>(*requestedMargin))
-          : loadParams.fit_params_target;
+  // A caller's margin answers a different question — what the models already
+  // resident need — so the stricter of the two binds.
+  std::vector<size_t> margins = loadParams.fit_params_target;
+  if (requestedMargin.has_value()) {
+    const auto requested = static_cast<size_t>(*requestedMargin);
+    for (size_t& margin : margins) {
+      margin = std::max(margin, requested);
+    }
+  }
 
   // Without the fitter the load places nothing, so there is no verdict.
   if (!loadParams.fit_params) {
-    return errorResult("unsupported-config");
+    return unknownResult();
   }
 
   common_params_fit_status status{};
   try {
-    const std::lock_guard<std::mutex> lock(fitMutex);
     status = common_fit_params(
         modelPath.c_str(),
         &mparams,
@@ -336,36 +366,26 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
         buftOverrides.data(),
         margins.data(),
         minCtx,
+        nullptr,
         false,
-        GGML_LOG_LEVEL_INFO);
-  } catch (const std::exception&) {
+        GGML_LOG_LEVEL_INFO,
+        // The load's fit passes it too, so `moe-cache-mib: auto` sizes the
+        // same expert cache in the projection as in the load.
+        loadParams.moe_cache_auto_explicit);
+  } catch (const std::exception& e) {
     // `common_fit_params` answers its own failures with a status, so a throw
     // escaping it came from the setup around the probe.
-    return errorResult("unsupported-config");
-  }
-
-  const char* statusName = "error";
-  if (status == COMMON_PARAMS_FIT_STATUS_SUCCESS) {
-    statusName = "fits";
-  } else if (status == COMMON_PARAMS_FIT_STATUS_FAILURE) {
-    statusName = "does-not-fit";
+    throwFitError(qvac_errors::general_error::InternalError, e.what());
   }
 
   if (status == COMMON_PARAMS_FIT_STATUS_ERROR) {
-    return errorResult("model-unreadable");
+    throwFitError(
+        qvac_errors::general_error::InvalidArgument,
+        "the fitter could not read " + modelPath);
   }
+  const char* statusName =
+      status == COMMON_PARAMS_FIT_STATUS_SUCCESS ? "fits" : "does-not-fit";
 
-  auto result = js::Object::create(env);
-  result.setProperty(
-      env, "status", js::String::create(env, std::string(statusName)));
-  result.setProperty(
-      env,
-      "reason",
-      js::String::create(
-          env,
-          std::string(
-              status == COMMON_PARAMS_FIT_STATUS_SUCCESS ? "fits"
-                                                         : "does-not-fit")));
   // The per-device breakdown is a second no-alloc probe, so it costs about
   // what the fit cost and only runs once a projection exists.
   std::vector<ggml_backend_dev_t> devices;
@@ -373,7 +393,6 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
   uint32_t trainCtx = 0;
   uint32_t expertCount = 0;
   common_device_memory_data_vec breakdown;
-  bool measured = true;
   try {
     breakdown = common_get_device_memory_data(
         modelPath.c_str(),
@@ -385,115 +404,143 @@ inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
         expertCount,
         GGML_LOG_LEVEL_INFO);
   } catch (const std::exception&) {
-    // The fit already reached a verdict; this probe only breaks it down, so a
-    // failure here leaves the verdict standing without per-device figures.
-    measured = false;
-    devices.clear();
-    breakdown.clear();
+    // A verdict is reported only with the rows it rests on.
+    return unknownResult();
+  }
+
+  // A fitted context of 0 with no trained context names no usable load.
+  if (cparams.n_ctx == 0 && trainCtx == 0) {
+    throwFitError(
+        qvac_errors::general_error::InvalidArgument,
+        modelPath + " declares no trained context");
   }
 
   // The probe returns one row per device the model was assigned to, then a
   // trailing host row: the CPU device is counted among the devices but its
-  // demand lands on the host.
-  auto perDevice = js::Array::create(env);
-  double deviceBytes = 0;
-  double hostBytes = 0;
+  // demand lands on the host. Weights mapped from the file under
+  // LLAMA_LOAD_MODE_MMAP are page cache the OS can evict, so the host row
+  // leaves them out, as fabric's own verdict does. A verdict always carries the
+  // host row, so a probe without one, or a registry without a CPU device to
+  // name it by, leaves the load unsized.
+  ggml_backend_dev_t host =
+      ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+  if (host == nullptr || breakdown.size() <= devices.size()) {
+    return unknownResult();
+  }
+  const bool hostModelEvictable = mparams.load_mode == LLAMA_LOAD_MODE_MMAP;
+  FitResult result;
+  result.status = statusName;
   for (size_t i = 0; i < breakdown.size(); ++i) {
     const auto& row = breakdown[i];
-    const bool isHost = i >= devices.size();
-    const double used = static_cast<double>(row.model) +
-                        static_cast<double>(row.context) +
-                        static_cast<double>(row.compute);
-    if (isHost) {
-      hostBytes += used;
-    } else {
-      deviceBytes += used;
-    }
-
-    auto entry = js::Object::create(env);
-    entry.setProperty(
-        env,
-        "name",
-        js::String::create(
-            env,
-            std::string(isHost ? "host" : ggml_backend_dev_name(devices[i]))));
-    entry.setProperty(
-        env,
-        "totalBytes",
-        js::Number::create(env, static_cast<double>(row.total)));
-    entry.setProperty(
-        env,
-        "freeBytes",
-        js::Number::create(env, static_cast<double>(row.free)));
-    entry.setProperty(
-        env,
-        "modelBytes",
-        js::Number::create(env, static_cast<double>(row.model)));
-    entry.setProperty(
-        env,
-        "contextBytes",
-        js::Number::create(env, static_cast<double>(row.context)));
-    entry.setProperty(
-        env,
-        "computeBytes",
-        js::Number::create(env, static_cast<double>(row.compute)));
-    perDevice.set(env, i, entry);
+    const bool hostRow = i >= devices.size();
+    ggml_backend_dev_t device = hostRow ? host : devices[i];
+    const double model =
+        hostRow && hostModelEvictable ? 0 : static_cast<double>(row.model);
+    // Device handles are borrowed from the backend, so only owned values leave
+    // this worker for the result.
+    result.devices.push_back(fitDevice(
+        device,
+        model + static_cast<double>(row.context) +
+            static_cast<double>(row.compute),
+        static_cast<double>(row.free),
+        static_cast<double>(row.total)));
   }
 
-  // A fitted 0 names the trained context rather than a usable load. Only the
-  // breakdown probe reads the trained context, so without it a fitted 0 stays
-  // 0 instead of being read as an unreadable model.
-  uint32_t fittedCtx = cparams.n_ctx;
-  if (fittedCtx == 0 && measured) {
-    if (trainCtx == 0) {
-      return errorResult("model-unreadable");
-    }
-    fittedCtx = trainCtx;
-  }
-
-  result.setProperty(
-      env, "ctxSize", js::Number::create(env, static_cast<double>(fittedCtx)));
   // A load that fits whole leaves llama's -1 in place. llama resolves that to
   // every layer plus the output layer, and to none when the placement holds no
-  // device; the probe's device list never holds the CPU.
-  //
-  // `resolvedLayers` omits an MTP model's nextn layers unless the load asked
-  // for them, so such a model reports short of what llama would offload.
-  double gpuLayers = static_cast<double>(mparams.n_gpu_layers);
-  if (mparams.n_gpu_layers < 0 && measured) {
-    gpuLayers = devices.empty() ? 0.0 : static_cast<double>(resolvedLayers) + 1;
-  }
-  result.setProperty(env, "gpuLayers", js::Number::create(env, gpuLayers));
-  result.setProperty(env, "devices", perDevice);
-  result.setProperty(env, "deviceBytes", js::Number::create(env, deviceBytes));
-  result.setProperty(env, "hostBytes", js::Number::create(env, hostBytes));
-  result.setProperty(
-      env,
-      "trainCtxSize",
-      js::Number::create(env, static_cast<double>(trainCtx)));
-  result.setProperty(
-      env,
-      "expertCount",
-      js::Number::create(env, static_cast<double>(expertCount)));
+  // device; the probe's device list never holds the CPU. A fitted context of 0
+  // is the trained context.
+  const double gpuLayers =
+      mparams.n_gpu_layers >= 0 ? static_cast<double>(mparams.n_gpu_layers)
+      : devices.empty()         ? 0.0
+                                : static_cast<double>(resolvedLayers) + 1;
+  result.stats = FitStats{
+      static_cast<double>(cparams.n_ctx != 0 ? cparams.n_ctx : trainCtx),
+      gpuLayers};
 
+#if defined(__APPLE__) && TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
+  // The margin the fitter held back on each device is held back from the app's
+  // limit too.
+  const size_t margin =
+      margins.empty() ? 0 : *std::max_element(margins.begin(), margins.end());
+  result.status = applyAppMemoryBudget(
+      result.status,
+      result.devices,
+      static_cast<double>(os_proc_available_memory()),
+      static_cast<double>(margin));
+#endif
   return result;
+}
+
+inline js_value_t* fitResultObject(js_env_t* env, const FitResult& fit) {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  auto result = js::Object::create(env);
+  result.setProperty(env, "status", js::String::create(env, fit.status));
+  auto devices = js::Array::create(env);
+  for (size_t i = 0; i < fit.devices.size(); ++i) {
+    const auto& row = fit.devices[i];
+    auto entry = js::Object::create(env);
+    entry.setProperty(env, "id", js::String::create(env, row.id));
+    entry.setProperty(env, "name", js::String::create(env, row.name));
+    entry.setProperty(env, "unified", js::Boolean::create(env, row.unified));
+    entry.setProperty(env, "usedBytes", js::Number::create(env, row.usedBytes));
+    entry.setProperty(env, "freeBytes", js::Number::create(env, row.freeBytes));
+    entry.setProperty(
+        env, "totalBytes", js::Number::create(env, row.totalBytes));
+    devices.set(env, i, entry);
+  }
+  result.setProperty(env, "devices", devices);
+  auto stats = js::Object::create(env);
+  if (fit.stats.has_value()) {
+    stats.setProperty(
+        env, "ctxSize", js::Number::create(env, fit.stats->ctxSize));
+    stats.setProperty(
+        env, "gpuLayers", js::Number::create(env, fit.stats->gpuLayers));
+  }
+  result.setProperty(env, "stats", stats);
+  return result;
+}
+
+inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+
+  FitRequest request = parseFitRequest(env, info);
+  return js::JsAsyncTask::run(
+      env,
+      [request = std::move(request)]() mutable {
+        return runFit(std::move(request));
+      },
+      fitResultObject);
 }
 JSCATCH
 
-inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
+/// Creates the JS instance of a @p ModelT whose outputs @p OutputHandlerT
+/// delivers. Args: [jsHandle, { path, config, backendsDir }, outputCallback],
+/// plus `projectionPath` for a BertModel.
+template <typename ModelT, typename OutputHandlerT>
+js_value_t* createModelInstance(js_env_t* env, js_callback_info_t* info) {
   using namespace qvac_lib_inference_addon_cpp;
   using namespace std;
 
   JsArgsParser args(env, info);
 
-  auto model = make_unique<BertModel>(
-      args.getMapEntry(1, "path"),
-      args.getSubmap(1, "config"),
-      args.getMapEntry(1, "backendsDir"));
+  unique_ptr<ModelT> model;
+  if constexpr (is_same_v<ModelT, BertModel>) {
+    model = make_unique<BertModel>(
+        args.getMapEntry(1, "path"),
+        args.getSubmap(1, "config"),
+        args.getMapEntry(1, "backendsDir"),
+        args.getMapEntry(1, "projectionPath"));
+  } else {
+    model = make_unique<ModelT>(
+        args.getMapEntry(1, "path"),
+        args.getSubmap(1, "config"),
+        args.getMapEntry(1, "backendsDir"));
+  }
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
-  outHandlers.add(
-      make_shared<out_handl::Js2DArrayOutputHandler<BertEmbeddings, float>>());
+  outHandlers.add(make_shared<OutputHandlerT>());
   unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
       env,
       args.get(0, "jsHandle"),
@@ -503,6 +550,51 @@ inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   auto addon = make_unique<AddonJs>(env, std::move(callback), std::move(model));
 
   return JsInterface::createInstance(env, std::move(addon));
+}
+
+inline js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
+  return createModelInstance<
+      BertModel,
+      qvac_lib_inference_addon_cpp::out_handl::
+          Js2DArrayOutputHandler<BertEmbeddings, float>>(env, info);
+}
+JSCATCH
+
+/// Delivers laya's response JSON as a JS string; the JS side parses it.
+struct JsLayaDecisionOutputHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          LayaDecisionResult> {
+  JsLayaDecisionOutputHandler()
+      : JsBaseOutputHandler<LayaDecisionResult>(
+            [this](const LayaDecisionResult& out) -> js_value_t* {
+              return qvac_lib_inference_addon_cpp::js::String::create(
+                  this->env_, out.json);
+            }) {}
+};
+
+inline js_value_t*
+createLayaInstance(js_env_t* env, js_callback_info_t* info) try {
+  return createModelInstance<LayaModel, JsLayaDecisionOutputHandler>(env, info);
+}
+JSCATCH
+
+/// Delivers the scores as a Float32Array, one per document.
+struct JsRerankScoresOutputHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          RerankScores> {
+  JsRerankScoresOutputHandler()
+      : JsBaseOutputHandler<
+            RerankScores>([this](const RerankScores& out) -> js_value_t* {
+          std::span<const float> scores{out.scores.data(), out.scores.size()};
+          return qvac_lib_inference_addon_cpp::js::TypedArray<float>::create(
+              this->env_, scores);
+        }) {}
+};
+
+inline js_value_t*
+createRerankInstance(js_env_t* env, js_callback_info_t* info) try {
+  return createModelInstance<RerankModel, JsRerankScoresOutputHandler>(
+      env, info);
 }
 JSCATCH
 
@@ -526,6 +618,54 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
     return sequences;
   };
 
+  // [[{type: 'text', text} | {type: 'media', data: Uint8Array}, ...], ...]
+  auto parseMultimodal =
+      [&](js::Object inputObj) -> std::vector<MultimodalInput> {
+    if (!js::is<js::Array>(env, inputObj)) {
+      throw StatusError{
+          general_error::InvalidArgument,
+          "Expected array of inputs for multimodal type"};
+    }
+    js::Array inputsArr{env, inputObj};
+    std::vector<MultimodalInput> inputs(inputsArr.size(env));
+    for (size_t i = 0; i < inputs.size(); i++) {
+      auto partsObj = inputsArr.get<js::Object>(env, i);
+      if (!js::is<js::Array>(env, partsObj)) {
+        throw StatusError{
+            general_error::InvalidArgument,
+            "Expected array of parts for multimodal input"};
+      }
+      js::Array partsArr{env, partsObj};
+      size_t nParts = partsArr.size(env);
+      inputs[i].reserve(nParts);
+      for (size_t j = 0; j < nParts; j++) {
+        auto partObj = partsArr.get<js::Object>(env, j);
+        auto partType =
+            js::String(env, partObj.getProperty<js::String>(env, "type"))
+                .as<std::string>(env);
+        MultimodalPart part;
+        if (partType == "text") {
+          part.text =
+              js::String(env, partObj.getProperty<js::String>(env, "text"))
+                  .as<std::string>(env);
+        } else if (partType == "media") {
+          part.isMedia = true;
+          part.media =
+              js::TypedArray<uint8_t>(
+                  env,
+                  partObj.getProperty<js::TypedArray<uint8_t>>(env, "data"))
+                  .as<std::vector<uint8_t>>(env);
+        } else {
+          throw StatusError(
+              general_error::InvalidArgument,
+              "Unknown multimodal part type: " + partType);
+        }
+        inputs[i].push_back(std::move(part));
+      }
+    }
+    return inputs;
+  };
+
   JsArgsParser args(env, info);
   any input;
   {
@@ -534,6 +674,8 @@ inline js_value_t* runJob(js_env_t* env, js_callback_info_t* info) try {
       input = js::String(env, jsInput).as<std::string>(env);
     } else if (type == "sequences") {
       input = parseSequences(js::Object(env, jsInput));
+    } else if (type == "multimodal") {
+      input = parseMultimodal(js::Object(env, jsInput));
     } else {
       throw StatusError(
           general_error::InvalidArgument, "Unknown input type: " + type);

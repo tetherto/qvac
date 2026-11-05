@@ -11,7 +11,6 @@ import {
 } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 import {
   qvacCatalog as sharedQvacCatalog,
@@ -19,6 +18,8 @@ import {
   type QvacCatalogEntry
 } from '@qvac/ai-sdk-provider/models'
 import type { OpenClawConfig } from 'openclaw/plugin-sdk/plugin-entry'
+
+import { ONBOARD_COMMAND_HINT, ensureQvacServe, loadApiKey } from './local-service.js'
 
 // openclaw 2026.8.1 dropped `plugin-sdk/config-types` from its exports map and
 // stopped shipping declarations for `plugin-sdk/provider-model-shared`, so the
@@ -34,17 +35,13 @@ export interface ResolvedOptions {
   readonly model: string
   readonly host: string
   readonly port: number
-  readonly baseUrl: string
   readonly apiKeyFile: string
   readonly qvacCommand: string
-  readonly serviceRuntime: string
-  readonly serviceEntrypoint: string
   readonly cwd: string | undefined
   readonly ctxSize: number
   readonly reasoningBudget: number
   readonly tools: boolean
   readonly readyTimeoutMs: number
-  readonly idleStopMs: number
   readonly timeoutSeconds: number
 }
 
@@ -70,21 +67,11 @@ export interface OpenClawModel {
   }
 }
 
-export interface OpenClawLocalService {
-  readonly command: string
-  readonly args: string[]
-  readonly cwd?: string
-  readonly healthUrl: string
-  readonly readyTimeoutMs: number
-  readonly idleStopMs: number
-}
-
 export interface OpenClawProvider {
   readonly baseUrl: string
   readonly apiKey: QvacApiKeyRef
   readonly api: 'openai-completions'
   readonly timeoutSeconds: number
-  readonly localService: OpenClawLocalService
   readonly models: OpenClawModel[]
 }
 
@@ -162,8 +149,12 @@ export interface QvacApiKeyRef {
   readonly id: 'value'
 }
 
+export interface QvacPreparedRuntimeAuth {
+  readonly apiKey: string
+  readonly baseUrl: string
+}
+
 export interface QvacProviderRegistration {
-  readonly rootDir?: string
   readonly pluginConfig?: Record<string, unknown>
   readonly runtime?: {
     readonly state: {
@@ -184,6 +175,9 @@ export interface QvacProviderRegistration {
         readonly config: OpenClawConfigLike
       }): Promise<OpenClawConfigLike>
     }>
+    prepareRuntimeAuth(context: {
+      readonly config?: OpenClawConfigLike
+    }): Promise<QvacPreparedRuntimeAuth>
     readonly catalog: {
       readonly order: 'simple'
       run(): Promise<{ provider: OpenClawProvider }>
@@ -239,21 +233,23 @@ function resolveFallbackOpenClawStateDir(
   return existsSync(legacy) ? legacy : current
 }
 
+// The configured URL never carries traffic: `prepareRuntimeAuth` swaps in the
+// port the plugin's own serve reported. `.invalid` cannot resolve, so a request
+// that skips that hook fails instead of reaching whoever holds a loopback port,
+// and OpenClaw's unauthenticated local-endpoint preflight leaves it alone.
+export const UNVERIFIED_BASE_URL = 'http://qvac.invalid/v1'
+
 export const DEFAULT_OPTIONS: ResolvedOptions = {
   model: 'qwen3.5-9b',
   host: '127.0.0.1',
-  port: 11434,
-  baseUrl: 'http://127.0.0.1:11434/v1',
+  port: 0,
   apiKeyFile: resolveQvacApiKeyFile(resolveFallbackOpenClawStateDir()),
   qvacCommand: 'qvac',
-  serviceRuntime: process.execPath,
-  serviceEntrypoint: join(dirname(fileURLToPath(import.meta.url)), 'local-service.js'),
   cwd: undefined,
   ctxSize: 32768,
   reasoningBudget: -1,
   tools: true,
   readyTimeoutMs: 180_000,
-  idleStopMs: 0,
   timeoutSeconds: 300
 }
 
@@ -436,17 +432,12 @@ function resolveOptionsWithApiKey(raw: RawOptions): {
   options: ResolvedOptions
   configuredApiKey: string | undefined
 } {
-  const host = raw.host === undefined ? DEFAULT_OPTIONS.host : coerceString('host', raw.host)
-  const port = raw.port === undefined ? DEFAULT_OPTIONS.port : coerceNumber('port', raw.port)
-  const baseUrl =
-    raw.baseUrl === undefined ? `http://${host}:${port}/v1` : coerceString('baseUrl', raw.baseUrl)
   return {
     configuredApiKey: raw.apiKey === undefined ? undefined : normalizeApiKey(raw.apiKey, 'apiKey'),
     options: {
       model: raw.model === undefined ? DEFAULT_OPTIONS.model : coerceString('model', raw.model),
-      host,
-      port,
-      baseUrl,
+      host: raw.host === undefined ? DEFAULT_OPTIONS.host : coerceString('host', raw.host),
+      port: raw.port === undefined ? DEFAULT_OPTIONS.port : coerceNumber('port', raw.port),
       apiKeyFile:
         raw.apiKeyFile === undefined
           ? DEFAULT_OPTIONS.apiKeyFile
@@ -455,14 +446,6 @@ function resolveOptionsWithApiKey(raw: RawOptions): {
         raw.qvacCommand === undefined
           ? DEFAULT_OPTIONS.qvacCommand
           : coerceString('qvacCommand', raw.qvacCommand),
-      serviceRuntime:
-        raw.serviceRuntime === undefined
-          ? DEFAULT_OPTIONS.serviceRuntime
-          : coerceString('serviceRuntime', raw.serviceRuntime),
-      serviceEntrypoint:
-        raw.serviceEntrypoint === undefined
-          ? DEFAULT_OPTIONS.serviceEntrypoint
-          : coerceString('serviceEntrypoint', raw.serviceEntrypoint),
       cwd: raw.cwd === undefined ? DEFAULT_OPTIONS.cwd : coerceString('cwd', raw.cwd),
       ctxSize:
         raw.ctxSize === undefined ? DEFAULT_OPTIONS.ctxSize : coerceNumber('ctxSize', raw.ctxSize),
@@ -475,10 +458,6 @@ function resolveOptionsWithApiKey(raw: RawOptions): {
         raw.readyTimeoutMs === undefined
           ? DEFAULT_OPTIONS.readyTimeoutMs
           : coerceNumber('readyTimeoutMs', raw.readyTimeoutMs),
-      idleStopMs:
-        raw.idleStopMs === undefined
-          ? DEFAULT_OPTIONS.idleStopMs
-          : coerceNumber('idleStopMs', raw.idleStopMs),
       timeoutSeconds:
         raw.timeoutSeconds === undefined
           ? DEFAULT_OPTIONS.timeoutSeconds
@@ -516,7 +495,7 @@ export function createQvacServeModels(options: ResolvedOptions): Record<string, 
 
 export function createOpenClawProvider(options: ResolvedOptions): OpenClawProvider {
   return {
-    baseUrl: options.baseUrl,
+    baseUrl: UNVERIFIED_BASE_URL,
     apiKey: {
       source: 'file',
       provider: QVAC_SECRET_PROVIDER_ID,
@@ -524,34 +503,44 @@ export function createOpenClawProvider(options: ResolvedOptions): OpenClawProvid
     },
     api: 'openai-completions',
     timeoutSeconds: options.timeoutSeconds,
-    localService: {
-      command: options.serviceRuntime,
-      args: [
-        options.serviceEntrypoint,
-        '--qvac-command',
-        options.qvacCommand,
-        '--api-key-file',
-        options.apiKeyFile,
-        '--model',
-        options.model,
-        '--host',
-        options.host,
-        '--port',
-        String(options.port),
-        '--ctx-size',
-        String(options.ctxSize),
-        '--reasoning-budget',
-        String(options.reasoningBudget),
-        '--tools',
-        String(options.tools)
-      ],
-      ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
-      healthUrl: `${options.baseUrl}/models`,
-      readyTimeoutMs: options.readyTimeoutMs,
-      idleStopMs: options.idleStopMs
-    },
     models: createOpenClawModels(options)
   }
+}
+
+// An entry onboarded by an earlier plugin version still declares OpenClaw's
+// `localService`, whose health probe sends the key to the fixed port before
+// anything is spawned. Refuse it rather than run alongside that probe.
+function assertNoLegacyLocalService(config: OpenClawConfigLike | undefined): void {
+  const provider = config?.models?.providers?.['qvac'] as Record<string, unknown> | undefined
+  if (provider?.['localService'] === undefined) return
+  throw new TypeError(
+    'This QVAC provider entry was created by an older plugin version that let OpenClaw start ' +
+      'qvac serve on a fixed port. Re-run ' +
+      ONBOARD_COMMAND_HINT +
+      ' to regenerate it.'
+  )
+}
+
+export async function prepareQvacRuntimeAuth(
+  config: OpenClawConfigLike | undefined,
+  rawOptions: RawOptions
+): Promise<QvacPreparedRuntimeAuth> {
+  assertNoLegacyLocalService(config)
+  const options = prepareOptions(rawOptions)
+  const apiKey = loadApiKey(options.apiKeyFile)
+  const serve = await ensureQvacServe({
+    qvacCommand: options.qvacCommand,
+    apiKeyFile: options.apiKeyFile,
+    model: options.model,
+    host: options.host,
+    port: options.port,
+    cwd: options.cwd,
+    ctxSize: options.ctxSize,
+    reasoningBudget: options.reasoningBudget,
+    tools: options.tools,
+    readyTimeoutMs: options.readyTimeoutMs
+  })
+  return { apiKey, baseUrl: serve.baseUrl }
 }
 
 export function createQvacSetupResult(
@@ -627,14 +616,8 @@ export function registerQvacProvider(
   const pluginConfig = api.pluginConfig ?? {}
   const stateDir = api.runtime?.state.resolveStateDir() ?? resolveFallbackOpenClawStateDir()
   const apiKeyFile = resolveQvacApiKeyFile(stateDir)
-  // OpenClaw runs plugin code from a per-process copy (2026.9.6 deletes it on
-  // exit), so `import.meta.url` must not reach the persisted localService args.
-  // `rootDir` is the install location and outlives the process.
-  const serviceEntrypoint =
-    api.rootDir === undefined ? undefined : join(api.rootDir, 'dist', 'local-service.js')
   const mergedOptions = () => ({
     apiKeyFile,
-    ...(serviceEntrypoint === undefined ? {} : { serviceEntrypoint }),
     ...pluginConfig,
     ...rawOptions
   })
@@ -654,7 +637,7 @@ export function registerQvacProvider(
       {
         id: 'local',
         label: 'Local QVAC',
-        hint: 'Start qvac serve through OpenClaw localService',
+        hint: 'Start a local qvac serve',
         kind: 'custom',
         // lunte-disable-next-line require-await
         run: async ({ config }) => createQvacSetupResult(config, mergedOptions()),
@@ -662,6 +645,7 @@ export function registerQvacProvider(
         runNonInteractive: async ({ config }) => applyQvacSetupConfig(config, mergedOptions())
       }
     ],
+    prepareRuntimeAuth: ({ config }) => prepareQvacRuntimeAuth(config, mergedOptions()),
     catalog: {
       order: 'simple',
       // lunte-disable-next-line require-await

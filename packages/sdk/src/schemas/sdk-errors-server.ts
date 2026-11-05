@@ -22,8 +22,10 @@ export const SDK_SERVER_ERROR_CODES = {
   TTS_REFERENCE_AUDIO_REQUIRED: 52209,
   LEGACY_PARAKEET_MODEL_DEPRECATED: 52210,
   LEGACY_TTS_MODEL_DEPRECATED: 52211,
+  MODEL_FIT_REFUSED: 52212,
 
   // Model Operations (52,400-52,799)
+  RPC_SERVER_OPERATION_FAILED: 52423,
   MODEL_UNLOAD_FAILED: 52400,
   EMBED_FAILED: 52401,
   EMBED_NO_EMBEDDINGS: 52402,
@@ -130,7 +132,8 @@ export const SDK_SERVER_ERROR_CODES = {
 
   // QVAC Model Registry Operations (53,950-54,000)
   // Note: Registry client errors (19,001-20,000) are re-thrown directly
-  QVAC_MODEL_REGISTRY_QUERY_FAILED: 53950
+  QVAC_MODEL_REGISTRY_QUERY_FAILED: 53950,
+  QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND: 53951
 } as const
 
 const serverErrorDefinitions: ErrorCodesMap = {
@@ -200,8 +203,19 @@ const serverErrorDefinitions: ErrorCodesMap = {
     message: (legacyFields?: string) =>
       `Legacy ONNX TTS modelConfig fields are no longer supported (${legacyFields ?? 'unknown fields'}). As of @qvac/tts-ggml the addon uses GGUF bundles: supply the primary GGUF via modelSrc, set language in modelConfig, and for Chatterbox add s3genModelSrc (e.g. loadModel({ modelSrc: TTS_T3_TURBO_EN_CHATTERBOX_Q8_0, modelType: "tts", modelConfig: { ttsEngine: "chatterbox", language: "en", s3genModelSrc: TTS_S3GEN_EN_CHATTERBOX } })). Supertonic multilingual mode is selected by the GGUF (e.g. TTS_MULTILINGUAL_SUPERTONIC2_Q8_0) plus language — not ttsSupertonicMultilingual.`
   },
+  [SDK_SERVER_ERROR_CODES.MODEL_FIT_REFUSED]: {
+    name: 'MODEL_FIT_REFUSED',
+    message: (modelType: string, reason: string, detail?: string) =>
+      `${modelType}: the engine fitter projects this load will not fit (${reason})${
+        detail ? `: ${detail}` : ''
+      }`
+  },
 
   // Model Operations (52,400-52,799)
+  [SDK_SERVER_ERROR_CODES.RPC_SERVER_OPERATION_FAILED]: {
+    name: 'RPC_SERVER_OPERATION_FAILED',
+    message: (operation: string, details: string) => `${operation}: ${details}`
+  },
   [SDK_SERVER_ERROR_CODES.MODEL_UNLOAD_FAILED]: {
     name: 'MODEL_UNLOAD_FAILED',
     message: (modelId?: string) => `Failed to unload model${modelId ? ` "${modelId}"` : ''}`
@@ -628,6 +642,11 @@ const serverErrorDefinitions: ErrorCodesMap = {
     name: 'QVAC_MODEL_REGISTRY_QUERY_FAILED',
     message: (details?: string) =>
       `QVAC model registry query failed${details ? `: ${details}` : ''}`
+  },
+  [SDK_SERVER_ERROR_CODES.QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND]: {
+    name: 'QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND',
+    message: (registrySource: string, registryPath: string) =>
+      `QVAC model registry has no model at ${registrySource}/${registryPath}`
   }
 }
 

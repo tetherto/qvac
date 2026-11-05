@@ -1,6 +1,6 @@
 {
   "include": ["**/*"],
-  "exclude": ["node_modules", "dist", "e2e", "test"],
+  "exclude": ["node_modules", "dist", "test"],
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2022", "ESNext.Disposable"],
     "target": "ES2022",
@@ -13,6 +13,7 @@
     "baseUrl": ".",
     "paths": {
       "@qvac/sdk": ["./src/index.ts"],
+      "@qvac/sdk/commands": ["./src/commands/index.ts"],
       "@/*": ["./src/*"],
       "bare-buffer": ["./src/types/bare-buffer.d.ts"]
     },

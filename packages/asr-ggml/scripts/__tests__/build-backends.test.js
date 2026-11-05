@@ -9,12 +9,14 @@ const packageRoot = path.resolve(__dirname, '..', '..')
 const packageJson = JSON.parse(fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'))
 const vcpkgManifest = JSON.parse(fs.readFileSync(path.join(packageRoot, 'vcpkg.json'), 'utf8'))
 const cmakeSource = fs.readFileSync(path.join(packageRoot, 'CMakeLists.txt'), 'utf8')
+const projectJson = JSON.parse(fs.readFileSync(path.join(packageRoot, 'project.json'), 'utf8'))
 const whisperModelSource = fs.readFileSync(
   path.join(packageRoot, 'addon/src/model-interface/whisper/WhisperModel.cpp'),
   'utf8'
 )
 
 const CUDA_CMAKE_OPTION = 'ASR_CUDA'
+const PUBLISHED_CUDA_HOST = 'linux-x64'
 const CUDA_MANIFEST_FEATURE = 'cuda'
 const SPEECH_PORT = 'speech-cpp'
 const DESKTOP_PLATFORM = '!(osx | ios | android)'
@@ -41,8 +43,23 @@ function cudaSpeechDependency() {
   return speechDependencies(cudaFeature().dependencies)[0]
 }
 
+function publishBuildCi() {
+  return projectJson.targets.build.options.ci
+}
+
+function platformDefines(host) {
+  const entry = (publishBuildCi().platformCmakeDefines ?? '')
+    .split('\n')
+    .find((line) => line.trim().startsWith(`${host}:`))
+  return entry === undefined ? '' : entry.slice(entry.indexOf(':') + 1).trim()
+}
+
 function versionFloorOf(dependency) {
   return dependency['version>=']
+}
+
+function overridesOf(port) {
+  return (vcpkgManifest.overrides ?? []).filter((entry) => entry.name === port)
 }
 
 test('the CUDA build is opt-in behind a dedicated CMake option', () => {
@@ -74,8 +91,20 @@ test('the cuda feature is confined to the platforms that have NVIDIA GPUs', () =
   assert.equal(cudaSpeechDependency().platform, DESKTOP_PLATFORM)
 })
 
-test('the cuda feature requires a speech-cpp that declares it', () => {
-  assert.ok(versionFloorOf(cudaSpeechDependency()) >= versionFloorOf(desktopSpeechDependency()))
+test('the cuda feature takes the speech-cpp that the overrides pin', () => {
+  assert.equal(overridesOf(SPEECH_PORT).length, 1)
+  assert.equal(versionFloorOf(cudaSpeechDependency()), undefined)
+  assert.equal(versionFloorOf(desktopSpeechDependency()), undefined)
+})
+
+test('the speech override includes the explicit MOSS backend API', () => {
+  const [speech] = overridesOf(SPEECH_PORT)
+  assert.ok(speech, 'MOSS load/fit require an explicitly pinned speech port')
+  const version = speech.version
+  assert.ok(
+    version > '2026-10-12' || (version === '2026-10-12' && (speech['port-version'] ?? 0) >= 1),
+    'speech-cpp before 2026-10-12#1 lacks TranscribeOptions.backend'
+  )
 })
 
 test('no direct CUDA linkage - the hybrid MODULE backend carries its own', () => {
@@ -117,4 +146,9 @@ test('the GPU integration tests accept CUDA as a desktop backend', () => {
     const source = fs.readFileSync(path.join(packageRoot, file), 'utf8')
     assert.match(source, /id === 2 \|\| id === 3/, file)
   })
+})
+
+test('the published linux-x64 prebuild builds the CUDA backend', () => {
+  assert.equal(publishBuildCi().includeCuda, true)
+  assert.match(platformDefines(PUBLISHED_CUDA_HOST), new RegExp(`-D ${CUDA_CMAKE_OPTION}=ON`))
 })

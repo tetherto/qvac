@@ -7,7 +7,7 @@
     "finetuningArchs": ["runFinetuningArchsTest"],
     "toolCalling": ["runToolCallingTest"],
     "reasoning": ["runReasoningTest"],
-    "imageFruitPlate": ["runImageFruitPlateTest"],
+    "imageFruitPlate": ["runImageFruitPlateTest", "runOrderedMediaPartsTest"],
     "imageMmprojGpu": ["runImageMmprojGpuTest"],
     "imageTileMode": ["runQwen35ImageTileModeTokensTest"],
     "multiImageEncode": ["runQwen35MultiImageEncodeTest"],
@@ -16,6 +16,7 @@
     "continuousBatching": ["runContinuousBatchingTest"],
     "lightA": [
       "runApiBehaviorTest",
+      "runCalcTokensTest",
       "runFitTest",
       "runBitnetTest",
       "runCacheStateMachineTest",
@@ -29,9 +30,11 @@
       "runModelLoadingTest",
       "runMultiGpuTest",
       "runMultiInstanceTest",
+      "runPrimeSystemToolsTest",
       "runQwen35Test",
       "runTurboquantTest",
-      "runUtf8OutputTest"
+      "runUtf8OutputTest",
+      "runSpeculativeDecodingTest"
     ]
   },
   "android": {
@@ -54,18 +57,22 @@
     "funcShardC": [
       "runToolCallingTest",
       "runReasoningTest",
-      "runGenerationParamsTest"
+      "runGenerationParamsTest",
+      "runSpeculativeDecodingTest"
     ],
     "funcShardD": [
       "runGemma4Test"
     ],
     "funcShardE": [
       "runApiBehaviorTest",
+      "runCalcTokensTest",
       "runFitTest",
       "runMultiInstanceTest",
+      "runPrimeSystemToolsTest",
       "runQwen35Test",
       "runModelLoadingTest",
       "runImageFruitPlateTest",
+      "runOrderedMediaPartsTest",
       "runImageMmprojGpuTest",
       "runQwen35ImageTileModeTokensTest",
       "runQwen35MultiImageEncodeTest",
@@ -98,7 +105,8 @@
       "runQwen35ImageElephantPerfTest",
       "runQwen35ImageFruitPlatePerfTest",
       "runQwen35ImageHighResAuroraPerfTest",
-      "runQwen35MultimodalCacheStressTest"
+      "runQwen35MultimodalCacheStressTest",
+      "runKvCacheExtendedTest"
     ]
   },
   "iosWeekly": {
@@ -124,7 +132,8 @@
       "runQwen35ImageElephantPerfTest",
       "runQwen35ImageFruitPlatePerfTest",
       "runQwen35ImageHighResAuroraPerfTest",
-      "runQwen35MultimodalCacheStressTest"
+      "runQwen35MultimodalCacheStressTest",
+      "runKvCacheExtendedTest"
     ]
   }
 }

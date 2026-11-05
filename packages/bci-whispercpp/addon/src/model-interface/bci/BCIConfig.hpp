@@ -27,11 +27,8 @@ struct BCIConfig {
   std::map<std::string, JSValueVariant> whisperContextCfg;
   std::map<std::string, JSValueVariant> bciConfig;
 
-  // Addon prebuilds folder (`configurationParams.backendsDir` from JS).
-  // Combined with the compile-time `BACKENDS_SUBDIR` to locate the
-  // per-arch ggml `.so` modules for `ggml_backend_load_all_from_path()`.
-  // Android-only; empty elsewhere. Mirrors WhisperConfig::backendsDir
-  // in transcription-whispercpp 0.9.0.
+  // Directory scanned, as given, for the ggml `.so` modules
+  // (`configurationParams.backendsDir` from JS). Empty scans the addon's own.
   std::string backendsDir;
 
   // Explicit path to the BCI embedder weights file

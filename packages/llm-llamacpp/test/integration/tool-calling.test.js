@@ -277,9 +277,9 @@ async function createToolModel(modelVariant, configOverrides = {}) {
   }
 }
 
-async function runPrompt(model, prompt) {
+async function runPrompt(model, prompt, runOptions) {
   const startTime = Date.now()
-  const response = await model.run(prompt)
+  const response = await model.run(prompt, runOptions)
   const collected = await collectResponse(response)
   return {
     ...collected,
@@ -306,8 +306,14 @@ safeTest('[tools] prompt scenarios', { timeout: 1_800_000, skip: isDarwinX64 }, 
       // the loaded model so its TTFT/TPS reflect a warm follow-up
       // call. Keeping both rows in the report shows the cold-vs-warm
       // delta for the same model on the same device.
+      // A fixed seed makes prompt1's sampling (temp 0.1) repeat run to run.
+      // The reasoning budget forces `<think>` closed before `n_predict` runs
+      // out: Qwen3-1.7B can loop over the request's "add 2" ambiguity until
+      // the cap and never reach a call (darwin-arm64, Metal).
       const firstPrompt = clonePrompt()
-      const firstRun = await runPrompt(model, firstPrompt)
+      const firstRun = await runPrompt(model, firstPrompt, {
+        generationParams: { seed: 42, reasoning_budget: 512 }
+      })
       t.ok(firstRun.text.length > 0, `${label} prompt1: generated text`)
       t.ok(firstRun.generatedTokens > 0, `${label} prompt1: generated tokens tracked`)
       assertDeclaredToolCalls(t, firstRun.text, firstPrompt, `${label} prompt1`)
@@ -366,6 +372,55 @@ safeTest(
         withoutTools.text.includes('<tool_call>'),
         `tools-free output has no tool_call block: ${withoutTools.text.slice(0, 200)}`
       )
+    } finally {
+      await release()
+    }
+  }
+)
+
+// A past call and its result passed as structured history (`tool_calls` on
+// the assistant turn, `tool_call_id` / `name` on the tool turn) render through
+// the chat template, and the model answers from the result instead of calling
+// again.
+safeTest(
+  '[tools] structured tool history is answered from the tool result',
+  { timeout: 1_800_000, skip: isDarwinX64 },
+  async (t) => {
+    const modelVariant = TOOL_MODEL_VARIANTS[0]
+    const { model, release } = await createToolModel(modelVariant)
+    try {
+      const prompt = [
+        { role: 'system', content: 'You are a helpful assistant. /no_think' },
+        {
+          type: 'function',
+          name: 'get_weather',
+          description: 'Get the current temperature for a city',
+          parameters: {
+            type: 'object',
+            properties: { city: { type: 'string', description: 'City' } },
+            required: ['city']
+          }
+        },
+        { role: 'user', content: 'What is the temperature in Paris right now?' },
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [{ id: 'call_1', name: 'get_weather', arguments: { city: 'Paris' } }]
+        },
+        {
+          role: 'tool',
+          content: '{"city":"Paris","temperature_c":18}',
+          tool_call_id: 'call_1',
+          name: 'get_weather'
+        }
+      ]
+      const run = await runPrompt(model, prompt)
+      t.ok(run.text.length > 0, 'generated text')
+      t.absent(
+        run.text.includes('<tool_call>'),
+        `answered in text, not with another call: ${run.text.slice(0, 200)}`
+      )
+      t.ok(run.text.includes('18'), `answer uses the tool result: ${run.text.slice(0, 200)}`)
     } finally {
       await release()
     }

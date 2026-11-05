@@ -1,5 +1,5 @@
 // Discovery + kill helpers for bare worker children. Mirrors
-// e2e/tests/desktop/executors/no-lingering-bare-executor.ts — dedup
+// packages/sdk-e2e/runners/js/shared/executors/node/no-lingering-bare-executor.ts — dedup
 // blocked by the e2e harness's separate BaseExecutor setup.
 
 import { execFileSync } from 'node:child_process'

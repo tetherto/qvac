@@ -1,13 +1,12 @@
-import { randomBytes } from 'node:crypto'
-import { writeFile, unlink } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { extname, join } from 'node:path'
-import type { FastifyInstance, FastifyRequest } from 'fastify'
+import { unlink } from 'node:fs/promises'
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
-import { transcribe, textToSpeech } from '@qvac/sdk'
-import type { TranscribeSegment } from '@qvac/sdk'
+import { transcribe, textToSpeech, textToSpeechStream } from '@qvac/sdk'
+import type { TextToSpeechStreamResponse, TranscribeSegment } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
+import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
 import { multipartToBody } from '@/serve/lib/multipart'
+import { writeTempAudio } from '@/serve/lib/temp-audio'
 import {
   formatTimedTranscription,
   isTimedTranscriptionFormat
@@ -16,6 +15,7 @@ import { resolveAndCheckModel, ensureReady } from '@/serve/core/plugins/require-
 import { logUnsupported } from '@/serve/core/plugins/log-unsupported'
 import {
   transcriptionsBody,
+  assertTranscriptionOptionsSupported,
   translationsBody,
   audioSpeechBody,
   voicesListResponse,
@@ -26,6 +26,7 @@ import {
 import { resolveModelAlias } from '@/serve/core/config/models'
 import { openaiOptions } from '@/serve/extensions/openai/config'
 import {
+  buildStreamingWavHeader,
   buildWavBuffer,
   int16SamplesToBuffer,
   mapResponseFormat,
@@ -44,21 +45,30 @@ import { openaiState, type OpenAIState } from '@/serve/extensions/openai/state'
 
 type SpeechMatchMode = 'voice_map' | 'hyphen' | 'model'
 
+// The SDK's textToSpeechStream session rejects these engines.
+const BATCH_ONLY_TTS_ENGINES = new Set(['moss-sfx', 'moss-speech'])
+
 const SUPPORTED_TRANSCRIPTION_FORMATS = new Set(['json', 'text', 'srt', 'vtt', 'verbose_json'])
 
 const descriptions = {
   transcribe: `
-Speech-to-text via Whisper-cpp / Parakeet. Multipart body with required
+Speech-to-text via Whisper-cpp / Parakeet / MOSS. Multipart body with required
 \`file\` (audio bytes) and \`model\` (alias of a registered transcription
 model).
 
 **\`response_format\`** accepts \`json\` (default), \`text\`, \`srt\`, \`vtt\`,
-and \`verbose_json\`. \`json\` and \`text\` work with Whisper and Parakeet
-transcription aliases. Timed formats require Whisper segment metadata.
-\`verbose_json\` exposes only text, duration, and segment id/start/end/text.
-Its duration is the end of the last transcribed segment, not the submitted
+and \`verbose_json\`. \`json\` and \`text\` work with Whisper, Parakeet,
+and MOSS transcription aliases. SRT/VTT require Whisper or MOSS segment metadata.
+Parakeet also supports \`verbose_json\`, including offline diarization turns.
+\`verbose_json\` exposes text, duration, segment id/start/end/text, available speaker/speaker_id labels,
+and the whisper language, no_speech_prob, speaker_turn_next and token_timestamps the engine reports.
+Its duration is the latest segment or speaker-turn end, not the submitted
 audio length.
 Unknown values return \`400 invalid_response_format\`.
+
+**MOSS options:** \`hotwords\` is a JSON array of up to 64 nonempty terms, each
+limited to 64 UTF-8 bytes. Use it instead of \`prompt\`. \`max_new_tokens\` sets
+the decoding limit (0 uses the model default).
 
 **\`language\`** is honored as a model-load-time config, not per request.
 Sending it logs a warning and uses whatever language the model was loaded
@@ -112,8 +122,26 @@ input is rejected as \`missing_input\`.
 Those four return \`503 transcode_unavailable\` when ffmpeg is absent; unknown
 values return \`400 invalid_response_format\`.
 
+**\`stream_format\`** accepts \`audio\` (default, the audio body above) and
+\`sse\`. With \`sse\` the response is \`text/event-stream\`: one
+\`speech.audio.delta\` event per synthesized chunk (\`audio\` is base64), then
+\`speech.audio.done\`. \`usage\` token counts are always 0. \`sse\` supports
+\`wav\` (a streaming header with unknown length) and \`pcm\` only; other
+formats return \`400 unsupported_response_format\`. Unknown values return
+\`400 invalid_stream_format\`. MOSS-SoundEffect and MOSS-Speech aliases
+(\`ttsEngine\` \`moss-sfx\` / \`moss-speech\`) are batch-only and return
+\`400 unsupported_stream_format\` with \`sse\`. Errors before the first audio chunk return JSON
+as usual; a failure after it arrives as a final \`{ "error": ... }\` event.
+
+**Error codes:** \`400\` \`missing_input\`, \`input_too_long\`,
+\`missing_voice\`, \`invalid_response_format\`, \`invalid_stream_format\`,
+\`unsupported_response_format\`, \`unsupported_stream_format\`,
+\`invalid_model_type\`; \`404\`
+\`model_not_found\`; \`502\` \`speech_empty\`, \`transcode_failed\`; \`503\`
+\`transcode_unavailable\`, \`model_not_ready\`.
+
 **Ignored params** (logged, returned in \`X-QVAC-Ignored-Params\` header):
-\`speed\`, \`instructions\`, \`stream_format\`.
+\`speed\`, \`instructions\`.
 `.trim(),
   voices: `
 List the configured TTS voices. Returns the OpenAI \`voice\` names mapped under
@@ -156,11 +184,11 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       assertKnownTranscriptionFormat(responseFormat)
       if (body.language !== undefined) {
         app.qvac.logger.warn(
-          `language="${String(body.language)}" is configured at model load time. Per-request language override is not yet supported.`
+          'language is configured at model load time. Per-request language override is not yet supported.'
         )
       }
       if (body.temperature !== undefined) {
-        app.qvac.logger.warn(`Ignoring unsupported param: temperature=${String(body.temperature)}`)
+        app.qvac.logger.warn('Ignoring unsupported param: temperature')
       }
 
       const { sdkModelId, alias, entry } = await resolveAndCheckModel(
@@ -170,6 +198,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         'transcription'
       )
       assertTimedFormatSupported(responseFormat, entry.sdkType)
+      assertTranscriptionOptionsSupported(body, entry.sdkType)
       const fileSizeKB = Math.round(file.length / 1024)
       app.qvac.logger.info(
         `  transcribe model=${alias} file=${fileMeta?.filename ?? ''} size=${fileSizeKB}KB ` +
@@ -186,7 +215,9 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           {
             modelId: sdkModelId,
             audioChunk: tmpPath,
-            ...(body.prompt !== undefined ? { prompt: String(body.prompt) } : {})
+            ...(body.prompt !== undefined ? { prompt: String(body.prompt) } : {}),
+            ...(body.hotwords !== undefined ? { hotwords: body.hotwords } : {}),
+            ...(body.max_new_tokens !== undefined ? { maxNewTokens: body.max_new_tokens } : {})
           },
           isTimedTranscriptionFormat(responseFormat),
           'transcription'
@@ -238,7 +269,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       }
       assertKnownTranscriptionFormat(responseFormat)
       if (body.temperature !== undefined) {
-        app.qvac.logger.warn(`Ignoring unsupported param: temperature=${String(body.temperature)}`)
+        app.qvac.logger.warn('Ignoring unsupported param: temperature')
       }
 
       const { sdkModelId, alias, entry } = await resolveAndCheckModel(
@@ -298,7 +329,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         summary: 'Text-to-speech',
         description: descriptions.speech
       },
-      config: { unsupportedParams: [...SPEECH_UNSUPPORTED_PARAMS] },
+      config: { unsupportedParams: [...SPEECH_UNSUPPORTED_PARAMS], sseSentinel: false },
       preHandler: logUnsupported
     },
     async (req, reply) => {
@@ -339,6 +370,21 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       const formatMapping = mapResponseFormat(body.response_format)
       if (formatMapping.kind === 'invalid') {
         throw new HttpError(400, 'invalid_response_format', formatMapping.message)
+      }
+      const streamFormat = body.stream_format ?? 'audio'
+      if (streamFormat !== 'audio' && streamFormat !== 'sse') {
+        throw new HttpError(
+          400,
+          'invalid_stream_format',
+          `Unknown stream_format "${streamFormat}". Use "audio" or "sse".`
+        )
+      }
+      if (streamFormat === 'sse' && formatMapping.kind === 'transcoded') {
+        throw new HttpError(
+          400,
+          'unsupported_response_format',
+          `stream_format "sse" supports response_format "wav" or "pcm", not "${formatMapping.format}".`
+        )
       }
       if (formatMapping.kind === 'transcoded' && !openai.ffmpegAvailable) {
         throw new HttpError(
@@ -398,6 +444,19 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         )
       }
 
+      const ttsEngine = modelEntry.config?.['ttsEngine']
+      if (
+        streamFormat === 'sse' &&
+        typeof ttsEngine === 'string' &&
+        BATCH_ONLY_TTS_ENGINES.has(ttsEngine)
+      ) {
+        throw new HttpError(
+          400,
+          'unsupported_stream_format',
+          `Model "${modelName}" (ttsEngine "${ttsEngine}") is batch-only. Use stream_format "audio".`
+        )
+      }
+
       const alias = 'alias' in modelEntry ? (modelEntry.alias as string) : modelEntry.id
       const registryEntry = await ensureReady(ctx, alias, modelEntry, modelName, reply)
 
@@ -409,8 +468,22 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
 
       ctx.logger.info(
         `  speech model=${alias} voice=${voice} format=${formatMapping.format} chars=${input.length} ` +
-          `route=${matchMode} resolved_alias=${resolvedAlias}`
+          `stream=${streamFormat} route=${matchMode} resolved_alias=${resolvedAlias}`
       )
+
+      if (streamFormat === 'sse') {
+        await streamSpeech(req, reply, {
+          sdkModelId,
+          input,
+          format: formatMapping.format === 'pcm' ? 'pcm' : 'wav',
+          fallbackSampleRate: resolveSampleRate(registryEntry.config),
+          ignoredParams,
+          ...(openai.textToSpeechStreamOverride !== undefined
+            ? { streamFn: openai.textToSpeechStreamOverride }
+            : {})
+        })
+        return
+      }
 
       const result = textToSpeech({
         modelId: sdkModelId,
@@ -551,10 +624,92 @@ function toModelObject(
   }
 }
 
+interface StreamSpeechOptions {
+  sdkModelId: string
+  input: string
+  format: 'wav' | 'pcm'
+  fallbackSampleRate: number
+  ignoredParams: string[]
+  streamFn?: typeof textToSpeechStream
+}
+
+async function streamSpeech(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  opts: StreamSpeechOptions
+): Promise<void> {
+  const logger = req.server.qvac.logger
+  const session = await (opts.streamFn ?? textToSpeechStream)({
+    modelId: opts.sdkModelId,
+    inputType: 'text'
+  })
+  req.bindCancel(session.requestId)
+  session.write(opts.input)
+  session.end()
+
+  const frames = session[Symbol.asyncIterator]()
+  // Headers wait for the first audio so engine failures and empty runs still
+  // get a JSON error with a real status code.
+  const first = await nextAudioFrame(frames)
+  if (first === null) {
+    logger.warn(`  speech empty stream chars=${opts.input.length}`)
+    throw new HttpError(502, 'speech_empty', 'Speech synthesis returned no audio samples.')
+  }
+
+  const sampleRate = first.sampleRate ?? opts.fallbackSampleRate
+  initSSE(reply, {
+    'X-Audio-Sample-Rate': String(sampleRate),
+    'X-Audio-Channels': '1',
+    'X-Audio-Bits-Per-Sample': '16',
+    ...(opts.ignoredParams.length > 0
+      ? { 'X-QVAC-Ignored-Params': opts.ignoredParams.join(',') }
+      : {})
+  })
+  const raw = reply.raw
+
+  let samples = first.buffer.length
+  const firstPcm = int16SamplesToBuffer(first.buffer)
+  const firstChunk =
+    opts.format === 'wav'
+      ? Buffer.concat([buildStreamingWavHeader(sampleRate), firstPcm])
+      : firstPcm
+  sendSSE(raw, { type: 'speech.audio.delta', audio: firstChunk.toString('base64') })
+
+  for (let frame = await nextAudioFrame(frames); frame; frame = await nextAudioFrame(frames)) {
+    samples += frame.buffer.length
+    sendSSE(raw, {
+      type: 'speech.audio.delta',
+      audio: int16SamplesToBuffer(frame.buffer).toString('base64')
+    })
+  }
+
+  // Local synthesis has no billable tokens; OpenAI's schema still requires usage.
+  sendSSE(raw, {
+    type: 'speech.audio.done',
+    usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 }
+  })
+  endSSE(raw, { sentinel: false })
+  logger.info(`  speech stream done samples=${samples} sample_rate=${sampleRate}`)
+}
+
+// Next frame that carries audio, or null once the run ends.
+async function nextAudioFrame(
+  frames: AsyncIterator<TextToSpeechStreamResponse>
+): Promise<TextToSpeechStreamResponse | null> {
+  for (;;) {
+    const next = await frames.next()
+    if (next.done) return null
+    if (next.value.buffer.length > 0) return next.value
+    if (next.value.done) return null
+  }
+}
+
 interface TranscriptionInvocationOptions {
   modelId: string
   audioChunk: string
   prompt?: string
+  hotwords?: string[]
+  maxNewTokens?: number
 }
 
 interface TranscriptionInvocationResult {
@@ -635,11 +790,23 @@ function assertKnownTranscriptionFormat(responseFormat: string): void {
 
 function assertTimedFormatSupported(responseFormat: string, sdkType: string): void {
   if (!isTimedTranscriptionFormat(responseFormat)) return
-  if (sdkType === 'whisper' || sdkType === 'whispercpp-transcription') return
+  if (
+    responseFormat === 'verbose_json' &&
+    (sdkType === 'parakeet' || sdkType === 'parakeet-transcription')
+  ) {
+    return
+  }
+  if (
+    sdkType === 'whisper' ||
+    sdkType === 'whispercpp-transcription' ||
+    sdkType === 'moss-transcribe'
+  ) {
+    return
+  }
   throw new HttpError(
     400,
     'unsupported_response_format',
-    `response_format "${responseFormat}" requires Whisper segment metadata. Use "json" or "text" with this model.`
+    `response_format "${responseFormat}" requires Whisper or MOSS segment metadata. Use "json" or "text" with this model.`
   )
 }
 
@@ -648,31 +815,6 @@ function resolveVoice(raw: SpeechVoice | undefined, fallback: string | null): st
   const name = typeof raw === 'object' ? raw.id : raw
   const trimmed = name?.trim()
   return trimmed ? trimmed : fallback
-}
-
-const MIME_TO_EXT: Record<string, string> = {
-  'audio/mpeg': '.mp3',
-  'audio/mp4': '.mp4',
-  'audio/ogg': '.ogg',
-  'audio/wav': '.wav',
-  'audio/wave': '.wav',
-  'audio/webm': '.webm',
-  'audio/flac': '.flac',
-  'audio/aac': '.aac',
-  'audio/x-m4a': '.m4a'
-}
-
-// Returns the temp file path for an audio buffer. The caller is responsible
-// for deleting it (typically in a finally block).
-async function writeTempAudio(
-  audio: Buffer,
-  fileMeta: { filename: string; mimetype: string } | undefined
-): Promise<string> {
-  const originalName = fileMeta?.filename ?? ''
-  const ext = extname(originalName) || MIME_TO_EXT[fileMeta?.mimetype ?? ''] || '.bin'
-  const tmpPath = join(tmpdir(), `qvac-audio-${randomBytes(8).toString('hex')}${ext}`)
-  await writeFile(tmpPath, audio)
-  return tmpPath
 }
 
 export default plugin

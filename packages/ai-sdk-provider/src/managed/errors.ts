@@ -12,6 +12,7 @@ export type QvacManagedErrorCode =
   | 'SERVE_START_TIMEOUT'
   | 'SERVE_EXITED'
   | 'PORT_ALLOCATION_FAILED'
+  | 'CLI_UPGRADE_REQUIRED'
 
 export class QvacManagedModeError extends Error {
   readonly code: QvacManagedErrorCode
@@ -76,6 +77,17 @@ export class CliNotFoundError extends QvacManagedModeError {
       cause === undefined ? undefined : { cause }
     )
     this.name = 'CliNotFoundError'
+  }
+}
+
+export class CliUpgradeRequiredError extends QvacManagedModeError {
+  constructor() {
+    super(
+      'CLI_UPGRADE_REQUIRED',
+      'This `@qvac/cli` cannot report the port it bound (`--ready-fd`), so managed mode ' +
+        'cannot verify the listener before sending it a key. Upgrade `@qvac/cli`.'
+    )
+    this.name = 'CliUpgradeRequiredError'
   }
 }
 

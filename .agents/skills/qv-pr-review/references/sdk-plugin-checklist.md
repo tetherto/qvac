@@ -24,7 +24,7 @@ Apply this checklist **only** when the PR is in `tetherto/qvac` AND touches at l
 - `packages/sdk/client/**` other than `client/api/**` — internal client helpers, covered by the SDK's scoped instructions
 - `packages/sdk/utils/**`, `packages/sdk/profiling/**` — internal helpers
 - `packages/sdk/models/registry/**` only — auto-gen registry drift
-- `packages/sdk/e2e/**` only — test-only additions
+- `packages/sdk-e2e/**` only — test-only additions
 
 For non-plugin SDK PRs, use the nearest scoped `AGENTS.md`, package documentation, and current tests; re-running this plugin-specific checklist would just be noise.
 
@@ -137,8 +137,8 @@ Rules for this section:
 
 - End-to-end tests in the test suite cover the plugin's behavior.
 - End-to-end example(s) exist under `packages/sdk/examples/` and reflect the current API shape.
-- If adding/changing the client API, ensure `packages/sdk/e2e` is aligned.
-- Typecheck and lint pass (`bun run build`).
+- If adding/changing the client API, ensure `packages/sdk-e2e` is aligned.
+- Typecheck and lint pass (`npm run build`).
 
 ### Breaking Changes & Docs Hygiene
 

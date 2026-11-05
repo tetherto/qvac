@@ -15,7 +15,7 @@ Legend:
 | bare-sdk | Removed (last npm release 0.18.2). Use `@qvac/inference` for in-process Bare | SDK |
 | ai-sdk-provider | Vercel AI SDK provider exposing the QVAC runtime (chat, embeddings, transcription, translation, speech, OCR, image) | SDK |
 | bci-whispercpp | Brain-Computer Interface (BCI) neural-signal transcription addon powered by whisper.cpp | Addon |
-| classification-ggml | Image classification addon (MobileNetV3-Small) on the GGML backend | Addon |
+| classification-ggml | MobileNetV3-Small classification and MegaLoc image embeddings on GGML/Fabric | Addon |
 | decoder-audio | Audio decoder library leveraging FFmpeg as a preprocessing step for other addons | Addon |
 | diffusion-cpp | Native C++ addon for image/video generation via `qvac-ext-stable-diffusion.cpp` | Addon |
 | embed-llamacpp | Native C++ addon for text embedding generation via `qvac-fabric-llm.cpp` | Addon |
@@ -28,17 +28,14 @@ Legend:
 | translation-nmtcpp | Native C++ addon for translation using either `qvac-fabric-llm.cpp` or [Bergamot](https://browser.mt) | Addon |
 | tts-ggml | Text-to-Speech (TTS) addon wrapping the Chatterbox and Supertonic engines on the GGML backend | Addon |
 | vla-ggml | Vision-Language-Action (VLA) inference addon on the GGML backend | Addon |
-| dl-base | Base class for QVAC dataloader libraries providing a common interface for loading data from various sources | Core |
-| dl-filesystem | Data loading library for model weights and resources from the local filesystem | Core |
-| dl-hyperdrive | Data loading library for model weights and resources from the Hyperdrive distributed file system | Core |
 | error | Standardized error-handling capabilities for all QVAC libraries | Core |
 | fabric | Shared Bare addon hosting the qvac-fabric (forked llama.cpp + ggml) runtime for QVAC inference addons | Core |
 | infer-base | Base class for inference addon clients defining the common lifecycle and generic model-interaction methods | Core |
 | inference-addon-cpp | Header-only C++ library providing common abstractions and infrastructure for building inference addons | Core |
 | logging | Logger wrapper that normalizes the logging interface across QVAC libraries | Core |
 | cli | Command-line interface for the QVAC ecosystem with tooling for building, bundling, and managing QVAC-powered applications | Tool |
-| diagnostics | Diagnostic report generation library for QVAC | Tool |
 | lint-cpp | Configuration files for formatting and linting C++ source files with pre-commit hooks | Tool |
 | qvac-ci | CI utilities for the QVAC monorepo | Tool |
 | registry-server | Distributed model registry server for downloading AI models and contributing new ones | Tool |
 | test-suite | Distributed MQTT test-orchestration framework (`qvac-test` CLI) driving e2e suites across desktop, Electron, Snap, Android, and iOS consumers | Tool |
+| sdk-e2e | Private, unpublished e2e suite for the SDK clients: the client-neutral test catalog, the JS and Python runners, and the cross-client conformance corpus | Tool |

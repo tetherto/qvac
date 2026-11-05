@@ -1,6 +1,6 @@
 import test from 'brittle'
 import type { Tool } from '@/schemas'
-import { parseToolCalls, detectToolDialectFromName } from '@/utils/tools'
+import { parseToolCalls, matchToolDialectFromName } from '@/utils/tools'
 import { parseHarmonyFormat } from '@/utils/tools/parsers/harmony'
 import { parseQwen35Format } from '@/utils/tools/parsers/qwen35'
 import { parseGemma4NativeFormat } from '@/utils/tools/parsers/gemma4native'
@@ -212,7 +212,7 @@ test('matched-but-failed: complete Hermes frame with broken JSON keeps PARSE_ERR
   t.is(errors[0]?.code, 'PARSE_ERROR')
 })
 
-test('detectToolDialectFromName: LFM names and paths → pythonic', (t) => {
+test('matchToolDialectFromName: LFM names and paths → pythonic', (t) => {
   const cases: Array<[string | undefined, string]> = [
     ['LFM_2_5_1_2B_INST_Q4_K_M', '/Users/x/.qvac/models/abc_lfm-2.5-1.2b-instruct-Q4_K_M.gguf'],
     [undefined, '/Users/x/.qvac/models/23238f141f948551_LFM2-1.2B-Tool-Q4_K_M.gguf'],
@@ -221,29 +221,27 @@ test('detectToolDialectFromName: LFM names and paths → pythonic', (t) => {
   ]
 
   for (const [name, path] of cases) {
-    t.is(detectToolDialectFromName(name, path), 'pythonic')
+    t.is(matchToolDialectFromName(name, path), 'pythonic')
   }
 })
 
-// Single negative pin: with the explicit qwen|hermes|mistral allowlist gone,
-// every non-LFM model (Qwen, Hermes, Mistral, Llama tool-calling fine-tunes,
-// unknowns, empty paths) routes to "hermes" via the catch-all. The hermes
-// parser chain is the catch-all; it also covers unknown JSON-payload models.
-test('detectToolDialectFromName: non-LFM models default to hermes', (t) => {
+// Single negative pin: every model outside the dialect patterns (Qwen, Hermes,
+// Mistral, Llama tool-calling fine-tunes, unknowns, empty paths) matches no
+// name, so detection moves on to the GGUF architecture and then "hermes".
+test('matchToolDialectFromName: names outside the dialect patterns match nothing', (t) => {
   const cases: Array<[string | undefined, string]> = [
     ['QWEN3_1_7B_INST_Q4', '/Users/x/.qvac/models/abc_Qwen3-1.7B-Q4_K_M.gguf'],
     [undefined, '/cache/foo_qwen3-1.7b.gguf'],
     ['Hermes-2-Pro-Mistral-7B', '/Users/x/.qvac/models/abc_Hermes-2-Pro-Mistral-7B-Q4_K_M.gguf'],
     ['MISTRAL_7B_INSTRUCT', '/Users/x/.qvac/models/abc_Mistral-7B-Instruct-v0.3-Q4_K_M.gguf'],
     [undefined, '/cache/abc_Mistral-Nemo-Instruct-2407.gguf'],
-    // Llama tool-calling fine-tunes (mav23, nguyenthanhthuan, etc.)
-    // empirically emit OpenAI-style JSON, not pythonic, so they fall through
-    // the catch-all rather than being auto-routed to pythonic. Callers with
-    // a pythonic-emitting Llama variant should use `completion({ toolDialect:
-    // "pythonic" })` to opt in.
+    // Llama tool-calling fine-tunes (mradermacher, nguyenthanhthuan, etc.)
+    // emit OpenAI-style JSON, not pythonic, so no name pattern claims them.
+    // Callers with a pythonic-emitting Llama variant should use
+    // `completion({ toolDialect: "pythonic" })` to opt in.
     [
-      'LLAMA_TOOL_CALLING_1B_INST_Q4_K',
-      '/Users/x/.qvac/models/abc_llama_3.2_1b_intruct_tool_calling_v2.Q4_K.gguf'
+      'LLAMA_TOOL_CALLING_1B_INST_Q4_K_M',
+      '/Users/x/.qvac/models/abc_Llama_3.2_1B_Intruct_Tool_Calling_V2.Q4_K_M.gguf'
     ],
     ['LLAMA_3_2_1B_INST_Q4_0', '/Users/x/.qvac/models/abc_Llama-3.2-1B-Instruct-Q4_0.gguf'],
     [undefined, '/cache/abc_Llama-3.3-70B-Instruct-Tool-Calling.gguf'],
@@ -264,7 +262,7 @@ test('detectToolDialectFromName: non-LFM models default to hermes', (t) => {
     // gemma-40b contains 'gemma-4' as a substring but the trailing '0' (digit) blocks the gemma4 lookahead
     [undefined, '/cache/abc_gemma-40b-Q4_K_M.gguf'],
     // DSML only exists from DeepSeek V3.2 onwards — older DeepSeek releases and
-    // the DeepSeek-derived OCR models must keep the hermes chain
+    // the DeepSeek-derived OCR models must not match it
     [undefined, '/cache/abc_DeepSeek-V2-Lite-Chat-Q4_K_M.gguf'],
     [undefined, '/cache/abc_DeepSeek-V3.1-Q4_K_M.gguf'],
     ['DEEPSEEK_R1_DISTILL_Q4', '/Users/x/.qvac/models/abc_deepseek-r1-distill-qwen-7b.gguf'],
@@ -272,7 +270,7 @@ test('detectToolDialectFromName: non-LFM models default to hermes', (t) => {
   ]
 
   for (const [name, path] of cases) {
-    t.is(detectToolDialectFromName(name, path), 'hermes')
+    t.is(matchToolDialectFromName(name, path), undefined, `name=${name} path=${path}`)
   }
 })
 
@@ -582,7 +580,7 @@ test('parseToolCalls(default): Harmony frame in default chain still parses', (t)
   t.alike(toolCalls[0]?.arguments, { city: 'Paris' })
 })
 
-test('detectToolDialectFromName: GPT-OSS variants → harmony', (t) => {
+test('matchToolDialectFromName: GPT-OSS variants → harmony', (t) => {
   const cases: Array<[string | undefined, string]> = [
     ['gpt-oss-20b', '/cache/gpt-oss-20b-Q4_K_M.gguf'],
     ['GPT_OSS_120B_INST_Q4_K_M', '/Users/x/.qvac/models/abc_gpt-oss-120b-Q4_K_M.gguf'],
@@ -592,11 +590,11 @@ test('detectToolDialectFromName: GPT-OSS variants → harmony', (t) => {
   ]
 
   for (const [name, path] of cases) {
-    t.is(detectToolDialectFromName(name, path), 'harmony', `name=${name} path=${path}`)
+    t.is(matchToolDialectFromName(name, path), 'harmony', `name=${name} path=${path}`)
   }
 })
 
-test('detectToolDialectFromName: Qwen3.5, Qwen3.6, and Qwen3.8 variants → qwen35', (t) => {
+test('matchToolDialectFromName: Qwen3.5, Qwen3.6, and Qwen3.8 variants → qwen35', (t) => {
   const cases: Array<[string | undefined, string]> = [
     [undefined, '/cache/abc_Qwen3.5-7B-Instruct-Q4_K_M.gguf'],
     ['QWEN3_5_7B_INST_Q4', '/Users/x/.qvac/models/abc_qwen3.5-7b-instruct.gguf'],
@@ -614,11 +612,11 @@ test('detectToolDialectFromName: Qwen3.5, Qwen3.6, and Qwen3.8 variants → qwen
   ]
 
   for (const [name, path] of cases) {
-    t.is(detectToolDialectFromName(name, path), 'qwen35', `name=${name} path=${path}`)
+    t.is(matchToolDialectFromName(name, path), 'qwen35', `name=${name} path=${path}`)
   }
 })
 
-test('detectToolDialectFromName: Gemma 4 variants → gemma4', (t) => {
+test('matchToolDialectFromName: Gemma 4 variants → gemma4', (t) => {
   const cases: Array<[string | undefined, string]> = [
     [undefined, '/cache/abc_gemma4-9b-it-Q4_K_M.gguf'],
     ['GEMMA4_27B_IT_Q4', '/Users/x/.qvac/models/abc_gemma-4-27b-it.gguf'],
@@ -626,7 +624,7 @@ test('detectToolDialectFromName: Gemma 4 variants → gemma4', (t) => {
   ]
 
   for (const [name, path] of cases) {
-    t.is(detectToolDialectFromName(name, path), 'gemma4', `name=${name} path=${path}`)
+    t.is(matchToolDialectFromName(name, path), 'gemma4', `name=${name} path=${path}`)
   }
 })
 
@@ -1612,7 +1610,7 @@ test('parseToolCalls(default): DSML is recovered without explicit dialect', (t) 
   t.alike(toolCalls[0]?.arguments, { city: 'Berlin' })
 })
 
-test('detectToolDialectFromName: DeepSeek V3.2 / V4 variants → dsml', (t) => {
+test('matchToolDialectFromName: DeepSeek V3.2 / V4 variants → dsml', (t) => {
   const cases: Array<[string | undefined, string]> = [
     [undefined, '/cache/abc_DeepSeek-V4-Flash-0731-UD-IQ2_M-00001-of-00003.gguf'],
     ['DEEPSEEK_V4_FLASH_UD_IQ2_M', '/Users/x/.qvac/models/abc_deepseek-v4-flash.gguf'],
@@ -1622,11 +1620,11 @@ test('detectToolDialectFromName: DeepSeek V3.2 / V4 variants → dsml', (t) => {
   ]
 
   for (const [name, path] of cases) {
-    t.is(detectToolDialectFromName(name, path), 'dsml', `name=${name} path=${path}`)
+    t.is(matchToolDialectFromName(name, path), 'dsml', `name=${name} path=${path}`)
   }
 })
 
-test('detectToolDialectFromName: DeepSeek sizes and quants are not DSML versions', (t) => {
+test('matchToolDialectFromName: DeepSeek sizes and quants are not DSML versions', (t) => {
   const cases: Array<[string | undefined, string]> = [
     [undefined, '/cache/abc_deepseek-32b-instruct-Q4_K_M.gguf'],
     ['DEEPSEEK_32B_INSTRUCT', '/Users/x/.qvac/models/abc_deepseek-32b-instruct.gguf'],
@@ -1634,6 +1632,121 @@ test('detectToolDialectFromName: DeepSeek sizes and quants are not DSML versions
   ]
 
   for (const [name, path] of cases) {
-    t.is(detectToolDialectFromName(name, path), 'hermes', `name=${name} path=${path}`)
+    t.is(matchToolDialectFromName(name, path), undefined, `name=${name} path=${path}`)
   }
+})
+
+// --- nullable and union parameter types ---
+
+const nullableTool: Tool = {
+  type: 'function',
+  name: 'search',
+  description: 'search',
+  parameters: {
+    type: 'object',
+    properties: {
+      limit: { type: ['integer', 'null'] },
+      offset: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
+      filter: { type: 'object', properties: { tag: { type: 'string' } } }
+    }
+  }
+}
+
+test('parseQwen35Format: nullable and anyOf types coerce to their non-null member', (t) => {
+  const text = `<tool_call><function=search><parameter=limit>7</parameter><parameter=offset>null</parameter><parameter=filter>{"tag":"a"}</parameter></function></tool_call>`
+  const result = parseQwen35Format(text, [nullableTool])
+  t.is(result.errors.length, 0)
+  t.alike(result.toolCalls[0]?.arguments, { limit: 7, offset: null, filter: { tag: 'a' } })
+})
+
+test('parseDsmlFormat: nullable and anyOf types coerce to their non-null member', (t) => {
+  const text = `<｜DSML｜tool_calls>
+<｜DSML｜invoke name="search">
+<｜DSML｜parameter name="limit">null</｜DSML｜parameter>
+<｜DSML｜parameter name="offset">3</｜DSML｜parameter>
+</｜DSML｜invoke>
+</｜DSML｜tool_calls>`
+  const result = parseDsmlFormat(text, [nullableTool])
+  t.is(result.errors.length, 0)
+  t.alike(result.toolCalls[0]?.arguments, { limit: null, offset: 3 })
+})
+
+// Unions try each branch in declaration order with `string` last.
+const unionCases: Array<[string, Record<string, unknown>, string, unknown]> = [
+  [
+    'anyOf [integer, string] with text',
+    { anyOf: [{ type: 'integer' }, { type: 'string' }] },
+    'abc',
+    'abc'
+  ],
+  [
+    'anyOf [integer, string] with a number',
+    { anyOf: [{ type: 'integer' }, { type: 'string' }] },
+    '42',
+    42
+  ],
+  ["type ['string', 'object'] with JSON", { type: ['string', 'object'] }, '{"a":1}', { a: 1 }],
+  ["type ['string', 'object'] with text", { type: ['string', 'object'] }, 'hello', 'hello'],
+  [
+    'oneOf [boolean, integer] with a boolean',
+    { oneOf: [{ type: 'boolean' }, { type: 'integer' }] },
+    'true',
+    true
+  ],
+  [
+    'oneOf [boolean, integer] with a number',
+    { oneOf: [{ type: 'boolean' }, { type: 'integer' }] },
+    '7',
+    7
+  ],
+  [
+    'enum-only branch beside integer',
+    { anyOf: [{ enum: ['auto', 'off'] }, { type: 'integer' }] },
+    'auto',
+    'auto'
+  ],
+  [
+    'enum-only branch beside integer with a number',
+    { anyOf: [{ enum: ['auto', 'off'] }, { type: 'integer' }] },
+    '3',
+    3
+  ],
+  ["type ['object', 'array'] with an array", { type: ['object', 'array'] }, '[1,2]', [1, 2]]
+]
+
+function unionTool(schema: Record<string, unknown>): Tool {
+  return {
+    type: 'function',
+    name: 'pick',
+    description: 'pick',
+    parameters: { type: 'object', properties: { v: schema } }
+  }
+}
+
+for (const [label, schema, raw, expected] of unionCases) {
+  test(`union coercion (qwen35): ${label}`, (t) => {
+    const text = `<tool_call><function=pick><parameter=v>${raw}</parameter></function></tool_call>`
+    const result = parseQwen35Format(text, [unionTool(schema)])
+    t.is(result.errors.length, 0)
+    t.alike(result.toolCalls[0]?.arguments, { v: expected })
+  })
+
+  test(`union coercion (dsml): ${label}`, (t) => {
+    const text = `<｜DSML｜tool_calls>
+<｜DSML｜invoke name="pick">
+<｜DSML｜parameter name="v">${raw}</｜DSML｜parameter>
+</｜DSML｜invoke>
+</｜DSML｜tool_calls>`
+    const result = parseDsmlFormat(text, [unionTool(schema)])
+    t.is(result.errors.length, 0)
+    t.alike(result.toolCalls[0]?.arguments, { v: expected })
+  })
+}
+
+test('union coercion: no branch accepts the value → PARSE_ERROR', (t) => {
+  const tool = unionTool({ anyOf: [{ type: 'integer' }, { type: 'boolean' }] })
+  const text = `<tool_call><function=pick><parameter=v>abc</parameter></function></tool_call>`
+  const result = parseQwen35Format(text, [tool])
+  t.is(result.toolCalls.length, 0)
+  t.is(result.errors[0]?.code, 'PARSE_ERROR')
 })

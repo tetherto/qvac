@@ -7,7 +7,8 @@ import { REASONING_BUDGET_MAX } from '@/schemas/llamacpp-config'
 export { completionStatsSchema, type CompletionStats } from '@/schemas/completion-event'
 
 /**
- * Tool-call output dialect. Auto-detected from the model name; pass via
+ * Tool-call output dialect. Detected at load from the model name, then from the
+ * GGUF `general.architecture`, then `"hermes"`; pass via
  * `completion({ toolDialect })` to override.
  *
  * Expected raw model output per dialect:
@@ -71,31 +72,23 @@ export const generationParamsSchema = z
       .describe(
         "Per-request reasoning channel budget. `-1` keeps the model's reasoning channel on; `0` disables it for this request; any positive integer caps the reasoning channel at that many tokens. Equivalent to the load-time `reasoning_budget` config but scoped to a single `run()` call; the prior value is restored afterwards."
       ),
-    remove_thinking_from_context: z
-      .boolean()
-      .optional()
-      .describe(
-        'When the model emits a reasoning block during generation (e.g. `<think>...</think>` for the Qwen3 family, `<|channel>thought ... <channel|>` for Gemma 4), drop those tokens from the KV cache at end-of-generation so subsequent turns do not accumulate reasoning history. Defaults to `false`, except the Qwen3 reasoning family (Qwen3, Qwen3.5, Qwen3.6, including MoE variants), which defaults to `true`. No-op for models without a recognised reasoning channel. Supported on recurrent / hybrid-SSM models (e.g. Qwen3.5) via a state snapshot and replay when the reasoning close marker is a single token; on such a model with a multi-token close marker, enabling this fails with an error.'
-      ),
     tool_choice: z
       .string()
       .min(1)
       .optional()
       .describe(
         'Controls tool calling for a request that declares `tools`, in the OpenAI style. `"auto"` (default) lets the model decide and constrains output to the tool-call grammar only once it starts a call; `"required"` forces a tool call; `"none"` leaves the tool definitions in the prompt but disables the tool-call grammar; any other value names one declared tool and forces a call to it. `"required"` and a tool name are rejected when the request declares no tools, and fail the request rather than answering in prose when the model cannot honour them. Only honoured by llama.cpp-backed models; other backends ignore it.'
+      ),
+    parallel_tool_calls: z
+      .boolean()
+      .optional()
+      .describe(
+        'Whether one response may carry more than one tool call. `true` (default) lets the chat template and tool-call grammar accept several; `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.'
       )
   })
   .strict()
 
 const TOOL_CHOICE_MODES = new Set(['auto', 'none', 'required'])
-
-/**
- * Whether a `tool_choice` demands a tool call (`required` or a named tool),
- * as opposed to `auto` / `none`, which only shape how the model may call one.
- */
-export function toolChoiceDemandsCall(toolChoice: string | undefined): boolean {
-  return toolChoice !== undefined && toolChoice !== 'auto' && toolChoice !== 'none'
-}
 
 type ToolChoiceTool = { type: 'function'; name: string; deferLoading?: boolean | undefined }
 
@@ -131,8 +124,8 @@ export function refineToolChoiceMatchesTools(
     })
     return
   }
-  // A deferred tool has no parameter schema in the prompt, so the addon has
-  // nothing to build a grammar from and could not honour the demand.
+  // A deferred tool has no parameter schema in the prompt until a search loads
+  // it, which this check cannot see, so the demand may be unbuildable.
   if (named.deferLoading === true) {
     ctx.addIssue({
       code: 'custom',
@@ -197,25 +190,86 @@ export const responseFormatSchema = z.discriminatedUnion('type', [
     .strict()
 ])
 
+const historyToolCallSchema = z.object({
+  id: z.string().optional().describe('Call id, echoed by the `tool` message that answers it.'),
+  name: z.string().min(1).describe('Name of the tool that was called.'),
+  arguments: z.record(z.string(), z.unknown()).describe('Arguments the tool was called with.')
+})
+
+export const historyMessageSchema = z
+  .object({
+    role: z
+      .string()
+      .describe('Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'),
+    content: z
+      .string()
+      .nullish()
+      .describe(
+        'Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.'
+      ),
+    attachments: z
+      .array(attachmentSchema)
+      .optional()
+      .describe('Optional file attachments for multimodal models.'),
+    toolCalls: z
+      .array(historyToolCallSchema)
+      .optional()
+      .describe(
+        "Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty."
+      ),
+    toolCallId: z
+      .string()
+      .optional()
+      .describe('On a `tool` turn: the id of the call this result answers.'),
+    toolName: z
+      .string()
+      .optional()
+      .describe('On a `tool` turn: the name of the tool that produced the result.')
+  })
+  .superRefine((message, ctx) => {
+    const callsOnly = message.role === 'assistant' && (message.toolCalls?.length ?? 0) > 0
+    if ((message.content === null || message.content === undefined) && !callsOnly) {
+      ctx.addIssue({
+        code: 'custom',
+        message: '`content` is required unless an assistant message carries `toolCalls`.',
+        path: ['content']
+      })
+    }
+    if (message.toolCalls !== undefined && message.role !== 'assistant') {
+      ctx.addIssue({
+        code: 'custom',
+        message: '`toolCalls` is only valid on an assistant message.',
+        path: ['toolCalls']
+      })
+    }
+    for (const key of ['toolCallId', 'toolName'] as const) {
+      if (message[key] !== undefined && message.role !== 'tool') {
+        ctx.addIssue({
+          code: 'custom',
+          message: `\`${key}\` is only valid on a tool message.`,
+          path: [key]
+        })
+      }
+    }
+  })
+  .transform((message) => ({ ...message, content: message.content ?? '' }))
+
+export type HistoryMessage = z.infer<typeof historyMessageSchema>
+
 export const completionParamsSchema = z.object({
   history: z
-    .array(
-      z.object({
-        role: z.string().describe('Message role (e.g., `"user"`, `"assistant"`, `"system"`).'),
-        content: z.string().describe('Message content.'),
-        attachments: z
-          .array(attachmentSchema)
-          .optional()
-          .describe('Optional file attachments for multimodal models.')
-      })
-    )
+    .array(historyMessageSchema)
     .describe('Array of conversation messages sent to the model.'),
   modelId: z.string().describe('The identifier of the model to use for completion.'),
   kvCache: kvCacheSchema
     .optional()
     .describe(
       'KV cache configuration — `true` to auto-generate a cache key from history, a string to use a custom key, or `false`/`undefined` to disable.'
-    )
+    ),
+  prefill: z
+    .boolean()
+    .optional()
+    .describe('Evaluate the prompt without generating an answer. Requires an enabled KV cache.')
 })
 
 const completionClientParamsBaseSchema = completionParamsSchema.extend({
@@ -247,7 +301,7 @@ const completionClientParamsBaseSchema = completionParamsSchema.extend({
   toolDialect: toolDialectSchema
     .optional()
     .describe(
-      'Override auto-detected tool-call dialect. Use when name-based detection picks the wrong parser chain for your model.'
+      'Override auto-detected tool-call dialect. Use when detection from the model name and GGUF architecture picks the wrong parser chain for your model.'
     ),
   responseFormat: responseFormatSchema
     .optional()
@@ -285,7 +339,34 @@ function refineNoToolsWithStructuredOutput(
   }
 }
 
+function refinePrefill(
+  data: {
+    prefill?: boolean | undefined
+    kvCache?: boolean | string | undefined
+    generationParams?: { tool_choice?: string | undefined } | undefined
+  },
+  ctx: z.RefinementCtx
+): void {
+  if (!data.prefill) return
+  if (!data.kvCache) {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'prefill requires kvCache: true or a nonempty cache key.',
+      path: ['kvCache']
+    })
+  }
+  const choice = data.generationParams?.tool_choice
+  if (choice !== undefined && choice !== 'auto' && choice !== 'none') {
+    ctx.addIssue({
+      code: 'custom',
+      message: 'prefill cannot be combined with a forced tool_choice.',
+      path: ['generationParams', 'tool_choice']
+    })
+  }
+}
+
 export const completionClientParamsSchema = completionClientParamsBaseSchema
+  .superRefine(refinePrefill)
   .superRefine(refineNoToolsWithStructuredOutput)
   .superRefine(refineToolChoiceMatchesTools)
   .superRefine(refineReservedToolNames)
@@ -294,6 +375,7 @@ export const completionStreamRequestSchema = completionClientParamsBaseSchema
   .extend({
     type: z.literal('completionStream')
   })
+  .superRefine(refinePrefill)
   .superRefine(refineNoToolsWithStructuredOutput)
   .superRefine(refineToolChoiceMatchesTools)
   .superRefine(refineReservedToolNames)
@@ -326,6 +408,7 @@ export const completionOrchestrateRequestSchema = completionClientParamsBaseSche
           'the next turn. Defaults to 8.'
       )
   })
+  .superRefine(refinePrefill)
   .superRefine(refineNoToolsWithStructuredOutput)
   .superRefine(refineToolChoiceMatchesTools)
   .superRefine(refineReservedToolNames)

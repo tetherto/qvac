@@ -40,7 +40,9 @@ function buildTranscribeRequest(
       typeof params.audioChunk === 'string'
         ? { type: 'filePath', value: params.audioChunk }
         : { type: 'base64', value: params.audioChunk.toString('base64') },
-    ...(params.prompt && { prompt: params.prompt }),
+    ...(params.prompt !== undefined && params.prompt !== null && { prompt: params.prompt }),
+    ...(params.hotwords !== undefined && { hotwords: params.hotwords }),
+    ...(params.maxNewTokens !== undefined && { maxNewTokens: params.maxNewTokens }),
     ...(params.metadata === true && { metadata: true }),
     requestId
   }
@@ -56,7 +58,9 @@ function buildTranscribeRequest(
  * @param params.prompt - Optional initial prompt to guide the transcription
  * @param params.metadata - When true, resolves to an array of transcript
  *                          segments (`{ text, startMs, endMs, append, id }`,
- *                          plus `isEndOfTurn` and `startsWord` on parakeet)
+ *                          plus `isEndOfTurn` and `startsWord` on parakeet, and
+ *                          `language`, `noSpeechProb`, `speakerTurnNext` and
+ *                          `tokens` on whisper when the engine reports them)
  *                          instead of joined text.
  * @param options - Optional RPC options including per-call profiling
  * @returns A promise (decorated with `requestId`) resolving to the
@@ -165,7 +169,9 @@ export function transcribeStream(
  * @param params.prompt - Optional initial prompt to guide transcription
  * @param params.metadata - When true, the session yields transcript segment
  *                          objects (`{ text, startMs, endMs, append, id }`,
- *                          plus `isEndOfTurn` and `startsWord` on parakeet)
+ *                          plus `isEndOfTurn` and `startsWord` on parakeet, and
+ *                          `language`, `noSpeechProb`, `speakerTurnNext` and
+ *                          `tokens` on whisper when the engine reports them)
  *                          instead of plain text.
  * @param options - Optional RPC options including per-call profiling.
  * @returns A session object: call `write(audioChunk)` with a `Uint8Array`
@@ -556,7 +562,9 @@ export function processLineConversation(
           type: 'vad',
           speaking: response.vad.speaking,
           probability: response.vad.probability,
-          ...(response.vad.source && { source: response.vad.source })
+          ...(response.vad.source && { source: response.vad.source }),
+          ...(response.vad.timestamp !== undefined && { timestamp: response.vad.timestamp }),
+          ...(response.vad.speakerId !== undefined && { speakerId: response.vad.speakerId })
         }
       }
       if (response.endOfTurn) {

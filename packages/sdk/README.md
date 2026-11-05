@@ -22,6 +22,15 @@ For AI/LLM tools, use [https://docs.qvac.tether.io/llms-full.txt](https://docs.q
 
 See https://docs.qvac.tether.io/sdk/getting-started/installation
 
+On Node.js, the SDK installs and launches its own Bare worker through `bare-runtime`.
+Its dependency range must satisfy `@qvac/inference`'s `engines.bare` requirement.
+When upgrading the SDK, reinstall dependencies with the existing lockfile so the
+package manager can replace an older, incompatible runtime. Remove any override
+or resolution that forces the worker below that requirement; installing a newer
+global `bare` executable does not change the SDK's worker dependency.
+
+For mobile apps that use only raw PCM streaming transcription, list the required audio plugins and set `"includeAudioDecoder": false` in `qvac.config.*` before bundling or running Expo prebuild. You can also use `qvac bundle sdk --defer bare-ffmpeg`. Both options leave `bare-ffmpeg` out of the native addon manifest. Bundle FFmpeg when the app decodes compressed audio files or asks `audiogen-ggml` for a compressed output format; PCM and WAV output need no FFmpeg.
+
 ## Quickstart
 
 1. Create the examples workspace:
@@ -75,316 +84,46 @@ try {
 node quickstart.js
 ```
 
-## System resource diagnostics
+A first `loadModel()` call also starts the SDK's worker. If that startup ever
+exceeds its budget (cold disk cache, antivirus scanning the native addon), the
+call fails with `RPC_INIT_TIMEOUT`. Re-running usually succeeds; to give every
+start more room, raise `rpcInitTimeoutMs` in `qvac.config.*` or set the
+`QVAC_RPC_INIT_TIMEOUT_MS` environment variable.
 
-Use `getSystemResources` to inspect locally observed CPU, system-memory, GPU, and
-driver capabilities. Pass `sample: true` only when you also need a fresh usage
-sample:
+## Documentation
 
-```ts
-import { getSystemResources } from '@qvac/sdk'
+The [QVAC SDK documentation](https://docs.qvac.tether.io/sdk/) covers each
+capability with its configuration and examples. See the
+[API reference](https://docs.qvac.tether.io/sdk/reference/api/) for the full API
+and the [release notes](https://docs.qvac.tether.io/sdk/reference/release-notes/)
+for what changed in each release.
 
-const resources = await getSystemResources({ sample: true })
-
-if (resources.capabilities.memory.totalBytes.status === 'supported') {
-  console.log('System memory:', resources.capabilities.memory.totalBytes.value)
-}
-
-if (resources.sample?.cpu.status === 'supported') {
-  console.log('CPU utilization:', resources.sample.cpu.value)
-}
-```
-
-See the [system resources support matrix](./docs/system-resources-support-matrix.md)
-for metric-level evidence and platform limitations.
-
-Every metric reports `supported`, `unavailable`, `unverified`, or `failed`.
-Supported values include provenance with a source and optional scope. These
-values are diagnostics; they do not reserve memory or guarantee that a model
-can be loaded.
-
-GPU capabilities expose observed driver names, versions, and graphics APIs.
-These observations do not prove that an inference backend is compatible.
-
-Profiled inference operation events may include `event.backend` with the
-selected backend and device, graphics API, driver, fallback reason, and probe
-result. Addons attach backend metadata with `attachBackendDiagnostics`; the SDK
-validates it before recording the operation event. `gpuId`, when present,
-identifies a GPU from the current worker resource collector and is stable only
-for that collector's lifetime. The SDK does not infer compatibility from driver
-inventory or log text.
-
-### Profiler resource gauges
-
-Resource gauges are disabled by default. Enable them explicitly to attach one
-worker resource sample to each profiled operation:
-
-```ts
-import { profiler } from '@qvac/sdk'
-
-profiler.enable({ mode: 'verbose', includeResourceGauges: true })
-
-// Run SDK operations, then inspect recentEvents[].resources.
-const profile = profiler.exportJSON()
-```
-
-The sample uses the same status, provenance, and scope semantics as
-`getSystemResources({ sample: true })`. Its `sampledAt` uses the same monotonic
-clock as the profiling event's `ts`, so the two timestamps are comparable.
-`resources.origin` records that the sample was taken on the `local` worker.
-Samples are delivered to `profiler.onRecord`; they
-are retained in `exportJSON().recentEvents` only in `verbose` mode. Enabling
-gauges in `summary` mode still incurs the sampling cost without retaining them.
-Disabling profiling or omitting `includeResourceGauges` performs no resource
-sampling. Enabling gauges adds one CPU query and one query per GPU to each
-profiled operation's response path. If the worker resource collector is not
-initialized, the event omits the resource block.
-
-## Pre-download model fit assessment
-
-Use `assessModelFit` to check, before downloading anything, whether models are
-likely to fit in this device's memory. Each candidate is described as `loadModel`
-takes it. It reads generated catalog metadata plus a fresh memory sample, and for
-a single candidate the registry's weightless description of the artifact, so the
-engine's own fitter can answer — no weights, no load:
-
-```ts
-import { assessModelFit, QWEN3_8B_INST_Q4_K_M } from '@qvac/sdk'
-
-const result = await assessModelFit({
-  models: [{ modelSrc: QWEN3_8B_INST_Q4_K_M, modelType: 'llm', modelConfig: { ctx_size: 8192 } }],
-  execution: 'sequential',
-  policy: 'interactive-v1'
-})
-
-console.log(result.verdict) // 'likely-fits' | 'likely-too-large' | 'unknown'
-```
-
-The result is advisory: it does not block `loadModel`, reserve memory, or make a
-performance claim. `unknown` is a real answer meaning the evidence does not
-support a call either way — show it as "can't say", not as "no".
-
-See [pre-download model fit assessment](./docs/assess-model-fit.md) for the
-budget arithmetic, why estimates are ranges, the supported engine and workload
-matrix, and the current calibration status.
-
-## Streaming transcription statistics
-
-Whisper and Parakeet duplex transcription sessions expose terminal engine
-statistics after their event iterator completes:
-
-```ts
-const session = await transcribeStream({ modelId })
-
-for await (const text of session) {
-  process.stdout.write(text)
-}
-
-const stats = await session.stats
-console.log(stats?.audioDuration, stats?.realTimeFactor)
-```
-
-`session.stats` resolves to `undefined` when the engine does not report
-statistics.
+TranscribePsy (`PARAKEET_TRANSCRIBEPSY_250M_Q8_0`, eight European
+languages) has a separate Core ML distribution instead of a sidecar:
+`PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0` is an encoder-less GGUF whose
+encoder and decoder bundles the SDK stages beside it, so both stages run on
+the Neural Engine. It loads on macOS and iOS only; elsewhere the load is
+refused up front with the ggml constant to use instead. See
+[`examples/asr/parakeet-transcribepsy-filesystem.ts`](examples/asr/parakeet-transcribepsy-filesystem.ts),
+which also shows the `longFormWindowFrames` / `longFormContextFrames` knobs
+that bound the offline encoder window on long recordings.
 
 ## Examples
 
-In the `./examples` subdirectory, you will find scripts demonstrating how to use all SDK functionalities. To try any of them:
-
-1. Build the SDK from source (see [Build](#build) section).
-2. Run using Bare, Node.js, or Bun as the runtime:
+The [`examples`](./examples) directory has scripts covering every SDK capability.
+To run one, set up the SDK from source as described in
+[`CONTRIBUTING.md`](./CONTRIBUTING.md), then from `packages/sdk`:
 
 ```bash
-# With Bare
-bun run bare:example dist/examples/path/to/example.js
-
-# With Node
+# Compiled output
 node dist/examples/path/to/example.js
 
-# With bun, straight from source
-bun run examples/path/to/example.ts
+# Straight from source, with the tsx dev dependency
+npx tsx examples/path/to/example.ts
 ```
-
-`examples/abot-world.ts` has a companion guide covering the hardware
-requirements, scene-pack lifecycle, cancellation semantics and concurrency rules
-of an interactive world session: see
-[ABot-World interactive world sessions](./docs/abot-world.md).
-
-## Build
-
-Use the [Bun](https://bun.sh/) package manager:
-
-```bash
-bun i
-```
-
-`@qvac/inference` resolves to its published release by default. To build and test against the in-repo engine at the same commit, link it first:
-
-```bash
-bun run sdk-source:workspace
-```
-
-```bash
-bun run build  # or `watch` for hotreload
-```
-
-```bash
-bun run build:pack
-```
-
-This outputs a tarball under `dist/sdk-{version}.tgz` that you can install in your project, e.g.:
-
-```bash
-npm i path/to/sdk-0.3.0.tgz
-```
-
-## Testing
-
-The SDK test suite is organized into two buckets by runtime:
-
-| Bucket            | Runtime    | Location | Command                                |
-| ----------------- | ---------- | -------- | -------------------------------------- |
-| Unit              | Bun / Node | `test/`  | `bun run test:unit`                    |
-| Client (consumer) | Node / RN  | `e2e/`   | See [`e2e/README.md`](./e2e/README.md) |
-
-See [`TESTING.md`](./TESTING.md) for the full decision tree on where new tests should land.
 
 ## Contributing
 
-### Commit Message and PR Title Format
-
-This repository enforces structured commit messages and PR titles to maintain consistency and generate changelogs automatically.
-
-#### Format
-
-**Commit messages:**
-
-```
-prefix[tags]?: subject
-```
-
-**PR titles:**
-
-```
-TICKET prefix[tags]: subject
-```
-
-#### Allowed Prefixes
-
-- `feat` - New features or capabilities
-- `fix` - Bug fixes
-- `doc` - Documentation changes
-- `test` - Test additions or modifications
-- `mod` - Model-related changes
-- `chore` - Maintenance tasks
-- `infra` - CI/CD, tooling, infrastructure
-
-#### Allowed Tags
-
-Tags are optional:
-
-- `[api]` - API changes (non-breaking)
-- `[bc]` - Breaking changes (including breaking API changes)
-
-#### Examples
-
-**Valid commit messages:**
-
-```bash
-feat: add RAG support for LanceDB
-fix[api]: fix completion stream error handling
-doc: update installation instructions
-feat[bc]: redesign loadModel signature
-chore: update dependencies
-```
-
-**Valid PR titles:**
-
-```bash
-QVAC-123 feat: add RAG support for LanceDB
-QVAC-456 fix[api]: fix completion stream error handling
-QVAC-789 doc: update installation instructions
-QVAC-101 feat[bc]: redesign loadModel signature
-```
-
-#### Code Examples Requirements
-
-When creating PRs with specific tags, you must include code examples in the PR description:
-
-**`[bc]` tag requirements:**
-
-Must include BEFORE/AFTER code examples showing the migration path:
-
-````markdown
-## BC Changes
-
-**BEFORE:**
-
-```typescript
-const model = await loadModel('model-path')
-```
-
-**AFTER:**
-
-```typescript
-const modelId = await loadModel('model-path', { modelType: 'llm' })
-```
-````
-
-Or using inline comments:
-
-````markdown
-```typescript
-// old
-const model = await loadModel('model-path')
-
-// new
-const modelId = await loadModel('model-path', { modelType: 'llm' })
-```
-````
-
-**`[api]` tag requirements (non-breaking):**
-
-Must include at least one fenced code block showing the new API usage:
-
-````markdown
-## New API
-
-```typescript
-// New completion API with streaming support
-for await (const token of completion({
-  modelId,
-  history: [{ role: 'user', content: 'Hello!' }]
-}).tokenStream) {
-  process.stdout.write(token)
-}
-```
-````
-
-#### Validation
-
-- **Commit messages** are validated automatically via Husky commit-msg hook
-- **PR titles and descriptions** are validated via GitHub Actions on PR creation/update
-- Invalid commits or PRs will be rejected with helpful error messages
-- **Auto-skipped commits:** The following Git-generated commits bypass validation:
-  - Merge commits (e.g., `Merge pull request #123`)
-  - Version bumps (e.g., `1.0.0`, `v1.0.0`)
-  - Revert commits (e.g., `Revert "feat: add feature"`)
-  - Squash commits (e.g., `squash! fix: bug fix`)
-
-#### Generating Changelogs
-
-Once your PRs are merged into `dev`, you can generate a changelog:
-
-```bash
-npm run changelog:generate
-```
-
-This will:
-
-1. Compare versions between `dev` and `main` branches
-2. Collect all merged PRs
-3. Parse and classify each PR by prefix
-4. Generate `changelog/<version>/CHANGELOG.md`
-5. Generate `changelog/<version>/breaking.md` for BC changes (with code examples)
-6. Generate `changelog/<version>/api.md` for API changes (with code examples)
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for building from source, commit and
+PR title format, and changelog generation, and [`TESTING.md`](./TESTING.md) for
+where new tests belong.

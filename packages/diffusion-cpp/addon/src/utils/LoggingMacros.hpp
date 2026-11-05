@@ -5,6 +5,11 @@
 #include <string>
 #include <unordered_map>
 
+#ifdef JS_LOGGER
+// inference-addon-cpp 1.4.0 uses libuv in JsUtils.hpp before including uv.h.
+#include <uv.h>
+#endif
+
 #include "inference-addon-cpp/Logger.hpp"
 
 namespace qvac_lib_inference_addon_sd {

@@ -42,9 +42,12 @@ export interface QVACModelEntry {
    * engine's dry-run fitter reads, with none of the weights.
    *
    * - For a GGUF it is a short GGUF holding the tensor list and the settings
-   *   without the tokenizer tables; for a safetensors it is the JSON header.
-   * - Present for GGUF and safetensors artifacts, every shard of a split model
-   *   included; absent for other formats and when it could not be built.
+   *   without the tokenizer tables; for a safetensors it is the JSON header;
+   *   for the `.bin` and `.spm` artifacts of the whisper.cpp, BCI and nmt.cpp
+   *   engines it is a GGUF with no data section holding the file's settings,
+   *   tensor list and vocabulary sizes.
+   * - Present for those formats, every shard of a split model included; absent
+   *   for other formats and when it could not be built.
    * - Written to the writer's active blob core, which is not always the one
    *   holding the weights; `downloadBlob` takes the binding directly.
    * - `sha256` covers the description, not the artifact it came from.
@@ -79,6 +82,8 @@ export interface QVACDownloadOptions {
     totalBlocks: number
   }) => void
   signal?: AbortSignal
+  /** With `outputFile`, whether to clear cached blocks when `signal` aborts (default `true`). Pass `false` to keep them so the download can resume. */
+  clearBlocksOnCancel?: boolean | (() => boolean)
 }
 
 export interface QVACBlobDownloadOptions {
@@ -92,6 +97,8 @@ export interface QVACBlobDownloadOptions {
     totalBlocks: number
   }) => void
   signal?: AbortSignal
+  /** With `outputFile`, whether to clear cached blocks when `signal` aborts (default `true`). Pass `false` to keep them so the download can resume. */
+  clearBlocksOnCancel?: boolean | (() => boolean)
 }
 
 export interface QVACBlobDownloadResult {
@@ -157,6 +164,10 @@ export class QVACRegistryClient extends ReadyResource {
     blobBinding: QVACBlobBinding,
     options?: QVACBlobDownloadOptions
   ): Promise<QVACBlobDownloadResult>
+  /** Deletes a blob's cached blocks, e.g. those a cancelled or failed download kept for resume. */
+  clearBlob(
+    blobBinding: Pick<QVACBlobBinding, 'coreKey' | 'blockOffset' | 'blockLength'>
+  ): Promise<void>
 
   findBy(params?: FindByParams): Promise<QVACModelEntry[]>
   findModels(query?: QVACModelQuery): Promise<QVACModelEntry[]>

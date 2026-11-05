@@ -113,6 +113,14 @@ const WorldSessionHandlersMap WORLD_SESSION_HANDLERS = {
      [](WorldSessionConfig& c, const std::string& v) {
        c.verbosity = parseIntInRange(v, "verbosity", 0, 3);
      }},
+    {"maxImagePixels",
+     [](WorldSessionConfig& c, const std::string& v) {
+       c.maxImagePixels = static_cast<uint64_t>(parseIntInRange(
+           v,
+           "maxImagePixels",
+           1,
+           static_cast<int>(image_codec::MAX_CONFIGURED_IMAGE_PIXELS)));
+     }},
 
     {"threads",
      [](WorldSessionConfig& c, const std::string& v) {

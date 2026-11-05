@@ -7,6 +7,7 @@
 #include <shared_mutex>
 #include <utility>
 
+#include "model-interface/CacheLedger.hpp"
 #include "model-interface/ContinuousBatchScheduler.hpp"
 #include "model-interface/LlamaFinetuner.hpp"
 #include "model-interface/LlamaModel.hpp"
@@ -30,6 +31,35 @@ public:
   scheduler(LlamaModel& model) {
     std::shared_lock lock(model.stateMtx_);
     return model.state_ ? model.state_->batchScheduler_.get() : nullptr;
+  }
+
+  /// The checkpoint policy the load resolved.
+  static qvac_lib_inference_addon_llama::cache::CheckpointPolicy
+  checkpointPolicy(LlamaModel& model) {
+    std::shared_lock lock(model.stateMtx_);
+    return model.state_
+               ? model.state_->cacheCheckpointPolicy_
+               : qvac_lib_inference_addon_llama::cache::CheckpointPolicy{};
+  }
+
+  /// The RAM tier shared by the single-prompt cache and the scheduler.
+  static qvac_lib_inference_addon_llama::batching::SlotStateCache*
+  ramTier(LlamaModel& model) {
+    std::shared_lock lock(model.stateMtx_);
+    return model.state_ ? model.state_->ramTier_.get() : nullptr;
+  }
+
+  /// `formatPrompt`: the JSON prompt parser both request paths share.
+  static ParsedPromptPayload
+  formatPrompt(LlamaModel& model, const std::string& input) {
+    std::shared_lock lock(model.stateMtx_);
+    return model.formatPrompt(input);
+  }
+
+  static void
+  resolvePromptMedia(LlamaModel& model, const LlamaModel::Prompt& prompt) {
+    std::shared_lock lock(model.stateMtx_);
+    model.resolveChatAndTools(prompt);
   }
 
   /// The loaded single-prompt context, for driver-level accounting tests.
@@ -148,6 +178,26 @@ public:
     return scheduler.driverFactory_;
   }
 
+  /// How many keys currently have checkpoints kept between requests.
+  static size_t checkpointStoreSize(Scheduler& scheduler) {
+    std::scoped_lock lock(scheduler.mutex_);
+    return scheduler.checkpointStore_.size();
+  }
+
+  /// `saveCache` / `discardCache` jobs queued and not yet run. Takes the
+  /// scheduler mutex, like `admissionIdAt`.
+  static size_t queuedSaveJobs(Scheduler& scheduler) {
+    std::scoped_lock lock(scheduler.mutex_);
+    return scheduler.saveJobs_.size();
+  }
+
+  /// Requests submitted and not yet admitted into a slot, including those
+  /// waiting for their cacheKey. Takes the scheduler mutex.
+  static size_t queuedRequests(Scheduler& scheduler) {
+    std::scoped_lock lock(scheduler.mutex_);
+    return scheduler.pending_.size_approx() + scheduler.keyDeferred_.size();
+  }
+
   static void setDriverFactory(
       Scheduler& scheduler,
       qvac_lib_inference_addon_llama::batching::DriverFactory factory) {
@@ -201,19 +251,14 @@ public:
     return context.bitmaps_.entries.size();
   }
 
-  static bool removeThinkingFromContext(const MtmdLlmContext& context) {
-    return context.removeThinkingFromContext_;
-  }
-
-  static bool compactorRemovesThinking(const MtmdLlmContext& context) {
-    return context.compactor_.removeThinkingFromContext();
-  }
-
-  static bool hasReasoningBoundary(const MtmdLlmContext& context) {
-    return context.rollbackState_.hasReasoningBoundary();
-  }
-
-  static llama_pos reasoningBoundaryNPast(const MtmdLlmContext& context) {
-    return context.rollbackState_.reasoningBoundaryNPast();
+  static std::vector<uint64_t>
+  loadedMediaHashes(const MtmdLlmContext& context) {
+    std::vector<uint64_t> hashes;
+    for (const auto& bitmap : context.bitmaps_.entries) {
+      hashes.push_back(
+          qvac_lib_inference_addon_llama::cache::hashBytes(
+              bitmap.data(), bitmap.n_bytes()));
+    }
+    return hashes;
   }
 };

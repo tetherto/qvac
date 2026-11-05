@@ -250,6 +250,19 @@ test(
     try {
       await model.load()
 
+      let updates = 0
+      const rejected = await model.run({
+        ...BASE_PARAMS,
+        width: 1024,
+        height: 1024,
+        upscale: { repeats: 2 }
+      })
+      rejected.onUpdate(() => {
+        updates += 1
+      })
+      await t.exception.all(rejected.await(), /ESRGAN output exceeds configured pixel/)
+      t.is(updates, 0, 'oversized upscale is rejected before generation')
+
       for (const runCase of [
         { label: 'upscale true', upscale: true, repeats: 1 },
         { label: 'upscale repeats 2', upscale: { repeats: 2 }, repeats: 2 }
@@ -623,11 +636,8 @@ test(
         upscalerImages[0]
       )
 
-      const [modelResponse2, upscalerResponse2] = await Promise.all([
-        model.run(LONG_PARAMS),
-        upscaler.upscale(TINY_PNG_16X16, { repeats: 3 })
-      ])
-      const modelImages2Promise = collectImages(modelResponse2)
+      const modelImages2Promise = model.run(LONG_PARAMS).then(collectImages)
+      const upscalerResponse2 = await upscaler.upscale(TINY_PNG_16X16, { repeats: 3 })
       const upscalerImages2 = []
       const upscalerChain = upscalerResponse2
         .onUpdate((data) => {

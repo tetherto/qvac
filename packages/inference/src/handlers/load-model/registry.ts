@@ -13,6 +13,7 @@ import {
 import { getSingleFileCachePath } from '@/utils/cache/paths'
 import { getModelByPath, type RegistryItem } from '@/models/registry/index'
 import { getRegistryClient } from '@/runtime/registry-client'
+import { getRuntimeContext } from '@/runtime/state'
 import {
   createRegistryDownloadKey,
   startOrJoinDownload,
@@ -24,6 +25,12 @@ import {
   downloadSingleFileFromRegistry
 } from '@/handlers/load-model/registry-download-utils'
 import { downloadCompanionSetFromRegistry } from '@/handlers/load-model/registry-companion-set'
+import {
+  findCoremlCompanionSet,
+  findLocallyCachedCoremlCompanionSet,
+  getCoremlSidecarSpec,
+  writeCachedCoremlCompanionSet
+} from '@/handlers/load-model/coreml-sidecars'
 import {
   DownloadCancelledError,
   ModelNotFoundError,
@@ -41,9 +48,15 @@ const logger = getEngineLogger()
 /**
  * Find all shards for a model using path prefix query.
  */
-async function findModelShards(
-  registryPath: string
-): Promise<{ path: string; source: string; size: number; checksum: string }[]> {
+export async function findModelShards(registryPath: string): Promise<
+  {
+    path: string
+    source: string
+    size: number
+    checksum: string
+    blobBinding: QVACBlobBinding | undefined
+  }[]
+> {
   const client = await getRegistryClient()
 
   const shardInfo = detectShardedModel(registryPath.split('/').pop() || '')
@@ -75,7 +88,8 @@ async function findModelShards(
       path: s.path,
       source: s.source,
       size: s.blobBinding?.byteLength || 0,
-      checksum: (s.blobBinding as unknown as Record<string, string>)?.['sha256'] || s.sha256 || ''
+      checksum: (s.blobBinding as unknown as Record<string, string>)?.['sha256'] || s.sha256 || '',
+      blobBinding: s.blobBinding
     }))
 
   logger.info(`📦 Found ${sortedShards.length} shards`)
@@ -94,7 +108,8 @@ async function downloadShardedFilesFromRegistry(
   progressCallback?: (progress: ModelProgressUpdate) => void,
   signal?: AbortSignal,
   localShardMetadata?: RegistryItem['shardMetadata'],
-  hooks?: DownloadHooks
+  hooks?: DownloadHooks,
+  shouldClearCache?: () => boolean
 ): Promise<string> {
   if (signal?.aborted) {
     throw new DownloadCancelledError()
@@ -224,7 +239,8 @@ async function downloadShardedFilesFromRegistry(
       shardProgressCallback,
       signal,
       shard.blobBinding,
-      hooks
+      hooks,
+      shouldClearCache
     )
 
     overallDownloaded += shard.size
@@ -334,7 +350,8 @@ export async function downloadModelFromRegistry(
             ctx.broadcastProgress,
             ctx.signal,
             localShardMeta,
-            hooks
+            hooks,
+            ctx.shouldClearCache
           )
         } catch (error) {
           if (error instanceof DownloadCancelledError && ctx.shouldClearCache()) {
@@ -351,6 +368,67 @@ export async function downloadModelFromRegistry(
             }
           }
           throw error
+        }
+      }
+
+      // Apple Core ML sidecars are optional registry assets. Discover them
+      // before the ordinary single-file path so the GGUF and its complete
+      // .mlmodelc directories share the companion-set cache layout.
+      const platform = getRuntimeContext().platform
+      if (modelMetadata && getCoremlSidecarSpec(registryPath, registrySource, platform)) {
+        const companionHooks: DownloadHooks = {
+          ...hooks,
+          markCacheHit: () => {
+            hooks?.markCacheHit?.()
+            ctx.setCacheHit(true)
+          },
+          markCacheMiss: () => {
+            hooks?.markCacheMiss?.()
+            ctx.setCacheHit(false)
+          }
+        }
+        try {
+          const cachedSet = await findLocallyCachedCoremlCompanionSet(modelMetadata, platform)
+          if (cachedSet) {
+            return await downloadCompanionSetFromRegistry({
+              companionSet: cachedSet,
+              downloadKey,
+              progressCallback: ctx.broadcastProgress,
+              signal: ctx.signal,
+              hooks: companionHooks,
+              shouldClearCache: ctx.shouldClearCache
+            })
+          }
+
+          const coremlSet = await findCoremlCompanionSet(
+            await getRegistryClient(),
+            modelMetadata,
+            platform
+          )
+          if (coremlSet) {
+            const modelPath = await downloadCompanionSetFromRegistry({
+              companionSet: coremlSet,
+              downloadKey,
+              progressCallback: ctx.broadcastProgress,
+              signal: ctx.signal,
+              hooks: companionHooks,
+              shouldClearCache: ctx.shouldClearCache
+            })
+            try {
+              await writeCachedCoremlCompanionSet(coremlSet)
+            } catch (error) {
+              logger.warn('Unable to save Core ML cache metadata', { registryPath, error })
+            }
+            return modelPath
+          }
+        } catch (error) {
+          if (ctx.signal.aborted || error instanceof DownloadCancelledError) {
+            throw new DownloadCancelledError()
+          }
+          logger.warn('Core ML sidecar unavailable; loading the GGUF without it', {
+            registryPath,
+            error
+          })
         }
       }
 
@@ -427,7 +505,8 @@ export async function downloadModelFromRegistry(
           ctx.broadcastProgress,
           ctx.signal,
           blobBinding,
-          hooks
+          hooks,
+          ctx.shouldClearCache
         )
       } catch (error) {
         if (error instanceof DownloadCancelledError && ctx.shouldClearCache()) {

@@ -111,3 +111,93 @@ test('parakeetRuntimeConfigSchema: rejects invalid language values', (t) => {
 test('parakeetRuntimeConfigSchema: rejects negative streamingSpkCacheLen', (t) => {
   t.exception(() => parakeetRuntimeConfigSchema.parse({ streamingSpkCacheLen: -1 }))
 })
+
+test('Nemotron diarization load and streaming controls preserve defaults and explicit context', (t) => {
+  const config = {
+    diarizationThreshold: 0.5,
+    diarizationMinSegmentMs: 200,
+    streamingSpeakerVad: true,
+    streamingChunkLeftContextMs: 80
+  }
+  t.alike(parakeetRuntimeConfigSchema.parse(config), config)
+  t.alike(parakeetRuntimeConfigSchema.parse({}), {})
+  for (const config of [
+    { diarizationThreshold: -0.1 },
+    { diarizationThreshold: 1.1 },
+    { diarizationMinSegmentMs: -1 },
+    { diarizationMinSegmentMs: 0.5 }
+  ]) {
+    t.exception(() => parakeetRuntimeConfigSchema.parse(config))
+  }
+})
+
+test('parakeetRuntimeConfigSchema: accepts the long-form window and context frames', (t) => {
+  // TranscribePsy recommends 60 s windows with 25 % overlap: 750 encoder
+  // frames with 94 frames of context on each side. `0` leaves the window to
+  // the model, a negative window is one pass, `-1` context is no context.
+  const explicit = parakeetRuntimeConfigSchema.parse({
+    longFormWindowFrames: 750,
+    longFormContextFrames: 94
+  })
+  t.is(explicit.longFormWindowFrames, 750)
+  t.is(explicit.longFormContextFrames, 94)
+
+  const sentinels = parakeetRuntimeConfigSchema.parse({
+    longFormWindowFrames: -1,
+    longFormContextFrames: -1
+  })
+  t.is(sentinels.longFormWindowFrames, -1)
+  t.is(sentinels.longFormContextFrames, -1)
+
+  t.absent(
+    parakeetRuntimeConfigSchema.safeParse({ longFormWindowFrames: 37.5 }).success,
+    'frames are whole encoder frames'
+  )
+  t.ok(parakeetLoadConfigSchema.safeParse({ longFormWindowFrames: 375 }).success)
+})
+
+test('parakeetRuntimeConfigSchema: accepts the energy-VAD tuning controls', (t) => {
+  const config = {
+    streaming: true,
+    streamingEnergyVad: true,
+    streamingEnergyVadThresholdDb: -40,
+    streamingEnergyVadWindowMs: 50,
+    streamingEnergyVadHangoverMs: 300
+  }
+  t.alike(parakeetRuntimeConfigSchema.parse(config), config)
+  t.ok(parakeetLoadConfigSchema.safeParse(config).success)
+
+  // The threshold is a dBFS level, so it takes fractions; the window is a
+  // positive whole number of ms and the hangover a non-negative one.
+  t.is(
+    parakeetRuntimeConfigSchema.parse({ streamingEnergyVadThresholdDb: -27.5 })
+      .streamingEnergyVadThresholdDb,
+    -27.5
+  )
+  t.is(
+    parakeetRuntimeConfigSchema.parse({ streamingEnergyVadHangoverMs: 0 })
+      .streamingEnergyVadHangoverMs,
+    0
+  )
+  for (const invalid of [
+    { streamingEnergyVadWindowMs: 0 },
+    { streamingEnergyVadWindowMs: 12.5 },
+    { streamingEnergyVadHangoverMs: -1 },
+    { streamingEnergyVadHangoverMs: 0.5 }
+  ]) {
+    t.exception(() => parakeetRuntimeConfigSchema.parse(invalid), JSON.stringify(invalid))
+  }
+})
+
+test('parakeetRuntimeConfigSchema: accepts prewarm and the length of its pass', (t) => {
+  const config = { prewarm: true, prewarmAudioSeconds: 2.5 }
+  t.alike(parakeetRuntimeConfigSchema.parse(config), config)
+  t.ok(parakeetLoadConfigSchema.safeParse(config).success)
+  // The addon refuses a prewarm pass of no audio, so the schema does too.
+  for (const seconds of [0, -1]) {
+    t.exception(
+      () => parakeetRuntimeConfigSchema.parse({ prewarmAudioSeconds: seconds }),
+      `prewarmAudioSeconds ${seconds}`
+    )
+  }
+})

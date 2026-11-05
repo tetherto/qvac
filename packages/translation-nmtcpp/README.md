@@ -69,6 +69,7 @@ This library simplifies the process of running various translation models within
     - [JavaScript Tests](#javascript-tests)
     - [C++ Tests](#c-tests)
       - [npm Commands (Recommended - Cross-Platform)](#npm-commands-recommended---cross-platform)
+    - [Fuzz Testing (Linux)](#fuzz-testing-linux)
   - [Glossary](#glossary)
   - [Resources](#resources)
   - [Contributing](#contributing)
@@ -288,7 +289,7 @@ const backendSettings = {
   use_gpu: true,              // Enable GPU inference (default: false → CPU-only)
   gpu_backend: 'vulkan',      // Optional: pick a specific backend by name substring
   gpu_device: 0,              // Optional: ordinal within matching devices (default: 0)
-  backendsDir: './prebuilds', // Optional override of the fabric backends root
+  backendsDir: '/abs/path/to/backends', // Optional. Scanned as given; omit to use the backends @qvac/fabric ships
   openclCacheDir: '/path/ok'  // Optional (Android only): OpenCL kernel-cache dir
 }
 ```
@@ -300,7 +301,7 @@ The three GPU control keys each accept a camelCase alias alongside the snake_cas
 | `use_gpu` | `useGPU` | boolean | Enable GPU inference. When `false` (default), only the CPU backend is used. Bergamot is CPU-only by design — this flag is effectively a no-op for Bergamot. |
 | `gpu_backend` | `gpuBackend` | string | Case-insensitive **substring** match against eligible Vulkan, Metal, OpenCL, or CUDA device names (e.g. `"vulkan"`, `"vulkan0"`, `"opencl"`, `"metal"`). When unset, the default gated selection runs (see [Backends](#backends)). Any explicit selector that resolves to OpenCL bypasses the build-time `USE_OPENCL` guard — an informed opt-in. |
 | `gpu_device` | `gpuDevice` | int | Ordinal within the matching devices. Defaults to `0` (first match). Example: `{gpu_backend: "vulkan", gpu_device: 1}` picks the second Vulkan adapter. |
-| `backendsDir` | — | string | Path to the directory containing the runtime backend shared libraries (`libqvac-ggml-vulkan.so`, etc.). Defaults to the root `@qvac/fabric/backends` resolves on desktop, falling back to this package's `prebuilds/` on mobile, where the package tree isn't resolvable from the packed worklet. Must be an absolute path when set; paths with `..` segments or unresolvable symlinks are rejected with a warning and fall back to that default. |
+| `backendsDir` | — | string | Path to the directory containing the runtime backend shared libraries (`libqvac-ggml-vulkan.so`, etc.). When omitted, the backends `@qvac/fabric` ships are loaded; fabric locates them next to its runtime on every platform. Must be an absolute path when set; paths with `..` segments or unresolvable symlinks are rejected with a warning and fall back to fabric's backends. |
 | `openclCacheDir` | — | string | **Android only.** Writable directory the OpenCL backend uses for its JIT kernel cache (forwarded via `GGML_OPENCL_CACHE_DIR`). Must be an absolute path; paths with `..` segments are rejected. The OpenCL backend falls back to a non-writable relative path if this is unset, which `ggml_abort()`s during init inside the app sandbox — always provide an app-writable path when exercising OpenCL on Android. |
 
 GPU execution is limited to Vulkan, Metal/MTL, OpenCL, and CUDA devices reported as GPU or integrated GPU. RPC, ROCm/HIP, SYCL, MUSA, and unknown backend families fall back to CPU — RPC because translation has no split-mode support and cannot execute over it. CUDA is admitted ahead of its planned Fabric build so that build does not require another selector change. An explicit selector only narrows this eligible set; it cannot enable an unsupported family.
@@ -561,6 +562,46 @@ TypeScript declarations ship with the package (`index.d.ts`).
 | `opts.stats` | `boolean` | | populate `response.stats` with [`RuntimeStats`](#runtimestats) after each run (default `false`) |
 
 ### Methods
+
+Call `TranslationNmtcpp.assessFit({ files, config, marginBytes? })` before
+constructing a model to estimate whether its weights can load with the memory
+free right now. `files` and `config` match the constructor; `files.model` must
+be an absolute path. It returns a Promise, and concurrent calls run one at a
+time within the addon. The result is `{ status, devices, stats }`: `status` is
+`fits`, `does-not-fit`, or `unknown`, and `devices` is
+`[{ id, name, unified, usedBytes, freeBytes, totalBytes }]`: the selected device,
+charged the allowance, then the host CPU. A discrete GPU's host row carries the
+model's source bytes, which the host stages while the weights load; a GPU that
+shares host memory has a host row carrying 0. A load on the CPU, which every
+Bergamot load is, is one row. `id` is the PCI bus ID when the backend reports
+one, and the device name otherwise. `unified` is true for memory the host owns:
+the CPU, an integrated GPU, a GPU that shares the host's memory, Android's
+OpenCL GPU, and a device that reports no memory of its own, which takes the
+host's figures. No model instance or weights are loaded.
+The estimate budgets four times the model file size plus 512 MiB for copies,
+tokenizers, and inference buffers; actual use varies by model. `fits` means
+every row's charge fits with `marginBytes` left free. `does-not-fit` means a CPU
+load whose source bytes alone do not fit. A placement between the two, memory
+that cannot be read, no CPU device for the host row, and IndicTrans `main-gpu`
+selection are `unknown`, with no rows. On an iOS device every unified row's free
+memory is capped at the app's own memory limit, `os_proc_available_memory()`,
+before the verdict, and a limit of 0 means the app has none left. A model or
+vocabulary that cannot be read, a requested GPU that is unavailable, or a
+malformed request rejects with an `InvalidArgument` error, and a CPU load on a
+host with no CPU device with an `InternalError`. Fit is a point-in-time estimate, so another
+load can consume memory before `load()` runs.
+
+```js
+const fit = await TranslationNmtcpp.assessFit({
+  files: { model: '/absolute/path/to/model.bin' },
+  config: { modelType: TranslationNmtcpp.ModelTypes.IndicTrans },
+  marginBytes: 256 * 1024 * 1024
+})
+
+fit.status // 'fits' | 'does-not-fit' | 'unknown'
+fit.devices // [{ id, name, unified, usedBytes, freeBytes, totalBytes }]
+fit.stats // {}
+```
 
 - `load(): Promise<void>` — loads the model (both stages for pivot setups);
   reloads if already loaded. Rejects after `destroy()`.
@@ -1111,6 +1152,38 @@ npm run coverage:cpp       # Complete coverage workflow
 # Combined Testing
 npm run test:all           # Run both JavaScript and C++ tests
 ```
+
+### Fuzz Testing (Linux)
+
+The GGML weight-header fuzz target tests dimensions, bounded strings, counts and
+tensor types without loading a model or linking the Fabric runtime. It uses full
+ASan and LeakSanitizer (`detect_leaks=1:abort_on_error=1`). Install the package
+dependencies and use the repository's locked Bare toolchain and vcpkg setup,
+just as for native C++ builds.
+
+```bash
+npm run fuzz             # Build and run all bounded fuzz properties and seeds
+npm run fuzz:build       # Build bounded mode only
+npm run fuzz:run         # Run the existing bounded build
+npm run fuzz:continuous -- --fuzz_for 30m
+# Select a different property; place the selector before binary flags:
+npm run fuzz:continuous -- NmtWeightHeaderFuzz.BoundedStringNeverCrashes --fuzz_for=30m
+```
+
+`fuzz:continuous` rebuilds with coverage-guided fuzzing enabled. It runs until
+interrupted unless `--fuzz_for` supplies a time limit. `fuzz:build:continuous`
+builds that mode without running it. Both `--flag=value` and `--flag value` are
+forwarded to the binary. For explicit passthrough, use a second separator:
+`npm run fuzz:continuous -- -- --fuzz_for 30m` (npm consumes the first `--`).
+
+Fuzz builds use `build-fuzz/` and `test/fuzz/vcpkg.json`; model tests and their
+coverage files stay in `build/`. The separate trees keep FuzzTest's ASan Abseil
+apart from production NMT's Abseil. Do not enable `BUILD_TESTING` and
+`BUILD_FUZZING` in the same tree. `coverage:cpp:build` builds both trees, and
+`coverage:cpp:run` runs fuzz before the model tests, so CI exercises this target
+before collecting the model-test coverage report. See
+[Native Addon Fuzz Testing](../../docs/architecture/ADDON-FUZZING.md) for the
+shared design.
 
 ## Glossary
 

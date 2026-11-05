@@ -1,31 +1,15 @@
-const { hostPlatformPackage, PREBUILT_HOSTS } = require('./lib/backends.js')
+'use strict'
 
-const META_PACKAGE = '@qvac/audiogen-ggml'
-const UNKNOWN_HOST = 'unknown'
+// "#host-addon" target for hosts with no platform package. Hosts that have one
+// map straight to it with no fallback, so a missing install fails bare-pack (and
+// fails at run time naming the package) instead of producing a bundle that only
+// throws once launched.
+const host = require.addon ? require.addon.host : 'unknown'
 
-throw new Error(buildMessage(currentHost()))
-
-function currentHost() {
-  return require.addon ? require.addon.host : null
-}
-
-function buildMessage(host) {
-  if (!host || !PREBUILT_HOSTS.includes(host)) {
-    return (
-      META_PACKAGE +
-      ' has no prebuilt binaries for host ' +
-      (host || UNKNOWN_HOST) +
-      '. Prebuilt hosts: ' +
-      PREBUILT_HOSTS.join(', ') +
-      '. Build from source with bare-make.'
-    )
-  }
-  return (
-    META_PACKAGE +
-    ' found no native prebuild for ' +
+throw new Error(
+  '@qvac/audiogen-ggml has no prebuilt binaries for host ' +
     host +
-    ': the platform package ' +
-    hostPlatformPackage(host) +
-    ' is not installed. It ships as an os/cpu filtered optional dependency, which Yarn v1 and installs using --omit=optional drop. Reinstall with npm 7+, pnpm, bun, or Yarn Berry, or build from source with bare-make.'
-  )
-}
+    '. Platform packages exist for linux-x64, linux-arm64, darwin-arm64, ' +
+    'darwin-x64, win32-x64, android-arm64 and ios (ios-arm64, ' +
+    'ios-arm64-simulator, ios-x64-simulator). Build from source with bare-make.'
+)

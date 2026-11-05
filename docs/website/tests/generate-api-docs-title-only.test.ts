@@ -3,7 +3,7 @@
  *
  * The mode is exposed as the exported `rewriteFrontmatterTitle` helper.
  * We exercise it against scratch MDX files rather than the real
- * `content/docs/reference/api/` tree so the test stays isolated.
+ * `content/docs/sdk/reference/api/` tree so the test stays isolated.
  *
  * What we verify:
  *   - The single `title:` line inside the frontmatter is rewritten with

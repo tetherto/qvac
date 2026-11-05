@@ -47,6 +47,7 @@ export interface WorldFiles {
 }
 
 export interface WorldConfig {
+  maxImagePixels?: NumericLike
   threads?: number
   seed?: number
   backend?: string

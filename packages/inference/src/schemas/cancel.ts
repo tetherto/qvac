@@ -26,6 +26,8 @@ const cancelKindSchema = z
     'completion',
     'batchCompletion',
     'embeddings',
+    'decision',
+    'rerank',
     'transcribe',
     'translate',
     'diffusion',
@@ -37,6 +39,8 @@ const cancelKindSchema = z
     'finetune',
     'loadModel',
     'downloadAsset',
+    'rpcServer',
+    'rpcDiscovery',
     'rag'
   ] as const)
   .describe(

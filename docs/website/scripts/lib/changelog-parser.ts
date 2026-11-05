@@ -1,3 +1,8 @@
+/**
+ * Not in use. Its only caller is `generate-release-notes.ts`, which the site
+ * no longer runs now that release notes are linked out to GitHub. Kept on disk
+ * because the page model may come back.
+ */
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 

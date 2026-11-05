@@ -1,0 +1,14 @@
+build/
+prebuilds/
+node_modules/
+package-lock.json
+
+test/integration/all.js
+
+# Added by lint-cpp
+.clang-format
+.clang-tidy
+
+# Benchmark output
+benchmarks/performance/id-map-index-turbovec-cpu-report.md
+benchmarks/performance/.tmp-id-map-index-turbovec-*

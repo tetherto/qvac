@@ -287,6 +287,132 @@ test('audioEdit plugin operation omits unset operation fields from the addon cal
   t.is(getRequestRegistry().get(requestId), null)
 })
 
+test('audioEdit plugin operation forwards the edit-run controls and the decoded reference', async (t) => {
+  const modelId = 'audio-edit-operation-run-controls'
+  const requestId = 'audio-edit-request-run-controls'
+  const sessions: RecordedSession[] = []
+  const metadata = {
+    caption: '',
+    lyrics: '',
+    bpm: 120,
+    keyscale: 'C minor',
+    beatsPerBar: 4,
+    vocalLanguage: 'en',
+    seed: 99,
+    codeFrames: 0
+  }
+  const model = createEditModel(
+    createResponse(
+      [{ outputArray: new Int16Array([0, 0]), sampleRate: 48000, channels: 2, metadata }],
+      { totalTimeMs: 5, metadata }
+    ),
+    sessions
+  )
+  registerAudioGenModel(modelId, model)
+  t.teardown(() => {
+    unregisterModel(modelId)
+  })
+
+  const frames = []
+  for await (const frame of audioEditStream({
+    type: 'audioEditStream',
+    requestId,
+    modelId,
+    sourceAudio: { type: 'base64', value: stereoFloat32Base64([0.1, -0.1]) },
+    // A reference only has to be finite; the [-1, 1] rule is the source's.
+    referenceAudio: { type: 'base64', value: stereoFloat32Base64([1.5, -1.5]) },
+    operations: [{ type: 'repaint', caption: 'drum fill', start: 0 }],
+    seed: 99,
+    vocalLanguage: 'en',
+    bpm: 120,
+    keyscale: 'C minor',
+    timesignature: '4/4',
+    augmentCaptionWithMetadata: true,
+    dcwEnabled: false,
+    dcwScaler: 0.04,
+    dcwHighScaler: 0.01,
+    inferenceSteps: 16,
+    shift: 2
+  })) {
+    frames.push(frame)
+  }
+
+  const { referenceAudio, ...runOptions } = sessions[0]?.runOptions ?? {}
+  t.ok(
+    referenceAudio instanceof Float32Array,
+    'the reference is decoded to the PCM the addon takes'
+  )
+  t.alike(Array.from(referenceAudio ?? []), [1.5, -1.5])
+  t.alike(runOptions, {
+    seed: 99,
+    vocalLanguage: 'en',
+    bpm: 120,
+    keyscale: 'C minor',
+    timesignature: '4/4',
+    augmentCaptionWithMetadata: true,
+    dcwEnabled: false,
+    dcwScaler: 0.04,
+    dcwHighScaler: 0.01,
+    inferenceSteps: 16,
+    shift: 2
+  })
+  t.alike(frames.at(-1)?.stats, { totalTimeMs: 5, metadata }, 'the edit reports what it rendered')
+  t.is(getRequestRegistry().get(requestId), null)
+})
+
+test('audioEdit plugin operation rejects a non-finite reference before touching the addon', async (t) => {
+  const modelId = 'audio-edit-operation-bad-reference'
+  const requestId = 'audio-edit-request-bad-reference'
+  const sessions: RecordedSession[] = []
+  const model = createEditModel(createResponse([], {}), sessions)
+  registerAudioGenModel(modelId, model)
+  t.teardown(() => {
+    unregisterModel(modelId)
+  })
+
+  const stream = audioEditStream({
+    type: 'audioEditStream',
+    requestId,
+    modelId,
+    sourceAudio: { type: 'base64', value: stereoFloat32Base64([0.1, -0.1]) },
+    referenceAudio: { type: 'base64', value: stereoFloat32Base64([Number.NaN, 0]) },
+    operations: [{ type: 'repaint', caption: 'drum fill', start: 0 }]
+  })
+  const error = await rejection(stream.next())
+  t.ok(error instanceof InvalidAudioInputError)
+  t.ok(/referenceAudio/.test((error as Error).message))
+  t.is(sessions.length, 0, 'no edit session was opened')
+  t.is(getRequestRegistry().get(requestId), null)
+})
+
+test('audioEdit plugin operation throws the source failure when both inputs are bad', async (t) => {
+  const modelId = 'audio-edit-operation-both-inputs-bad'
+  const requestId = 'audio-edit-request-both-inputs-bad'
+  const sessions: RecordedSession[] = []
+  const model = createEditModel(createResponse([], {}), sessions)
+  registerAudioGenModel(modelId, model)
+  t.teardown(() => {
+    unregisterModel(modelId)
+  })
+
+  const stream = audioEditStream({
+    type: 'audioEditStream',
+    requestId,
+    modelId,
+    sourceAudio: { type: 'base64', value: stereoFloat32Base64([0.5, 1.5]) },
+    referenceAudio: { type: 'base64', value: stereoFloat32Base64([Number.NaN, 0]) },
+    operations: [{ type: 'repaint', caption: 'drum fill', start: 0 }]
+  })
+  const error = await rejection(stream.next())
+  t.ok(error instanceof InvalidAudioInputError)
+  t.ok(
+    /sourceAudio must contain samples in \[-1, 1\]/.test((error as Error).message),
+    'the source is what the edit is about'
+  )
+  t.is(sessions.length, 0, 'no edit session was opened')
+  t.is(getRequestRegistry().get(requestId), null)
+})
+
 test('audioEdit plugin operation rejects out-of-range source PCM before touching the addon', async (t) => {
   const modelId = 'audio-edit-operation-unnormalized'
   const requestId = 'audio-edit-request-unnormalized'

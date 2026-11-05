@@ -19,9 +19,9 @@
  *
  * URL → file mapping:
  *   '/'                            → out/index.md
- *   '/quickstart'                  → out/quickstart.md
- *   '/reference/api'               → out/reference/api.md
- *   '/reference/api/v0.10.x'       → out/reference/api/v0.10.x.md  (archived)
+ *   '/sdk/quickstart'              → out/sdk/quickstart.md
+ *   '/sdk/reference/api'           → out/sdk/reference/api.md
+ *   '/sdk/reference/api/v0.10.x'   → out/sdk/reference/api/v0.10.x.md  (archived)
  *
  * Archived per-section versions ARE included in the manifest. The HTML
  * for those pages renders publicly (with `noindex` + canonical-to-latest

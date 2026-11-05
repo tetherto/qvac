@@ -41,24 +41,3 @@ export const checkBareRuntime: Check = (ctx) => {
     value: r.version ?? 'installed'
   }
 }
-
-export const checkBun: Check = (ctx) => {
-  const r = ctx.probe('bun', ['--version'])
-  if (!r.ok) {
-    return {
-      id: 'tool-bun',
-      label: 'Bun',
-      status: 'warn',
-      severity: 'recommended',
-      value: 'not found',
-      hint: 'Install Bun only if you build the SDK from source (https://bun.sh).'
-    }
-  }
-  return {
-    id: 'tool-bun',
-    label: 'Bun',
-    status: 'pass',
-    severity: 'recommended',
-    value: r.version ?? 'installed'
-  }
-}

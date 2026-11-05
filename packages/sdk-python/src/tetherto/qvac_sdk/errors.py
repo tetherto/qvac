@@ -34,6 +34,7 @@ _CODES = {**SERVER_ERROR_CODES, **CLIENT_ERROR_CODES, **REGISTRY_ERROR_CODES}
 
 _CODE_CANCEL_FAILED = _CODES["CANCEL_FAILED"]
 _CODE_MODEL_LOAD_FAILED = _CODES["MODEL_LOAD_FAILED"]
+_CODE_REQUEST_VALIDATION_FAILED = _CODES["REQUEST_VALIDATION_FAILED"]
 _CODE_TRANSLATION_FAILED = _CODES["TRANSLATION_FAILED"]
 _CODE_TRANSCRIPTION_FAILED = _CODES["TRANSCRIPTION_FAILED"]
 _CODE_TEXT_TO_SPEECH_STREAM_FAILED = _CODES["TEXT_TO_SPEECH_STREAM_FAILED"]
@@ -48,6 +49,7 @@ _CODE_CONTEXT_OVERFLOW = _CODES["CONTEXT_OVERFLOW"]
 _CODE_DELETE_CACHE_FAILED = _CODES["DELETE_CACHE_FAILED"]
 _CODE_INVALID_DELETE_CACHE_PARAMS = _CODES["INVALID_DELETE_CACHE_PARAMS"]
 _CODE_MODEL_REGISTRY_QUERY_FAILED = _CODES["QVAC_MODEL_REGISTRY_QUERY_FAILED"]
+_CODE_MODEL_REGISTRY_MODEL_NOT_FOUND = _CODES["QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND"]
 _CODE_INVALID_RESPONSE_TYPE = _CODES["INVALID_RESPONSE_TYPE"]
 _CODE_STREAM_ENDED_WITHOUT_RESPONSE = _CODES["STREAM_ENDED_WITHOUT_RESPONSE"]
 _CODE_MODEL_TYPE_REQUIRED = _CODES["MODEL_TYPE_REQUIRED"]
@@ -322,6 +324,25 @@ class StreamEndedError(QvacError):
         )
 
 
+class RequestValidationError(QvacError):
+    """A request refused before it reaches the worker.
+
+    JS validates client parameters against a strict schema, so an unknown key
+    -- a config field that was removed, or one misspelled -- is refused with
+    REQUEST_VALIDATION_FAILED rather than silently dropped. Pydantic ignores
+    unknown keys by default, so without this the same call loads a model whose
+    configuration is not what the caller asked for.
+    """
+
+    def __init__(self, message: str, *, cause: Any = None) -> None:
+        super().__init__(
+            message,
+            name="REQUEST_VALIDATION_FAILED",
+            code=_CODE_REQUEST_VALIDATION_FAILED,
+            cause=cause,
+        )
+
+
 class InvalidResponseError(QvacError):
     def __init__(self, expected: str, *, cause: Any = None) -> None:
         self.expected = expected
@@ -364,10 +385,30 @@ class ModelRegistryQueryFailedError(QvacError):
         )
 
 
+class ModelRegistryModelNotFoundError(QvacError):
+    def __init__(
+        self,
+        registry_source: str,
+        registry_path: str,
+        *,
+        cause: Any = None,
+        message: str | None = None,
+    ) -> None:
+        self.registry_source = registry_source
+        self.registry_path = registry_path
+        super().__init__(
+            message
+            or f"QVAC model registry has no model at {registry_source}/{registry_path}",
+            name="QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND",
+            code=_CODE_MODEL_REGISTRY_MODEL_NOT_FOUND,
+            cause=cause,
+        )
+
+
 class InvalidDeleteCacheParamsError(QvacError):
     def __init__(self, *, cause: Any = None) -> None:
         super().__init__(
-            "deleteCache needs either all=True or kv_cache_key",
+            "deleteCache needs all=True, auto=True, kv_cache_key or model_src",
             name="INVALID_DELETE_CACHE_PARAMS",
             code=_CODE_INVALID_DELETE_CACHE_PARAMS,
             cause=cause,
@@ -446,6 +487,16 @@ def _reconstruct_request_not_found(response: dict[str, Any]) -> QvacError:
     )
 
 
+def _reconstruct_registry_model_not_found(response: dict[str, Any]) -> QvacError:
+    fields = _typed_fields(response)
+    return ModelRegistryModelNotFoundError(
+        _str_field(fields, "registrySource"),
+        _str_field(fields, "registryPath"),
+        cause=response.get("cause"),
+        message=_opt_str(response, "message"),
+    )
+
+
 def _reconstruct_request_rejected(response: dict[str, Any]) -> QvacError:
     fields = _typed_fields(response)
     return RequestRejectedByPolicyError(
@@ -481,11 +532,27 @@ def _reconstruct_translation_failed(response: dict[str, Any]) -> QvacError:
     )
 
 
+def _reconstruct_inference_cancelled(response: dict[str, Any]) -> QvacError:
+    fields = _typed_fields(response)
+    partial = fields.get("partial")
+    if not isinstance(partial, dict):
+        partial = {}
+    return InferenceCancelledError(
+        _str_field(fields, "requestId"),
+        partial_text=_opt_str(partial, "text"),
+        partial_tool_calls=partial.get("toolCalls"),
+        partial_stats=partial.get("stats"),
+        cause=response.get("cause"),
+    )
+
+
 _RECONSTRUCTORS: dict[str, Callable[[dict[str, Any]], QvacError]] = {
+    "INFERENCE_CANCELLED": _reconstruct_inference_cancelled,
     "REQUEST_ID_CONFLICT": _reconstruct_request_id_conflict,
     "REQUEST_NOT_FOUND": _reconstruct_request_not_found,
     "REQUEST_REJECTED_BY_POLICY": _reconstruct_request_rejected,
     "CONTEXT_OVERFLOW": _reconstruct_context_overflow,
+    "QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND": _reconstruct_registry_model_not_found,
     "TRANSLATION_FAILED": _reconstruct_translation_failed,
 }
 
@@ -537,8 +604,10 @@ __all__ = [
     "InferenceCancelledError",
     "StreamEndedError",
     "InvalidResponseError",
+    "RequestValidationError",
     "ModelUnloadFailedError",
     "ModelRegistryQueryFailedError",
+    "ModelRegistryModelNotFoundError",
     "InvalidDeleteCacheParamsError",
     "InvalidCancelParamsError",
     "DeleteCacheFailedError",

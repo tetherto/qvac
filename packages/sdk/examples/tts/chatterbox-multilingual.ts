@@ -7,7 +7,7 @@ import {
   TTS_S3GEN_MULTILINGUAL_CHATTERBOX_Q4_0,
   TTS_MECAB_IPADIC_CHATTERBOX
 } from '@qvac/sdk'
-import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './utils'
+import { createWav, playAudio, int16ArrayToBuffer, createWavHeader } from './utils.js'
 
 // Chatterbox multilingual TTS (GGML): Japanese synthesis with MeCab/IPAdic.
 // Uses registry model constants — downloads automatically from QVAC Registry.

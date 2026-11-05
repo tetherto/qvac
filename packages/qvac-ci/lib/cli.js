@@ -1,26 +1,26 @@
 // Minimal CLI builder for qvac-ci — no external dependencies.
 
-export function header (text) {
+export function header(text) {
   return { type: 'header', text }
 }
 
-export function summary (text) {
+export function summary(text) {
   return { type: 'summary', text }
 }
 
-export function footer (text) {
+export function footer(text) {
   return { type: 'footer', text }
 }
 
-export function flag (spec, description) {
+export function flag(spec, description) {
   return { type: 'flag', spec, description }
 }
 
-function toCamelCase (name) {
+function toCamelCase(name) {
   return name.replace(/-([a-z])/g, (_, c) => c.toUpperCase())
 }
 
-function parseFlagSpec (spec) {
+function parseFlagSpec(spec) {
   const match = spec.match(/^(--[\w-]+)(?:\|(-[\w]))?(?:\s+(<[^>]+>|\[[^\]]+\]))?$/)
   if (!match) {
     throw new Error('Invalid flag spec: ' + spec)
@@ -32,10 +32,17 @@ function parseFlagSpec (spec) {
   const valueRequired = valuePart ? valuePart.startsWith('<') : false
   const valueOptional = valuePart ? valuePart.startsWith('[') : false
 
-  return { longName, shortName, valuePart, valueRequired, valueOptional, hasValue: Boolean(valuePart) }
+  return {
+    longName,
+    shortName,
+    valuePart,
+    valueRequired,
+    valueOptional,
+    hasValue: Boolean(valuePart)
+  }
 }
 
-function buildHelp (cmd) {
+function buildHelp(cmd) {
   const lines = []
   for (const part of cmd.decorators) {
     if (part.type === 'header') lines.push(part.text)
@@ -49,7 +56,7 @@ function buildHelp (cmd) {
   if (cmd.subcommands.length > 0) {
     lines.push('Commands:')
     for (const sub of cmd.subcommands) {
-      const summaryLine = sub.decorators.find(d => d.type === 'summary')
+      const summaryLine = sub.decorators.find((d) => d.type === 'summary')
       lines.push('  ' + sub.name + (summaryLine ? '  ' + summaryLine.text : ''))
     }
     lines.push('')
@@ -67,7 +74,7 @@ function buildHelp (cmd) {
     lines.push('')
   }
 
-  const footerPart = cmd.decorators.find(d => d.type === 'footer')
+  const footerPart = cmd.decorators.find((d) => d.type === 'footer')
   if (footerPart && footerPart.text) {
     lines.push(footerPart.text)
     lines.push('')
@@ -76,9 +83,9 @@ function buildHelp (cmd) {
   return lines.join('\n')
 }
 
-function parseFlags (argv, flagDefs) {
+function parseFlags(argv, flagDefs) {
   const parsed = {}
-  const specs = flagDefs.map(f => ({ ...parseFlagSpec(f.spec), description: f.description }))
+  const specs = flagDefs.map((f) => ({ ...parseFlagSpec(f.spec), description: f.description }))
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
@@ -125,11 +132,16 @@ function parseFlags (argv, flagDefs) {
   return { help: false, flags: parsed }
 }
 
-function isSubcommand (item) {
-  return item && typeof item === 'object' && typeof item.name === 'string' && Array.isArray(item.flagDefs)
+function isSubcommand(item) {
+  return (
+    item &&
+    typeof item === 'object' &&
+    typeof item.name === 'string' &&
+    Array.isArray(item.flagDefs)
+  )
 }
 
-export function command (name, ...items) {
+export function command(name, ...items) {
   const decorators = []
   const flags = []
   const subcommands = []
@@ -155,7 +167,7 @@ export function command (name, ...items) {
     handler,
     flags: {},
 
-    parse (argv = process.argv.slice(2)) {
+    parse(argv = process.argv.slice(2)) {
       if (subcommands.length > 0) {
         const subName = argv[0]
         if (!subName || subName.startsWith('-')) {
@@ -172,7 +184,7 @@ export function command (name, ...items) {
           process.exit(1)
         }
 
-        const sub = subcommands.find(s => s.name === subName)
+        const sub = subcommands.find((s) => s.name === subName)
         if (!sub) {
           process.stderr.write('Unknown command: ' + subName + '\n')
           process.exit(1)

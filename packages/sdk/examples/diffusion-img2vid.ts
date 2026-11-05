@@ -26,7 +26,7 @@ const clipVisionModelSrc = process.argv[8] || CLIP_VISION_H
 if (!initImagePath) {
   console.error('✖ init image path is required')
   console.error(
-    'Usage: bun run bare:example dist/examples/diffusion-img2vid.js ' +
+    'Usage: node dist/examples/diffusion-img2vid.js ' +
       '<initImagePath> [prompt] [outputDir] ' +
       '[i2vModelSrc] [t5XxlModelSrc] [vaeModelSrc] [clipVisionModelSrc]'
   )

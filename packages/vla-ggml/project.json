@@ -67,6 +67,7 @@
             { "src": "qvac_models_compiled/vla/pi05-base/2026-05-21/pi05-base-q-aggressive.gguf", "dest": "model/vla/pi05/pi05-base-q-aggressive.gguf" },
             { "src": "qvac_models_compiled/vla/pi05-base/2026-05-21/fixture.safetensors", "dest": "test/pi05-oracle/fixture.safetensors" },
             { "src": "qvac_models_compiled/vla/pi05-base/2026-05-21/activations.safetensors", "dest": "test/pi05-oracle/activations.safetensors" },
+            { "src": "qvac_models_compiled/vla/pi05-base/2026-05-21/activations_2cam.safetensors", "dest": "test/pi05-oracle/activations_2cam.safetensors" },
             { "src": "qvac_models_compiled/vla/groot-n1.7-3b-multi/2026-08-04/groot-q8_vf16.gguf", "dest": "model/vla/groot/groot-q8_vf16.gguf" },
             { "src": "qvac_models_compiled/vla/groot-n1.7-3b-libero/2026-07-14/activations_v4.safetensors", "dest": "test/groot-oracle/activations_v4.safetensors" }
           ],
@@ -75,6 +76,7 @@
             "PI05_TEST_GGUF": "{workspace}/{workdir}/model/vla/pi05/pi05-base-q-aggressive.gguf",
             "PI05_TEST_FIXTURE": "{workspace}/{workdir}/test/pi05-oracle/fixture.safetensors",
             "PI05_TEST_ACTIVATIONS": "{workspace}/{workdir}/test/pi05-oracle/activations.safetensors",
+            "PI05_TEST_ACTIONS_2CAM": "{workspace}/{workdir}/test/pi05-oracle/activations_2cam.safetensors",
             "GROOT_TEST_GGUF": "{workspace}/{workdir}/model/vla/groot/groot-q8_vf16.gguf",
             "GROOT_TEST_ACTIVATIONS_V4": "{workspace}/{workdir}/test/groot-oracle/activations_v4.safetensors"
           },

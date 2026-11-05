@@ -1,5 +1,7 @@
 #include "JSAdapter.hpp"
 
+#include <cmath>
+#include <limits>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -29,6 +31,21 @@ void readInt(js::Object& obj, js_env_t* env, const char* name, int& target) {
   if (auto value = obj.getOptionalPropertyAs<js::Number, int32_t>(env, name)) {
     target = *value;
   }
+}
+
+std::optional<int>
+readAttributionDuration(js::Object& object, js_env_t* env, const char* name) {
+  auto value = object.getOptionalPropertyAs<js::Number, double>(env, name);
+  if (!value)
+    return std::nullopt;
+  if (!std::isfinite(*value) || *value < 0 || std::floor(*value) != *value ||
+      *value > std::numeric_limits<int32_t>::max()) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        std::string("speakerAttribution.") + name +
+            " must be a non-negative native integer");
+  }
+  return static_cast<int>(*value);
 }
 
 void readBool(js::Object& obj, js_env_t* env, const char* name, bool& target) {
@@ -82,7 +99,64 @@ void addConfigParam(
   }
 }
 
+std::string readArrayString(
+    js::Array& array, js_env_t* env, uint32_t index, const char* name) {
+  js_value_t* raw = nullptr;
+  JS(js_get_element(env, array, index, &raw));
+  if (!js::is<js::String>(env, raw)) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        std::string(name) + " must contain only strings");
+  }
+  return js::String::fromValue(raw).as<std::string>(env);
+}
+
+std::vector<std::string>
+readStringElements(js::Array array, js_env_t* env, const char* name) {
+  const uint32_t count = array.size(env);
+  std::vector<std::string> values;
+  values.reserve(count);
+  for (uint32_t i = 0; i < count; ++i) {
+    values.push_back(readArrayString(array, env, i, name));
+  }
+  return values;
+}
+
+std::vector<std::string>
+readOptionalStringArray(js::Object& obj, js_env_t* env, const char* name) {
+  js_value_t* raw = obj.getProperty(env, name);
+  if (js::is<js::Undefined>(env, raw) || js::is<js::Null>(env, raw)) {
+    return {};
+  }
+  if (!js::is<js::Array>(env, raw)) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        std::string(name) + " must be an array of strings");
+  }
+  return readStringElements(js::Array::fromValue(raw), env, name);
+}
+
 } // namespace
+
+moss::MossTranscribeConfig JSAdapter::buildMossTranscribeConfig(
+    js::Object configurationParams, js_env_t* env) {
+  moss::MossTranscribeConfig config;
+  readString(configurationParams, env, "modelPath", config.modelPath);
+  readInt(configurationParams, env, "maxThreads", config.maxThreads);
+  readBool(configurationParams, env, "useGPU", config.useGPU);
+  readString(configurationParams, env, "backend", config.backend);
+  readString(configurationParams, env, "backendsDir", config.backendsDir);
+  return config;
+}
+
+moss::MossTranscribeRequest
+JSAdapter::readMossTranscribeRequest(js::Object job, js_env_t* env) {
+  moss::MossTranscribeRequest request;
+  readString(job, env, "prompt", request.prompt);
+  request.hotwords = readOptionalStringArray(job, env, "hotwords");
+  readInt(job, env, "maxNewTokens", request.maxNewTokens);
+  return request;
+}
 
 EngineType
 JSAdapter::readEngineType(js::Object configurationParams, js_env_t* env) {
@@ -94,11 +168,14 @@ JSAdapter::readEngineType(js::Object configurationParams, js_env_t* env) {
   if (explicitType == "parakeet") {
     return EngineType::Parakeet;
   }
+  if (explicitType == "moss-transcribe") {
+    return EngineType::MossTranscribe;
+  }
   if (!explicitType.empty()) {
     throw qvac_errors::StatusError(
         general_error::InvalidArgument,
-        "engineType must be 'whisper' or 'parakeet' (got '" + explicitType +
-            "')");
+        "engineType must be 'whisper', 'parakeet' or 'moss-transcribe' (got '" +
+            explicitType + "')");
   }
 
   // Inference fallback (convenience for direct-binding consumers only; the
@@ -172,6 +249,21 @@ auto JSAdapter::buildParakeetConfig(js::Object jsObject, js_env_t* env)
   readString(jsObject, env, "path", config.modelPath);
   readInt(jsObject, env, "maxThreads", config.maxThreads);
   readBool(jsObject, env, "useGPU", config.useGPU);
+  readString(jsObject, env, "backend", config.backend);
+  if (auto value =
+          jsObject.getOptionalProperty<js::Object>(env, "speakerAttribution")) {
+    parakeet::SpeakerAttributionConfig attribution;
+    auto object = *value;
+    readString(object, env, "modelPath", attribution.modelPath);
+    attribution.mergeSameSpeaker =
+        object.getOptionalPropertyAs<js::Boolean, bool>(
+            env, "mergeSameSpeaker");
+    attribution.minSegmentMs =
+        readAttributionDuration(object, env, "minSegmentMs");
+    attribution.padSegmentMs =
+        readAttributionDuration(object, env, "padSegmentMs");
+    config.speakerAttribution = std::move(attribution);
+  }
   readInt(jsObject, env, "sampleRate", config.sampleRate);
   readInt(jsObject, env, "channels", config.channels);
   readBool(jsObject, env, "captionEnabled", config.captionEnabled);
