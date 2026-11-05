@@ -185,7 +185,7 @@ jobs:
       - name: Install
         shell: bash
         working-directory: src
-        run: pnpm install --frozen-lockfile --filter .
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter .
       # Prebuilds: a named run's, else a published build's; prepare-mobile-prebuilds checks either is this package's.
       - id: run
         if: matrix.row.hasBuild && inputs.prebuild_run_id != ''

@@ -86,7 +86,7 @@ jobs:
           NX_DAEMON: "false"
           NX_NO_CLOUD: "true"
         run: |
-          pnpm install --frozen-lockfile
+          pnpm install --frozen-lockfile --ignore-scripts
           pnpm exec nx run "$PROJECT:verify:generated" --outputStyle=stream
 
   build:

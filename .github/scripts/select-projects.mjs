@@ -31,7 +31,8 @@ export const TARGETS = [
   'test:mobile',
   'cache:models',
   'benchmark',
-  'publish'
+  'publish',
+  'publish:post'
 ]
 
 // A configuration is named <platform>-<arch>[-<variant>] and holds only args or commands and a ci
@@ -157,8 +158,9 @@ export function rows(project, target, labels) {
     setup: [],
     runner: ''
   }
-  // Nx gives every target a configurations object, empty when it has none.
-  if (!Object.keys(project.targets[target]?.configurations ?? {}).length) return [base]
+  // Nx gives every target a configurations object, empty when it has none. publish:post's configurations only name
+  // the platforms its dependencies run on after publishing, so it stays one row per package.
+  if (target === 'publish:post' || !Object.keys(project.targets[target]?.configurations ?? {}).length) return [base]
   return configurations(project, target).map((cfg) => {
     const runner = labels[cfg.runnerKey]
     if (!runner)

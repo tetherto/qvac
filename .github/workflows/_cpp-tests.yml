@@ -97,7 +97,7 @@ jobs:
         working-directory: src
         env:
           NPM: ${{ matrix.row.npm }}
-        run: pnpm install --frozen-lockfile --filter . --filter "$NPM..."
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter . --filter "$NPM..."
       # The build job's prebuilds for this platform: the package's and its native dependencies'.
       - uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
@@ -162,6 +162,10 @@ jobs:
           bucket: ${{ secrets.MODEL_S3_BUCKET }}
           target: cpp:tests
           exact-hit: ${{ steps.models-cache.outputs.cache-hit || steps.models-restore.outputs.cache-hit }}
+      # The models are down, so the AWS session goes before PR code runs again, unless the target reads S3 itself.
+      - if: ${{ !contains(matrix.row.meta.secrets, 'MODEL_S3_BUCKET') }}
+        shell: bash
+        run: printf 'AWS_ACCESS_KEY_ID=\nAWS_SECRET_ACCESS_KEY=\nAWS_SESSION_TOKEN=\n' >> "$GITHUB_ENV"
       # cpp:build ran above; excluding task dependencies keeps Nx from building it again.
       - name: cpp:tests
         shell: bash

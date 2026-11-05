@@ -19,7 +19,7 @@ A package without the tag stays on `on-pr-nx.yml`, which reads `options.ci` from
 | `mobile-tests.yml` | dispatch | `test:mobile` |
 | `benchmarks.yml` | dispatch | `build`, `benchmark`, `test:mobile` |
 | `cache-warm.yml` | push to `main` on cache inputs, schedule, dispatch | `cache:models`, `build`, `cpp:tests` |
-| `publish-npm.yml` | push to `release-<dir>-<x.y.z>`, dispatch (`dry_run`) | `build`, `verify:generated`, `publish` |
+| `publish-npm.yml` | push to `release-<dir>-<x.y.z>`, dispatch (`dry_run`) | `build`, `verify:generated`, `publish`, `publish:post` |
 | `publish-gpr.yml` | dispatch | `build`, `verify:generated`, `publish` |
 
 Each group calls `_select-projects.yml` for its rows, then the templates `_build.yml`, `_cpp-lint.yml`, `_cpp-tests.yml`, `_desktop.yml` and `_mobile.yml` run them. `.github/scripts/select-projects.mjs` is the only code that reads a package's CI settings.
@@ -46,6 +46,7 @@ A package on the contract declares only these targets:
 | `cache:models` | Marks the package for model cache warming; `nx:noop` | no |
 | `benchmark` | Runs the package's benchmarks; its `report` configuration then reads every configuration's results | yes, plus `report` |
 | `publish` | Marks the package as publishable; `nx:noop` | no |
+| `publish:post` | What runs once the release is published and tagged. Its own command runs in `publish-npm.yml`; each target in its `dependsOn` (`benchmark`, `test:integration`, `test:backend`, `test:mobile`) is dispatched to the workflow that owns it, at the release tag | names the platforms its dependencies run on; none means all |
 
 Every package command is a target command. A group's step runs `nx run-many`, never `bare-make`, a `ci/` script or a package script directly. Tooling stays in the groups' steps: checkout, toolchain setup, artifacts, Device Farm, and packing and publishing to a registry. `ci:setup` and `ci:system` set `options.forwardAllArgs: false`, so an argument meant for a later target never reaches their commands.
 
