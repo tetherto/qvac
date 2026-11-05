@@ -114,7 +114,7 @@
     {
       "name": "speech-cpp",
       "version": "2026-11-04",
-      "port-version": 0
+      "port-version": 1
     }
   ]
 }
