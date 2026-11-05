@@ -15,7 +15,8 @@ const catalog = [
     testId: 'tts-a',
     metadata: { category: 'tts' },
     skip: { reason: 'python client lacks TTS', platforms: ['desktop-python'] }
-  }
+  },
+  { testId: 'llm-off', suites: ['smoke'], skip: { reason: 'disabled everywhere' } }
 ]
 
 const ids = (selection) => selection.tests.map((t) => t.testId)
@@ -25,6 +26,17 @@ test('drops what the platform skips, after the producer-side selection', () => {
   assert.deepEqual(ids(selection), ['llm-a'])
   assert.deepEqual(selection.platformSkippedTestIds, ['ocr-a'])
   assert.equal(selection.filtered, true)
+})
+
+test('a test skipped on every platform is never queued, so it is not in the run', () => {
+  const selection = selectRunTests(catalog, { suite: 'smoke', platform: 'desktop-macos' })
+  assert.ok(!ids(selection).includes('llm-off'))
+  assert.ok(!selection.platformSkippedTestIds.includes('llm-off'))
+  assert.ok(
+    !ids(selectRunTests(catalog, { include: 'llm-off', platform: 'desktop-macos' })).includes(
+      'llm-off'
+    )
+  )
 })
 
 test('a skip for another client does not apply', () => {

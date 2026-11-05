@@ -20,6 +20,14 @@ export function matchesPlatform(platform: string, declared: readonly string[]): 
 }
 
 /**
+ * Whether the test is skipped on every platform: a `skip` without `platforms`. The producer never
+ * queues such a test; it reports it as skipped instead.
+ */
+export function isSkippedEverywhere(definition: Pick<TestDefinition, 'skip'>): boolean {
+  return definition.skip !== undefined && !definition.skip.platforms
+}
+
+/**
  * Whether platform policy skips this test on `platform`, and why. When the skip carries
  * per-platform `reasons`, only the groups that match this platform are reported, so a leg does
  * not show the reasons another leg was skipped for.
