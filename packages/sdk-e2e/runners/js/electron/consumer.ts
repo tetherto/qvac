@@ -1,4 +1,3 @@
-import { EmbeddingGemma2Executor } from '../shared/executors/embeddinggemma2-executor.js'
 import { SpeakerAwareExecutor } from '../shared/executors/node/speaker-aware-executor.js'
 import { DecisionExecutor } from '../shared/executors/decision-executor.js'
 import { RerankExecutor } from '../shared/executors/rerank-executor.js'
@@ -169,7 +168,6 @@ export const executor = createExecutor({
     new TranscriptionExecutor(resources),
     new TranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
-    new EmbeddingGemma2Executor(resources, resolveTableAsset),
     new RagExecutor(resources),
     new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),
