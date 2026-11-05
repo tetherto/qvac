@@ -159,11 +159,26 @@ test(
     const model = await ensureIndicTransModel()
     const files = { model }
     const config = { modelType: TranslationNmtcpp.ModelTypes.IndicTrans, use_gpu: true }
-    const automatic = await TranslationNmtcpp.assessFit({ files, config })
-    const conflicting = await TranslationNmtcpp.assessFit({
-      files,
-      config: { ...config, gpu_backend: '', gpuBackend: 'no-such-backend' }
-    })
+    const [automaticResult, conflictingResult] = await Promise.allSettled([
+      TranslationNmtcpp.assessFit({ files, config }),
+      TranslationNmtcpp.assessFit({
+        files,
+        config: { ...config, gpu_backend: '', gpuBackend: 'no-such-backend' }
+      })
+    ])
+    t.is(conflictingResult.status, automaticResult.status, 'backend alias keeps the same outcome')
+    if (automaticResult.status === 'rejected') {
+      t.is(automaticResult.reason.code, '[ General :: InvalidArgument ]')
+      t.is(automaticResult.reason.message, 'assessFit: the requested compute device is unavailable')
+      if (conflictingResult.status === 'rejected') {
+        t.is(conflictingResult.reason.code, automaticResult.reason.code)
+        t.is(conflictingResult.reason.message, automaticResult.reason.message)
+      }
+      return
+    }
+    if (conflictingResult.status === 'rejected') return
+    const automatic = automaticResult.value
+    const conflicting = conflictingResult.value
     t.is(conflicting.status, automatic.status)
     t.alike(
       conflicting.devices.map((row) => row.id),

@@ -3,7 +3,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.BertInterface = void 0;
 exports.toBertJobInput = toBertJobInput;
 exports.mapAddonEvent = mapAddonEvent;
-exports.pickPrimaryGgufPath = pickPrimaryGgufPath;
+exports.validateModelPath = validateModelPath;
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- bare-path uses CommonJS.
+const path = require("bare-path");
 function isMediaPart(part) {
     return (part !== null &&
         typeof part === "object" &&
@@ -104,13 +106,24 @@ function mapAddonEvent(rawEvent, rawData, rawError) {
     return null;
 }
 /**
- * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
- * entry for single-file models. Matches the C++ shard-expansion contract
- * in `GGUFShards::expandGGUFIntoShards`.
+ * Validates the single disk path. For a sharded GGUF, pass only the first
+ * shard; Fabric discovers the remaining shards. Weight streaming is unsupported.
  */
-function pickPrimaryGgufPath(files) {
-    const SHARD_REGEX = /-\d+-of-\d+\.gguf$/;
-    return files.find((p) => SHARD_REGEX.test(p)) || files[0];
+function validateModelPath(files) {
+    if (!Array.isArray(files) || files.length === 0) {
+        throw new TypeError("files.model must contain one absolute disk path");
+    }
+    if (files.length !== 1) {
+        throw new TypeError("Weight streaming is no longer supported. Pass only one disk path in files.model; " +
+            "for a sharded model, pass only the first shard path. Do not pass a tensor-name file.");
+    }
+    if (typeof files[0] !== "string" || files[0].length === 0 || !path.isAbsolute(files[0])) {
+        throw new TypeError("files.model[0] must be an absolute disk path string; weight buffers are not supported");
+    }
+    if (files[0].endsWith(".tensors.txt")) {
+        throw new TypeError("Weight streaming is no longer supported. Pass the first GGUF shard path, not a tensor-name file.");
+    }
+    return files[0];
 }
 /** An interface between the Bare C++ addon and the JS runtime. */
 class BertInterface {
@@ -138,9 +151,6 @@ class BertInterface {
      */
     async runJob(data) {
         return this._binding.runJob(this._handle, data);
-    }
-    async loadWeights(data) {
-        return this._binding.loadWeights(this._handle, data);
     }
     /** Activates the model to start processing the queue. */
     async activate() {
