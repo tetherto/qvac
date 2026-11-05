@@ -8,7 +8,7 @@ Explicit options, including `flash_attn: false`, take precedence.
 | Model checkpoint | GPU and API | Automatic change | Fallback |
 | --- | --- | --- | --- |
 | FLUX.2 Klein 4B Q8_0 | RTX 5090 CUDA, GB10 CUDA | GEMM VAE for single 512×512 or 1024×1024 text-to-image requests, with at least 16 GiB free after loading | Direct convolution for other requests, APIs and GPUs |
-| FLUX.2 Klein 4B Q8_0 | Radeon 8060S HIP | GEMM VAE for single 1024×1024 text-to-image requests with the same memory guard | Direct convolution at unvalidated dimensions |
+| FLUX.2 Klein 4B Q8_0 | Radeon 8060S HIP | None: repeated-output validation found an inconsistent GEMM output | Direct convolution; explicit GEMM remains experimental |
 | MiniMax-H3 FL2VA Q4_K | RTX 5090 CUDA/Vulkan, GB10 CUDA, M3 Ultra Metal, Radeon 8060S HIP | Global flash attention | Previous flash-attention setting elsewhere |
 | MiniMax-H3 FL2VA Q4_K | RTX 5090 CUDA/Vulkan | Fused SwiGLU and QKV views, together with automatic global flash attention | Original graph elsewhere, including Metal |
 | LTX-2.3 22B distilled Q5_K | M3 Ultra Metal | F16 transformer matrices for bounded video contexts with sufficient memory | Original quantized matrices |
@@ -19,7 +19,8 @@ Unknown layouts, mixed device/module assignments, explicit precision overrides,
 graph-cut budgets and layer streaming retain current settings. HIP remains a
 source-build configuration; this change does not add a HIP release package.
 
-FLUX keeps direct convolution on Metal and Vulkan, where GEMM was slower.
+FLUX keeps direct convolution on Metal and Vulkan, where GEMM was slower, and
+on HIP, where a repeated-output quality check did not pass.
 Automatic GEMM excludes reference/image conditioning, LoRA, tiling and batches. Each
 request rechecks its dimensions and free memory, so a later larger request
 returns to direct convolution. Reviewed output was visually identical, but not

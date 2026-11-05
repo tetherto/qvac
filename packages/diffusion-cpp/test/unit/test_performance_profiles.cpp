@@ -86,7 +86,8 @@ TEST(SdPerformanceProfiles, FluxRequiresBoundedWorkloadAndFreeMemory) {
   EXPECT_FALSE(useVaeGemm(select(), 768, 768, 1, 24 * GIB));
   EXPECT_TRUE(useVaeGemm(select(), 512, 512, 1, 16 * GIB));
   gpu = device(ProfileApi::Hip, ProfileGpu::StrixHalo);
-  EXPECT_TRUE(useVaeGemm(select(), 1024, 1024, 1, 16 * GIB));
+  EXPECT_FALSE(select().vaeGemm);
+  EXPECT_FALSE(useVaeGemm(select(), 1024, 1024, 1, 16 * GIB));
   EXPECT_FALSE(useVaeGemm(select(), 512, 512, 1, 16 * GIB));
   for (const auto api : {ProfileApi::Metal, ProfileApi::Vulkan}) {
     gpu.api = api;

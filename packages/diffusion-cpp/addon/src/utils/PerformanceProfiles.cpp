@@ -250,8 +250,7 @@ PerformanceProfile selectPerformanceProfile(
                         device.freeBytes >= 28 * GIB;
   }
   if (model == ProfileModel::Flux2Klein4BQ8 &&
-      ((rtx && cuda) || (spark && cuda) || (strix && hip)) &&
-      !config.explicitVaeConvDirect) {
+      ((rtx && cuda) || (spark && cuda)) && !config.explicitVaeConvDirect) {
     result.vaeGemm = true;
     result.vaeGemm512 = cuda;
   }
