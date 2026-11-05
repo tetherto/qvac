@@ -868,7 +868,7 @@ importers:
         specifier: ^0.34.0
         version: 0.34.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/decoder-audio':
-        specifier: ^0.8.1
+        specifier: ^0.9.0
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
         specifier: ^0.31.0
@@ -1585,7 +1585,7 @@ importers:
         specifier: ^0.34.0
         version: 0.34.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/decoder-audio':
-        specifier: ^0.8.1
+        specifier: ^0.9.0
         version: link:../decoder-audio
       '@qvac/diffusion-cpp':
         specifier: ^0.31.0
