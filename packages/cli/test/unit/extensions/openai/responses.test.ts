@@ -197,6 +197,16 @@ describe('buildResponseObject', () => {
     const warm = usage({ promptTokens: 14, cacheTokens: 268, generatedTokens: 6, emittedTokens: 6 })
     assert.deepEqual(cold, { input_tokens: 262, output_tokens: 6, total_tokens: 268 })
     assert.deepEqual(warm, cold)
+    // Overlapping requests inflate the scheduler-wide cacheTokens; the request's
+    // own promptTokens is used then.
+    const overlapped = usage({
+      promptTokens: 262,
+      cacheTokens: 900,
+      generatedTokens: 6,
+      emittedTokens: 6,
+      avgConcurrentSeq: 2
+    })
+    assert.deepEqual(overlapped, cold)
   })
 
   it('marks status incomplete with max_output_tokens reason when truncated by length', () => {
