@@ -1,7 +1,12 @@
 name: Mobile tests
 
 # On-demand Device Farm runs of test:mobile: one platform, the dispatcher's devices. How to pick them: docs/ci/MOBILE-ON-DEMAND.md.
+# Every Sunday it also runs the androidWeekly/iosWeekly groups of any package that has them and files a report issue;
+# every Monday it sweeps stale report issues, as main's weekend workflows did.
 on:
+  schedule:
+    - cron: "0 6 * * 0"
+    - cron: "0 8 * * 1"
   workflow_dispatch:
     inputs:
       platform:
@@ -60,13 +65,14 @@ permissions: {}
 # One manual run per branch, package and platform, as main's per-addon workflows had; a fresh dispatch cancels the
 # one in flight so Device Farm runs never stack, while an Android and an iOS dispatch of one package run side by side.
 concurrency:
-  group: mobile-tests-${{ github.ref }}-${{ inputs.packages }}-${{ inputs.platform }}
-  cancel-in-progress: true
+  group: mobile-tests-${{ github.ref }}-${{ inputs.packages || github.event.schedule }}-${{ inputs.platform }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
 
 jobs:
   # One package per dispatch, as main's per-addon mobile workflows ran one addon each, so the per-package run cap in
   # devicefarm-check-devices caps the whole dispatch.
   one-package:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -109,3 +115,119 @@ jobs:
       package: ${{ inputs.package }}
       prebuild_run_id: ${{ inputs.prebuild_run_id }}
       dependency_prebuild_run_id: ${{ inputs.dependency_prebuild_run_id }}
+
+  weekly:
+    if: github.event.schedule == '0 6 * * 0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      android: ${{ steps.find.outputs.android }}
+      ios: ${{ steps.find.outputs.ios }}
+    steps:
+      - uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          sparse-checkout: |
+            .github/actions/mobile-weekly
+            packages/*/test/mobile/test-groups.json
+          sparse-checkout-cone-mode: "false"
+          persist-credentials: "false"
+      - id: find
+        uses: ./.github/actions/mobile-weekly
+        with:
+          command: find
+
+  weekly-select-android:
+    needs: weekly
+    if: needs.weekly.outputs.android != ''
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_select-projects.yml
+    with:
+      targets: test:mobile
+      packages: ${{ needs.weekly.outputs.android }}
+      configs: android-arm64
+
+  weekly-select-ios:
+    needs: weekly
+    if: needs.weekly.outputs.ios != ''
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_select-projects.yml
+    with:
+      targets: test:mobile
+      packages: ${{ needs.weekly.outputs.ios }}
+      configs: ios-arm64
+
+  weekly-android:
+    needs: weekly-select-android
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+      id-token: write
+      pull-requests: write
+    uses: ./.github/workflows/_mobile.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.weekly-select-android.outputs.matrices)['test:mobile']) }}
+      platform: Android
+      devices: Google Pixel 9
+      weekly: true
+
+  weekly-ios:
+    needs: weekly-select-ios
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+      id-token: write
+      pull-requests: write
+    uses: ./.github/workflows/_mobile.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.weekly-select-ios.outputs.matrices)['test:mobile']) }}
+      platform: iOS
+      devices: Apple iPhone 16 Pro
+      weekly: true
+
+  # One weekly-mobile-report issue per package that ran, from each platform's test-case-details.json.
+  weekly-report:
+    needs: [weekly-select-android, weekly-select-ios, weekly-android, weekly-ios]
+    if: always() && github.event.schedule == '0 6 * * 0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      issues: write
+    steps:
+      - uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          sparse-checkout: .github/actions/mobile-weekly
+          persist-credentials: "false"
+      - uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          pattern: console-logs-*
+          path: logs
+      - uses: ./.github/actions/mobile-weekly
+        with:
+          command: report
+          projects: |
+            ${{ needs.weekly-select-android.outputs.projects }}
+            ${{ needs.weekly-select-ios.outputs.projects }}
+
+  weekly-report-gc:
+    if: github.event.schedule == '0 8 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          sparse-checkout: .github/actions/mobile-weekly-report-gc
+          persist-credentials: "false"
+      - uses: ./.github/actions/mobile-weekly-report-gc

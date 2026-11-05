@@ -44,6 +44,9 @@ inputs:
   after-hook-pulls:
     description: JSON [{device_path, artifact_name}] copied off the device after the tests, into the run's logs
     default: "[]"
+  weekly:
+    description: Read the package's <platform>Weekly groups instead of its per-PR ones
+    default: "false"
 
 outputs:
   specs:
@@ -73,4 +76,5 @@ runs:
         PERF_WARMUP_RUNS: ${{ inputs.perf-warmup-runs }}
         DEVICE_ENV: ${{ inputs.device-env }}
         AFTER_PULLS: ${{ inputs.after-hook-pulls || '[]' }}
+        WEEKLY: ${{ inputs.weekly }}
       run: node "$GITHUB_ACTION_PATH/devicefarm-write-specs.mjs"
