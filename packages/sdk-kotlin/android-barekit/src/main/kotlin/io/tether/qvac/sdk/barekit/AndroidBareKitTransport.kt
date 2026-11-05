@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.CancellationException
@@ -29,6 +30,7 @@ class AndroidBareKitTransport private constructor(
 ) : QvacTransport {
     private val closeMutex = Mutex()
     private var closed = false
+    override val lost: Deferred<Unit> get() = rpc.ended
 
     override suspend fun call(payload: JsonObject): JsonObject = rpc.call(payload)
 

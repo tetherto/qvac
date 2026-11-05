@@ -67,6 +67,10 @@ class WorkerRpc(
         explicitNulls = false
     }
 
+    /** Completes once the read loop has ended: the connection is gone. */
+    val ended: Deferred<Unit> get() = readLoopEnded
+    private val readLoopEnded = CompletableDeferred<Unit>()
+
     init {
         scope.launch {
             try {
@@ -76,6 +80,7 @@ class WorkerRpc(
                 // transport read error means the owner is closing it.
             } finally {
                 withContext(NonCancellable) { rpc.close() }
+                readLoopEnded.complete(Unit)
             }
         }
     }

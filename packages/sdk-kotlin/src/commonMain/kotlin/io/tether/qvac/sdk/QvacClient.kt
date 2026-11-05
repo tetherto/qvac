@@ -3,11 +3,14 @@ package io.tether.qvac.sdk
 import io.tether.qvac.sdk.generated.schema.HeartbeatRequest
 import io.tether.qvac.sdk.generated.schema.HeartbeatResponse
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -27,6 +30,33 @@ open class QvacClient(
 
     /** The transport a session handle wraps; see [openSession]. */
     internal val transportForSessions: QvacTransport get() = transport
+
+    // The sessions opened on this client that have not closed themselves. They
+    // end with the owner's close, and with the worker when the transport can
+    // report its loss.
+    private val sessions = MutableStateFlow<List<SessionTransport>>(emptyList())
+    private val workerWatch: Unit by lazy {
+        transport.lost?.let { lost ->
+            scope.launch {
+                lost.await()
+                endSessions("crashed")
+            }
+        }
+        Unit
+    }
+
+    internal fun registerSession(session: SessionTransport) {
+        sessions.update { it + session }
+        workerWatch
+    }
+
+    internal fun unregisterSession(session: SessionTransport) {
+        sessions.update { it - session }
+    }
+
+    private fun endSessions(reason: String) {
+        sessions.value.forEach { it.markEnded(reason) }
+    }
 
     suspend fun heartbeat(): HeartbeatResponse = heartbeat(HeartbeatRequest())
 
@@ -115,8 +145,9 @@ open class QvacClient(
         }
     }
 
-    /** Owner shutdown: stops the transport and, with it, every session opened on this client. */
+    /** Owner shutdown: ends every session opened on this client, then stops the transport. */
     open suspend fun close() {
+        endSessions("shutdown")
         try {
             transport.close()
         } finally {

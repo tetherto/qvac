@@ -12,6 +12,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
+import kotlin.concurrent.Volatile
 
 /**
  * A caller session on a shared runtime. It is a [QvacClient] whose every
@@ -32,9 +33,15 @@ class QvacSession internal constructor(
     /** Completes once the worker registered the session. Calls wait for it on their own. */
     val opened: Deferred<Unit> get() = transport.opened
 
-    /** Cancels this session's requests, releases its model leases and ends the handle. */
+    /**
+     * Cancels this session's requests, releases its model leases and ends the
+     * handle. Throws [QvacSessionClosedException] when the session already
+     * ended, by its own close, the owner's close or the loss of the worker.
+     */
     override suspend fun close() {
-        transport.markClosed()
+        transport.ended?.let { throw QvacSessionClosedException(sessionId, it) }
+        transport.markEnded("closed")
+        owner.unregisterSession(transport)
         try {
             opened.await()
             owner.closeSession(CloseSessionRequest(sessionId = sessionId))
@@ -54,21 +61,24 @@ internal class SessionTransport(
     private val sessionId: String,
     val opened: Deferred<Unit>,
 ) : QvacTransport {
-    private var closed = false
+    /** Why the session ended, or null while it is usable. The first reason is kept. */
+    @Volatile
+    var ended: String? = null
+        private set
 
     override val runtimeProfile: QvacRuntimeProfile? get() = inner.runtimeProfile
 
-    fun markClosed() {
-        closed = true
+    fun markEnded(reason: String) {
+        if (ended == null) ended = reason
     }
 
     // The handle's id replaces any id the payload carries, so a caller cannot send a
     // request as another session. Only the session methods themselves name the
     // session they act on.
     private suspend fun stamp(payload: JsonObject): JsonObject {
-        if (closed) throw QvacSessionClosedException(sessionId)
+        ended?.let { throw QvacSessionClosedException(sessionId, it) }
         opened.await()
-        if (closed) throw QvacSessionClosedException(sessionId)
+        ended?.let { throw QvacSessionClosedException(sessionId, it) }
         val type = payload["type"]?.jsonPrimitive?.content
         if (type == "openSession" || type == "closeSession") return payload
         return JsonObject(payload + ("sessionId" to JsonPrimitive(sessionId)))
@@ -87,9 +97,13 @@ internal class SessionTransport(
     override suspend fun close() = Unit
 }
 
-/** A call on a session handle after its `close()`. Raised locally, before any wire traffic. */
-class QvacSessionClosedException(val sessionId: String) :
-    QvacFeatureException("Session \"$sessionId\" is closed; open a new session")
+/**
+ * A call on a session handle after the session ended. Raised locally, before any
+ * wire traffic. [reason] is `closed` after the handle's own close, `shutdown`
+ * after the owner's close and `crashed` after the worker was lost.
+ */
+class QvacSessionClosedException(val sessionId: String, val reason: String = "closed") :
+    QvacFeatureException("Session \"$sessionId\" is no longer usable ($reason); open a new session")
 
 /** `openSession` called on a session handle instead of the owner client. */
 class QvacNestedSessionException(val sessionId: String) :
@@ -108,5 +122,7 @@ fun QvacClient.openSession(name: String? = null): QvacSession {
         openSession(OpenSessionRequest(sessionId = sessionId, name = name))
         Unit
     }
-    return QvacSession(sessionId, name, this, SessionTransport(transportForSessions, sessionId, opened), json)
+    val transport = SessionTransport(transportForSessions, sessionId, opened)
+    registerSession(transport)
+    return QvacSession(sessionId, name, this, transport, json)
 }

@@ -3,11 +3,15 @@ package io.tether.qvac.sdk
 import io.tether.qvac.sdk.generated.schema.CancelRequest
 import io.tether.qvac.sdk.generated.schema.CancelRequestRequest
 import io.tether.qvac.sdk.generated.schema.UnloadModelRequest
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -98,11 +102,69 @@ class QvacSessionTest {
         assertEquals(1, transport.closeCalls)
     }
 
+    @Test
+    fun theOwnerCloseEndsEverySessionBeforeTheTransport() = runTest {
+        val transport = SessionRecordingTransport()
+        val client = QvacClient(transport)
+        val session = client.openSession()
+        session.opened.await()
+
+        client.close()
+
+        val error = assertFailsWith<QvacSessionClosedException> { session.heartbeat() }
+        assertEquals("shutdown", error.reason)
+        assertEquals("shutdown", assertFailsWith<QvacSessionClosedException> { session.close() }.reason)
+        assertEquals(listOf("openSession"), transport.requests.map { it.type() }, "no closeSession after the owner shut down")
+    }
+
+    @Test
+    fun aLostWorkerEndsEverySession() = runTest {
+        val lost = CompletableDeferred<Unit>()
+        val transport = SessionRecordingTransport(lost = lost)
+        val client = QvacClient(transport)
+        val session = client.openSession()
+        session.opened.await()
+        session.heartbeat()
+
+        lost.complete(Unit)
+
+        val error = awaitSessionEnd(session)
+        assertEquals("crashed", error.reason)
+        assertEquals(0, transport.closeCalls, "worker loss is not an owner close")
+    }
+
+    @Test
+    fun aClosedSessionIsNotEndedAgainByTheOwnerClose() = runTest {
+        val transport = SessionRecordingTransport()
+        val client = QvacClient(transport)
+        val session = client.openSession()
+        session.close()
+
+        client.close()
+
+        assertEquals("closed", assertFailsWith<QvacSessionClosedException> { session.heartbeat() }.reason)
+    }
+
+    // The worker watch runs on the client's own scope, outside the test
+    // dispatcher, so the end is observed by retrying on a real clock.
+    private suspend fun awaitSessionEnd(session: QvacSession): QvacSessionClosedException {
+        repeat(200) {
+            try {
+                session.heartbeat()
+            } catch (error: QvacSessionClosedException) {
+                return error
+            }
+            withContext(Dispatchers.Default) { delay(10) }
+        }
+        throw AssertionError("the session did not end after the worker was lost")
+    }
+
     private fun JsonObject.type() = this["type"]?.jsonPrimitive?.content
 }
 
 private class SessionRecordingTransport(
     private val stream: Flow<JsonObject> = emptyFlow(),
+    override val lost: CompletableDeferred<Unit>? = null,
 ) : QvacTransport {
     val requests = mutableListOf<JsonObject>()
     var closeCalls = 0
