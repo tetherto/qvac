@@ -14,6 +14,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-05
+
 ### Breaking
 
 - `assessFit` returns `{ status, devices, stats }`: the device the load
