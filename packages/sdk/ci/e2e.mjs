@@ -266,12 +266,23 @@ function snapBuild(env) {
       cwd: E2E,
       env: { ...env, QVAC_TEST_SNAP_BUILD_ID: id, TMPDIR: env.RUNNER_TEMP || tmpdir() }
     })
-  build('first')
-  copyFileSync(
-    join(E2E, 'snap/dist/qvac-sdk-e2e.snap'),
-    join(E2E, 'snap/dist/qvac-sdk-e2e-first.snap')
-  )
-  build('second')
+  try {
+    build('first')
+    copyFileSync(
+      join(E2E, 'snap/dist/qvac-sdk-e2e.snap'),
+      join(E2E, 'snap/dist/qvac-sdk-e2e-first.snap')
+    )
+    build('second')
+  } finally {
+    // The LXD instance is named after the snap directory's inode, new each run; best effort, as main's always() step.
+    if (env.QVAC_TEST_SNAP_BUILD_MODE === 'lxd') {
+      spawnSync('snapcraft', ['clean', '--use-lxd'], {
+        cwd: join(E2E, 'snap'),
+        env,
+        stdio: 'inherit'
+      })
+    }
+  }
   run(
     'npm',
     [
