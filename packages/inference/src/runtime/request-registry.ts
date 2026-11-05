@@ -333,6 +333,14 @@ interface NormalizedPolicy {
  * cancel-while-queued, where the request proceeds only to observe its
  * already-aborted signal); `reject(err)` fails the awaiting `begin(...)`.
  */
+/** A `begin(...)` between its start and its entry landing in `entries`. */
+interface PendingBegin {
+  sessionId: string
+  /** Resolves once the begin has landed or thrown. */
+  settled: Promise<void>
+  settle: () => void
+}
+
 interface SlotWaiter {
   requestId: string
   sessionId: string
@@ -427,12 +435,16 @@ export function createRequestRegistry(options?: {
    */
   const waitersById = new Map<string, { key: string; waiter: SlotWaiter }>()
   /**
-   * Ids reserved synchronously at `begin(...)` start and cleared once the entry
-   * lands in `entries` (or the begin throws). A same-tick second `begin(...)`
-   * with the same id runs before the first reaches `entries`/`waitersById`, so
-   * without this it would slip past the duplicate check and both would execute.
+   * Begins that have started but not yet landed in `entries`: reserved
+   * synchronously at `begin(...)` start and cleared once the entry lands (or
+   * the begin throws). A same-tick second `begin(...)` with the same id runs
+   * before the first reaches `entries`/`waitersById`, so without this it
+   * would slip past the duplicate check and both would execute. A session
+   * drain also consults it: a begin suspended in admission is in neither
+   * `entries` nor (once granted) `waitersById`, and would otherwise start its
+   * work after the session closed.
    */
-  const reservedIds = new Set<string>()
+  const pendingBegins = new Map<string, PendingBegin>()
   // Models being torn down: a begin(...) for one starts aborted. The barrier
   // half of cancelAndDrain — catches begins its scan can't see yet.
   const drainingModels = new Set<string>()
@@ -773,14 +785,22 @@ export function createRequestRegistry(options?: {
     if (
       entries.has(registryKey) ||
       waitersById.has(registryKey) ||
-      reservedIds.has(registryKey) ||
+      pendingBegins.has(registryKey) ||
       disposingIds.has(registryKey)
     ) {
       throw new RequestIdConflictError(opts.requestId)
     }
     // Reserve synchronously so a same-tick duplicate begin is rejected before
-    // this one reaches `entries`/`waitersById`. Cleared on every exit below.
-    reservedIds.add(registryKey)
+    // this one reaches `entries`/`waitersById`. Settled on every exit below.
+    let settle = () => {}
+    const settled = new Promise<void>((resolve) => {
+      settle = resolve
+    })
+    pendingBegins.set(registryKey, { sessionId, settled, settle })
+    const settlePending = () => {
+      pendingBegins.delete(registryKey)
+      settle()
+    }
 
     // A request cancelled BEFORE begin must not queue for a slot on a saturated
     // lane: consume its marker first and skip admission, so it resolves at once
@@ -800,7 +820,7 @@ export function createRequestRegistry(options?: {
       try {
         acquired = await acquireSlot(opts, sessionId, registryKey)
       } catch (err) {
-        reservedIds.delete(registryKey)
+        settlePending()
         throw err
       }
       slotKey = acquired.slotKey
@@ -812,7 +832,7 @@ export function createRequestRegistry(options?: {
       // rather than stranding it on the conflicting throw.
       if (entries.has(registryKey)) {
         if (slotKey !== undefined) releaseSlot(slotKey, exclusive)
-        reservedIds.delete(registryKey)
+        settlePending()
         throw new RequestIdConflictError(opts.requestId)
       }
 
@@ -880,7 +900,7 @@ export function createRequestRegistry(options?: {
       resolveDisposed
     }
     entries.set(registryKey, entry)
-    reservedIds.delete(registryKey)
+    settlePending()
     logLifecycle('begin', ctx)
 
     return {
@@ -1062,11 +1082,23 @@ export function createRequestRegistry(options?: {
   }
 
   // Cancel every request a session owns and wait for the active ones to finish
-  // disposing. Queued waiters resume into aborted contexts that their handlers
-  // dispose on their own; a model release after this goes through
-  // `withModelDraining`, which waits for those too.
+  // disposing. A begin still in admission, queued or granted but not yet
+  // landed, is marked cancelled first and waited for, so it lands as an aborted
+  // context before the active scan runs; its handler disposes it on its own and
+  // a model release after this goes through `withModelDraining`, which waits
+  // for those too.
   async function drainSession(sessionId: string, reason: string): Promise<number> {
     let cancelled = 0
+    const landing: Array<Promise<void>> = []
+    for (const [key, pending] of pendingBegins) {
+      if (pending.sessionId !== sessionId) continue
+      const queued = waitersById.get(key)
+      if (queued) cancelQueuedWaiterGracefully(queued.key, queued.waiter, reason)
+      else recordCancelBeforeBegin(key, reason)
+      landing.push(pending.settled)
+      cancelled++
+    }
+    await Promise.all(landing)
     const draining: Array<Promise<void>> = []
     for (const entry of entries.values()) {
       if (entry.ctx.sessionId !== sessionId) continue
@@ -1075,11 +1107,6 @@ export function createRequestRegistry(options?: {
     }
     for (const entry of disposingEntries) {
       if (entry.ctx.sessionId === sessionId) draining.push(entry.disposed)
-    }
-    for (const { key, waiter } of Array.from(waitersById.values())) {
-      if (waiter.sessionId !== sessionId) continue
-      cancelQueuedWaiterGracefully(key, waiter, reason)
-      cancelled++
     }
     await Promise.all(draining)
     return cancelled

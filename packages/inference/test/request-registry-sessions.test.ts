@@ -167,6 +167,54 @@ test('sessions: drainSession cancels every request of one session and waits for 
   t.is(r.listBySession('B').length, 1)
 })
 
+test('sessions: drainSession cancels a begin that is past admission but not yet registered', async (t) => {
+  const r = createRequestRegistry()
+  // No policy: admission grants at once, but `begin` still resumes on a later
+  // microtask, so the drain runs while the request is in neither the waiter
+  // queue nor the active set.
+  const pending = r.begin({ requestId: 'late', sessionId: 'A', kind: 'embeddings' })
+  const untouched = r.begin({ requestId: 'late', sessionId: 'B', kind: 'embeddings' })
+  const drain = r.drainSession('A', 'sessionClosed')
+
+  const ctx = await pending
+  t.is(ctx.signal.aborted, true, 'the begin lands as an aborted context')
+  t.is(ctx.state, 'cancelling')
+  const other = await untouched
+  t.is(other.signal.aborted, false, 'another session is not drained')
+
+  let drained = false
+  void drain.then(() => {
+    drained = true
+  })
+  await new Promise<void>((resolve) => setTimeout(resolve, 5))
+  t.is(drained, false, 'the drain waits for the landed request to dispose')
+  await ctx[Symbol.asyncDispose]()
+  t.is(await drain, 1)
+  t.is(r.listBySession('A').length, 0)
+  await other[Symbol.asyncDispose]()
+})
+
+test('sessions: drainSession waits for a queued begin of the session to land and dispose', async (t) => {
+  const r = createRequestRegistry()
+  r.policy({ kind: 'completion', maxConcurrentPerModel: 1, onOverflow: 'queue' })
+  const holder = await r.begin({ requestId: 'h', sessionId: 'A', kind: 'completion', modelId: 'm' })
+  holder.signal.addEventListener('abort', () => {
+    void holder[Symbol.asyncDispose]()
+  })
+  const queuedA = r.begin({ requestId: 'qa', sessionId: 'A', kind: 'completion', modelId: 'm' })
+  const queuedB = r.begin({ requestId: 'qb', sessionId: 'B', kind: 'completion', modelId: 'm' })
+  await new Promise<void>((resolve) => setTimeout(resolve, 5))
+
+  const drain = r.drainSession('A', 'sessionClosed')
+  const a = await queuedA
+  t.is(a.signal.aborted, true, "A's queued begin lands aborted")
+  await a[Symbol.asyncDispose]()
+  t.is(await drain, 2, 'the holder and the queued begin')
+  t.is(holder.signal.aborted, true)
+  await using b = await queuedB
+  t.is(b.signal.aborted, false, "B's waiter is admitted once the lane frees")
+})
+
 test('sessions: end() resolves the id within the given session', async (t) => {
   const r = createRequestRegistry()
   const a = await r.begin({ requestId: 'e', sessionId: 'A', kind: 'embeddings' })
