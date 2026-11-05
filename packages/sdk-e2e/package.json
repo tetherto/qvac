@@ -35,7 +35,6 @@
     "sync:test-suite": "./sync-test-suite.sh",
     "emit:resource-table": "node scripts/emit-resource-table.mjs",
     "check:resource-table": "node scripts/emit-resource-table.mjs --check",
-    "plan:model-cache": "node scripts/model-cache-plan.mjs",
     "check:step-dependencies": "node scripts/check-step-dependencies.mjs",
     "check:skip-matrix": "node scripts/check-skip-matrix.mjs",
     "check:contract": "node scripts/check-contract.mjs",
@@ -43,7 +42,7 @@
   },
   "dependencies": {
     "@qvac/sdk": "file:../sdk",
-    "@qvac/test-suite": "^0.13.0",
+    "@qvac/test-suite": "^0.14.0",
     "custom-echo-plugin": "file:./fixtures/echo-plugin",
     "mqtt": "^5.14.1",
     "react-native": "0.81.5",

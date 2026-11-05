@@ -355,32 +355,24 @@ either: the model cache below is shared per model, not per job.
 
 ### Model cache in CI
 
-Each model is its own cache entry, so a leg transfers only the models its run uses and a registry change
-invalidates only the models it changed:
+Each model is its own cache entry, keyed by its registry `sha256Checksum`, so a leg restores only the
+models its run uses, a registry change invalidates only the models it changed, and every family shares
+one copy of a model:
 
-1. `scripts/model-cache-plan.mjs` resolves the leg's tests the way the run will (suite, filter, include,
-   platform skips; `selectRunTests` from `@qvac/test-suite`), collects the ResourceManager deps they
-   declare, and lists every model constant the bootstrap would download for them, with every file the SDK
-   keeps for it, at its exact path, size and registry checksum. The layout comes from
-   `@qvac/inference/model-cache-layout`, the same rules the loader uses, Core ML sets included.
-2. `.github/actions/sdk-e2e-model-cache` restores those entries. Keys derive from the registry's
-   `sha256Checksum`, so desktop, Electron, Python and Snap share one copy of a model (macOS keeps a model
-   with Core ML bundles as its own entry), and a branch that is behind `main` still hits every model it
-   has in common with it.
-3. `scripts/model-cache-bootstrap.mjs` downloads only what the restore did not provide
-   (`QVAC_E2E_BOOTSTRAP_DEPS` and `QVAC_E2E_BOOTSTRAP_MODELS` narrow `run:bootstrap:*`).
-4. Only trusted runs save, and only files whose sha256 matches the registry:
+1. `scripts/model-cache-plan.mjs` resolves the leg's tests as the run will (`selectRunTests` from
+   `@qvac/test-suite`) and lists the files of every model they use, with paths from
+   `@qvac/inference/model-cache-layout`.
+2. `.github/actions/sdk-e2e-model-cache` restores those entries, and `scripts/model-cache-bootstrap.mjs`
+   downloads only what the restore did not provide.
+3. Only trusted runs save, and only files whose sha256 matches the registry:
    `on-merge-sdk-e2e-model-cache.yml` (push to `main`, every two days, dispatch) and a `test-sdk.yml`
-   dispatch. PR runs restore and never write, so a model a PR adds is downloaded on that PR's runs until
-   it reaches `main`.
+   dispatch. A model a PR adds is downloaded on that PR's runs until it reaches `main`.
 
-The SDK verifies every file against the registry checksum when it loads it, so a damaged entry costs a
-download, never a wrong result. A save warns about anything the SDK wrote that no entry covers. To see
-what a selection would restore (with `@qvac/inference` built from this branch):
+To see what a selection would restore, with `@qvac/inference` built from the branch:
 
 ```bash
 npm run build
-npm run plan:model-cache -- --family=desktop --suite=smoke --out=plan.json
+node scripts/model-cache-plan.mjs --family=desktop --suite=smoke --out=plan.json
 ```
 
 ## Developing new tests

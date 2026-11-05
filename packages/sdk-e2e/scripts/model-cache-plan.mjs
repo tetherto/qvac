@@ -93,6 +93,9 @@ for (const family of families) {
 }
 
 const testSuite = await import('@qvac/test-suite')
+if (typeof testSuite.selectRunTests !== 'function') {
+  throw new Error('@qvac/test-suite has no selectRunTests; install a version that exports it')
+}
 const sdk = await import('@qvac/sdk')
 const { RESOURCE_TABLE } = await load('dist/catalog/resource-table.js')
 const { applyResourceTable } = await load('dist/catalog/resource-table-types.js')
@@ -119,58 +122,6 @@ const selectionOptions = {
   include: values.include || undefined
 }
 
-/** Copy of test-suite's `selectRunTests`. Delete once the published test-suite exports it. */
-function selectRunTestsFallback(tests, options) {
-  const list = (value) =>
-    (value ?? '')
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean)
-  const operatingSystems = new Set(['macos', 'linux', 'windows', 'ios', 'android'])
-  const matches = (platform, declared) => {
-    const segments = platform.split('-')
-    return declared.some((entry) => {
-      if (entry === platform) return true
-      const entrySegments = entry.split('-')
-      if (entrySegments.length >= segments.length) return false
-      if (!entrySegments.every((segment, index) => segment === segments[index])) return false
-      return segments.slice(entrySegments.length).every((segment) => operatingSystems.has(segment))
-    })
-  }
-
-  let selected = tests
-  if (options.suite) {
-    const suites = list(options.suite)
-    selected = selected.filter((test) => test.suites?.some((suite) => suites.includes(suite)))
-  }
-  if (options.excludeSuite) {
-    const excluded = list(options.excludeSuite)
-    selected = selected.filter((test) => !test.suites?.some((suite) => excluded.includes(suite)))
-  }
-  if (options.filter) {
-    const filters = list(options.filter)
-    selected = selected.filter((test) =>
-      filters.some((filter) => test.testId.startsWith(filter) || test.metadata?.category === filter)
-    )
-  }
-  if (options.include) {
-    const keep = new Set([...selected.map((test) => test.testId), ...list(options.include)])
-    selected = tests.filter((test) => keep.has(test.testId))
-  }
-
-  const skipped = (test) =>
-    test.skip?.platforms?.length && matches(options.platform, test.skip.platforms)
-  return { tests: selected.filter((test) => !skipped(test)) }
-}
-
-function selectLegTests(platform) {
-  const select =
-    typeof testSuite.selectRunTests === 'function'
-      ? testSuite.selectRunTests
-      : selectRunTestsFallback
-  return select(catalog, { ...selectionOptions, platform })
-}
-
 const cacheRoot = values['cache-root'].replace(/\\/g, '/').replace(/\/+$/, '')
 const legs = []
 const constants = []
@@ -179,7 +130,7 @@ for (const family of families) {
   const { consumer } = FAMILIES[family]
   const platform = FAMILIES[family].platform(values.os, config)
   const resourcePlatform = FAMILIES[family].resourcePlatform(values.os)
-  const selection = selectLegTests(platform)
+  const selection = testSuite.selectRunTests(catalog, { ...selectionOptions, platform })
   const deps = collectTestDeps(selection.tests)
 
   const resources = new ResourceManager()
