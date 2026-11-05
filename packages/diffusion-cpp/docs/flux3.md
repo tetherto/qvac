@@ -8,7 +8,7 @@ use `prediction: 'auto'`. No vision projector or external tokenizer is required.
 
 This integration builds on [QVAC #5550](https://github.com/tetherto/qvac/pull/5550)
 and uses the same [registry #475](https://github.com/tetherto/qvac-registry-vcpkg/pull/475)
-baseline, `c1ecd54c08eb1b8a84b8ddf9440899fd63c75be7`, on
+baseline, `1c902fde9a74201917d03256449135495e9f6bf5`, on
 `feat/diffusion-2026-11-01`. The GGML port is `2026-11-01` and the diffusion port is
 `2026-11-01#1`. The diffusion engine starts from
 `11d3d0138537abd8098c13d9bd2889bf1413bab1` with registry patches for integer
