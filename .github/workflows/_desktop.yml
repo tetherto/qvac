@@ -95,12 +95,17 @@ jobs:
           bucket: ${{ secrets.MODEL_S3_BUCKET }}
           target: ${{ matrix.row.target }}
           exact-hit: ${{ steps.models-restore.outputs.cache-hit }}
+      # Every AWS use above is done; from here on PR code runs, so the session goes unless the target reads S3 itself.
+      - if: ${{ !contains(matrix.row.meta.secrets, 'MODEL_S3_BUCKET') }}
+        shell: bash
+        run: printf 'AWS_ACCESS_KEY_ID=\nAWS_SECRET_ACCESS_KEY=\nAWS_SESSION_TOKEN=\n' >> "$GITHUB_ENV"
+      # No install scripts: a dependency's lifecycle script would run with this job's credentials.
       - name: Install
         shell: bash
         working-directory: src
         env:
           NPM: ${{ matrix.row.npm }}
-        run: pnpm install --frozen-lockfile --filter . --filter "$NPM..."
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter . --filter "$NPM..."
       # The build job's prebuilds for this platform: the package's and its native dependencies'.
       - uses: tetherto/qvac-actions/download-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
