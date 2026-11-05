@@ -132,6 +132,17 @@ export function responseUsage(
   }
 }
 
+// The request settings a response echoes back, each only when it was set.
+function requestEcho(params: BuildResponseObjectParams): Record<string, unknown> {
+  return {
+    ...(params.metadata !== undefined && params.metadata !== null && { metadata: params.metadata }),
+    ...(params.temperature !== undefined && { temperature: params.temperature }),
+    ...(params.topP !== undefined && { top_p: params.topP }),
+    ...(params.maxOutputTokens !== undefined && { max_output_tokens: params.maxOutputTokens }),
+    ...(params.previousResponseId && { previous_response_id: params.previousResponseId })
+  }
+}
+
 export function buildResponseObject(params: BuildResponseObjectParams): Record<string, unknown> {
   const calls = responseToolCalls(params)
   const hasToolCalls = calls.length > 0
@@ -166,13 +177,7 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
 
   if (hasToolCalls) base['required_action'] = requiredAction(calls)
 
-  if (params.metadata !== undefined && params.metadata !== null) {
-    base['metadata'] = params.metadata
-  }
-  if (params.temperature !== undefined) base['temperature'] = params.temperature
-  if (params.topP !== undefined) base['top_p'] = params.topP
-  if (params.maxOutputTokens !== undefined) base['max_output_tokens'] = params.maxOutputTokens
-  if (params.previousResponseId) base['previous_response_id'] = params.previousResponseId
+  Object.assign(base, requestEcho(params))
 
   return base
 }

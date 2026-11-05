@@ -629,7 +629,9 @@ describe('historyPrefixFromStoredResponse', () => {
       ]
     )
   })
+})
 
+describe('writeBlockingResponse: input tokens across search rounds', () => {
   it('counts input per round when an overlapping search round precedes a solo one', async () => {
     let sent = false
     const res = {
