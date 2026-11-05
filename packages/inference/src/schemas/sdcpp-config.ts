@@ -755,12 +755,25 @@ export const diffusionRequestSchema = z
       .describe('Enable VAE tiling for large images on constrained VRAM, overriding model config.'),
     vae_tile_size: z
       .union([
-        z.number().positive().meta({ title: 'DiffusionVaeTileSize' }),
-        z.string().min(1).meta({ title: 'DiffusionVaeTileSizeSpec' })
+        z.number().int().positive().max(2147483647).meta({ title: 'DiffusionVaeTileSize' }),
+        z
+          .string()
+          .regex(/^[0-9]+x[0-9]+$/, { message: 'vae_tile_size must be a WxH string' })
+          .refine(
+            (value) =>
+              value.split('x').every((dimension) => {
+                const size = Number(dimension)
+                return size > 0 && size <= 2147483647
+              }),
+            { message: 'vae_tile_size dimensions must be integers between 1 and 2147483647' }
+          )
+          .meta({ title: 'DiffusionVaeTileSizeSpec' })
       ])
       .optional()
       .describe(
-        'VAE tile size in latent units. For Qwen-Image-2.1 outputs at 2048x2048 or larger, ' +
+        'VAE tile size in latent units, as a positive integer or a WxH string such as 64x32. ' +
+          'Each dimension must be between 1 and 2147483647. ' +
+          'For Qwen-Image-2.1 outputs at 2048x2048 or larger, ' +
           'use vae_tiling: true with vae_tile_size: 64 to bound decode memory.'
       ),
     cache_preset: z

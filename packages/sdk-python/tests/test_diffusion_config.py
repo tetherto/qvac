@@ -94,3 +94,43 @@ def test_invalid_sigma_bounds_reject_before_rpc(sigmas: list[float]) -> None:
                 "custom_sigmas": sigmas,
             }
         )
+
+
+@pytest.mark.parametrize(
+    ("tile_size", "expected"),
+    [
+        (1, 1),
+        (64, 64),
+        (2147483647, 2147483647),
+        ("64", 64),
+        ("64x32", "64x32"),
+        ("001x064", "001x064"),
+    ],
+)
+def test_valid_tile_sizes_serialize_for_native_parser(
+    tile_size: int | str, expected: int | str
+) -> None:
+    payload = {
+        "type": "diffusionStream",
+        "modelId": "qwen-turbo",
+        "prompt": "A teapot.",
+        "vae_tile_size": tile_size,
+    }
+    request = DiffusionStreamRequest.model_validate(payload)
+    assert request.model_dump(mode="json", by_alias=True, exclude_unset=True) == {
+        **payload,
+        "vae_tile_size": expected,
+    }
+
+
+@pytest.mark.parametrize("tile_size", [0, 64.5, 2147483648, "garbage", "64.5x32"])
+def test_invalid_tile_sizes_reject_before_rpc(tile_size: int | float | str) -> None:
+    with pytest.raises(ValidationError, match="vae_tile_size"):
+        DiffusionStreamRequest.model_validate(
+            {
+                "type": "diffusionStream",
+                "modelId": "qwen-turbo",
+                "prompt": "A teapot.",
+                "vae_tile_size": tile_size,
+            }
+        )

@@ -64,8 +64,49 @@ test('custom sigma validation rejects malformed schedules before native executio
     t.is(result.success, false)
     if (!result.success) t.is(result.error.issues[0]?.path[0], 'custom_sigmas')
   }
-  for (const vae_tile_size of [0, -1, '', false, Infinity]) {
-    t.is(diffusionRequestSchema.safeParse({ ...generation, vae_tile_size }).success, false)
+})
+
+test('diffusion tile sizes accept native integer bounds and WxH strings without rewriting them', (t) => {
+  for (const schema of [diffusionRequestSchema, diffusionStreamRequestSchema]) {
+    const request = { ...generation, type: 'diffusionStream' }
+    t.is(schema.parse(request).vae_tile_size, undefined)
+    for (const vae_tile_size of [1, 64, 2147483647, '64x32', '001x064', '2147483647x1']) {
+      t.is(schema.parse({ ...request, vae_tile_size }).vae_tile_size, vae_tile_size)
+    }
+  }
+})
+
+test('diffusion tile sizes reject malformed dimensions before native execution', (t) => {
+  for (const schema of [diffusionRequestSchema, diffusionStreamRequestSchema]) {
+    for (const vae_tile_size of [
+      0,
+      -1,
+      64.5,
+      2147483648,
+      NaN,
+      Infinity,
+      null,
+      false,
+      '',
+      '64',
+      'garbage',
+      '64X32',
+      '64x',
+      'x32',
+      '0x64',
+      '64x0',
+      '-1x64',
+      '64x-1',
+      '64.5x32',
+      '64x32.5',
+      '2147483648x64',
+      '64x2147483648',
+      '64x32x16'
+    ]) {
+      const result = schema.safeParse({ ...generation, type: 'diffusionStream', vae_tile_size })
+      t.is(result.success, false, `reject ${String(vae_tile_size)}`)
+      if (!result.success) t.is(result.error.issues[0]?.path[0], 'vae_tile_size')
+    }
   }
 })
 

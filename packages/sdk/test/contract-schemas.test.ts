@@ -325,5 +325,10 @@ test('contract diffusion request carries custom schedules and VAE tile sizes', (
   for (const custom_sigmas of [[], [0], [-1, 0], [Number.MAX_VALUE, 0], ['1', 0]]) {
     t.is(contractValidate('diffusionStream.request', { ...request, custom_sigmas }).valid, false)
   }
-  t.is(contractValidate('diffusionStream.request', { ...request, vae_tile_size: 0 }).valid, false)
+  for (const vae_tile_size of [1, 2147483647, '64x32']) {
+    t.ok(contractValidate('diffusionStream.request', { ...request, vae_tile_size }).valid)
+  }
+  for (const vae_tile_size of [0, 64.5, 2147483648, '64', 'garbage', '64.5x32']) {
+    t.is(contractValidate('diffusionStream.request', { ...request, vae_tile_size }).valid, false)
+  }
 })

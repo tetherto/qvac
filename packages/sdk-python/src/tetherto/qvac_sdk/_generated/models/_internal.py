@@ -6051,12 +6051,13 @@ class CustomSigma(RootModel[float]):
     root: Annotated[float, Field(ge=0.0, le=3.4028234663852886e38)]
 
 
-class DiffusionVaeTileSize(RootModel[float]):
+class DiffusionVaeTileSize(RootModel[int]):
     root: Annotated[
-        float,
+        int,
         Field(
-            description="VAE tile size in latent units. For Qwen-Image-2.1 outputs at 2048x2048 or larger, use vae_tiling: true with vae_tile_size: 64 to bound decode memory.",
-            gt=0.0,
+            description="VAE tile size in latent units, as a positive integer or a WxH string such as 64x32. Each dimension must be between 1 and 2147483647. For Qwen-Image-2.1 outputs at 2048x2048 or larger, use vae_tiling: true with vae_tile_size: 64 to bound decode memory.",
+            gt=0,
+            le=2147483647,
             title="DiffusionVaeTileSize",
         ),
     ]
@@ -6066,8 +6067,8 @@ class DiffusionVaeTileSizeSpec(RootModel[str]):
     root: Annotated[
         str,
         Field(
-            description="VAE tile size in latent units. For Qwen-Image-2.1 outputs at 2048x2048 or larger, use vae_tiling: true with vae_tile_size: 64 to bound decode memory.",
-            min_length=1,
+            description="VAE tile size in latent units, as a positive integer or a WxH string such as 64x32. Each dimension must be between 1 and 2147483647. For Qwen-Image-2.1 outputs at 2048x2048 or larger, use vae_tiling: true with vae_tile_size: 64 to bound decode memory.",
+            pattern="^[0-9]+x[0-9]+$",
             title="DiffusionVaeTileSizeSpec",
         ),
     ]
@@ -6196,7 +6197,7 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     vae_tile_size: Annotated[
         DiffusionVaeTileSize | DiffusionVaeTileSizeSpec | None,
         Field(
-            description="VAE tile size in latent units. For Qwen-Image-2.1 outputs at 2048x2048 or larger, use vae_tiling: true with vae_tile_size: 64 to bound decode memory."
+            description="VAE tile size in latent units, as a positive integer or a WxH string such as 64x32. Each dimension must be between 1 and 2147483647. For Qwen-Image-2.1 outputs at 2048x2048 or larger, use vae_tiling: true with vae_tile_size: 64 to bound decode memory."
         ),
     ] = None
     cache_preset: Annotated[
