@@ -166,6 +166,7 @@ jobs:
         with:
           sparse-checkout: |
             .github/actions
+            .github/bare-toolchain
             scripts/perf-report
             scripts/test-utils
           persist-credentials: false
