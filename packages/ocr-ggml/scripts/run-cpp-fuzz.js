@@ -24,7 +24,9 @@ const { spawnSync } = require('child_process')
 // Only --continuous and --build-dir are the runner's own. Every other flag is
 // forwarded verbatim to the fuzz binary, which is how FuzzTest/libFuzzer knobs
 // (--fuzz_for, --rss_limit_mb, --gtest_filter, ...) are reached. Through npm:
-//   npm run fuzz:continuous -- --fuzz_for=30m
+//   npm run fuzz:continuous -- --fuzz_for 30m
+// Put the optional Suite.Test selector before binary flags; -- passes the rest
+// of the arguments to the binary without interpretation.
 const DEFAULT_FUZZ_TEST = 'OcrDecodeImageFuzz.EncodedNeverCrashes'
 const BINARY_NAME = 'ocr-decode-image-fuzz'
 
@@ -71,15 +73,20 @@ function asanOptionsNotice(processEnv) {
 }
 
 function parseArgs(argv) {
-  // --build-dir <dir> / --build-dir=<dir> selects the build tree; a non-flag is
-  // the optional Suite.Test selector; anything else is the binary's.
+  // A positional before any forwarded flag is the optional Suite.Test selector.
+  // Once forwarding starts, keep positional flag values in the binary's argv.
   let continuous = false
   let buildDir
-  const rest = []
+  let fuzzTest = DEFAULT_FUZZ_TEST
+  let selectorSeen = false
+  let forwarding = false
   const fuzzerArgs = []
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
-    if (a === '--continuous') {
+    if (a === '--') {
+      fuzzerArgs.push(...argv.slice(i + 1))
+      break
+    } else if (a === '--continuous') {
       continuous = true
     } else if (a.startsWith('--build-dir=')) {
       buildDir = a.slice('--build-dir='.length)
@@ -96,12 +103,15 @@ function parseArgs(argv) {
       // Unknown to us, so it belongs to the fuzz binary. Forwarding beats an
       // allowlist: the binary's own flag parser rejects what it doesn't know, so
       // a typo fails loudly instead of being dropped on the floor.
+      forwarding = true
+      fuzzerArgs.push(a)
+    } else if (forwarding || selectorSeen) {
       fuzzerArgs.push(a)
     } else {
-      rest.push(a)
+      fuzzTest = a
+      selectorSeen = true
     }
   }
-  const fuzzTest = rest[0] || DEFAULT_FUZZ_TEST
   return { continuous, fuzzTest, buildDir, fuzzerArgs }
 }
 
