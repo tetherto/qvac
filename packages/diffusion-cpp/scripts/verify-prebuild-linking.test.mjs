@@ -400,7 +400,7 @@ function mergedFixture(
     linux = ['x64', 'arm64'],
     win32 = true,
     addonImports,
-    cudaImports = ['cudart64_13.dll', 'cublas64_13.dll']
+    cudaImports = ['cublas64_13.dll', 'kernel32.dll']
   } = {}
 ) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'diffusion-merged-'))
@@ -486,7 +486,6 @@ test('Windows prebuild job fails when its artifact is absent', (t) => {
 
 for (const [name, cudaImports, error] of [
   ['missing DLL', null, /CUDA DL backend module missing/],
-  ['missing CUDA runtime', ['cublas64_13.dll'], /does not import cudart64/],
   ['missing cuBLAS', ['cudart64_13.dll'], /does not import cublas64/],
   [
     'dynamic CRT',
@@ -519,7 +518,7 @@ test('Windows integration validates present CUDA and rejects dynamic CRT imports
     platform: 'win32',
     addon: ['kernel32.dll'],
     vulkan: ['vulkan-1.dll'],
-    cuda: ['cudart64_13.dll', 'cublas64_13.dll']
+    cuda: ['cublas64_13.dll', 'kernel32.dll']
   }
   const result = await integrationLayout(options)
   assert.deepEqual(result.reads, [result.addonPath, result.vulkanPath, result.cudaPath])
@@ -528,3 +527,13 @@ test('Windows integration validates present CUDA and rejects dynamic CRT imports
     /CUDA module must not import msvcp/
   )
 })
+
+for (const cudaImports of [
+  ['cublas64_13.dll', 'kernel32.dll'],
+  ['cudart64_13.dll', 'cublas64_13.dll', 'kernel32.dll']
+]) {
+  test(`Windows CUDA accepts static or dynamic cudart: ${cudaImports.join(', ')}`, (t) => {
+    const result = mergedFixture(t, { linux: [], cudaImports })('win32')
+    assert.equal(result.status, 0, result.output)
+  })
+}

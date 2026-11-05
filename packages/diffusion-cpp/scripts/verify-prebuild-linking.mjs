@@ -329,10 +329,10 @@ for (const target of WIN_TARGETS) {
   }
   const cudaImports = peImports(fs.readFileSync(cudaPath))
   console.log(`${target}/qvac-diffusion-ggml-cuda.dll imports: ${cudaImports.join(', ')}`)
-  for (const dependency of ['cudart64', 'cublas64']) {
-    if (!cudaImports.some((name) => name.startsWith(dependency))) {
-      fail(`${target}: CUDA module does not import ${dependency}* (broken module)`)
-    }
+  // Windows GGML_STATIC links cudart_static and imports cuBLAS. A dynamic
+  // cudart import is valid for source builds, but is not required.
+  if (!cudaImports.some((name) => name.startsWith('cublas64'))) {
+    fail(`${target}: CUDA module does not import cublas64* (broken module)`)
   }
   for (const dll of FORBIDDEN_WIN_RUNTIME) {
     if (cudaImports.some((name) => name.startsWith(dll))) {

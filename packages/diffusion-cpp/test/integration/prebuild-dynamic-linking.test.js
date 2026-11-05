@@ -330,12 +330,11 @@ test('win32 prebuild has no hard GPU-loader imports and ships the Vulkan and CUD
   }
   const cudaImports = peImports(fs.readFileSync(cudaPath))
   t.comment(`qvac-diffusion-ggml-cuda.dll imports: ${cudaImports.join(', ')}`)
-  for (const dependency of ['cudart64', 'cublas64']) {
-    t.ok(
-      cudaImports.some((name) => name.startsWith(dependency)),
-      `CUDA module imports ${dependency}*`
-    )
-  }
+  // Windows GGML_STATIC links cudart_static; only cuBLAS must be imported.
+  t.ok(
+    cudaImports.some((name) => name.startsWith('cublas64')),
+    'CUDA module imports cublas64*'
+  )
   for (const dll of FORBIDDEN_WIN_RUNTIME) {
     t.absent(
       cudaImports.find((name) => name.startsWith(dll)),
