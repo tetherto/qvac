@@ -93,6 +93,10 @@ test('every mobile manifest url is the commit-pinned integration url', () => {
     for (const model of models) {
       const entry = integrationManifest.models[model.name]
       assert.ok(entry, `${name}: ${model.name} is in models.manifest.json`)
+      if (entry.s3Path) {
+        assert.equal(model.url, undefined, `${name}: ${model.name} is S3-only and carries no url`)
+        continue
+      }
       assert.equal(model.url, entry.urls[0], `${name}: ${model.name} url is pinned`)
       assert.doesNotMatch(model.url, /\/resolve\/(?:main|master)\//)
     }
@@ -380,6 +384,27 @@ test('a brace before the label does not become the block', () => {
   ].join('\n')
   const sets = prestageSetDefs({ '_h.js': src }, [])
   assert.deepEqual([...modelNamesInSource(sets.get('s').block)], ['m.gguf'])
+})
+
+test('an S3-only model is valid without a url and rejected with one', () => {
+  const s3Manifest = {
+    models: { 's3.gguf': { s3Path: 'qvac_models_compiled/ggml/x/s3.gguf' } }
+  }
+  const base = {
+    testGroups: { android: { shardA: ['runGrammarTest'] } },
+    integrationManifest: s3Manifest,
+    sources: { 'grammar.test.js': "ensureModel({ modelName: 's3.gguf' })" }
+  }
+  assert.deepEqual(
+    validate({ ...base, mobileManifest: { runGrammarTest: [{ name: 's3.gguf' }] } }),
+    []
+  )
+  const withUrl = { runGrammarTest: [{ name: 's3.gguf', url: PINNED }] }
+  const errors = validate({ ...base, mobileManifest: withUrl })
+  assert.equal(errors.length, 1)
+  assert.match(errors[0], /s3\.gguf is pinned by s3Path, so it must not carry a url/)
+  assert.equal(repinUrls(withUrl, s3Manifest), 1)
+  assert.deepEqual(withUrl.runGrammarTest, [{ name: 's3.gguf' }])
 })
 
 test('repinUrls rewrites to the integration manifest url', () => {

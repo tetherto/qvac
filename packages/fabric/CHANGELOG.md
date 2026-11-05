@@ -1,5 +1,82 @@
 # Changelog
 
+## [0.26.0] - 2026-11-04
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11259.2.0#2` -> `11739.0.0`, a rebase onto
+  upstream llama.cpp b11739. Native consumers must rebuild, and code using the
+  `common` library needs source changes:
+  - `common_batch_clear` and `common_batch_add` are removed.
+  - `common_speculative_process()` takes a `common_batch`.
+  - `common_chat_params::prompt` is a `common_chat_prompt`; call `.str()` for
+    the string.
+  - The RPC protocol major goes 112 -> 113, so RPC peers on 0.25.0 are not
+    compatible.
+- TurboVec moves to upstream turbovec 1.1.2: snapshots use its v8 container,
+  dims up to 16384 are accepted, fresh indexes are not calibrated, and staged
+  search is on by default. `ggml_vec_index_turbovec_calibrate`,
+  `ggml_vec_index_turbovec_set_staged` and
+  `ggml_vec_index_turbovec_is_calibrated` are new.
+
+### Fixed
+
+- mtmd keeps tiled image chunk geometry and rounds resizes like the reference
+  implementation.
+- Linux CUDA, Jetson and HIP backend modules no longer leave libstdc++ symbols
+  undefined, so they load under hosts without libstdc++ in the global
+  namespace (such as `bare-sidecar`) instead of silently falling back to the
+  CPU. The CUDA modules link libstdc++ statically behind a version script, and
+  HIP host code builds against the libc++ fabric ships (`qvac-fabric`
+  `11259.2.0#2`).
+
+### Added
+
+- AMD XDNA NPU backend.
+- Faster Metal flash-attention prefill for head size 256 with F16 K/V
+  (Qwen3.5/3.8 full-attention layers).
+- `flash_attn_ext_rows` for the unified KV cache, which makes multi-sequence
+  decoding cheaper.
+- The speech memory APIs and CPU graph planning are restored: memory accessors
+  for contexts, allocators and schedulers, backend workspace queries and the CPU
+  `ggml_graph_plan` registry procedure.
+
+## [0.25.0] - 2026-10-28
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11259.1.0` -> `11259.2.0`. The `common`
+  structs change layout, so native consumers must be rebuilt against this
+  release (no source changes needed):
+  - `common_params` gains `coreml_max_inflight` and `coreml_model` in the
+    embedding section.
+  - `common_chat_msg` gains `extra_json`.
+  - The ggml op list and the RPC protocol (112) are unchanged, so RPC peers on
+    0.24.0 stay compatible.
+
+### Fixed
+
+- The PNG decoder bounds its zlib output to the size the image header
+  declares, so a tiny image with a large deflate stream no longer makes mtmd
+  allocate gigabytes.
+- The RPC server drops its cached graphs when a buffer is freed, keeping its
+  graph cache in step with the client.
+- CUDA: bitonic argsort handles rows wider than one block, the CCCL version
+  guard no longer breaks on a major version rollover, and CUB `DeviceTopK` is
+  used only from CCCL 3.4.3, which fixes its race condition.
+
+### Added
+
+- DeepSeek V4.1 Flash support, including its chat template's extra message keys.
+- `llama_supports_coreml` and `llama_set_coreml_model` for an optional Core ML
+  EmbeddingGemma 2 sidecar. This package does not build Core ML support, so
+  `llama_supports_coreml` returns `false`.
+
+### Changed
+
+- CUDA `TOP_K` picks bitonic sort, radix select or `DeviceTopK` by row shape,
+  so many long rows no longer take one launch per row.
+
 ## [0.24.0] - 2026-10-26
 
 ### Breaking

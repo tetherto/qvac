@@ -16,7 +16,7 @@ const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
 const { ensureModel, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
-const { recordPerformance, isMobile } = require('./_perf-helper.js')
+const { recordPerformance, isMobile, coldPrompt } = require('./_perf-helper.js')
 const { modelId, modelFileName } = require('./_benchmark-matrix.js')
 const os = require('bare-os')
 
@@ -78,7 +78,7 @@ function modelSpec(size, quant) {
 
 async function runInference(addon, prompt, reasoningBudget) {
   const startTime = Date.now()
-  const response = await addon.run(prompt, {
+  const response = await addon.run(coldPrompt(prompt), {
     generationParams: { reasoning_budget: parseInt(reasoningBudget, 10) }
   })
   const chunks = []

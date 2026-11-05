@@ -45,6 +45,7 @@ import { buildNativeParams } from "./lib/engineParams";
 import type { EngineSetup } from "./lib/engineSetup";
 import { pickAudio8VoiceFields } from "./lib/engines/audio8";
 import {
+  assertNoPerCallParlerCoreml,
   pickParlerDescFields,
   type ParlerJobSource,
 } from "./lib/engines/parler";
@@ -266,6 +267,7 @@ class TTSGgml {
     this._pocket?.checkReload();
     const normalized =
       options == null || typeof options !== "object" ? {} : options;
+    assertNoPerCallParlerCoreml(normalized, "runStream");
     if (this._setup.engineType === ENGINE_POCKET) {
       return this._startStream(() =>
         this._runStreamOrchestrator(
@@ -458,6 +460,18 @@ class TTSGgml {
     return this._pocket ? this._pocket.runJob(addon, input) : addon.runJob(input);
   }
 
+  async warmUp(text: string): Promise<void> {
+    if (this._setup.engineType !== ENGINE_SUPERTONIC) {
+      throw new Error("warmUp is supported by Supertonic only");
+    }
+    if (typeof text !== "string") throw new Error("warmUp text must be a string");
+    await this._runExclusive(async () => {
+      await this._job.active?.await().catch(() => {});
+      const response = await this._runInternal({ input: text, type: "warmUp" });
+      await response.await();
+    });
+  }
+
   async cancel(): Promise<void> {
     if (this._pocket) return this._pocket.cancel();
     const addon = this._optionalAddon();
@@ -545,8 +559,11 @@ namespace TTSGgml {
 
   export type TtsFitEngine = Fit.TtsFitEngine;
   export type TtsFitRequest = Fit.TtsFitRequest;
+  export type PocketFitRequest = Fit.PocketFitRequest;
   export type TtsFitResult = Fit.TtsFitResult;
   export type TtsFitStatus = Fit.TtsFitStatus;
+  export type TtsFitDevice = Fit.TtsFitDevice;
+  export type TtsFitStats = Fit.TtsFitStats;
   export type SupertonicFitRequest = Fit.SupertonicFitRequest;
   export type ParlerFitRequest = Fit.ParlerFitRequest;
   export type ChatterboxFitRequest = Fit.ChatterboxFitRequest;

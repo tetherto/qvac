@@ -6,6 +6,7 @@ import {
   isResponseSerializationError
 } from 'fastify-type-provider-zod'
 import { HttpError, errorType } from '@/serve/lib/http-error'
+import { isLifecycleBlockedError, runtimeSuspendedError } from '@/serve/core/lifecycle'
 import { sendSSE, endSSE } from '@/serve/lib/sse'
 
 export interface ErrorHandlerOptions {
@@ -36,26 +37,18 @@ const plugin: FastifyPluginAsync<ErrorHandlerOptions> = async (app, opts) => {
     if (reply.raw.destroyed || reply.raw.writableEnded) return
 
     const sseSentinel = req.routeOptions?.config?.sseSentinel ?? true
-    const contextOverflow = err instanceof ContextOverflowError
-    const httpError = contextOverflow
-      ? new HttpError(
-          400,
-          'context_length_exceeded',
-          "The request exceeds the model's context capacity. Shorten the input, start a new conversation, or increase ctx_size."
-        )
-      : err instanceof HttpError
-        ? err
-        : undefined
+    const sdkHttpError = sdkErrorAsHttp(err)
+    const httpError = sdkHttpError ?? (err instanceof HttpError ? err : undefined)
     const message = httpError?.message ?? err.message ?? 'An internal error occurred.'
 
     if (reply.raw.headersSent) {
-      if (!contextOverflow) {
+      if (!sdkHttpError) {
         app.qvac.logger.error(formatServerError('streaming_error', req.method, req.url, err))
       }
       sendSSE(reply.raw, {
         error: {
           message: httpError?.message ?? 'An internal error occurred.',
-          type: contextOverflow ? 'invalid_request_error' : 'server_error',
+          type: sdkHttpError ? errorType(sdkHttpError.status) : 'server_error',
           code: httpError?.code ?? 'internal_error'
         }
       })
@@ -161,6 +154,19 @@ const plugin: FastifyPluginAsync<ErrorHandlerOptions> = async (app, opts) => {
       }
     })
   })
+}
+
+// SDK errors a client can act on, rather than a server fault.
+function sdkErrorAsHttp(err: unknown): HttpError | undefined {
+  if (err instanceof ContextOverflowError) {
+    return new HttpError(
+      400,
+      'context_length_exceeded',
+      "The request exceeds the model's context capacity. Shorten the input, start a new conversation, or increase ctx_size."
+    )
+  }
+  if (isLifecycleBlockedError(err)) return runtimeSuspendedError()
+  return undefined
 }
 
 function formatServerError(label: string, method: string, url: string, err: FastifyError): string {

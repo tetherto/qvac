@@ -233,15 +233,12 @@ test('CosyVoice3: emotion and pace are forwarded canonically, not pre-rendered',
 // The determinism knobs the cosyvoice integration helper sets, pinned here
 // because the integration lane is the only other place that constructs with
 // them and it takes hours to tell you.
-test('CosyVoice3: seed is the determinism knob; greedy belongs to audio8', (t) => {
+test('CosyVoice3: seed and greedy reach the native decoding configuration', (t) => {
   const seeded = createMockedCosyvoiceModel({ extra: { seed: 42 } })
   t.is(seeded._buildTtsParams().seed, 42, 'seed reaches the native configurationParams')
 
-  t.exception(
-    () => createMockedCosyvoiceModel({ extra: { greedy: true } }),
-    /audio8-only/,
-    'greedy is not a cosyvoice3 option'
-  )
+  t.is(createMockedCosyvoiceModel({ extra: { greedy: true } })._buildTtsParams().greedy, true)
+  t.is(createMockedCosyvoiceModel({ extra: { greedy: false } })._buildTtsParams().greedy, false)
 })
 
 test('CosyVoice3: unsupported emotions and instruct keys are rejected', (t) => {

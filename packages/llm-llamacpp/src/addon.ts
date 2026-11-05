@@ -25,6 +25,7 @@ export interface AddonMessage {
   generationParams?: GenerationParams;
   cacheKey?: string;
   ephemeral?: boolean;
+  baseCacheKey?: string;
 }
 
 export interface AddonMediaMessage {
@@ -69,12 +70,6 @@ export type AddonBatchRunResult =
     }
   | { accepted: false; id?: never; ids: string[] };
 
-export interface LoadWeightsData {
-  filename: string;
-  chunk: Uint8Array | null;
-  completed: boolean;
-}
-
 export interface AddonConfigurationParams {
   path: string;
   projectionPath: string;
@@ -89,6 +84,13 @@ export type AddonOutputCallback = (
   jobId: unknown,
 ) => void;
 
+/** `calcTokens` input as the native binding takes it: `history` and `tools` are JSON array text. */
+export interface AddonCalcTokensParams {
+  text?: string;
+  history?: string;
+  tools?: string;
+}
+
 export interface LlamaBinding {
   createInstance(
     owner: LlamaInterface,
@@ -96,7 +98,6 @@ export interface LlamaBinding {
     outputCallback: AddonOutputCallback,
     reserved: null,
   ): object;
-  loadWeights(handle: unknown, data: LoadWeightsData): Promise<void> | void;
   activate(handle: unknown): Promise<void> | void;
   activeJobs(handle: unknown): number;
   activeSlots(handle: unknown): number;
@@ -105,6 +106,7 @@ export interface LlamaBinding {
   finetune?(handle: unknown, params: FinetuneOptions): Promise<number | false> | number | false;
   saveCache(handle: unknown, cacheKey: string): Promise<void>;
   discardCache(handle: unknown, cacheKey: string): Promise<void>;
+  calcTokens(handle: unknown, params: AddonCalcTokensParams): Promise<number>;
   runJob(handle: unknown, data: AddonRunJobMessage[]): Promise<AddonRunJobResult>;
   runJob(handle: unknown, data: AddonBatchRunItem[]): Promise<AddonBatchRunResult>;
   destroyInstance(handle: unknown): void;
@@ -204,10 +206,6 @@ export class LlamaInterface {
     this._handle = this._binding.createInstance(this, configurationParams, outputCb, null);
   }
 
-  loadWeights(weightsData: LoadWeightsData): Promise<void> {
-    return Promise.resolve(this._binding.loadWeights(this._handle, weightsData));
-  }
-
   /**
    * Moves addon to the LISTENING state after all the initialization is done
    */
@@ -280,6 +278,14 @@ export class LlamaInterface {
   discardCache(cacheKey: string): Promise<void> {
     if (!this._handle) return Promise.reject(new Error("Model is not loaded"));
     return Promise.resolve(this._binding.discardCache(this._handle, cacheKey));
+  }
+
+  /**
+   * Tokens `params` takes on the loaded model (see `LlmLlamacpp.calcTokens`).
+   */
+  calcTokens(params: AddonCalcTokensParams): Promise<number> {
+    if (!this._handle) return Promise.reject(new Error("Model is not loaded"));
+    return Promise.resolve(this._binding.calcTokens(this._handle, params));
   }
 
   /**

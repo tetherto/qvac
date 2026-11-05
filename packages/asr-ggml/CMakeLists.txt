@@ -417,6 +417,7 @@ if(BUILD_TESTING)
 
   add_executable(asr_ggml_tests
     ${PROJECT_SOURCE_DIR}/addon/tests/test_main.cpp
+    ${PROJECT_SOURCE_DIR}/addon/tests/test_app_memory_budget.cpp
     # whisper suite
     ${PROJECT_SOURCE_DIR}/addon/tests/test_core.cpp
     ${PROJECT_SOURCE_DIR}/addon/tests/test_main_gpu.cpp

@@ -1,5 +1,80 @@
 # Changelog
 
+## [0.55.0] - 2026-11-04
+
+### Breaking
+
+- Removed model-weight streaming from `GGMLBert`, `LayaDecisions` and `Reranker`.
+  `files.model` now accepts exactly one absolute disk path: a single GGUF or
+  only its first shard. All shards must already be in the same directory.
+  Multiple paths and weight buffers are rejected; the `loadWeights()` API
+  has been removed ([#5398](https://github.com/tetherto/qvac/pull/5398)).
+- Renamed `pickPrimaryGgufPath` to `validateModelPath`. `files.model` is typed
+  as a one-element tuple so TypeScript also rejects multi-path model inputs
+  ([#5398](https://github.com/tetherto/qvac/pull/5398)).
+- Removed addon-side shard-name expansion. Fabric discovers and reads disk
+  shards from the first GGUF, preventing excessive allocation from a shard
+  count embedded in a filename. Tensor-name companion files are not needed
+  ([#5398](https://github.com/tetherto/qvac/pull/5398)).
+- Reranker classifier checks still inspect all disk shards, using the bounded
+  shard count in the GGUF header ([#5398](https://github.com/tetherto/qvac/pull/5398)).
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.25.0` -> `^0.26.0`, which carries
+  `qvac-fabric` `11259.2.0` -> `11739.0.0`
+  ([#5331](https://github.com/tetherto/qvac/pull/5331)):
+  a rebase onto upstream llama.cpp b11739, TurboVec 1.1.2, an mtmd
+  image-resize fix, and Linux CUDA, Jetson and HIP backend modules that load
+  in hosts without libstdc++ (such as `bare-sidecar`) instead of falling back
+  to the CPU. A caret on a `0.x` version locks the minor, so `^0.25.0`
+  would not have resolved `0.26.0` on its own. The mobile dev dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.26.0` with it.
+- `@qvac/fabric` 0.26.0 changes the `common` library's API and is not
+  ABI-compatible with 0.25.x, so every addon loaded in one process must resolve
+  the same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.26.0` together.
+- The addon fills its `llama_batch` with its own helpers, since fabric's
+  `common` library dropped `common_batch_clear` and `common_batch_add`
+  ([#5331](https://github.com/tetherto/qvac/pull/5331)).
+
+### Fixed
+
+- With a projector that resizes images dynamically, half-way image dimensions
+  round to even, as the reference implementation does, so such an image can
+  get a different token count and embedding than on 0.54.0
+  ([#5331](https://github.com/tetherto/qvac/pull/5331)).
+
+## [0.54.0] - 2026-11-03
+
+### Breaking
+
+- `assessFit` returns `{ status, devices, stats }`: a row per device, then the
+  host CPU, and the resolved `ctxSize` and `gpuLayers`. `status` is `fits`,
+  `does-not-fit` or `unknown`. An unreadable model or an invalid request
+  rejects ([#5470](https://github.com/tetherto/qvac/pull/5470)).
+- On an iOS device, `assessFit` checks the load and its margin against the
+  app's memory limit ([#5470](https://github.com/tetherto/qvac/pull/5470)).
+
+## [0.53.1] - 2026-10-29
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.24.0` -> `^0.25.0`, which carries
+  `qvac-fabric` `11259.1.0` -> `11259.2.0`
+  ([#5435](https://github.com/tetherto/qvac/pull/5435)): a bound on the PNG
+  zlib decode, an RPC server graph-cache fix, DeepSeek V4.1 Flash and CUDA
+  top-k fixes. A caret on a `0.x` version locks the minor, so `^0.24.0` would
+  not have resolved `0.25.0` on its own. The mobile dev dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.25.0` with it.
+- `@qvac/fabric` 0.25.0 changes the layout of `common_params` and
+  `common_chat_msg`, so every addon loaded in one process must resolve the
+  same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.25.0` together.
+- The Core ML embedding sidecar API added in this fabric is not built into the
+  shared runtime, so embeddings keep running on ggml. No API change for this
+  package.
+
 ## [0.53.0] - 2026-10-27
 
 ### Changed

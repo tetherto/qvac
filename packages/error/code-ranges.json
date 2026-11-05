@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "allocations": [
+    { "owner": "@qvac/error", "ranges": [[0, 999]], "status": "active" },
+    { "owner": "@qvac/dl-hyperdrive", "ranges": [[1001, 2000]], "status": "retired" },
+    {
+      "owner": "@qvac/dl-filesystem",
+      "ranges": [[3001, 5000]],
+      "status": "retired",
+      "formerOwners": ["@qvac/infer-base"],
+      "note": "Historical dl-filesystem and infer-base reservations overlapped at 3001-4000. Infer-base also used 4001; retain that block conservatively. Neither may be reused."
+    },
+    {
+      "owner": "@qvac/asr-ggml",
+      "ranges": [
+        [6001, 7000],
+        [24001, 25000]
+      ],
+      "status": "active",
+      "formerOwners": ["@qvac/transcription-whispercpp", "@qvac/transcription-parakeet"],
+      "note": "Preserves both historical ASR blocks after the package merge."
+    },
+    {
+      "owner": "@qvac/tts-onnx",
+      "ranges": [[7001, 8000]],
+      "status": "retired",
+      "note": "Historical codes 7001-7011; retain their full convention-sized block conservatively."
+    },
+    {
+      "owner": "@qvac/translation-nmtcpp",
+      "ranges": [
+        [8001, 8100],
+        [8204, 9000]
+      ],
+      "status": "active",
+      "note": "Excludes OCR and retired util-transcription allocations from the former broad 8001-9000 reservation. Published translation codes 8001-8009 are unchanged."
+    },
+    { "owner": "@qvac/ocr-ggml", "ranges": [[8101, 8200]], "status": "active" },
+    { "owner": "@qvac/util-transcription", "ranges": [[8201, 8203]], "status": "retired" },
+    { "owner": "@qvac/ocr-onnx", "ranges": [[9001, 10000]], "status": "retired" },
+    { "owner": "@tetherto/vad-onnx", "ranges": [[10001, 11000]], "status": "retired" },
+    { "owner": "@qvac/decoder-audio", "ranges": [[11001, 12000]], "status": "active" },
+    { "owner": "@qvac/tts-ggml", "ranges": [[13001, 14000]], "status": "active" },
+    { "owner": "@qvac/rag", "ranges": [[14001, 15000]], "status": "active" },
+    {
+      "owner": "@qvac/registry-client",
+      "ranges": [[19001, 20000]],
+      "status": "active",
+      "sharedWith": ["@qvac/inference"],
+      "note": "Inference mirrors registry-client constants for error reconstruction."
+    },
+    { "owner": "@qvac/bci-whispercpp", "ranges": [[26001, 27000]], "status": "active" },
+    {
+      "owner": "@qvac/vla-ggml",
+      "ranges": [[30001, 31000]],
+      "status": "active",
+      "formerOwners": ["@qvac/vla"]
+    },
+    {
+      "owner": "@qvac/audiogen-ggml",
+      "ranges": [[31001, 32000]],
+      "status": "active",
+      "formerOwners": ["@qvac/lipsync-ggml"],
+      "note": "Historical conflict: lipsync used 31001-31010 with different meanings before AudioGen reused this block. This is not a compatible alias; do not combine those versions or allocate this block again."
+    },
+    {
+      "owner": "@qvac/sdk",
+      "ranges": [
+        [50001, 52000],
+        [52001, 54000]
+      ],
+      "status": "active",
+      "sharedWith": ["@qvac/inference"],
+      "aliases": { "50608": ["WORKER_PLUGINS_NOT_REGISTERED", "PLUGINS_NOT_REGISTERED"] },
+      "note": "Client and server families retain their numeric contract across the SDK/inference split. Code 50608 has an existing client/engine name difference; other shared names must match."
+    },
+    { "owner": "@qvac/core", "ranges": [[100001, 102000]], "status": "reserved" },
+    { "owner": "@qvac/harness", "ranges": [[102001, 104000]], "status": "reserved" }
+  ]
+}

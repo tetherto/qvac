@@ -23,7 +23,6 @@ using qvac_errors::StatusError;
 using qvac_errors::tts_error::TTSErrorCode;
 namespace general_error = qvac_errors::general_error;
 
-constexpr int CPU_BACKEND_ID = 0;
 constexpr double MS_PER_SECOND = 1000.0;
 
 void requireModelFile(const std::string& path) {
@@ -92,6 +91,7 @@ MossSoundEffectModel::toEngineOptions(const MossSoundEffectConfig& cfg) {
   opts.model_path = cfg.modelPath;
   if (cfg.threads.value_or(0) > 0)
     opts.n_threads = *cfg.threads;
+  opts.backend = cfg.backend;
   opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   opts.use_gpu = wantsGpu(cfg);
   return opts;
@@ -147,8 +147,7 @@ void MossSoundEffectModel::loadLocked() {
   }
   backendName_ = engine_->backend_name();
   backendId_ = backendIdFromName(backendName_);
-  backendDevice_ =
-      backendId_ == CPU_BACKEND_ID ? kBackendDeviceCpu : kBackendDeviceGpu;
+  backendDevice_ = backendDeviceFromName(backendName_);
   gpuUnsupported_ = wantsGpu(cfg_) && backendDevice_ == kBackendDeviceCpu;
 }
 

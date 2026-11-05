@@ -45,6 +45,33 @@ It also runs a **contract check**: every breakpoint named in `plan.md §5`
 must end up in the dump. Failure here exits non-zero — the missing-key list
 points straight at a hook that silently stopped firing.
 
+### Two-camera reference
+
+`pi05.test.js` checks a run with only the first two cameras against
+`PI05_TEST_ACTIONS_2CAM` when it is set. Make that file in float32 with the
+third camera masked out of attention, the way openpi treats an empty camera
+slot:
+
+```bash
+python packages/vla-ggml/scripts/dump_pi05_activations.py \
+  --checkpoint   lerobot/pi05_base \
+  --out-dir      packages/vla-ggml/scripts/oracle_dump_2cam/ \
+  --seed         0 \
+  --mask-cameras 2 \
+  --dtype        float32
+```
+
+Use the same `--seed` as the main dump so the images, tokens and noise match,
+then point `PI05_TEST_ACTIONS_2CAM` at `oracle_dump_2cam/activations.safetensors`.
+The pin JSON is not touched by this run.
+
+Keep it float32. The two-camera trajectory amplifies rounding: on this
+fixture the bf16 oracle sits at cos 0.911 from float32 (0.9996 with three
+cameras), which is further off than the native run. Masking the third camera
+and dropping it give the same actions in PyTorch (cos 1.0000). Measured on CPU
+against the float32 reference: f16 GGUF 0.9998, q_aggressive 0.991, so the
+test bar is 0.999 for f16/f32 GGUFs and 0.98 for quantized ones.
+
 ## Determinism contract
 
 The dump is deterministic for a fixed:

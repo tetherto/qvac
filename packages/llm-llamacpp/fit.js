@@ -6,8 +6,7 @@ exports.assessFit = assessFit;
  * and never weight data. The registry's weightless copy of a model answers the
  * same as the model itself, so this can run before anything is downloaded.
  *
- * A model the fitter cannot read resolves to `status: "error"`; only a broken
- * request rejects.
+ * A model the fitter cannot read, or an invalid request, rejects.
  *
  * Builds the model twice without allocating weights. Concurrent calls run one
  * at a time.

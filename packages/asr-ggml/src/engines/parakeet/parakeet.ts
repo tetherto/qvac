@@ -1,4 +1,5 @@
 import {
+  ERR_CODES as SHARED_ERR_CODES,
   ERR_CODES_PARAKEET as ERR_CODES,
   QvacErrorAddonASRGgml,
 } from "../../lib/error";
@@ -8,6 +9,7 @@ import {
 } from "../../lib/constants";
 import { mergeFloat32Chunks, pcmS16ToFloat32 } from "../../lib/audio";
 import type { BackendInfo } from "../../lib/types";
+import type { ParakeetSpeakerAttributionConfig } from "./options";
 
 export type { BackendInfo };
 
@@ -28,8 +30,9 @@ export interface ParakeetConfigurationParams {
   modelPath?: string;
   maxThreads?: number;
   useGPU?: boolean;
-  /** MOSS native backend selector. */
+  /** Native ggml backend selector. */
   backend?: string;
+  speakerAttribution?: ParakeetSpeakerAttributionConfig;
   sampleRate?: number;
   channels?: number;
   captionEnabled?: boolean;
@@ -295,6 +298,10 @@ export class ParakeetInterface {
       return eventStr;
     }
     if (isError || eventStr.includes("Error")) return "Error";
+    if (
+      data !== null && typeof data === "object" &&
+      (data as { type?: unknown }).type === "endOfTurn"
+    ) return "EndOfTurn";
     if (this._looksLikeVadEvent(data)) return "VadState";
     if (eventStr.includes("RuntimeStats")) return "JobEnded";
     if (eventStr.includes("Output")) return "Output";
@@ -675,9 +682,11 @@ export class ParakeetInterface {
       return Promise.resolve(currentJobId);
     } catch (error) {
       const normalized = normalizeError(error);
+      // New in 0.11.x with no historical parakeet number, so it carries the
+      // shared code (6012): one number per name across both engines.
       return Promise.reject(
         createParakeetError(
-          ERR_CODES.FAILED_TO_APPEND,
+          SHARED_ERR_CODES.FAILED_TO_START_STREAMING,
           normalized.message,
           error,
         ),

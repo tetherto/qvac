@@ -18,6 +18,7 @@
 
 #include <parakeet/parakeet.h>
 
+#include "AttributedTranscription.hpp"
 #include "ggml-backend.h"
 #include "ggml.h"
 #include "inference-addon-cpp/Errors.hpp"
@@ -48,7 +49,7 @@ enum BackendId {
   BackendOpenCl = 4,
   BackendOther = 99
 };
-enum BackendDeviceClass { DeviceCpu = 0, DeviceGpu = 1 };
+enum BackendDeviceClass { DeviceCpu = 0, DeviceGpu = 1, DeviceNpu = 2 };
 
 // n_gpu_layers value that offloads every layer to the GPU backend.
 constexpr int OFFLOAD_ALL_LAYERS_TO_GPU = 999;
@@ -138,8 +139,23 @@ findGpuDeviceForBackend(int backendId, ggml_backend_dev_t& firstGpuOut) {
 // Human-readable GPU device name recovered from the ggml device registry;
 // "" on CPU or when no GPU is registered. Prefers the device whose backend
 // family matches the engine, else the first GPU/IGPU device.
-std::string captureBackendDescription(int backendId, int backendDevice) {
-  if (backendDevice != DeviceGpu)
+ggml_backend_dev_t findDeviceByName(const std::string& name) {
+  for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+    auto* device = ggml_backend_dev_get(i);
+    const char* deviceName = device ? ggml_backend_dev_name(device) : nullptr;
+    if (deviceName && name == deviceName)
+      return device;
+  }
+  return nullptr;
+}
+
+std::string captureBackendDescription(
+    const std::string& name, int backendId, int backendDevice) {
+  if (backendDevice == DeviceCpu)
+    return "";
+  if (auto* device = findDeviceByName(name))
+    return deviceDescriptionOrName(device);
+  if (backendDevice == DeviceNpu)
     return "";
   ggml_backend_dev_t firstGpu = nullptr;
   ggml_backend_dev_t matched = findGpuDeviceForBackend(backendId, firstGpu);
@@ -201,11 +217,14 @@ std::string formatDiarizationSegments(const Segments& segments) {
 Transcript
 makeDiarizationTranscript(const pkt::StreamingDiarizationSegment& seg) {
   Transcript t;
-  t.text = formatSpeakerSegment(seg.speaker_id, seg.start_s, seg.end_s);
+  if (seg.speaker_id >= 0)
+    t.text = formatSpeakerSegment(seg.speaker_id, seg.start_s, seg.end_s);
   t.start = static_cast<float>(seg.start_s);
   t.end = static_cast<float>(seg.end_s);
   t.toAppend = true;
   t.speakerId = seg.speaker_id;
+  t.isFinal = seg.is_final;
+  t.chunkIndex = seg.chunk_index;
   return t;
 }
 
@@ -217,6 +236,10 @@ Transcript makeAsrTranscript(const pkt::StreamingSegment& seg) {
   t.toAppend = true;
   t.isEndOfTurn = seg.is_eou_boundary;
   t.startsWord = seg.starts_word;
+  t.tokenIds = seg.token_ids;
+  t.isFinal = seg.is_final;
+  t.chunkIndex = seg.chunk_index;
+  t.eotConfidence = seg.eot_confidence;
   return t;
 }
 
@@ -234,6 +257,17 @@ std::string joinTranscriptText(
 } // namespace
 
 void ParakeetModel::validateConfig(const ParakeetConfig& cfg) {
+  if (cfg.speakerAttribution) {
+    if (cfg.speakerAttribution->modelPath.empty())
+      throwInvalidConfig("speakerAttribution.modelPath is required");
+    if (cfg.streaming)
+      throwInvalidConfig(
+          "speakerAttribution uses batch transcription, not streaming mode");
+    if (cfg.speakerAttribution->minSegmentMs.value_or(0) < 0 ||
+        cfg.speakerAttribution->padSegmentMs.value_or(0) < 0) {
+      throwInvalidConfig("speakerAttribution durations must be non-negative");
+    }
+  }
   // The energy-VAD window and hangover and the long-form frame counts are
   // clamped inside speech-cpp, so only these need checking here.
   if (!std::isfinite(cfg.diarizationThreshold) ||
@@ -275,6 +309,8 @@ pkt::EngineOptions ParakeetModel::buildEngineOptions(
   // only when explicitly set non-zero.
   eopts.n_threads = cfg.maxThreads > 0 ? cfg.maxThreads : 0;
   eopts.n_gpu_layers = cfg.useGPU ? OFFLOAD_ALL_LAYERS_TO_GPU : 0;
+  if (!cfg.backend.empty())
+    eopts.backend = cfg.backend;
   eopts.verbose = false;
   eopts.language = cfg.language;
   eopts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
@@ -345,6 +381,7 @@ ParakeetModel::toVadEvent(const pkt::StreamEvent& event, VadSource source) {
   out.speaking = event.vad_state == pkt::VadState::Speaking;
   out.score = event.vad_score;
   out.timestamp = event.timestamp_s;
+  out.chunkIndex = event.chunk_index;
   out.speakerId = event.speaker_id;
   out.source = source;
   return out;
@@ -371,6 +408,12 @@ void ParakeetModel::feedInSlices(
 
 void ParakeetModel::forwardStreamEvent(
     const pkt::StreamEvent& event, VadSource source) {
+  if (event.type == pkt::StreamEventType::EndOfTurn) {
+    emitStreamingSegments(takePendingStreamingSegments());
+    if (onEndOfTurn_)
+      onEndOfTurn_(toEndOfTurnEvent(event));
+    return;
+  }
   if (!onVadEvent_)
     return;
   auto vad = toVadEvent(event, source);
@@ -510,14 +553,12 @@ int ParakeetModel::resolveStreamingChunkMs(
 void ParakeetModel::captureBackend() {
   if (!engine_)
     return;
-  backend_device_ = engine_->backend_device() == pkt::BackendDevice::GPU
-                        ? DeviceGpu
-                        : DeviceCpu;
+  backend_device_ = static_cast<int>(engine_->backend_device());
   backend_name_ = engine_->backend_name();
   backend_id_ = backendIdFromName(backend_name_);
   backend_gpu_unsupported_ = engine_->gpu_unsupported() ? 1 : 0;
   backend_description_ =
-      captureBackendDescription(backend_id_, backend_device_);
+      captureBackendDescription(backend_name_, backend_id_, backend_device_);
   encoder_backend_ = engine_->encoder_backend();
   encoder_on_coreml_ = engine_->encoder_on_coreml() ? 1 : 0;
   modelTypeName_ = engine_->model_type();
@@ -525,15 +566,17 @@ void ParakeetModel::captureBackend() {
   QLOG(
       logger::Priority::INFO,
       std::string("Parakeet engine loaded; model_type=") +
-          engine_->model_type() + " backend=" + backend_name_ +
-          " (device=" + (backend_device_ == DeviceGpu ? "GPU" : "CPU") +
+          engine_->model_type() + " backend=" + backend_name_ + " (device=" +
+          (backend_device_ == DeviceNpu   ? "NPU"
+           : backend_device_ == DeviceGpu ? "GPU"
+                                          : "CPU") +
           ", id=" + std::to_string(backend_id_) + ", gpu='" +
           backend_description_ + "', encoder=" + encoder_backend_ + ")");
 }
 
 void ParakeetModel::warnOnGpuFallback() const {
-  if (cfg_.useGPU && backend_device_ != DeviceGpu &&
-      !backend_gpu_unsupported_) {
+  if ((cfg_.backend.empty() || cfg_.backend == "auto") && cfg_.useGPU &&
+      backend_device_ != DeviceGpu && !backend_gpu_unsupported_) {
     QLOG(
         logger::Priority::WARNING,
         "Parakeet: useGPU=true was requested but the active backend is CPU. "
@@ -579,7 +622,15 @@ void ParakeetModel::load() {
     const fs::path ggufPath = resolveGgufPath();
     const pkt::EngineOptions eopts = buildEngineOptions(cfg_, ggufPath);
     std::lock_guard<std::mutex> lk(engine_mutex_);
-    engine_ = std::make_unique<pkt::Engine>(eopts);
+    auto engine = std::make_unique<pkt::Engine>(eopts);
+    if (cfg_.speakerAttribution && !engine->is_transcription_model()) {
+      throwInvalidConfig(
+          "speakerAttribution requires a transcription model as its primary "
+          "model");
+    }
+    auto attributionEngine = createAttributionEngine();
+    engine_ = std::move(engine);
+    attribution_engine_ = std::move(attributionEngine);
   });
 
   is_loaded_ = true;
@@ -606,6 +657,7 @@ void ParakeetModel::unload() {
   {
     std::lock_guard<std::mutex> lk(engine_mutex_);
     engine_.reset();
+    attribution_engine_.reset();
   }
   is_loaded_ = false;
   is_warmed_up_ = false;
@@ -655,6 +707,7 @@ void ParakeetModel::endOfStream() {
 
 void ParakeetModel::reset() {
   output_.clear();
+  streamingSegmentsDelivered_ = false;
   stream_ended_ = false;
   processed_time_ = 0.0f;
   jobEncoderCalls_ = 0;
@@ -703,6 +756,8 @@ void ParakeetModel::cancel() const {
     std::unique_lock<std::mutex> lk(engine_mutex_, std::try_to_lock);
     if (lk.owns_lock() && engine_) {
       engine_->cancel();
+      if (attribution_engine_)
+        attribution_engine_->cancel();
     }
   }
   // cancel() may race with the open/close/unload lifecycle, so snapshot the
@@ -824,6 +879,102 @@ std::string ParakeetModel::runAsrProcess(const Input& input) {
   return result.text;
 }
 
+Transcript
+ParakeetModel::toStreamingTranscript(const pkt::StreamingSegment& segment) {
+  return makeAsrTranscript(segment);
+}
+
+Transcript ParakeetModel::toStreamingDiarizationTranscript(
+    const pkt::StreamingDiarizationSegment& segment) {
+  return makeDiarizationTranscript(segment);
+}
+
+EndOfTurnEvent ParakeetModel::toEndOfTurnEvent(const pkt::StreamEvent& event) {
+  return {event.timestamp_s, event.chunk_index, event.eot_confidence};
+}
+
+pkt::AttributedTranscriptionOptions
+ParakeetModel::buildAttributionOptions(const ParakeetConfig& config) {
+  pkt::AttributedTranscriptionOptions options;
+  if (config.diarizationThreshold >= 0)
+    options.diarization.threshold = config.diarizationThreshold;
+  if (config.diarizationMinSegmentMs >= 0)
+    options.diarization.min_segment_ms = config.diarizationMinSegmentMs;
+  if (config.speakerAttribution) {
+    const auto& attribution = *config.speakerAttribution;
+    if (attribution.mergeSameSpeaker)
+      options.merge_same_speaker = *attribution.mergeSameSpeaker;
+    if (attribution.minSegmentMs)
+      options.min_segment_ms = *attribution.minSegmentMs;
+    if (attribution.padSegmentMs)
+      options.pad_segment_ms = *attribution.padSegmentMs;
+  }
+  return options;
+}
+
+std::unique_ptr<pkt::Engine> ParakeetModel::createAttributionEngine() const {
+  if (!cfg_.speakerAttribution)
+    return nullptr;
+  auto options = buildEngineOptions(cfg_, cfg_.speakerAttribution->modelPath);
+  auto engine = std::make_unique<pkt::Engine>(options);
+  if (!engine->is_diarization_model()) {
+    throwInvalidConfig(
+        "speakerAttribution.modelPath must identify a diarization model");
+  }
+  return engine;
+}
+
+ParakeetModel::Output ParakeetModel::toAttributedTranscripts(
+    const pkt::AttributedTranscriptionResult& result, float offset) {
+  Output transcripts;
+  transcripts.reserve(result.segments.size());
+  for (const auto& segment : result.segments) {
+    Transcript transcript;
+    transcript.text = segment.text;
+    transcript.speakerId = segment.speaker_id;
+    transcript.start = offset + static_cast<float>(segment.start_s);
+    transcript.end = offset + static_cast<float>(segment.end_s);
+    transcript.toAppend = true;
+    transcript.isFinal = true;
+    transcripts.push_back(std::move(transcript));
+  }
+  return transcripts;
+}
+
+ParakeetModel::Output
+ParakeetModel::runAttributedProcess(const Input& input, float offset) {
+  pkt::Engine* asr = nullptr;
+  pkt::Engine* diarizer = nullptr;
+  {
+    std::lock_guard<std::mutex> lock(engine_mutex_);
+    asr = engine_.get();
+    diarizer = attribution_engine_.get();
+  }
+  if (!asr || !diarizer)
+    throwInvalidConfig("Speaker-attributed engines are not loaded");
+  const auto options = buildAttributionOptions(cfg_);
+  AttributedTranscription transcription(
+      input,
+      sample_rate_,
+      options,
+      [&] {
+        return diarizer->diarize_samples(
+            input.data(),
+            static_cast<int>(input.size()),
+            sample_rate_,
+            options.diarization);
+      },
+      [&](std::span<const float> slice) {
+        auto result = asr->transcribe_samples(
+            slice.data(), static_cast<int>(slice.size()), sample_rate_);
+        recordTranscriptionResult(result);
+        ++totalTranscriptions_;
+        return std::move(result.text);
+      },
+      [this] { throwIfCancelled(); });
+  return toAttributedTranscripts(transcription.run(), offset);
+}
+
 void ParakeetModel::recordTranscriptionResult(const pkt::EngineResult& result) {
   encoderMs_ += static_cast<int64_t>(result.encoder_ms);
   decoderMs_ += static_cast<int64_t>(result.decode_ms);
@@ -941,7 +1092,7 @@ void ParakeetModel::openSortformerStreamingSession(pkt::Engine& engine) {
   auto session = engine.diarize_start(
       opts, [this](const pkt::StreamingDiarizationSegment& seg) {
         // Negative speaker_id is the synthetic finalize terminator.
-        if (seg.speaker_id < 0)
+        if (seg.speaker_id < 0 && !seg.is_final)
           return;
         pushPendingSegment(makeDiarizationTranscript(seg));
       });
@@ -958,14 +1109,12 @@ void ParakeetModel::openAsrStreamingSession(pkt::Engine& engine) {
   }
   pkt::StreamingOptions opts = buildAsrStreamingOptions(cfg_, sample_rate_);
   // speech-cpp only runs the energy detector when on_event is set.
-  if (cfg_.streamingEnergyVad) {
-    opts.on_event = [this](const pkt::StreamEvent& event) {
-      forwardStreamEvent(event, VadSource::Energy);
-    };
-  }
+  opts.on_event = [this](const pkt::StreamEvent& event) {
+    forwardStreamEvent(event, VadSource::Energy);
+  };
   auto session =
       engine.stream_start(opts, [this](const pkt::StreamingSegment& seg) {
-        if (seg.text.empty() && !seg.is_eou_boundary)
+        if (seg.text.empty() && !seg.is_eou_boundary && !seg.is_final)
           return;
         pushPendingSegment(makeAsrTranscript(seg));
       });
@@ -988,11 +1137,19 @@ std::vector<Transcript> ParakeetModel::takePendingStreamingSegments() {
 void ParakeetModel::emitStreamingSegments(
     const std::vector<Transcript>& segments) {
   for (const auto& seg : segments) {
-    output_.push_back(seg);
-    if (on_segment_)
-      on_segment_(seg);
-    ++totalTranscriptions_;
+    emitStreamingTranscript(seg);
   }
+}
+
+void ParakeetModel::emitStreamingTranscript(const Transcript& segment) {
+  output_.push_back(segment);
+  if (onStreamingSegment_) {
+    onStreamingSegment_(segment);
+    streamingSegmentsDelivered_ = true;
+  }
+  if (on_segment_)
+    on_segment_(segment);
+  ++totalTranscriptions_;
 }
 
 void ParakeetModel::closeStreamingSession() {
@@ -1091,15 +1248,15 @@ std::string ParakeetModel::runStreamingProcess(const Input& input) {
       static_cast<double>(input.size()) / static_cast<double>(sample_rate_);
 
   std::vector<Transcript> drained = takePendingStreamingSegments();
-  if (drained.empty()) {
+  emitStreamingSegments(drained);
+  if (output_.empty()) {
     return isDiarization() ? ERR_NO_SPEAKERS : ERR_NO_SPEECH;
   }
 
-  emitStreamingSegments(drained);
   // Diarization segments are pre-formatted ("Speaker N: ..."); join with
   // newlines so the JS parser keeps working. ASR joins with spaces.
   const char* separator = isDiarization() ? "\n" : " ";
-  std::string joined = joinTranscriptText(drained, separator);
+  std::string joined = joinTranscriptText(output_, separator);
 
   reopenStreamingSession();
   return joined;
@@ -1122,6 +1279,8 @@ void ParakeetModel::process(const Input& input) {
 
   std::string text;
   std::vector<SpeakerSegment> speakerSegments;
+  Output attributedSegments;
+  bool attributed = false;
   bool streamed = false;
   const int64_t wall = measureMs([&] {
     if (!is_loaded_) {
@@ -1133,7 +1292,10 @@ void ParakeetModel::process(const Input& input) {
       const bool hasSession =
           (isDiarization() ? diar_session_ != nullptr
                            : asr_session_ != nullptr);
-      if (cfg_.streaming && hasSession) {
+      if (cfg_.speakerAttribution) {
+        attributedSegments = runAttributedProcess(input, startTime);
+        attributed = true;
+      } else if (cfg_.streaming && hasSession) {
         // runStreamingProcess already pushes per-segment Transcripts, so
         // skip the single-Transcript push below.
         text = runStreamingProcess(input);
@@ -1145,7 +1307,7 @@ void ParakeetModel::process(const Input& input) {
       }
       throwIfCancelled();
     } catch (const std::exception& e) {
-      if (isCancellationError(e))
+      if (isCancellationError(e) || cfg_.speakerAttribution)
         throw;
       QLOG(
           logger::Priority::ERROR, std::string("Inference error: ") + e.what());
@@ -1154,6 +1316,15 @@ void ParakeetModel::process(const Input& input) {
   });
   totalWallMs_ += wall;
   processed_time_ += duration;
+
+  if (attributed) {
+    for (auto& transcript : attributedSegments) {
+      if (on_segment_)
+        on_segment_(transcript);
+      output_.push_back(std::move(transcript));
+    }
+    return;
+  }
 
   if (streamed) {
     // On a silence sentinel the streaming drain emitted nothing, so push a
@@ -1164,10 +1335,7 @@ void ParakeetModel::process(const Input& input) {
       transcript.start = startTime;
       transcript.end = startTime + duration;
       transcript.toAppend = true;
-      output_.push_back(transcript);
-      ++totalTranscriptions_;
-      if (on_segment_)
-        on_segment_(transcript);
+      emitStreamingTranscript(transcript);
     }
     return;
   }
@@ -1222,6 +1390,8 @@ std::any ParakeetModel::process(const std::any& input) {
 
   Output result = std::move(output_);
   output_.clear();
+  if (streamingSegmentsDelivered_)
+    return Output{};
   return result;
 }
 

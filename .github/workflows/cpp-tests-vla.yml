@@ -167,7 +167,10 @@ jobs:
           arch: ${{ matrix.arch }}
 
       - name: Install bare tooling
-        run: npm install -g --force bare bare-make@1.8.0
+        run: npm install -g --force bare
+
+      - name: Install the locked bare toolchain
+        run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
 
       - if: ${{ matrix.os == 'ubuntu-24.04' }}
         name: Set Vulkan SDK Path on Linux
@@ -421,6 +424,25 @@ jobs:
             fi
             echo "Multi-embodiment sweep validated $sweep_rows embodiment row(s)"
           fi
+
+      - name: Build fuzz targets
+        if: matrix.platform == 'linux' && steps.cpp-tests.outcome == 'success'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run fuzz:build
+
+      - name: Run fuzz targets (bounded)
+        if: matrix.platform == 'linux' && steps.cpp-tests.outcome == 'success'
+        working-directory: ${{ env.WORKDIR }}
+        run: npm run fuzz:run
+
+      - name: Build a fresh native addon after fuzzing
+        if: matrix.platform == 'linux' && steps.cpp-tests.outcome == 'success'
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        run: |
+          rm -rf prebuilds/linux-x64
+          npm run build:native
+          test -n "$(find prebuilds/linux-x64 -maxdepth 1 -type f -name '*.bare' -size +0c -print -quit)"
 
       - name: Archive Test Results
         if: ${{ always() }}

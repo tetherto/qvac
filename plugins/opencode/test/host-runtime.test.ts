@@ -43,6 +43,7 @@ function hostConfig(overrides: Partial<ManagedServeHostConfig> = {}): ManagedSer
     upstreamTimeoutMs: 5_000,
     debug: false,
     logFile: undefined,
+    serveBinPath: undefined,
     ...overrides
   }
 }

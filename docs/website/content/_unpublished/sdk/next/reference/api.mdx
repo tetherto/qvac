@@ -1,5 +1,5 @@
 ---
-title: API Summary — v0.22.x (latest)
+title: API Summary — v0.23.x (latest)
 sidebarTitle: API
 icon: BookA
 description: One-page reference of all public functions and objects exported by @qvac/sdk
@@ -14,7 +14,7 @@ description: One-page reference of all public functions and objects exported by 
 > **Fields intentionally omitted**: parameter descriptions, return field descriptions
 > (covered by IDE hover and `.d.ts` declarations).
 >
-> **Scope**: 61 functions in `packages/sdk/client/api/` plus the `profiler` object.
+> **Scope**: 62 functions in `packages/sdk/client/api/` plus the `profiler` object.
 
 ---
 
@@ -214,7 +214,7 @@ complete text. Accepts either a `.bin` file path or a raw neural buffer.
 **Signature**:
 
 ```ts
-function bciTranscribe(params: any, options?: RPCOptions): Promise<TranscribeSegment[]> & { requestId: string };
+function bciTranscribe(params: BciTranscribeClientParams & { metadata: true }, options?: RPCOptions): Promise<{ append: boolean; endMs: number; id: number; isEndOfTurn?: boolean; speaker?: string; speakerId?: number; speakerSegments?: { endMs: number; speakerId: number; startMs: number }[]; startMs: number; startsWord?: boolean; text: string }[]> & { requestId: string };
 ```
 
 #### Overload 2
@@ -244,7 +244,7 @@ will throw a `TranscriptionFailedError`.
 **Signature**:
 
 ```ts
-function bciTranscribeStream(params: any, options?: RPCOptions): Promise<BciTranscribeStreamMetadataSession>;
+function bciTranscribeStream(params: BciTranscribeStreamClientParams & { metadata: true }, options?: RPCOptions): Promise<BciTranscribeStreamMetadataSession>;
 ```
 
 #### Overload 2
@@ -441,7 +441,7 @@ Answers typed decision questions about one state or a batch of states.
 **Signature**:
 
 ```ts
-function decide(params: Extract<DecideParams, { state: unknown }>, options?: RPCOptions): Promise<DecisionResult> & { requestId: string };
+function decide(params: Extract<DecideParams, { state: unknown }>, options?: RPCOptions): Promise<{ answers: z.ZodRecord<z.ZodString, z.ZodDiscriminatedUnion<[z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; choice: z.ZodUnion<readonly [(...), (...), (...)]>; confidence: z.ZodNumber; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; type: z.ZodLiteral<"choice"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; legend: z.ZodRecord<z.ZodString, z.ZodString>; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; score: z.ZodNumber; type: z.ZodLiteral<"score"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; noul: z.ZodNumber; type: z.ZodLiteral<"noul"> }, z.core.$strip>], "type">>; model: string; usage: { inputTokens: number; options?: Record<string, { distinct: number; tokensPerOption: number | null; total: number }>; outputTokens: number; stateTokens: number; stateTokensDropped: number; truncated: boolean; truncatedQuestions: string[] } }> & { requestId: string };
 ```
 
 **Throws**:
@@ -457,7 +457,7 @@ Answers typed decision questions about one state or a batch of states.
 **Signature**:
 
 ```ts
-function decide(params: Extract<DecideParams, { states: unknown }>, options?: RPCOptions): Promise<DecisionResult[]> & { requestId: string };
+function decide(params: Extract<DecideParams, { states: unknown }>, options?: RPCOptions): Promise<{ answers: z.ZodRecord<z.ZodString, z.ZodDiscriminatedUnion<[z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; choice: z.ZodUnion<readonly (...)>; confidence: z.ZodNumber; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; type: z.ZodLiteral<"choice"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; legend: z.ZodRecord<z.ZodString, z.ZodString>; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; score: z.ZodNumber; type: z.ZodLiteral<"score"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; noul: z.ZodNumber; type: z.ZodLiteral<"noul"> }, z.core.$strip>], "type">>; model: string; usage: { inputTokens: number; options?: Record<string, { distinct: number; tokensPerOption: number | null; total: number }>; outputTokens: number; stateTokens: number; stateTokensDropped: number; truncated: boolean; truncatedQuestions: string[] } }[]> & { requestId: string };
 ```
 
 **Throws**:
@@ -473,7 +473,7 @@ Answers typed decision questions about one state or a batch of states.
 **Signature**:
 
 ```ts
-function decide(params: DecideParams, options?: RPCOptions): Promise<DecisionResponse> & { requestId: string };
+function decide(params: DecideParams, options?: RPCOptions): Promise<{ answers: z.ZodRecord<z.ZodString, z.ZodDiscriminatedUnion<[z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; choice: z.ZodUnion<readonly (...)>; confidence: z.ZodNumber; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; type: z.ZodLiteral<"choice"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; legend: z.ZodRecord<z.ZodString, z.ZodString>; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; score: z.ZodNumber; type: z.ZodLiteral<"score"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; noul: z.ZodNumber; type: z.ZodLiteral<"noul"> }, z.core.$strip>], "type">>; model: string; usage: { inputTokens: number; options?: Record<string, { distinct: number; tokensPerOption: number | null; total: number }>; outputTokens: number; stateTokens: number; stateTokensDropped: number; truncated: boolean; truncatedQuestions: string[] } } | { answers: z.ZodRecord<z.ZodString, z.ZodDiscriminatedUnion<[z.ZodObject<{ action: z.ZodObject<(...), (...)>; answerConfidence: z.ZodNumber; choice: z.ZodUnion<(...)>; confidence: z.ZodNumber; probabilities: z.ZodRecord<(...), (...)>; type: z.ZodLiteral<(...)> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<(...), (...)>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; legend: z.ZodRecord<(...), (...)>; probabilities: z.ZodRecord<(...), (...)>; score: z.ZodNumber; type: z.ZodLiteral<(...)> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<(...), (...)>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; noul: z.ZodNumber; type: z.ZodLiteral<(...)> }, z.core.$strip>], "type">>; model: string; usage: { inputTokens: number; options?: Record<string, { distinct: number; tokensPerOption: number | null; total: number }>; outputTokens: number; stateTokens: number; stateTokensDropped: number; truncated: boolean; truncatedQuestions: string[] } }[]> & { requestId: string };
 ```
 
 **Throws**:
@@ -492,7 +492,7 @@ Deletes KV cache files.
 **Signature**:
 
 ```ts
-function deleteCache(params: { all: true } | { auto: true } | { kvCacheKey: string; modelId?: string }): Promise<{ success: any }>;
+function deleteCache(params: { all: true } | { auto: true } | { kvCacheKey: string; modelId?: string }): Promise<{ success: boolean }>;
 ```
 
 **Throws**:
@@ -526,6 +526,14 @@ Generates images using a loaded diffusion model.
 function diffusion(params: DiffusionClientParams): DiffusionResult;
 ```
 
+**Throws**:
+
+- `InferenceCancelledError` — The run's promises reject and progress stream throws when an active generation is cancelled.
+- `RequestRejectedByPolicyError` — The run rejects when another image or video generation owns the model.
+
+Supports txt2img without input images, img2img via `init_image`,
+and ordered multi-reference editing via `init_images` on supported models.
+
 **Example**:
 ```ts
 // txt2img
@@ -556,6 +564,20 @@ const { outputs } = diffusion({
   init_images: [refA, refB],
   width: 768,
   height: 768,
+});
+
+// Qwen-Image-2.1 reference editing. Load the matching Qwen3-VL encoder,
+// vision projector, and 2.1 VAE from your local files first.
+const { outputs: edited } = diffusion({
+  modelId,
+  prompt: "Place the two referenced people together in one office.",
+  init_images: [refA, refB],
+  width: 512,
+  height: 512,
+  steps: 30,
+  cfg_scale: 6,
+  sampling_method: "euler",
+  seed: 42,
 });
 
 // LoRA adapter for this generation (absolute path required).
@@ -609,7 +631,7 @@ Cancel a pending search with its promise.requestId.
 **Signature**:
 
 ```ts
-function discoverRpcServers(options: DiscoverRpcServersOptions): Promise<RpcServerCandidate[]> & { requestId: string };
+function discoverRpcServers(options: DiscoverRpcServersOptions): Promise<{ devices: { freeMemory: number; index: number; totalMemory: number }[]; rdmaAvailable: boolean; url: string }[]> & { requestId: string };
 ```
 
 ---
@@ -669,7 +691,7 @@ Generates embeddings for a single text using a specified model.
 **Signature**:
 
 ```ts
-function embed(params: { modelId: string; text: string }, options?: RPCOptions): Promise<{ embedding: number[]; stats?: any }> & { requestId: string };
+function embed(params: { modelId: string; text: string }, options?: RPCOptions): Promise<{ embedding: number[]; stats?: { backendDevice?: "cpu" | "gpu"; contextSize?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string };
 ```
 
 **Throws**:
@@ -682,7 +704,7 @@ Generates embeddings for multiple texts using a specified model.
 **Signature**:
 
 ```ts
-function embed(params: { modelId: string; text: string[] }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: any }> & { requestId: string };
+function embed(params: { modelId: string; text: string[] }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: { backendDevice?: "cpu" | "gpu"; contextSize?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string };
 ```
 
 **Throws**:
@@ -1038,7 +1060,7 @@ Opens a logging stream to receive real-time logs.
 **Signature**:
 
 ```ts
-function loggingStream(params: LoggingParams): AsyncGenerator<LoggingStreamResponse>;
+function loggingStream(params: LoggingParams, options?: AbortableRPCOptions): AsyncGenerator<LoggingStreamResponse>;
 ```
 
 **Throws**:
@@ -1056,6 +1078,12 @@ const sdkLogs = loggingStream({ id: SDK_LOG_ID });
 for await (const logMessage of logStream) {
   console.log(`[${logMessage.level}] ${logMessage.namespace}: ${logMessage.message}`);
 }
+
+// Stop from outside the loop
+const controller = new AbortController();
+const modelLogs = loggingStream({ id: 'my-model-id' }, { signal: controller.signal });
+// later
+controller.abort();
 ```
 
 ---
@@ -1072,7 +1100,8 @@ function modelRegistryGetModel(registryPath: string, registrySource: string): Pr
 
 **Throws**:
 
-- `ModelRegistryQueryFailedError` — When the model cannot be located or the registry query fails.
+- `ModelRegistryModelNotFoundError` — When the registry has no model at this source and path.
+- `ModelRegistryQueryFailedError` — When the registry query fails.
 
 ---
 
@@ -1115,7 +1144,7 @@ Performs Optical Character Recognition (OCR) on an image to extract text.
 **Signature**:
 
 ```ts
-function ocr(params: OCRClientParams): { blocks: Promise<OCRTextBlock[]>; blockStream: AsyncGenerator<OCRTextBlock[]>; stats: Promise<any> };
+function ocr(params: OCRClientParams): { blocks: Promise<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; blockStream: AsyncGenerator<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; stats: Promise<{ detectionTime?: number; recognitionTime?: number; totalTime?: number } | undefined> };
 ```
 
 **Example**:
@@ -1342,7 +1371,7 @@ For HyperDB, this is 16 documents by default. If there are insufficient document
 **Signature**:
 
 ```ts
-function ragReindex(params: RagReindexParams, options?: RPCOptions): Promise<RagReindexResult> & { requestId: string };
+function ragReindex(params: RagReindexParams, options?: RPCOptions): Promise<ReindexResult> & { requestId: string };
 ```
 
 **Throws**:
@@ -1386,7 +1415,7 @@ The workspace remains open until closed.
 **Signature**:
 
 ```ts
-function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: RPCOptions): Promise<RagSaveEmbeddingsResult[]> & { requestId: string };
+function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: RPCOptions): Promise<SaveEmbeddingsResult[]> & { requestId: string };
 ```
 
 **Throws**:
@@ -1443,6 +1472,25 @@ const results = await ragSearch({
 
 ---
 
+### `rerank`
+
+Scores documents by relevance to a query with a reranker model.
+
+**Signature**:
+
+```ts
+function rerank(params: RerankParams, options?: RPCOptions): Promise<number[]> & { requestId: string };
+```
+
+**Throws**:
+
+- `RequestValidationFailedError` — If the request is invalid.
+- `InferenceCancelledError` — If the request is cancelled.
+- `RequestRejectedByPolicyError` — If this model's rerank queue is full.
+- `InvalidResponseError` — If the worker returns a malformed result.
+
+---
+
 ### `resume`
 
 Resumes the SDK runtime: restores all suspended Hyperswarm and Corestore
@@ -1489,7 +1537,7 @@ Cancel a pending start with its promise.requestId.
 **Signature**:
 
 ```ts
-function startRpcServer(options: StartRpcServerOptions): Promise<RpcServerInfo> & { requestId: string };
+function startRpcServer(options: StartRpcServerOptions): Promise<{ rdmaCapable: boolean; serverId: string; url: string }> & { requestId: string };
 ```
 
 ---
@@ -1682,7 +1730,7 @@ Has 2 overloads.
 **Signature**:
 
 ```ts
-function transcribe(params: any, options?: RPCOptions): TranscribeCall<TranscribeSegment[]>;
+function transcribe(params: TranscribeClientParams & { metadata: true }, options?: RPCOptions): TranscribeCall<TranscribeSegment[]>;
 ```
 
 #### Overload 2
@@ -1702,7 +1750,7 @@ removed in the next major version.
 Streaming transcription with upfront audio: sends full audio, yields text
 chunks as they arrive.
 
-Has 5 overloads.
+Has 6 overloads.
 
 #### Overload 1 — Upfront audio (deprecated)
 > ⚠️ **Deprecated**: Pass audio via `transcribe()` instead. This overload will be
@@ -1714,7 +1762,7 @@ chunks as they arrive.
 **Signature**:
 
 ```ts
-function transcribeStream(params: any, options?: RPCOptions): AsyncGenerator<TranscribeSegment>;
+function transcribeStream(params: TranscribeClientParams & { metadata: true }, options?: RPCOptions): AsyncGenerator<TranscribeSegment>;
 ```
 
 #### Overload 2 — Upfront audio (deprecated)
@@ -1741,7 +1789,7 @@ time will throw a `TranscriptionFailedError`.
 **Signature**:
 
 ```ts
-function transcribeStream(params: any, options?: RPCOptions): Promise<TranscribeStreamConversationSession>;
+function transcribeStream(params: TranscribeStreamClientParams & { emitVadEvents: true }, options?: RPCOptions): Promise<TranscribeStreamConversationSession>;
 ```
 
 #### Overload 4 — Upfront audio (deprecated)
@@ -1754,10 +1802,23 @@ chunks as they arrive.
 **Signature**:
 
 ```ts
-function transcribeStream(params: any, options?: RPCOptions): Promise<TranscribeStreamMetadataSession>;
+function transcribeStream(params: TranscribeStreamClientParams & { parakeetStreamingConfig: { chunkLeftContextMs?: number; chunkMs?: number; chunkRightContextMs?: number; diarizationMinSegmentMs?: number; diarizationThreshold?: number; emitEnergyVad?: boolean; emitPartials?: boolean; emitSpeakerVad?: boolean; fifoLen?: number; historyMs?: number; leftContextMs?: number; rightLookaheadMs?: number; spkCacheEnable?: boolean; spkCacheLen?: number; spkCacheUpdatePeriod?: number } }, options?: RPCOptions): Promise<TranscribeStreamConversationSession>;
 ```
 
 #### Overload 5 — Upfront audio (deprecated)
+> ⚠️ **Deprecated**: Pass audio via `transcribe()` instead. This overload will be
+removed in the next major version.
+
+Streaming transcription with upfront audio: sends full audio, yields text
+chunks as they arrive.
+
+**Signature**:
+
+```ts
+function transcribeStream(params: TranscribeStreamClientParams & { metadata: true }, options?: RPCOptions): Promise<TranscribeStreamMetadataSession>;
+```
+
+#### Overload 6 — Upfront audio (deprecated)
 > ⚠️ **Deprecated**: Pass audio via `transcribe()` instead. This overload will be
 removed in the next major version.
 
@@ -1780,7 +1841,7 @@ Supports both NMT (Neural Machine Translation) and LLM models.
 **Signature**:
 
 ```ts
-function translate(params: TranslateClientParams, options?: RPCOptions): { requestId: string; stats: Promise<any>; text: Promise<string>; tokenStream: AsyncGenerator<string>; translations: Promise<string[]> };
+function translate(params: TranslateClientParams, options?: RPCOptions): { requestId: string; stats: Promise<{ cacheTokens?: number; decodeTime?: number; encodeTime?: number; timeToFirstToken?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } | undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string>; translations: Promise<string[]> };
 ```
 
 **Throws**:
@@ -2132,7 +2193,7 @@ runs to completion. Await the result before unloading the model.
 **Signature**:
 
 ```ts
-function worldCreateScene(params: any): WorldSceneResultWithPack;
+function worldCreateScene(params: Omit<{ height?: number; image: string; modelId: string; prompt: string; requestId?: string; returnPack?: boolean; width?: number }, "requestId" | "image"> & { image: Uint8Array } & { returnPack: true }): WorldSceneResultWithPack;
 ```
 
 **Throws**:
@@ -2208,7 +2269,7 @@ runs to completion. Await the result before unloading the model.
 **Signature**:
 
 ```ts
-function worldCreateScene(params: any): WorldSceneResult;
+function worldCreateScene(params: Omit<{ height?: number; image: string; modelId: string; prompt: string; requestId?: string; returnPack?: boolean; width?: number }, "requestId" | "image"> & { image: Uint8Array } & { returnPack?: false }): WorldSceneResult;
 ```
 
 **Throws**:
@@ -2428,7 +2489,7 @@ const profiler: {
   exportSummary(): string;
   exportTable(): string;
   getAggregates(): Record<string, AggregatedStats>;
-  getConfig(): ResolvedProfilerConfig;
+  getConfig(): controller.ResolvedProfilerConfig;
   isEnabled(): boolean;
   onRecord(callback: (event: ProfilingEvent) => void): () => void;
 };
@@ -2612,4 +2673,5 @@ and read `error.code` / `error.cause`. Code ranges:
 | `LIFECYCLE_RESUME_FAILED` | 53601 | Runtime resume failed… |
 | `LIFECYCLE_OPERATION_BLOCKED` | 53602 | Operation "…" is blocked while runtime state is "…" |
 | `PATH_TRAVERSAL` | 53900 | Path traversal detected: "…" escapes base directory "…" |
-| `QVAC_MODEL_REGISTRY_QUERY_FAILED` | 53950 | Qvac model registry query failed |
+| `QVAC_MODEL_REGISTRY_QUERY_FAILED` | 53950 | QVAC model registry query failed… |
+| `QVAC_MODEL_REGISTRY_MODEL_NOT_FOUND` | 53951 | Qvac model registry model not found |

@@ -117,6 +117,7 @@ export {
   type EndOfTurnEvent,
   type TranscribeSegment,
   type TranscribeSpeakerSegment,
+  type TranscribeToken,
   ASR_BACKEND_IDS,
   type AsrBackendId,
   type BciConfig,

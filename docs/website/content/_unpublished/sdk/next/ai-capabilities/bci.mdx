@@ -68,6 +68,14 @@ The following script transcribes a full neural signal up-front and prints the de
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/bci_filesystem.py title="bci_filesystem.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Streaming
@@ -90,11 +98,15 @@ The following script feeds neural-signal chunks into a duplex session and prints
 ```
 </WrapCode>
 </Tab>
-</Tabs>
 
-<Callout type="info">
-The Python client supports this capability through the same worker. A dedicated Python example is not yet published — see the [Python SDK](/sdk/python-sdk) for the API surface.
-</Callout>
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/bci_filesystem_streaming.py title="bci_filesystem_streaming.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
 
 <Callout type="success">
 **Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
