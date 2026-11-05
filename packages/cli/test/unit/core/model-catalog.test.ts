@@ -62,6 +62,7 @@ describe('model-catalog', () => {
       'audiogen-ggml': 'audiogen',
       'ggml-vla': 'vla',
       'ggml-classification': 'classification',
+      'ggml-image-embedding': 'image-embedding',
       'onnx-vad': 'vad'
     } satisfies Record<ModelConstant['engine'], string>
     const constants = new Map<string, ModelConstant>()
