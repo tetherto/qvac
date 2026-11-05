@@ -30,6 +30,34 @@ const shellTool = {
   }
 }
 
+const readFileTool = {
+  type: 'function',
+  name: 'read_file',
+  description: 'Read a file from the project and return its contents.',
+  parameters: {
+    type: 'object',
+    properties: { path: { type: 'string' } },
+    required: ['path']
+  }
+}
+
+// The project `read_file` reads from. A call with unusable arguments gets an
+// error back, so the answer can only name the project if the call was right.
+const PROJECT_FILES: Record<string, string> = {
+  'package.json': '{\n  "name": "acme-widgets",\n  "version": "1.2.0"\n}'
+}
+
+function runReadFile(call: { arguments: string }): string {
+  let path: unknown
+  try {
+    path = (JSON.parse(call.arguments) as { path?: unknown }).path
+  } catch {
+    return 'error: arguments are not valid JSON'
+  }
+  if (typeof path !== 'string') return 'error: read_file needs a "path" string'
+  return PROJECT_FILES[path.replace(/^\.\//, '')] ?? `error: no such file: ${path}`
+}
+
 function message(role: string, text: string) {
   return { type: 'message', role, content: [{ type: 'input_text', text }] }
 }
@@ -39,6 +67,10 @@ const developer = message(
   'Use the shell tool to run commands. Never print commands for the user to run.'
 )
 const question = message('user', 'What is the project name in package.json? Read the file.')
+const readDeveloper = message(
+  'developer',
+  'Use the read_file tool to read files. Never print commands for the user to run.'
+)
 
 function responses(body: Record<string, unknown>) {
   return server().inject({
@@ -92,14 +124,18 @@ describe('responses: Codex tool loop', () => {
 
   it('answers from the tool result on the next turn', async () => {
     const first = (
-      await responses({ input: [developer, question], tool_choice: 'required' })
+      await responses({
+        input: [readDeveloper, question],
+        tools: [readFileTool],
+        tool_choice: 'required'
+      })
     ).json() as any
     const call = functionCalls(first)[0]
     assert.ok(call, 'first turn requested a tool call')
 
     const res = await responses({
       input: [
-        developer,
+        readDeveloper,
         question,
         {
           type: 'function_call',
@@ -107,12 +143,9 @@ describe('responses: Codex tool loop', () => {
           name: call.name,
           arguments: call.arguments
         },
-        {
-          type: 'function_call_output',
-          call_id: call.call_id,
-          output: '{\n  "name": "acme-widgets",\n  "version": "1.2.0"\n}'
-        }
-      ]
+        { type: 'function_call_output', call_id: call.call_id, output: runReadFile(call) }
+      ],
+      tools: [readFileTool]
     })
     assert.equal(res.statusCode, 200, res.body)
     const body = res.json() as any
@@ -124,7 +157,8 @@ describe('responses: Codex tool loop', () => {
 describe('responses: Codex tool loop over stored turns', () => {
   it('answers from the tool result when the next turn chains previous_response_id', async () => {
     const first = await responses({
-      input: [developer, question],
+      input: [readDeveloper, question],
+      tools: [readFileTool],
       tool_choice: 'required',
       store: true
     })
@@ -137,12 +171,9 @@ describe('responses: Codex tool loop over stored turns', () => {
       previous_response_id: firstBody.id,
       input: [
         message('developer', 'Answer in one sentence.'),
-        {
-          type: 'function_call_output',
-          call_id: call.call_id,
-          output: '{\n  "name": "acme-widgets",\n  "version": "1.2.0"\n}'
-        }
-      ]
+        { type: 'function_call_output', call_id: call.call_id, output: runReadFile(call) }
+      ],
+      tools: [readFileTool]
     })
     assert.equal(res.statusCode, 200, res.body)
     const body = res.json() as any
@@ -159,24 +190,13 @@ describe('responses: Codex tool shapes', () => {
       type: 'namespace',
       name: 'mcp__files',
       description: 'Workspace files.',
-      tools: [
-        {
-          type: 'function',
-          name: 'read_file',
-          description: 'Read a file and return its contents.',
-          parameters: {
-            type: 'object',
-            properties: { path: { type: 'string' } },
-            required: ['path']
-          }
-        }
-      ]
+      tools: [readFileTool]
     }
   ]
 
   it('calls a namespaced tool and answers from its result', async () => {
     const first = await responses({
-      input: [developer, question],
+      input: [readDeveloper, question],
       tools: codexTools,
       tool_choice: 'required'
     })
@@ -187,7 +207,7 @@ describe('responses: Codex tool shapes', () => {
 
     const res = await responses({
       input: [
-        developer,
+        readDeveloper,
         question,
         {
           type: 'function_call',
@@ -196,11 +216,7 @@ describe('responses: Codex tool shapes', () => {
           name: call.name,
           arguments: call.arguments
         },
-        {
-          type: 'function_call_output',
-          call_id: call.call_id,
-          output: '{\n  "name": "acme-widgets",\n  "version": "1.2.0"\n}'
-        }
+        { type: 'function_call_output', call_id: call.call_id, output: runReadFile(call) }
       ],
       tools: codexTools
     })

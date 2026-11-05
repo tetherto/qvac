@@ -116,6 +116,7 @@ interface ResponsesTool {
   name?: string
   description?: string
   parameters?: Record<string, unknown>
+  defer_loading?: boolean
   tools?: ResponsesTool[]
 }
 
@@ -143,11 +144,12 @@ export function qualifiedToolName(namespace: string, name: string): string {
   return `${namespace}__${name}`
 }
 
-function functionTool(t: ResponsesTool, name: string): Tool {
+function functionTool(t: ResponsesTool, name: string, deferLoading = t.defer_loading): Tool {
   return {
     type: 'function',
     name,
     description: typeof t.description === 'string' ? t.description : '',
+    ...(typeof deferLoading === 'boolean' && { deferLoading }),
     parameters: normalizeToolParameters(
       t.parameters ?? { type: 'object', properties: {} }
     ) as Tool['parameters']
@@ -181,9 +183,16 @@ export function openaiResponsesToolsToSdk(tools: ResponsesTool[] | undefined): R
         const fn = inner as ResponsesTool
         if (fn.type !== 'function' || typeof fn.name !== 'string' || !fn.name) continue
         const qualified = qualifiedToolName(t.name, fn.name)
-        if (namespaces.has(qualified)) continue
+        const existing = namespaces.get(qualified)
+        if (existing) {
+          if (existing.namespace === t.name && existing.name === fn.name) continue
+          throw new InvalidResponsesToolsError(
+            `Tool "${fn.name}" in namespace "${t.name}" and tool "${existing.name}" in namespace ` +
+              `"${existing.namespace}" both become "${qualified}".`
+          )
+        }
         namespaces.set(qualified, { namespace: t.name, name: fn.name })
-        out.push(functionTool(fn, qualified))
+        out.push(functionTool(fn, qualified, fn.defer_loading ?? t.defer_loading))
       }
     } else {
       skippedTypes.add(t.type)
@@ -205,6 +214,23 @@ export function openaiResponsesToolsToSdk(tools: ResponsesTool[] | undefined): R
     namespaces,
     skippedTypes: [...skippedTypes]
   }
+}
+
+// The Responses API accepts `{ role, content }` without `type: "message"`.
+function isMessageItem(item: Record<string, unknown>): boolean {
+  return (
+    item['type'] === 'message' || (item['type'] === undefined && typeof item['role'] === 'string')
+  )
+}
+
+// A namespaced tool is named `<namespace>__<name>` for the model, so a forced
+// choice that names it by namespace has to use that name too.
+function qualifyToolChoice(body: Record<string, unknown>): Record<string, unknown> {
+  const choice = body['tool_choice']
+  if (choice === null || typeof choice !== 'object' || Array.isArray(choice)) return body
+  const { namespace, name, ...rest } = choice as Record<string, unknown>
+  if (typeof namespace !== 'string' || !namespace || typeof name !== 'string') return body
+  return { ...body, tool_choice: { ...rest, name: qualifiedToolName(namespace, name) } }
 }
 
 function inputTextPart(text: string): Record<string, unknown> {
@@ -326,7 +352,7 @@ export function openaiResponsesInputToHistory(
     if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) continue
     const item = raw as Record<string, unknown>
     const t = item['type']
-    if (t === 'message') {
+    if (isMessageItem(item)) {
       const role = typeof item['role'] === 'string' ? item['role'] : 'user'
       const content = item['content']
       history.push({ role, content: flattenResponsesContent(content) })
@@ -392,7 +418,7 @@ export function historyPrefixFromStoredResponse(
   for (const raw of stored.inputItems) {
     if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) continue
     const item = raw as Record<string, unknown>
-    if (item['type'] === 'message') {
+    if (isMessageItem(item)) {
       const role = typeof item['role'] === 'string' ? item['role'] : 'user'
       prefix.push({ role, content: flattenResponsesContent(item['content']) })
     } else if (item['type'] === 'input_text') {
@@ -493,7 +519,7 @@ export function toSdkResponsesArgs(body: ResponsesBody): SdkResponsesArgs {
     generationParams: withParallelToolCalls(
       withToolChoice(
         extractGenerationParams(body as Record<string, unknown>, 'max_output_tokens'),
-        extractToolChoice(body as Record<string, unknown>, tools)
+        extractToolChoice(qualifyToolChoice(body as Record<string, unknown>), tools)
       ),
       parallel
     ),

@@ -1133,6 +1133,85 @@ describe('openaiResponsesToolsToSdk: name collisions and bad shapes', () => {
   }
 })
 
+describe('Responses review follow-ups', () => {
+  it('keeps messages sent without type', () => {
+    const items = [
+      { role: 'developer', content: 'Use the tools.' },
+      { role: 'user', content: 'hello' }
+    ]
+    const expected = [
+      { role: 'system', content: 'Use the tools.' },
+      { role: 'user', content: 'hello' }
+    ]
+    assert.deepEqual(openaiResponsesInputToHistory(items, undefined), expected)
+    assert.deepEqual(
+      historyPrefixFromStoredResponse({
+        inputItems: items,
+        responseObject: { output: [], output_text: '' }
+      }),
+      [
+        { role: 'developer', content: 'Use the tools.' },
+        { role: 'user', content: 'hello' }
+      ]
+    )
+  })
+
+  it('rejects two namespaced tools that would share a qualified name', () => {
+    assert.throws(
+      () =>
+        openaiResponsesToolsToSdk([
+          { type: 'namespace', name: 'a__b', tools: [{ type: 'function', name: 'c' }] },
+          { type: 'namespace', name: 'a', tools: [{ type: 'function', name: 'b__c' }] }
+        ]),
+      InvalidResponsesToolsError
+    )
+  })
+
+  it('keeps defer_loading on top-level and namespaced tools', () => {
+    const t = openaiResponsesToolsToSdk([
+      { type: 'function', name: 'top', defer_loading: true },
+      {
+        type: 'namespace',
+        name: 'files',
+        tools: [
+          { type: 'function', name: 'read', defer_loading: true },
+          { type: 'function', name: 'list' }
+        ]
+      },
+      {
+        type: 'namespace',
+        name: 'mail',
+        defer_loading: true,
+        tools: [{ type: 'function', name: 'send' }]
+      }
+    ])
+    assert.deepEqual(
+      t.tools!.map((tool) => [tool.name, tool.deferLoading]),
+      [
+        ['top', true],
+        ['files__read', true],
+        ['files__list', undefined],
+        ['mail__send', true]
+      ]
+    )
+  })
+
+  it('forces a namespaced tool by its qualified name', () => {
+    const args = toSdkResponsesArgs(
+      responsesBody.parse({
+        model: 'm',
+        input: 'hi',
+        tools: [
+          { type: 'function', name: 'read' },
+          { type: 'namespace', name: 'files', tools: [{ type: 'function', name: 'read' }] }
+        ],
+        tool_choice: { type: 'function', namespace: 'files', name: 'read' }
+      })
+    )
+    assert.equal(args.generationParams?.tool_choice, 'files__read')
+  })
+})
+
 describe('openaiResponsesInputToHistory: namespaced calls', () => {
   it('replays a namespaced function_call under its qualified name', () => {
     const h = openaiResponsesInputToHistory(
