@@ -6546,11 +6546,11 @@ class EmbedTextRequest(GeneratedBaseModel):
     ] = None
 
 
-class Inputs(RootModel[str]):
-    root: Annotated[str, Field(min_length=1)]
+class EmbedInput1(RootModel[str]):
+    root: Annotated[str, Field(min_length=1, title="EmbedInput")]
 
 
-class EmbedInputsRequestInputsItemItemMediaBase64(GeneratedBaseModel):
+class EmbedMediaSourceBase64(GeneratedBaseModel):
     type: Literal["base64"] = "base64"
     value: Annotated[
         str,
@@ -6562,23 +6562,41 @@ class EmbedInputsRequestInputsItemItemMediaBase64(GeneratedBaseModel):
     ]
 
 
-class EmbedInputsRequestInputsItemItemMediaFilePath(GeneratedBaseModel):
+class EmbedMediaSourceFilePath(GeneratedBaseModel):
     type: Literal["filePath"] = "filePath"
     value: Annotated[str, Field(min_length=1)]
 
 
-class EmbedInputsRequestInputsItemItem(GeneratedBaseModel):
-    media: Annotated[
-        EmbedInputsRequestInputsItemItemMediaBase64
-        | EmbedInputsRequestInputsItemItemMediaFilePath,
+class EmbedMediaSource(RootModel[EmbedMediaSourceBase64 | EmbedMediaSourceFilePath]):
+    root: Annotated[
+        EmbedMediaSourceBase64 | EmbedMediaSourceFilePath,
         Field(
-            description="Image or WAV/MP3/FLAC bytes as base64, or a file path accessible to the inference worker."
+            description="Image or WAV/MP3/FLAC bytes as base64, or a file path accessible to the inference worker.",
+            title="EmbedMediaSource",
         ),
     ]
 
 
-class Inputs1(RootModel[list[str | EmbedInputsRequestInputsItemItem]]):
-    root: Annotated[list[str | EmbedInputsRequestInputsItemItem], Field(min_length=1)]
+class EmbedMediaInputPart(GeneratedBaseModel):
+    media: Annotated[
+        EmbedMediaSource,
+        Field(
+            description="Image or WAV/MP3/FLAC bytes as base64, or a file path accessible to the inference worker.",
+            title="EmbedMediaSource",
+        ),
+    ]
+
+
+class EmbedInputPart(RootModel[str | EmbedMediaInputPart]):
+    root: Annotated[str | EmbedMediaInputPart, Field(title="EmbedInputPart")]
+
+
+class EmbedInput2(RootModel[list[EmbedInputPart]]):
+    root: Annotated[list[EmbedInputPart], Field(min_length=1, title="EmbedInput")]
+
+
+class EmbedInput(RootModel[EmbedInput1 | EmbedInput2]):
+    root: Annotated[EmbedInput1 | EmbedInput2, Field(title="EmbedInput")]
 
 
 class EmbedInputsRequest(GeneratedBaseModel):
@@ -6593,7 +6611,7 @@ class EmbedInputsRequest(GeneratedBaseModel):
         ),
     ]
     inputs: Annotated[
-        list[Inputs | Inputs1],
+        list[EmbedInput],
         Field(
             description="One embedding per input. Each input is text or ordered text and media parts. Media requires projectionModelSrc at load time.",
             min_length=1,

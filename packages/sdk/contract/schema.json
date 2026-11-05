@@ -7555,7 +7555,7 @@
                                     }
                                   },
                                   "required": ["type", "value"],
-                                  "title": "EmbedInputsRequestInputsItemItemMediaBase64"
+                                  "title": "EmbedMediaSourceBase64"
                                 },
                                 {
                                   "type": "object",
@@ -7570,19 +7570,22 @@
                                     }
                                   },
                                   "required": ["type", "value"],
-                                  "title": "EmbedInputsRequestInputsItemItemMediaFilePath"
+                                  "title": "EmbedMediaSourceFilePath"
                                 }
                               ],
-                              "description": "Image or WAV/MP3/FLAC bytes as base64, or a file path accessible to the inference worker."
+                              "description": "Image or WAV/MP3/FLAC bytes as base64, or a file path accessible to the inference worker.",
+                              "title": "EmbedMediaSource"
                             }
                           },
                           "required": ["media"],
-                          "title": "EmbedInputsRequestInputsItemItem"
+                          "title": "EmbedMediaInputPart"
                         }
-                      ]
+                      ],
+                      "title": "EmbedInputPart"
                     }
                   }
-                ]
+                ],
+                "title": "EmbedInput"
               },
               "description": "One embedding per input. Each input is text or ordered text and media parts. Media requires projectionModelSrc at load time."
             },

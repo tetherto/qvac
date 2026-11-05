@@ -8,21 +8,26 @@ export const embedMediaSourceSchema = z
   .describe(
     'Image or WAV/MP3/FLAC bytes as base64, or a file path accessible to the inference worker.'
   )
+  .meta({ title: 'EmbedMediaSource' })
 
-export const embedInputPartSchema = z.union([
-  z.string(),
-  z.object({ media: embedMediaSourceSchema })
-])
-export const embedInputSchema = z.union([
-  z.string().min(1, 'Text cannot be empty'),
-  z
-    .array(embedInputPartSchema)
-    .min(1, 'Input parts cannot be empty')
-    .refine(
-      (parts) => parts.some((part) => typeof part !== 'string' || part.length > 0),
-      'Input cannot be empty'
-    )
-])
+export const embedInputPartSchema = z
+  .union([
+    z.string(),
+    z.object({ media: embedMediaSourceSchema }).meta({ title: 'EmbedMediaInputPart' })
+  ])
+  .meta({ title: 'EmbedInputPart' })
+export const embedInputSchema = z
+  .union([
+    z.string().min(1, 'Text cannot be empty'),
+    z
+      .array(embedInputPartSchema)
+      .min(1, 'Input parts cannot be empty')
+      .refine(
+        (parts) => parts.some((part) => typeof part !== 'string' || part.length > 0),
+        'Input cannot be empty'
+      )
+  ])
+  .meta({ title: 'EmbedInput' })
 const textEmbedParamsSchema = z.object({
   modelId: z.string().describe('The identifier of the embedding model to use'),
   text: z

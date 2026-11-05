@@ -2441,110 +2441,110 @@ internal object EmbedTextRequestTextSerializer : KSerializer<EmbedTextRequestTex
 @Serializable
 data class EmbedInputsRequest(
     @SerialName("modelId") val `modelId`: String,
-    @SerialName("inputs") val `inputs`: List<EmbedInputsRequestInputsItem>,
+    @SerialName("inputs") val `inputs`: List<EmbedInput>,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "embed",
     @SerialName("requestId") val `requestId`: String? = null,
 )
 
-@Serializable(with = EmbedInputsRequestInputsItemSerializer::class)
-sealed class EmbedInputsRequestInputsItem {
-    data class Variant1(val value: String) : EmbedInputsRequestInputsItem()
-    data class Variant2(val value: List<EmbedInputsRequestInputsItemVariant2Item>) : EmbedInputsRequestInputsItem()
+@Serializable(with = EmbedInputSerializer::class)
+sealed class EmbedInput {
+    data class Variant1(val value: String) : EmbedInput()
+    data class Variant2(val value: List<EmbedInputPart>) : EmbedInput()
 }
-internal object EmbedInputsRequestInputsItemSerializer : KSerializer<EmbedInputsRequestInputsItem> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("EmbedInputsRequestInputsItem")
+internal object EmbedInputSerializer : KSerializer<EmbedInput> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("EmbedInput")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"media\"],\"properties\":{\"media\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"value\"]},{\"type\":\"object\",\"required\":[\"type\",\"value\"]}]}}}]}}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): EmbedInputsRequestInputsItem {
+    override fun deserialize(decoder: Decoder): EmbedInput {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> EmbedInputsRequestInputsItem.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> EmbedInputsRequestInputsItem.Variant2(input.json.decodeFromJsonElement(serializer<List<EmbedInputsRequestInputsItemVariant2Item>>(), element))
-            else -> throw SerializationException("No matching EmbedInputsRequestInputsItem variant")
+            0 -> EmbedInput.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
+            1 -> EmbedInput.Variant2(input.json.decodeFromJsonElement(serializer<List<EmbedInputPart>>(), element))
+            else -> throw SerializationException("No matching EmbedInput variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: EmbedInputsRequestInputsItem) {
+    override fun serialize(encoder: Encoder, value: EmbedInput) {
         when (value) {
-            is EmbedInputsRequestInputsItem.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is EmbedInputsRequestInputsItem.Variant2 -> encoder.encodeSerializableValue(serializer<List<EmbedInputsRequestInputsItemVariant2Item>>(), value.value)
+            is EmbedInput.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is EmbedInput.Variant2 -> encoder.encodeSerializableValue(serializer<List<EmbedInputPart>>(), value.value)
         }
     }
 }
 
-@Serializable(with = EmbedInputsRequestInputsItemVariant2ItemSerializer::class)
-sealed class EmbedInputsRequestInputsItemVariant2Item {
-    data class Variant1(val value: String) : EmbedInputsRequestInputsItemVariant2Item()
-    data class EmbedInputsRequestInputsItemItem(val value: io.tether.qvac.sdk.generated.schema.EmbedInputsRequestInputsItemItem) : EmbedInputsRequestInputsItemVariant2Item()
+@Serializable(with = EmbedInputPartSerializer::class)
+sealed class EmbedInputPart {
+    data class Variant1(val value: String) : EmbedInputPart()
+    data class EmbedMediaInputPart(val value: io.tether.qvac.sdk.generated.schema.EmbedMediaInputPart) : EmbedInputPart()
 }
-internal object EmbedInputsRequestInputsItemVariant2ItemSerializer : KSerializer<EmbedInputsRequestInputsItemVariant2Item> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("EmbedInputsRequestInputsItemVariant2Item")
+internal object EmbedInputPartSerializer : KSerializer<EmbedInputPart> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("EmbedInputPart")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"media\"],\"properties\":{\"media\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"base64\"},\"value\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"filePath\"},\"value\":{\"type\":\"string\"}}}]}}}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): EmbedInputsRequestInputsItemVariant2Item {
+    override fun deserialize(decoder: Decoder): EmbedInputPart {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> EmbedInputsRequestInputsItemVariant2Item.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> EmbedInputsRequestInputsItemVariant2Item.EmbedInputsRequestInputsItemItem(input.json.decodeFromJsonElement(serializer<EmbedInputsRequestInputsItemItem>(), element))
-            else -> throw SerializationException("No matching EmbedInputsRequestInputsItemVariant2Item variant")
+            0 -> EmbedInputPart.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
+            1 -> EmbedInputPart.EmbedMediaInputPart(input.json.decodeFromJsonElement(serializer<EmbedMediaInputPart>(), element))
+            else -> throw SerializationException("No matching EmbedInputPart variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: EmbedInputsRequestInputsItemVariant2Item) {
+    override fun serialize(encoder: Encoder, value: EmbedInputPart) {
         when (value) {
-            is EmbedInputsRequestInputsItemVariant2Item.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is EmbedInputsRequestInputsItemVariant2Item.EmbedInputsRequestInputsItemItem -> encoder.encodeSerializableValue(serializer<EmbedInputsRequestInputsItemItem>(), value.value)
+            is EmbedInputPart.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is EmbedInputPart.EmbedMediaInputPart -> encoder.encodeSerializableValue(serializer<EmbedMediaInputPart>(), value.value)
         }
     }
 }
 
 @Serializable
-data class EmbedInputsRequestInputsItemItem(
-    @SerialName("media") val `media`: EmbedInputsRequestInputsItemItemMedia,
+data class EmbedMediaInputPart(
+    @SerialName("media") val `media`: EmbedMediaSource,
 )
 
-@Serializable(with = EmbedInputsRequestInputsItemItemMediaSerializer::class)
-sealed class EmbedInputsRequestInputsItemItemMedia {
-    data class Base64(val value: io.tether.qvac.sdk.generated.schema.EmbedInputsRequestInputsItemItemMediaBase64) : EmbedInputsRequestInputsItemItemMedia()
-    data class FilePath(val value: io.tether.qvac.sdk.generated.schema.EmbedInputsRequestInputsItemItemMediaFilePath) : EmbedInputsRequestInputsItemItemMedia()
+@Serializable(with = EmbedMediaSourceSerializer::class)
+sealed class EmbedMediaSource {
+    data class Base64(val value: io.tether.qvac.sdk.generated.schema.EmbedMediaSourceBase64) : EmbedMediaSource()
+    data class FilePath(val value: io.tether.qvac.sdk.generated.schema.EmbedMediaSourceFilePath) : EmbedMediaSource()
 }
-internal object EmbedInputsRequestInputsItemItemMediaSerializer : KSerializer<EmbedInputsRequestInputsItemItemMedia> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("EmbedInputsRequestInputsItemItemMedia")
+internal object EmbedMediaSourceSerializer : KSerializer<EmbedMediaSource> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("EmbedMediaSource")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"base64\"},\"value\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"filePath\"},\"value\":{\"type\":\"string\"}}}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): EmbedInputsRequestInputsItemItemMedia {
+    override fun deserialize(decoder: Decoder): EmbedMediaSource {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> EmbedInputsRequestInputsItemItemMedia.Base64(input.json.decodeFromJsonElement(serializer<EmbedInputsRequestInputsItemItemMediaBase64>(), element))
-            1 -> EmbedInputsRequestInputsItemItemMedia.FilePath(input.json.decodeFromJsonElement(serializer<EmbedInputsRequestInputsItemItemMediaFilePath>(), element))
-            else -> throw SerializationException("No matching EmbedInputsRequestInputsItemItemMedia variant")
+            0 -> EmbedMediaSource.Base64(input.json.decodeFromJsonElement(serializer<EmbedMediaSourceBase64>(), element))
+            1 -> EmbedMediaSource.FilePath(input.json.decodeFromJsonElement(serializer<EmbedMediaSourceFilePath>(), element))
+            else -> throw SerializationException("No matching EmbedMediaSource variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: EmbedInputsRequestInputsItemItemMedia) {
+    override fun serialize(encoder: Encoder, value: EmbedMediaSource) {
         when (value) {
-            is EmbedInputsRequestInputsItemItemMedia.Base64 -> encoder.encodeSerializableValue(serializer<EmbedInputsRequestInputsItemItemMediaBase64>(), value.value)
-            is EmbedInputsRequestInputsItemItemMedia.FilePath -> encoder.encodeSerializableValue(serializer<EmbedInputsRequestInputsItemItemMediaFilePath>(), value.value)
+            is EmbedMediaSource.Base64 -> encoder.encodeSerializableValue(serializer<EmbedMediaSourceBase64>(), value.value)
+            is EmbedMediaSource.FilePath -> encoder.encodeSerializableValue(serializer<EmbedMediaSourceFilePath>(), value.value)
         }
     }
 }
 
 @Serializable
-data class EmbedInputsRequestInputsItemItemMediaBase64(
+data class EmbedMediaSourceBase64(
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "base64",
     @SerialName("value") val `value`: String,
 )
 
 @Serializable
-data class EmbedInputsRequestInputsItemItemMediaFilePath(
+data class EmbedMediaSourceFilePath(
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "filePath",
     @SerialName("value") val `value`: String,
