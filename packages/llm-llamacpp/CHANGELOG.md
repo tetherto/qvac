@@ -10,6 +10,15 @@
   split. The KV cache stays at `f16` on the NPU, whose attention kernels take
   only `f16` K/V.
 
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.26.0` -> `^0.27.0`, whose Linux x64
+  package ships the XDNA backend and its NPU kernels (system XRT 2.25 or newer
+  required to load it). A caret on a `0.x` version locks the minor, so
+  `^0.26.0` would not have resolved `0.27.0`. The mobile dev and peer
+  dependencies `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to
+  `^0.27.0` with it.
+
 ### Fixed
 
 - With `parallel >= 2`, a request whose chat template force-opens the
