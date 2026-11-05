@@ -577,14 +577,14 @@ void LlamaModelLoader::init(LlamaModelSetup& setup) {
         toString(UnableToLoadModel),
         "model initialization returned a null model/context");
   }
+  if (hooks_.onLoaded) {
+    hooks_.onLoaded(model_, ctx_);
+  }
   const auto backendName = qvac_lib_inference_addon_embed::backend_reporting::
       runtimeModelBackendName(ctx_);
   runtimeBackendName_->set(backendName);
   if (!backendName.empty()) {
     runtimeBackendDevice_ = backendName == "cpu" ? 0 : 1;
-  }
-  if (hooks_.onLoaded) {
-    hooks_.onLoaded(model_, ctx_);
   }
 
   // print system information
