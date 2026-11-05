@@ -164,6 +164,30 @@ function normalizedPatternVec(row) {
   return vector
 }
 
+// Unit rows from a fixed mulberry32 stream, so no two rows are near-copies.
+function seededUnitRows(rows, seed) {
+  let state = seed >>> 0
+  const next = () => {
+    state = (state + 0x6d2b79f5) >>> 0
+    let x = state
+    x = Math.imul(x ^ (x >>> 15), x | 1)
+    x ^= x + Math.imul(x ^ (x >>> 7), x | 61)
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296 - 0.5
+  }
+  const vectors = new Float32Array(rows * TURBOVEC_DIM)
+  for (let row = 0; row < rows; row++) {
+    let norm = 0
+    for (let col = 0; col < TURBOVEC_DIM; col++) {
+      const value = next()
+      vectors[row * TURBOVEC_DIM + col] = value
+      norm += value * value
+    }
+    norm = Math.sqrt(norm) || 1
+    for (let col = 0; col < TURBOVEC_DIM; col++) vectors[row * TURBOVEC_DIM + col] /= norm
+  }
+  return vectors
+}
+
 function runTurboVecRoundTrip(t, storage, bitWidth) {
   const idx = new IdMapIndex({ dim: TURBOVEC_DIM, storage })
   const localN = 6
@@ -903,12 +927,11 @@ test('IdMapIndex: TurboVec calibrates from a first add of 1000 rows', (t) => {
     return
   }
   const rows = 1000
-  const vectors = new Float32Array(rows * TURBOVEC_DIM)
+  // Seeded random rows: normalizedPatternVec repeats with a period near 2*pi*113,
+  // so row 710 is a near-copy of row 0 and a 4-bit search can return either.
+  const vectors = seededUnitRows(rows, 0x5eed)
   const ids = new BigUint64Array(rows)
-  for (let i = 0; i < rows; i++) {
-    vectors.set(normalizedPatternVec(i), i * TURBOVEC_DIM)
-    ids[i] = BigInt(i + 1)
-  }
+  for (let i = 0; i < rows; i++) ids[i] = BigInt(i + 1)
   const file = tmpPath('id-map-index-turbovec-calibrated')
   const idx = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'turbovec-q4' })
   const small = new IdMapIndex({ dim: TURBOVEC_DIM, storage: 'turbovec-q4' })
