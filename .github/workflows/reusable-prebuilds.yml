@@ -636,7 +636,12 @@ jobs:
               exit 1
             fi
           done
-          ls -l "$dir"/*.xclbin "$dir"/*.insts.bin
+          instructions=("$dir"/*.insts.bin)
+          if [ "${#instructions[@]}" -eq 0 ]; then
+            echo "::error::no *.insts.bin next to $module"
+            exit 1
+          fi
+          ls -l "$dir"/*.xclbin "${instructions[@]}"
 
       - if: ${{ inputs.include-cuda && inputs.include-cuda-win32 && matrix.platform == 'win32' && matrix.arch == 'x64' }}
         name: Verify Windows CUDA and Vulkan modules
