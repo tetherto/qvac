@@ -558,7 +558,9 @@ for (const lane of [
 
 test(
   'ABot-World: full world generation - native scene creation + KV-cache walk',
-  { skip, timeout: 2_400_000 },
+  // Temporarily disabled at the author's request: the KV append pass
+  // exhausted GPU memory in run 42022226424 (job 127236233013).
+  { skip: true, timeout: 2_400_000 },
   async (t) => {
     setupJsLogger()
     t.teardown(releaseJsLogger)

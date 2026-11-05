@@ -405,7 +405,8 @@ for (const backend of ['Vulkan', 'CUDA']) {
             backend: assignment,
             threads: 4,
             prediction: 'v',
-            verbosity: 2
+            // Runtime backend evidence is emitted at DEBUG level.
+            verbosity: 3
           },
           logger: console
         })
