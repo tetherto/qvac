@@ -16,6 +16,38 @@ function device(name: string, usedBytes: number) {
   }
 }
 
+function legacyLlamaDevice(name: string, modelBytes: number) {
+  return {
+    name,
+    totalBytes: 24 * 1024 ** 3,
+    freeBytes: 20 * 1024 ** 3,
+    modelBytes,
+    contextBytes: 0,
+    computeBytes: 0
+  }
+}
+
+function legacyEmbed(devices: ReturnType<typeof legacyLlamaDevice>[]) {
+  return {
+    engine: 'embed-llamacpp' as const,
+    result: {
+      status: 'fits' as const,
+      reason: 'fits' as const,
+      gpuLayers: 32,
+      ctxSize: 4096,
+      devices,
+      deviceBytes: devices
+        .filter((row) => row.name !== 'host')
+        .reduce((total, row) => total + row.modelBytes + row.contextBytes + row.computeBytes, 0),
+      hostBytes: devices
+        .filter((row) => row.name === 'host')
+        .reduce((total, row) => total + row.modelBytes + row.contextBytes + row.computeBytes, 0),
+      trainCtxSize: 8192,
+      expertCount: 0
+    }
+  }
+}
+
 type LlamaProbeResult = Extract<FitProbeResult, { engine: 'llm-llamacpp' }>['result']
 
 function llama(
@@ -33,14 +65,12 @@ function llama(
   }
 }
 
-// Shared fit results roll out independently across addon packages. Keep these
-// fixtures structural so the SDK consumer leg also compiles against the latest
-// published package set while exercising the common runtime contract.
-function shared(
-  engine: 'tts-ggml' | 'audiogen-ggml',
-  devices: ReturnType<typeof device>[]
-): FitProbeResult {
-  return { engine, result: { status: 'fits', devices, stats: {} } } as never
+function sharedTts(devices: ReturnType<typeof device>[]): FitProbeResult {
+  return { engine: 'tts-ggml', result: { status: 'fits', devices, stats: {} } }
+}
+
+function sharedAudiogen(devices: ReturnType<typeof device>[]): FitProbeResult {
+  return { engine: 'audiogen-ggml', result: { status: 'fits', devices, stats: {} } }
 }
 
 function legacyTts() {
@@ -78,6 +108,22 @@ function legacyBci() {
       weightsBytes: 1024 ** 3,
       kvBytes: 64 * 1024 ** 2,
       computeBytes: 32 * 1024 ** 2
+    }
+  }
+}
+
+function legacyAudiogen() {
+  return {
+    engine: 'audiogen-ggml' as const,
+    result: {
+      status: 'fits' as const,
+      reason: 'fits',
+      deviceName: 'Metal',
+      deviceBytes: 3 * 1024 ** 3,
+      hostBytes: 128 * 1024 ** 2,
+      deviceFreeBytes: 20 * 1024 ** 3,
+      deviceTotalBytes: 24 * 1024 ** 3,
+      report: 'table'
     }
   }
 }
@@ -194,7 +240,7 @@ test('the diffusion placement stands in for a reason string', (t) => {
 
 test('a speech projection carries the device the engine measured', (t) => {
   const outcome = classifyFit(
-    shared('tts-ggml', [device('Metal', 2 * 1024 ** 3), device('CPU', 128 * 1024 ** 2)]),
+    sharedTts([device('Metal', 2 * 1024 ** 3), device('CPU', 128 * 1024 ** 2)]),
     PROVENANCE
   )
 
@@ -227,13 +273,93 @@ test('published bci fit results keep their memory breakdown', (t) => {
   t.is(outcome.projection?.computeBytes, 32 * 1024 ** 2)
 })
 
-test('an engine reporting only a total has no breakdown', (t) => {
-  const outcome = classifyFit(shared('audiogen-ggml', [device('Metal', 3 * 1024 ** 3)]), PROVENANCE)
+test('published audiogen fit results keep their totals', (t) => {
+  const outcome = classifyFit(legacyAudiogen(), PROVENANCE)
+
+  t.is(outcome.projection?.deviceBytes, 3 * 1024 ** 3)
+  t.is(outcome.projection?.hostBytes, 128 * 1024 ** 2)
+  t.absent(outcome.projection?.weightsBytes)
+  t.absent(outcome.projection?.contextBytes)
+  t.absent(outcome.projection?.computeBytes)
+})
+
+test('a shared engine result reporting only totals has no breakdown', (t) => {
+  const outcome = classifyFit(sharedAudiogen([device('Metal', 3 * 1024 ** 3)]), PROVENANCE)
 
   t.absent(outcome.projection?.weightsBytes)
   t.absent(outcome.projection?.contextBytes)
   t.absent(outcome.projection?.computeBytes)
   t.is(outcome.projection?.deviceBytes, 3 * 1024 ** 3)
+})
+
+test('the embed breakdown sums every device the demand is charged to', (t) => {
+  const rows = [
+    {
+      ...legacyLlamaDevice('CUDA0', 3 * 1024 ** 3),
+      contextBytes: 1024 ** 3,
+      computeBytes: 256 * 1024 ** 2
+    },
+    {
+      ...legacyLlamaDevice('CUDA1', 2 * 1024 ** 3),
+      contextBytes: 512 * 1024 ** 2
+    },
+    {
+      ...legacyLlamaDevice('host', 1024 ** 3),
+      contextBytes: 1024 ** 3,
+      computeBytes: 1024 ** 3
+    }
+  ]
+
+  const outcome = classifyFit(legacyEmbed(rows), PROVENANCE)
+
+  t.is(outcome.projection?.weightsBytes, 5 * 1024 ** 3)
+  t.is(outcome.projection?.contextBytes, 1536 * 1024 ** 2)
+  t.is(outcome.projection?.computeBytes, 256 * 1024 ** 2)
+})
+
+test('the embed projection keeps a row per device, host excluded', (t) => {
+  const rows = [
+    {
+      ...legacyLlamaDevice('CPU', 1024 ** 3),
+      contextBytes: 256 * 1024 ** 2
+    },
+    {
+      ...legacyLlamaDevice('CUDA0', 3 * 1024 ** 3),
+      contextBytes: 1024 ** 3,
+      computeBytes: 256 * 1024 ** 2
+    },
+    {
+      ...legacyLlamaDevice('CUDA1', 2 * 1024 ** 3),
+      contextBytes: 512 * 1024 ** 2
+    },
+    {
+      ...legacyLlamaDevice('host', 1024 ** 3),
+      contextBytes: 1024 ** 3,
+      computeBytes: 1024 ** 3
+    }
+  ]
+
+  const outcome = classifyFit(legacyEmbed(rows), PROVENANCE)
+  const devices = outcome.projection?.devices
+
+  t.is(devices?.length, 3, 'the host row is carried by hostBytes instead')
+  t.alike(
+    devices?.map((row) => row.name),
+    ['CPU', 'CUDA0', 'CUDA1']
+  )
+  t.is(outcome.projection?.deviceName, 'CUDA0', 'deviceName names the first non-CPU row')
+  t.is(devices?.[1]?.weightsBytes, 3 * 1024 ** 3)
+  t.is(devices?.[1]?.contextBytes, 1024 ** 3)
+  t.is(devices?.[2]?.weightsBytes, 2 * 1024 ** 3)
+
+  const summed = devices?.reduce((total, row) => total + row.weightsBytes, 0)
+  t.is(summed, outcome.projection?.weightsBytes, 'the flattened total sums the rows')
+})
+
+test('an engine other than legacy llama carries no device rows', (t) => {
+  const outcome = classifyFit(legacyTts(), PROVENANCE)
+
+  t.absent(outcome.projection?.devices)
 })
 
 test('a translation projection charges its whole allowance to the device it ran on', (t) => {

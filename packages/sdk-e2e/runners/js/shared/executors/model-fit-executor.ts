@@ -141,6 +141,13 @@ export class ModelFitExecutor extends AbstractModelExecutor<typeof modelFitTests
         (projection?.report ?? '').length > 0
 
       const deviceBytes = projection?.deviceBytes ?? 0
+      const breakdown = [
+        projection?.weightsBytes,
+        projection?.contextBytes,
+        projection?.computeBytes
+      ]
+      const hasBreakdown = breakdown.every((value) => value !== undefined)
+      const hasNoBreakdown = breakdown.every((value) => value === undefined)
       const projectedBytes =
         (projection?.weightsBytes ?? 0) +
         (projection?.contextBytes ?? 0) +
@@ -160,8 +167,8 @@ export class ModelFitExecutor extends AbstractModelExecutor<typeof modelFitTests
               verdictHoldsAgainstItsOwnFigures:
                 fit.verdict === 'fit' ||
                 (fit.verdict === 'does-not-fit' &&
-                  deviceBytes > 0 &&
-                  projectedBytes >= deviceBytes),
+                  ((hasBreakdown && deviceBytes > 0 && projectedBytes >= deviceBytes) ||
+                    (hasNoBreakdown && (deviceBytes > 0 || (projection?.hostBytes ?? 0) > 0)))),
               projectionMeasured: measured
             }
 
