@@ -1,7 +1,10 @@
 #pragma once
 
+#include <algorithm>
+#include <any>
 #include <memory>
 #include <string>
+#include <variant>
 
 #include <inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
 
@@ -29,8 +32,19 @@ public:
   }
 
   js_value_t* handleOutput(const std::any& output) const override {
-    auto* value = numericStats_.handleOutput(output);
-    const auto name = backendName_->get();
+    auto stats =
+        std::any_cast<qvac_lib_inference_addon_cpp::RuntimeStats>(output);
+    std::string name;
+    std::erase_if(stats, [this, &name](const auto& stat) {
+      if (stat.first != kBackendNameId) {
+        return false;
+      }
+      if (const auto* id = std::get_if<int64_t>(&stat.second)) {
+        name = backendName_->get(*id);
+      }
+      return true;
+    });
+    auto* value = numericStats_.handleOutput(std::any{std::move(stats)});
     if (!name.empty()) {
       qvac_lib_inference_addon_cpp::js::Object object{env_, value};
       object.setProperty(
