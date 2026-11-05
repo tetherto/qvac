@@ -10,6 +10,7 @@ import {
   type AudioEditStreamResponse,
   type AudioGenAudio,
   type AudioGenClientParams,
+  type AudioGenEncodedAudio,
   type AudioGenProgress,
   type AudioGenResult,
   type AudioGenStats,
@@ -36,6 +37,72 @@ export type AudioUnderstandStreamFactory = (
 
 type AudioRunFrame = AudioGenStreamResponse | AudioEditStreamResponse
 
+/**
+ * A queue one consumer drains as an async generator. It ends when the run
+ * does, and throws the run's error once the queued items are delivered.
+ */
+function createFeed<T>() {
+  const queue: T[] = []
+  let closed = false
+  let failure: Error | undefined
+  let wake: (() => void) | undefined
+
+  function notify() {
+    wake?.()
+    wake = undefined
+  }
+
+  async function* drain(): AsyncGenerator<T> {
+    while (true) {
+      if (queue.length > 0) {
+        yield queue.shift() as T
+        continue
+      }
+      if (closed) {
+        if (failure !== undefined) throw failure
+        return
+      }
+      await new Promise<void>((resolve) => {
+        wake = resolve
+      })
+    }
+  }
+
+  return {
+    push(item: T) {
+      queue.push(item)
+      notify()
+    },
+    close(error?: Error) {
+      closed = true
+      failure = error
+      notify()
+    },
+    stream: drain()
+  }
+}
+
+/**
+ * Copies one PCM frame into its own `Int16Array`. The copy keeps a caller
+ * that edits a chunk in place from changing `audio`, and gives the samples
+ * the alignment a view over the decoded bytes might lack.
+ */
+function toInt16Chunk(bytes: Uint8Array, wireType: string): Int16Array {
+  if (bytes.byteLength % Int16Array.BYTES_PER_ELEMENT !== 0) {
+    throw new InvalidResponseError(`${wireType} audio chunk`)
+  }
+  const samples = new Int16Array(bytes.byteLength / Int16Array.BYTES_PER_ELEMENT)
+  new Uint8Array(samples.buffer).set(bytes)
+  return samples
+}
+
+async function* int16Chunks(
+  source: AsyncGenerator<Uint8Array>,
+  wireType: string
+): AsyncGenerator<Int16Array> {
+  for await (const bytes of source) yield toInt16Chunk(bytes, wireType)
+}
+
 function concatenateChunks(chunks: Uint8Array[]) {
   const totalLength = chunks.reduce((total, chunk) => total + chunk.length, 0)
   const pcm = new Uint8Array(totalLength)
@@ -58,8 +125,12 @@ export function createAudioGenResult(
     type: 'audioGenStream',
     requestId
   }
-  return collectAudioRun(requestId, 'audioGenStream', audioGenStreamResponseSchema, () =>
-    streamFactory(request)
+  return collectAudioRun(
+    requestId,
+    'audioGenStream',
+    audioGenStreamResponseSchema,
+    () => streamFactory(request),
+    request.outputFormat !== undefined
   )
 }
 
@@ -74,8 +145,12 @@ export function createAudioEditResult(
     type: 'audioEditStream',
     requestId
   }
-  return collectAudioRun(requestId, 'audioEditStream', audioEditStreamResponseSchema, () =>
-    streamFactory(request)
+  return collectAudioRun(
+    requestId,
+    'audioEditStream',
+    audioEditStreamResponseSchema,
+    () => streamFactory(request),
+    request.outputFormat !== undefined
   )
 }
 
@@ -104,6 +179,8 @@ interface RunSink<TFrame, TPayload> {
   absorb(frame: TFrame): void
   /** Build the payload from the terminal frame, or throw if it is incomplete. */
   settle(frame: TFrame): TPayload
+  /** The run is over: `error` is set when it failed, unset when it completed or was cancelled. */
+  close?(error?: Error): void
 }
 
 interface RunFrame {
@@ -121,10 +198,7 @@ function collectRun<TFrame extends RunFrame, TPayload>(
   open: () => AsyncGenerator<unknown>,
   sink: RunSink<TFrame, TPayload>
 ) {
-  const progressQueue: AudioGenProgress[] = []
-  let progressDone = false
-  let progressError: Error | undefined
-  let progressResolve: (() => void) | undefined
+  const progress = createFeed<AudioGenProgress>()
 
   let resolvePayload: (payload: TPayload) => void = () => {}
   let rejectPayload: (error: unknown) => void = () => {}
@@ -150,11 +224,6 @@ function collectRun<TFrame extends RunFrame, TPayload>(
   })
   diagnostics.catch(() => {})
 
-  function notifyProgress() {
-    progressResolve?.()
-    progressResolve = undefined
-  }
-
   function rejectAll(error: unknown) {
     rejectPayload(error)
     rejectStats(error)
@@ -163,6 +232,7 @@ function collectRun<TFrame extends RunFrame, TPayload>(
 
   async function processResponses() {
     let receivedDone = false
+    let failure: Error | undefined
     try {
       for await (const response of open()) {
         if (
@@ -175,10 +245,7 @@ function collectRun<TFrame extends RunFrame, TPayload>(
         }
         const frame = responseSchema.parse(response)
 
-        if (frame.progress) {
-          progressQueue.push(frame.progress)
-          notifyProgress()
-        }
+        if (frame.progress) progress.push(frame.progress)
 
         sink.absorb(frame)
 
@@ -200,34 +267,17 @@ function collectRun<TFrame extends RunFrame, TPayload>(
         throw new InvalidResponseError(`${wireType} terminal response`)
       }
     } catch (error) {
-      progressError = error instanceof Error ? error : new InvalidResponseError(wireType, error)
-      rejectAll(progressError)
+      failure = error instanceof Error ? error : new InvalidResponseError(wireType, error)
+      rejectAll(failure)
     } finally {
-      progressDone = true
-      notifyProgress()
-    }
-  }
-
-  async function* progressStream(): AsyncGenerator<AudioGenProgress> {
-    while (true) {
-      const tick = progressQueue.shift()
-      if (tick) {
-        yield tick
-        continue
-      }
-      if (progressDone) {
-        if (progressError !== undefined) throw progressError
-        return
-      }
-      await new Promise<void>((resolve) => {
-        progressResolve = resolve
-      })
+      progress.close(failure)
+      sink.close?.(failure)
     }
   }
 
   void processResponses()
 
-  return { requestId, progressStream: progressStream(), payload, stats, diagnostics }
+  return { requestId, progressStream: progress.stream, payload, stats, diagnostics }
 }
 
 /**
@@ -264,18 +314,25 @@ function collectUnderstandRun(
 
 /**
  * Consumes one generation or editing stream: PCM chunks accumulate into
- * `audio`, carrying the format reported alongside them.
+ * `audio`, carrying the format reported alongside them, and are offered one
+ * by one on `chunkStream`. The encoded file, when the request asked for one,
+ * settles `encoded`.
  */
 function collectAudioRun(
   requestId: string,
   wireType: AudioRunFrame['type'],
   responseSchema: z.ZodType<AudioRunFrame>,
-  open: () => AsyncGenerator<unknown>
+  open: () => AsyncGenerator<unknown>,
+  expectsEncoded: boolean
 ): AudioGenResult {
   const pcmChunks: Uint8Array[] = []
   let sampleRate: number | undefined
   let channels: number | undefined
   let bitsPerSample: number | undefined
+  let encoded: AudioGenEncodedAudio | undefined
+  // Holds the same arrays as `pcmChunks`; the Int16 copy is made as a chunk
+  // is read, so a caller that never iterates `chunkStream` pays nothing.
+  const chunks = createFeed<Uint8Array>()
 
   const { progressStream, payload, stats, diagnostics } = collectRun(
     requestId,
@@ -284,8 +341,13 @@ function collectAudioRun(
     open,
     {
       absorb(frame) {
+        if (frame.encoded !== undefined) {
+          encoded = { ...frame.encoded, data: decodeBase64(frame.encoded.data) }
+        }
         if (frame.data === undefined) return
-        pcmChunks.push(decodeBase64(frame.data))
+        const bytes = decodeBase64(frame.data)
+        pcmChunks.push(bytes)
+        chunks.push(bytes)
         sampleRate = frame.sampleRate
         channels = frame.channels
         bitsPerSample = frame.bitsPerSample
@@ -294,15 +356,37 @@ function collectAudioRun(
         if (sampleRate === undefined || channels === undefined || bitsPerSample === undefined) {
           throw new InvalidResponseError(`${wireType} audio chunk`)
         }
+        if (expectsEncoded && encoded === undefined) {
+          throw new InvalidResponseError(`${wireType} encoded audio`)
+        }
         return {
-          pcm: concatenateChunks(pcmChunks),
-          sampleRate,
-          channels,
-          bitsPerSample
-        } satisfies AudioGenAudio
+          audio: {
+            pcm: concatenateChunks(pcmChunks),
+            sampleRate,
+            channels,
+            bitsPerSample
+          } satisfies AudioGenAudio,
+          encoded
+        }
+      },
+      close(error) {
+        chunks.close(error)
       }
     }
   )
 
-  return { requestId, progressStream, audio: payload, stats, diagnostics }
+  const audio = payload.then((settled) => settled.audio)
+  const encodedAudio = payload.then((settled) => settled.encoded)
+  audio.catch(() => {})
+  encodedAudio.catch(() => {})
+
+  return {
+    requestId,
+    progressStream,
+    chunkStream: int16Chunks(chunks.stream, wireType),
+    audio,
+    encoded: encodedAudio,
+    stats,
+    diagnostics
+  }
 }

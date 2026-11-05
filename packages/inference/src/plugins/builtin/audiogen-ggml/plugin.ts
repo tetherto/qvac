@@ -120,6 +120,10 @@ function getAudioGenAddonConfig(config: AudioGenRuntimeConfig) {
     return {
       ...commonConfig,
       ...(config.device !== undefined && { device: config.device }),
+      ...(config.coremlProfileDir !== undefined && { coremlProfileDir: config.coremlProfileDir }),
+      ...(config.coremlComputeUnits !== undefined && {
+        coremlComputeUnits: config.coremlComputeUnits
+      }),
       ...(config.inferenceSteps !== undefined && { inferenceSteps: config.inferenceSteps }),
       ...(config.cfgScale !== undefined && { cfgScale: config.cfgScale })
     }

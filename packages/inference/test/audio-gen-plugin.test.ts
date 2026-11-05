@@ -592,3 +592,76 @@ test('queued AudioGen run waits for active native cancellation to settle', async
   t.is(getRequestRegistry().get(activeRequestId), null)
   t.is(getRequestRegistry().get(queuedRequestId), null)
 })
+
+test('audioGen sends the encoded file after the PCM and before the terminal frame', async (t) => {
+  const modelId = 'audio-gen-operation-encoded'
+  const model = createModel(
+    createResponse(
+      [
+        { outputArray: new Int16Array([1, -1]), sampleRate: 44100, channels: 1 },
+        { outputArray: new Int16Array([2, -2]), sampleRate: 44100, channels: 1 }
+      ],
+      { audioDurationMs: 10, totalTimeMs: 5, realTimeFactor: 0.5 }
+    )
+  )
+  registerAudioGenModel(modelId, model)
+  t.teardown(() => {
+    unregisterModel(modelId)
+  })
+
+  const frames = []
+  for await (const frame of audioGenStream({
+    type: 'audioGenStream',
+    requestId: 'audio-gen-request-encoded',
+    modelId,
+    caption: 'ambient electronic music',
+    outputFormat: 'wav'
+  })) {
+    frames.push(frame)
+  }
+
+  t.is(frames.length, 4)
+  t.ok(frames[0]?.data !== undefined)
+  t.ok(frames[1]?.data !== undefined)
+  t.is(frames[2]?.done, false)
+  t.is(frames[2]?.data, undefined, 'the file travels on its own frame')
+  t.is(frames[2]?.encoded?.format, 'wav')
+  t.is(frames[2]?.encoded?.mimeType, 'audio/wav')
+  t.is(frames[2]?.encoded?.extension, 'wav')
+  const wav = Buffer.from(frames[2]?.encoded?.data ?? '', 'base64')
+  t.is(wav.byteLength, 44 + 8, 'a 44-byte header and both chunks')
+  t.is(wav.readUInt16LE(22), 1, 'the header carries the layout the engine reported')
+  t.is(wav.readUInt32LE(24), 44100)
+  t.is(frames[3]?.done, true)
+  t.is(frames[3]?.encoded, undefined)
+})
+
+test('audioGen sends no encoded frame for a cancelled run', async (t) => {
+  const modelId = 'audio-gen-operation-encoded-cancel'
+  const requestId = 'audio-gen-request-encoded-cancel'
+  const model = createModel(
+    createResponse([{ outputArray: new Int16Array([1, -1]), sampleRate: 44100, channels: 2 }], {
+      audioDurationMs: 10,
+      totalTimeMs: 5,
+      realTimeFactor: 0.5
+    })
+  )
+  registerAudioGenModel(modelId, model)
+  t.teardown(() => {
+    unregisterModel(modelId)
+  })
+
+  const stream = audioGenStream({
+    type: 'audioGenStream',
+    requestId,
+    modelId,
+    caption: 'ambient electronic music',
+    outputFormat: 'wav'
+  })
+  const first = await stream.next()
+  t.ok(first.value?.data !== undefined)
+  getRequestRegistry().cancel({ requestId })
+  const rest = []
+  for await (const frame of stream) rest.push(frame)
+  t.alike(rest, [{ type: 'audioGenStream', done: true, stopReason: 'cancelled' }])
+})

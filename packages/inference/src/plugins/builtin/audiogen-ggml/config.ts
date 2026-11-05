@@ -17,6 +17,11 @@ async function resolveMinimaxConfig(parsed: MinimaxAudioGenConfig, ctx: ResolveC
   if (ctx.platform === 'android' || ctx.platform === 'ios') {
     throw new ModelLoadFailedError('MiniMax-Music3 is available on desktop only')
   }
+  // Refused before the model pair is resolved: the addon would only say so
+  // once several gigabytes had been downloaded.
+  if (parsed.coremlProfileDir !== undefined && ctx.platform !== 'darwin') {
+    throw new ModelLoadFailedError('MiniMax Core ML requires macOS 15 or later')
+  }
 
   const { lmModelSrc, synthModelSrc, ...runtimeConfig } = parsed
   // Resolve sequentially for the same stall-timeout reason documented for the
