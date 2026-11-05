@@ -10,13 +10,7 @@ export interface AssetRef {
   $asset: { kind: string; file: string }
 }
 
-/** A data file shipped inside a package, named rather than pathed. */
-export interface PackageAssetRef {
-  $packageAsset: { package: string; file: string }
-}
-
-export type ResourceValue =
-  ConstRef | AssetRef | PackageAssetRef | ResourceValue[] | { [key: string]: unknown }
+export type ResourceValue = ConstRef | AssetRef | ResourceValue[] | { [key: string]: unknown }
 
 export interface ResourceEntry {
   /**
@@ -36,8 +30,8 @@ export interface ResourceEntry {
    */
   configOn?: Record<string, Record<string, unknown>>
   /**
-   * Skip this entry when pre-downloading. Bundled addons have no model to fetch, and a few entries
-   * are deliberately loaded cold by their tests.
+   * Skip this entry when pre-downloading. Some entries have no model to fetch, and a few are
+   * deliberately loaded cold by their tests.
    */
   skipPreDownload?: boolean
   /**
@@ -57,8 +51,6 @@ export type ResourceTable = Record<string, ResourceEntry>
 export interface ResourceResolvers {
   const: (name: string) => unknown
   asset: (kind: string, file: string) => unknown
-  /** Only ever reached by an entry that names one; may throw elsewhere. */
-  packageAsset?: (pkg: string, file: string) => unknown
 }
 
 export function resolveResourceValue(value: unknown, resolvers: ResourceResolvers): unknown {
@@ -71,13 +63,6 @@ export function resolveResourceValue(value: unknown, resolvers: ResourceResolver
     if (record.$asset && typeof record.$asset === 'object') {
       const { kind, file } = record.$asset as { kind: string; file: string }
       return resolvers.asset(kind, file)
-    }
-    if (record.$packageAsset && typeof record.$packageAsset === 'object') {
-      const { package: pkg, file } = record.$packageAsset as { package: string; file: string }
-      if (!resolvers.packageAsset) {
-        throw new Error(`no packageAsset resolver for "${pkg}/${file}" on this client`)
-      }
-      return resolvers.packageAsset(pkg, file)
     }
     return Object.fromEntries(
       Object.entries(record).map(([key, entry]) => [key, resolveResourceValue(entry, resolvers)])

@@ -5,6 +5,7 @@ const fs = require('fs')
 const path = require('path')
 const https = require('https')
 const crypto = require('crypto')
+const { spawn } = require('child_process')
 
 const PKG_ROOT = path.resolve(__dirname, '..')
 const MODEL_DIR = path.join(PKG_ROOT, 'models', 'unit-test')
@@ -22,7 +23,8 @@ const TRANSIENT_ERROR_CODES = new Set([
   'ECONNRESET',
   'EPIPE',
   'ECONNABORTED',
-  'ESIZE'
+  'ESIZE',
+  'ES3COPY'
 ])
 
 function log(message) {
@@ -188,6 +190,29 @@ function downloadFileOnce(url, dest, opts = {}) {
   })
 }
 
+// S3-hosted fixtures come from the QVAC model registry bucket via the aws CLI.
+function copyFromS3Once(s3Path, dest) {
+  const bucket = process.env.MODEL_S3_BUCKET
+  if (!bucket) {
+    return Promise.reject(new Error('MODEL_S3_BUCKET is not set (needed for S3-hosted models)'))
+  }
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      'aws',
+      ['s3', 'cp', `s3://${bucket}/${s3Path}`, dest, '--only-show-errors'],
+      {
+        stdio: ['ignore', 'inherit', 'inherit']
+      }
+    )
+    child.on('error', reject)
+    child.on('close', (code) => {
+      if (code === 0) return resolve()
+      const err = new Error(`aws s3 cp exited ${code} for ${s3Path}`)
+      reject(Object.assign(err, { code: 'ES3COPY' }))
+    })
+  })
+}
+
 function removeIfExists(filePath) {
   try {
     fs.unlinkSync(filePath)
@@ -220,13 +245,14 @@ async function verifySha256(filePath, expected) {
 }
 
 async function downloadFileWithRetries(url, dest, opts = {}) {
-  const { retries = 3, minBytes = 1, sha256, ...downloadOpts } = opts
+  const { retries = 3, minBytes = 1, sha256, s3Path, ...downloadOpts } = opts
   const partPath = `${dest}.part`
 
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const host = urlHost(url)
+    const host = s3Path ? 's3' : urlHost(url)
     try {
-      await downloadFileOnce(url, partPath, downloadOpts)
+      if (s3Path) await copyFromS3Once(s3Path, partPath)
+      else await downloadFileOnce(url, partPath, downloadOpts)
 
       const stat = fs.statSync(partPath)
       if (stat.size < minBytes) {
@@ -257,7 +283,7 @@ async function downloadFileWithRetries(url, dest, opts = {}) {
 
 async function downloadFile(url, dest, opts = {}) {
   const name = path.basename(dest)
-  const { sha256 } = opts
+  const { sha256, s3Path, s3Optional = false } = opts
 
   if (fs.existsSync(dest)) {
     const stat = fs.statSync(dest)
@@ -281,14 +307,23 @@ async function downloadFile(url, dest, opts = {}) {
     }
   }
 
+  if (s3Path && !process.env.MODEL_S3_BUCKET && s3Optional) {
+    log(`WARNING: skip ${name}: S3-hosted; set MODEL_S3_BUCKET and AWS credentials to fetch it`)
+    return
+  }
+
   fs.mkdirSync(path.dirname(dest), { recursive: true })
   log(`download: ${name}`)
 
   try {
-    await downloadFileWithRetries(url, dest, { sha256 })
+    await downloadFileWithRetries(url, dest, { sha256, s3Path })
   } catch (err) {
     removeIfExists(dest)
-    throw new Error(`failed to download ${name} from ${url}: ${err.message}`)
+    if (s3Path && s3Optional) {
+      log(`WARNING: skip ${name}: S3 copy failed (${err.message}); check AWS credentials`)
+      return
+    }
+    throw new Error(`failed to download ${name} from ${url || s3Path}: ${err.message}`)
   }
 
   const stat = fs.statSync(dest)
@@ -312,7 +347,9 @@ async function downloadShardedRepo(baseUrl, files, sha256Map = {}) {
 //   'optional' -> only downloaded for full local runs; the matching unit tests
 //                 use OnMissing::Skip, so CI deliberately skips them.
 // SHA256 digests are computed from known-good local fixtures; downloads that
-// do not match are retried as transient and ultimately fail the run.
+// do not match are retried as transient and ultimately fail the run. An entry
+// with `s3Path` instead of `url` is copied from the registry bucket
+// (MODEL_S3_BUCKET + AWS credentials).
 const SINGLE_FILE_MANIFEST = [
   {
     scope: 'ci',
@@ -352,7 +389,7 @@ const SINGLE_FILE_MANIFEST = [
   },
   {
     scope: 'ci',
-    url: 'https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/main/bitnet_b1_58-large-TQ2_0.gguf',
+    s3Path: 'qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-large-TQ2_0.gguf',
     dest: 'bitnet_b1_58-large-TQ2_0.gguf',
     sha256: '281aafb18a9f4a3124c10a1d8683e2296f0cfe8a2944da0a5667d17488a951bb'
   }
@@ -364,14 +401,11 @@ const SHARDED_REPOS = [
     label: 'Qwen3-0.6B-UD-IQ1_S (3 shards)',
     baseUrl: 'https://huggingface.co/jmb95/Qwen3-0.6B-UD-IQ1_S-sharded/resolve/main',
     files: [
-      'Qwen3-0.6B-UD-IQ1_S.tensors.txt',
       'Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf',
       'Qwen3-0.6B-UD-IQ1_S-00002-of-00003.gguf',
       'Qwen3-0.6B-UD-IQ1_S-00003-of-00003.gguf'
     ],
     sha256: {
-      'Qwen3-0.6B-UD-IQ1_S.tensors.txt':
-        'c10b950a18ec75d3ee61b55ed1ba5b4c3ff3d7afd726651b813d48165bd5847a',
       'Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf':
         '27a0f5d92fffa1b1907218f62d7a82fa1a0bf5adce4975c9b7f4ccc0f34e8c88',
       'Qwen3-0.6B-UD-IQ1_S-00002-of-00003.gguf':
@@ -385,7 +419,6 @@ const SHARDED_REPOS = [
     label: 'bitnet_b1_58-large-TQ2_0 (8 shards)',
     baseUrl: 'https://huggingface.co/jmb95/bitnet_b1_58-large-TQ2_0-sharded/resolve/main',
     files: [
-      'bitnet_b1_58-large-TQ2_0.tensors.txt',
       'bitnet_b1_58-large-TQ2_0-00001-of-00008.gguf',
       'bitnet_b1_58-large-TQ2_0-00002-of-00008.gguf',
       'bitnet_b1_58-large-TQ2_0-00003-of-00008.gguf',
@@ -396,8 +429,6 @@ const SHARDED_REPOS = [
       'bitnet_b1_58-large-TQ2_0-00008-of-00008.gguf'
     ],
     sha256: {
-      'bitnet_b1_58-large-TQ2_0.tensors.txt':
-        '6d7950adc98635bb67a198abe72b9c511643ade55e8016ec413237d99210fb4e',
       'bitnet_b1_58-large-TQ2_0-00001-of-00008.gguf':
         'fb913ff5d3df8508f312f7ea1429de8ae1ed0efb907809540225fb0fa2206af6',
       'bitnet_b1_58-large-TQ2_0-00002-of-00008.gguf':
@@ -417,13 +448,12 @@ const SHARDED_REPOS = [
     }
   },
   {
-    // Enables ModelFullLoadingTest.{LargeSharded,StreamingLargeShards}_LoadsSuccessfully,
+    // Enables ModelFullLoadingTest.LargeSharded_LoadsSuccessfully,
     // which gtest-skip on CI because the shards aren't fetched there.
     scope: 'optional',
     label: 'Llama-3.2-1B-Instruct-Q4_0 (8 shards)',
     baseUrl: 'https://huggingface.co/jmb95/Llama-3.2-1B-Instruct-Q4_0-sharded/resolve/main',
     files: [
-      'Llama-3.2-1B-Instruct-Q4_0.tensors.txt',
       'Llama-3.2-1B-Instruct-Q4_0-00001-of-00008.gguf',
       'Llama-3.2-1B-Instruct-Q4_0-00002-of-00008.gguf',
       'Llama-3.2-1B-Instruct-Q4_0-00003-of-00008.gguf',
@@ -434,8 +464,6 @@ const SHARDED_REPOS = [
       'Llama-3.2-1B-Instruct-Q4_0-00008-of-00008.gguf'
     ],
     sha256: {
-      'Llama-3.2-1B-Instruct-Q4_0.tensors.txt':
-        '94d891c22bca7700d422a3974b6aaa8095a4b2f132a53c89e7312b8435412cbf',
       'Llama-3.2-1B-Instruct-Q4_0-00001-of-00008.gguf':
         'fafc6166dc5e7a9791b053cda2e71924c037b16f09fa41d69383cedd37cd91d8',
       'Llama-3.2-1B-Instruct-Q4_0-00002-of-00008.gguf':
@@ -487,7 +515,9 @@ async function ensureUnitTestModels(options = {}) {
     for (const entry of SINGLE_FILE_MANIFEST) {
       if (!shouldInclude(entry, opts)) continue
       await downloadFile(entry.url, path.join(MODEL_DIR, entry.dest), {
-        sha256: entry.sha256
+        sha256: entry.sha256,
+        s3Path: entry.s3Path,
+        s3Optional: !opts.ciOnly
       })
     }
 
@@ -522,5 +552,7 @@ if (require.main === module) {
 
 module.exports = {
   MODEL_DIR,
+  SINGLE_FILE_MANIFEST,
+  downloadFile,
   ensureUnitTestModels
 }

@@ -1,7 +1,7 @@
 import QvacLogger = require("@qvac/logging");
 import { type QvacResponse } from "@qvac/infer-base";
 import { QvacErrorAddonASRGgml } from "./lib/error";
-import { assessFit as assessFitImpl, type AsrFitRequest, type AsrFitResult, type AsrFitStatus, type MossTranscribeFitRequest, type ParakeetFitRequest, type WhisperFitRequest } from "./lib/fit";
+import { assessFit as assessFitImpl, type AsrFitDevice, type AsrFitRequest, type AsrFitResult, type AsrFitStats, type AsrFitStatus, type MossTranscribeFitRequest, type ParakeetFitRequest, type WhisperFitRequest } from "./lib/fit";
 import { BackendId as BackendIdEnum, type ASRRunOutput, type ASRStreamOutput, type AudioChunk, type AudioInput, type BackendInfo, type EndOfTurnEvent, type InferenceClientState, type ParakeetRuntimeStats, type RuntimeStats, type RuntimeStatsCore, type TranscriptionSegment, type VadEvent, type WhisperRuntimeStats } from "./lib/types";
 import type { ASRGgmlFiles, ASRGgmlReloadConfig, ASRRunOptions, ASRStreamingOptions, AsrNativeInterface, EngineType } from "./engines/types";
 import { type VadParams, type WhisperConfig, type WhisperEngineConfig, type WhisperStreamingOptions } from "./engines/whisper/driver";
@@ -57,6 +57,8 @@ declare class ASRGgml {
         STREAMING_SESSION_ACTIVE: 6020;
         INVALID_ENGINE: 6021;
     }>;
+    /** Chunk cadences (ms) Nemotron streaming accepts; see `runStreaming()`. */
+    static readonly NEMOTRON_STREAMING_CHUNK_MS: readonly [80, 160, 320, 560, 1120];
     static readonly Error: typeof QvacErrorAddonASRGgml;
     static readonly inferenceManagerConfig: Readonly<{
         noAdditionalDownload: true;
@@ -145,8 +147,10 @@ type WhisperRuntimeStatsShape = WhisperRuntimeStats;
 type ParakeetRuntimeStatsShape = ParakeetRuntimeStats;
 type RuntimeStatsShape = RuntimeStats;
 type InferenceClientStateShape = InferenceClientState;
+type AsrFitDeviceShape = AsrFitDevice;
 type AsrFitRequestShape = AsrFitRequest;
 type AsrFitResultShape = AsrFitResult;
+type AsrFitStatsShape = AsrFitStats;
 type AsrFitStatusShape = AsrFitStatus;
 type MossTranscribeFitRequestShape = MossTranscribeFitRequest;
 type ParakeetFitRequestShape = ParakeetFitRequest;
@@ -182,8 +186,10 @@ declare namespace ASRGgml {
     type ParakeetRuntimeStats = ParakeetRuntimeStatsShape;
     type RuntimeStats = RuntimeStatsShape;
     type InferenceClientState = InferenceClientStateShape;
+    type AsrFitDevice = AsrFitDeviceShape;
     type AsrFitRequest = AsrFitRequestShape;
     type AsrFitResult = AsrFitResultShape;
+    type AsrFitStats = AsrFitStatsShape;
     type AsrFitStatus = AsrFitStatusShape;
     type MossTranscribeFitRequest = MossTranscribeFitRequestShape;
     type ParakeetFitRequest = ParakeetFitRequestShape;

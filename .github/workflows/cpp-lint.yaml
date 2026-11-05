@@ -57,6 +57,13 @@ on:
         type: boolean
         required: false
         default: false
+      include-xdna-sdk:
+        description: >-
+          Validate provisioned XRT and install IRON before configuring a
+          package whose qvac-fabric dependency requests xdna-backend.
+        type: boolean
+        required: false
+        default: false
       fabric-overlay-artifact:
         description: >-
           Workflow-run artifact name for PR-built @qvac/fabric prebuilds. Empty
@@ -150,6 +157,10 @@ jobs:
         name: Setup CUDA toolkit for the ggml CUDA backend
         uses: ./.github/actions/setup-cuda
 
+      - if: ${{ inputs.include-xdna-sdk }}
+        name: Setup XRT and IRON for XDNA configure
+        uses: tetherto/qvac/.github/actions/setup-xdna@80457aa3e81ff236d95e665748e3d8c4a9879d9f # merged XDNA provisioning
+
       - name: Setup vcpkg
         uses: tetherto/qvac/.github/actions/setup-vcpkg@10ae9f571c61ad94348ebbe8daaef67641ae8855
         env:
@@ -191,17 +202,11 @@ jobs:
         working-directory: ${{ env.WORKDIR }}
         run: npm install
 
-      # Local install, not `npm install -g`. The global pin is bare-make
-      # 1.8.0, whose cmake-toolchains selects system clang. node_modules/.bin
-      # is prepended so generate and the vcpkg toolchain's
-      # find_program(bare-make) both use the current package.
-      - name: Install current bare-make locally
+      # Its bin directory goes first on PATH, so generate, the vcpkg toolchain's
+      # find_program(bare-make) and the format check all use bare's tools.
+      - name: Install the locked bare toolchain
         shell: bash
-        working-directory: ${{ env.WORKDIR }}
-        run: |
-          npm install --no-save --ignore-scripts bare-make
-          echo "$PWD/node_modules/.bin" >> "$GITHUB_PATH"
-          ./node_modules/.bin/bare-make --version
+        run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
 
       # Must sit between npm install and bare-make generate: the overlay
       # rewrites node_modules/@qvac/fabric/prebuilds in place, and generate is

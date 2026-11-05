@@ -1861,7 +1861,13 @@ export type { DitVariant, ModelManifest, ModelSources, ResolveDitModelPathOption
 export { encodePcm, pcmToWav, SUPPORTED_FORMATS as OUTPUT_FORMATS } from './lib/audio-format'
 export type { OutputFormat, EncodeOptions, EncodedAudio } from './lib/audio-format'
 export { assessFit } from './lib/fit'
-export type { AudiogenFitRequest, AudiogenFitResult, AudiogenFitStatus } from './lib/fit'
+export type {
+  AudiogenFitRequest,
+  AudiogenFitResult,
+  AudiogenFitStatus,
+  AudiogenFitDevice,
+  AudiogenFitStats
+} from './lib/fit'
 export { ERR_CODE_RANGE, ERR_CODES, QvacErrorAudioGen } from './error'
 export { AudioEditOperationType, RepaintMode } from './audiogen'
 

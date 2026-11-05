@@ -19,11 +19,19 @@ void missingArgs;
 const missingFiles = new LlmLlamacpp({});
 void missingFiles;
 
-const primary: string = LlmLlamacpp.pickPrimaryGgufPath([
+const primary: string = LlmLlamacpp.validateModelPath([
   "/abs/model-00001-of-00002.gguf",
-  "/abs/model-00002-of-00002.gguf",
 ]);
 void primary;
+
+// @ts-expect-error - model weights must be one disk path
+void new LlmLlamacpp({ files: { model: ["/abs/first.gguf", "/abs/second.gguf"] }, config: { device: "cpu" } });
+// @ts-expect-error - an empty model list is not a disk path
+void new LlmLlamacpp({ files: { model: [] }, config: { device: "cpu" } });
+// @ts-expect-error - weight buffers are not disk paths
+void new LlmLlamacpp({ files: { model: [new Uint8Array(8)] }, config: { device: "cpu" } });
+// @ts-expect-error - the weight streaming API has been removed
+void model.addon?.loadWeights;
 
 // Attached at runtime, deliberately absent from the type surface.
 // @ts-expect-error - not part of the published constructor surface
@@ -39,6 +47,16 @@ const saved: Promise<void> = model.saveCache("/abs/session.bin");
 void saved;
 const discarded: Promise<void> = model.discardCache("/abs/session.bin");
 void discarded;
+const counted: Promise<number> = model.calcTokens({
+  text: "Weather in Paris?",
+  history: [{ role: "system", content: "You are a helpful assistant." }],
+  tools: [{ type: "function", name: "get_weather" }],
+});
+void counted;
+const calcInput: LlmLlamacpp.CalcTokensInput = { text: "Hello" };
+void calcInput;
+// @ts-expect-error - history takes Message[], not its JSON text
+void model.calcTokens({ history: "[]" });
 
 const config: LlmLlamacpp.LlamaConfig = {
   device: "gpu",
@@ -94,6 +112,7 @@ const runOptions: LlmLlamacpp.RunOptions = {
   prefill: false,
   generationParams,
   cacheKey: "k",
+  baseCacheKey: "base",
   ephemeral: false,
   rejectWhenBusy: true,
 };
@@ -102,6 +121,10 @@ void runOptions;
 // @ts-expect-error - saveCacheToDisk was removed; use saveCache(cacheKey)
 const removedSave: LlmLlamacpp.RunOptions = { saveCacheToDisk: true };
 void removedSave;
+
+// @ts-expect-error - baseCacheKey is a cacheKey file path
+const badBaseCacheKey: LlmLlamacpp.RunOptions = { baseCacheKey: 1 };
+void badBaseCacheKey;
 
 const messages: LlmLlamacpp.Message[] = [
   { role: "user", content: "hello" },

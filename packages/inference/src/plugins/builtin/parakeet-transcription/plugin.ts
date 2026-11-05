@@ -193,6 +193,7 @@ export const parakeetPlugin = definePlugin({
                     speaking: value.speaking,
                     probability: value.probability,
                     ...(value.source && { source: value.source }),
+                    ...(value.timestamp !== undefined && { timestamp: value.timestamp }),
                     ...(value.speakerId !== undefined && { speakerId: value.speakerId })
                   }
                 }

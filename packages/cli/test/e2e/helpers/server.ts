@@ -15,6 +15,7 @@ export interface CreateServerOptions {
   corsOrigins?: string[]
   allowedHosts?: string[]
   allowAnyHost?: boolean
+  enableAdmin?: boolean
   publicBaseUrl?: string
   docs?: boolean
   model?: string[]
@@ -35,6 +36,7 @@ function serverOptions(projectRoot: string, opts: CreateServerOptions): StartSer
     ...(opts.corsOrigins !== undefined ? { corsOrigins: opts.corsOrigins } : {}),
     ...(opts.allowedHosts !== undefined ? { allowedHosts: opts.allowedHosts } : {}),
     ...(opts.allowAnyHost !== undefined ? { allowAnyHost: opts.allowAnyHost } : {}),
+    ...(opts.enableAdmin !== undefined ? { enableAdmin: opts.enableAdmin } : {}),
     ...(opts.publicBaseUrl !== undefined ? { publicBaseUrl: opts.publicBaseUrl } : {}),
     ...(opts.docs !== undefined ? { docs: opts.docs } : {}),
     ...(opts.model !== undefined ? { model: opts.model } : {}),
@@ -86,13 +88,16 @@ export function useServer(opts: CreateServerOptions = {}): () => FastifyInstance
 // would interfere with the test runner.
 // One shared server per file, since model loads are expensive and node:test
 // isolates files into separate processes.
-export function useModelServer(config: unknown): () => FastifyInstance {
+export function useModelServer(
+  config: unknown,
+  opts: CreateServerOptions = {}
+): () => FastifyInstance {
   let app: FastifyInstance | undefined
   let dir: string | undefined
   before(async () => {
     dir = await mkdtemp(join(tmpdir(), 'qvac-cli-e2e-models-'))
     await writeFile(join(dir, 'qvac.config.json'), JSON.stringify(config))
-    app = await buildServer(serverOptions(dir, {}))
+    app = await buildServer(serverOptions(dir, opts))
     await app.ready()
     await preloadModels(
       app.qvac.serveConfig,

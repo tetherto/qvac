@@ -111,7 +111,20 @@ To capture logs from every source (SDK server, all models, RAG) with a single su
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/logging_global.py title="logging_global.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
+
+The script reads its config from `config/logging/logging.config.json`, relative to the script. The config disables the default console output, so only the subscribed logs are printed:
+
+```json file=<rootDir>/packages/sdk/examples/config/logging/logging.config.json title="config/logging/logging.config.json"
+```
 
 <Callout type="success">
 **Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).

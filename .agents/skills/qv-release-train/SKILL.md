@@ -31,7 +31,7 @@ the per-package flow in `docs/gitflow.md`.
 - When the train moves `@qvac/sdk`, skip "Point the SDK at that version" in
   `/qv-sdk-inference-version`: the version pass writes the `@qvac/inference`
   range. Its `sdk-python` and `sdk-kotlin` syncs still apply.
-- When the train lists `fromNpm` packages, make the workspace exclusion its own
+- Make the workspace exclusion of the packages outside the train its own
   commit in the release PR ("Making a release" in `docs/ci/RELEASE-TRAIN.md`),
   and leave it out of the backmerge.
 - Open both PRs with `qv-sdk-pr-create`: one release PR, one backmerge, for the
