@@ -111,7 +111,7 @@ test('identical text in two documents is stored twice', async (t) => {
     ]
   })
 
-  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], k: 10 })
+  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], spaceId, k: 10 })
   t.alike(
     hits.map((hit) => [hit.documentId, hit.content]),
     [
@@ -139,7 +139,7 @@ test('re-ingest replaces a document and drops superseded chunks', async (t) => {
   })
   t.alike(result.documents, [{ id: 'a', generation: 2, chunkCount: 1 }])
 
-  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 1, 1], k: 10 })
+  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 1, 1], spaceId, k: 10 })
   t.alike(
     hits.map((hit) => hit.content),
     ['new'],
@@ -254,7 +254,7 @@ test('ingest validates everything before committing anything', async (t) => {
     'unknown namespace'
   )
 
-  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], k: 10 })
+  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], spaceId, k: 10 })
   t.is(hits.length, 0, 'nothing was written by the rejected calls')
 })
 
@@ -278,7 +278,7 @@ test('deleteDocuments removes chunks and native ids and ignores unknown ids', as
     'unknown namespace'
   )
 
-  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 1, 0], k: 10 })
+  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 1, 0], spaceId, k: 10 })
   t.alike(
     hits.map((hit) => hit.documentId),
     ['b']
@@ -320,7 +320,12 @@ test('a document that fails mid-batch keeps its old generation and the next writ
     'no native id left for the new generation'
   )
 
-  const hits = await reopened.search({ scope: { namespace: 'ns' }, vector: [1, 1, 0], k: 5 })
+  const hits = await reopened.search({
+    scope: { namespace: 'ns' },
+    vector: [1, 1, 0],
+    spaceId,
+    k: 5
+  })
   t.alike(
     hits.map((hit) => hit.content),
     ['old'],
@@ -354,6 +359,6 @@ test('metadata that cannot be stored as JSON is rejected before any write', asyn
     )
   }
 
-  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], k: 10 })
+  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], spaceId, k: 10 })
   t.is(hits.length, 0, 'the valid first document was not committed either')
 })

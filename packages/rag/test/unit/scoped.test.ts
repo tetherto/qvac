@@ -1,7 +1,7 @@
 import test from 'brittle'
 
-import { ERR_CODES } from '../../src/index.js'
-import { doc, openRag, rejectsWithCode, type Test } from './helpers.js'
+import { ERR_CODES, computeSpaceId } from '../../src/index.js'
+import { SPACE, doc, openRag, rejectsWithCode, type Test } from './helpers.js'
 
 async function setup(t: Test) {
   const fixture = await openRag(t, ['ns', 'other'])
@@ -18,7 +18,7 @@ async function setup(t: Test) {
   return fixture
 }
 
-const query = { vector: [1, 0, 0], k: 10 }
+const query = { vector: [1, 0, 0], spaceId: computeSpaceId(SPACE), k: 10 }
 
 function ids(hits: Array<{ documentId: string }>): string[] {
   return hits.map((hit) => hit.documentId)

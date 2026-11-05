@@ -38,14 +38,19 @@ await rag.ingest({
   ]
 })
 
-const everything = await rag.search({ scope: { namespace: 'pets' }, vector: [1, 0, 0], k: 3 })
+const everything = await rag.search({
+  scope: { namespace: 'pets' },
+  vector: [1, 0, 0],
+  spaceId,
+  k: 3
+})
 console.log(
   'namespace-wide:',
   everything.map((hit) => hit.content)
 )
 
 const dogsOnly = rag.scoped({ namespace: 'pets', documentIds: ['dogs'] })
-const hits = await dogsOnly.search({ vector: [1, 0, 0], k: 3 })
+const hits = await dogsOnly.search({ vector: [1, 0, 0], spaceId, k: 3 })
 console.log(
   'dogs only:',
   hits.map((hit) => hit.content)

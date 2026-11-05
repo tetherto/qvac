@@ -31,9 +31,14 @@ import {
   type ValidDocument
 } from './input.js'
 import { intersectScope, parseScope } from './scope.js'
-import { scanSearch } from './search.js'
+import { scanSearch, type SearchQuery } from './search.js'
 import { computeSpaceId, parseEmbeddingSpace } from './space.js'
-import type { HyperDBInstance, HyperDBReader, HyperDBTransaction } from './db/db-types.js'
+import type {
+  Hypercore,
+  HyperDBInstance,
+  HyperDBReader,
+  HyperDBTransaction
+} from './db/db-types.js'
 import type {
   CreateNamespaceParams,
   CreateRagOptions,
@@ -53,6 +58,69 @@ import type {
 
 const CORE_NAME = 'qvac-rag'
 
+// One HyperDB per core, shared by every RAG opened on it. Separate instances
+// would each serialize only their own transactions and overwrite each other.
+interface SharedDatabase {
+  opening: Promise<HyperDBInstance>
+  refs: number
+}
+
+const sharedDatabases = new Map<string, SharedDatabase>()
+
+async function acquireDatabase(core: Hypercore): Promise<{ id: string; db: HyperDBInstance }> {
+  let id: string | null = null
+  try {
+    await core.ready()
+    id = core.id
+    if (!id) {
+      throw new QvacErrorRAG({
+        code: ERR_CODES.DB_OPERATION_FAILED,
+        adds: 'the RAG core has no id'
+      })
+    }
+  } catch (error) {
+    await core.close().catch(() => {})
+    throw error
+  }
+
+  let entry = sharedDatabases.get(id)
+  const reused = entry !== undefined
+  if (!entry) {
+    const created: SharedDatabase = { opening: openDatabase(core), refs: 0 }
+    created.opening.catch(() => {
+      if (sharedDatabases.get(id) === created) sharedDatabases.delete(id)
+    })
+    sharedDatabases.set(id, created)
+    entry = created
+  }
+  entry.refs++
+  try {
+    if (reused) await core.close()
+    return { id, db: await entry.opening }
+  } catch (error) {
+    entry.refs--
+    throw error
+  }
+}
+
+async function releaseDatabase(id: string): Promise<void> {
+  const entry = sharedDatabases.get(id)
+  if (!entry || --entry.refs > 0) return
+  sharedDatabases.delete(id)
+  await (await entry.opening).close()
+}
+
+async function openDatabase(core: Hypercore): Promise<HyperDBInstance> {
+  const instance = HyperDB.bee(core, dbSpec, { autoUpdate: true })
+  try {
+    await instance.ready()
+  } catch (error) {
+    await instance.close().catch(() => {})
+    throw error
+  }
+  return instance
+}
+
 export function createRag(options: CreateRagOptions): Rag {
   const corestore = options?.corestore
   if (!corestore || typeof corestore.get !== 'function') {
@@ -63,6 +131,7 @@ export function createRag(options: CreateRagOptions): Rag {
   }
 
   let db: HyperDBInstance | null = null
+  let dbId: string | null = null
   let opening: Promise<void> | null = null
   let closed = false
   let closing: Promise<void> | null = null
@@ -82,14 +151,9 @@ export function createRag(options: CreateRagOptions): Rag {
 
   async function open(): Promise<void> {
     await corestore.ready()
-    const instance = HyperDB.bee(corestore.get({ name: CORE_NAME }), dbSpec, { autoUpdate: true })
-    try {
-      await instance.ready()
-    } catch (error) {
-      await instance.close().catch(() => {})
-      throw error
-    }
-    db = instance
+    const acquired = await acquireDatabase(corestore.get({ name: CORE_NAME }))
+    db = acquired.db
+    dbId = acquired.id
   }
 
   // The Corestore belongs to the caller and stays open. Every caller gets the
@@ -105,8 +169,9 @@ export function createRag(options: CreateRagOptions): Rag {
   async function drain(): Promise<void> {
     if (opening) await opening.catch(() => {})
     await Promise.allSettled(inflight)
-    if (db) await db.close()
     db = null
+    if (dbId) await releaseDatabase(dbId)
+    dbId = null
   }
 
   // close() waits for every call started before it. Each call checks
@@ -200,8 +265,8 @@ export function createRag(options: CreateRagOptions): Rag {
 
   // A direct caller names documents explicitly, so an unknown one is an error.
   async function search(params: SearchParams): Promise<SearchHit[]> {
-    const { scope, vector, k, signal } = parseSearch(params)
-    return await runSearch(parseScope(scope), vector, k, { strict: true, signal })
+    const { scope, vector, spaceId, k, signal } = parseSearch(params)
+    return await runSearch(parseScope(scope), { vector, spaceId }, k, { strict: true, signal })
   }
 
   // A handle's documents are granted, not chosen per request: an ID the
@@ -211,21 +276,31 @@ export function createRag(options: CreateRagOptions): Rag {
     const bound = parseScope(scope)
     return {
       async search(params: ScopedSearchParams): Promise<SearchHit[]> {
-        const { scope: request, vector, k, signal } = parseSearch({ scope: undefined, ...params })
-        return await runSearch(intersectScope(bound, request), vector, k, { strict: false, signal })
+        const {
+          scope: request,
+          vector,
+          spaceId,
+          k,
+          signal
+        } = parseSearch({
+          scope: undefined,
+          ...params
+        })
+        const query = { vector, spaceId }
+        return await runSearch(intersectScope(bound, request), query, k, { strict: false, signal })
       }
     }
   }
 
   function runSearch(
     scope: SearchScope,
-    vector: Float32Array,
+    query: SearchQuery,
     k: number,
     options: { strict: boolean; signal?: AbortSignal }
   ): Promise<SearchHit[]> {
     return withSnapshot(database(), async (reader) => {
       const { space } = await readNamespace(reader, scope.namespace)
-      return scanSearch(reader, space, scope, vector, k, options)
+      return scanSearch(reader, space, scope, query, k, options)
     })
   }
 

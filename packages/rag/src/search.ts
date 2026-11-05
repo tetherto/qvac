@@ -13,6 +13,11 @@ import type { SearchHit, SearchScope } from './types.js'
 // Rows decoded and scored per step; memory stays bounded by this and k.
 export const SCAN_BATCH_SIZE = 256
 
+export interface SearchQuery {
+  vector: Float32Array
+  spaceId: string
+}
+
 interface Ranked {
   score: number
   hit: SearchHit
@@ -24,11 +29,18 @@ export async function scanSearch(
   reader: HyperDBReader,
   space: SpaceRecord,
   scope: SearchScope,
-  query: Float32Array,
+  { vector: query, spaceId }: SearchQuery,
   k: number,
   options: { strict: boolean; signal?: AbortSignal }
 ): Promise<SearchHit[]> {
   throwIfAborted(options.signal)
+  // Matching dimensions do not make two embedding spaces comparable.
+  if (spaceId !== space.spaceId) {
+    throw new QvacErrorRAG({
+      code: ERR_CODES.EMBEDDING_SPACE_MISMATCH,
+      adds: `query is in space ${spaceId}, namespace '${scope.namespace}' is in ${space.spaceId}`
+    })
+  }
   if (query.length !== space.dimensions) {
     throw new QvacErrorRAG({
       code: ERR_CODES.EMBEDDING_DIMENSION_MISMATCH,

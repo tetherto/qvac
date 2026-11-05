@@ -17,7 +17,7 @@ test('search ranks by exact dot product and honours k', async (t) => {
     ]
   })
 
-  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], k: 2 })
+  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], spaceId, k: 2 })
   t.alike(
     hits.map((hit) => hit.content),
     ['high', 'mid']
@@ -44,7 +44,7 @@ test('cosine spaces normalise both sides', async (t) => {
     ]
   })
 
-  const hits = await rag.search({ scope: { namespace: 'cos' }, vector: [2, 0, 0], k: 2 })
+  const hits = await rag.search({ scope: { namespace: 'cos' }, vector: [2, 0, 0], spaceId, k: 2 })
   t.is(hits[0].content, 'aligned', 'direction wins over magnitude')
   t.ok(Math.abs(hits[0].score - 1) < 1e-6)
 })
@@ -68,6 +68,7 @@ test('documentIds scope ranks only allowed chunks', async (t) => {
   const hits = await rag.search({
     scope: { namespace: 'ns', documentIds: ['public'] },
     vector: [1, 0, 0],
+    spaceId,
     k: 2
   })
   t.alike(
@@ -85,7 +86,7 @@ test('namespaces do not see each other, including name prefixes', async (t) => {
     documents: [doc('a', spaceId, [['in ns2', [1, 0, 0]]]), doc('ab', spaceId, [['ab', [1, 0, 0]]])]
   })
 
-  const query = { vector: [1, 0, 0], k: 10 }
+  const query = { vector: [1, 0, 0], spaceId, k: 10 }
   t.alike(
     (await rag.search({ ...query, scope: { namespace: 'ns' } })).map((hit) => hit.content),
     ['in ns'],
@@ -104,7 +105,7 @@ test('search fails closed', async (t) => {
   const { rag, spaceId } = await openRag(t, ['ns', 'other'])
   await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
   await rag.ingest({ namespace: 'other', documents: [doc('foreign', spaceId, [['f', [1, 0, 0]]])] })
-  const query = { vector: [1, 0, 0], k: 5 }
+  const query = { vector: [1, 0, 0], spaceId, k: 5 }
 
   await rejectsWithCode(
     t,
@@ -144,19 +145,50 @@ test('search fails closed', async (t) => {
   )
   await rejectsWithCode(
     t,
-    rag.search({ scope: { namespace: 'ns' }, vector: [1, 0], k: 5 }),
+    rag.search({ scope: { namespace: 'ns' }, vector: [1, 0], spaceId, k: 5 }),
     ERR_CODES.EMBEDDING_DIMENSION_MISMATCH,
     'query of the wrong dimension'
   )
   await rejectsWithCode(
     t,
-    rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], k: 0 }),
+    rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], spaceId, k: 0 }),
     ERR_CODES.INVALID_INPUT,
     'k of zero'
   )
 
   const empty = await rag.search({ ...query, scope: { namespace: 'ns', documentIds: [] } })
   t.alike(empty, [], 'documentIds: [] returns nothing')
+})
+
+test('a query from another embedding space is rejected even when dimensions match', async (t) => {
+  const { rag, spaceId } = await openRag(t)
+  const other = await rag.createNamespace({
+    name: 'other-model',
+    space: { ...SPACE, model: 'other-embedder' }
+  })
+  t.not(other.spaceId, spaceId, 'the spaces differ only by model')
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+
+  await rejectsWithCode(
+    t,
+    rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], spaceId: other.spaceId, k: 5 }),
+    ERR_CODES.EMBEDDING_SPACE_MISMATCH,
+    'direct search'
+  )
+  await rejectsWithCode(
+    t,
+    rag.scoped({ namespace: 'ns' }).search({ vector: [1, 0, 0], spaceId: other.spaceId, k: 5 }),
+    ERR_CODES.EMBEDDING_SPACE_MISMATCH,
+    'scoped search'
+  )
+  await rejectsWithCode(
+    t,
+    rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], k: 5 } as never),
+    ERR_CODES.INVALID_INPUT,
+    'a query without spaceId'
+  )
+  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], spaceId, k: 5 })
+  t.is(hits.length, 1, 'the matching space still answers')
 })
 
 test('scan crosses batch boundaries without losing rows', async (t) => {
@@ -166,7 +198,7 @@ test('scan crosses batch boundaries without losing rows', async (t) => {
   for (let i = 0; i < total; i++) chunks.push([`chunk ${i}`, [i / total, 0, 0]])
   await rag.ingest({ namespace: 'ns', documents: [doc('big', spaceId, chunks)] })
 
-  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], k: 3 })
+  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], spaceId, k: 3 })
   t.alike(
     hits.map((hit) => hit.ordinal),
     [total - 1, total - 2, total - 3]
@@ -191,6 +223,7 @@ test('hits carry chunk metadataJson only when it was given', async (t) => {
   const [withMeta, withoutMeta] = await rag.search({
     scope: { namespace: 'ns' },
     vector: [1, 0, 0],
+    spaceId,
     k: 2
   })
   t.is(withMeta.metadataJson, '{"page":2}')
@@ -208,7 +241,7 @@ test('reusing an input buffer after the call does not change what was stored', a
   await pending
 
   const query = new Float32Array([1, 0, 0])
-  const searching = rag.search({ scope: { namespace: 'ns' }, vector: query, k: 1 })
+  const searching = rag.search({ scope: { namespace: 'ns' }, vector: query, spaceId, k: 1 })
   query.fill(0)
   const [hit] = await searching
   t.is(hit.score, 1, 'both the stored vector and the query kept their values')
@@ -219,7 +252,7 @@ test('an aborted signal cancels the search', async (t) => {
   const chunks: Array<[string, number[]]> = []
   for (let i = 0; i < SCAN_BATCH_SIZE * 2; i++) chunks.push([`chunk ${i}`, [1, 0, 0]])
   await rag.ingest({ namespace: 'ns', documents: [doc('big', spaceId, chunks)] })
-  const query = { scope: { namespace: 'ns' }, vector: [1, 0, 0], k: 1 }
+  const query = { scope: { namespace: 'ns' }, vector: [1, 0, 0], spaceId, k: 1 }
 
   await rejectsWithCode(
     t,
@@ -239,7 +272,7 @@ test('an aborted signal cancels the search', async (t) => {
   } as AbortSignal
   await rejectsWithCode(
     t,
-    rag.scoped({ namespace: 'ns' }).search({ vector: [1, 0, 0], k: 1, signal: midScan }),
+    rag.scoped({ namespace: 'ns' }).search({ vector: [1, 0, 0], spaceId, k: 1, signal: midScan }),
     ERR_CODES.OPERATION_CANCELLED,
     'aborted between batches'
   )
@@ -269,7 +302,7 @@ test('hits carry the document metadata given at ingest', async (t) => {
     ]
   })
 
-  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], k: 3 })
+  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], spaceId, k: 3 })
   t.alike(hits[0].documentMetadata, { title: 'Leave policy' })
   t.alike(hits[1].documentMetadata, { title: 'Leave policy' }, 'every chunk of the document')
   t.absent('documentMetadata' in hits[2], 'no key when the document had none')
@@ -282,7 +315,7 @@ test('a storage error during search surfaces as DB_OPERATION_FAILED', async (t) 
 
   await rejectsWithCode(
     t,
-    rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], k: 1 }),
+    rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], spaceId, k: 1 }),
     ERR_CODES.DB_OPERATION_FAILED,
     'a read on a closed store'
   )

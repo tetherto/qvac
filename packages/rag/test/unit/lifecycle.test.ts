@@ -25,7 +25,12 @@ test('operations before ready and after close fail with NOT_READY', async (t) =>
   await rag.close()
   await rejectsWithCode(
     t,
-    rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], k: 1 }),
+    rag.search({
+      scope: { namespace: 'ns' },
+      vector: [1, 0, 0],
+      spaceId: computeSpaceId(SPACE),
+      k: 1
+    }),
     ERR_CODES.NOT_READY,
     'after close'
   )
@@ -110,7 +115,7 @@ test('close waits for in-flight calls to finish', async (t) => {
   const documents = []
   for (let i = 0; i < 20; i++) documents.push(doc(`d${i}`, spaceId, [[`text ${i}`, [1, 0, 0]]]))
   const ingesting = rag.ingest({ namespace: 'ns', documents })
-  const searching = rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], k: 1 })
+  const searching = rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], spaceId, k: 1 })
   await rag.close()
 
   const result = await ingesting
@@ -119,7 +124,12 @@ test('close waits for in-flight calls to finish', async (t) => {
 
   const reopened = createRag({ corestore: store })
   await reopened.ready()
-  const hits = await reopened.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], k: 50 })
+  const hits = await reopened.search({
+    scope: { namespace: 'ns' },
+    vector: [1, 0, 0],
+    spaceId,
+    k: 50
+  })
   t.is(hits.length, 20)
   await reopened.close()
 })
@@ -144,6 +154,35 @@ test('a second close waits for the first to drain', async (t) => {
   t.ok(ingested, 'the ingest finished before the second close returned')
   await first
   await ingesting
+})
+
+test('two instances on the same core share one writer', async (t) => {
+  const store = new Corestore(await tmp(t))
+  t.teardown(() => store.close())
+  const session = store.session()
+  t.teardown(() => session.close())
+  const a = createRag({ corestore: store })
+  const b = createRag({ corestore: session })
+  await Promise.all([a.ready(), b.ready()])
+  const { spaceId } = await a.createNamespace({ name: 'ns', space: SPACE })
+
+  await Promise.all([
+    a.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['from a', [1, 0, 0]]])] }),
+    b.ingest({ namespace: 'ns', documents: [doc('b', spaceId, [['from b', [1, 0, 0]]])] })
+  ])
+  const query = { scope: { namespace: 'ns' }, vector: [1, 0, 0], spaceId, k: 10 }
+  const ids = (hits: { documentId: string }[]) => hits.map((hit) => hit.documentId).sort()
+  t.alike(ids(await a.search(query)), ['a', 'b'], 'both writes are visible through a')
+  t.alike(ids(await b.search(query)), ['a', 'b'], 'both writes are visible through b')
+
+  await a.close()
+  t.alike(ids(await b.search(query)), ['a', 'b'], 'b keeps working after a closes')
+  await b.close()
+
+  const reopened = createRag({ corestore: store })
+  await reopened.ready()
+  t.alike(ids(await reopened.search(query)), ['a', 'b'], 'both writes survive reopen')
+  await reopened.close()
 })
 
 test('close leaves the caller-owned corestore open', async (t) => {
@@ -223,7 +262,7 @@ test('data survives close and reopen', async (t) => {
 
   const second = createRag({ corestore: store })
   await second.ready()
-  const hits = await second.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], k: 5 })
+  const hits = await second.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], spaceId, k: 5 })
   t.is(hits.length, 1)
   t.is(hits[0].content, 'hello')
   await second.close()

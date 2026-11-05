@@ -49,6 +49,7 @@ await rag.ingest({
 const hits = await rag.search({
   scope: { namespace: 'handbook', documentIds: ['leave-policy'] },
   vector: queryVector,
+  spaceId,
   k: 5
 })
 
@@ -86,9 +87,9 @@ Returns `{ documents: [{ id, generation, chunkCount }], revision }`.
 
 Deletes the documents and their chunks in one batch. Unknown IDs are ignored. Returns `{ deleted, revision }`.
 
-### `search({ scope, vector, k, signal? })`
+### `search({ scope, vector, spaceId, k, signal? })`
 
-Returns up to `k` hits `{ namespace, documentId, chunkId, ordinal, content, metadataJson?, documentMetadata?, score }`, best first. `metadataJson` is the chunk's and `documentMetadata` is the document's `metadata` from ingest. The score is the dot product, or the cosine similarity for `cosine` spaces. An aborted `signal` stops the scan between batches with `OPERATION_CANCELLED`.
+Returns up to `k` hits `{ namespace, documentId, chunkId, ordinal, content, metadataJson?, documentMetadata?, score }`, best first. `metadataJson` is the chunk's and `documentMetadata` is the document's `metadata` from ingest. `spaceId` is the space the query was embedded in; a different one fails with `EMBEDDING_SPACE_MISMATCH`, even when its dimensions match. The score is the dot product, or the cosine similarity for `cosine` spaces. An aborted `signal` stops the scan between batches with `OPERATION_CANCELLED`.
 
 `scope` is `{ namespace, documentIds? }`. Only chunks inside the scope are read and ranked, so a restricted search fills its top `k` from allowed documents. Search fails closed:
 
@@ -99,11 +100,11 @@ Returns up to `k` hits `{ namespace, documentId, chunkId, ordinal, content, meta
 
 ### `scoped(scope)`
 
-Returns `{ search }` bound to `scope`. The `scope` passed to its `search` is optional and is intersected with the bound one: it can narrow to fewer documents but never add a document or switch namespace. A handle never fails on document identity: an ID that the namespace does not have, whether it was never ingested or has since been deleted, is skipped, so a handle whose documents are gone returns no hits instead of an error. Only the shape of the scope can fail (`INVALID_SCOPE`), and a namespace that does not exist fails with `NAMESPACE_NOT_FOUND`.
+Returns `{ search }` bound to `scope`. The `scope` passed to its `search` is optional and is intersected with the bound one: it can narrow to fewer documents but never add a document or switch namespace. Its `search` takes the same `vector`, `spaceId`, `k` and `signal` as `search`. A handle never fails on document identity: an ID that the namespace does not have, whether it was never ingested or has since been deleted, is skipped, so a handle whose documents are gone returns no hits instead of an error. Only the shape of the scope can fail (`INVALID_SCOPE`), and a namespace that does not exist fails with `NAMESPACE_NOT_FOUND`.
 
 ```ts
 const reader = rag.scoped({ namespace: 'handbook', documentIds: ['leave-policy', 'travel'] })
-await reader.search({ vector: queryVector, k: 5, scope: { documentIds: ['travel'] } })
+await reader.search({ vector: queryVector, spaceId, k: 5, scope: { documentIds: ['travel'] } })
 ```
 
 ## Errors

@@ -80,6 +80,8 @@ export interface SearchScope {
 export interface SearchParams {
   scope: SearchScope
   vector: Float32Array | number[]
+  // The `spaceId` the query was embedded in; it must match the namespace's.
+  spaceId: string
   k: number
   // Checked between scan batches; an aborted search fails with OPERATION_CANCELLED.
   signal?: AbortSignal
@@ -89,6 +91,7 @@ export interface ScopedSearchParams {
   // Intersected with the bound scope; it can narrow it, never widen it.
   scope?: Partial<SearchScope>
   vector: Float32Array | number[]
+  spaceId: string
   k: number
   signal?: AbortSignal
 }

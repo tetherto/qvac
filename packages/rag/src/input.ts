@@ -57,6 +57,7 @@ const searchSchema = z
   .object({
     scope: z.unknown(),
     vector: vectorSchema,
+    spaceId: z.string().min(1),
     k: z.number().int().positive(),
     signal: z
       .custom<AbortSignal>(
@@ -151,6 +152,7 @@ export function parseDelete(params: unknown): DeleteDocumentsParams {
 export interface ValidSearch {
   scope: unknown
   vector: Float32Array
+  spaceId: string
   k: number
   signal?: AbortSignal
 }
@@ -161,6 +163,7 @@ export function parseSearch(params: unknown): ValidSearch {
   return {
     scope: parsed.data.scope,
     vector: toVector(parsed.data.vector, 'vector'),
+    spaceId: parsed.data.spaceId,
     k: parsed.data.k,
     signal: parsed.data.signal
   }

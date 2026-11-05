@@ -1,8 +1,12 @@
 // Owned type surface for the untyped `corestore` and `hyperdb` deps. Only the
 // members this package uses are described.
 
-// Opaque to this package: it is only handed to HyperDB.
-export type Hypercore = object
+export interface Hypercore {
+  // Set once ready() resolves; identifies the core across Corestore sessions.
+  id: string | null
+  ready(): Promise<void>
+  close(): Promise<void>
+}
 
 export interface Corestore {
   ready(): Promise<void>
