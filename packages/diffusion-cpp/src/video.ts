@@ -86,7 +86,7 @@ export interface VideoGenerationBaseParams {
   /** LTX IC-LoRA reference-image spatial factor. Currently only exactly 1 is supported. */
   reference_downscale_factor?: number
   vae_tiling?: boolean
-  /** Spatial tile dimensions in latent pixels; 0 uses the engine default. */
+  /** Positive spatial tile dimensions in latent pixels; omit to use the engine default. */
   vae_tile_size?: number | string
   vae_tile_overlap?: number
   temporal_tiling?: boolean
