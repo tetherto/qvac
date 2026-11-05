@@ -49,6 +49,29 @@ export const list = (name, value) => {
   return out
 }
 
+// CI_SUITE is the plan's run options, the suite then key=value pairs: smoke;include=a,b;exclude=slow;inference=1.2.3.
+export const OPTIONS = ['include', 'exclude', 'inference']
+export function runOptions(value) {
+  const [suite, ...pairs] = String(value || '').split(';')
+  const out = { suite: list('suite', suite), include: '', exclude: '', inference: '' }
+  for (const pair of pairs) {
+    const [key, v] = pair.split('=')
+    if (!OPTIONS.includes(key)) throw new Error(`unknown run option ${key}`)
+    out[key] = list(key, v)
+  }
+  return out
+}
+export const encodeOptions = (suite, options = {}) =>
+  [suite || '', ...OPTIONS.filter((k) => options[k]).map((k) => `${k}=${options[k]}`)].join(';')
+
+// The producer's selection: suite, exclusions, extra exact ids and the filter.
+export const selection = ({ suite, exclude, include }, filter) => [
+  ...(filter ? [`--filter=${filter}`] : []),
+  ...(suite ? [`--suite=${suite}`] : []),
+  ...(exclude ? [`--exclude-suite=${exclude}`] : []),
+  ...(include ? [`--include=${include}`] : [])
+]
+
 export function summary(text) {
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${text}\n`)
 }
@@ -87,23 +110,30 @@ export function prepare(env) {
   writeFileSync(join(SDK, '.npmrc'), npmrc)
   const tmp = mkdtempSync(join(env.RUNNER_TEMP || tmpdir(), 'sdk-e2e-'))
   const sha = run('git', ['rev-parse', 'HEAD'], { capture: true }).trim()
-  for (const [script, prefix, project] of [
-    ['e2e-inference.mjs', 'INFERENCE', 'packages/sdk'],
-    ['e2e-test-suite.mjs', 'TEST_SUITE', 'packages/sdk-e2e']
+  // A dispatch's inference version installs that published @qvac/inference instead of this commit's.
+  const { inference } = runOptions(env.CI_SUITE)
+  for (const [script, prefix, project, version] of [
+    ['e2e-inference.mjs', 'INFERENCE', 'packages/sdk', inference],
+    ['e2e-test-suite.mjs', 'TEST_SUITE', 'packages/sdk-e2e', '']
   ]) {
     const dir = join(tmp, prefix.toLowerCase())
+    const out = join(tmp, `${prefix}.out`)
     const step = {
       ...env,
-      GITHUB_OUTPUT: '',
-      [`${prefix}_SOURCE`]: 'branch',
+      GITHUB_OUTPUT: out,
+      [`${prefix}_SOURCE`]: version ? 'npm' : 'branch',
+      [`${prefix}_VERSION`]: version,
       [`${prefix}_ARTIFACT_DIRECTORY`]: dir,
       ARTIFACT_DIRECTORY: dir,
       PROJECT_DIRECTORY: project,
       CHECKOUT_SHA: sha
     }
-    for (const command of ['resolve', 'apply']) {
-      run('node', [join(SDK, 'ci', script), command], { env: step })
-    }
+    writeFileSync(out, '')
+    run('node', [join(SDK, 'ci', script), 'resolve'], { env: step })
+    const spec = /^dependency-spec=(.*)$/m.exec(readFileSync(out, 'utf8'))?.[1] ?? ''
+    run('node', [join(SDK, 'ci', script), 'apply'], {
+      env: { ...step, GITHUB_OUTPUT: '', [`${prefix}_DEPENDENCY_SPEC`]: spec }
+    })
   }
   run('npm', ['install', '--ignore-scripts'], { cwd: SDK, env })
   run('npm', ['run', 'build'], { cwd: SDK, env })
@@ -304,7 +334,7 @@ function snapBuild(env) {
 }
 
 // main's run step: the consumer in the background, the producer in the foreground for up to 60 minutes.
-async function consumerAndProducer({ env, runId, family, filter, suite }) {
+async function consumerAndProducer({ env, runId, family, filter, options }) {
   const external = family === 'python'
   const consumerArgs = [
     'qvac-test',
@@ -335,8 +365,7 @@ async function consumerAndProducer({ env, runId, family, filter, suite }) {
     '--consumer-timeout=60',
     '--config=.',
     '--report-dir=./reports',
-    ...(filter ? [`--filter=${filter}`] : []),
-    ...(suite ? [`--suite=${suite}`] : [])
+    ...selection(options, filter)
   ]
   console.log(`Producer: npx ${producerArgs.join(' ')}`)
   const producer = spawnSync('npx', producerArgs, {
@@ -375,7 +404,7 @@ async function main(family, env) {
   if (!FAMILIES.includes(family)) throw new Error(`family must be one of ${FAMILIES.join(', ')}`)
   const platform = platformOf(env.CI_RUNNER_LABEL)
   if (family === 'snap' && platform !== 'linux') throw new Error('Snap runs on Linux only')
-  const suite = list('suite', env.CI_SUITE)
+  const options = runOptions(env.CI_SUITE)
   // A rerun's previously failed tests, from the e2e router; empty runs the suite.
   const tests = list('tests', env.CI_TESTS)
   const label = `${family}-${platform}`
@@ -419,7 +448,7 @@ async function main(family, env) {
     }
     const sha = run('git', ['rev-parse', '--short=7', 'HEAD'], { capture: true }).trim()
     const runId = `${platform}-${sha}-${family}-${Number(env.GITHUB_RUN_ID || Date.now()).toString(36)}-${env.GITHUB_RUN_ATTEMPT || 1}`
-    status = await consumerAndProducer({ env: e, runId, family, filter: tests, suite })
+    status = await consumerAndProducer({ env: e, runId, family, filter: tests, options })
   } finally {
     if (family === 'snap') {
       // Best effort, as main's two optional steps: removing the snap stops its processes; denials explain a failure.

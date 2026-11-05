@@ -19,14 +19,31 @@ on:
         type: string
         default: ""
       labels:
-        description: Labels whose desktop configurations to run, e.g. test-e2e-smoke; dispatch-only ones too, e.g. electron
+        description: Labels whose desktop configurations to run, e.g. electron; empty runs test-e2e-full's desktop ones
         type: string
         default: ""
       platform:
         description: Device Farm platform; none runs the desktop configurations only
         type: choice
-        options: [none, Android, iOS]
+        options: [none, Android, iOS, both]
         default: none
+      suite:
+        description: Test suite for every leg
+        type: choice
+        options: [full, smoke]
+        default: full
+      exclude-suite:
+        description: Suites to exclude, comma-separated, e.g. slow,flaky
+        type: string
+        default: ""
+      include:
+        description: Extra testIds to run on top of the suite and filter, exact ids, comma-separated
+        type: string
+        default: ""
+      inference-version:
+        description: Published @qvac/inference version or dist-tag; empty uses this branch's packages/inference
+        type: string
+        default: ""
       pool:
         description: Device pool name; empty picks a ready private pool, else a public one
         type: string
@@ -36,18 +53,18 @@ on:
         type: choice
         options: [UNMETERED, METERED]
         default: UNMETERED
-      tests:
-        description: Optional filter over the mobile test names
+      filter:
+        description: Test filters for every leg, comma-separated categories or prefixes; empty runs all
         type: string
         default: ""
 
 permissions: {}
 
 # One group per kind of run, as main's on-pr-test-sdk.yml: a label this workflow ignores cancels nothing, and the Python
-# probe runs beside the smoke or full run instead of replacing it.
+# probe runs beside the smoke or full run instead of replacing it. Dispatches never cancel each other.
 concurrency:
   group: >-
-    sdk-e2e-${{ github.event.pull_request.number || github.ref }}-${{ inputs.platform || 'none' }}-${{
+    sdk-e2e-${{ github.event.pull_request.number || github.run_id }}-${{ inputs.platform || 'none' }}-${{
       github.event.action != 'labeled' && 'base'
       || (github.event.label.name == 'test-e2e-rerun-failed' && 'rerun')
       || (github.event.label.name == 'test-e2e-smoke' && 'base')
@@ -64,7 +81,7 @@ jobs:
     with:
       targets: test:integration,test:mobile
       packages: ${{ inputs.packages }}
-      labels: ${{ inputs.labels }}
+      labels: ${{ github.event_name == 'workflow_dispatch' && (inputs.labels || 'test-e2e-full') || '' }}
       configs: ${{ inputs.platform == 'iOS' && 'ios-arm64' || inputs.platform == 'Android' && 'android-arm64' || '' }}
       tags: ci:sdk
 
@@ -114,11 +131,52 @@ jobs:
         with:
           github-token: ${{ github.token }}
 
+  # main's resolve-impacted: the testIds a smoke run's PR touched. PR code runs here, so read-only; plan validates the ids.
+  impacted:
+    needs: [route, trust]
+    if: >-
+      needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_verified_checks == 'true'
+      && contains(fromJSON('["test-e2e-smoke","test-e2e-python"]'), github.event.label.name)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      include: ${{ steps.impacted.outputs.include }}
+      json: ${{ steps.impacted.outputs.impacted-json }}
+    steps:
+      - uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          sparse-checkout: |
+            packages/sdk-e2e
+            packages/sdk/contract
+            packages/sdk/src/client/api
+            packages/inference/src/registry.ts
+          sparse-checkout-cone-mode: "false"
+          persist-credentials: "false"
+      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          node-version: "22"
+      - id: impacted
+        working-directory: packages/sdk-e2e
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          ESBUILD_MODULE: ${{ runner.temp }}/mapper/node_modules/esbuild/lib/main.js
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[] | {filename, patch}' | jq -s . > "$RUNNER_TEMP/pr-files.json"
+          npm install --ignore-scripts --no-save --no-fund --no-audit --prefix "$RUNNER_TEMP/mapper" esbuild@0.27.0
+          node scripts/impacted-tests.mjs --repo-root "$GITHUB_WORKSPACE" --pr-files "$RUNNER_TEMP/pr-files.json" --github-output "$GITHUB_OUTPUT"
+
   # The SDK router: the run's mode, each leg's rows and the running comments. Only base-branch code runs here, since
   # it holds pull-requests: write.
   plan:
-    needs: [select, route, trust]
-    if: needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_verified_checks == 'true'
+    needs: [select, route, trust, impacted]
+    if: >-
+      always() && !cancelled() && needs.trust.outputs.allowed == 'true' && needs.route.outputs.run_verified_checks == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -148,6 +206,14 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           MATRICES: ${{ needs.select.outputs.matrices }}
           PLATFORM: ${{ inputs.platform }}
+          SUITE: ${{ inputs.suite }}
+          FILTER: ${{ inputs.filter }}
+          EXCLUDE_SUITE: ${{ inputs.exclude-suite }}
+          INCLUDE: ${{ inputs.include }}
+          INFERENCE_VERSION: ${{ inputs.inference-version }}
+          IMPACTED: ${{ needs.impacted.result }}
+          IMPACTED_INCLUDE: ${{ needs.impacted.outputs.include }}
+          IMPACTED_JSON: ${{ needs.impacted.outputs.json }}
         run: node packages/sdk/ci/e2e-report.mjs plan
 
   desktop:
@@ -186,9 +252,9 @@ jobs:
       PROJECT: ${{ matrix.row.project }}
       CONFIG: ${{ matrix.row.config }}
       PLATFORM: ${{ matrix.row.config == 'ios-arm64' && 'iOS' || 'Android' }}
-      # The label's suite, and on a rerun the tests that failed on this row's base run.
+      # The plan's suite and options, and the filter: a rerun's failed tests or a dispatch's filter.
       CI_SUITE: ${{ matrix.row.suite }}
-      TESTS: ${{ matrix.row.tests || inputs.tests }}
+      TESTS: ${{ matrix.row.tests }}
       PROJECT_ARN: ${{ vars[matrix.row.meta.mobile.projectArnVar] }}
       NX_DAEMON: "false"
       NX_NO_CLOUD: "true"

@@ -8,6 +8,8 @@ import { appendFileSync, existsSync, readFileSync, readdirSync, statSync } from 
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+import { SAFE_LIST, encodeOptions, list } from './e2e.mjs'
+
 const SDK = '@qvac/sdk'
 const STATE = '<!-- sdk-e2e-base-state -->'
 const STATE_DATA = /<!-- sdk-e2e-base-state-data:v2:([A-Za-z0-9+/=]+) -->/
@@ -198,6 +200,110 @@ async function isRunInFlight(gh, runId) {
   }
 }
 
+// main's sdk-e2e-report-impacted: the impact mapper ran PR code, so every field is checked before it is rendered.
+const IMPACTED = '<!-- sdk-e2e-impacted -->'
+const E2E_PREFIX = 'packages/sdk-e2e/'
+const SAFE_PATH = /^[A-Za-z0-9._/-]+$/
+const SAFE_ID = /^[A-Za-z0-9._-]+$/
+const VIA = new Set([
+  'definitions (whole file)',
+  'definitions (changed lines)',
+  'executor pattern',
+  'import graph',
+  'inference engine',
+  'sdk handler',
+  'sdk api'
+])
+
+// The validated ids to add, and the comment to post (null for none).
+export function impacted({ result, include, json }) {
+  const ok = result === 'success' && (!include || SAFE_LIST.test(include))
+  if (result === 'success' && !ok) {
+    console.log(
+      '::error title=Unsafe test ids::The impact mapper emitted ids outside [A-Za-z0-9._-]'
+    )
+  }
+  let report = null
+  try {
+    report = ok && json ? JSON.parse(json) : null
+  } catch (err) {
+    console.log(`::warning::Impact report could not be parsed: ${err.message}`)
+  }
+  if (!report || typeof report !== 'object') {
+    return {
+      include: '',
+      body:
+        '### QVAC E2E — impact analysis unavailable\n\n' +
+        '⚠️ The impact mapper did not produce a report, so this is a plain smoke run: tests this PR added or ' +
+        'changed may not have run. Check the `impacted` job, or apply `test-e2e-full`.'
+    }
+  }
+  const count = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0)
+  const strip = (f) => (f.startsWith(E2E_PREFIX) ? f.slice(E2E_PREFIX.length) : f)
+  const paths = (v) =>
+    (Array.isArray(v) ? v : []).filter((f) => typeof f === 'string' && SAFE_PATH.test(f)).map(strip)
+  const ids = (v) =>
+    (Array.isArray(v) ? v : []).filter((id) => typeof id === 'string' && SAFE_ID.test(id))
+  if (count(report.changedFilesInScope) === 0) return { include, body: null }
+  const affected = count(report.affected?.length)
+  const covered = count(report.coveredBySmoke?.length)
+  const added = ids(report.includeTests)
+  const unmapped = paths(report.unmapped)
+  const rejected = count(report.rejectedIds?.length)
+  const lines = ['### QVAC E2E — tests changed by this PR', '']
+  if (added.length) {
+    lines.push(
+      `This smoke run additionally covers **${added.length}** test(s) that are not tagged \`smoke\`, adding ` +
+        `roughly **${count(report.addedMinutes)} min**.`
+    )
+  } else if (affected)
+    lines.push('Every test this PR touched is already covered by the smoke suite.')
+  else lines.push('No test could be attributed to the changed files listed below.')
+  lines.push(
+    '',
+    `**Catalog:** ${count(report.catalog)} tests · **smoke:** ${count(report.smoke)} · ` +
+      `**touched by this PR:** ${affected} (${covered} already in smoke)`,
+    ''
+  )
+  const attribution = (Array.isArray(report.attribution) ? report.attribution : []).filter(
+    (e) => e && typeof e.file === 'string' && SAFE_PATH.test(e.file) && VIA.has(e.via)
+  )
+  if (attribution.length) {
+    lines.push('| Changed file | Matched via | Tests |', '| --- | --- | --- |')
+    for (const e of attribution)
+      lines.push(`| \`${strip(e.file)}\` | ${e.via} | ${count(e.tests)} |`)
+    lines.push('')
+  }
+  if (added.length) {
+    const rest = added.length - Math.min(added.length, 50)
+    lines.push(
+      `<details><summary>${added.length} added test id(s)</summary>`,
+      '',
+      '```',
+      ...added.slice(0, 50),
+      ...(rest > 0 ? [`… and ${rest} more`] : []),
+      '```',
+      '',
+      '</details>',
+      ''
+    )
+  }
+  if (unmapped.length) {
+    lines.push(
+      'These changed files map to no test, so nothing was added for them — review by hand if they affect behaviour:',
+      ...unmapped.map((f) => `- \`${f}\``),
+      ''
+    )
+  }
+  if (rejected) {
+    lines.push(
+      `⚠️ ${rejected} affected test id(s) were rejected as unsafe to pass on a command line and were not added.`,
+      ''
+    )
+  }
+  return { include, body: lines.join('\n') }
+}
+
 // main's resolve-rerun: the failed tests of the last recorded base run, per leg, or why there is nothing to run.
 export function rerunPlan(state) {
   const recorded = state.recorded
@@ -226,12 +332,21 @@ export async function plan(env) {
   const mobile = matrices['test:mobile'] ?? []
   const pr = event.pull_request?.number
   if (!pr) {
-    // A dispatch runs what its inputs select, Device Farm only on the platform it names.
+    // A dispatch runs what its inputs select, Device Farm only on the platform it names, as main's test-sdk.yml.
     const platform = env.PLATFORM && env.PLATFORM !== 'none'
+    const suite = env.SUITE === 'smoke' ? 'smoke' : ''
+    const options = {
+      exclude: list('exclude-suite', env.EXCLUDE_SUITE),
+      include: list('include', env.INCLUDE),
+      inference: list('inference-version', env.INFERENCE_VERSION)
+    }
+    const tests = list('filter', env.FILTER)
+    const rows = (rs) => rs.map((r) => ({ ...r, suite: encodeOptions(suite, options), tests }))
     return output(env, {
       mode: 'dispatch',
-      desktop: labelled,
-      mobile: platform ? mobile : [],
+      suite,
+      desktop: rows(labelled),
+      mobile: platform ? rows(mobile) : [],
       report: [],
       comments: {}
     })
@@ -245,6 +360,24 @@ export async function plan(env) {
   const gh = github(env)
   const runUrl = runUrlOf(env)
   if (mode === 'base') devices = mobile.filter(reported).map((r) => ({ ...r, suite }))
+  // A smoke run adds the tests the PR touched, on desktop and mobile, as main's resolve-impacted did.
+  if (suite === 'smoke' && ['success', 'failure'].includes(env.IMPACTED)) {
+    const found = impacted({
+      result: env.IMPACTED,
+      include: env.IMPACTED_INCLUDE || '',
+      json: env.IMPACTED_JSON || ''
+    })
+    if (found.include) {
+      const add = (r) => ({ ...r, suite: encodeOptions(r.suite, { include: found.include }) })
+      desktop = desktop.map(add)
+      devices = devices.map(add)
+    }
+    if (found.body) {
+      const { comments } = await readState(gh, pr)
+      await upsert(gh, pr, comments, IMPACTED, found.body)
+      summary(env, found.body)
+    }
+  }
   if (mode === 'rerun') {
     // GitHub only emits labeled when the label is absent, so it comes off for the next attempt.
     await gh.call('DELETE', `issues/${pr}/labels/${RERUN}`).catch((err) => {
