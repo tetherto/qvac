@@ -65,12 +65,15 @@ function llama(
   }
 }
 
-function sharedTts(devices: ReturnType<typeof device>[]): FitProbeResult {
-  return { engine: 'tts-ggml', result: { status: 'fits', devices, stats: {} } }
+function sharedTts(devices: ReturnType<typeof device>[]) {
+  return { engine: 'tts-ggml' as const, result: { status: 'fits' as const, devices, stats: {} } }
 }
 
-function sharedAudiogen(devices: ReturnType<typeof device>[]): FitProbeResult {
-  return { engine: 'audiogen-ggml', result: { status: 'fits', devices, stats: {} } }
+function sharedAudiogen(devices: ReturnType<typeof device>[]) {
+  return {
+    engine: 'audiogen-ggml' as const,
+    result: { status: 'fits' as const, devices, stats: {} }
+  }
 }
 
 function legacyTts() {
