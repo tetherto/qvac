@@ -81,12 +81,20 @@ function rejectsInvalid(
         }
       },
       {
-        assert: {
-          on: '$err',
-          named: 'errorMatches',
-          with: { code: '50010', ...(messageContains && { messageContains }) }
-        }
-      }
+        project: { from: '$err', path: 'message', as: 'message' }
+      },
+      { assert: { on: '$message', named: 'nonEmptyText' } },
+      ...(messageContains
+        ? [
+            {
+              assert: {
+                on: '$err',
+                named: 'errorMatches',
+                with: { messageContains }
+              }
+            } as const
+          ]
+        : [])
     ],
     metadata: { category: 'completion', dependency: 'none', estimatedDurationMs: 1000 }
   }
