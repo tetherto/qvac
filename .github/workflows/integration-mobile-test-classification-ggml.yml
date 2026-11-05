@@ -243,8 +243,7 @@ jobs:
           # resolves empty, leaving the artifact-first path untouched.
           prebuild-run-id: ${{ inputs.prebuild_run_id }}
 
-      # Keep current MobileNet-only source compatible before MegaLoc lands.
-      - name: Stage MegaLoc test models
+      - name: Stage classification test models
         if: hashFiles(format('addon/{0}/test/integration/megaloc.test.js', inputs.workdir || 'packages/classification-ggml')) != ''
         uses: ./.github/actions/stage-integration-models
         with:
@@ -253,7 +252,7 @@ jobs:
           bucket: ${{ secrets.MODEL_S3_BUCKET }}
           s3-manifest: ${{ needs.test-models.outputs.manifest }}
 
-      - name: Verify MegaLoc test models
+      - name: Verify classification test models
         if: hashFiles(format('addon/{0}/test/integration/megaloc.test.js', inputs.workdir || 'packages/classification-ggml')) != ''
         working-directory: addon/${{ inputs.workdir || 'packages/classification-ggml' }}
         shell: bash

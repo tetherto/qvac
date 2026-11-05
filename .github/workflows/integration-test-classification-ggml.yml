@@ -240,8 +240,7 @@ jobs:
           echo "Prebuilds downloaded from npm successfully"
           Get-ChildItem prebuilds/
 
-      # Keep current MobileNet-only source compatible before MegaLoc lands.
-      - name: Stage MegaLoc test models
+      - name: Stage classification test models
         if: hashFiles(format('{0}/test/integration/megaloc.test.js', env.PKG_DIR)) != ''
         uses: tetherto/qvac/.github/actions/stage-integration-models@94eb8ef3e888f8bc1f1717d5e31f55b14d4ac915
         with:
@@ -250,7 +249,7 @@ jobs:
           bucket: ${{ secrets.MODEL_S3_BUCKET }}
           s3-manifest: ${{ needs.test-models.outputs.manifest }}
 
-      - name: Verify MegaLoc test models
+      - name: Verify classification test models
         if: hashFiles(format('{0}/test/integration/megaloc.test.js', env.PKG_DIR)) != ''
         working-directory: ${{ env.PKG_DIR }}
         shell: bash
