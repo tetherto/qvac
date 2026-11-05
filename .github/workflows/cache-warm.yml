@@ -9,6 +9,7 @@ on:
       - "packages/*/vcpkg.json"
       - "packages/*/vcpkg-configuration.json"
       - "packages/*/test/integration/models.manifest.json"
+      - "packages/inference/src/models/registry/models.ts"
       - "vcpkg-overlays/triplets/**"
       - "vcpkg-overlays/toolchains/**"
       - ".github/workflows/cache-warm.yml"

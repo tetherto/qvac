@@ -56,8 +56,8 @@ if (['generated', 'format', 'lint', 'typecheck', 'unit'].includes(step)) {
     args: process.argv.slice(3),
     options: { platform: { type: 'string' } }
   })
-  // The worker keeps its models here, as main's full and wheel legs pointed it.
-  const cache = join(process.env.GITHUB_WORKSPACE ?? pkg, '.qvac-cache')
+  // The worker keeps its models in test:integration's metadata.modelCache, the SDK e2e's set that cache-warm saves.
+  const cache = join(pkg, '../sdk-e2e/.qvac-cache')
   mkdirSync(cache, { recursive: true })
   const env = { QVAC_CACHE_DIR: cache }
   if (suite === 'fast' || suite === 'full') {

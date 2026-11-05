@@ -120,7 +120,21 @@
         }
       },
       "metadata": {
-        "timeoutMinutes": 60
+        "timeoutMinutes": 60,
+        "modelCache": {
+          "path": "../sdk-e2e/.qvac-cache",
+          "keyFiles": ["../inference/src/models/registry/models.ts"]
+        }
+      }
+    },
+    "cache:models": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/sdk-python",
+        "command": "node ../sdk/ci/e2e.mjs cache"
+      },
+      "metadata": {
+        "secrets": ["GITHUB_TOKEN"]
       }
     }
   }
