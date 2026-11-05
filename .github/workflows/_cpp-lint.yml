@@ -90,7 +90,7 @@ jobs:
         working-directory: src
         env:
           NPM: ${{ matrix.row.npm }}
-        run: pnpm install --frozen-lockfile --filter . --filter "$NPM..."
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter . --filter "$NPM..."
       - name: ci:system
         shell: bash
         working-directory: src

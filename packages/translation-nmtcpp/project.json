@@ -377,6 +377,10 @@
           "tagPrefix": "translation-nmtcpp"
         }
       }
+    },
+    "publish:post": {
+      "executor": "nx:noop",
+      "dependsOn": ["benchmark"]
     }
   },
   "implicitDependencies": [

@@ -19,7 +19,7 @@ A package without the tag runs the workflows it names itself, such as the regist
 | `mobile-tests.yml` | dispatch | `test:mobile` |
 | `benchmarks.yml` | dispatch; weekly for the perf report | `build`, `benchmark`, `test:mobile` |
 | `cache-warm.yml` | push to `main` on cache inputs, schedule, dispatch | `cache:models`, `build`, `cpp:tests` |
-| `publish-npm.yml` | push to `release-<slug>-<x.y.z>`, dispatch (`dry_run`) | `build`, `verify:generated`, `verify:deps`, `publish:pre`, `publish` |
+| `publish-npm.yml` | push to `release-<slug>-<x.y.z>`, dispatch (`dry_run`) | `build`, `verify:generated`, `verify:deps`, `publish:pre`, `publish`, `publish:post` |
 | `publish-gpr.yml` | dispatch | `build`, `verify:generated`, `verify:deps`, `publish:pre`, `publish` |
 
 Each group names the tags it serves in `_select-projects.yml`'s `tags`. `pr-checks.yml`, `pr-build-test.yml` and `mobile-tests.yml` serve `ci:addons`; the publish groups also serve `ci:libs`, the JavaScript libraries that run no other group; the SDK pod's two workflows serve `ci:sdk`: `sdk-checks.yml` runs their check targets in each package's own install, with the pod's release guard and PR rules, and `release-train.yml` calls it for a train; `sdk-e2e.yml` routes each run through its `plan` job (`packages/sdk/ci/e2e-report.mjs`): their labelled `test:integration` configurations through `_desktop.yml`, the sdk's Device Farm app on the same labels or by dispatch, then a `report` job that comments the results on the PR. The publish, benchmark and cache groups serve both tags.
@@ -52,6 +52,7 @@ A package on the contract declares only these targets:
 | `benchmark` | Runs the package's benchmarks; its `report` configuration then reads every configuration's results | yes, plus `report` |
 | `publish:pre` | A check the release must pass before it publishes, which the publish groups run in their verify job, e.g. a library's own install and tests | no |
 | `publish` | Marks the package as publishable: `nx:noop`, or a command `publish-gpr.yml` runs before packing a JavaScript build, with `PUBLISH_REGISTRY=gpr` and the run's `PUBLISH_PROJECTS` | no |
+| `publish:post` | What runs once the release is published and tagged. Its own command runs in `publish-npm.yml`; each target in its `dependsOn` (`benchmark`, `test:integration`, `test:backend`, `test:mobile`) is dispatched to the workflow that owns it, at the release tag | names the platforms its dependencies run on; none means all |
 
 Every package command is a target command. A group's step runs `nx run-many`, never `bare-make`, a `ci/` script or a package script directly. Tooling stays in the groups' steps: checkout, toolchain setup, artifacts, Device Farm, and packing and publishing to a registry. `ci:setup` and `ci:system` set `options.forwardAllArgs: false`, so an argument meant for a later target never reaches their commands.
 

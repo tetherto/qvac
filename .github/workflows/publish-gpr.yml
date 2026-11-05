@@ -93,10 +93,10 @@ jobs:
         # A package checked in npm's layout installs as its pr-checks do: the sdk-source:workspace script, or npm alone.
         run: |
           if [ -n "$SOURCE" ]; then
-            pnpm install --frozen-lockfile --filter .
+            pnpm install --frozen-lockfile --ignore-scripts --filter .
             node scripts/ci/checks-source.mjs check "$SOURCE" "$DIR" "$PROJECT" "$TARGET"
           else
-            pnpm install --frozen-lockfile
+            pnpm install --frozen-lockfile --ignore-scripts
             pnpm exec nx run "$PROJECT:$TARGET" --outputStyle=stream
           fi
 
