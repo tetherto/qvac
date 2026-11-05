@@ -869,7 +869,7 @@ importers:
         version: 0.34.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/decoder-audio':
         specifier: ^0.8.1
-        version: link:../decoder-audio
+        version: 0.8.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/diffusion-cpp':
         specifier: ^0.31.0
         version: 0.31.0
@@ -1613,7 +1613,7 @@ importers:
         version: 0.34.1(@qvac/fabric-android-arm64@0.25.0)(@qvac/fabric-ios@0.25.0)(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-tcp@2.5.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)))
       '@qvac/decoder-audio':
         specifier: ^0.8.1
-        version: link:../decoder-audio
+        version: 0.8.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       '@qvac/diffusion-cpp':
         specifier: ^0.31.0
         version: 0.31.0
@@ -4548,6 +4548,9 @@ packages:
         optional: true
       '@qvac/fabric-ios':
         optional: true
+
+  '@qvac/decoder-audio@0.8.1':
+    resolution: {integrity: sha512-gjvE6H7DhEGj+HsPhkqmQK0XivoGP7xXHL+XwpuTWyoT9oVuo8zG6+LJgQ78FNsFY5DYyjwBrWdOTqjN3Ksl9g==}
 
   '@qvac/diagnostics@0.1.2':
     resolution: {integrity: sha512-rpNekTUH3uIHPFqRRWcWXEHzW2CZbJJodLfCecVSkzvVXCOm5SLnlP2sxGVTWL7Q/umD68jnTiHMr4h6tP+jUw==}
@@ -14480,6 +14483,20 @@ snapshots:
       - bare-events
       - bare-pipe
       - bare-tcp
+      - react-native-b4a
+
+  '@qvac/decoder-audio@0.8.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)':
+    dependencies:
+      '@qvac/error': 0.1.1
+      '@qvac/infer-base': 0.8.0
+      '@qvac/logging': 0.1.1
+      bare-ffmpeg: 1.5.0
+      bare-fs: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      bare-path: 3.1.1
+      bare-url: 2.5.4
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
       - react-native-b4a
 
   '@qvac/diagnostics@0.1.2':
