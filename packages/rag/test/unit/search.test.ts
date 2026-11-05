@@ -1,4 +1,5 @@
 import test from 'brittle'
+import { AbortController } from 'bare-abort-controller'
 
 import { ERR_CODES } from '../../src/index.js'
 import { SCAN_BATCH_SIZE } from '../../src/search.js'
@@ -261,13 +262,12 @@ test('an aborted signal cancels the search', async (t) => {
     'already aborted'
   )
 
-  // `aborted` is read by input validation, at scan entry, then once per scored
-  // batch. Aborting on the fourth read means the first batch was scored and the
-  // scan stopped at the check before the second.
+  // `aborted` is read by input validation, at scan entry, then after each full
+  // batch. Aborting on the third read means the scan stopped after one batch.
   let checks = 0
   const midScan = {
     get aborted() {
-      return ++checks > 3
+      return ++checks > 2
     }
   } as AbortSignal
   await rejectsWithCode(
@@ -276,13 +276,31 @@ test('an aborted signal cancels the search', async (t) => {
     ERR_CODES.OPERATION_CANCELLED,
     'aborted between batches'
   )
-  t.is(checks, 4, 'the scan scored one batch before stopping')
+  t.is(checks, 3, 'the scan scored one batch before stopping')
 
   await rejectsWithCode(
     t,
     rag.search({ ...query, signal: 'stop' as never }),
     ERR_CODES.INVALID_INPUT,
     'a non-signal is rejected'
+  )
+})
+
+test('an abort from the event loop stops a scan over cached rows', async (t) => {
+  const { rag, spaceId } = await openRag(t)
+  const chunks: Array<[string, number[]]> = []
+  for (let i = 0; i < SCAN_BATCH_SIZE * 4; i++) chunks.push([`chunk ${i}`, [1, 0, 0]])
+  await rag.ingest({ namespace: 'ns', documents: [doc('big', spaceId, chunks)] })
+  const query = { scope: { namespace: 'ns' }, vector: [1, 0, 0], spaceId, k: 1 }
+  await rag.search(query)
+
+  const controller = new AbortController()
+  setImmediate(() => controller.abort(new Error('stop')))
+  await rejectsWithCode(
+    t,
+    rag.search({ ...query, signal: controller.signal }),
+    ERR_CODES.OPERATION_CANCELLED,
+    'the abort ran between batches'
   )
 })
 

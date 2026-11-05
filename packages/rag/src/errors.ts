@@ -2,7 +2,7 @@ import { QvacErrorBase, addCodes, type ErrorCodesMap } from '@qvac/error'
 
 export class QvacErrorRAG extends QvacErrorBase {}
 
-// Codes retired in 0.10 are not reused.
+// Codes retired in 0.10 are not reused; see RETIRED_DEFINITIONS.
 export const ERR_CODES = Object.freeze({
   INVALID_INPUT: 14008,
   DUPLICATE_DOCUMENT_ID: 14010,
@@ -85,4 +85,28 @@ export function toRagError(error: unknown): QvacErrorRAG {
   })
 }
 
-addCodes(definitions, { name: '@qvac/rag', version: '0.10.0' })
+// Codes 0.9 registered and 0.10 no longer raises. @qvac/error keeps only the
+// newest version's registration, so dropping them would turn a 0.9 error in
+// the same app into UNKNOWN_ERROR_CODE once 0.10 loads.
+const RETIRED_DEFINITIONS: ErrorCodesMap = {
+  14001: { name: 'ABSTRACT_CLASS', message: 'Abstract class cannot be instantiated directly' },
+  14002: { name: 'DB_ADAPTER_NOT_INITIALIZED', message: 'Adapter not initialized' },
+  14003: { name: 'DB_ADAPTER_REQUIRED', message: 'Database adapter required' },
+  14004: { name: 'CENTROIDS_INITIALIZATION_FAILURE', message: 'Centroids initialization failure' },
+  14005: { name: 'LLM_REQUIRED', message: 'LLM required' },
+  14006: { name: 'EMBEDDING_FUNCTION_REQUIRED', message: 'Embedding function required' },
+  14007: { name: 'NOT_IMPLEMENTED', message: 'Not implemented' },
+  14009: { name: 'INVALID_PARAMS', message: 'Invalid params' },
+  14011: {
+    name: 'GENERATION_FAILED',
+    message: (message) => `Failed to generate, error: ${message}`
+  },
+  14012: { name: 'CHUNKING_FAILED', message: (message) => `Failed to chunk document: ${message}` },
+  14013: { name: 'INVALID_CHUNKER', message: 'Invalid chunker instance provided' },
+  14017: {
+    name: 'EMBEDDING_MODEL_MISMATCH',
+    message: (message) => `Embedding model mismatch: ${message}`
+  }
+}
+
+addCodes({ ...RETIRED_DEFINITIONS, ...definitions }, { name: '@qvac/rag', version: '0.10.0' })

@@ -58,7 +58,6 @@ export async function scanSearch(
   const top: Ranked[] = []
 
   function scoreBatch() {
-    throwIfAborted(options.signal)
     for (let row = 0; row < batch.length; row++) {
       const offset = row * dims
       let score = dot(query, vectors, offset)
@@ -81,10 +80,14 @@ export async function scanSearch(
       }
       decodeVectorInto(chunk.vector, vectors, batch.length * dims)
       batch.push(chunk)
-      if (batch.length === SCAN_BATCH_SIZE) scoreBatch()
+      if (batch.length === SCAN_BATCH_SIZE) {
+        scoreBatch()
+        await yieldForAbort(options.signal)
+      }
     }
   }
   scoreBatch()
+  throwIfAborted(options.signal)
 
   const hits = top.map((entry) => entry.hit)
   await attachDocumentMetadata(reader, scope.namespace, hits)
@@ -144,6 +147,16 @@ async function resolveRanges(
     ranges.push({ gte: key, lte: key })
   })
   return ranges
+}
+
+// Cached rows resolve through microtasks alone, so without a turn of the event
+// loop an abort scheduled by a timer or UI event could never run mid-scan.
+async function yieldForAbort(signal: AbortSignal | undefined): Promise<void> {
+  if (!signal) return
+  await new Promise<void>((resolve) =>
+    typeof setImmediate === 'function' ? setImmediate(resolve) : setTimeout(resolve, 0)
+  )
+  throwIfAborted(signal)
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
