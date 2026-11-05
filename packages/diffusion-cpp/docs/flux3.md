@@ -8,7 +8,7 @@ use `prediction: 'auto'`. No vision projector or external tokenizer is required.
 
 This integration builds on [QVAC #5550](https://github.com/tetherto/qvac/pull/5550)
 and uses the same [registry #475](https://github.com/tetherto/qvac-registry-vcpkg/pull/475)
-baseline, `3e01cbf62a3b61e0ac67ffb52e50e658b8bd0e8a`, on
+baseline, `c1ecd54c08eb1b8a84b8ddf9440899fd63c75be7`, on
 `feat/diffusion-2026-11-01`. Both native ports are `2026-11-01`; the diffusion
 engine source is `11d3d0138537abd8098c13d9bd2889bf1413bab1`.
 Keep the registry branch available until the pin is refreshed to merged main.
