@@ -160,8 +160,14 @@ async function runVlmImagePerf(t, modelDef, imageCase) {
   const backendTag = useCpu ? 'CPU' : 'GPU'
   const perfLabel = `[${imageCase.name}] [${modelDef.perfLabel}] [${backendTag}]`
 
+  // A request without a cacheKey keeps its state for the next one, which
+  // would then reuse the image of an identical prompt. A distinct system
+  // message per call keeps every timed run's image encode and prefill cold.
+  let imageRuns = 0
   async function runImageInference(imageBytes) {
+    imageRuns++
     const messages = [
+      { role: 'system', content: `Run ${imageRuns}.` },
       { role: 'user', type: 'media', content: imageBytes },
       // Most VLMs answer a generic caption prompt; OCR models (e.g. Unlimited-OCR)
       // need their own task prompt, so a case can override it.

@@ -762,17 +762,29 @@ const fit = await assessFit({
   lyricTokens: 256
 })
 
-fit.status // 'fits' | 'does-not-fit' | 'error'
-fit.reason // the engine's own wording, e.g. 'model-unreadable', 'workload-too-large'
-fit.modelName
-fit.isTurbo
-fit.deviceName
-fit.deviceBytes // peak across the pipeline phases under the projected residency mode
-fit.hostBytes
-fit.hostFreeBytes // host capacity, a budget of its own where the device has its own memory
-fit.stagesResident
-fit.report
+fit.status // 'fits' | 'does-not-fit' | 'unknown'
+fit.devices // [{ id, name, unified, usedBytes, freeBytes, totalBytes }]
+fit.stats // {}
 ```
+
+`devices` holds each device the pipeline uses, then the host CPU, which holds
+the CPU-placed stages, the mapped weights and the host-side buffers. A load on
+the CPU is one row. `usedBytes` is the load's peak on that device across the
+pipeline phases, under the projected residency mode. `id` is the PCI bus ID when
+the backend reports one, so the same GPU matches across addons built on
+different backends, and the device name otherwise. `unified` is true for memory
+the host owns: the CPU, an integrated GPU, a GPU that shares the host's memory,
+Android's OpenCL GPU, and a device that reports no memory of its own, which
+takes the host's figures.
+
+On an iOS device every unified row shares the app's own memory limit,
+`os_proc_available_memory()`. Each such row's free memory is capped at that
+limit, and a load whose unified rows together take more than the limit less
+the margin does not fit. A limit of 0 means the app has none left.
+
+`status` is `unknown`, with no rows, for a load the fitter cannot size:
+MiniMax-Music3 with Core ML stages, which have no memory estimate, or a load
+whose memory the engine fails to measure.
 
 `modelsDir` holds the four stage GGUFs; `textEncoderPath`, `lmPath`, `ditPath`
 and `vaePath` name them individually and win over it.
@@ -790,17 +802,13 @@ and `vaePath` name them individually and win over it.
 | `threads`, `backendsDir`      | As the load takes them.                                                                   |
 | `marginBytes`                 | Free memory that must remain for the projection to count as fitting. Defaults to 256 MiB. |
 
-`deviceSharesHostMemory` reports that the device pool is system RAM, so host
-bytes compete with device bytes.
-
 ### MiniMax-Music3
 
 `engine: 'minimax'` projects a MiniMax-Music3 pair on desktop builds, with the
 same result shape. `modelsDir` holds the pair; `lmPath` and `synthPath` name the
 two GGUFs and win over it. The weights and the synthesis graphs stay resident
-between runs and the LM's cache is rebuilt by each run, so `deviceBytes` is the
-peak of repeated generations, and the `stages` rows are `lm`, `depth`, `cond`,
-`dit` and `vocoder`.
+between runs and the LM's cache is rebuilt by each run, so `usedBytes` is the
+peak of repeated generations.
 
 ```js
 const fit = await assessFit({
@@ -812,18 +820,19 @@ const fit = await assessFit({
 })
 ```
 
-| Option                                  | Description                                                                                                                                                                                    |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `device`                                | `'cpu'`, `'gpu'` or `'auto'`, as `config.device` takes it. Without it, `gpuLayers` greater than 0 projects `'auto'` and anything else `'cpu'`.                                                 |
-| `durationSeconds`, `maxFrames`          | The generation length, as `run()` takes it (25 frames per second); one or the other. Defaults to 300 frames.                                                                                   |
-| `promptTokens`                          | Tokenized prompt length: caption, lyrics and template. Defaults to 1024. A prompt above the checkpoint's limit, or one that leaves too little context for the frames, is `workload-too-large`. |
-| `threads`, `backendsDir`, `marginBytes` | As for ACE-Step.                                                                                                                                                                               |
+| Option                                  | Description                                                                                                                                                                                              |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `device`                                | `'cpu'`, `'gpu'` or `'auto'`, as `config.device` takes it. Without it, `gpuLayers` greater than 0 projects `'auto'` and anything else `'cpu'`.                                                           |
+| `durationSeconds`, `maxFrames`          | The generation length, as `run()` takes it (25 frames per second); one or the other. Defaults to 300 frames.                                                                                             |
+| `promptTokens`                          | Tokenized prompt length: caption, lyrics and template. Defaults to 1024. A prompt above the checkpoint's limit, or one that leaves too little context for the frames, rejects with `workload-too-large`. |
+| `threads`, `backendsDir`, `marginBytes` | As for ACE-Step.                                                                                                                                                                                         |
 
 On Android and iOS, where MiniMax-Music3 is unavailable, `engine: 'minimax'`
-comes back as `status: "error"` with `reason: "unsupported-engine"`.
+rejects.
 
-A model the engine cannot read is `status: "error"`; a broken request, or a
-host with no native binding, rejects.
+A model the engine cannot read, an engine with no fitter, or a broken request
+rejects with an `InvalidArgument` error, and a host with no native binding
+rejects as well.
 
 ## Lifecycle
 

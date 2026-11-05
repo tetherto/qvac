@@ -15,7 +15,8 @@ const ADDON_STATS = {
   audioDurationMs: 1250,
   realTimeFactor: 0.4,
   encoderMs: 12,
-  decoderMs: 18
+  decoderMs: 18,
+  aoscActive: 1
 }
 
 function createStreamingModel(onAwait?: () => void) {
@@ -83,7 +84,8 @@ test('transcribeStream returns normalized terminal stats after awaiting the addo
     audioDuration: 1250,
     realTimeFactor: 0.4,
     encoderTime: 12,
-    decoderTime: 18
+    decoderTime: 18,
+    aoscActive: 1
   })
 })
 
@@ -104,7 +106,8 @@ test('parakeet duplex handler forwards stats on its terminal frame', async (t) =
     audioDuration: 1250,
     realTimeFactor: 0.4,
     encoderTime: 12,
-    decoderTime: 18
+    decoderTime: 18,
+    aoscActive: 1
   })
   t.is(frames.at(-1)?.done, true)
 })
@@ -126,7 +129,8 @@ test('whisper duplex handler forwards stats on its terminal frame', async (t) =>
     audioDuration: 1250,
     realTimeFactor: 0.4,
     encoderTime: 12,
-    decoderTime: 18
+    decoderTime: 18,
+    aoscActive: 1
   })
   t.is(frames.at(-1)?.done, true)
 })
@@ -138,7 +142,14 @@ for (const metadata of [false, true]) {
       async runStreaming() {
         return {
           async *iterate() {
-            yield { type: 'vad', speaking: true, score: 0.9, source: 'sortformer', speakerId: 0 }
+            yield {
+              type: 'vad',
+              speaking: true,
+              score: 0.9,
+              source: 'sortformer',
+              timestamp: 1.25,
+              speakerId: 0
+            }
             yield { type: 'vad', speaking: false, score: 0.1, source: 'sortformer', speakerId: 7 }
             yield { text: 'hello', startMs: 0, endMs: 100 }
           },
@@ -164,7 +175,13 @@ for (const metadata of [false, true]) {
       [
         {
           type: 'transcribeStream',
-          vad: { speaking: true, probability: 0.9, source: 'sortformer', speakerId: 0 }
+          vad: {
+            speaking: true,
+            probability: 0.9,
+            source: 'sortformer',
+            timestamp: 1.25,
+            speakerId: 0
+          }
         },
         {
           type: 'transcribeStream',

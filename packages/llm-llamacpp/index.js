@@ -16,6 +16,7 @@ function normalizeRunOptions(runOptions) {
             generationParams: undefined,
             cacheKey: undefined,
             ephemeral: false,
+            baseCacheKey: undefined,
             rejectWhenBusy: undefined,
         };
     }
@@ -43,6 +44,9 @@ function normalizeRunOptions(runOptions) {
     if (options.ephemeral !== undefined && typeof options.ephemeral !== "boolean") {
         throw new TypeError("ephemeral must be a boolean when provided");
     }
+    if (options.baseCacheKey !== undefined && typeof options.baseCacheKey !== "string") {
+        throw new TypeError("baseCacheKey must be a string when provided");
+    }
     if (options.rejectWhenBusy !== undefined && typeof options.rejectWhenBusy !== "boolean") {
         throw new TypeError("rejectWhenBusy must be a boolean when provided");
     }
@@ -51,15 +55,28 @@ function normalizeRunOptions(runOptions) {
         generationParams: normalizeGenerationParams(options.generationParams),
         cacheKey: options.cacheKey,
         ephemeral: options.ephemeral === true,
+        baseCacheKey: options.baseCacheKey,
         // Left undefined when unset so admission falls back to the instance default.
         rejectWhenBusy: options.rejectWhenBusy,
     };
+}
+// Malformed parts (null, non-objects) are not byte media: they pass through
+// untouched so the native validator rejects them with `InvalidInputFormat`.
+function isByteMediaPart(part) {
+    const candidate = part;
+    return (candidate !== null &&
+        typeof candidate === "object" &&
+        candidate.type === "media" &&
+        candidate.content instanceof Uint8Array);
 }
 function promptToAddonMessages(prompt, runOptions) {
     if (!Array.isArray(prompt)) {
         throw new TypeError("Prompt input must be Message[]");
     }
-    const { prefill, generationParams, cacheKey, ephemeral } = normalizeRunOptions(runOptions);
+    const { prefill, generationParams, cacheKey, ephemeral, baseCacheKey } = normalizeRunOptions(runOptions);
+    // Only ever JSON-serialized into the addon's text message: a byte-buffer
+    // media part reaches the native side path-less, bound to the hoisted buffer
+    // by position, so the wire shape is wider than the public `Message` type.
     const textMessages = [];
     const mediaItems = [];
     for (const message of prompt) {
@@ -67,10 +84,26 @@ function promptToAddonMessages(prompt, runOptions) {
         if (media.role === "user" && media.type === "media" && media.content instanceof Uint8Array) {
             mediaItems.push(media.content);
             textMessages.push({ ...media, content: "" });
+            continue;
         }
-        else {
-            textMessages.push(message);
+        // Ordered parts: hoist each media part's bytes next to the other media
+        // messages and leave a path-less part behind. The native side records the
+        // plan in marker order, so the bytes still bind to the right markers.
+        const text = message;
+        if (Array.isArray(text.content)) {
+            textMessages.push({
+                ...text,
+                content: text.content.map((part) => {
+                    if (isByteMediaPart(part)) {
+                        mediaItems.push(part.content);
+                        return { type: "media" };
+                    }
+                    return part;
+                }),
+            });
+            continue;
         }
+        textMessages.push(message);
     }
     const promptMessages = [];
     for (const mediaData of mediaItems) {
@@ -83,6 +116,7 @@ function promptToAddonMessages(prompt, runOptions) {
         generationParams,
         cacheKey,
         ephemeral,
+        baseCacheKey,
     });
     return promptMessages;
 }
@@ -239,13 +273,24 @@ function normalizeFinetuneParams(opts) {
     return out;
 }
 /**
- * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
- * entry for single-file models. Matches the C++ shard-expansion contract
- * in `GGUFShards::expandGGUFIntoShards`.
+ * Validates the single disk path. For a sharded GGUF, pass only the first
+ * shard; Fabric discovers the remaining shards. Weight streaming is unsupported.
  */
-function pickPrimaryGgufPath(files) {
-    const SHARD_REGEX = /-\d+-of-\d+\.gguf$/;
-    return files.find((p) => SHARD_REGEX.test(p)) || files[0];
+function validateModelPath(files) {
+    if (!Array.isArray(files) || files.length === 0) {
+        throw new TypeError("files.model must contain one absolute disk path");
+    }
+    if (files.length !== 1) {
+        throw new TypeError("Weight streaming is no longer supported. Pass only one disk path in files.model; " +
+            "for a sharded model, pass only the first shard path. Do not pass a tensor-name file.");
+    }
+    if (typeof files[0] !== "string" || files[0].length === 0 || !path.isAbsolute(files[0])) {
+        throw new TypeError("files.model[0] must be an absolute disk path string; weight buffers are not supported");
+    }
+    if (files[0].endsWith(".tensors.txt")) {
+        throw new TypeError("Weight streaming is no longer supported. Pass the first GGUF shard path, not a tensor-name file.");
+    }
+    return files[0];
 }
 // Replace media Uint8Array contents with a small summary so the logger never
 // asks V8 to JSON.stringify multi-MB binary blobs.
@@ -257,12 +302,21 @@ function sanitizePromptForLog(prompt) {
         if (media && media.type === "media" && media.content instanceof Uint8Array) {
             return { ...media, content: `[Uint8Array byteLength=${media.content.byteLength}]` };
         }
+        const text = msg;
+        if (Array.isArray(text?.content)) {
+            return {
+                ...text,
+                content: text.content.map((part) => isByteMediaPart(part)
+                    ? { ...part, content: `[Uint8Array byteLength=${part.content.byteLength}]` }
+                    : part),
+            };
+        }
         return msg;
     });
 }
 /** LLM client wrapping the native LlamaInterface for inference, finetuning, and pause/resume. */
 const LlmLlamacpp = class LlmLlamacpp {
-    static pickPrimaryGgufPath = pickPrimaryGgufPath;
+    static validateModelPath = validateModelPath;
     static assessFit = fit_1.assessFit;
     // Attached for tests; untyped because `typeof QvacResponse` is not nameable by consumers.
     static QvacResponse = infer_base_1.QvacResponse;
@@ -270,7 +324,7 @@ const LlmLlamacpp = class LlmLlamacpp {
     opts;
     logger;
     state;
-    _files;
+    _modelPath;
     _projectionModelPath;
     _config;
     _finetuneJob;
@@ -281,17 +335,7 @@ const LlmLlamacpp = class LlmLlamacpp {
     _batchHandler;
     _checkpointSaveDir;
     constructor({ files, config, logger = null, opts = {} }) {
-        if (!files || !Array.isArray(files.model) || files.model.length === 0) {
-            throw new TypeError("files.model must be a non-empty array of absolute paths");
-        }
-        for (const [i, entry] of files.model.entries()) {
-            if (typeof entry !== "string" || entry.length === 0) {
-                throw new TypeError(`files.model[${i}] must be an absolute path string`);
-            }
-            if (!path.isAbsolute(entry)) {
-                throw new TypeError(`files.model[${i}] must be an absolute path (got: ${entry})`);
-            }
-        }
+        this._modelPath = validateModelPath(files?.model);
         if (files.projectionModel !== undefined) {
             if (typeof files.projectionModel !== "string" || files.projectionModel.length === 0) {
                 throw new TypeError("files.projectionModel must be an absolute path string");
@@ -300,7 +344,6 @@ const LlmLlamacpp = class LlmLlamacpp {
                 throw new TypeError(`files.projectionModel must be an absolute path (got: ${files.projectionModel})`);
             }
         }
-        this._files = files.model;
         this._projectionModelPath = files.projectionModel || "";
         this._config = config;
         this.logger = new QvacLogger(logger);
@@ -361,18 +404,14 @@ const LlmLlamacpp = class LlmLlamacpp {
     }
     async _load() {
         this.logger.info("Starting model load");
-        const primaryGgufPath = pickPrimaryGgufPath(this._files);
         const configurationParams = {
-            path: primaryGgufPath,
+            path: this._modelPath,
             projectionPath: this._projectionModelPath,
             config: { ...this._config },
         };
         this.logger.info("Creating addon with configuration:", configurationParams);
         try {
             this.addon = this._createAddon(configurationParams);
-            if (this._files.length > 1) {
-                await this._streamShards();
-            }
             this.logger.info("Activating addon");
             await this.addon.activate();
         }
@@ -388,17 +427,6 @@ const LlmLlamacpp = class LlmLlamacpp {
             throw loadError;
         }
         this.logger.info("Model load completed successfully");
-    }
-    async _streamShards() {
-        for (const filePath of this._files) {
-            const filename = path.basename(filePath);
-            const stream = fs.createReadStream(filePath);
-            for await (const chunk of stream) {
-                await this.addon.loadWeights({ filename, chunk, completed: false });
-            }
-            await this.addon.loadWeights({ filename, chunk: null, completed: true });
-            this.logger.info(`Streamed weights for ${filename}`);
-        }
     }
     run(prompt, runOptions) {
         if (BatchHandler.isBatchInput(prompt)) {
@@ -826,13 +854,69 @@ const LlmLlamacpp = class LlmLlamacpp {
         }
         await this.addon.discardCache(cacheKey);
     }
+    /**
+     * Tokens `input` takes on the loaded model, without running it. `text`
+     * alone is counted raw, with no chat template and no BOS. With `history` or
+     * `tools` the conversation, `text` (even empty) appended as the last user
+     * turn, is rendered by the chat template as the opening request of a fresh
+     * conversation, with BOS and the generation prompt, as `run()` renders it.
+     * Tools the template leaves out are not counted. `tools` alone has no
+     * message to render and rejects, as `run()` does. Never queues behind
+     * `run()`: it reads only load-time state. A wrong-typed argument rejects
+     * with `TypeError`, and before `load()` it rejects with `Model is not
+     * loaded`. Other invalid input, a media message included, rejects with code
+     * `InvalidArgument`; a conversation the chat template cannot render fails
+     * as it would in `run()`.
+     */
+    async calcTokens(input) {
+        if (input === null || typeof input !== "object") {
+            throw new TypeError("calcTokens(input) requires an object");
+        }
+        const text = input.text ?? undefined;
+        const history = input.history ?? undefined;
+        const tools = input.tools ?? undefined;
+        if (text !== undefined && typeof text !== "string") {
+            throw new TypeError("calcTokens: text must be a string");
+        }
+        if (history !== undefined && !Array.isArray(history)) {
+            throw new TypeError("calcTokens: history must be a Message[]");
+        }
+        if (tools !== undefined && !Array.isArray(tools)) {
+            throw new TypeError("calcTokens: tools must be an array of function definitions");
+        }
+        if (!this.addon) {
+            throw new Error("Model is not loaded");
+        }
+        const params = {};
+        if (text !== undefined)
+            params.text = text;
+        // Media bytes are dropped rather than serialized: the native side rejects
+        // any media message or ordered media part by its type.
+        if (history !== undefined) {
+            params.history = JSON.stringify(history.map((message) => {
+                if (message?.type === "media")
+                    return { ...message, content: "" };
+                const textMessage = message;
+                if (Array.isArray(textMessage?.content)) {
+                    return {
+                        ...message,
+                        content: textMessage.content.map((part) => isByteMediaPart(part) ? { type: "media" } : part),
+                    };
+                }
+                return message;
+            }));
+        }
+        if (tools !== undefined)
+            params.tools = JSON.stringify(tools);
+        return this.addon.calcTokens(params);
+    }
     getState() {
         return this.state;
     }
 };
 // Runtime-redundant: ESM named imports need the top-level `module.exports.X =` form.
 /* eslint-disable @typescript-eslint/no-unsafe-member-access -- `module.exports` is untyped CommonJS surface. */
-module.exports.pickPrimaryGgufPath = pickPrimaryGgufPath;
+module.exports.validateModelPath = validateModelPath;
 module.exports.assessFit = fit_1.assessFit;
 module.exports.QvacResponse = infer_base_1.QvacResponse;
 module.exports = LlmLlamacpp;

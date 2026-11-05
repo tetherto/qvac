@@ -10,11 +10,9 @@
 
 #include <llama/common/common.h>
 
-#include "AsyncWeightsLoader.hpp"
 #include "BackendSelection.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
 #include "ModelMetadata.hpp"
-#include "inference-addon-cpp/GGUFShards.hpp"
 #include "inference-addon-cpp/InitLoader.hpp"
 #include "utils/ModelBackendName.hpp"
 
@@ -57,7 +55,7 @@ splitBackendTraits(const backend_selection::SplitDeviceSelection& selection);
 ///
 /// Owns everything a load needs that does not depend on what the model is used
 /// for: the config to common_params translation with backend and split-device
-/// selection, the GGUF shards and metadata, streamed weights, the backends
+/// selection, disk metadata, the backends
 /// handle and the deferred (InitLoader) initialization. A model class owns one
 /// loader and customizes the load through @ref Hooks.
 ///
@@ -79,25 +77,13 @@ public:
     std::function<void(llama_model* model, llama_context* ctx)> onLoaded;
   };
 
-  /// @brief Resolves shard basenames in-place to absolute paths relative to
-  /// the parent directory of @p modelPath. `GGUFShards::expandGGUFIntoShards`
-  /// only populates basenames; resolving them is required for both pre-load
-  /// metadata inspection and `llama_model_load_from_splits` when the working
-  /// directory differs from the model directory.
-  static void
-  resolveShardPaths(GGUFShards& shards, const std::string& modelPath);
-
-  /// @param modelName Prefix of the llama.cpp loading context, unique per
-  /// loader instance.
   LlamaModelLoader(
-      const std::string& modelName, Hooks hooks,
-      const std::string& modelGgufPath,
+      Hooks hooks, const std::string& modelGgufPath,
       const std::unordered_map<std::string, std::string>& config,
       const std::string& backendsDir);
 
   /// @brief Load from already parsed parameters.
-  LlamaModelLoader(
-      const std::string& modelName, Hooks hooks, LlamaModelSetup& setup);
+  LlamaModelLoader(Hooks hooks, LlamaModelSetup& setup);
 
   LlamaModelLoader(const LlamaModelLoader&) = delete;
   LlamaModelLoader& operator=(const LlamaModelLoader&) = delete;
@@ -141,8 +127,6 @@ private:
   bool loaded_ = false;
   Hooks hooks_;
 
-  const std::string loadingContext_;
-  GGUFShards shards_;
   InitLoader initLoader_;
   std::optional<LlamaBackendsHandle> backendsHandle_;
   int64_t runtimeBackendDevice_ = 0;
@@ -152,5 +136,4 @@ private:
           std::make_shared<qvac_lib_inference_addon_embed::backend_reporting::
                                RuntimeBackendName>();
   ModelMetaData metadata_;
-  AsyncWeightsLoader asyncWeightsLoader_;
 };

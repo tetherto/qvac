@@ -14,7 +14,9 @@ import type {
   TTSGgmlRuntimeConfig,
 } from "./engineSetup";
 import { applyAudio8Reload } from "./engines/audio8";
-import { applyMossReload, assertMossReloadKeepsVoice } from "./engines/moss";
+import { applyMossReload, assertMossReloadKeepsVoice, assertMossDurationTokens } from "./engines/moss";
+import { resolveFabricOptions, validateBackendOption } from "./fabricOptions";
+import { ENGINE_MOSS, ENGINE_COSYVOICE3 } from "./engineIds";
 import { applyParlerReload } from "./engines/parler";
 import { validateOutputSampleRate } from "./setup";
 
@@ -22,6 +24,7 @@ import { validateOutputSampleRate } from "./setup";
 interface ReloadableState {
   language?: string;
   useGPU?: boolean;
+  backend?: string;
   outputSampleRate: number | null;
   settings: SynthesisSettings;
 }
@@ -30,6 +33,7 @@ function captureReloadableState(setup: EngineSetup): ReloadableState {
   return {
     language: setup.config.language,
     useGPU: setup.config.useGPU,
+    backend: setup.config.backend,
     outputSampleRate: setup.outputSampleRate,
     settings: { ...setup.settings },
   };
@@ -41,6 +45,7 @@ function restoreReloadableState(
 ): void {
   setup.config.language = state.language;
   setup.config.useGPU = state.useGPU;
+  setup.config.backend = state.backend;
   setup.outputSampleRate = state.outputSampleRate;
   const live = setup.settings as Record<string, unknown>;
   const snapshot = state.settings as Record<string, unknown>;
@@ -55,6 +60,16 @@ function applyReloadableRuntimeConfig(
 ): void {
   assertMossReloadKeepsVoice(setup, newConfig);
   const runtimeConfig = newConfig as Partial<TTSGgmlRuntimeConfig>;
+  validateBackendOption(setup.engineType, runtimeConfig.backend);
+  if (runtimeConfig.backend !== undefined) setup.config.backend = runtimeConfig.backend;
+  Object.assign(setup.settings, resolveFabricOptions(setup.engineType, { ...setup.settings, ...newConfig }));
+  if (setup.engineType === ENGINE_MOSS && newConfig.nCtx !== undefined) {
+    setup.settings.nCtx = newConfig.nCtx as number;
+  }
+  if (setup.engineType === ENGINE_COSYVOICE3 && newConfig.greedy !== undefined) {
+    if (typeof newConfig.greedy !== "boolean") throw new Error("greedy must be a boolean");
+    setup.settings.greedy = newConfig.greedy;
+  }
   if (runtimeConfig.language !== undefined) {
     setup.config.language = runtimeConfig.language;
   }
@@ -68,6 +83,9 @@ function applyReloadableRuntimeConfig(
   }
   applyAudio8Reload(setup, newConfig);
   applyMossReload(setup, newConfig);
+  if (setup.engineType === ENGINE_MOSS) {
+    assertMossDurationTokens(setup.settings.durationTokens, "reload", setup.settings.maxNewTokens);
+  }
 }
 
 // Cross-engine conditioning is reloadable on every engine that supports it,

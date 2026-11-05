@@ -22,7 +22,7 @@ import {
   LLAMA_3_2_1B_INST_Q4_0,
   TTS_MULTILINGUAL_SUPERTONIC3_Q8_0
 } from '@qvac/sdk'
-import { createWav, playPcmInt16Chunk } from './utils'
+import { createWav, playPcmInt16Chunk } from './utils.js'
 
 // Only a fallback, for the case where no frame ever reports a rate: each
 // audio frame carries the rate the engine actually produced, and

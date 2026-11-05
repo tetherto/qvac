@@ -26,7 +26,6 @@ qvacLibInferenceAddonLlamaExports(js_env_t* env, js_value_t* exports) {
   V("createInstance", qvac_lib_inference_addon_llama::createInstance)
   V("runJob", qvac_lib_inference_addon_llama::runJob)
 
-  V("loadWeights", qvac_lib_inference_addon_cpp::JsInterface::loadWeights)
   V("activate", qvac_lib_inference_addon_cpp::JsInterface::activate)
   V("activeJobs", qvac_lib_inference_addon_cpp::JsInterface::activeJobs)
   V("activeSlots", qvac_lib_inference_addon_llama::activeSlots)
@@ -35,6 +34,7 @@ qvacLibInferenceAddonLlamaExports(js_env_t* env, js_value_t* exports) {
   V("finetune", qvac_lib_inference_addon_llama::finetune)
   V("saveCache", qvac_lib_inference_addon_llama::saveCache)
   V("discardCache", qvac_lib_inference_addon_llama::discardCache)
+  V("calcTokens", qvac_lib_inference_addon_llama::calcTokens)
   V("destroyInstance",
     qvac_lib_inference_addon_cpp::JsInterface::destroyInstance)
   V("setLogger", qvac_lib_inference_addon_cpp::JsInterface::setLogger)

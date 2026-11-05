@@ -1,6 +1,6 @@
 {
   "name": "@qvac/inference",
-  "version": "0.22.0",
+  "version": "0.23.0",
   "description": "Bare-only in-process core of the QVAC SDK. Runs inference directly on the Bare runtime with explicit plugin assembly and no RPC, worker, or subprocess layer.",
   "license": "Apache-2.0",
   "repository": {
@@ -190,7 +190,7 @@
     "bare-cpu-info": "0.1.1",
     "bare-crypto": "^1.15.3",
     "bare-env": "^3.0.1",
-    "bare-fs": "^4.7.4",
+    "bare-fs": "^4.8.4",
     "bare-gpu-info": "0.1.1",
     "bare-http1": "^4.6.2",
     "bare-https": "^3.0.0",

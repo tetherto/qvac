@@ -18,7 +18,6 @@
 #include "LlamaModelLoader.hpp"
 #include "ModelMetadata.hpp"
 #include "MultimodalEmbedder.hpp"
-#include "inference-addon-cpp/GGUFShards.hpp"
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
 #include "utils.hpp"
@@ -91,14 +90,6 @@ public:
   using Output = OutputType;
 
   using TokenizerHandle = void*;
-
-  /// @brief Resolves shard basenames in-place to absolute paths relative to
-  /// the parent directory of @p modelPath. `GGUFShards::expandGGUFIntoShards`
-  /// only populates basenames; resolving them is required for both pre-load
-  /// metadata inspection and `llama_model_load_from_splits` when the working
-  /// directory differs from the model directory.
-  static void
-  resolveShardPaths(GGUFShards& shards, const std::string& modelPath);
 
   /// @brief This constructor allows to specify model to load more clearly and
   /// override default common params by a configuration object.

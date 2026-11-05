@@ -6,54 +6,41 @@ export interface EmbedFitRequest {
   config?: Record<string, string>
   /**
    * The load's `files.projectionModel`, if any. The projection does not count
-   * a projector, so a multimodal load is refused with `unsupported-config`
-   * rather than projected as if it were text only.
+   * a projector, so a multimodal load is `unknown`.
    */
   projectionModel?: string
   /** Floor the fitter may not reduce the context below. */
   minCtxSize?: number
-  /** Memory to leave free on every device, held to against the load's own `fit-target`. */
+  /** Memory to leave free on every device. The larger of this and the load's own `fit-target` binds. */
   marginBytes?: number
 }
 
-export type EmbedFitStatus = 'fits' | 'does-not-fit' | 'error'
-
-export type EmbedFitReason =
-  | 'fits'
-  | 'does-not-fit'
-  | 'model-unreadable'
-  | 'no-backend-device'
-  | 'unsupported-config'
+/** `unknown` is a load the fitter cannot project, such as one placed on the CPU. */
+export type EmbedFitStatus = 'fits' | 'does-not-fit' | 'unknown'
 
 export interface EmbedFitDevice {
+  /** The PCI bus ID when the backend reports one, the device name otherwise. */
+  id: string
   name: string
-  totalBytes: number
+  unified: boolean
+  /** Model, context and compute memory the load takes on this device. */
+  usedBytes: number
   freeBytes: number
-  modelBytes: number
-  contextBytes: number
-  computeBytes: number
+  totalBytes: number
 }
+
+/**
+ * The load as the fit resolved it: on `fits` the context and GPU layer count the
+ * fitter settled on, on `does-not-fit` the ones the load asked for. Empty when
+ * `unknown`.
+ */
+export type EmbedFitStats = { ctxSize: number; gpuLayers: number } | Record<string, never>
 
 export interface EmbedFitResult {
   status: EmbedFitStatus
-  reason: EmbedFitReason
-  /**
-   * With `status: "error"`: what caused it, such as the config key that was
-   * refused or the parser's own message, so a caller can act on it. Absent
-   * otherwise.
-   */
-  message?: string
-  /** The layer count the placement resolved to. */
-  gpuLayers: number
-  ctxSize: number
-  /** One row per device the model was assigned to, then a `host` row. */
+  /** One row per device the model is assigned to, then the host CPU. Empty when `unknown`. */
   devices: EmbedFitDevice[]
-  /** Model, context and compute summed across the devices, host excluded. */
-  deviceBytes: number
-  /** The same, for the trailing host row. */
-  hostBytes: number
-  trainCtxSize: number
-  expertCount: number
+  stats: EmbedFitStats
 }
 
 interface FitBinding {
@@ -65,8 +52,7 @@ interface FitBinding {
  * and never weight data. The registry's weightless copy of a model answers the
  * same as the model itself, so this can run before anything is downloaded.
  *
- * A model the fitter cannot read resolves to `status: "error"`; only a broken
- * request rejects.
+ * A model the fitter cannot read, or an invalid request, rejects.
  *
  * Builds the model twice without allocating weights. Concurrent calls run one
  * at a time.

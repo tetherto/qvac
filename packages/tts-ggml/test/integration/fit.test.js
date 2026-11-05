@@ -27,14 +27,18 @@ async function supertonicPath(t) {
 /**
  * The supertonic fitter covers the fused graph path: a validated GPU, or a CPU
  * without the Accelerate pointwise kernels. A runner outside that answers
- * `compute-path-not-supported`. That is a refusal, and it carries no figures.
+ * `unknown`, and it carries no rows.
  */
 function projected(t, fit) {
-  if (fit.reason === 'compute-path-not-supported') {
-    t.pass('this runner’s compute path is not modelled')
+  if (fit.status === 'unknown') {
+    t.is(fit.devices.length, 0, 'an unknown carries no rows')
     return false
   }
   return true
+}
+
+function hostRow(fit) {
+  return fit.devices[fit.devices.length - 1]
 }
 
 function tempDir(t) {
@@ -70,14 +74,19 @@ test('a projection is internally consistent', { timeout: TEST_TIMEOUT_MS }, asyn
     useGPU: true
   })
 
-  t.comment(`status=${fit.status} reason=${fit.reason} device=${fit.deviceName}`)
+  t.comment(JSON.stringify(fit))
   if (!projected(t, fit)) return
-  t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', 'a verdict, not an error')
-  t.ok(fit.deviceTotalBytes > 0, 'the device reported its capacity')
-  t.ok(fit.deviceFreeBytes <= fit.deviceTotalBytes, 'free never exceeds total')
-  t.ok(fit.weightsBytes > 0, 'the weights were measured')
-  t.ok(fit.deviceBytes >= fit.weightsBytes, 'weights are part of the device demand')
-  t.is(fit.lavasrFileBytes, 0, 'no LavaSR stage was named')
+  t.ok(fit.status === 'fits' || fit.status === 'does-not-fit', 'a verdict')
+  t.ok(fit.devices.length >= 1, 'at least the device the load resolves to')
+  for (const row of fit.devices) {
+    t.ok(row.id.length > 0 && row.name.length > 0, `${row.name} is named`)
+    t.ok(row.totalBytes > 0, `${row.name} reported its capacity`)
+    t.ok(row.freeBytes <= row.totalBytes, `${row.name} free never exceeds total`)
+  }
+  t.ok(fit.devices[0].usedBytes > 0, 'the device demand was measured')
+  t.is(hostRow(fit).name, 'CPU', 'the host row is last')
+  t.ok(hostRow(fit).unified, 'the host row is unified')
+  t.alike(fit.stats, {})
 })
 
 test('a weightless copy projects the same', { timeout: TEST_TIMEOUT_MS }, async (t) => {
@@ -97,9 +106,11 @@ test('a weightless copy projects the same', { timeout: TEST_TIMEOUT_MS }, async 
   })
 
   t.is(stub.status, full.status, 'the same verdict')
-  t.is(stub.weightsBytes, full.weightsBytes, 'the same weight footprint')
-  t.is(stub.deviceBytes, full.deviceBytes, 'the same device demand')
-  t.is(stub.hostBytes, full.hostBytes, 'the same host demand')
+  t.alike(
+    stub.devices.map((row) => [row.id, row.usedBytes]),
+    full.devices.map((row) => [row.id, row.usedBytes]),
+    'the same demand on the same devices'
+  )
 })
 
 test('the load’s offload keys reach the projection', { timeout: TEST_TIMEOUT_MS }, async (t) => {
@@ -117,28 +128,14 @@ test('the load’s offload keys reach the projection', { timeout: TEST_TIMEOUT_M
     nGpuLayers: 0
   })
 
-  t.ok(cpu.deviceIsCpu, 'useGPU false projects on the CPU device')
-  t.is(pinned.deviceIsCpu, cpu.deviceIsCpu, 'nGpuLayers 0 agrees with useGPU false')
-})
-
-test('a LavaSR stage is sized beside the projection', { timeout: TEST_TIMEOUT_MS }, async (t) => {
-  const model = await supertonicPath(t)
-  if (model === null) return
-
-  const dir = tempDir(t)
-  const enhancer = path.join(dir, 'enhancer.gguf')
-  fs.writeFileSync(enhancer, Buffer.alloc(4096, 1))
-
-  const fit = await TTSGgml.assessFit({
-    engineType: 'supertonic',
-    supertonicModelPath: model,
-    useGPU: true,
-    lavasrEnhancerPath: enhancer
-  })
-
-  t.is(fit.lavasrFileBytes, 4096, 'the enhancer is reported at its size on disk')
-  if (!projected(t, fit)) return
-  t.ok(fit.lavasrFileBytes < fit.deviceBytes, 'reported beside the projection')
+  t.is(pinned.status, cpu.status, 'nGpuLayers 0 agrees with useGPU false')
+  if (!projected(t, cpu)) return
+  t.is(cpu.devices.length, 1, 'useGPU false projects on the CPU alone')
+  t.ok(cpu.devices[0].unified, 'the CPU row is the host')
+  // Free memory is read again by each call, so only the placement and the
+  // demand are compared.
+  const placement = (fit) => fit.devices.map(({ freeBytes, ...row }) => row)
+  t.alike(placement(pinned), placement(cpu), 'the same row')
 })
 
 test('fitting keeps the event loop responsive', { timeout: TEST_TIMEOUT_MS }, async (t) => {
@@ -166,9 +163,7 @@ test('fitting keeps the event loop responsive', { timeout: TEST_TIMEOUT_MS }, as
 
   t.comment(`${turns} loop turns before the fits settled`)
   t.ok(turns > 0, 'the loop turned while the fitter ran')
-  for (const fit of fits) {
-    t.not(fit.reason, 'model-unreadable', 'every queued projection ran')
-  }
+  t.is(new Set(fits.map((fit) => fit.status)).size, 1, 'every queued projection agrees')
 })
 
 test(
@@ -178,28 +173,16 @@ test(
     const model = await supertonicPath(t)
     if (model === null) return
 
-    const dir = tempDir(t)
-    const enhancer = path.join(dir, 'enhancer.gguf')
-    fs.writeFileSync(enhancer, Buffer.alloc(4096, 1))
-
-    const request = {
-      engineType: 'supertonic',
-      supertonicModelPath: model,
-      useGPU: false,
-      lavasrEnhancerPath: enhancer
-    }
+    const request = { engineType: 'supertonic', supertonicModelPath: model, useGPU: true }
     const first = TTSGgml.assessFit(request)
-    request.lavasrEnhancerPath = ''
+    request.supertonicModelPath = '/nonexistent/model.gguf'
     const second = TTSGgml.assessFit(request)
-    const missing = TTSGgml.assessFit({
-      engineType: 'supertonic',
-      supertonicModelPath: '/nonexistent/model.gguf'
-    })
-    const [a, b, c] = await Promise.all([first, second, missing])
+    const third = TTSGgml.assessFit({ ...request, supertonicModelPath: model })
+    const [a, b, c] = await Promise.allSettled([first, second, third])
 
-    t.is(a.lavasrFileBytes, 4096, 'the first call owns its original request')
-    t.is(b.lavasrFileBytes, 0, 'the second call owns its changed request')
-    t.is(c.status, 'error', 'an error outcome does not strand queued callers')
+    t.is(a.status, 'fulfilled', 'the first call owns its original request')
+    t.is(b.status, 'rejected', 'the second call owns its changed request')
+    t.is(c.status, 'fulfilled', 'a rejection does not strand queued callers')
   }
 )
 
@@ -218,11 +201,11 @@ test('a fit settles while a loaded model unloads', { timeout: TEST_TIMEOUT_MS },
     const fit = TTSGgml.assessFit({
       engineType: 'supertonic',
       supertonicModelPath: model,
-      useGPU: false
+      useGPU: true
     })
     await voice.unload()
     const result = await fit
-    t.ok(result.deviceTotalBytes > 0, 'the projection measured a device')
+    t.ok(['fits', 'does-not-fit', 'unknown'].includes(result.status), 'the fit settled')
   } finally {
     try {
       await voice.unload()
@@ -231,27 +214,34 @@ test('a fit settles while a loaded model unloads', { timeout: TEST_TIMEOUT_MS },
 })
 
 test('MOSS routes to its fitter when a model cannot be read', async (t) => {
-  const fit = await TTSGgml.assessFit({
-    engineType: 'moss',
-    mossBackbonePath: '/models/moss-tts-delay.gguf',
-    mossCodecDecoderPath: '/models/moss-codec-decoder.gguf',
-    promptRows: 128,
-    referenceSamples: 0,
-    streaming: false
-  })
-
-  t.is(fit.status, 'error')
-  t.is(fit.reason, 'model-unreadable')
-  t.is(fit.modelVariant, 'moss')
+  await t.exception(
+    TTSGgml.assessFit({
+      engineType: 'moss',
+      mossBackbonePath: '/models/moss-tts-delay.gguf',
+      mossCodecDecoderPath: '/models/moss-codec-decoder.gguf',
+      promptRows: 128,
+      referenceSamples: 0,
+      streaming: false
+    }),
+    /model-unreadable/
+  )
 })
 
-test('a model that cannot be read is an outcome, not a rejection', async (t) => {
-  const fit = await TTSGgml.assessFit({
-    engineType: 'supertonic',
-    supertonicModelPath: '/nonexistent/model.gguf'
-  })
+test('a model that cannot be read rejects', async (t) => {
+  await t.exception(
+    TTSGgml.assessFit({
+      engineType: 'supertonic',
+      supertonicModelPath: '/nonexistent/model.gguf'
+    }),
+    /model-unreadable/
+  )
+})
 
-  t.is(fit.status, 'error')
+test('a voice with no fitter rejects', async (t) => {
+  await t.exception(
+    TTSGgml.assessFit({ engineType: 'moss-speech', mossSpeechModelPath: '/models/speech.gguf' }),
+    /has no fitter/
+  )
 })
 
 test('a count that is not a count is refused', async (t) => {

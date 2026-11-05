@@ -164,6 +164,42 @@ object Models {
         params = "",
     )
 
+    val AUDIOGEN_ACESTEP_V15_TURBO_BF16 = ModelConstant(
+        name = "AUDIOGEN_ACESTEP_V15_TURBO_BF16",
+        src = "registry://s3/qvac_models_compiled/ggml/acestep/2026-10-28/acestep-v15-turbo-BF16.gguf",
+        registryPath = "qvac_models_compiled/ggml/acestep/2026-10-28/acestep-v15-turbo-BF16.gguf",
+        registrySource = "s3",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 2050940,
+        blobBlockLength = 73115,
+        blobByteOffset = 134380631617,
+        modelId = "acestep-v15-turbo-BF16.gguf",
+        expectedSize = 4791642080,
+        sha256Checksum = "c7b463b728cdce2f3d4e5205fc5747d0344ebfea37f19542f5236cd8a76cf462",
+        addon = "audiogen",
+        engine = "audiogen-ggml",
+        quantization = "bf16",
+        params = "",
+    )
+
+    val AUDIOGEN_ACESTEP_V15_TURBO_F16 = ModelConstant(
+        name = "AUDIOGEN_ACESTEP_V15_TURBO_F16",
+        src = "registry://s3/qvac_models_compiled/ggml/acestep/2026-10-28/acestep-v15-turbo-F16.gguf",
+        registryPath = "qvac_models_compiled/ggml/acestep/2026-10-28/acestep-v15-turbo-F16.gguf",
+        registrySource = "s3",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 2124056,
+        blobBlockLength = 73115,
+        blobByteOffset = 139172330753,
+        modelId = "acestep-v15-turbo-F16.gguf",
+        expectedSize = 4791642112,
+        sha256Checksum = "90a7f7680fb0e9149e6febda599568f48ca5423f1dbda24e333b74e06a714374",
+        addon = "audiogen",
+        engine = "audiogen-ggml",
+        quantization = "fp16",
+        params = "",
+    )
+
     val AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M = ModelConstant(
         name = "AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M",
         src = "registry://s3/qvac_models_compiled/ggml/acestep/2026-07-22/acestep-v15-turbo-Q4_K_M.gguf",
@@ -2270,6 +2306,24 @@ object Models {
         params = "2x7B",
     )
 
+    val EMBEDDINGGEMMA_2_Q8_0 = ModelConstant(
+        name = "EMBEDDINGGEMMA_2_Q8_0",
+        src = "registry://hf/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/embeddinggemma-2-Q8_0.gguf",
+        registryPath = "ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/embeddinggemma-2-Q8_0.gguf",
+        registrySource = "hf",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 2211992,
+        blobBlockLength = 4729,
+        blobByteOffset = 144934876963,
+        modelId = "embeddinggemma-2-Q8_0.gguf",
+        expectedSize = 309855456,
+        sha256Checksum = "2188ac1deca4b77dffefd603c2776a9d76d9d74ec01841392982ebb840b09135",
+        addon = "embeddings",
+        engine = "llamacpp-embedding",
+        quantization = "q8_0",
+        params = "",
+    )
+
     val EMBEDDINGGEMMA_300M_BF16 = ModelConstant(
         name = "EMBEDDINGGEMMA_300M_BF16",
         src = "registry://hf/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300M-BF16.gguf",
@@ -3638,6 +3692,24 @@ object Models {
         params = "4B",
     )
 
+    val MMPROJ_EMBEDDINGGEMMA_2_Q8_0 = ModelConstant(
+        name = "MMPROJ_EMBEDDINGGEMMA_2_Q8_0",
+        src = "registry://hf/ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/mmproj-embeddinggemma-2-Q8_0.gguf",
+        registryPath = "ggml-org/embeddinggemma-2-GGUF/resolve/bfcd298762cc34d0357ece5ebdd31791a3a374d8/mmproj-embeddinggemma-2-Q8_0.gguf",
+        registrySource = "hf",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 2216722,
+        blobBlockLength = 8466,
+        blobByteOffset = 145244759043,
+        modelId = "mmproj-embeddinggemma-2-Q8_0.gguf",
+        expectedSize = 554821024,
+        sha256Checksum = "c4a8a52691ecef40618438928bdf9e68379b854e24166f292592353db0aab64f",
+        addon = "embeddings",
+        engine = "llamacpp-embedding",
+        quantization = "q8_0",
+        params = "",
+    )
+
     val MMPROJ_GEMMA4_2B_MULTIMODAL_BF16 = ModelConstant(
         name = "MMPROJ_GEMMA4_2B_MULTIMODAL_BF16",
         src = "registry://hf/bartowski/google_gemma-4-E2B-it-GGUF/resolve/b5e99bd964eaacc27ba484bb2eb3e9f6160b9143/mmproj-google_gemma-4-E2B-it-bf16.gguf",
@@ -4232,6 +4304,24 @@ object Models {
         params = "460M",
     )
 
+    val MOBILENETV3_3CLASS_V3_FP16 = ModelConstant(
+        name = "MOBILENETV3_3CLASS_V3_FP16",
+        src = "registry://s3/qvac_models_compiled/ggml/mobilenetv3-3class/2026-10-28/mobilenetv3_3class_v3_fp16.gguf",
+        registryPath = "qvac_models_compiled/ggml/mobilenetv3-3class/2026-10-28/mobilenetv3_3class_v3_fp16.gguf",
+        registrySource = "s3",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 2050891,
+        blobBlockLength = 48,
+        blobByteOffset = 134377529985,
+        modelId = "mobilenetv3_3class_v3_fp16.gguf",
+        expectedSize = 3084800,
+        sha256Checksum = "faaa680c62f989d642032114c8892e9f43e9f2487ff7a350941715c7de9ffb6c",
+        addon = "classification",
+        engine = "ggml-classification",
+        quantization = "fp16",
+        params = "2.5M",
+    )
+
     val MOE_35B_INST_IQ2_XXS = ModelConstant(
         name = "MOE_35B_INST_IQ2_XXS",
         src = "registry://hf/bartowski/Kwaipilot_KAT-Coder-V2.5-Dev-GGUF/resolve/d8f684f08d2950ea9d2db6a35ef7dada0707858b/Kwaipilot_KAT-Coder-V2.5-Dev-IQ2_XXS.gguf",
@@ -4664,6 +4754,42 @@ object Models {
         params = "600M",
     )
 
+    val PARAKEET_MOSAIC_COMPACT_Q4_0_Q8_0_Q3_K_IQ3_S = ModelConstant(
+        name = "PARAKEET_MOSAIC_COMPACT_Q4_0_Q8_0_Q3_K_IQ3_S",
+        src = "registry://s3/qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact.gguf",
+        registryPath = "qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic-compact.gguf",
+        registrySource = "s3",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 2026488,
+        blobBlockLength = 5182,
+        blobByteOffset = 132778538615,
+        modelId = "parakeet-mosaic-compact.gguf",
+        expectedSize = 339564832,
+        sha256Checksum = "8229311ec51911e7f305413f8d9430b1e0d357101ffb3b75d32feed6b8520780",
+        addon = "parakeet",
+        engine = "parakeet-transcription",
+        quantization = "q4_0/q8_0/q3_k/iq3_s",
+        params = "0.6B",
+    )
+
+    val PARAKEET_MOSAIC_Q4_0_Q8_0 = ModelConstant(
+        name = "PARAKEET_MOSAIC_Q4_0_Q8_0",
+        src = "registry://s3/qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic.gguf",
+        registryPath = "qvac_models_compiled/ggml/parakeet/2026-10-23/parakeet-mosaic.gguf",
+        registrySource = "s3",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 1999840,
+        blobBlockLength = 7427,
+        blobByteOffset = 131032418925,
+        modelId = "parakeet-mosaic.gguf",
+        expectedSize = 486693152,
+        sha256Checksum = "9e17114b5773d1b1ed9b6a4fafb0f46427a3bb9a80b77e645c24576bda9188ef",
+        addon = "parakeet",
+        engine = "parakeet-transcription",
+        quantization = "q4_0/q8_0",
+        params = "0.6B",
+    )
+
     val PARAKEET_NEMOTRON_0_6B_F16 = ModelConstant(
         name = "PARAKEET_NEMOTRON_0_6B_F16",
         src = "registry://s3/qvac_models_compiled/ggml/parakeet/2026-09-30/nemotron-3.5-asr-streaming-0.6b.f16.gguf",
@@ -4716,6 +4842,24 @@ object Models {
         engine = "parakeet-transcription",
         quantization = "q8_0",
         params = "0.6B",
+    )
+
+    val PARAKEET_NEMOTRON_3_DIARIZATION_Q4_K = ModelConstant(
+        name = "PARAKEET_NEMOTRON_3_DIARIZATION_Q4_K",
+        src = "registry://s3/qvac_models_compiled/ggml/parakeet/2026-10-22/Nemotron-3-Diarization.converted.q4_k.gguf",
+        registryPath = "qvac_models_compiled/ggml/parakeet/2026-10-22/Nemotron-3-Diarization.converted.q4_k.gguf",
+        registrySource = "s3",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 1998954,
+        blobBlockLength = 885,
+        blobByteOffset = 130974449965,
+        modelId = "Nemotron-3-Diarization.converted.q4_k.gguf",
+        expectedSize = 57942048,
+        sha256Checksum = "4639dd46782618087f64960fe350950a10712a174d45e7f5d5780a96ffe878ae",
+        addon = "parakeet",
+        engine = "parakeet-transcription",
+        quantization = "q4_k",
+        params = "99.2M",
     )
 
     val PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0 = ModelConstant(
@@ -6860,6 +7004,24 @@ object Models {
         params = "0.6B",
     )
 
+    val TTS_LM_MULTILINGUAL_AUDIO8_Q4_0 = ModelConstant(
+        name = "TTS_LM_MULTILINGUAL_AUDIO8_Q4_0",
+        src = "registry://s3/qvac_models_compiled/ggml/audio8/2026-10-28/audio8-lm-q4_0.gguf",
+        registryPath = "qvac_models_compiled/ggml/audio8/2026-10-28/audio8-lm-q4_0.gguf",
+        registrySource = "s3",
+        blobCoreKey = "dcfc2187d23e3a82212144211b94d1bd2f521cc21e18ca66bea8a1f7749bc7a1",
+        blobBlockOffset = 2202372,
+        blobBlockLength = 9619,
+        blobByteOffset = 144304484419,
+        modelId = "audio8-lm-q4_0.gguf",
+        expectedSize = 630374592,
+        sha256Checksum = "1bbf6c214017cb3d02499da8946e0e2a8d9fa9555db7f1a954e21bd22c257e64",
+        addon = "tts",
+        engine = "tts-ggml",
+        quantization = "q4_0",
+        params = "0.6B",
+    )
+
     val TTS_LM_MULTILINGUAL_AUDIO8_Q8_0 = ModelConstant(
         name = "TTS_LM_MULTILINGUAL_AUDIO8_Q8_0",
         src = "registry://s3/qvac_models_compiled/ggml/audio-8/2026-08-12/audio8-lm-q8_0.gguf",
@@ -8399,6 +8561,8 @@ object Models {
         AUDIOGEN_ACESTEP_5HZ_LM_0_6B_Q8_0,
         AUDIOGEN_ACESTEP_V15_BASE_Q4_K_M,
         AUDIOGEN_ACESTEP_V15_SFT_Q8_0,
+        AUDIOGEN_ACESTEP_V15_TURBO_BF16,
+        AUDIOGEN_ACESTEP_V15_TURBO_F16,
         AUDIOGEN_ACESTEP_V15_TURBO_Q4_K_M,
         AUDIOGEN_ACESTEP_V15_TURBO_Q8_0,
         AUDIOGEN_MOSS_SFX_V2_F16,
@@ -8516,6 +8680,7 @@ object Models {
         DEEPSEEK_V4_304B_INST_UD_IQ2_M_SHARD,
         DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_SHARD,
         DOLPHIN_MIXTRAL_2X7B_MOE_Q2_K_TENSORS,
+        EMBEDDINGGEMMA_2_Q8_0,
         EMBEDDINGGEMMA_300M_BF16,
         EMBEDDINGGEMMA_300M_F32,
         EMBEDDINGGEMMA_300M_Q4_0,
@@ -8592,6 +8757,7 @@ object Models {
         MEDGEMMA_4B_IT_Q4_1_TENSORS,
         MEDGEMMA_4B_IT_Q8_0,
         MEDGEMMA_4B_IT_Q8_0_SHARD,
+        MMPROJ_EMBEDDINGGEMMA_2_Q8_0,
         MMPROJ_GEMMA4_2B_MULTIMODAL_BF16,
         MMPROJ_GEMMA4_2B_MULTIMODAL_F16,
         MMPROJ_GEMMA4_2B_MULTIMODAL_Q8_0,
@@ -8625,6 +8791,7 @@ object Models {
         MMPROJ_TERNARY_BONSAI_2_27B_MULTIMODAL_Q8_0,
         MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0,
         MMPROJ_VISIONPSY_NANO_460M_MULTIMODAL_Q8_0_1,
+        MOBILENETV3_3CLASS_V3_FP16,
         MOE_35B_INST_IQ2_XXS,
         MOE_35B_INST_Q4_K_M,
         MOE_35B_INST_Q8_0,
@@ -8649,9 +8816,12 @@ object Models {
         PARAKEET_INDIC_CONFORMER_600M_F16,
         PARAKEET_INDIC_CONFORMER_600M_Q4_0,
         PARAKEET_INDIC_CONFORMER_600M_Q8_0,
+        PARAKEET_MOSAIC_COMPACT_Q4_0_Q8_0_Q3_K_IQ3_S,
+        PARAKEET_MOSAIC_Q4_0_Q8_0,
         PARAKEET_NEMOTRON_0_6B_F16,
         PARAKEET_NEMOTRON_0_6B_Q4_0,
         PARAKEET_NEMOTRON_0_6B_Q8_0,
+        PARAKEET_NEMOTRON_3_DIARIZATION_Q4_K,
         PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0,
         PARAKEET_SORTFORMER_4SPK_V1_F16,
         PARAKEET_SORTFORMER_4SPK_V1_Q4_0,
@@ -8771,6 +8941,7 @@ object Models {
         TTS_LARGE_V1_EN_PARLER_TTS_FP32,
         TTS_LARGE_V1_EN_PARLER_TTS_Q8_0,
         TTS_LM_MULTILINGUAL_AUDIO8_FP16,
+        TTS_LM_MULTILINGUAL_AUDIO8_Q4_0,
         TTS_LM_MULTILINGUAL_AUDIO8_Q8_0,
         TTS_MECAB_IPADIC_CHATTERBOX,
         TTS_MINI_V1_EN_PARLER_TTS_FP16,

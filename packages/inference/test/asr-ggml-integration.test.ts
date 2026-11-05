@@ -4,6 +4,7 @@ import {
   parakeetStreamingRunConfigSchema,
   transcribeStreamResponseSchema
 } from '@/schemas/transcription'
+import { whisperConfigSchema } from '@/schemas/transcription-config'
 import {
   buildParakeetEngineConfig,
   buildParakeetReloadConfig,
@@ -65,6 +66,81 @@ test('Whisper config maps detect_language to the unified auto language mode', (t
       language: 'fr'
     }
   })
+})
+
+test('Whisper config forwards carry_initial_prompt and the main-gpu selector', (t) => {
+  t.alike(
+    buildWhisperEngineConfig({
+      initial_prompt: 'QVAC',
+      carry_initial_prompt: true,
+      contextParams: { use_gpu: true, 'main-gpu': 'dedicated' }
+    }),
+    {
+      engine: 'whisper',
+      whisperConfig: {
+        initial_prompt: 'QVAC',
+        carry_initial_prompt: true
+      },
+      contextParams: {
+        use_gpu: true,
+        'main-gpu': 'dedicated'
+      }
+    }
+  )
+  t.alike(
+    buildWhisperReloadConfig({ carry_initial_prompt: false }),
+    { whisperConfig: { carry_initial_prompt: false } },
+    'carry_initial_prompt is a reloadable whisperConfig key'
+  )
+})
+
+test('whisperConfigSchema accepts main-gpu and rejects conflicting selectors', (t) => {
+  t.ok(whisperConfigSchema.safeParse({ carry_initial_prompt: true }).success)
+  t.ok(whisperConfigSchema.safeParse({ contextParams: { 'main-gpu': 0 } }).success)
+  t.ok(whisperConfigSchema.safeParse({ contextParams: { 'main-gpu': '1' } }).success)
+  t.ok(whisperConfigSchema.safeParse({ contextParams: { 'main-gpu': 'integrated' } }).success)
+  t.ok(whisperConfigSchema.safeParse({ contextParams: { gpu_device: 1 } }).success)
+  // The addon's validateMainGpu() vocabulary: a non-negative 32-bit registry
+  // index (number or digit string), 'dedicated', or 'integrated'.
+  for (const selector of [
+    1.5,
+    -1,
+    2147483648,
+    'auto',
+    '1.5',
+    '-1',
+    '2147483648',
+    'Dedicated',
+    ''
+  ]) {
+    t.absent(
+      whisperConfigSchema.safeParse({ contextParams: { 'main-gpu': selector } }).success,
+      `main-gpu rejects ${JSON.stringify(selector)} before model load`
+    )
+  }
+  t.ok(whisperConfigSchema.safeParse({ contextParams: { 'main-gpu': 2147483647 } }).success)
+  // The addon's `main_gpu` spelling is not SDK vocabulary: the generated
+  // Python model's `main_gpu` field already serialises to `main-gpu`, and a
+  // second wire key of that name would make it emit both spellings.
+  t.alike(
+    whisperConfigSchema.parse({ contextParams: { main_gpu: 'integrated' } }).contextParams,
+    {},
+    'the snake_case spelling is dropped like any other unknown context key'
+  )
+  const withLegacy = whisperConfigSchema.safeParse({
+    contextParams: { 'main-gpu': 'dedicated', gpu_device: 0 }
+  })
+  t.absent(withLegacy.success, 'main-gpu combined with the legacy gpu_device is rejected')
+  if (!withLegacy.success) {
+    t.ok(
+      withLegacy.error.issues.some((issue) => issue.message.includes('gpu_device')),
+      'the error names gpu_device'
+    )
+  }
+  t.absent(
+    whisperConfigSchema.partial().strict().safeParse({ 'main-gpu': 0 }).success,
+    'main-gpu belongs under contextParams, not at the top level'
+  )
 })
 
 test('buildParakeetEngineConfig removes undefined addon fields', (t) => {
@@ -220,6 +296,23 @@ test('ASR event adapters preserve the public engine event contract', (t) => {
       source: 'silero'
     }
   )
+  // Parakeet stamps its events with the session time; the native chunk index
+  // stays an engine detail. It is not part of the published addon typings, so
+  // it rides along on a widened value rather than an object literal.
+  const nativeVad = {
+    type: 'vad',
+    speaking: false,
+    score: 0.1,
+    source: 'energy',
+    timestamp: 2.5,
+    chunkIndex: 3
+  } as const
+  const stamped = toVadStateEvent(nativeVad)
+  t.alike(stamped, { speaking: false, probability: 0.1, source: 'energy', timestamp: 2.5 })
+  t.is(
+    transcribeStreamResponseSchema.parse({ type: 'transcribeStream', vad: stamped }).vad?.timestamp,
+    2.5
+  )
   t.alike(
     toEndOfTurnEvent({
       type: 'endOfTurn',
@@ -247,6 +340,35 @@ test('ASR event adapters preserve the public engine event contract', (t) => {
     }),
     null
   )
+})
+
+test('Parakeet energy-VAD tuning and prewarm reach the addon at load, on reload and per stream', (t) => {
+  const config = {
+    streaming: true,
+    streamingEnergyVad: true,
+    streamingEnergyVadThresholdDb: -40,
+    streamingEnergyVadWindowMs: 50,
+    streamingEnergyVadHangoverMs: 300,
+    prewarm: true,
+    prewarmAudioSeconds: 2
+  }
+  t.alike(buildParakeetEngineConfig(config), { engine: 'parakeet', parakeetConfig: config })
+  t.alike(buildParakeetReloadConfig(config), { parakeetConfig: config })
+
+  const runConfig = {
+    emitEnergyVad: true,
+    energyVadThresholdDb: -40,
+    energyVadWindowMs: 50,
+    energyVadHangoverMs: 300
+  }
+  t.alike(parakeetStreamingRunConfigSchema.parse(runConfig), runConfig)
+  for (const invalid of [
+    { energyVadWindowMs: 0 },
+    { energyVadWindowMs: 12.5 },
+    { energyVadHangoverMs: -1 }
+  ]) {
+    t.absent(parakeetStreamingRunConfigSchema.safeParse(invalid).success, JSON.stringify(invalid))
+  }
 })
 
 test('Nemotron diarization streaming forwards controls and dominant speaker ids', (t) => {
