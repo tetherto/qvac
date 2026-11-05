@@ -95,7 +95,7 @@ export function build({
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const env = process.env
-  if (!LINK_OUT[env.PLATFORM])
+  if (!LINK[env.PLATFORM])
     throw new Error(`platform must be Android or iOS, got '${env.PLATFORM}'`)
   const run = (cmd, args, opts) => execFileSync(cmd, args, { stdio: 'inherit', ...opts })
   // The test app is an Expo app; its CLI is what builds it.
