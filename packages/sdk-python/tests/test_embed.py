@@ -16,14 +16,14 @@ from tetherto.qvac_sdk import EmbedRequest
 )
 def test_embed_request_rejects_both_input_fields(inputs: dict[str, Any]) -> None:
     with pytest.raises(ValidationError):
-        EmbedRequest(model_id="m", **inputs)
+        EmbedRequest(**{"model_id": "m", **inputs})
     with pytest.raises(ValidationError):
         EmbedRequest.model_validate({"type": "embed", "modelId": "m", **inputs})
 
 
 @pytest.mark.parametrize("inputs", [{"text": "hi"}, {"inputs": ["x"]}])
 def test_embed_request_serializes_each_input_variant(inputs: dict[str, Any]) -> None:
-    request = EmbedRequest(model_id="m", **inputs)
+    request = EmbedRequest(**{"model_id": "m", **inputs})
     assert request.model_dump(by_alias=True, exclude_unset=True) == {
         "modelId": "m",
         **inputs,
