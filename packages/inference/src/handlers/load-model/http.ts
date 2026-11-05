@@ -136,7 +136,8 @@ async function validateCachedFile(
         ...(signal && { signal })
       })
       response.body.resume()
-      expectedSize = parseInt(String(response.headers['content-length'] ?? '0') || '0')
+      const ok = response.status >= 200 && response.status <= 299
+      expectedSize = ok ? parseInt(String(response.headers['content-length'] ?? '0') || '0') : 0
     } catch (headError) {
       // A refused insecure Hugging Face hop is terminal, not an offline fallback.
       if (headError instanceof InsecureModelSourceError) throw headError
@@ -164,6 +165,12 @@ async function validateCachedFile(
       }
 
       logger.warn(`⚠️ Offline and GGUF validation failed - file may be incomplete`)
+      return null
+    }
+
+    // Without a size from the server an empty file would match, so let the Range request decide.
+    if (!Number.isSafeInteger(expectedSize) || expectedSize <= 0) {
+      logger.info(`📥 Server gave no size for the cached file. Checking it with a Range request...`)
       return null
     }
 

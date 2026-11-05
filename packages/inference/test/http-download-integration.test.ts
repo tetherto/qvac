@@ -206,6 +206,24 @@ test('downloadModelFromHttp: a 416 for the whole file marks it complete', async 
   t.is(await downloadModelFromHttp(url), modelPath, 'offline load uses the cached file')
 })
 
+test('downloadModelFromHttp: an empty cache is not marked when HEAD gives no size', async (t) => {
+  const cacheDir = useTestCacheDir()
+  fs.rmSync(cacheDir, { recursive: true, force: true })
+  const server = await startServer()
+  t.teardown(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+
+  const url = `${server.base}/head-unsized.bin`
+  const modelPath = await downloadModelFromHttp(url)
+  // An interrupted download that left nothing on disk.
+  fs.writeFileSync(modelPath, Buffer.alloc(0))
+  fs.rmSync(completeMarkerPath(modelPath))
+
+  await downloadModelFromHttp(url)
+  t.ok(bytesEqual(fs.readFileSync(modelPath) as Buffer, CONTENT), 'the empty file was downloaded again')
+  t.is(fs.readFileSync(completeMarkerPath(modelPath), 'utf8'), String(CONTENT.length), 'the marker has the real size')
+  await server.close()
+})
+
 test('downloadModelFromHttp: a 416 for a file longer than the server has is not marked', async (t) => {
   const cacheDir = useTestCacheDir()
   fs.rmSync(cacheDir, { recursive: true, force: true })
