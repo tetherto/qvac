@@ -118,7 +118,7 @@ jobs:
         working-directory: src
         env:
           NPM: ${{ matrix.row.npm }}
-        run: pnpm install --frozen-lockfile --filter . --filter "$NPM..."
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter . --filter "$NPM..."
       - name: Build
         shell: bash
         working-directory: src
