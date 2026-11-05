@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Include independent LM device pools in `assessFit()` when the primary
   pipeline runs on CPU, counting the host peak once.
 
+## [0.10.0] - 2026-11-05
+
 ### Breaking
 
 - `assessFit` returns `{ status, devices, stats }`: each device the pipeline
