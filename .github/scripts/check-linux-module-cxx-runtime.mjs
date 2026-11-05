@@ -7,18 +7,20 @@
  * Usage:
  *   node .github/scripts/check-linux-module-cxx-runtime.mjs <dir>...
  *
+ * --xdna validates the XDNA module against the system XRT/libstdc++ ABI.
  * Every .so and .bare under each <dir> is checked; finding none is an error.
  * NM and READELF override the tools, which default to llvm-nm and
  * llvm-readelf, then nm and readelf.
  */
 import { spawnSync } from 'node:child_process'
 import { readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import {
   cxxRuntimeViolations,
+  xdnaRuntimeViolations,
   formatViolations,
   parseNeeded,
-  parseUndefined,
+  parseUndefined
 } from './lib/linux-module-cxx-runtime.mjs'
 
 function pickTool(override, candidates) {
@@ -30,7 +32,10 @@ function pickTool(override, candidates) {
 }
 
 function run(tool, args) {
-  const result = spawnSync(tool, args, { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 })
+  const result = spawnSync(tool, args, {
+    encoding: 'utf8',
+    maxBuffer: 256 * 1024 * 1024
+  })
   if (result.error) throw result.error
   if (result.status !== 0) {
     throw new Error(`${tool} ${args.join(' ')} exited ${result.status}: ${result.stderr.trim()}`)
@@ -45,7 +50,10 @@ function listBinaries(dir) {
     .sort()
 }
 
-const dirs = process.argv.slice(2)
+// Opt in only for Fabric's XRT-linked module; all other modules retain the
+// static-runtime rule. XDNA's required system ABI is validated separately.
+const withXdna = process.argv.includes('--xdna')
+const dirs = process.argv.slice(2).filter((arg) => arg !== '--xdna')
 if (dirs.length === 0) {
   console.error('usage: check-linux-module-cxx-runtime.mjs <dir>...')
   process.exit(2)
@@ -59,11 +67,20 @@ if (files.length === 0) {
   process.exit(1)
 }
 
+if (withXdna && !files.some((file) => basename(file) === 'libqvac-ggml-xdna.so')) {
+  console.error('::error::--xdna requires libqvac-ggml-xdna.so in the prebuilds')
+  process.exit(1)
+}
+
 const failures = []
 for (const file of files) {
-  const violations = cxxRuntimeViolations({
+  const check =
+    withXdna && basename(file) === 'libqvac-ggml-xdna.so'
+      ? xdnaRuntimeViolations
+      : cxxRuntimeViolations
+  const violations = check({
     needed: parseNeeded(run(readelf, ['-d', file])),
-    undefinedSymbols: parseUndefined(run(nm, ['-D', '--undefined-only', '-P', file])),
+    undefinedSymbols: parseUndefined(run(nm, ['-D', '--undefined-only', '-P', file]))
   })
   if (violations.needed.length > 0 || violations.symbols.length > 0) {
     failures.push(formatViolations(file, violations))
@@ -73,8 +90,10 @@ for (const file of files) {
 }
 
 if (failures.length > 0) {
-  console.log(`::error::${failures.length} of ${files.length} Linux prebuilds depend on a shared C++ runtime`)
+  console.log(
+    `::error::${failures.length} of ${files.length} Linux prebuilds fail C++ runtime ABI validation`
+  )
   console.log(failures.join('\n'))
   process.exit(1)
 }
-console.log(`${files.length} Linux prebuilds carry no C++ runtime dependency (${nm}, ${readelf})`)
+console.log(`${files.length} Linux prebuilds pass C++ runtime ABI validation (${nm}, ${readelf})`)
