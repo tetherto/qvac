@@ -295,6 +295,7 @@ test('an abort from the event loop stops a scan over cached rows', async (t) => 
   await rag.search(query)
 
   const controller = new AbortController()
+  const { setImmediate } = globalThis as unknown as { setImmediate: (callback: () => void) => void }
   setImmediate(() => controller.abort(new Error('stop')))
   await rejectsWithCode(
     t,

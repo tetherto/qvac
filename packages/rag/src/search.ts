@@ -153,10 +153,18 @@ async function resolveRanges(
 // loop an abort scheduled by a timer or UI event could never run mid-scan.
 async function yieldForAbort(signal: AbortSignal | undefined): Promise<void> {
   if (!signal) return
-  await new Promise<void>((resolve) =>
-    typeof setImmediate === 'function' ? setImmediate(resolve) : setTimeout(resolve, 0)
-  )
+  await new Promise<void>((resolve) => {
+    if (timers.setImmediate) timers.setImmediate(resolve)
+    else timers.setTimeout(resolve, 0)
+  })
   throwIfAborted(signal)
+}
+
+// Timers are runtime globals on Bare, Node, React Native and browsers, but the
+// package compiles without platform typings.
+const timers = globalThis as unknown as {
+  setImmediate?: (callback: () => void) => unknown
+  setTimeout: (callback: () => void, ms: number) => unknown
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
