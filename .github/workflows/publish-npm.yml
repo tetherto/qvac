@@ -234,8 +234,6 @@ jobs:
       repo_name: ${{ matrix.row.meta.publish.tagPrefix }}
       published_version: ${{ needs.publish.outputs.published_version }}
 
-  # The QIP's publish:post once the release is out: its own command runs here, and each target it depends on is
-  # dispatched to the workflow that owns it at the release tag (publish-post.mjs). Their results stay in those runs.
   post:
     needs: [select, create-tag]
     if: >-
