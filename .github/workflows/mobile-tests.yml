@@ -195,7 +195,7 @@ jobs:
   # One weekly-mobile-report issue per package that ran, from each platform's test-case-details.json.
   weekly-report:
     needs: [weekly-select-android, weekly-select-ios, weekly-android, weekly-ios]
-    if: always() && github.event.schedule == '0 6 * * 0'
+    if: always() && (github.event.schedule == '0 6 * * 0' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
