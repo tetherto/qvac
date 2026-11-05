@@ -309,6 +309,32 @@ describe('serve: context overflow errors', () => {
     }
   }
 
+  it('logs a failed Responses stream that is a server error', async (t) => {
+    const { app, address } = await completionServer(t)
+    app.qvac.extensions.openai!.completionOverride = () => {
+      async function* events(): AsyncGenerator<CompletionEvent> {
+        yield { type: 'contentDelta', seq: 0, text: 'Partial' }
+        yield { type: 'completionDone', seq: 1, stopReason: 'error' } as unknown as CompletionEvent
+      }
+      const final = Promise.resolve(undefined) as unknown as Promise<CompletionFinal>
+      return { requestId: 'error-request', events: events(), final } as unknown as CompletionRun
+    }
+    const loggedErrors: string[] = []
+    app.qvac.logger.error = (message) => loggedErrors.push(message)
+    const response = await fetch(`${address}/v1/responses`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(2000),
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'chat', input: 'Synthetic meeting transcript', stream: true })
+    })
+    const failure = streamError(collectSSE(await response.text())) as {
+      error: { code: string }
+    }
+    assert.equal(failure.error.code, 'inference_failed')
+    assert.equal(loggedErrors.length, 1)
+    assert.match(loggedErrors[0]!, /streaming_error/)
+  })
+
   it('does not classify untyped errors by message text', async (t) => {
     const { address } = await completionServer(
       t,

@@ -125,8 +125,11 @@ function sendResponseFailed(
   err: unknown,
   logger: { error: (message: string) => void }
 ): void {
-  const httpError = sdkErrorAsHttp(err) ?? (err instanceof HttpError ? err : undefined)
-  if (!httpError) {
+  // Like the shared error handler: expected SDK input errors are not logged,
+  // everything else (including a 502 inference_failed) is.
+  const sdkHttpError = sdkErrorAsHttp(err)
+  const httpError = sdkHttpError ?? (err instanceof HttpError ? err : undefined)
+  if (!sdkHttpError) {
     logger.error(`streaming_error POST /v1/responses\n${(err as Error)?.stack ?? String(err)}`)
   }
   sendSSE(reply.raw, {
