@@ -47,10 +47,12 @@ jobs:
       runners: ${{ steps.select.outputs.runners }}
       any: ${{ steps.select.outputs.any }}
     steps:
-      # Actions and settings both come from here, so this is a full checkout of the trusted ref.
+      # Actions and settings both come from here, so this is a full checkout of the trusted ref. On any PR event that is
+      # the default branch, so a PR's own project.json can never change which of its checks run.
       - name: Checkout actions and settings
         uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
+          ref: ${{ github.event.pull_request && github.event.repository.default_branch || '' }}
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
