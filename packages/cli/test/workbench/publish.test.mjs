@@ -11,7 +11,11 @@ const root = fileURLToPath(new URL('../../', import.meta.url))
 function fixture(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-publish-'))
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
-  for (const name of ['package.json', 'npm-shrinkwrap.json', 'scripts', 'patches']) {
+  for (const name of ['package.json', 'npm-shrinkwrap.json']) {
+    const committed = execFileSync('git', ['show', `HEAD:./${name}`], { cwd: root })
+    fs.writeFileSync(path.join(dir, name), committed)
+  }
+  for (const name of ['scripts', 'patches']) {
     fs.cpSync(path.join(root, name), path.join(dir, name), {
       recursive: true,
       mode: fs.constants.COPYFILE_FICLONE,
@@ -27,8 +31,9 @@ function check(dir) {
   })
 }
 
-test('publish check accepts the committed manifest and distribution lock', () => {
-  execFileSync(process.execPath, [path.join(root, 'scripts/check-publish-ready.cjs')])
+test('publish check accepts the committed manifest and distribution lock', (t) => {
+  const result = check(fixture(t))
+  assert.equal(result.status, 0, result.stderr)
 })
 
 test('publish check rejects a stale npm dependency lock', (t) => {

@@ -91,9 +91,10 @@ class Reply implements HttpReply {
     }
     if (data !== undefined) {
       if (!this.raw.hasHeader('content-type')) {
-        if (typeof data === 'string')
-          this.raw.setHeader('content-type', 'text/plain; charset=utf-8')
-        else this.raw.setHeader('content-type', 'application/octet-stream')
+        this.raw.setHeader(
+          'content-type',
+          typeof data === 'string' ? 'text/plain; charset=utf-8' : 'application/octet-stream'
+        )
       }
       this.raw.setHeader('x-content-type-options', 'nosniff')
       if (!this.raw.hasHeader('content-length')) {

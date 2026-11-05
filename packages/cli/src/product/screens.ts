@@ -547,7 +547,7 @@ function usageRows(
   compactions: { id: string; label: string; detail: string }
 ): ScreenRow[] {
   const used = m.cacheTokens
-  const pct = m.ctxSize && used != null ? ` (${Math.round((used / m.ctxSize) * 100)}%)` : ''
+  const pct = m.ctxSize && used !== null ? ` (${Math.round((used / m.ctxSize) * 100)}%)` : ''
 
   return [
     { id: 'window', label: 'Context window', detail: `${tokens(m.ctxSize)} tokens` },

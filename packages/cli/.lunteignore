@@ -3,3 +3,6 @@ dist
 # Generated runtime, standalone binaries, and external benchmark checkouts
 output/
 out/
+
+# Licensed generated runtime artifacts (see scripts/vendor-libraries.mjs)
+src/lib/vendor/*.mjs
