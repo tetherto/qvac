@@ -41,6 +41,9 @@ inputs:
   device-env:
     description: Semicolon-separated KEY=VALUE pairs the on-device loader sets before the tests load
     default: ""
+  weekly:
+    description: Read the package's <platform>Weekly groups instead of its per-PR ones
+    default: "false"
 
 outputs:
   specs:
@@ -69,4 +72,5 @@ runs:
         PERF_RUNS: ${{ inputs.perf-runs }}
         PERF_WARMUP_RUNS: ${{ inputs.perf-warmup-runs }}
         DEVICE_ENV: ${{ inputs.device-env }}
+        WEEKLY: ${{ inputs.weekly }}
       run: node "$GITHUB_ACTION_PATH/devicefarm-write-specs.mjs"
