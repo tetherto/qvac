@@ -2,9 +2,10 @@ import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion } from '@qvac/sdk'
 import type { Tool } from '@qvac/sdk'
-import { HttpError } from '@/serve/lib/http-error'
+import { HttpError, errorType } from '@/serve/lib/http-error'
 import { responsesKvCacheRetention } from '@/serve/lib/responses-kv-cache'
-import { initSSE } from '@/serve/lib/sse'
+import { endSSE, initSSE, sendSSE } from '@/serve/lib/sse'
+import { sdkErrorAsHttp } from '@/serve/core/plugins/error-handler'
 import { requireModel } from '@/serve/core/plugins/require-model'
 import { logUnsupported } from '@/serve/core/plugins/log-unsupported'
 import { assertToolsEnabled, toolsRequested } from '@/serve/lib/assert-tools-enabled'
@@ -17,13 +18,14 @@ import {
   InvalidResponsesBackgroundError,
   InvalidResponsesConversationError,
   InvalidResponsesKvCacheKeyError,
+  InvalidResponsesToolsError,
   toSdkResponsesArgs,
-  UnsupportedToolTypeError,
   type ResponsesHistoryItem
 } from '@/serve/extensions/openai/schemas/responses'
 import {
   InvalidResponseFormatError,
   InvalidToolChoiceError,
+  hoistInstructions,
   nameToolResults,
   type GenerationParams,
   type ResponseFormat
@@ -89,10 +91,14 @@ response); this is not a per-request count of reused tokens.
 **Rejections**:
 - \`conversation\` → \`400 conversation_not_supported\` (Conversation persistence not implemented)
 - \`background: true\` → \`400 background_not_supported\` (only synchronous responses)
-- \`tools[].type\` other than \`function\` (e.g. \`web_search\`, \`file_search\`, \`code_interpreter\`) → \`400 invalid_tool_type\`
 - structured output (\`json_object\`/\`json_schema\`) combined with non-empty \`tools\` → \`400 invalid_response_format\`
 - \`tools\` on a model loaded without \`config.tools: true\` → \`400 tools_not_enabled\`
 - \`tool_choice\` demanding a tool with no matching \`tools\` entry → \`400 invalid_tool_choice\`
+
+**Tools**: \`function\` tools, and the functions inside a \`namespace\` tool (the
+model sees them as \`<namespace>__<name>\`; calls come back with \`name\` and
+\`namespace\` split again; a malformed \`namespace\` → \`400 invalid_tools\`). Built-in tool types (\`web_search\`,
+\`file_search\`, …) are left out of the request and logged.
 
 **\`tool_choice\`**: \`"auto"\` (default), \`"none"\`, \`"required"\`, or
 \`{ type: 'function', name }\` to force one tool. \`required\` and a named tool
@@ -124,6 +130,40 @@ async function markVolatile(_req: FastifyRequest, reply: FastifyReply): Promise<
   reply.header(VOLATILE_HEADER, RESPONSES_VOLATILE_STUB)
 }
 
+// A Responses stream reports a failure as `response.failed`. Codex reads the
+// error code from it; any other frame looks like a dropped connection to retry.
+function sendResponseFailed(
+  reply: FastifyReply,
+  params: HandlerParams,
+  err: unknown,
+  logger: { error: (message: string) => void }
+): void {
+  // Like the shared error handler: expected SDK input errors are not logged,
+  // everything else (including a 502 inference_failed) is.
+  const sdkHttpError = sdkErrorAsHttp(err)
+  const httpError = sdkHttpError ?? (err instanceof HttpError ? err : undefined)
+  if (!sdkHttpError) {
+    logger.error(`streaming_error POST /v1/responses\n${(err as Error)?.stack ?? String(err)}`)
+  }
+  sendSSE(reply.raw, {
+    type: 'response.failed',
+    response: {
+      id: params.rid,
+      object: 'response',
+      created_at: params.createdAtSec,
+      status: 'failed',
+      model: params.modelAlias,
+      output: [],
+      error: {
+        type: httpError ? errorType(httpError.status) : 'server_error',
+        code: httpError?.code ?? 'internal_error',
+        message: httpError?.message ?? 'An internal error occurred.'
+      }
+    }
+  })
+  endSSE(reply.raw, { sentinel: false })
+}
+
 // lunte-disable-next-line require-await
 const plugin: FastifyPluginAsyncZod = async (app) => {
   const openai = openaiState(app.qvac)
@@ -148,6 +188,9 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       try {
         sdk = toSdkResponsesArgs(req.body, req.raw.rawHeaders)
       } catch (err) {
+        if (err instanceof InvalidResponsesToolsError) {
+          throw new HttpError(400, 'invalid_tools', err.message)
+        }
         if (err instanceof InvalidResponsesKvCacheKeyError) {
           throw new HttpError(400, 'invalid_kv_cache_key', err.message)
         }
@@ -157,9 +200,6 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         if (err instanceof InvalidResponsesBackgroundError) {
           throw new HttpError(400, 'background_not_supported', err.message)
         }
-        if (err instanceof UnsupportedToolTypeError) {
-          throw new HttpError(400, 'invalid_tool_type', err.message)
-        }
         if (err instanceof InvalidResponseFormatError) {
           throw new HttpError(400, 'invalid_response_format', err.message)
         }
@@ -167,6 +207,10 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           throw new HttpError(400, 'invalid_tool_choice', err.message)
         }
         throw err
+      }
+
+      if (sdk.skippedToolTypes.length > 0) {
+        ctx.logger.info(`Ignoring unsupported tool types: ${sdk.skippedToolTypes.join(', ')}`)
       }
 
       assertToolsEnabled(req.qvacModel!.entry.config, sdk.tools, req.qvacModel!.alias)
@@ -190,8 +234,9 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
           )
         }
         const prefix = historyPrefixFromStoredResponse(prev, (id) => openai.responsesStore.get(id))
-        // A result in this request can answer a call from the stored turns.
-        history = nameToolResults([...prefix, ...history])
+        // A result in this request can answer a call from the stored turns, and
+        // the stored turns can carry instructions of their own.
+        history = nameToolResults(hoistInstructions([...prefix, ...history]))
       }
 
       const params: HandlerParams = {
@@ -227,6 +272,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         sdkModelId: params.sdkModelId,
         history: params.history,
         ...(params.tools !== undefined ? { tools: params.tools } : {}),
+        toolNamespaces: sdk.toolNamespaces,
         ...(params.generationParams !== undefined
           ? { generationParams: params.generationParams }
           : {}),
@@ -277,7 +323,12 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         if (reply.raw.destroyed) return
         if (streaming) {
           initSSE(reply, { [VOLATILE_HEADER]: RESPONSES_VOLATILE_STUB })
-          await writeStreamingResponse(reply.raw, writerParams, runTurn(true))
+          try {
+            await writeStreamingResponse(reply.raw, writerParams, runTurn(true))
+          } catch (err) {
+            if (reply.raw.destroyed || reply.raw.writableEnded) throw err
+            sendResponseFailed(reply, params, err, ctx.logger)
+          }
         } else {
           // The writer ends the raw response on success. Keep the reply managed
           // until then so inference errors before headers can produce HTTP errors.
