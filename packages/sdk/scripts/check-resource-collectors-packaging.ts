@@ -106,23 +106,26 @@ export async function runResourceCollectorPackagingCheck(
   options: ResourceCollectorCheckOptions,
   dependencies: ResourceCollectorCheckDependencies = DEFAULT_DEPENDENCIES
 ) {
-  const hosts =
-    options.hosts.length > 0
-      ? options.hosts
-      : [resolveDesktopHost(options.platform ?? process.platform, options.arch ?? process.arch)]
+  const ownHost = resolveDesktopHost(
+    options.platform ?? process.platform,
+    options.arch ?? process.arch
+  )
+  const hosts = options.hosts.length > 0 ? options.hosts : [ownHost]
   const temporaryProjectRoot = await dependencies.createTemporaryProject(options.sdkPackageRoot)
 
   try {
+    // Acceptance reads each host's prebuilds from the collector packages; the
+    // bundle only shows which collectors the worker links.
     const bundle = await dependencies.bundleSdk({
       projectRoot: temporaryProjectRoot,
       sdkPath: options.sdkPackageRoot,
-      hosts,
-      quiet: true
+      hosts: [ownHost],
+      quiet: true,
+      verify: false
     })
     const report = await dependencies.acceptResourceCollectorPackaging({
       projectRoot: temporaryProjectRoot,
       bundlePath: bundle.bundlePath,
-      manifestPath: bundle.manifestPath,
       hosts
     })
     const output = options.json
