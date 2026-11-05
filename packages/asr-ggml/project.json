@@ -109,13 +109,65 @@
           "args": "--platform=linux --arch=x64 -D ASR_CUDA=ON",
           "ci": {
             "runner": "linux_ubuntu2204_x64"
-          }
+          },
+          "commands": [
+            {
+              "command": "npm install --ignore-scripts --no-audit --no-fund",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "npm run build:ts",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "npx --no-install bare-make generate -D BUILD_TESTING=OFF",
+              "forwardAllArgs": true
+            },
+            {
+              "command": "npx --no-install bare-make build",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "npx --no-install bare-make install",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs prebuilds/linux-x64",
+              "forwardAllArgs": false
+            }
+          ]
         },
         "linux-arm64": {
           "args": "--platform=linux --arch=arm64",
           "ci": {
             "runner": "ubuntu_2204_arm"
-          }
+          },
+          "commands": [
+            {
+              "command": "npm install --ignore-scripts --no-audit --no-fund",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "npm run build:ts",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "npx --no-install bare-make generate -D BUILD_TESTING=OFF",
+              "forwardAllArgs": true
+            },
+            {
+              "command": "npx --no-install bare-make build",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "npx --no-install bare-make install",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs prebuilds/linux-arm64",
+              "forwardAllArgs": false
+            }
+          ]
         },
         "android-arm64": {
           "args": "--platform=android --arch=arm64 -D ANDROID_STL=c++_shared",

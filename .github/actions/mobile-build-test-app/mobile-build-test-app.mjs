@@ -12,10 +12,15 @@ const INSTALLER = fileURLToPath(
     import.meta.url
   )
 )
-const LINK_OUT = {
-  Android: ['android', 'node_modules/react-native-bare-kit/android/src/main/addons'],
-  iOS: ['ios', 'node_modules/react-native-bare-kit/ios/addons']
+// The APK builds only arm64-v8a, so Android links that one host; the android preset also asks for
+// arm/ia32/x64, which arm64-only platform packages cannot provide.
+const LINK = {
+  Android: [['--host', 'android-arm64'], 'node_modules/react-native-bare-kit/android/src/main/addons'],
+  iOS: [['--preset', 'ios'], 'node_modules/react-native-bare-kit/ios/addons']
 }
+// The linker comes from the repository's locked Bare toolchain, not the app's dependencies.
+const TOOLCHAIN = fileURLToPath(new URL('../../bare-toolchain/', import.meta.url))
+const BARE_LINK = join(TOOLCHAIN, 'node_modules/.bin/bare-link')
 
 export function checkMobileTests(addonDir) {
   const dir = join(addonDir, 'test/mobile')
@@ -58,16 +63,9 @@ export function build({
   mkdirSync(join(addonDir, 'dist'), { recursive: true })
   run('npm', ['pack', '--pack-destination', 'dist'], { cwd: addonDir })
   // react-native-bare-kit 0.16 no longer links a worklet's native addons, so bare-link does.
-  run(
-    'npm',
-    [
-      'pkg',
-      'set',
-      'dependencies.react-native-bare-kit=^0.16.0',
-      'devDependencies.bare-link=^4.0.1'
-    ],
-    { cwd: appDir }
-  )
+  run('node', [join(TOOLCHAIN, 'install.mjs')])
+  run('npm', ['pkg', 'delete', 'devDependencies.bare-link'], { cwd: appDir })
+  run('npm', ['pkg', 'set', 'dependencies.react-native-bare-kit=^0.16.0'], { cwd: appDir })
   run('npm', ['install'], { cwd: appDir })
   run('node', installerArgs('.', addonDir, dependencyPrebuilds), {
     cwd: appDir
@@ -77,23 +75,16 @@ export function build({
   })
   if (!existsSync(join(appDir, 'backend/backend.cjs')))
     throw new Error('backend/backend.cjs was not generated')
-  const [preset, out] = LINK_OUT[platform]
-  run(
-    'npx',
-    ['--no-install', 'bare-link', '--preset', preset, '--out', out, 'backend/backend.cjs'],
-    { cwd: appDir }
-  )
+  const [targets, out] = LINK[platform]
+  run(BARE_LINK, ['--version', 'backend/backend.cjs'], { cwd: appDir })
+  run(BARE_LINK, [...targets, '--out', out, 'backend/backend.cjs'], { cwd: appDir })
   // A second pass so the package's own backends win over a dependency's same-named copies.
   if (existsSync(join(appDir, 'node_modules', npmName, 'package.json'))) {
     writeFileSync(
       join(appDir, 'link-addon-under-test.cjs'),
       `require(${JSON.stringify(npmName)})\n`
     )
-    run(
-      'npx',
-      ['--no-install', 'bare-link', '--preset', preset, '--out', out, 'link-addon-under-test.cjs'],
-      { cwd: appDir }
-    )
+    run(BARE_LINK, [...targets, '--out', out, 'link-addon-under-test.cjs'], { cwd: appDir })
     rmSync(join(appDir, 'link-addon-under-test.cjs'))
   }
   if (timeoutMinutes) {
