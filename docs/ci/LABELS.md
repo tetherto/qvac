@@ -20,23 +20,15 @@ Secret-bearing CI on **external fork PRs** is gated by the GitHub Actions **`for
 
 There is **no self-service path** for external contributors — a merge/release team member must approve the workflow run.
 
-### Ordering matters: approve `fork-ci` **before** applying stage labels
+### Native stages on a fork PR
 
-Two different workflow families react to a fork PR, and only one of them waits for you:
+The native stages (`prebuilds`, `run-cpp-addon-tests`, `run-desktop-addon-tests`) run in [`pr-build-test.yml`](../../.github/workflows/pr-build-test.yml), a `pull_request_target` workflow that loads from the default branch and checks out the PR head. Every run goes through the same three gates before a stage job starts:
 
-- **`pull_request_target`** workflows (`on-pr-*`) contain the `fork-approval` job. They pause on the `fork-ci` environment and resume the moment you approve.
-- **`pull_request`** workflows that run on self-hosted runners never see the environment prompt. Their trust check reads the `qvac/fork-verified` commit status at run time, and that status does not exist until `fork-approval` has been approved.
+1. `fork-approval` pauses on the `fork-ci` environment for a fork PR, and records `qvac/fork-verified` on the head SHA once a merge or release team member approves.
+2. `trust` ([`pr-check-trust`](../../.github/actions/pr-check-trust)) allows a same-repo PR, blocks a draft, and allows a fork PR only with that SHA-bound approval.
+3. `route` ([`ci-route-stages`](../../.github/actions/ci-route-stages)) reads the PR's labels and turns each stage on or off.
 
-Writing a commit status is not a `pull_request` event, so approving `fork-ci` does **not** wake up a `pull_request` run that already finished. If you apply `run-cpp-addon-tests` first and approve second, the native tests report skipped and stay skipped — the PR looks green without ever having run them.
-
-Do this instead, in order:
-
-1. Approve the `fork-ci` deployment on the pending `on-pr-*` run and wait for `fork-approval` to go green (this is what writes `qvac/fork-verified` on the head SHA).
-2. Then apply the stage label (`run-cpp-addon-tests`, `run-desktop-addon-tests`, …). The `labeled` event starts a fresh `pull_request` run that now finds the status.
-
-If the label was already applied, re-run the `pull_request` workflow instead of toggling the label — `authorize` re-queries the status API on every run.
-
-Each new push invalidates all of this: `qvac/fork-verified` is bound to a single head SHA, so the next commit needs a fresh approval and a fresh label/re-run cycle.
+A label event starts a new `pr-build-test` run, and that run waits on `fork-approval` itself, so the label and the approval can come in either order. A new push needs a new approval: `qvac/fork-verified` is bound to one head SHA. The checks in [`pr-checks.yml`](../../.github/workflows/pr-checks.yml) (lint, typecheck, unit tests) run on `pull_request`, with no secrets, so they need no approval.
 
 ---
 

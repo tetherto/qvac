@@ -1854,51 +1854,88 @@ test("release policy: no workflow or action calls nx's publish directly", () => 
   assert.deepEqual(offenders, []);
 });
 
-// A cpp-tests workflow runs PR-head code and is reachable from a fork PR once
-// fork-ci is approved, so a cache WRITE (actions/cache/save) must be gated on
-// trusted events only. Easy to undo by accident, so pin it here.
-// See .github/AGENTS.md.
-const TRUSTED_CACHE_EVENTS = [
-  "push",
-  "workflow_dispatch",
-  "merge_group",
-  "schedule",
-];
-
-// Known-ungated, tracked on QVAC-24711. Remove each entry as it is fixed -- this
-// list should only ever shrink.
-const TRUSTED_CACHE_EXEMPT = new Set([
-]);
-
-// Events that must never appear in a cache WRITE gate. `pull_request_target` is
-// the whole point -- a gate that merely lists the four trusted events still
-// passes a presence check while carrying `|| github.event_name ==
-// 'pull_request_target'` alongside them, which is exactly the hole this test
-// exists to close. So assert the untrusted ones are absent too.
-// A trusted event is not a trusted run. `Checkout code` takes both a
-// `repository` and a `ref` redirect, and neither is safer for arriving as a
-// workflow_call input: on-pr-nx.yml fills both from its own workflow_dispatch
-// inputs and forwards them through cpp-tests-nx.yml to every leaf. Inside a
-// called workflow github.event_name and github.ref are the caller's, so a
-// dispatch on the default branch satisfies the branch clause while the checkout
-// builds a foreign tree (QVAC-25269).
-const TRUST_GUARDS = [
-  [
-    "the default branch",
-    "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
-  ],
-  ["its own ref", "(inputs.ref == '' || inputs.ref == github.ref_name)"],
-  [
-    "its own repository",
-    "(inputs.repository == '' || inputs.repository == github.repository)",
-  ],
-];
-
-function missingTrustGuards(step) {
-  return TRUST_GUARDS.filter(([, guard]) => !step.includes(guard)).map(
-    ([label]) => label,
+// C++ lint checks out the event's head commit, never a branch name that a later push can move under the job.
+test("cpp-lint resolves checkout from event head SHA, never branch ref", () => {
+  const source = read(".github/workflows/_cpp-lint.yml");
+  assert.match(
+    source,
+    /ref:\s+\$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/,
   );
+  assert.doesNotMatch(source, /head\.ref\b|PR_HEAD_REF|env\.HEAD_REF/);
+});
+
+// The text of every `run:` script in a workflow, block scalars included.
+function runScripts(source) {
+  const lines = source.split("\n");
+  const scripts = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^(\s*)(- )?run:(.*)$/.exec(lines[i]);
+    if (!m) continue;
+    const indent = m[1].length + (m[2] ? 2 : 0);
+    const block = [m[3]];
+    while (
+      i + 1 < lines.length &&
+      (!lines[i + 1].trim() || lines[i + 1].search(/\S/) > indent)
+    ) {
+      block.push(lines[++i]);
+    }
+    scripts.push(block.join("\n"));
+  }
+  return scripts;
 }
+
+// (1) No expression is interpolated into a run: script, so a crafted dispatch input cannot break out of it; inputs
+// reach scripts through env. (2) The model match defaults to EQUALS, so a one-device run bills the exact fleet model.
+// (3) The published-build input defaults to empty, never to an @latest spec.
+test("mobile dispatch inputs are injection-safe and default to exact-model runs", () => {
+  let checked = 0;
+  for (const path of [".github/workflows/mobile-tests.yml", ".github/workflows/_mobile.yml"]) {
+    const source = read(path);
+    const scripts = runScripts(withoutComments(source));
+    checked += scripts.length;
+    for (const script of scripts) {
+      assert.doesNotMatch(script, /\$\{\{/, `${path}: an expression is interpolated into a run: script`);
+    }
+    assert.match(
+      source,
+      /device_model_operator:\n(?:\s+[a-z_]+:.*\n)*?\s+default: EQUALS\b/,
+      `${path} must default device_model_operator to EQUALS`,
+    );
+    assert.doesNotMatch(source, /default: CONTAINS/, `${path} must not default to CONTAINS`);
+    assert.doesNotMatch(
+      source,
+      /default:\s*['"]?@[a-z]+\/[^'"\s]*@latest/,
+      `${path} must default the published-build spec to empty, not @latest`,
+    );
+  }
+  assert.ok(checked >= 1, "no run: scripts found in the mobile workflows");
+});
+
+// fabric-cmake-layout.sh is the only check of every @qvac/fabric install layout, so it must stay wired to the files
+// it guards.
+test("the fabric CMake layout script runs when its inputs change", () => {
+  const source = read(".github/workflows/on-pr-shared-ci-infra.yml");
+  for (const path of [
+    ".github/scripts/test/fabric-cmake-layout.sh",
+    "cmake/qvac-addon/qvac-addon.cmake",
+    "packages/fabric/cmake/qvac-fabric-hosts.cmake",
+  ]) {
+    assert.ok(source.includes(`- "${path}"`), `on-pr-shared-ci-infra.yml does not run on ${path}`);
+  }
+  assert.match(
+    source,
+    /run: \.github\/scripts\/test\/fabric-cmake-layout\.sh packages\/fabric\/node_modules/,
+  );
+});
+
+// The contract's cache writers run PR-head code once fork approval and the trust check pass, so a cache WRITE must
+// happen only on a trusted run: _cpp-tests.yml gates each write on its env.TRUSTED, and cache-warm.yml has no
+// pull-request trigger at all. Easy to undo by accident, so pin it here. See .github/AGENTS.md.
+const CACHE_WORKFLOWS = [
+  ".github/workflows/_cpp-tests.yml",
+  ".github/workflows/_build.yml",
+  ".github/workflows/cache-warm.yml",
+];
 
 const UNTRUSTED_CACHE_EVENTS = [
   "pull_request",
@@ -1906,22 +1943,27 @@ const UNTRUSTED_CACHE_EVENTS = [
   "issue_comment",
 ];
 
-// Every `uses: actions/cache@` (write) step in the cpp-tests family, as
-// {path, code, steps, index}. Steps are split on the six-space step indent
-// these workflows use; `index` is the step's position, for ordering checks.
-//
-// `match` is one regex or an array of them, ALL of which must match the step.
-// An array is how a caller spells "this step mentions both X and Y" without
-// tying itself to the order the YAML keys happen to be written in: a single
-// /X[\s\S]*Y/ silently stops matching when someone moves `with:` above `uses:`,
-// which is legal YAML with identical runtime behaviour and would let a cache
-// write slip past the gate below.
-function eachCppTestsCacheStep(opts = {}) {
+// What env.TRUSTED must require. Inside a called workflow github.event_name and github.ref are the caller's, so
+// the caller's opt-in, the event and the default branch are all needed (QVAC-25269).
+const TRUSTED_GUARDS = [
+  ["the caller's opt-in", "inputs.trusted"],
+  ["no pull_request_target event", "github.event_name != 'pull_request_target'"],
+  ["no pull_request event", "github.event_name != 'pull_request'"],
+  [
+    "the default branch",
+    "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+  ],
+];
+
+// A cache write: the actions/cache action itself, its save half, or the qvac-actions wrappers of either.
+const CACHE_WRITE = /uses: \S*actions\/cache(-save|\/save)?@/;
+
+// Every step in the contract's cache workflows matching ALL of `match`, as {path, code, steps, step, index}.
+// Steps are split on the six-space step indent; `index` is the step's position, for ordering checks.
+function eachCacheStep(opts = {}) {
   const found = [];
   const patterns = [opts.match].flat();
-  for (const path of workflowPaths()) {
-    if (!/\/(reusable-)?cpp-tests?-/.test(path)) continue;
-    if (!opts.includeExempt && TRUSTED_CACHE_EXEMPT.has(path)) continue;
+  for (const path of CACHE_WORKFLOWS) {
     const code = withoutComments(read(path));
     const steps = code.split(/\n {6}- /);
     steps.forEach((step, index) => {
@@ -1932,55 +1974,63 @@ function eachCppTestsCacheStep(opts = {}) {
   return found;
 }
 
-test("cache policy: cpp-tests cache writes are gated on trusted events", () => {
+test("cache policy: contract cache writes happen only on a trusted run", () => {
   const offenders = [];
-  const check = (path, step) => {
-    const missing = TRUSTED_CACHE_EVENTS.filter(
-      (e) => !step.includes(`github.event_name == '${e}'`),
+  const writes = eachCacheStep({ match: CACHE_WRITE });
+  for (const { path, code, steps, step } of writes) {
+    const trusted = /\n {6}TRUSTED: \$\{\{ (.+) \}\}/.exec(code)?.[1];
+    if (!trusted) {
+      // Without env.TRUSTED, no untrusted event may start the workflow at all.
+      const on = code.slice(code.indexOf("\non:"), code.indexOf("\njobs:"));
+      const untrusted = UNTRUSTED_CACHE_EVENTS.filter((e) =>
+        new RegExp(`\\n  ${e}:`).test(on),
+      );
+      if (untrusted.length) {
+        offenders.push(
+          `${path}: writes a cache with no env.TRUSTED but runs on ${untrusted.join(", ")}`,
+        );
+      }
+      continue;
+    }
+    if (!/env\.TRUSTED == 'true'/.test(step)) {
+      offenders.push(`${path}: a cache write step does not gate on env.TRUSTED`);
+    }
+    for (const [label, guard] of TRUSTED_GUARDS) {
+      if (!trusted.includes(guard)) {
+        offenders.push(`${path}: env.TRUSTED does not require ${label}`);
+      }
+    }
+    const admitted = UNTRUSTED_CACHE_EVENTS.filter((e) =>
+      trusted.includes(`github.event_name == '${e}'`),
     );
-    if (missing.length) {
-      offenders.push(
-        `${path}: a cache write step does not gate on ${missing.join(", ")}`,
-      );
+    if (admitted.length) {
+      offenders.push(`${path}: env.TRUSTED admits ${admitted.join(", ")}`);
     }
-    const forbidden = UNTRUSTED_CACHE_EVENTS.filter((e) =>
-      step.includes(`github.event_name == '${e}'`),
-    );
-    if (forbidden.length) {
-      offenders.push(
-        `${path}: a cache write step admits untrusted ${forbidden.join(", ")}`,
-      );
+    // A trusted event is not a trusted run if a caller can redirect what is checked out.
+    for (const checkout of steps.filter((s) => /actions\/checkout@/.test(s))) {
+      if (/inputs\.(ref|repository)\b/.test(checkout)) {
+        offenders.push(
+          `${path}: a checkout takes a caller's ref or repository in a job that writes caches`,
+        );
+      }
     }
-    const unpinned = missingTrustGuards(step);
-    if (unpinned.length) {
-      offenders.push(
-        `${path}: a cache write step is not pinned to ${unpinned.join(", ")}`,
-      );
+  }
+  assert.ok(writes.length >= 1, "no cache write step found; CACHE_WORKFLOWS is stale");
+  assert.deepEqual([...new Set(offenders)], []);
+});
+
+// The host vcpkg cache: vcpkg-cache-setup's files mode writes the shared host dir only when `trusted` is true.
+test("cache policy: the host vcpkg cache is writable only on a trusted run", () => {
+  const offenders = [];
+  const setups = eachCacheStep({
+    match: [/uses: \.\/\.github\/actions\/vcpkg-cache-setup/, /mode: files/],
+  });
+  for (const { path, step } of setups) {
+    if (!/trusted: \$\{\{ env\.TRUSTED \}\}/.test(step)) {
+      offenders.push(`${path}: vcpkg-cache-setup's files mode does not take env.TRUSTED`);
     }
-  };
-  const seen = new Set();
-  for (const { path, step, index } of eachCppTestsCacheStep({
-    match: /uses: actions\/cache(@|\/save@)/,
-  })) {
-    seen.add(`${path}#${index}`);
-    check(path, step);
   }
-  // An exempt file is exempt only for the ungated model/ccache caches it already
-  // had; a vcpkg cache write carries the full gate wherever it appears.
-  for (const { path, step, index } of eachCppTestsCacheStep({
-    match: [/uses: actions\/cache\/save@/, /vcpkg\/cache/],
-    includeExempt: true,
-  })) {
-    if (seen.has(`${path}#${index}`)) continue;
-    check(path, step);
-  }
-  // The third gate site: the action decides read vs write mode from `trusted`.
-  for (const { path, step } of eachCppTestsCacheStep({
-    match: /uses: \.\/\.github\/actions\/vcpkg-binary-cache-dir/,
-    includeExempt: true,
-  })) {
-    check(path, step);
-  }
+  assert.ok(setups.length >= 1, "no files-mode vcpkg-cache-setup found; CACHE_WORKFLOWS is stale");
   assert.deepEqual(offenders, []);
 });
 
@@ -1990,15 +2040,11 @@ test("cache policy: cpp-tests cache writes are gated on trusted events", () => {
 // so the dead entry is never replaced. Observed on both Windows pools and on a
 // single macOS runner four days apart. Both cache steps in a workflow must
 // carry the fingerprint, and the step that produces it must come first.
-test("cache policy: cpp-tests vcpkg cache keys carry the toolchain fingerprint", () => {
+test("cache policy: vcpkg cache keys carry the toolchain fingerprint", () => {
   const offenders = [];
-  // Only the vcpkg cache; the model caches are keyed on manifests and are
-  // toolchain-independent by construction.
-  // Only the restore step spells the key out; the save reuses it via
-  // steps.vcpkg-cache.outputs.cache-primary-key, so it cannot drift.
-  const vcpkgCacheSteps = eachCppTestsCacheStep({
-    match: [/uses: actions\/cache\/restore@/, /vcpkg\/cache/],
-    includeExempt: true,
+  // Only the restore step spells the key out; the save reuses its cache-primary-key, so it cannot drift.
+  const vcpkgCacheSteps = eachCacheStep({
+    match: [/uses: \S*actions\/cache(-restore|\/restore)@/, /vcpkg\/cache/],
   });
 
   for (const { path, steps, step, index } of vcpkgCacheSteps) {
@@ -2011,7 +2057,7 @@ test("cache policy: cpp-tests vcpkg cache keys carry the toolchain fingerprint",
     // Compare step positions, not string offsets: two textually identical steps
     // resolve to the same offset, and the restore/save pair very nearly is one.
     const producer = steps.findIndex((s) =>
-      s.includes("actions/vcpkg-toolchain-fingerprint"),
+      /actions\/vcpkg-toolchain-(fingerprint|hash)\b/.test(s),
     );
     if (producer === -1) {
       offenders.push(
@@ -2025,6 +2071,7 @@ test("cache policy: cpp-tests vcpkg cache keys carry the toolchain fingerprint",
       );
     }
   }
+  assert.ok(vcpkgCacheSteps.length >= 1, "no vcpkg cache restore found; CACHE_WORKFLOWS is stale");
   assert.deepEqual(offenders, []);
 });
 
@@ -2098,4 +2145,14 @@ test("ggml-rpc-server on the CI contract keeps main's build and test legs", () =
     Object.keys(targets["test:integration"].configurations).filter((c) => c.startsWith("linux")).sort(),
     ["linux-arm64", "linux-x64"],
   );
+});
+
+// As main's prebuild smoke test, the arm64 Linux one checks the TCP-only path: fabric's ci:system puts libibverbs on
+// that build host and its device node is not a usable RDMA device, so GGML_RPC_NO_RDMA keeps RDMA out of the check.
+test("RPC server prebuilds smoke-test without the Linux RDMA runtime", () => {
+  const { targets } = JSON.parse(read("packages/ggml-rpc-server/project.json"));
+  const smoke = targets.build.configurations["linux-arm64"].commands.filter((c) => /smoke-packaged\.cjs/.test(c));
+  assert.deepEqual(smoke, ["GGML_RPC_NO_RDMA=1 node scripts/smoke-packaged.cjs"]);
+  const script = read("packages/ggml-rpc-server/scripts/smoke-packaged.cjs");
+  assert.match(script, /process\.env\.GGML_RPC_NO_RDMA/, "the smoke test honours GGML_RPC_NO_RDMA");
 });
