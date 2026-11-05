@@ -523,3 +523,23 @@ test('groupCompanionSets: Audio8 Core ML bundle components are companion-only', 
   t.is(result[2]!.isCompanionOnly, true)
   t.absent(result[3]!.isCompanionOnly)
 })
+
+test('groupCompanionSets: Core ML source packages are companion-only and archives stay standalone', (t) => {
+  const components = [
+    'vae-decoder.mlpackage/Manifest.json',
+    'vae-decoder.mlpackage/Data/com.apple.CoreML/model.mlmodel',
+    'vae-decoder.mlpackage/Data/com.apple.CoreML/weights/weight.bin'
+  ]
+  const standalone = ['model.gguf', 'encoder.mlmodelc.zip', 'vae-decoder.mlpackage.zip']
+  for (const prefix of ['', 'acestep/']) {
+    const result = groupCompanionSets(
+      [...components, ...standalone].map((path) => makeModel({ registryPath: prefix + path }))
+    )
+    for (const entry of result.slice(0, components.length)) {
+      t.is(entry.isCompanionOnly, true, entry.registryPath)
+    }
+    for (const entry of result.slice(components.length)) {
+      t.absent(entry.isCompanionOnly, entry.registryPath)
+    }
+  }
+})

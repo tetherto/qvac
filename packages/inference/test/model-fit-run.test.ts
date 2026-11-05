@@ -151,6 +151,39 @@ test('runFit: a crashed marker keeps skipping native', async (t) => {
   t.ok(exists(crashedMarkerPath(stateDir, PROBE)))
 })
 
+test('runFit: skipping native does not restart the crashed marker expiry', async (t) => {
+  const stateDir = tempDir()
+  const crashed = crashedMarkerPath(stateDir, PROBE)
+  fs.writeFileSync(crashed, '')
+  const sixDaysAgo = (Date.now() - 6 * 24 * 60 * 60 * 1000) / 1000
+  fs.utimesSync(crashed, sixDaysAgo, sixDaysAgo)
+  const before = fs.statSync(crashed).mtimeMs
+  const { state, callFit } = countingFit()
+
+  const result = await runFit(PROBE, { stateDir, callFit })
+
+  t.is(state.calls, 0)
+  t.is(result.status, 'unknown')
+  if (result.status !== 'unknown') return
+  t.is(result.reason, 'crashed')
+  t.is(fs.statSync(crashed).mtimeMs, before, 'the marker still expires on its first schedule')
+})
+
+test('runFit: an expired crashed marker returns the request to native', async (t) => {
+  const stateDir = tempDir()
+  const crashed = crashedMarkerPath(stateDir, PROBE)
+  fs.writeFileSync(crashed, '')
+  const eightDaysAgo = (Date.now() - 8 * 24 * 60 * 60 * 1000) / 1000
+  fs.utimesSync(crashed, eightDaysAgo, eightDaysAgo)
+  const { state, callFit } = countingFit()
+
+  const result = await runFit(PROBE, { stateDir, callFit })
+
+  t.is(state.calls, 1)
+  t.is(result.status, 'completed')
+  t.absent(exists(crashed))
+})
+
 test('runFit: a thrown fit is invocation-error and clears the marker', async (t) => {
   const stateDir = tempDir()
 

@@ -16,3 +16,12 @@ export const END_OF_INPUT = "end of job";
  * and by far the most common whisper input.
  */
 export const MAX_BUFFERED_BYTES = 500 * 1024 * 1024;
+
+/**
+ * Streaming chunk cadences Nemotron accepts, in ms. The engine's cache-aware
+ * encoder is trained at these operating points and rejects any other value.
+ * Frozen: the array is public (`ASRGgml.NEMOTRON_STREAMING_CHUNK_MS`) and the
+ * driver validates against it, so a caller editing it must not change what
+ * the driver accepts.
+ */
+export const NEMOTRON_STREAMING_CHUNK_MS = Object.freeze([80, 160, 320, 560, 1120] as const);
