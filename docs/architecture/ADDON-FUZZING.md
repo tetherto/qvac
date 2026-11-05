@@ -13,9 +13,9 @@ CMake-template adoption. Bounded Linux CI coverage exists for
 fronts, the `asr-ggml` s16le PCM decoder, the `bci-whispercpp`
 neural-signal parser, the `embed-llamacpp` main-gpu config parsers, the
 `diffusion-cpp` GGUF video-capability inspector, the `llm-llamacpp`
-stop-string and log sanitizers, the `vla-ggml` safetensors header parser, and
-the `translation-nmtcpp` weight-header parsers. Fleet corpus/dictionary
-scale-up, scheduled continuous fuzzing, and
+stop-string and log sanitizers, the `vla-ggml` safetensors header parser,
+the `translation-nmtcpp` weight-header parsers, and the `ocr-ggml` image
+decoder. Fleet corpus/dictionary scale-up, scheduled continuous fuzzing, and
 optional OSS-Fuzz onboarding remain future phases. Chosen framework: **Google FuzzTest** (backed by
 libFuzzer).
 
@@ -616,6 +616,9 @@ families that protect several addons at once.
   `build-fuzz/` tree (`test/fuzz/vcpkg.json`) so FuzzTest's
   ASan Abseil never shares a prefix with production `abseil@onnxruntime#1` and
   the coverage artefacts in `build/` are left alone.
+  **`ocr-ggml` decodeOrWrapImage: done.** OpenCV only, no `LINK_FABRIC`
+  (full ASan + LSan). The shared `cpp-tests-nx.yml` job runs the bounded fuzz scripts after
+  the existing C++ tests.
 - **Phase 2 — text + audio + config families.** Add targets for the llama.cpp /
   NMT text parsers, the whisper/parakeet/tts audio buffer math, and the config
   JSON parsers. Code behind engine state lands with (or after) that addon's
