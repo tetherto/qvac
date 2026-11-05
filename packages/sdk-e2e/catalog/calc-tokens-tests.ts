@@ -66,12 +66,12 @@ export const calcTokensPrompt: TestDefinition = {
 function rejectsInvalid(
   testId: string,
   request: Record<string, unknown>,
-  field: string
+  messageContains?: string
 ): TestDefinition {
   return {
     testId,
-    params: { request, field },
-    expectation: { validation: 'throws-error', errorContains: field },
+    params: { request, field: messageContains ?? '' },
+    expectation: { validation: 'throws-error', errorContains: messageContains ?? '' },
     steps: [
       {
         callError: {
@@ -80,17 +80,21 @@ function rejectsInvalid(
           as: 'err'
         }
       },
-      { assert: { on: '$err', named: 'errorMatches', with: { messageContains: field } } }
+      {
+        assert: {
+          on: '$err',
+          named: 'errorMatches',
+          with: { code: '50010', ...(messageContains && { messageContains }) }
+        }
+      }
     ],
     metadata: { category: 'completion', dependency: 'none', estimatedDurationMs: 1000 }
   }
 }
 
-export const calcTokensRejectsMissingPrompt = rejectsInvalid(
-  'calc-tokens-rejects-missing-prompt',
-  { modelId: 'calc-tokens-invalid' },
-  'text'
-)
+export const calcTokensRejectsMissingPrompt = rejectsInvalid('calc-tokens-rejects-missing-prompt', {
+  modelId: 'calc-tokens-invalid'
+})
 
 export const calcTokensRejectsUnknownKey = rejectsInvalid(
   'calc-tokens-rejects-unknown-key',
