@@ -1,0 +1,81 @@
+# Temporary QVAC-28004 check, not for merge. Shows that bare-fs 4.8.3 breaks
+# reopening an on-disk Corestore on Windows ("Invalid device file, was
+# modified", #5407) and that 4.8.4 fixes it. Ubuntu with 4.8.3 is the control.
+name: Verify bare-fs on Windows (QVAC-28004)
+
+on:
+  push:
+    branches: [QVAC-28004-windows-verify]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reopen:
+    name: ${{ matrix.os }} / bare-fs ${{ matrix.bare-fs }} (expect ${{ matrix.expect }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, bare-fs: 4.8.3, expect: fail }
+          - { os: windows-latest, bare-fs: 4.8.4, expect: pass }
+          - { os: ubuntu-latest, bare-fs: 4.8.3, expect: pass }
+    defaults:
+      run:
+        shell: bash
+        working-directory: .github/verify-bare-fs-windows
+    env:
+      BARE_FS_VERSION: ${{ matrix.bare-fs }}
+      EXPECT: ${{ matrix.expect }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/verify-bare-fs-windows
+
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      - name: Install with bare-fs ${{ matrix.bare-fs }} everywhere
+        run: |
+          npm pkg set "dependencies.bare-fs=$BARE_FS_VERSION" 'overrides.bare-fs=$bare-fs'
+          npm install --no-audit --no-fund
+          npm ls bare-fs device-file corestore --all
+
+      - name: Create the store, then reopen it in a new process
+        id: run
+        run: |
+          store="$RUNNER_TEMP/qvac-store"
+          rm -rf "$store"
+          set +e
+          npx bare reopen.js "$store" create
+          create=$?
+          npx bare reopen.js "$store" reopen
+          reopen=$?
+          set -e
+          echo "create=$create reopen=$reopen"
+          echo "create=$create" >> "$GITHUB_OUTPUT"
+          echo "reopen=$reopen" >> "$GITHUB_OUTPUT"
+
+      - name: Check the result matches the expectation
+        env:
+          CREATE: ${{ steps.run.outputs.create }}
+          REOPEN: ${{ steps.run.outputs.reopen }}
+        run: |
+          if [ "$CREATE" != "0" ]; then
+            echo "::error::Creating the store failed, so the reopen result says nothing"
+            exit 1
+          fi
+          if [ "$EXPECT" = "fail" ] && [ "$REOPEN" = "0" ]; then
+            echo "::error::Reopen succeeded with bare-fs $BARE_FS_VERSION, expected the device-file failure"
+            exit 1
+          fi
+          if [ "$EXPECT" = "pass" ] && [ "$REOPEN" != "0" ]; then
+            echo "::error::Reopen failed with bare-fs $BARE_FS_VERSION, expected it to work"
+            exit 1
+          fi
+          echo "bare-fs $BARE_FS_VERSION on $RUNNER_OS: reopen exit $REOPEN, as expected ($EXPECT)"

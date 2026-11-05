@@ -1,0 +1,10 @@
+{
+  "name": "verify-bare-fs-windows",
+  "private": true,
+  "description": "Temporary QVAC-28004 check: does an on-disk Corestore reopen on Windows with a given bare-fs?",
+  "dependencies": {
+    "bare-path": "^3.0.0",
+    "bare-runtime": "1.34.1",
+    "corestore": "7.11.1"
+  }
+}
