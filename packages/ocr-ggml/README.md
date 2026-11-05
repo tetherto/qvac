@@ -777,7 +777,8 @@ unchanged to the binary.
 
 Shared Linux C++ CI runs the existing unit tests first, then builds and runs the
 bounded fuzz target. Re-run `test:cpp:build` to switch the tree back to unit-test
-mode after fuzzing. See [Native Addon Fuzz Testing](../../docs/architecture/ADDON-FUZZING.md).
+mode after fuzzing, or `build:native` to rebuild and install the native addon. Both
+commands explicitly reset `BUILD_FUZZING=OFF`. See [Native Addon Fuzz Testing](../../docs/architecture/ADDON-FUZZING.md).
 
 ### Running the suite on Vulkan (GPU)
 

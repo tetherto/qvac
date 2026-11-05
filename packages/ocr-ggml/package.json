@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "npm run build:ts && npm run build:native",
-    "build:native": "bare-make generate && bare-make build && bare-make install",
+    "build:native": "bare-make generate -D BUILD_FUZZING=OFF && bare-make build && bare-make install",
     "build:ts": "tsc -p tsconfig.build.json && prettier --write fit.js",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "check:generated": "npm run build:ts && out=$(git status --porcelain --untracked-files=all -- index.js ocr-ggml.js addonLogging.js fit.js index.d.ts ocr-ggml.d.ts addonLogging.d.ts fit.d.ts lib) && { [ -z \"$out\" ] || { echo \"$out\"; exit 1; }; }",

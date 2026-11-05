@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <tuple>
@@ -92,6 +93,59 @@ FUZZ_TEST(OcrDecodeImageFuzz, RawNeverCrashes)
           {1, 1, 16, std::vector<uint8_t>{0, 0}},
       };
     });
+
+using qvac_lib_infer_ocr_ggml::detail::checkedEncodedImageLength;
+using qvac_lib_infer_ocr_ggml::detail::checkedRawImageByteCount;
+
+TEST(OcrDecodeImageSizeGuards, EncodedLengthBoundaries) {
+  const auto intMax = static_cast<size_t>(std::numeric_limits<int>::max());
+  EXPECT_THROW(checkedEncodedImageLength(0), std::runtime_error);
+  EXPECT_EQ(checkedEncodedImageLength(1), 1);
+  EXPECT_EQ(
+      checkedEncodedImageLength(intMax - 1),
+      std::numeric_limits<int>::max() - 1);
+  EXPECT_EQ(checkedEncodedImageLength(intMax), std::numeric_limits<int>::max());
+  EXPECT_THROW(checkedEncodedImageLength(intMax + 1), std::runtime_error);
+}
+
+TEST(OcrDecodeImageSizeGuards, RawDimensionsMustBePositive) {
+  EXPECT_THROW(checkedRawImageByteCount(0, 1, 1), std::runtime_error);
+  EXPECT_THROW(checkedRawImageByteCount(1, -1, 1), std::runtime_error);
+  EXPECT_THROW(checkedRawImageByteCount(1, 1, 0), std::runtime_error);
+}
+
+TEST(OcrDecodeImageSizeGuards, RawPixelCountAt32BitLimit) {
+  const auto limit = static_cast<size_t>(std::numeric_limits<uint32_t>::max());
+  // 65535 * 65537 is exactly UINT32_MAX; the adjacent square exceeds it.
+  EXPECT_EQ(checkedRawImageByteCount(65535, 65537, 1, limit), limit);
+  EXPECT_THROW(
+      checkedRawImageByteCount(65536, 65536, 1, limit), std::runtime_error);
+}
+
+TEST(OcrDecodeImageSizeGuards, RawByteCountAt32BitLimit) {
+  const auto limit = static_cast<size_t>(std::numeric_limits<uint32_t>::max());
+  // The pixel count fits, but multiplying by four crosses the byte limit.
+  EXPECT_EQ(
+      checkedRawImageByteCount(65536, 16383, 4, limit), size_t{4294705152ULL});
+  EXPECT_THROW(
+      checkedRawImageByteCount(65536, 16384, 4, limit), std::runtime_error);
+  EXPECT_EQ(checkedRawImageByteCount(1, 1, 4, 4), size_t{4});
+  EXPECT_THROW(checkedRawImageByteCount(1, 1, 4, 3), std::runtime_error);
+}
+
+TEST(OcrDecodeImageSizeGuards, RawMaximumIntDimensionsAtHostLimit) {
+  const int intMax = std::numeric_limits<int>::max();
+  const auto byteCount =
+      static_cast<uint64_t>(intMax) * static_cast<uint64_t>(intMax) * 4;
+  if (byteCount <= std::numeric_limits<size_t>::max()) {
+    EXPECT_EQ(
+        checkedRawImageByteCount(intMax, intMax, 4),
+        static_cast<size_t>(byteCount));
+  } else {
+    EXPECT_THROW(
+        checkedRawImageByteCount(intMax, intMax, 4), std::runtime_error);
+  }
+}
 
 TEST(OcrDecodeImageFuzzSeeds, ValidPngDecodesToRgb) {
   cv::Mat decoded;

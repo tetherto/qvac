@@ -9,22 +9,46 @@
 
 namespace qvac_lib_infer_ocr_ggml {
 
+namespace detail {
+
+int checkedEncodedImageLength(size_t byteCount) {
+  if (byteCount == 0) {
+    throw std::runtime_error("ocr-ggml: encoded image is empty");
+  }
+  if (byteCount > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    throw std::runtime_error("ocr-ggml: encoded image is too large");
+  }
+  return static_cast<int>(byteCount);
+}
+
+size_t checkedRawImageByteCount(
+    int width, int height, int bytesPerPixel, size_t maxBytes) {
+  if (width <= 0 || height <= 0 || bytesPerPixel <= 0) {
+    throw std::runtime_error("ocr-ggml: raw image dimensions must be positive");
+  }
+  const auto rawWidth = static_cast<size_t>(width);
+  const auto rawHeight = static_cast<size_t>(height);
+  const auto rawBytesPerPixel = static_cast<size_t>(bytesPerPixel);
+  if (rawWidth > maxBytes / rawHeight) {
+    throw std::runtime_error("ocr-ggml: raw image dimensions overflow");
+  }
+  const size_t pixels = rawWidth * rawHeight;
+  if (pixels > maxBytes / rawBytesPerPixel) {
+    throw std::runtime_error("ocr-ggml: raw image dimensions overflow");
+  }
+  return pixels * rawBytesPerPixel;
+}
+
+} // namespace detail
+
 cv::Mat decodeOrWrapImage(const OcrInput& input) {
   if (input.isEncoded) {
-    if (input.data.empty()) {
-      throw std::runtime_error("ocr-ggml: encoded image is empty");
-    }
-    // cv::Mat constructor wants non-const void* but cv::imdecode does not
-    // write through it. Reject lengths that would truncate when cast to int,
-    // the same class of attacker-controlled size field as the NMT n_dims
-    // overflow.
-    if (input.data.size() >
-        static_cast<size_t>(std::numeric_limits<int>::max())) {
-      throw std::runtime_error("ocr-ggml: encoded image is too large");
-    }
+    // OpenCV takes an int length; validate before narrowing the buffer size.
+    const int encodedLength =
+        detail::checkedEncodedImageLength(input.data.size());
     cv::Mat encoded(
         1,
-        static_cast<int>(input.data.size()),
+        encodedLength,
         CV_8UC1,
         const_cast<uint8_t*>( // NOLINT(cppcoreguidelines-pro-type-const-cast)
             input.data.data()));
@@ -68,17 +92,8 @@ cv::Mat decodeOrWrapImage(const OcrInput& input) {
   }
   // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 
-  const uint64_t width = static_cast<uint64_t>(input.imageWidth);
-  const uint64_t height = static_cast<uint64_t>(input.imageHeight);
-  const uint64_t bpp = static_cast<uint64_t>(expectedBytesPerPixel);
-  if (height > 0 && width > std::numeric_limits<size_t>::max() / height) {
-    throw std::runtime_error("ocr-ggml: raw image dimensions overflow");
-  }
-  const uint64_t pixels = width * height;
-  if (bpp > 0 && pixels > std::numeric_limits<size_t>::max() / bpp) {
-    throw std::runtime_error("ocr-ggml: raw image dimensions overflow");
-  }
-  const size_t expectedBytes = static_cast<size_t>(pixels * bpp);
+  const size_t expectedBytes = detail::checkedRawImageByteCount(
+      input.imageWidth, input.imageHeight, expectedBytesPerPixel);
   if (input.data.size() != expectedBytes) {
     throw std::runtime_error(
         "ocr-ggml: raw image data size mismatch (expected " +
