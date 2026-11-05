@@ -26,7 +26,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/_select-projects.yml
     with:
-      targets: build,verify:generated,publish
+      targets: build,verify:generated,publish,publish:post
       packages: ${{ inputs.packages }}
 
   logic:
@@ -152,3 +152,38 @@ jobs:
           workdir: ${{ env.WORKDIR }}
           tag: ${{ needs.logic.outputs.tag }}
           token: ${{ github.token }}
+
+  post:
+    needs: [select, publish]
+    if: >-
+      always() && !cancelled() && needs.publish.result == 'success' &&
+      toJSON(fromJSON(needs.select.outputs.matrices)['publish:post']) != '[]'
+    name: publish:post ${{ matrix.row.project }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix:
+        row: ${{ fromJSON(needs.select.outputs.matrices)['publish:post'] }}
+    steps:
+      - uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          persist-credentials: false
+      - uses: tetherto/qvac-actions/setup-node@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          node-version: lts/*
+      - uses: tetherto/qvac-actions/setup-pnpm@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - shell: bash
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter .
+      - shell: bash
+        env:
+          PROJECT: ${{ matrix.row.project }}
+          DIR: ${{ matrix.row.dir }}
+          GITHUB_TOKEN: ${{ github.token }}
+          DISPATCH_REF: ${{ github.ref_name }}
+          NX_DAEMON: "false"
+          NX_NO_CLOUD: "true"
+        run: node .github/scripts/publish-post.mjs
