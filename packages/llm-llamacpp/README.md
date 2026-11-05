@@ -56,6 +56,26 @@ are loaded from `%CUDA_PATH%\bin\x64`, not from `PATH`.
 - BitNet (TQ1_0 / TQ2_0) and some LoRA finetuning kernels are not yet available on CUDA. Use
   `backend: "vulkan"` for those workloads until the kernels land.
 
+**Note on the AMD XDNA NPU (Linux x64):**
+On an XDNA2 NPU (Strix Point, Strix Halo, Krackan) with XRT 2.25 or newer installed, and an
+`@qvac/fabric` build that ships the XDNA backend, the NPU registers as `XDNA0`.
+
+- It is never chosen automatically. Select it with `backend: "xdna"` or `devices: "XDNA0"`.
+  Without an NPU or XRT, `backend: "xdna"` is skipped like any other absent backend.
+- On an XDNA load the NPU runs the ops it supports and the CPU runs the rest. The GPU is not
+  used, so another model can run on it at the same time. All loads in a process share one NPU
+  context and take turns on it.
+- The backend is built around Qwen3.5. A model whose `ssm_out` quantization the fused decode
+  layer does not cover, such as a stock Qwen3.5-0.8B `Q4_K_M` with `Q8_0` `ssm_out`, fails at
+  the first decode with `unsupported fused weight set` instead of falling back. Requantize
+  `ssm_out` or use another backend.
+- Keep flash attention on (the default) and the KV cache at `f16` (the default on XDNA); the
+  NPU's attention kernels need both. `poll: 0` (the default) stops the threadpool busy-waiting
+  while the NPU works.
+- The NPU reports all of system memory as free, so fit and memory accounting are nominal.
+- Splitting one model across `XDNA0` and a GPU (`devices: "XDNA0,Vulkan0"` with a split mode) is
+  accepted but untested.
+
 **Note — BitNet models (TQ1_0 / TQ2_0 quantization):**
 BitNet models require special backend handling on Adreno GPUs. When a BitNet model is detected and no explicit `main-gpu` is set:
 - **Adreno 800+** (e.g. Adreno 830): Vulkan is used instead of OpenCL.
@@ -177,7 +197,7 @@ const config = {
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
 | image-max-megapixels | positive integer                            | 50                           | Maximum reported image pixel count in millions, checked before decode. Alias: `image_max_megapixels`. |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
-| backend           | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, or `auto` | N/A | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU. Cannot be combined with `split-mode` or `devices` |
+| backend           | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, `xdna`, or `auto` | N/A | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU. Cannot be combined with `split-mode` or `devices`. `xdna` selects the AMD XDNA NPU on Linux x64, which is never chosen automatically (see the note on the AMD XDNA NPU above) |
 | split-mode        | `"none"`, `"layer"`, or `"tensor"` | `"none"`                     | How to split the model across GPUs. `"tensor"` is EXPERIMENTAL and desktop-only; `"row"` is rejected ([details](./docs/multi-gpu.md)) |
 | tensor-split      | comma-separated proportions (e.g. `"1,1"`)  | —                            | GPU split ratios for the multi-GPU split modes ([details](./docs/multi-gpu.md)) |
 | parallel          | integer                                     | 1                            | Concurrent sequence slots for continuous batching. Values `>= 2` enable batch `run()` and split the KV cache uniformly across slots ([details](./docs/continuous-batching.md)) |
@@ -202,7 +222,7 @@ const config = {
 
 The addon picks a safe KV-cache type when `cache-type-k`/`cache-type-v` are unset, and validates any explicit choice per backend:
 
-- **Auto-default:** on a **Metal / Vulkan GPU** (with flash attention on) both K and V default to **`q8_0`** — quality-neutral vs `f16` and ~47% smaller KV cache. **CPU** and **OpenCL (Adreno)** keep **`f16`** (ARM CPU `q8_0` has a quality/throughput cost; quantized KV is unsafe on OpenCL — see below). Finetuning manages its own KV types and is left untouched.
+- **Auto-default:** on a **Metal / Vulkan GPU** (with flash attention on) both K and V default to **`q8_0`** — quality-neutral vs `f16` and ~47% smaller KV cache. **CPU**, **OpenCL (Adreno)** and the **XDNA NPU** keep **`f16`** (ARM CPU `q8_0` has a quality/throughput cost; quantized KV is unsafe on OpenCL — see below; the NPU's attention kernels take only `f16` K/V). Finetuning manages its own KV types and is left untouched.
 - **`flash-attn: 'auto'` keeps `f16`.** "Flash attention on" above means a truthy `flash-attn` — `on`, `enabled`, `true` or `1`, or the `on` default when the key is unset. `'auto'` is deliberately excluded: quantizing the V cache forces qvac-fabric to promote AUTO to ENABLED, which skips the runtime capability probe that `'auto'` exists to run. So `'auto'` trades the ~47% KV-cache saving for letting qvac-fabric decide. To get both, set `cache-type-k`/`-v` explicitly alongside `'auto'`, or use `'on'`. **`split-mode: 'tensor'` is the exception:** qvac-fabric promotes AUTO to ENABLED unconditionally for that mode, so there is no probe to preserve and `'auto'` takes the q8_0 default there exactly as `'on'` does.
 - **OpenCL (Adreno) accepts only `f16`/`f32`/`bf16`:** any other cache type — quantized (`q8_0`, `q4_0`, `q4_1`, `q5_0`, …) or unrecognized — throws a `StatusError`. A quantized K or V cache aborts in `llama_kv_cache::update` during state restore because ggml-opencl has no `F32→quantized` requantize kernel. Use `f16`/`f32`/`bf16`, or a Vulkan GPU / CPU.
 - **Mixed K≠V is a warning, not an error:** if K and V differ and at least one is quantized, the addon logs a warning (asymmetric quantized K/V falls off the fused flash-attention path — a notable GPU decode penalty — for no quality benefit, and is unsupported on Adreno OpenCL) but proceeds. Prefer a symmetric type. (This may be relaxed once qvac-fabric handles asymmetric quantized K/V efficiently.)

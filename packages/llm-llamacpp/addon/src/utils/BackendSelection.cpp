@@ -191,6 +191,17 @@ bool isRpcDevice(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
       "rpc");
 }
 
+// The AMD XDNA NPU registers as an integrated GPU. It is opt-in only: the
+// fused decode path rejects some quantizations outright, and there are no
+// NPU-vs-iGPU measurements to justify picking it automatically.
+bool isXdnaDevice(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
+  const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
+  return hasBackendFamily(
+      lowerCopy(bckI.ggml_backend_dev_name(dev)),
+      lowerCopy(reg != nullptr ? bckI.ggml_backend_reg_name(reg) : nullptr),
+      "xdna");
+}
+
 std::string
 deviceIdentity(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
   const ggml_backend_reg_t reg = bckI.ggml_backend_dev_backend_reg(dev);
@@ -311,21 +322,31 @@ void tryEmplaceDevice(
     std::vector<std::string>& openClBackends,
     std::vector<std::string>& cudaBackends,
     std::vector<std::string>& otherOpenClBackends,
+    std::vector<std::string>& xdnaBackends,
     std::optional<int>& maxAdrenoVersion, bool& sawMaliGpu,
-    std::vector<std::string>& rejectedDevices,
-    const bool allowNonAdrenoOpenCl) {
+    std::vector<std::string>& rejectedDevices, const bool allowNonAdrenoOpenCl,
+    const bool allowXdna) {
   const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(deviceIndex);
   const enum ggml_backend_dev_type backendTypeEnum =
       bckI.ggml_backend_dev_type(dev);
   const DeviceDescription devDescr(dev, backendTypeEnum, bckI);
   const bool isOpenCl = isOpenClDevice(bckI, dev, devDescr);
+  const bool isXdna = isXdnaDevice(bckI, dev);
   const bool isGpuType = backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_GPU ||
                          backendTypeEnum == GGML_BACKEND_DEVICE_TYPE_IGPU;
   // Recorded before the main-gpu type filter so the CPU-fallback warning names
   // a refused device even when `integrated`/`dedicated` skips its type.
   if (isGpuType && !isEligibleGpuDevice(bckI, dev) &&
-      !(allowNonAdrenoOpenCl && isOpenCl)) {
+      !(allowNonAdrenoOpenCl && isOpenCl) && !(allowXdna && isXdna)) {
     rejectedDevices.emplace_back(deviceIdentity(bckI, dev));
+    return;
+  }
+  // Kept in its own bucket, which only the backend override reads, so the
+  // default cascade can never fall through to the NPU.
+  if (isXdna) {
+    if (shouldProcessDevice(backendTypeEnum, false, mainGpuType)) {
+      xdnaBackends.emplace_back(devDescr.gpuBackend);
+    }
     return;
   }
   if (shouldProcessDevice(backendTypeEnum, isOpenCl, mainGpuType)) {
@@ -403,8 +424,8 @@ namespace {
 // that simply has no device on this machine (falls through). Deliberately does
 // NOT include "cpu": the CPU path is `device`, and accepting two spellings for
 // it would make `device: 'gpu', backend: 'cpu'` ambiguous.
-constexpr std::array<std::string_view, 4> KNOWN_GPU_BACKEND_FAMILIES = {
-    "cuda", "vulkan", "metal", "opencl"};
+constexpr std::array<std::string_view, 5> KNOWN_GPU_BACKEND_FAMILIES = {
+    "cuda", "vulkan", "metal", "opencl", "xdna"};
 
 // Trimmed from each family. \r matters: a value from a CRLF config file would
 // otherwise throw "unknown backend 'cuda\r'", which renders identically to the
@@ -460,8 +481,7 @@ backend_selection::parseBackendOverride(const std::string& backendStr) {
           qvac_errors::general_error::InvalidArgument,
           string_format(
               "backend: unknown backend '%s'. Expected a comma-separated list "
-              "of cuda/vulkan/metal/opencl or 'auto', for "
-              "example "
+              "of cuda/vulkan/metal/opencl/xdna or 'auto', for example "
               "'cuda,vulkan'. To run on CPU use device 'cpu' instead.\n",
               family.c_str()));
     }
@@ -487,7 +507,7 @@ backend_selection::parseBackendOverride(const std::string& backendStr) {
         qvac_errors::general_error::InvalidArgument,
         string_format(
             "backend: '%s' names no backend. Expected a comma-separated list "
-            "of cuda/vulkan/metal/opencl or 'auto', for example "
+            "of cuda/vulkan/metal/opencl/xdna or 'auto', for example "
             "'cuda,vulkan'. To run on CPU use device 'cpu' instead.\n",
             backendStr.c_str()));
   }
@@ -534,9 +554,12 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
   std::vector<std::string> openClBackends;
   std::vector<std::string> cudaBackends;
   std::vector<std::string> otherOpenClBackends;
+  std::vector<std::string> xdnaBackends;
   std::vector<std::string> rejectedDevices;
   const bool allowNonAdrenoOpenCl =
       std::ranges::find(backendOverride, "opencl") != backendOverride.end();
+  const bool allowXdna =
+      std::ranges::find(backendOverride, "xdna") != backendOverride.end();
   std::optional<int> maxAdrenoVersion;
   bool sawMaliGpu = false;
 
@@ -559,10 +582,12 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
               openClBackends,
               cudaBackends,
               otherOpenClBackends,
+              xdnaBackends,
               maxAdrenoVersion,
               sawMaliGpu,
               rejectedDevices,
-              allowNonAdrenoOpenCl);
+              allowNonAdrenoOpenCl,
+              allowXdna);
           loopAllDevices = false;
         } else {
           std::string errorMsg;
@@ -594,10 +619,12 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
           openClBackends,
           cudaBackends,
           otherOpenClBackends,
+          xdnaBackends,
           maxAdrenoVersion,
           sawMaliGpu,
           rejectedDevices,
-          allowNonAdrenoOpenCl);
+          allowNonAdrenoOpenCl,
+          allowXdna);
     }
   }
 
@@ -607,6 +634,7 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     gpuBackends.clear();
     igpuBackends.clear();
     otherOpenClBackends.clear();
+    xdnaBackends.clear();
   };
 
   const bool noMainGpuOverride = !mainGpu.has_value();
@@ -674,7 +702,8 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
             &cudaBackends,
             &gpuBackends,
             &igpuBackends,
-            &otherOpenClBackends}) {
+            &otherOpenClBackends,
+            &xdnaBackends}) {
         for (const std::string& name : *candidates) {
           if (::backendNameMatchesFamily(name, family)) {
             std::string text = string_format(
@@ -857,7 +886,8 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
       continue;
     }
     const size_t sourceGpuIndex = result.sourceGpuCount++;
-    if (!isEligibleGpuDevice(bckI, dev)) {
+    const bool isXdna = isXdnaDevice(bckI, dev);
+    if (!isXdna && !isEligibleGpuDevice(bckI, dev)) {
       result.rejectedDevices.emplace_back(deviceIdentity(bckI, dev));
       continue;
     }
@@ -894,6 +924,10 @@ backend_selection::getSplitDeviceSelection(const BackendInterface& bckI) {
         .isOpenCl = hasBackendFamily(deviceName, registryName, "opencl"),
         .isMetal = hasMetalFamily(deviceName, registryName),
         .deviceId = deviceId};
+    if (isXdna) {
+      result.optInDevices.emplace_back(std::move(selected));
+      continue;
+    }
     if (selected.isRpc) {
       rpc.emplace_back(std::move(selected));
       continue;

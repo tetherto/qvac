@@ -2421,6 +2421,46 @@ TEST_F(LoadFitNormalizationTest, ExplicitDevicesNamingOneCardTwiceAreRejected) {
       qvac_errors::StatusError);
 }
 
+// An opt-in device (the XDNA NPU) is never in the automatic set but can be
+// named. "none" stands in for its name because fabric's --device parser
+// accepts it without a registered device.
+TEST_F(LoadFitNormalizationTest, ExplicitDevicesCanNameOptInDevice) {
+  auto config = baseConfig();
+  config["devices"] = "none";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "local"}, {"local"});
+  auto selection = splitSelection({"local", "none"});
+  selection.optInDevices.push_back(selection.devices[1]);
+  selection.devices.pop_back();
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  EXPECT_EQ(result.params.mmproj_backend, "none");
+}
+
+TEST_F(LoadFitNormalizationTest, AutomaticSplitLeavesOutOptInDevices) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "local"}, {"local"});
+  auto selection = splitSelection({"local", "XDNA0"});
+  selection.optInDevices.push_back(selection.devices[1]);
+  selection.devices.pop_back();
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  ASSERT_EQ(result.params.devices.size(), 2U);
+  EXPECT_EQ(result.params.devices[0], selection.devices[0].handle);
+  EXPECT_EQ(result.params.devices[1], nullptr);
+  EXPECT_EQ(result.params.mmproj_backend, "local");
+}
+
 TEST_F(LoadFitNormalizationTest, DefaultSplitModeAllowsOneExplicitDevice) {
   auto config = baseConfig();
   config["devices"] = "none";

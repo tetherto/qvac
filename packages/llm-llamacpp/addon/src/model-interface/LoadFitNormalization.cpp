@@ -395,10 +395,13 @@ backend_selection::SplitDeviceSelection selectExplicitDevices(
   selected.devices.reserve(requested.size());
   for (const std::string& name : requested) {
     // A name the automatic dedupe dropped, such as Vulkan0 when CUDA0 is the
-    // same card, is still a valid explicit choice.
+    // same card, or an opt-in device such as XDNA0, is still a valid explicit
+    // choice.
     const backend_selection::SplitDevice* match = nullptr;
     for (const auto* candidates :
-         {&available.devices, &available.dedupedTwins}) {
+         {&available.devices,
+          &available.dedupedTwins,
+          &available.optInDevices}) {
       const auto found = std::ranges::find(
           *candidates, name, &backend_selection::SplitDevice::name);
       if (found != candidates->end()) {
@@ -720,7 +723,7 @@ void tuneLoadConfigMap(
     std::unordered_map<std::string, std::string>& configFilemap,
     const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
     const FinetuneConfigOverrides& finetuneOverrides, bool isOpenCl,
-    bool isMetal, bool isGpu, bool isCuda, bool isTensorSplit) {
+    bool isMetal, bool isGpu, bool isCuda, bool isTensorSplit, bool isXdna) {
 
   const bool isFinetuning = finetuneOverrides.active;
 
@@ -911,9 +914,11 @@ void tuneLoadConfigMap(
   // llama_kv_cache::update on Adreno, so f16 stays the safe default — and
   // block 3 now *rejects* any explicit quantized KV on OpenCL (q8_0 and q4_0
   // both crash on a shift). Also skipped for finetuning (manages its own KV
-  // types), when flash attention is off (V-cache quantization requires it), and
-  // on Adreno+Vulkan (see above).
-  if (!isFinetuning && isGpu && !isOpenCl && flashAttnEnabled &&
+  // types), when flash attention is off (V-cache quantization requires it), on
+  // Adreno+Vulkan (see above), and on the XDNA NPU, whose attention kernels
+  // take only f16 K/V and would leave a quantized cache's attention on the
+  // host.
+  if (!isFinetuning && isGpu && !isOpenCl && !isXdna && flashAttnEnabled &&
       !isAdrenoVulkan && notUserSet("cache-type-k", "cache_type_k") &&
       notUserSet("cache-type-v", "cache_type_v")) {
     configFilemap["cache-type-k"] = "q8_0";
@@ -1527,6 +1532,7 @@ NormalizedLoad normalizeLoadForFit(
   bool isOpenCl = false;
   bool isMetal = false;
   bool isCuda = false;
+  bool isXdna = false;
   bool isGpu = false;
   {
     using namespace backend_selection;
@@ -1868,14 +1874,18 @@ NormalizedLoad normalizeLoadForFit(
     isGpu = useGpu;
     isOpenCl = isGpu && selected.isOpenCl;
     isMetal = isGpu && selected.isMetal;
-    isCuda = isGpu &&
-             (toLowerAscii(selected.name).find("cuda") != std::string::npos ||
+    const auto usesFamily = [&](std::string_view family) {
+      return isGpu &&
+             (toLowerAscii(selected.name).find(family) != std::string::npos ||
               std::ranges::any_of(
                   splitSelection.devices,
-                  [](const backend_selection::SplitDevice& device) {
-                    return toLowerAscii(device.name).find("cuda") !=
+                  [family](const backend_selection::SplitDevice& device) {
+                    return toLowerAscii(device.name).find(family) !=
                            std::string::npos;
                   }));
+    };
+    isCuda = usesFamily("cuda");
+    isXdna = usesFamily("xdna");
   }
 
   tuneLoadConfigMap(
@@ -1891,7 +1901,8 @@ NormalizedLoad normalizeLoadForFit(
       // fallback), so this is the mode fabric will actually see. Tensor mode
       // changes how 'auto' is classified for the q8_0 KV default, see the
       // comment on flashAttnEnabled.
-      params.split_mode == LLAMA_SPLIT_MODE_TENSOR);
+      params.split_mode == LLAMA_SPLIT_MODE_TENSOR,
+      isXdna);
 
   // QVAC-24253: constraints qvac-fabric places on LLAMA_SPLIT_MODE_TENSOR.
   // Keyed on params.split_mode, not the local splitMode, because that is the

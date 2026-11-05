@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- The AMD XDNA NPU can be selected with `backend: "xdna"` or
+  `devices: "XDNA0"`, on Linux x64 with an `@qvac/fabric` that ships the XDNA
+  backend. It is never chosen automatically and never joins an automatic
+  split. The KV cache stays at `f16` on the NPU, whose attention kernels take
+  only `f16` K/V.
+
 ### Fixed
 
 - With `parallel >= 2`, a request whose chat template force-opens the
