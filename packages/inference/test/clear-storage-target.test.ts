@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { resolveClearStorageTarget, resolveShardedClearStorageTargets } from '@/utils/clear-storage'
+import { resolveClearStorageTarget, isCacheShardPath } from '@/utils/clear-storage'
 
 const CACHE = '/home/user/.qvac/models'
 
@@ -46,55 +46,31 @@ test('windows backslash paths are handled correctly', (t) => {
   t.is(result.path, 'C:/Users/me/.qvac/models/sets/abc123')
 })
 
-const SHARD_FILES = ['qwen-00001-of-00002.gguf', 'qwen-00002-of-00002.gguf', 'qwen.tensors.txt']
+const SHARD = 'qwen-00001-of-00002.gguf'
 
-test('sharded model in the cache deletes its shard directory', (t) => {
-  const result = resolveShardedClearStorageTargets(
-    `${CACHE}/sharded/abc123/qwen-00001-of-00002.gguf`,
-    CACHE,
-    SHARD_FILES
-  )
-  t.alike(result, [{ path: `${CACHE}/sharded/abc123`, kind: 'directory' }])
+test('sharded model in a cache shard directory matches', (t) => {
+  t.ok(isCacheShardPath(`${CACHE}/sharded/abc123/${SHARD}`, CACHE))
 })
 
-test('sharded model outside cache deletes only its own files', (t) => {
-  const result = resolveShardedClearStorageTargets(
-    '/Users/me/models/qwen-00001-of-00002.gguf',
-    CACHE,
-    SHARD_FILES
-  )
-  t.alike(result, [
-    { path: '/Users/me/models/qwen-00001-of-00002.gguf', kind: 'file' },
-    { path: '/Users/me/models/qwen-00002-of-00002.gguf', kind: 'file' },
-    { path: '/Users/me/models/qwen.tensors.txt', kind: 'file' }
-  ])
+test('sharded model outside cache does not match', (t) => {
+  t.absent(isCacheShardPath(`/Users/me/models/${SHARD}`, CACHE))
+  t.absent(isCacheShardPath(`/Users/me/models/sharded/abc123/${SHARD}`, CACHE))
 })
 
-test('sharded model elsewhere in the cache deletes only its own files', (t) => {
-  const result = resolveShardedClearStorageTargets(
-    `${CACHE}/qwen-00001-of-00002.gguf`,
-    CACHE,
-    SHARD_FILES
-  )
-  t.is(result.length, 3)
-  t.ok(result.every((target) => target.kind === 'file'))
+test('sharded model elsewhere in the cache does not match', (t) => {
+  t.absent(isCacheShardPath(`${CACHE}/${SHARD}`, CACHE))
+  t.absent(isCacheShardPath(`${CACHE}/sharded/${SHARD}`, CACHE))
+  t.absent(isCacheShardPath(`${CACHE}/sharded/abc123/sub/${SHARD}`, CACHE))
 })
 
-test('sharded model at the cache shard root never deletes the sharded directory', (t) => {
-  const result = resolveShardedClearStorageTargets(
-    `${CACHE}/sharded/qwen-00001-of-00002.gguf`,
-    CACHE,
-    SHARD_FILES
-  )
-  t.ok(result.every((target) => target.kind === 'file'))
+test('dot segments never match a cache shard directory', (t) => {
+  t.absent(isCacheShardPath(`${CACHE}/sharded/../${SHARD}`, CACHE))
+  t.absent(isCacheShardPath(`${CACHE}/sharded/./${SHARD}`, CACHE))
+  t.absent(isCacheShardPath(`${CACHE}/sharded//${SHARD}`, CACHE))
 })
 
-test('windows sharded model in the cache deletes its shard directory', (t) => {
+test('backslash is a separator only on windows', (t) => {
   const winCache = 'C:\\Users\\me\\.qvac\\models'
-  const result = resolveShardedClearStorageTargets(
-    `${winCache}\\sharded\\abc123\\qwen-00001-of-00002.gguf`,
-    winCache,
-    SHARD_FILES
-  )
-  t.alike(result, [{ path: 'C:/Users/me/.qvac/models/sharded/abc123', kind: 'directory' }])
+  t.ok(isCacheShardPath(`${winCache}\\sharded\\abc123\\${SHARD}`, winCache, '\\'))
+  t.absent(isCacheShardPath(`${CACHE}/sharded\\abc123/${SHARD}`, CACHE, '/'))
 })
