@@ -1,5 +1,6 @@
-package io.tether.qvac.sdk
+package io.tether.qvac.sdk.jvm
 
+import io.tether.qvac.sdk.*
 import io.tether.qvac.sdk.generated.Models
 import java.nio.file.Files
 import java.nio.file.Path
@@ -13,9 +14,9 @@ import kotlin.test.*
 /** Opt-in, real inference using the exact JS/Python corpus. Unknown categories fail. */
 class WorkerConformanceTest {
     @Test fun sharedCorpus(): Unit = runBlocking {
-        assumeTrue("Enable with QVAC_RUN_CONFORMANCE=1 and build the workspace worker", System.getenv("QVAC_RUN_CONFORMANCE") == "1")
-        val sdk = Path.of(System.getenv("QVAC_TEST_SDK_DIR") ?: "../sdk").toAbsolutePath().normalize()
-        val cases = Json.parseToJsonElement(Files.readString(sdk.resolveSibling("sdk-e2e").resolve("catalog/conformance/cases.json"))).jsonObject.getValue("cases").jsonArray
+        assumeTrue("Enable with QVAC_RUN_CONFORMANCE=1", System.getenv("QVAC_RUN_CONFORMANCE") == "1")
+        val corpus = Path.of("../../sdk-e2e/catalog/conformance/cases.json").toAbsolutePath().normalize()
+        val cases = Json.parseToJsonElement(Files.readString(corpus)).jsonObject.getValue("cases").jsonArray
         assertTrue(cases.isNotEmpty())
         val home = Path.of(System.getenv("QVAC_E2E_HOME") ?: "build/e2e-home").toAbsolutePath()
         Files.createDirectories(home)
@@ -24,8 +25,7 @@ class WorkerConformanceTest {
             val id = case.string("id")
             println("Conformance: $id")
             withTimeout(600_000) {
-                val transport = JvmBareRpcTransport.connectResolved(sdkDirectory = sdk.toString(), homeDirectory = home.toString())
-                val client = QvacClient(transport)
+                val client = QvacClient(JvmBareKitTransport.connect(homeDirectory = home.toString()))
                 try {
                     client.heartbeat()
                     val model = Models.all.single { it.name == case.string("model") }
@@ -35,7 +35,6 @@ class WorkerConformanceTest {
                     try { execute(client, modelId, case) }
                     finally { assertTrue(client.models.unload(modelId).success, "$id: unload failed") }
                 } finally { client.close() }
-                assertFalse(transport.isWorkerAlive, "$id: worker leaked")
             }
         }
     }
