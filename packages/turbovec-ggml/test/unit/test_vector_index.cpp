@@ -521,10 +521,9 @@ TEST(VectorIndexTest, LoadedTurboVecKeepsItsCalibrationState) {
     ASSERT_EQ(idx.write(calibratedFile.path()), GGML_VEC_INDEX_OK);
   }
   {
+    // Saved empty, so the loaded index has no rows and only the loaded state
+    // keeps the large add below from calibrating it.
     VectorIndex idx(DIM, VectorStorage::TurboVecQ4);
-    const auto batch = gaussianBatch(2);
-    ASSERT_EQ(
-        idx.add(batch.vectors.data(), 2, batch.ids.data()), GGML_VEC_INDEX_OK);
     ASSERT_EQ(idx.write(plainFile.path()), GGML_VEC_INDEX_OK);
   }
   int status = -1;
@@ -536,6 +535,7 @@ TEST(VectorIndexTest, LoadedTurboVecKeepsItsCalibrationState) {
   // A loaded index is not fresh: a large add does not calibrate it.
   VectorIndex plain = VectorIndex::load(plainFile.path(), &status);
   ASSERT_EQ(status, GGML_VEC_INDEX_OK);
+  ASSERT_EQ(plain.len(), 0);
   EXPECT_FALSE(plain.calibrated());
   const auto more =
       gaussianBatch(VectorIndex::AUTO_CALIBRATE_MIN_ROWS, 100000, 11);

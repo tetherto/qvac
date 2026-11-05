@@ -13,6 +13,11 @@ const IdMapIndex = require('@qvac/turbovec-ggml/idMapIndex')
 
 const DIM = 16
 const TURBOVEC_DIM = 128
+// The addon calibrates a fresh TurboVec index from its first add when that add
+// has at least this many rows (VectorIndex::AUTO_CALIBRATE_MIN_ROWS).
+const AUTO_CALIBRATE_MIN_ROWS = 1000
+// Any fixed value works; it only has to be the same on every run.
+const CALIBRATION_SEED = 0x5eed
 const N = 10
 const UINT64_MAX = (1n << 64n) - 1n
 
@@ -164,28 +169,42 @@ function normalizedPatternVec(row) {
   return vector
 }
 
-// Unit rows from a fixed mulberry32 stream, so no two rows are near-copies.
-function seededUnitRows(rows, seed) {
+// Deterministic pseudo-random numbers in [-0.5, 0.5). This is mulberry32, a
+// small public-domain 32-bit generator; the shift amounts and odd constants are
+// its published ones, not tuning values. A fixed seed gives every platform the
+// same rows, so a failure reproduces.
+function mulberry32(seed) {
   let state = seed >>> 0
-  const next = () => {
+  return () => {
     state = (state + 0x6d2b79f5) >>> 0
     let x = state
     x = Math.imul(x ^ (x >>> 15), x | 1)
     x ^= x + Math.imul(x ^ (x >>> 7), x | 61)
-    return ((x ^ (x >>> 14)) >>> 0) / 4294967296 - 0.5
+    const uint32 = (x ^ (x >>> 14)) >>> 0
+    return uint32 / 2 ** 32 - 0.5
   }
+}
+
+// `rows` unit-length TurboVec rows, laid out row after row. Independent random
+// rows are far apart (at dim 128 the closest pair of 1000 has cosine about
+// 0.43), so a search for a stored row has one clear answer even after 4-bit
+// encoding.
+function seededUnitRows(rows, seed) {
+  const next = mulberry32(seed)
   const vectors = new Float32Array(rows * TURBOVEC_DIM)
   for (let row = 0; row < rows; row++) {
-    let norm = 0
-    for (let col = 0; col < TURBOVEC_DIM; col++) {
-      const value = next()
-      vectors[row * TURBOVEC_DIM + col] = value
-      norm += value * value
-    }
-    norm = Math.sqrt(norm) || 1
-    for (let col = 0; col < TURBOVEC_DIM; col++) vectors[row * TURBOVEC_DIM + col] /= norm
+    const vector = vectors.subarray(row * TURBOVEC_DIM, (row + 1) * TURBOVEC_DIM)
+    for (let col = 0; col < TURBOVEC_DIM; col++) vector[col] = next()
+    normalizeInPlace(vector)
   }
   return vectors
+}
+
+function normalizeInPlace(vector) {
+  let norm = 0
+  for (const value of vector) norm += value * value
+  norm = Math.sqrt(norm) || 1
+  for (let i = 0; i < vector.length; i++) vector[i] /= norm
 }
 
 function runTurboVecRoundTrip(t, storage, bitWidth) {
@@ -921,15 +940,15 @@ test('IdMapIndex: corrupt persistence file load fails', (t) => {
   }
 })
 
-test('IdMapIndex: TurboVec calibrates from a first add of 1000 rows', (t) => {
+test(`IdMapIndex: TurboVec calibrates from a first add of ${AUTO_CALIBRATE_MIN_ROWS} rows`, (t) => {
   if (!SUPPORTS_TURBOVEC) {
     t.pass('TurboVec requires a 64-bit target')
     return
   }
-  const rows = 1000
-  // Seeded random rows: normalizedPatternVec repeats with a period near 2*pi*113,
-  // so row 710 is a near-copy of row 0 and a 4-bit search can return either.
-  const vectors = seededUnitRows(rows, 0x5eed)
+  const rows = AUTO_CALIBRATE_MIN_ROWS
+  // Not normalizedPatternVec: it repeats with a period near 2 * pi * 113, so its
+  // row 710 is a near-copy of row 0 and a 4-bit search can return either.
+  const vectors = seededUnitRows(rows, CALIBRATION_SEED)
   const ids = new BigUint64Array(rows)
   for (let i = 0; i < rows; i++) ids[i] = BigInt(i + 1)
   const file = tmpPath('id-map-index-turbovec-calibrated')
@@ -941,15 +960,16 @@ test('IdMapIndex: TurboVec calibrates from a first add of 1000 rows', (t) => {
   try {
     t.is(idx.calibrated, false, 'a fresh index is uncalibrated')
     idx.addWithIds(vectors, ids)
-    t.is(idx.calibrated, true, 'a first add of 1000 rows calibrates')
+    t.is(idx.calibrated, true, `a first add of ${AUTO_CALIBRATE_MIN_ROWS} rows calibrates`)
     const query = vectors.subarray(0, TURBOVEC_DIM)
     t.is(idx.search(query, 1).ids[0], ids[0], 'a calibrated index retrieves a stored row')
     idx.write(file)
     loaded = IdMapIndex.load(file)
     t.is(loaded.calibrated, true, 'the calibration survives a snapshot')
 
-    small.addWithIds(vectors.subarray(0, 999 * TURBOVEC_DIM), ids.subarray(0, 999))
-    t.is(small.calibrated, false, 'a first add of 999 rows does not calibrate')
+    const belowMin = AUTO_CALIBRATE_MIN_ROWS - 1
+    small.addWithIds(vectors.subarray(0, belowMin * TURBOVEC_DIM), ids.subarray(0, belowMin))
+    t.is(small.calibrated, false, 'a first add one row short of the minimum does not calibrate')
 
     const repeated = ids.slice()
     repeated[rows - 1] = repeated[0]
