@@ -56,7 +56,10 @@ async function countBlocks(storage, coreKey, pointer) {
   return blocks
 }
 
-test('cancelled download leaves no durable blocks after reopen', async (t) => {
+// Downloads from a real writer corestore and cancels once CANCEL_AFTER_BLOCKS
+// blocks have arrived, then closes everything and counts the blocks the reader
+// kept on disk.
+async function cancelMidDownload(t, downloadOptions = {}) {
   const root = await tmp(t)
   const writerStorage = path.join(root, 'writer')
   const readerStorage = path.join(root, 'reader')
@@ -108,7 +111,8 @@ test('cancelled download leaves no durable blocks after reopen', async (t) => {
       client.downloadModel('models/storage-test.gguf', 's3', {
         outputFile,
         signal: controller.signal,
-        maxRetries: 1
+        maxRetries: 1,
+        ...downloadOptions
       }),
     /Download cancelled/,
     'the download is cancelled while blocks are in flight'
@@ -121,12 +125,26 @@ test('cancelled download leaves no durable blocks after reopen', async (t) => {
   await writerCore.close()
   await writerStore.close()
 
-  t.ok(downloadedBlocks > CANCEL_AFTER_BLOCKS, 'in-flight blocks arrived after cancellation')
-  t.is(
-    await countBlocks(readerStorage, coreKey, pointer),
-    0,
-    'no downloaded blocks remain after reopening the corestore'
+  return {
+    downloadedBlocks,
+    storedBlocks: await countBlocks(readerStorage, coreKey, pointer)
+  }
+}
+
+test('cancel with clearBlocksOnCancel false keeps its blocks after reopen so it can resume', async (t) => {
+  const { storedBlocks } = await cancelMidDownload(t, { clearBlocksOnCancel: false })
+
+  t.ok(
+    storedBlocks >= CANCEL_AFTER_BLOCKS,
+    `blocks downloaded before the cancel remain on disk (${storedBlocks})`
   )
+})
+
+test('cancelled download leaves no durable blocks after reopen', async (t) => {
+  const { downloadedBlocks, storedBlocks } = await cancelMidDownload(t)
+
+  t.ok(downloadedBlocks > CANCEL_AFTER_BLOCKS, 'in-flight blocks arrived after cancellation')
+  t.is(storedBlocks, 0, 'no downloaded blocks remain after reopening the corestore')
 })
 
 test('drain timeout logs remaining peer counters with real Hypercore peers', async (t) => {

@@ -7489,6 +7489,21 @@
           },
           "required": ["type", "kvCacheKey"],
           "title": "DeleteCacheKvEntryRequest"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "deleteCache"
+            },
+            "modelSrc": {
+              "type": "string",
+              "description": "registry:// source of the model whose cached download to delete"
+            }
+          },
+          "required": ["type", "modelSrc"],
+          "title": "DeleteCacheModelRequest"
         }
       ]
     },

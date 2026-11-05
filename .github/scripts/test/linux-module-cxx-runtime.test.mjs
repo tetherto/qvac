@@ -1,8 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import {
   cxxRuntimeViolations,
+  xdnaRuntimeViolations,
   formatViolations,
   isForbiddenSymbol,
   parseNeeded,
@@ -115,4 +121,68 @@ test('the report names the file, the NEEDED entries and the first symbols', () =
       '    _Znwm',
     ].join('\n'),
   )
+})
+
+test('XDNA requires the XRT system ABI, which remains forbidden for other modules', () => {
+  const module = {
+    needed: ['libstdc++.so.6', 'libxrt_coreutil.so.2', 'libc.so.6'],
+    undefinedSymbols: ['_ZSt9terminatev', '_Znwm', '__cxa_throw']
+  }
+  assert.deepEqual(xdnaRuntimeViolations(module), { needed: [], symbols: [] })
+  assert.deepEqual(cxxRuntimeViolations(module).needed, ['libstdc++.so.6'])
+})
+
+test('XDNA rejects a missing system ABI and leaked ggml or libc++ references', () => {
+  assert.deepEqual(
+    xdnaRuntimeViolations({
+      needed: ['libc++.so.1', 'libc++abi.so.1'],
+      undefinedSymbols: [
+        'ggml_backend_init',
+        'gguf_init_empty',
+        '_ZNSt3__16chrono12steady_clock3nowEv'
+      ]
+    }),
+    {
+      needed: [
+        'missing libstdc++.so.6',
+        'missing libxrt_coreutil.so.2',
+        'libc++.so.1',
+        'libc++abi.so.1'
+      ],
+      symbols: ['ggml_backend_init', 'gguf_init_empty', '_ZNSt3__16chrono12steady_clock3nowEv']
+    }
+  )
+})
+
+test('the CLI permits only the explicitly requested XDNA module to use the XRT ABI', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'qvac-xdna-runtime-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const readelf = join(root, 'readelf')
+  const nm = join(root, 'nm')
+  const cli = fileURLToPath(new URL('../check-linux-module-cxx-runtime.mjs', import.meta.url))
+  const run = (...args) => spawnSync(process.execPath, [cli, root, ...args], {
+    encoding: 'utf8', env: { ...process.env, NM: nm, READELF: readelf },
+  })
+  // Only the simulated XDNA and CUDA modules use the system runtime.
+  for (const tool of [readelf, nm]) {
+    const source = tool === readelf
+      ? `#!/usr/bin/env node
+const file = process.argv.at(-1).split('/').at(-1)
+if (/xdna|cuda/.test(file)) { console.log('(NEEDED) Shared library: [libstdc++.so.6]'); console.log('(NEEDED) Shared library: [libxrt_coreutil.so.2]') }
+`
+      : `#!/usr/bin/env node
+if (/xdna|cuda/.test(process.argv.at(-1).split('/').at(-1))) console.log('_ZSt9terminatev U')
+`
+    writeFileSync(tool, source, { mode: 0o755 })
+  }
+  writeFileSync(join(root, 'libqvac-ggml-cpu.so'), '')
+  assert.equal(run('--xdna').status, 1, 'XDNA must actually be present')
+  writeFileSync(join(root, 'libqvac-ggml-xdna.so'), '')
+  assert.equal(run().status, 1, 'XDNA requires explicit opt-in')
+  const valid = run('--xdna')
+  assert.equal(valid.status, 0, valid.stdout + valid.stderr)
+  writeFileSync(join(root, 'libqvac-ggml-cuda.so'), '')
+  const invalid = run('--xdna')
+  assert.equal(invalid.status, 1, 'CUDA must retain its static-runtime check')
+  assert.match(invalid.stdout, /libqvac-ggml-cuda\.so/)
 })
