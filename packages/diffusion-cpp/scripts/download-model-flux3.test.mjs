@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
+const bash = process.env.BASH_BIN || 'bash'
+
 const source = readFileSync(new URL('./download-model-flux3.sh', import.meta.url), 'utf8')
 const payload = 'verified model fixture\n'
 const hash = createHash('sha256').update(payload).digest('hex')
@@ -34,15 +36,19 @@ const args = process.argv.slice(2)
 fs.appendFileSync(process.env.CURL_LOG, JSON.stringify(args) + '\\n')
 const file = args[args.indexOf('-o') + 1]
 if (process.env.FAIL_DOWNLOAD) {
-  fs.writeFileSync(file, 'partial')
+  fs.writeFileSync(file, ${JSON.stringify(payload.slice(0, 7))})
   process.exit(22)
 }
-fs.writeFileSync(file, process.env.BAD_HASH ? 'bad bytes' : ${JSON.stringify(payload)})
+const payload = ${JSON.stringify(payload)}
+const prefix = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
+if (prefix && args[args.indexOf('--continue-at') + 1] !== '-') process.exit(33)
+if (!payload.startsWith(prefix)) process.exit(34)
+fs.appendFileSync(file, process.env.BAD_HASH ? 'bad bytes' : payload.slice(prefix.length))
 `,
     { mode: 0o755 }
   )
   const run = (env = {}) =>
-    spawnSync('bash', [script], {
+    spawnSync(bash, [script], {
       encoding: 'utf8',
       env: {
         ...process.env,
@@ -104,9 +110,11 @@ test('network failure retains partial transfer for resuming', (t) => {
   const { out, run, calls } = fixture(t)
   assert.notEqual(run({ FAIL_DOWNLOAD: '1' }).status, 0)
   assert.equal(existsSync(join(out, files[0])), false)
-  assert.equal(readFileSync(join(out, `${files[0]}.part`), 'utf8'), 'partial')
+  assert.equal(readFileSync(join(out, `${files[0]}.part`), 'utf8'), payload.slice(0, 7))
   assert.equal(run().status, 0)
   assert.equal(calls()[1][calls()[1].indexOf('--continue-at') + 1], '-')
+  assert.equal(readFileSync(join(out, files[0]), 'utf8'), payload)
+  assert.equal(existsSync(join(out, `${files[0]}.part`)), false)
 })
 
 test('corrupted cached file is replaced only after a verified download', (t) => {
@@ -119,5 +127,5 @@ test('corrupted cached file is replaced only after a verified download', (t) => 
 })
 
 test('downloader has valid Bash syntax', () => {
-  execFileSync('bash', ['-n'], { input: source })
+  execFileSync(bash, ['-n'], { input: source })
 })

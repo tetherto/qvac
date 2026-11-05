@@ -25,7 +25,7 @@ fetch() {
     fi
     auth=(--header "Authorization: Bearer $HF_TOKEN")
   fi
-  curl --fail --location --retry 5 --continue-at - "${auth[@]}" \
+  curl --fail --location --retry 5 --continue-at - ${auth[@]+"${auth[@]}"} \
     "$HF/$repo/resolve/$revision/$source" -o "$OUT/$name.part"
   if ! check_hash "$OUT/$name.part" "$hash"; then
     rm -f -- "$OUT/$name.part"
