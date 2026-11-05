@@ -434,7 +434,7 @@ for (const lane of [
       addonLogging.setLogger((priority, message) => {
         const line = String(message)
         if (
-          /ABot-World DiT:|budget merge took|streaming budget =|residency=STREAMED|releasing params backend buffer/.test(
+          /ABot-World DiT:|ABot-World-5B \(causal walk\)|model manager released params backend buffers/.test(
             line
           )
         ) {
@@ -481,18 +481,23 @@ for (const lane of [
             t.ok(pngLuminanceStddev(frames[frames.length - 1]) > 20, 'walk retains image detail')
           }
           const markers = config.streamLayers
-            ? ['streaming budget =', 'residency=STREAMED']
+            ? ['executing segment 2/']
             : config.paramsBackend === 'diffusion=disk'
-              ? ['params=disk', 'releasing params backend buffer']
+              ? ['params=disk', 'model manager released params backend buffers']
               : []
           await waitForLogEvidence(evidence, markers)
           if (config.streamLayers) {
             t.ok(
-              evidence.some((line) => line.includes('streaming budget =')),
+              evidence.some((line) => {
+                const match = /ABot-World-5B \(causal walk\) using (\d+) segments/.exec(line)
+                return match && Number(match[1]) > 1
+              }),
               'shared streaming executor activated'
             )
             t.ok(
-              evidence.some((line) => line.includes('residency=STREAMED')),
+              evidence.some((line) =>
+                line.includes('ABot-World-5B (causal walk) executing segment 2/')
+              ),
               'at least one DiT segment was streamed'
             )
           }
@@ -502,7 +507,9 @@ for (const lane of [
               'disk placement reached the engine'
             )
             t.ok(
-              evidence.some((line) => line.includes('releasing params backend buffer')),
+              evidence.some((line) =>
+                line.includes('model manager released params backend buffers')
+              ),
               'disk weights are released during the walk'
             )
           }

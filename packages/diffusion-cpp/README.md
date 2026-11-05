@@ -542,7 +542,7 @@ expected graph-cut, streaming, CPU RAM, or disk behavior.
 | `lora`                        | string            | Absolute path to a LoRA adapter                                     |
 | `upscale`                     | boolean \| object | Post-generation ESRGAN upscale; requires `files.esrgan`             |
 | `vae_tiling`                  | boolean           | Per-job VAE tiling                                                  |
-| `vae_tile_size`               | number \| string  | VAE tile size, e.g. `512` or `'512x512'`                            |
+| `vae_tile_size`               | number \| string  | VAE tile size in latent pixels, e.g. `64` or `'64x64'`                            |
 | `vae_tile_overlap`            | number            | Tile overlap fraction                                               |
 | `cache_mode`                  | string            | Step-caching algorithm                                              |
 | `cache_preset`                | string            | Cache preset: `slow`, `medium`, `fast`, `ultra`                     |
