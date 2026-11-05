@@ -2,7 +2,11 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { CompletionRun, CompletionStats, ToolCall, ToolCallError } from '@qvac/sdk'
 import { InferenceCancelledError } from '@qvac/sdk'
-import { completionTokensFromStats, formatToolErrors } from '@/serve/core/completion'
+import {
+  completionTokensFromStats,
+  formatToolErrors,
+  promptTokensFromStats
+} from '@/serve/core/completion'
 import { drainCompletion } from '@/serve/extensions/openai/adapters/completion-result'
 import { HttpError } from '@/serve/lib/http-error'
 
@@ -187,5 +191,16 @@ describe('formatToolErrors', () => {
       ]),
       ' toolerrors=3 (PARSE_ERROR,UNKNOWN_TOOL)'
     )
+  })
+})
+
+describe('promptTokensFromStats', () => {
+  it('reports the whole prompt on a KV-cache hit', () => {
+    assert.equal(promptTokensFromStats({ promptTokens: 14, fullPromptTokens: 262 }), 262)
+  })
+
+  it('falls back to promptTokens on SDKs without fullPromptTokens', () => {
+    assert.equal(promptTokensFromStats({ promptTokens: 14, cacheTokens: 268 }), 14)
+    assert.equal(promptTokensFromStats(undefined), undefined)
   })
 })

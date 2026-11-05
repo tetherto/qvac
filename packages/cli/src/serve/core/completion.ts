@@ -1,6 +1,9 @@
 import type { CompletionRun, CompletionStats, ToolCall, ToolCallError } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 
+/** `fullPromptTokens` is absent on SDKs whose addon does not report it yet. */
+export type UsageStats = CompletionStats & { fullPromptTokens?: number }
+
 export interface DrainedCompletion {
   text: string
   /** Concatenated `thinkingDelta` text; empty when the SDK captured no reasoning. */
@@ -12,7 +15,7 @@ export interface DrainedCompletion {
    * looks like the model simply chose not to call a tool.
    */
   toolErrors: ToolCallError[]
-  stats: CompletionStats | undefined
+  stats: UsageStats | undefined
   /**
    * Terminal reason from the SDK `completionDone` event (`eos` / `length` /
    * `stopSequence` / `cancelled`), or undefined if the stream ended without
@@ -51,7 +54,7 @@ export async function drainCompletion(
   let thinking = ''
   const toolCalls: ToolCall[] = []
   const toolErrors: ToolCallError[] = []
-  let stats: CompletionStats | undefined
+  let stats: UsageStats | undefined
   let stopReason: string | undefined
   let rawFullText: string | undefined
 
@@ -100,6 +103,7 @@ export async function drainCompletion(
 
 const SUMMED_STAT_KEYS = [
   'promptTokens',
+  'fullPromptTokens',
   'cacheTokens',
   'generatedTokens',
   'emittedTokens'
@@ -134,6 +138,14 @@ export function accumulateUsage<T extends DrainedCompletion>(
     stats,
     completionTokens: previous.completionTokens + next.completionTokens
   }
+}
+
+/**
+ * This request's whole prompt. `promptTokens` alone leaves out a reused KV-cache
+ * prefix, so it is only the fallback for SDKs without `fullPromptTokens`.
+ */
+export function promptTokensFromStats(stats: UsageStats | undefined): number | undefined {
+  return stats?.fullPromptTokens ?? stats?.promptTokens
 }
 
 /**

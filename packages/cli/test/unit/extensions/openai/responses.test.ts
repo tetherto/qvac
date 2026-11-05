@@ -9,6 +9,7 @@ import type {
   ResponseWriterContext
 } from '@/serve/extensions/openai/adapters/response-writers'
 import type { CompletionRun, ToolCall, CompletionStats } from '@qvac/sdk'
+import type { UsageStats } from '@/serve/core/completion'
 
 const uuidSuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -171,7 +172,7 @@ describe('buildResponseObject', () => {
   })
 
   it('reports the full input whether or not the KV cache was reused', () => {
-    const usage = (stats: CompletionStats) =>
+    const usage = (stats: UsageStats) =>
       buildResponseObject({
         id: 'resp_cache',
         modelAlias: 'm',
@@ -207,6 +208,16 @@ describe('buildResponseObject', () => {
       avgConcurrentSeq: 2
     })
     assert.deepEqual(overlapped, cold)
+    // A warm request that overlapped others: only fullPromptTokens is exact.
+    const warmOverlapped = usage({
+      promptTokens: 14,
+      fullPromptTokens: 262,
+      cacheTokens: 900,
+      generatedTokens: 6,
+      emittedTokens: 6,
+      avgConcurrentSeq: 2
+    })
+    assert.deepEqual(warmOverlapped, cold)
   })
 
   it('marks status incomplete with max_output_tokens reason when truncated by length', () => {

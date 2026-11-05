@@ -205,12 +205,22 @@ describe('accumulateUsage', () => {
   }
 
   it('sums token counts across rounds and keeps the last turn otherwise', () => {
-    const search = turn(12, { promptTokens: 100, cacheTokens: 0, tokensPerSecond: 40 })
-    const answer = turn(30, { promptTokens: 60, cacheTokens: 90, tokensPerSecond: 50 }, 'done')
+    const search = turn(12, {
+      promptTokens: 100,
+      fullPromptTokens: 100,
+      cacheTokens: 0,
+      tokensPerSecond: 40
+    })
+    const answer = turn(
+      30,
+      { promptTokens: 60, fullPromptTokens: 140, cacheTokens: 90, tokensPerSecond: 50 },
+      'done'
+    )
 
     const total = accumulateUsage(accumulateUsage(undefined, search), answer)
     assert.equal(total.completionTokens, 42)
     assert.equal(total.stats?.promptTokens, 160)
+    assert.equal(total.stats?.fullPromptTokens, 240)
     assert.equal(total.stats?.cacheTokens, 90)
     assert.equal(total.stats?.tokensPerSecond, 50)
     assert.equal(total.text, 'done')

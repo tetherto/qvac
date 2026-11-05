@@ -4,7 +4,12 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { completion, type CompletionStats } from '@qvac/sdk'
 import { HttpError } from '@/serve/lib/http-error'
 import { initSSE, sendSSE, endSSE } from '@/serve/lib/sse'
-import { accumulateUsage, formatToolErrors } from '@/serve/core/completion'
+import {
+  accumulateUsage,
+  formatToolErrors,
+  promptTokensFromStats,
+  type UsageStats
+} from '@/serve/core/completion'
 import {
   drainCompletion,
   type DrainedOpenAICompletion,
@@ -90,6 +95,11 @@ function randomId(): string {
  * about what was measured (TTFT, decode rate, prompt/cache/generated tokens,
  * backend device).
  */
+function promptUsage(stats: UsageStats | undefined): { promptTokens?: number } {
+  const promptTokens = promptTokensFromStats(stats)
+  return promptTokens !== undefined ? { promptTokens } : {}
+}
+
 function formatStats(stats: CompletionStats | undefined): string {
   if (!stats) {
     return ''
@@ -161,9 +171,10 @@ reasoning routed to \`reasoning_content\` (a \`message.reasoning_content\` field
 on blocking responses, \`delta.reasoning_content\` chunks when streaming) so it
 never appears in \`content\`.
 
-**Token accounting**: \`usage.prompt_tokens\` and
-\`prompt_tokens_details.cached_tokens\` come from \`CompletionStats\` when the SDK
-provides them. \`completion_tokens\` prefers \`stats.emittedTokens\` (non-empty
+**Token accounting**: \`usage.prompt_tokens\` is the whole prompt, including a
+reused KV-cache prefix (\`stats.fullPromptTokens\`, or \`stats.promptTokens\` on
+SDKs without it). \`prompt_tokens_details.cached_tokens\` comes from
+\`CompletionStats\` when the SDK provides it. \`completion_tokens\` prefers \`stats.emittedTokens\` (non-empty
 addon stream pieces) over \`stats.generatedTokens\` (decode / \`n_eval\` count,
 which inline recovery can inflate toward the \`max_tokens\` / predict budget),
 and falls back to a whitespace split of the output. When streaming, \`usage\`
@@ -270,7 +281,7 @@ async function runBlocking(
         ...(thinking ? { reasoning: thinking } : {}),
         toolCalls,
         completionTokens,
-        ...(stats?.promptTokens !== undefined ? { promptTokens: stats.promptTokens } : {}),
+        ...promptUsage(stats),
         ...(stats?.cacheTokens !== undefined ? { cachedTokens: stats.cacheTokens } : {}),
         finishReason
       })
@@ -373,7 +384,7 @@ async function runStreaming(
     if (includeUsage) {
       const usage = buildUsage({
         completionTokens,
-        ...(stats?.promptTokens !== undefined ? { promptTokens: stats.promptTokens } : {}),
+        ...promptUsage(stats),
         ...(stats?.cacheTokens !== undefined ? { cachedTokens: stats.cacheTokens } : {})
       })
       sendSSE(raw, chatCompletionUsageChunk({ id, created, model: p.modelAlias, usage }))

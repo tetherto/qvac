@@ -290,8 +290,9 @@ Intentionally rejected with `400`: `conversation`, `background: true`, and
 built-in tools (`web_search`, `file_search`, `code_interpreter`).
 `function`-typed tools work normally.
 
-`usage.input_tokens` is the prompt size reported by the SDK, and
-`total_tokens` is input plus output. Reasoning from `<think>` models is
+`usage.input_tokens` is the whole prompt, a reused KV-cache prefix included,
+even when other requests ran at the same time; `total_tokens` is input plus
+output. Reasoning from `<think>` models is
 returned in `reasoning` output items (`reasoning_text` content), never in
 `output_text`. Items, function calls included, follow the order the model
 produced them, buffered and streamed alike, so answer text after a later

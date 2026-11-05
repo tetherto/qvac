@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
-import type { ToolCall, CompletionStats } from '@qvac/sdk'
+import type { ToolCall } from '@qvac/sdk'
 import { sdkToolCallsToOpenai } from '@/serve/extensions/openai/adapters/tool-calls'
-import { completionTokensFromStats } from '@/serve/core/completion'
+import { completionTokensFromStats, type UsageStats } from '@/serve/core/completion'
 
 export function responseId(): string {
   return `resp_${randomId()}`
@@ -52,7 +52,7 @@ export interface BuildResponseObjectParams {
   /** When set, must align with `toolCalls` length; same ids as streamed function_call items. */
   functionCallItemIds?: string[]
   /** From SDK completion stats; `emittedTokens` / `generatedTokens` map to `usage.output_tokens`. */
-  stats?: CompletionStats
+  stats?: UsageStats
   /**
    * When set (from `drainCompletion`), wins over stats-derived usage so
    * streaming and blocking Responses stay aligned.
@@ -187,12 +187,14 @@ export function messageItem(id: string, text: string): Record<string, unknown> {
   }
 }
 
-// On a KV-cache hit the SDK's promptTokens counts only the newly evaluated
-// tail. cacheTokens is what the context holds after the run (the whole prompt
-// plus what was generated), so the full input is that minus the generated part.
-// cacheTokens is scheduler-wide, though: when other requests overlapped this
-// one it includes theirs, so promptTokens, this request's own, is used instead.
-function inputTokensFromStats(stats: CompletionStats | undefined): number {
+// fullPromptTokens is exact per request. Without it (older SDKs): on a KV-cache
+// hit promptTokens counts only the newly evaluated tail, and cacheTokens is
+// what the context holds after the run (the whole prompt plus what was
+// generated), so the full input is that minus the generated part. cacheTokens
+// is scheduler-wide, though: when other requests overlapped this one it
+// includes theirs, so promptTokens, this request's own, is used instead.
+function inputTokensFromStats(stats: UsageStats | undefined): number {
+  if (typeof stats?.fullPromptTokens === 'number') return stats.fullPromptTokens
   const prompt = stats?.promptTokens ?? 0
   const held = stats?.cacheTokens
   const generated = stats?.generatedTokens
