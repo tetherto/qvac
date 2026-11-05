@@ -16,7 +16,7 @@ import {
   writeFileSync,
   appendFileSync
 } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -384,6 +384,18 @@ async function consumerAndProducer({ env, runId, family, filter, options }) {
   return producer.status === 0 ? consumerExit : producer.status || 1
 }
 
+// The Snap reads models from its own data directory, never the restored .qvac-cache, which has the same layout. Seed it
+// from the cache first, so the Snap's bootstrap downloads only what the desktop set lacks, as main's snap cache spared.
+export function seedSnapModels(from = join(E2E, '.qvac-cache'), home = homedir()) {
+  if (!existsSync(from) || !readdirSync(from).length) {
+    return console.log('No restored model cache to seed the Snap with')
+  }
+  const to = join(home, 'snap/qvac-sdk-e2e/common/.qvac/models')
+  mkdirSync(to, { recursive: true })
+  cpSync(from, to, { recursive: true, force: false })
+  console.log(`Seeded the Snap's models from ${from}`)
+}
+
 // The model cache the consumers download into: test:integration's metadata.modelCache, which cache-warm saves.
 function modelCache(env) {
   const dir = join(E2E, '.qvac-cache')
@@ -422,6 +434,7 @@ async function main(family, env) {
         QVAC_TEST_SNAP_BUILD_MODE: /^ubuntu-/.test(env.CI_RUNNER_LABEL) ? 'destructive' : 'lxd'
       }
       snapBuild(e)
+      seedSnapModels()
       run(
         'npx',
         ['qvac-test', 'run:bootstrap:snap', '--config=.', '--skip-build', '--skip-snap-install'],
