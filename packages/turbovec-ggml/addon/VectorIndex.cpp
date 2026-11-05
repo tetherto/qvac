@@ -132,8 +132,9 @@ VectorIndex::VectorIndex(int dim, VectorStorage storage) : handle_(nullptr) {
 }
 
 VectorIndex::VectorIndex(ggml_vec_index_t* handle) noexcept : handle_(handle) {
-  // Fabric rejects the call for a non-TurboVec index, which has no staged
-  // search to turn off.
+  // load() already loads with staged search off, so this is a no-op there;
+  // it keeps any other adopted TurboVec handle off too. Fabric rejects the
+  // call for a non-TurboVec index, which has no staged search to turn off.
   if (handle_ != nullptr) {
     (void)ggml_vec_index_turbovec_set_staged(handle_, 0);
   }
@@ -296,7 +297,10 @@ int VectorIndex::compactDelta(
 
 VectorIndex VectorIndex::load(const std::string& path, int* status) noexcept {
   ggml_vec_index_t* raw = nullptr;
-  *status = ggml_vec_index_load_ex(path.c_str(), &raw);
+  // Loaded with staged search already off: turning it off after a plain load
+  // would first build the staged-search caches of a large index for nothing.
+  *status = ggml_vec_index_load_with_flags(
+      path.c_str(), GGML_VEC_INDEX_LOAD_TURBOVEC_STAGED_OFF, &raw);
   return VectorIndex(raw);
 }
 
