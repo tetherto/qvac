@@ -327,6 +327,7 @@ jobs:
     with:
       repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       ref: ${{ github.event.pull_request.head.sha || github.ref }}
+      linux-x64-only: true
 
   prebuild-artifact-save:
     if: always() && needs.prebuild.result == 'success'
