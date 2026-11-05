@@ -12,9 +12,7 @@ import {
   endSession,
   isModelHeldBySession,
   isSessionEnded,
-  recordHeldModel,
-  registerSession,
-  releaseHeldModel
+  registerSession
 } from '@/client/session-registry'
 import { InvalidResponseError, SessionInvalidatedError } from '@/utils/errors-client'
 
@@ -45,7 +43,11 @@ export interface QvacSession {
   readonly name: string | undefined
   /** Resolves once the worker has registered the session. Calls queue behind it on their own. */
   readonly opened: Promise<void>
-  /** Whether this session loaded `modelId` and has not unloaded it. */
+  /**
+   * Whether this session loaded `modelId` and has not unloaded it. Stays true
+   * after the session ends: a call naming such a model then fails with
+   * `ModelHandleInvalidatedError` instead of `SessionInvalidatedError`.
+   */
   isModelHeld(modelId: string): boolean
   /** Cancels the session's requests, releases its model leases and ends the handle. */
   close(options?: RPCOptions): Promise<void>
@@ -163,17 +165,8 @@ function createSessionHandle(
 
   // `loadModel` is overloaded, so its parameter type is not contextually
   // available; the public type is restored by the cast.
-  const loadModel = ((options: unknown, rpcOptions?: RPCOptions) => {
-    const load = api.loadModel(options as never, withSession(rpcOptions))
-    load.then((modelId) => recordHeldModel(sessionId, modelId)).catch(() => {})
-    return load
-  }) as Api['loadModel']
-
-  const unloadModel: Api['unloadModel'] = async (params, options) => {
-    const result = await api.unloadModel(params, withSession(options))
-    if (result.released) releaseHeldModel(sessionId, params.modelId)
-    return result
-  }
+  const loadModel = ((options: unknown, rpcOptions?: RPCOptions) =>
+    api.loadModel(options as never, withSession(rpcOptions))) as Api['loadModel']
 
   async function close(options?: RPCOptions): Promise<void> {
     if (isSessionEnded(sessionId)) throw new SessionInvalidatedError(sessionId, 'closed')
@@ -192,7 +185,7 @@ function createSessionHandle(
     close,
 
     loadModel,
-    unloadModel,
+    unloadModel: (params, options) => api.unloadModel(params, withSession(options)),
     downloadAsset: (options, rpcOptions) => api.downloadAsset(options, withSession(rpcOptions)),
     completion: (params) =>
       api.completion({ ...params, rpcOptions: withSession(params.rpcOptions) }),

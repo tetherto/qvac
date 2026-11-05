@@ -32,7 +32,11 @@ import {
   notifyChannelClosed
 } from '#rpc'
 import { WorkerCrashedError, RequestValidationFailedError } from '@/utils/errors-client'
-import { awaitSessionUsable, endAllSessions } from '@/client/session-registry'
+import {
+  assertOwnerModelUsable,
+  awaitSessionUsable,
+  endAllSessions
+} from '@/client/session-registry'
 import { formatZodError } from '@/utils/zod-error'
 import { z } from 'zod'
 import {
@@ -274,11 +278,18 @@ function onWorkerLost(): void {
  * closed or lost. The handle's id replaces any id the request carries, so a
  * caller cannot send a request as another session; only the session methods
  * themselves (`openSession`, `closeSession`) name the session they act on.
+ *
+ * An owner request is refused the same way when it names a model the owner
+ * loaded on a runtime that has since stopped.
  */
 async function stampSession<T extends Request>(request: T, options?: RPCOptions): Promise<T> {
   const sessionId = options?.sessionId
-  if (sessionId === undefined) return request
-  await awaitSessionUsable(sessionId, request as { modelId?: string | undefined })
+  const target = request as { modelId?: string | undefined }
+  if (sessionId === undefined) {
+    assertOwnerModelUsable(target)
+    return request
+  }
+  await awaitSessionUsable(sessionId, target)
   if (request.type === 'openSession' || request.type === 'closeSession') return request
   return { ...request, sessionId }
 }

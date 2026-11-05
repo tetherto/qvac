@@ -6,6 +6,7 @@ import {
 } from '@qvac/inference/surface'
 import { send, close } from '@/client/rpc/rpc-client'
 import { stopLoggingStreamForModel } from '@/client/logging-stream-registry'
+import { releaseHeldModel } from '@/client/session-registry'
 import { InvalidResponseError, ModelUnloadFailedError } from '@/utils/errors-client'
 import { getClientLogger } from '@/logging'
 
@@ -57,6 +58,7 @@ export async function unloadModel(
   }
 
   if (response.unloaded !== false) stopLoggingStreamForModel(params.modelId)
+  if (response.released !== false) releaseHeldModel(options?.sessionId, params.modelId)
 
   const isOwnerCall = options?.sessionId === undefined
   const shouldAutoClose = isOwnerCall && (params.autoClose ?? !isBare)

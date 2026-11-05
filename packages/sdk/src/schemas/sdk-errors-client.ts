@@ -141,7 +141,7 @@ const clientErrorDefinitions: ErrorCodesMap = {
   [SDK_CLIENT_ERROR_CODES.MODEL_HANDLE_INVALIDATED]: {
     name: 'MODEL_HANDLE_INVALIDATED',
     message: (modelId: string, sessionId: string) =>
-      `Model "${modelId}" was held by session "${sessionId}", which is no longer usable; load it again through a new session`
+      `Model "${modelId}" is no longer loaded: the runtime or session that held it ("${sessionId}") is gone; load it again`
   },
   [SDK_CLIENT_ERROR_CODES.WORKER_STARTUP_FAILED]: {
     name: 'WORKER_STARTUP_FAILED',
