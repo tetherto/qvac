@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Fixed a memory leak where every decode kept the whole input file and its native FFmpeg state alive for the life of the process ([#5579](https://github.com/tetherto/qvac/pull/5579)). The decoder now destroys the bare-ffmpeg IO context, format context, codec context, resampler, packet and frames it creates on success, error, cancellation and failed stream setup. bare-ffmpeg handles have no GC finalizer, and the IO context's read/seek callbacks held the input buffer, so the SDK worker grew by about one input file per `transcribe()` call on file inputs.
+
 ## [0.8.1] - 2026-10-14
 
 ### Changed
