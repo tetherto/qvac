@@ -25,6 +25,11 @@ on:
         description: Device pool name; empty picks a ready private pool, else a public one
         type: string
         default: ""
+      billing:
+        description: "Device Farm billing: UNMETERED (shared slots, METERED after 15 min in queue) or METERED"
+        type: choice
+        options: [UNMETERED, METERED]
+        default: UNMETERED
       tests:
         description: Optional filter over the mobile test names
         type: string
@@ -275,6 +280,7 @@ jobs:
         env:
           POOLS: ${{ toJSON(fromJSON(vars[matrix.row.meta.mobile.devicePoolsVar[env.PLATFORM]])) }}
           DEVICES: ${{ inputs.pool }}
+          BILLING_METHOD: ${{ inputs.billing }}
           APP_ARN: ${{ steps.app.outputs.arn }}
           PACKAGE_ARN: ${{ steps.package.outputs.arn }}
           SPECS: ${{ steps.spec.outputs.uploads }}

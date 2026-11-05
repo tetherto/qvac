@@ -9,6 +9,8 @@ import { basename } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const DONE = ['COMPLETED', 'STOPPED', 'ERRORED']
+// Statuses of a run still waiting for a Device Farm slot.
+const QUEUED = ['PENDING', 'PENDING_CONCURRENCY']
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const summary = (lines) =>
   process.env.GITHUB_STEP_SUMMARY &&
@@ -205,7 +207,8 @@ export async function stopAndWait(arns, aws, { polls = 120, intervalMs = 15000 }
     }
     let now = status()
     console.log(`${arn}: ${now}`)
-    if (['RUNNING', 'PENDING'].includes(now)) {
+    // Queued runs too, or they take a slot later; a stopped run ends as COMPLETED.
+    if (!['COMPLETED', 'STOPPING', 'UNKNOWN'].includes(now)) {
       try {
         aws(['stop-run', '--arn', arn])
       } catch (e) {
@@ -219,6 +222,27 @@ export async function stopAndWait(arns, aws, { polls = 120, intervalMs = 15000 }
       if (i % 6 === 0) console.log(`${arn}: still ${now} (${i}/${polls})`)
     }
     console.log(`${arn}: finished as ${now}`)
+  }
+}
+
+// An UNMETERED run waits for a shared slot up to `minutes`, then is stopped so it can go METERED. Decides only on a
+// fresh read, so a run that just got a slot is never stopped. Returns true when the run was stopped for lack of one.
+export async function slotTimedOut(arn, aws, { minutes = 15, intervalMs = 15000 } = {}) {
+  const started = Date.now()
+  for (;;) {
+    let status
+    try {
+      status = aws(['get-run', '--arn', arn]).run.status
+    } catch (e) {
+      console.log(`get-run failed: ${errorText(e)}`)
+    }
+    if (status && !QUEUED.includes(status)) return false
+    if (status && Date.now() - started >= minutes * 60000) {
+      console.log(`No UNMETERED slot within ${minutes} minutes (${status}); stopping ${arn}`)
+      aws(['stop-run', '--arn', arn])
+      return true
+    }
+    await sleep(intervalMs)
   }
 }
 
@@ -237,46 +261,51 @@ async function main(command, env, producer) {
   if (!spec || !/^\d+$/.test(env.TIMEOUT))
     throw new Error('SPECS needs an arn and TIMEOUT a number')
   const name = `${basename(env.WORKDIR)}-${env.CONFIG}-${pool.name}-${env.GITHUB_RUN_NUMBER}-${env.GITHUB_RUN_ATTEMPT}`
-  const arn = awsCli([
-    'schedule-run',
-    '--project-arn',
-    env.PROJECT_ARN,
-    '--device-pool-arn',
-    pool.arn,
-    '--app-arn',
-    env.APP_ARN,
-    '--name',
-    name,
-    '--test',
-    JSON.stringify({ type: 'APPIUM_NODE', testPackageArn: env.PACKAGE_ARN, testSpecArn: spec }),
-    '--execution-configuration',
-    JSON.stringify({ jobTimeoutMinutes: Number(env.TIMEOUT) })
-  ]).run.arn
-  const project = env.PROJECT_ARN.split(':project:')[1]
-  const run = arn.split(':run:')[1]?.split('/')[1]
-  const url = `https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${project}/runs/${run}`
-  console.log(`Scheduled ${name}: ${arn}\nDevice Farm console: ${url}`)
-  summary([`### Device Farm: ${pool.name}`, `[Open Device Farm Console](${url})`])
-  output({
-    'run-arns': JSON.stringify([arn]),
-    'run-count': 1,
-    name: pool.name,
-    availability: pool.availability
-  })
-  if (!producer.length) return
+  // UNMETERED takes a shared slot when one is free; after 15 minutes in the queue the run goes METERED, as on main.
+  const schedule = (billing, suffix = '') => {
+    const arn = awsCli([
+      'schedule-run',
+      '--project-arn',
+      env.PROJECT_ARN,
+      '--device-pool-arn',
+      pool.arn,
+      '--app-arn',
+      env.APP_ARN,
+      '--name',
+      name + suffix,
+      '--test',
+      JSON.stringify({ type: 'APPIUM_NODE', testPackageArn: env.PACKAGE_ARN, testSpecArn: spec }),
+      '--configuration',
+      JSON.stringify({ billingMethod: billing }),
+      '--execution-configuration',
+      JSON.stringify({ jobTimeoutMinutes: Number(env.TIMEOUT) })
+    ]).run.arn
+    const project = env.PROJECT_ARN.split(':project:')[1]
+    const run = arn.split(':run:')[1]?.split('/')[1]
+    const url = `https://us-west-2.console.aws.amazon.com/devicefarm/home#/mobile/projects/${project}/runs/${run}`
+    console.log(`Scheduled ${name + suffix} (${billing}): ${arn}\nDevice Farm console: ${url}`)
+    summary([`### Device Farm: ${pool.name}`, `[Open Device Farm Console](${url}) · **Billing:** \`${billing}\``])
+    output({ 'run-arns': JSON.stringify([arn]), 'run-count': 1, name: pool.name, availability: pool.availability, billing })
+    return arn
+  }
+  const billing = env.BILLING_METHOD || 'UNMETERED'
+  let arn = schedule(billing)
   // A cancelled job signals the step: stop the run here too, in case the group's cancel step never sees its ARN.
-  const child = spawn(producer[0], producer.slice(1), {
-    stdio: 'inherit',
-    env: { ...env, RUN_ARNS: JSON.stringify([arn]), MOBILE_PHASE: 'produce' }
-  })
+  let child
   for (const signal of ['SIGINT', 'SIGTERM'])
     process.on(signal, () => {
-      child.kill(signal)
+      child?.kill(signal)
       try {
         awsCli(['stop-run', '--arn', arn])
       } catch {}
       process.exit(1)
     })
+  if (billing === 'UNMETERED' && (await slotTimedOut(arn, awsCli))) arn = schedule('METERED', '-metered')
+  if (!producer.length) return
+  child = spawn(producer[0], producer.slice(1), {
+    stdio: 'inherit',
+    env: { ...env, RUN_ARNS: JSON.stringify([arn]), MOBILE_PHASE: 'produce' }
+  })
   process.exitCode = await new Promise((resolve) => child.on('close', (code) => resolve(code ?? 1)))
 }
 
