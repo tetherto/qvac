@@ -7,20 +7,25 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
-import to.holepunch.barerpc.ConnectionClosedException
-import to.holepunch.barerpc.Message
-import to.holepunch.barerpc.Messages
+import to.holepunch.bare.rpc.ConnectionClosedException
+import to.holepunch.bare.rpc.Message
+import to.holepunch.bare.rpc.Messages
+import to.holepunch.bare.stow.host.Ipc
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
@@ -32,7 +37,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-class JvmBareRpcTransportTest {
+class WorkerRpcTest {
     @Test
     fun exchangesJsonWithTheWorker() = runBlocking {
         withWorkerSocket { transport, worker ->
@@ -129,6 +134,7 @@ class JvmBareRpcTransportTest {
             withTimeout(5_000) {
                 first.await()
                 workerJob.await()
+                launch(Dispatchers.IO) { runCatching { worker.exitOnTerminate() } }
                 transport.close()
                 // The failure reaches the collector, not the thread's uncaught handler.
                 assertIs<ConnectionClosedException>(failure.await())
@@ -250,30 +256,75 @@ private const val STREAM_RESPONSE = 0x200uL
 
 private suspend fun withWorkerSocket(
     limits: RpcLimits = RpcLimits(),
-    block: suspend CoroutineScope.(JvmBareRpcTransport, Socket) -> Unit,
+    block: suspend CoroutineScope.(SocketTransport, Socket) -> Unit,
 ) = coroutineScope {
     val server = ServerSocket(0, 1, InetAddress.getLoopbackAddress())
     val worker = Socket(InetAddress.getLoopbackAddress(), server.localPort)
     val host = withContext(Dispatchers.IO) { server.accept() }
-    val transport = JvmBareRpcTransport(host, rpcLimits = limits)
+    worker.writeFrame(STOW_CONTROL, "{\"type\":\"ready\"}".encodeToByteArray())
+    val transport = SocketTransport.attach(host, limits)
     try {
         block(transport, worker)
     } finally {
+        val exiting = launch(Dispatchers.IO) { runCatching { worker.exitOnTerminate() } }
         transport.close()
+        exiting.join()
         worker.close()
         server.close()
     }
 }
 
-private fun Socket.readMessage(): Message {
+private const val STOW_CONTROL = 0
+private const val STOW_USER = 1
+
+/** The next bare-stow frame the host sent, its tag first, or null once the host ends the connection. */
+private fun Socket.readFrame(): ByteArray? {
     val input = getInputStream()
     val prefix = input.readNBytes(4)
-    require(prefix.size == 4)
+    if (prefix.size < 4) return null
     val length = (prefix[0].toInt() and 0xff) or
         ((prefix[1].toInt() and 0xff) shl 8) or
         ((prefix[2].toInt() and 0xff) shl 16) or
         ((prefix[3].toInt() and 0xff) shl 24)
-    return Messages.decode(prefix + input.readNBytes(length)).message
+    return input.readNBytes(length)
+}
+
+/**
+ * The next bare-rpc message the host sent, unwrapped from its bare-stow user
+ * frame. Control frames, such as the host's `configure`, are skipped.
+ */
+private fun Socket.readMessage(): Message {
+    while (true) {
+        val body = requireNotNull(readFrame())
+        if (body[0].toInt() == STOW_CONTROL) continue
+        assertEquals(STOW_USER, body[0].toInt())
+        return Messages.decode(body.copyOfRange(1, body.size)).message
+    }
+}
+
+/** Answers the host's `terminate` as bare-stow's runtime does: an `exit` frame, then the end of the connection. */
+private fun Socket.exitOnTerminate() {
+    while (true) {
+        val body = readFrame() ?: return
+        if (body[0].toInt() == STOW_CONTROL && body.decodeToString(1, body.size).contains("\"terminate\"")) {
+            writeFrame(STOW_CONTROL, "{\"type\":\"exit\",\"code\":0}".encodeToByteArray())
+            close()
+            return
+        }
+    }
+}
+
+private fun Socket.writeFrame(tag: Int, payload: ByteArray) {
+    val length = payload.size + 1
+    val header = byteArrayOf(
+        length.toByte(),
+        (length ushr 8).toByte(),
+        (length ushr 16).toByte(),
+        (length ushr 24).toByte(),
+        tag.toByte(),
+    )
+    getOutputStream().write(header + payload)
+    getOutputStream().flush()
 }
 
 private fun Socket.readRequestData(): ByteArray? {
@@ -282,16 +333,55 @@ private fun Socket.readRequestData(): ByteArray? {
     return chunk.data
 }
 
-private fun Socket.write(message: Message) {
-    getOutputStream().write(Messages.encode(message))
-    getOutputStream().flush()
-}
+private fun Socket.write(message: Message) = writeFrame(STOW_USER, Messages.encode(message))
 
 /** 20 lines of 2 KiB: well past the library's 16 KiB pause mark while the collector holds the first. */
 private const val LINES_PAST_THE_PAUSE_MARK = 20
 
 /** A payload of exactly this many bytes fills a frame cap of the same size; the prefix and header push it over. */
 private const val TEST_FRAME_CAP = 64 * 1024
+
+/** bare-rpc over bare-stow's host side of a socket, as the BareKit transports run it over a worklet. */
+private class SocketTransport(private val socket: Socket, private val ipc: Ipc, limits: RpcLimits) : QvacTransport {
+    private val rpc = WorkerRpc(data = ipc.data, send = ipc::write, limits = limits)
+
+    override suspend fun call(payload: JsonObject): JsonObject = rpc.call(payload)
+
+    override fun stream(payload: JsonObject): Flow<JsonObject> = rpc.stream(payload)
+
+    override fun duplex(payload: JsonObject, input: Flow<ByteArray>): Flow<JsonObject> = rpc.duplex(payload, input)
+
+    override suspend fun close() {
+        rpc.close()
+        withTimeoutOrNull(SHUTDOWN_TIMEOUT_MS) { runCatching { ipc.terminate() } }
+        withContext(Dispatchers.IO) { socket.close() }
+    }
+
+    companion object {
+        suspend fun attach(socket: Socket, limits: RpcLimits): SocketTransport {
+            val ipc = Ipc(data = socket.chunks(), write = socket::writeAll, kill = { socket.close() })
+            ipc.ready()
+            return SocketTransport(socket, ipc, limits)
+        }
+
+        private const val SHUTDOWN_TIMEOUT_MS = 10_000L
+    }
+}
+
+private fun Socket.chunks(): Flow<ByteArray> = flow {
+    val input = getInputStream()
+    val buffer = ByteArray(64 * 1024)
+    while (true) {
+        val count = input.read(buffer)
+        if (count < 0) break
+        emit(buffer.copyOf(count))
+    }
+}.flowOn(Dispatchers.IO)
+
+private suspend fun Socket.writeAll(bytes: ByteArray) = withContext(Dispatchers.IO) {
+    getOutputStream().write(bytes)
+    getOutputStream().flush()
+}
 
 private suspend fun Socket.replyPastThePauseMark(id: ULong, pauseSeen: CompletableDeferred<Unit>) {
     val line = "{\"pad\":\"${"x".repeat(2048)}\"}\n".encodeToByteArray()
