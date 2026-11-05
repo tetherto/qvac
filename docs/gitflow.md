@@ -302,7 +302,7 @@ differ in major or minor, so the two cannot drift unnoticed.
 
 The flow above is one release branch per package, each waiting for the one
 below it to reach NPM. A **release train** releases `@qvac/inference`,
-`@qvac/sdk`, `@qvac/sdk-tools`, `@qvac/ai-sdk-provider` and the two plugins from one
+`@qvac/sdk`, `@qvac/sdk-tools`, `@qvac/cli`, `@qvac/ai-sdk-provider` and the two plugins from one
 `release-train-<train>-<x.y.z>` branch: one release PR, one backmerge, one npm
 approval. See `docs/ci/RELEASE-TRAIN.md`.
 

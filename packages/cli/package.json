@@ -1,0 +1,60 @@
+{
+  "name": "@qvac/cli",
+  "version": "0.18.0",
+  "description": "QVAC command-line entry point: runs the QVAC SDK tools as qvac sdk",
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "qvac": "./dist/index.js"
+  },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": "^22.21.0 || >=24.9.0"
+  },
+  "keywords": [
+    "tether",
+    "cli",
+    "qvac",
+    "sdk"
+  ],
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://qvac.tether.io",
+  "scripts": {
+    "build": "rm -rf dist && tsc",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "lint": "lunte",
+    "lint:fix": "lunte --fix",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit",
+    "test": "npm run test:unit",
+    "test:unit": "tsx --test 'test/unit/**/*.test.ts'",
+    "sdk-source:workspace": "npm install --ignore-scripts ../sdk-tools"
+  },
+  "dependencies": {
+    "@qvac/sdk-tools": "^0.17.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.3",
+    "lunte": "^1.8.2",
+    "prettier": "^3.9.4",
+    "prettier-config-holepunch": "^2.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

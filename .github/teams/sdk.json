@@ -18,6 +18,7 @@
     "packages/sdk/",
     "packages/sdk-e2e/",
     "packages/sdk-tools/",
+    "packages/cli/",
     "packages/rag/",
     "packages/logging/",
     "packages/error/",
