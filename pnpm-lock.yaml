@@ -777,7 +777,7 @@ importers:
         specifier: ^0.9.0
         version: link:../rag
       '@qvac/registry-client':
-        specifier: ^0.8.0
+        specifier: ^0.7.0 || ^0.8.0
         version: link:../registry-server/client
       bare-abort-controller:
         specifier: ^1.1.2
