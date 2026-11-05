@@ -88,7 +88,7 @@ The validation script enforces this for all new S3 entries. Legacy paths predati
 The staging registry syncs **automatically on merge to `main`**. No manual labels required.
 
 1. Submit PR targeting `main` with `models.prod.json` changes.
-2. Ensure validation passes (the `validate-json` job runs on PRs with the `verify` label).
+2. Ensure validation passes (the `validate-json` job runs on every non-draft PR that changes `models.prod.json`; fork PRs wait for `fork-ci` approval first).
 3. Once approved, merge to `main`. The `sync-staging` pipeline triggers automatically on push to `main` when `models.prod.json` is modified.
 
 How sync works:

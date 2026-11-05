@@ -1,13 +1,15 @@
 import test from 'brittle'
 import { appendPcm, collectTtsStats, chunkMetadata } from '@/utils/tts-stats'
 
-test('collectTtsStats: maps LavaSR enhancer backend stats', (t) => {
+test('collectTtsStats: maps LavaSR enhancer and denoiser backend stats', (t) => {
   const stats = collectTtsStats({
     stats: {
       audioDurationMs: 1200,
       totalSamples: 48000,
       enhancerBackendDevice: 1,
-      enhancerBackendId: 3
+      enhancerBackendId: 3,
+      denoiserBackendDevice: 1,
+      denoiserBackendId: 3
     }
   })
 
@@ -15,7 +17,27 @@ test('collectTtsStats: maps LavaSR enhancer backend stats', (t) => {
     audioDuration: 1200,
     totalSamples: 48000,
     enhancerBackendDevice: 1,
-    enhancerBackendId: 3
+    enhancerBackendId: 3,
+    denoiserBackendDevice: 1,
+    denoiserBackendId: 3
+  })
+})
+
+test('collectTtsStats: reports an unloaded LavaSR stage as -1', (t) => {
+  const stats = collectTtsStats({
+    stats: {
+      enhancerBackendDevice: 1,
+      enhancerBackendId: 2,
+      denoiserBackendDevice: -1,
+      denoiserBackendId: -1
+    }
+  })
+
+  t.alike(stats, {
+    enhancerBackendDevice: 1,
+    enhancerBackendId: 2,
+    denoiserBackendDevice: -1,
+    denoiserBackendId: -1
   })
 })
 
@@ -34,7 +56,9 @@ test('collectTtsStats: maps the whole addon RuntimeStats surface', (t) => {
       backendId: 1,
       gpuUnsupported: 0,
       enhancerBackendDevice: 0,
-      enhancerBackendId: 0
+      enhancerBackendId: 0,
+      denoiserBackendDevice: 0,
+      denoiserBackendId: 0
     }
   })
 
@@ -49,7 +73,9 @@ test('collectTtsStats: maps the whole addon RuntimeStats surface', (t) => {
     backendId: 1,
     gpuUnsupported: 0,
     enhancerBackendDevice: 0,
-    enhancerBackendId: 0
+    enhancerBackendId: 0,
+    denoiserBackendDevice: 0,
+    denoiserBackendId: 0
   })
 })
 

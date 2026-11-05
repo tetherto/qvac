@@ -6,7 +6,7 @@
  *                Always exits 0 once npm answers: a newer release is a signal
  *                to review, not a failure. With --report <file>, writes the
  *                tracking issue body there.
- *   verify-path  Fail when bare-make, clang or llvm-profdata on PATH is not
+ *   verify-path  Fail when bare-make, bare-link, clang or llvm-profdata on PATH is not
  *                the one in the lock's node_modules/.bin, i.e. install.mjs did
  *                not take effect.
  *
@@ -29,6 +29,7 @@ import {
   lockedVersions,
   pathMismatches,
   reportedVersion,
+  versionMismatches,
 } from './lib/bare-toolchain.mjs'
 
 const LOCKFILE = join(dirname(fileURLToPath(import.meta.url)), '..', 'bare-toolchain', 'package-lock.json')
@@ -90,7 +91,9 @@ function drift(argv) {
 function verifyPath() {
   const bin = join(dirname(LOCKFILE), 'node_modules', '.bin')
   const pathKey = Object.keys(process.env).find((key) => key.toUpperCase() === 'PATH') ?? 'PATH'
+  const locked = readLocked()
   const found = {}
+  const reported = {}
   let failed = false
   for (const tool of PATH_TOOLS) {
     found[tool] = findOnPath(tool, {
@@ -99,8 +102,10 @@ function verifyPath() {
       platform: process.platform,
       exists: existsSync,
     })
-    const result = spawnSync(tool, ['--version'], { encoding: 'utf8', shell })
+    const args = tool === 'bare-link' ? ['--version', '.'] : ['--version']
+    const result = spawnSync(tool, args, { encoding: 'utf8', shell })
     const version = result.status === 0 ? reportedVersion(result.stdout) : null
+    reported[tool] = version
     console.log(`${tool}: ${found[tool] ?? 'not found'} (${version ?? 'does not run'})`)
     if (found[tool] && result.status !== 0) {
       console.log(`::error::${tool} at ${found[tool]} does not run`)
@@ -109,6 +114,10 @@ function verifyPath() {
   }
   for (const { tool, actual } of pathMismatches(bin, found, process.platform)) {
     console.log(`::error::${tool} on PATH is ${actual ?? 'missing'}, not the locked one in ${bin}`)
+    failed = true
+  }
+  for (const { tool, expected, actual } of versionMismatches(locked, reported)) {
+    console.log(`::error::${tool} reports ${actual ?? 'no version'}, not the locked ${expected}`)
     failed = true
   }
   if (failed) process.exitCode = 1

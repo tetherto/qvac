@@ -206,6 +206,7 @@ jobs:
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
+            .github/bare-toolchain
             .github/actions/stage-integration-models
           sparse-checkout-cone-mode: false
 

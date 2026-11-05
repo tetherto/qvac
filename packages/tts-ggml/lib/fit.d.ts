@@ -4,6 +4,7 @@
  * the same keys and applies the same defaults as the load it describes.
  */
 interface TtsFitCommon {
+    backend?: string;
     /** Layers to offload. Unset defers to `useGPU`. */
     nGpuLayers?: number;
     /** All layers or none, when `nGpuLayers` is unset. */
@@ -28,6 +29,8 @@ export interface SupertonicFitRequest extends TtsFitCommon {
 export interface ParlerFitRequest extends TtsFitCommon {
     engineType: 'parler';
     parlerModelPath: string;
+    /** Match the Parler decoder-sidecar load policy. */
+    coremlDecoder?: boolean;
     descriptionTokens?: number;
     promptTokens?: number;
     /** 0 takes the checkpoint's default generation length. */
@@ -63,6 +66,8 @@ export interface CosyvoiceFitRequest extends TtsFitCommon {
     speechTokens?: number;
 }
 export interface MossFitRequest extends TtsFitCommon {
+    nCtx?: number;
+    maxNewTokens?: number;
     engineType: 'moss';
     mossBackbonePath: string;
     mossCodecDecoderPath: string;
@@ -88,7 +93,22 @@ export interface MossSoundEffectFitRequest extends TtsFitCommon {
     shift?: number;
     threads?: number;
 }
-export type TtsFitRequest = SupertonicFitRequest | ParlerFitRequest | ChatterboxFitRequest | Audio8FitRequest | CosyvoiceFitRequest | MossFitRequest | MossSoundEffectFitRequest;
+export interface PocketFitRequest extends TtsFitCommon {
+    engineType: 'pocket';
+    pocketFlowModelPath: string;
+    pocketMimiModelPath: string;
+    pocketFrontendPath: string;
+    pocketVoicePath?: string;
+    referenceAudio?: string;
+    text: string;
+    threads?: number;
+    nCtx?: number;
+    maxTokens?: number;
+    steps?: number;
+    framesAfterEos?: number;
+    memoryBudgetBytes?: number;
+}
+export type TtsFitRequest = PocketFitRequest | SupertonicFitRequest | ParlerFitRequest | ChatterboxFitRequest | Audio8FitRequest | CosyvoiceFitRequest | MossFitRequest | MossSoundEffectFitRequest;
 /** The voice engines a fit can be asked for, read off the request union. */
 export type TtsFitEngine = TtsFitRequest['engineType'];
 /**

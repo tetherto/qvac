@@ -22,15 +22,20 @@ export const MOSS_MAX_DURATION_TOKENS =
   MOSS_MAX_NEW_TOKENS - (MOSS_MAX_CHANNELS - 1) - MOSS_TERMINATION_ROWS;
 export const MOSS_INSTANCE_VOICE_KEYS = ["referenceAudio", "dialogueReferences"] as const;
 
-function isValidDurationTokens(value: number): boolean {
-  return Number.isInteger(value) && value >= 0 && value <= MOSS_MAX_DURATION_TOKENS;
+function isValidDurationTokens(value: number, maximum: number): boolean {
+  return Number.isInteger(value) && value >= 0 && (value === 0 || value <= maximum);
 }
 
-export function assertMossDurationTokens(value: number | null | undefined, where: string): void {
-  if (value == null || isValidDurationTokens(value)) return;
+export function assertMossDurationTokens(
+  value: number | null | undefined,
+  where: string,
+  maxNewTokens = MOSS_MAX_NEW_TOKENS,
+): void {
+  const maximum = maxNewTokens - (MOSS_MAX_CHANNELS - 1) - MOSS_TERMINATION_ROWS;
+  if (value == null || isValidDurationTokens(value, maximum)) return;
   throw new Error(
     `tts-ggml: ${where}: durationTokens must be an integer from 0 to ` +
-      `${MOSS_MAX_DURATION_TOKENS} (0 = free length)`,
+      `${Math.max(0, maximum)} (0 = free length)`,
   );
 }
 
@@ -124,7 +129,7 @@ export function assertMossOptions(setup: EngineSetup): void {
   }
   assertMossOutputRate(setup);
   assertMossVoiceConsistent(setup);
-  assertMossDurationTokens(setup.settings.durationTokens, "constructor");
+  assertMossDurationTokens(setup.settings.durationTokens, "constructor", setup.settings.maxNewTokens);
   assertMossDialogueReferences(setup);
 }
 
@@ -236,6 +241,6 @@ export function applyMossReload(
   const durationTokens = (newConfig as { durationTokens?: number | null })
     .durationTokens;
   if (durationTokens === undefined) return;
-  assertMossDurationTokens(durationTokens, "reload");
+  assertMossDurationTokens(durationTokens, "reload", setup.settings.maxNewTokens);
   setup.settings.durationTokens = durationTokens ?? undefined;
 }

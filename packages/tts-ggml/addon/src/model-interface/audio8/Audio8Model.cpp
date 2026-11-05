@@ -73,6 +73,7 @@ tts_cpp::audio8::EngineOptions toEngineOptions(const Audio8Config& cfg) {
   } else if (cfg.useGpu.has_value()) {
     opts.n_gpu_layers = *cfg.useGpu ? kOffloadAllGpuLayers : 0;
   }
+  opts.backend = cfg.backend;
   opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   return opts;
 }

@@ -84,14 +84,14 @@ A cancelled run ends cleanly rather than as an error: `done` resolves `true`,
 statistics from the final frame (`undefined` if the run reported none).
 
 <Callout type="info">
-  The five backend fields (`backendDevice`, `backendId`, `gpuUnsupported`,
-  `enhancerBackendDevice`, `enhancerBackendId`) are reported by batch
-  synthesis (`stream: false`) only. The chunked paths — `stream: true` (the
-  default), `sentenceStream: true`, and `textToSpeechStream()` — run one
-  native job per sentence and aggregate only the timing and sample counts,
-  plus Audio8's two Core ML fields, which keep the last sentence's value.
-  MOSS is the exception for `stream: true`: it runs the whole text as one
-  native job, so it reports them there too.
+  The chunked paths — `stream: true` (the default), `sentenceStream: true`,
+  and `textToSpeechStream()` — run one native job per sentence. Their `stats`
+  aggregate the timing and sample counts across sentences, while the backend
+  fields (`backendDevice`, `backendId`, `gpuUnsupported`, and the LavaSR
+  `enhancerBackend*` and `denoiserBackend*` pairs) and Audio8's two Core ML
+  fields keep the value of the last sentence that reported them, so a chunked
+  run reports where it ran just as batch synthesis (`stream: false`) does. A
+  field no sentence reported stays absent.
 </Callout>
 
 | Field | Meaning |
@@ -105,8 +105,10 @@ statistics from the final frame (`undefined` if the run reported none).
 | `backendDevice` | Compute device chosen at load: `0` CPU, `1` GPU. |
 | `backendId` | Backend family: `0` CPU, `1` Metal, `2` CUDA, `3` Vulkan, `4` OpenCL, `99` other GPU. |
 | `gpuUnsupported` | `1` when a GPU is present but unusable by engine policy, so the run fell back to CPU. |
-| `enhancerBackendDevice` | LavaSR enhancer device: `-1` not loaded, `0` CPU, `1` GPU. |
+| `enhancerBackendDevice` | LavaSR enhancer device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed. |
 | `enhancerBackendId` | LavaSR enhancer backend family, same codes as `backendId`. |
+| `denoiserBackendDevice` | LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed. |
+| `denoiserBackendId` | LavaSR denoiser backend family, same codes as `backendId`. |
 | `codecSidecarLoaded` | Audio8 on macOS/iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired. |
 | `codecOnCoreml` | Audio8: `1` when the synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` names. |
 

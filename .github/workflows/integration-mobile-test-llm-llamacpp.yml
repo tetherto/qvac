@@ -375,6 +375,7 @@ jobs:
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
+            .github/bare-toolchain
           sparse-checkout-cone-mode: false
 
       - name: Checkout addon repository

@@ -14,6 +14,7 @@ struct MossSpeechConfig {
   std::optional<int> threads;
   std::optional<int> nGpuLayers;
   std::optional<bool> useGpu;
+  std::string backend;
   std::string backendsDir;
 };
 

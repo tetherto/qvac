@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-11-04
+
+### Features
+
+- Windows loads the Vulkan backend at runtime from
+  `qvac-diffusion-ggml-vulkan.dll`, shipped next to the addon, as Android and
+  Linux already do. The addon no longer imports `vulkan-1.dll`, so it loads on
+  a Windows host without a Vulkan runtime
+  ([#5382](https://github.com/tetherto/qvac/pull/5382)).
+- Requires ggml `2026-08-11#4` from the QVAC registry.
+
 ## [0.33.0] - 2026-10-30
 
 ### Breaking

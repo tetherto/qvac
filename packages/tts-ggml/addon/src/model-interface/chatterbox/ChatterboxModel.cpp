@@ -128,6 +128,7 @@ tts_cpp::chatterbox::EngineOptions toEngineOptions(const ChatterboxConfig& cfg) 
   // own backends directory. Empty only when the loader cannot locate the
   // module, which leaves tts-cpp on ggml's default search
   // (`ggml_backend_load_all()` rather than `..._from_path()`).
+  opts.backend = cfg.backend;
   opts.backends_dir = resolveBackendsDir(cfg.backendsDir).string();
   // Forwarded as-is. Empty -> leave $GGML_OPENCL_CACHE_DIR alone
   // (the env-set-by-host path still wins). Only consumed on Android

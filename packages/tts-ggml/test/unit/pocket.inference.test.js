@@ -66,8 +66,8 @@ test('Pocket rejects unsupported and malformed options before native loading', (
     { speed: 1 },
     { streamChunkTokens: 1 },
     { voice: 'alba' },
-    { nGpuLayers: 99 },
-    { config: { useGPU: true } },
+    { nGpuLayers: 1.5 },
+    { config: { useGPU: 'true' } },
     { config: { language: 'fr' } },
     { config: { outputSampleRate: NaN } },
     { config: { outputSampleRate: 24000.5 } }
@@ -86,7 +86,7 @@ test('Pocket invalid reload preserves configuration; valid reload forwards sampl
   await model.load()
   t.is(params.steps, 1)
   const original = model.addon
-  await t.exception(model.reload({ useGPU: true }))
+  await t.exception(model.reload({ useGPU: 'invalid' }))
   t.is(model.addon, original, 'invalid options retain the loaded engine')
   t.is(model.getState().weightsLoaded, true)
   t.is(model._buildTtsParams().useGPU, false)

@@ -89,3 +89,101 @@ test('reload: a rejected reload restores settings, runtime config and the output
   t.is(params.outputSampleRate, 44100)
   t.alike(params, buildNativeParams(setup), 'the returned params describe the live setup')
 })
+
+test('parler Core ML: omitted fields inherit, explicit false survives constructor and reload', (t) => {
+  const setup = parlerSetup()
+  for (const key of ['coremlDecoder', 'coremlComputeUnits', 'coremlStrict']) {
+    t.is(Object.hasOwn(buildParlerParams(setup), key), false, key + ' stays omitted')
+  }
+  for (const units of ['all', 'cpu_and_ane', 'cpu_and_gpu', 'cpu_only']) {
+    const explicit = parlerSetup({
+      coremlDecoder: false,
+      coremlStrict: false,
+      coremlComputeUnits: units
+    })
+    const params = buildParlerParams(explicit)
+    t.is(params.coremlDecoder, false)
+    t.is(params.coremlStrict, false)
+    t.is(params.coremlComputeUnits, units)
+  }
+  const enabled = applyReloadableConfig(setup, {
+    coremlDecoder: true,
+    coremlStrict: true,
+    coremlComputeUnits: 'cpu_and_ane'
+  })
+  t.is(enabled.coremlDecoder, true)
+  t.is(enabled.coremlStrict, true)
+  const disabled = applyReloadableConfig(setup, { coremlDecoder: false, coremlStrict: false })
+  t.is(disabled.coremlDecoder, false)
+  t.is(disabled.coremlStrict, false)
+  t.is(disabled.coremlComputeUnits, 'cpu_and_ane')
+  t.alike(applyReloadableConfig(setup, { coremlStrict: undefined }), disabled)
+})
+
+test('parler Core ML: invalid values reject at construction and reload rolls back all changes', (t) => {
+  const setup = parlerSetup({
+    coremlDecoder: true,
+    coremlStrict: true,
+    coremlComputeUnits: 'all',
+    temperature: 0.7
+  })
+  const before = buildParlerParams(setup)
+  for (const [key, values] of [
+    ['coremlDecoder', [null, 0, 1, 'false', 'true', {}]],
+    ['coremlStrict', [null, 0, 1, 'false', 'true', {}]],
+    ['coremlComputeUnits', [null, false, 1, '', 'ane', 'ALL', {}]]
+  ]) {
+    for (const value of values) {
+      t.exception(() => parlerSetup({ [key]: value }), new RegExp(key))
+      t.exception(
+        () =>
+          applyReloadableConfig(setup, { temperature: 0.3, coremlDecoder: false, [key]: value }),
+        new RegExp(key)
+      )
+      t.alike(buildParlerParams(setup), before, 'rejected reload preserves the native config')
+    }
+  }
+  t.exception(
+    () =>
+      applyReloadableConfig(setup, { coremlStrict: false, description: 'A voice.', pitch: 'low' }),
+    /mutually exclusive/
+  )
+  t.alike(buildParlerParams(setup), before, 'later validation also rolls back Core ML changes')
+})
+
+test('parler Core ML: other engines reject constructor and reload options including false', (t) => {
+  for (const engine of [
+    'chatterbox',
+    'supertonic',
+    'cosyvoice3',
+    'audio8',
+    'moss',
+    'moss-sfx',
+    'moss-speech',
+    'pocket'
+  ]) {
+    for (const fields of [
+      { coremlDecoder: false },
+      { coremlStrict: false },
+      { coremlComputeUnits: 'cpu_only' }
+    ]) {
+      t.exception(() => resolveEngineSetup({ engine, ...fields }), /parler-only|does not support/)
+      const setup = resolveEngineSetup({
+        engine,
+        files: {
+          mossSoundEffect: './moss-sfx.gguf',
+          mossSpeechModel: './moss-speech.gguf',
+          mossSpeechCodec: './moss-codec.gguf',
+          pocketFlowModel: './flow.gguf',
+          pocketMimiModel: './mimi.gguf',
+          pocketFrontend: './frontend.json',
+          pocketVoice: './voice.gguf'
+        }
+      })
+      const before = { ...setup.settings }
+      t.exception(() => applyReloadableConfig(setup, { language: 'fr', ...fields }), /parler-only/)
+      t.alike(setup.settings, before)
+      t.is(setup.config.language, undefined)
+    }
+  }
+})

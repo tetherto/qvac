@@ -14,7 +14,8 @@ const COMPANION_FILE_KEYS = [
     'esrgan',
     'llm',
     'audioVae',
-    'embeddingsConnectors'
+    'embeddingsConnectors',
+    'tokenizer'
 ];
 const VIDEO_MODES = new Set(['txt2vid', 'img2vid']);
 const WAN22_MOE_PARAMS = [

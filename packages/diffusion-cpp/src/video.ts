@@ -86,6 +86,7 @@ export interface VideoGenerationBaseParams {
   /** LTX IC-LoRA reference-image spatial factor. Currently only exactly 1 is supported. */
   reference_downscale_factor?: number
   vae_tiling?: boolean
+  /** Spatial tile dimensions in latent pixels; 0 uses the engine default. */
   vae_tile_size?: number | string
   vae_tile_overlap?: number
   temporal_tiling?: boolean
@@ -140,7 +141,8 @@ const COMPANION_FILE_KEYS = [
   'esrgan',
   'llm',
   'audioVae',
-  'embeddingsConnectors'
+  'embeddingsConnectors',
+  'tokenizer'
 ] as const
 
 const VIDEO_MODES = new Set<VideoMode>(['txt2vid', 'img2vid'])

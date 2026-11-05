@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <tts-cpp/lavasr/coreml.h>
 
@@ -96,6 +97,8 @@ struct CosyvoiceConfig {
   std::string language = "en";
 
   std::optional<int> seed;
+  std::optional<bool> greedy;
+  std::vector<int> forceSpeechTokens;
   /** std::thread::hardware_concurrency() override. */
   std::optional<int> threads;
   /**
@@ -161,6 +164,7 @@ struct CosyvoiceConfig {
   std::optional<int> streamLeftContextTokens;
 
   /** Forwarded to `tts_cpp::cosyvoice::EngineOptions::backends_dir`. */
+  std::string backend;
   std::string backendsDir;
 
   /**

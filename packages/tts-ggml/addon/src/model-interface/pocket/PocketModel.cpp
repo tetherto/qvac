@@ -7,6 +7,7 @@
 
 #include "addon/TTSErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
+#include "model-interface/BackendUtils.hpp"
 
 namespace qvac::ttsggml::pocket {
 namespace {
@@ -27,7 +28,9 @@ struct BusyGuard {
 };
 std::shared_ptr<tts_cpp::pocket::Engine> makeEngine(const PocketConfig& cfg) {
   try {
-    return std::make_shared<tts_cpp::pocket::Engine>(cfg.options);
+    auto options = cfg.options;
+    options.backends_dir = resolveBackendsDir(options.backends_dir).string();
+    return std::make_shared<tts_cpp::pocket::Engine>(options);
   } catch (const std::exception& e) {
     throw createTTSError(
         TTSErrorCode::InitializationFailed,
@@ -163,8 +166,10 @@ std::any PocketModel::process(const std::any& input) {
         "realTimeFactor", duration > 0 ? seconds / duration : 0.0);
     stats_.emplace_back(
         "tokensPerSecond", seconds > 0 ? request->text.size() / seconds : 0.0);
-    stats_.emplace_back("backendDevice", int64_t(0));
-    stats_.emplace_back("backendId", int64_t(0));
+    const auto backend = std::string(engine_->backend_name());
+    stats_.emplace_back(
+        "backendDevice", int64_t(backendDeviceFromName(backend)));
+    stats_.emplace_back("backendId", int64_t(backendIdFromName(backend)));
     stats_.emplace_back("gpuUnsupported", int64_t(0));
   }
   return request->chunkCallback ? std::any{} : std::any(std::move(output));

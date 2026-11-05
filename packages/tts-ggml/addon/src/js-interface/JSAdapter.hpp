@@ -80,6 +80,9 @@ public:
   moss::MossSpeechCall readMossSpeechCall(
       qvac_lib_inference_addon_cpp::js::Object job, js_env_t* env);
 
+  void assertNoPerCallParlerCoreml(
+      qvac_lib_inference_addon_cpp::js::Object obj, js_env_t* env);
+
   // Shared by buildParlerConfig and the per-call runJob path (the same
   // description/template properties are legal on both objects).
   parler::ParlerDescriptionFields readParlerDescriptionFields(

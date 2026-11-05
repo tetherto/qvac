@@ -13,10 +13,12 @@ on:
       - ".github/actions/run-mobile-integration-tests/seed-and-presign-models/**"
       - ".github/actions/run-mobile-integration-tests/setup/**"
       - ".github/actions/run-mobile-integration-tests/build-mobile-app/**"
+      - ".github/workflows/integration-mobile-test-*.yml"
       - ".github/actions/run-mobile-integration-tests/collect-and-upload-logs/**"
       - ".github/actions/run-mobile-integration-tests/extract-addon-perf/**"
       - ".github/actions/run-mobile-integration-tests/test/**"
       - ".github/actions/select-prebuild-symbols-verifier/**"
+      - ".github/actions/sdk-device-farm-wait-for-running/**"
       # Holds one verify step per selector id, which the selector tests check.
       - ".github/workflows/reusable-prebuilds.yml"
       - "scripts/perf-report/**"
@@ -73,6 +75,9 @@ jobs:
       # build, so a wrong cutoff would first show up as a failed backport.
       - name: Run prebuild symbols verifier selector unit tests
         run: node --test .github/actions/select-prebuild-symbols-verifier/test/*.test.mjs
+      # The SDK e2e mobile workflows that use it run only on label or dispatch.
+      - name: Run SDK Device Farm wait action unit tests
+        run: node --test .github/actions/sdk-device-farm-wait-for-running/test/*.test.mjs
 
   # The per-addon benchmark aggregators are plain Node scripts shared by the
   # benchmark-performance-*.yml workflows, which only run on demand — so without

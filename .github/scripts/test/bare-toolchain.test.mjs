@@ -16,6 +16,7 @@ import {
   pathMismatches,
   reportedVersion,
   syncDriftIssue,
+  versionMismatches,
 } from '../lib/bare-toolchain.mjs'
 
 const lockfile = JSON.parse(
@@ -30,12 +31,14 @@ test('the lockfile pins every watched package', () => {
   assert.deepEqual(Object.keys(locked), WATCHED)
 })
 
-test('bare-make is pinned to one exact version, and the lockfile agrees', () => {
-  const pin = manifest.dependencies['bare-make']
-  assert.match(pin, /^\d+\.\d+\.\d+$/, 'a range would let a fresh install move without a lockfile change')
-  assert.equal(lockfile.packages['']?.dependencies?.['bare-make'], pin)
-  assert.equal(lockedVersions(lockfile)['bare-make'], pin)
-})
+for (const name of ['bare-make', 'bare-link']) {
+  test(`${name} is pinned to one exact version, and the lockfile agrees`, () => {
+    const pin = manifest.dependencies[name]
+    assert.match(pin, /^\d+\.\d+\.\d+$/, 'a range would let a fresh install move without a lockfile change')
+    assert.equal(lockfile.packages['']?.dependencies?.[name], pin)
+    assert.equal(lockedVersions(lockfile)[name], pin)
+  })
+}
 
 test('no locked package runs an install script', () => {
   const scripted = Object.entries(lockfile.packages)
@@ -80,6 +83,7 @@ test('the issue body carries its drift key, so an unchanged drift is not re-post
 
 test('tool versions are read from their --version banners', () => {
   assert.equal(reportedVersion('v2.1.1\n'), '2.1.1')
+  assert.equal(reportedVersion('v4.2.0\n'), '4.2.0')
   assert.equal(
     reportedVersion('clang version 23.1.3 (https://github.com/llvm/llvm-project.git 0d261d1ca552)\nTarget: x86_64-unknown-linux-gnu'),
     '23.1.3',
@@ -91,11 +95,11 @@ test('tool versions are read from their --version banners', () => {
 test('a host clang or a missing tool on PATH is a mismatch', () => {
   const bin = '/w/.github/bare-toolchain/node_modules/.bin'
   assert.deepEqual(
-    pathMismatches(bin, { 'bare-make': `${bin}/bare-make`, clang: `${bin}/clang`, 'llvm-profdata': `${bin}/llvm-profdata` }, 'linux'),
+    pathMismatches(bin, { 'bare-make': `${bin}/bare-make`, 'bare-link': `${bin}/bare-link`, clang: `${bin}/clang`, 'llvm-profdata': `${bin}/llvm-profdata` }, 'linux'),
     [],
   )
   assert.deepEqual(
-    pathMismatches(bin, { 'bare-make': `${bin}/bare-make`, clang: '/usr/bin/clang', 'llvm-profdata': null }, 'linux'),
+    pathMismatches(bin, { 'bare-make': `${bin}/bare-make`, 'bare-link': `${bin}/bare-link`, clang: '/usr/bin/clang', 'llvm-profdata': null }, 'linux'),
     [
       { tool: 'clang', actual: '/usr/bin/clang' },
       { tool: 'llvm-profdata', actual: null },
@@ -106,6 +110,7 @@ test('a host clang or a missing tool on PATH is a mismatch', () => {
 test('on Windows the lock bin directory matches regardless of case and separators', () => {
   const bin = 'D:\\a\\qvac\\.github\\bare-toolchain\\node_modules\\.bin'
   const found = {
+    'bare-link': `${bin}\\bare-link.cmd`,
     'bare-make': 'd:\\a\\qvac\\.github\\bare-toolchain\\node_modules\\.bin\\bare-make.cmd',
     clang: 'D:/a/qvac/.github/bare-toolchain/node_modules/.bin/clang.cmd',
     'llvm-profdata': 'C:\\Program Files\\LLVM\\bin\\llvm-profdata.exe',
@@ -209,4 +214,32 @@ test('an open issue is updated only when the drift changes, and closed when it i
 
 test('the issue says to move the setup-bare-tooling pins after the bump', () => {
   assert.match(issueBody(drifted), /setup-bare-tooling.*SHA pin/)
+})
+
+test('a missing or framework-local linker on PATH fails verification', () => {
+  const bin = '/lock/node_modules/.bin'
+  const found = { 'bare-make': `${bin}/bare-make`, clang: `${bin}/clang`, 'llvm-profdata': `${bin}/llvm-profdata` }
+  assert.deepEqual(pathMismatches(bin, found, 'linux'), [{ tool: 'bare-link', actual: null }])
+  found['bare-link'] = '/test-framework/node_modules/.bin/bare-link'
+  assert.deepEqual(pathMismatches(bin, found, 'linux'), [{ tool: 'bare-link', actual: found['bare-link'] }])
+})
+
+test('tool package versions must match the lock, while LLVM packaging versions need not', () => {
+  const locked = { 'bare-make': '2.1.1', 'bare-link': '4.2.0', 'llvm-runtime': '23.1.4' }
+  const reported = { 'bare-make': '2.1.1', 'bare-link': '4.2.0', clang: '23.1.3', 'llvm-profdata': '23.1.3' }
+  assert.deepEqual(versionMismatches(locked, reported), [])
+  assert.deepEqual(versionMismatches(locked, { ...reported, 'bare-link': '4.1.0' }), [
+    { tool: 'bare-link', expected: '4.2.0', actual: '4.1.0' },
+  ])
+  assert.deepEqual(versionMismatches(locked, { ...reported, 'bare-link': null }), [
+    { tool: 'bare-link', expected: '4.2.0', actual: null },
+  ])
+})
+
+test('new linker and module-traversal releases are monitored', () => {
+  const locked = lockedVersions(lockfile)
+  assert.deepEqual(findDrift(locked, { ...locked, 'bare-link': '5.0.0', 'bare-module-traverse': '3.0.0' }), [
+    { name: 'bare-link', locked: locked['bare-link'], latest: '5.0.0' },
+    { name: 'bare-module-traverse', locked: locked['bare-module-traverse'], latest: '3.0.0' },
+  ])
 })
