@@ -25,6 +25,7 @@ def test_embed_request_rejects_both_input_fields(inputs: dict[str, Any]) -> None
 def test_embed_request_serializes_each_input_variant(inputs: dict[str, Any]) -> None:
     request = EmbedRequest(**{"model_id": "m", **inputs})
     assert request.model_dump(by_alias=True, exclude_unset=True) == {
+        "type": "embed",
         "modelId": "m",
         **inputs,
     }
