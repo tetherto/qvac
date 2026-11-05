@@ -218,7 +218,7 @@ jobs:
           package-json-file: src/package.json
       - name: Install
         working-directory: src
-        run: pnpm install --frozen-lockfile --filter .
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter .
       - uses: tetherto/qvac-actions/configure-aws-credentials@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
