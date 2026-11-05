@@ -11,6 +11,8 @@ export interface Hypercore {
 export interface Corestore {
   ready(): Promise<void>
   get(options: { name: string }): Hypercore
+  // Shared by every session of one Corestore; distinct per storage directory.
+  storage?: object
 }
 
 export interface HyperDBStream<T> extends AsyncIterable<T> {

@@ -185,6 +185,38 @@ test('two instances on the same core share one writer', async (t) => {
   await reopened.close()
 })
 
+test('stores in separate directories stay separate when their cores share a key', async (t) => {
+  const primaryKey = new Uint8Array(32).fill(7)
+  const first = new Corestore(await tmp(t), { primaryKey, unsafe: true })
+  const second = new Corestore(await tmp(t), { primaryKey, unsafe: true })
+  t.teardown(() => first.close())
+  t.teardown(() => second.close())
+
+  async function write(store: typeof first, documentId: string) {
+    const rag = createRag({ corestore: store })
+    await rag.ready()
+    const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+    await rag.ingest({ namespace: 'ns', documents: [doc(documentId, spaceId, [['x', [1, 0, 0]]])] })
+    return rag
+  }
+  async function read(rag: Awaited<ReturnType<typeof write>>) {
+    const query = { scope: { namespace: 'ns' }, vector: [1, 0, 0], spaceId: computeSpaceId(SPACE) }
+    return (await rag.search({ ...query, k: 10 })).map((hit) => hit.documentId)
+  }
+
+  const a = await write(first, 'a')
+  const b = await write(second, 'b')
+  t.alike(await read(a), ['a'], 'the first directory holds only its document')
+  t.alike(await read(b), ['b'], 'the second directory holds only its document')
+  await a.close()
+  await b.close()
+
+  const reopened = createRag({ corestore: second })
+  await reopened.ready()
+  t.alike(await read(reopened), ['b'], 'the write landed in the second directory')
+  await reopened.close()
+})
+
 test('close leaves the caller-owned corestore open', async (t) => {
   const store = new Corestore(await tmp(t))
   t.teardown(() => store.close())
