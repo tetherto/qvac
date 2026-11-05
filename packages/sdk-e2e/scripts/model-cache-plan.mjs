@@ -243,14 +243,7 @@ for (const { constant } of constants) {
 }
 
 const entries = [...byLayout.values()].sort((a, b) => (a.path < b.path ? -1 : 1))
-const plan = {
-  version: 1,
-  os: values.os,
-  cacheRoot,
-  legs,
-  entries,
-  unresolved: [...unresolved].sort()
-}
+const plan = { version: 1, cacheRoot, legs, entries, unresolved: [...unresolved].sort() }
 const bytes = entries.reduce((sum, entry) => sum + entry.size, 0)
 
 const outPath = resolve(values.out)

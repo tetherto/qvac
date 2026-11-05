@@ -2,10 +2,10 @@ import type { TestDefinition } from '@qvac/test-suite'
 import { collectTestDeps } from './collect-test-deps.js'
 
 /** JSON array of dep keys from the CI model-cache plan; narrows a standalone bootstrap. */
-export const BOOTSTRAP_DEPS_ENV = 'QVAC_E2E_BOOTSTRAP_DEPS'
+const BOOTSTRAP_DEPS_ENV = 'QVAC_E2E_BOOTSTRAP_DEPS'
 
 /** JSON array of model names the CI cache restore did not provide. */
-export const BOOTSTRAP_MODELS_ENV = 'QVAC_E2E_BOOTSTRAP_MODELS'
+const BOOTSTRAP_MODELS_ENV = 'QVAC_E2E_BOOTSTRAP_MODELS'
 
 function readStringArray(
   env: Readonly<Record<string, string | undefined>>,

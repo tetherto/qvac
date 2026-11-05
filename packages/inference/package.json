@@ -83,8 +83,8 @@
       "import": "./dist/models/registry/index.js"
     },
     "./model-cache-layout": {
-      "types": "./dist/utils/cache/layout.d.ts",
-      "import": "./dist/utils/cache/layout.js"
+      "types": "./dist/model-cache-layout.d.ts",
+      "import": "./dist/model-cache-layout.js"
     },
     "./model-resource-profiles": {
       "types": "./dist/models/registry/resource-profiles.d.ts",
