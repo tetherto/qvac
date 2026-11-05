@@ -1,4 +1,5 @@
 import type { TestDefinition } from '../types/test-definition.js'
+import { getPlatformSkipReason } from './platform-match.js'
 
 export interface SelectionOptions {
   /** Include only tests tagged with one of these suites */
@@ -87,4 +88,32 @@ export function selectTests(
   }
 
   return { tests: [...tests], filtered, addedTestIds, unknownTestIds }
+}
+
+export interface RunSelectionOptions extends SelectionOptions {
+  /** The label a consumer registers with (e.g. `desktop-macos`); drops tests it skips */
+  platform: string
+}
+
+export interface RunSelection extends Selection {
+  /** Ids the selection kept but platform policy skips on `platform` */
+  platformSkippedTestIds: string[]
+}
+
+/**
+ * The tests one consumer leg executes: `selectTests` minus what it skips on its platform, as a
+ * consumer narrows `filteredTestIds` before it bootstraps.
+ */
+export function selectRunTests(
+  catalog: readonly TestDefinition[],
+  options: RunSelectionOptions
+): RunSelection {
+  const selection = selectTests(catalog, options)
+  const tests: TestDefinition[] = []
+  const platformSkippedTestIds: string[] = []
+  for (const test of selection.tests) {
+    if (getPlatformSkipReason(test, options.platform) === null) tests.push(test)
+    else platformSkippedTestIds.push(test.testId)
+  }
+  return { ...selection, tests, platformSkippedTestIds }
 }
