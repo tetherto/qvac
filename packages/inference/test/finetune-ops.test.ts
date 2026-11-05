@@ -9,6 +9,7 @@ import {
   type AnyModel
 } from '@/runtime/model-registry'
 import {
+  cancelFinetune,
   finetune as finetuneOp,
   getFinetuneState,
   getFinetuneStateFromCheckpoints,
@@ -840,5 +841,134 @@ test('startFinetune: revalidates checkpoint state after the exclusive-lane wait'
     unregisterModel(modelId)
     clearRegistry()
     cleanupCheckpointDir(checkpointDir)
+  }
+})
+
+// A finetune belongs to the session that started it. These tests pin who may
+// stop it: that session and the owner, nobody else.
+
+function registerStoppableModel(modelId: string) {
+  const calls = { pause: 0, cancel: 0, finetune: 0 }
+  let settle: ((value: { status: string; stats: object }) => void) | null = null
+  registerModel(modelId, {
+    model: {
+      finetune: async function () {
+        calls.finetune++
+        return {
+          on: () => {},
+          removeListener: () => {},
+          await: () =>
+            new Promise((resolve) => {
+              settle = resolve
+            })
+        }
+      },
+      pause: async function () {
+        calls.pause++
+        settle?.({ status: 'PAUSED', stats: {} })
+      },
+      cancel: async function () {
+        calls.cancel++
+        settle?.({ status: 'CANCELLED', stats: {} })
+      }
+    } as unknown as AnyModel,
+    path: '/tmp/stoppable-model.gguf',
+    config: {},
+    modelType: ModelType.llamacppCompletion
+  })
+  return calls
+}
+
+const stopOptions = {
+  trainDatasetDir: '/tmp/train.jsonl',
+  validation: { type: 'none' as const },
+  outputParametersDir: '/tmp/out'
+}
+
+test('pauseFinetune: another session cannot pause a session finetune, its own session can', async (t) => {
+  clearRegistry()
+  const modelId = 'finetune-pause-other-session'
+  const calls = registerStoppableModel(modelId)
+
+  try {
+    const running = startFinetune({
+      type: 'finetune',
+      modelId,
+      operation: 'start',
+      options: stopOptions,
+      sessionId: 'A'
+    })
+    await new Promise<void>((resolve) => setTimeout(resolve, 20))
+
+    const other = await pauseFinetune(modelId, 'B')
+    t.is(other.status, 'RUNNING', "session B's pause reports the finetune still running")
+    t.is(calls.pause, 0, 'the addon was not paused')
+
+    const own = await pauseFinetune(modelId, 'A')
+    t.is(own.status, 'PAUSED')
+    t.is(calls.pause, 1)
+    t.is((await running).status, 'PAUSED')
+  } finally {
+    unregisterModel(modelId)
+    clearRegistry()
+  }
+})
+
+test('cancelFinetune: another session cannot cancel a session finetune, the owner can', async (t) => {
+  clearRegistry()
+  const modelId = 'finetune-cancel-other-session'
+  const calls = registerStoppableModel(modelId)
+
+  try {
+    const running = finetuneOp({
+      type: 'finetune',
+      modelId,
+      operation: 'start',
+      options: stopOptions,
+      sessionId: 'A'
+    })
+    await new Promise<void>((resolve) => setTimeout(resolve, 20))
+
+    const other = await finetuneOp({
+      type: 'finetune',
+      modelId,
+      operation: 'cancel',
+      sessionId: 'B'
+    })
+    t.is(other.status, 'RUNNING', "session B's cancel reports the finetune still running")
+    t.is(calls.cancel, 0, 'the addon was not cancelled')
+
+    const owner = await cancelFinetune(modelId)
+    t.is(owner.status, 'CANCELLED', 'the owner may cancel any session finetune')
+    t.is((await running).status, 'CANCELLED')
+    t.is(calls.cancel, 1)
+  } finally {
+    unregisterModel(modelId)
+    clearRegistry()
+  }
+})
+
+test('cancelFinetune: a session cancel reaches its own finetune', async (t) => {
+  clearRegistry()
+  const modelId = 'finetune-cancel-own-session'
+  const calls = registerStoppableModel(modelId)
+
+  try {
+    const running = startFinetune({
+      type: 'finetune',
+      modelId,
+      operation: 'start',
+      options: stopOptions,
+      sessionId: 'A'
+    })
+    await new Promise<void>((resolve) => setTimeout(resolve, 20))
+
+    const own = await finetuneOp({ type: 'finetune', modelId, operation: 'cancel', sessionId: 'A' })
+    t.is(own.status, 'CANCELLED')
+    t.is((await running).status, 'CANCELLED')
+    t.is(calls.cancel, 1)
+  } finally {
+    unregisterModel(modelId)
+    clearRegistry()
   }
 })
