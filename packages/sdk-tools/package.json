@@ -6,7 +6,10 @@
   "license": "Apache-2.0",
   "type": "module",
   "main": "./dist/index.js",
-  "exports": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
   "bin": {
     "qvac-sdk": "./dist/index.js"
   },

@@ -25,6 +25,12 @@
     "sdk_sources_release": ["workspace", "published"]
   },
   {
+    "package": "cli",
+    "path": "packages/cli",
+    "sdk_sources": ["workspace"],
+    "sdk_sources_release": ["workspace", "published"]
+  },
+  {
     "package": "rag",
     "path": "packages/rag",
     "needs_bare": true

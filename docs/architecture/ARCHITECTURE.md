@@ -290,6 +290,7 @@ Most packages live in this monorepo under `packages/`. Integration plugins live 
 | `inference` | `@qvac/inference` | Engine: dispatch, plugins, models, P2P, RAG, schemas; Bare in-process, no worker/RPC |
 | `sdk-python` | `tetherto-qvac-sdk` | Generated Python client for the SDK worker contract |
 | `sdk-tools` | `@qvac/sdk-tools` | SDK command-line tools (worker bundler, HTTP server, doctor, verification) |
+| `cli` | `@qvac/cli` | The `qvac` command: runs the SDK tools as `qvac sdk` |
 | `ai-sdk-provider` | `@qvac/ai-sdk-provider` | Vercel AI SDK provider integration |
 | `test-suite` | `@qvac/test-suite` | Distributed MQTT test-orchestration framework (`qvac-test` CLI) driving the SDK e2e suites across desktop, Electron, Snap, Android, and iOS |
 | `sdk-e2e` | - | Private, unpublished SDK e2e suite: the test catalog, its executors and consumers, and the cross-client conformance corpus |
