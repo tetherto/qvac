@@ -34,6 +34,7 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
+- Update `@qvac/decoder-audio` to `^0.9.0` to include the FFmpeg resource cleanup fix.
 - Update the shared `speech-cpp` native dependency to `2026-10-29`
   ([#5420](https://github.com/tetherto/qvac/pull/5420),
   [#5447](https://github.com/tetherto/qvac/pull/5447)).
