@@ -41,8 +41,9 @@ async function main() {
   logStat('before open')
   const store = new Corestore(dir)
   await store.ready()
-  logStat('after open')
   await store.close()
+  // Windows keeps CORESTORE locked while the store is open, so read it after close.
+  logStat('after close')
   console.log(`[${step}] ok`)
 }
 
