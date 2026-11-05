@@ -2,19 +2,23 @@ import test from 'brittle'
 import {
   openSession,
   closeSession,
+  assertOwnerOperation,
   assertSessionOpen,
   assertWireSessionOpen,
   isSessionOpen,
   hasOpenSessions,
   listSessions,
-  clearSessions
+  clearSessions,
+  OWNER_ONLY_OPERATIONS
 } from '@/runtime/session-registry'
 import { OWNER_SESSION_ID } from '@/runtime/session-id'
 import {
+  OwnerOnlyError as OwnerOnly,
   SessionIdConflictError as SessionIdConflict,
   SessionNotOpenError as SessionNotOpen
 } from '@/errors'
 
+const OwnerOnlyError = OwnerOnly as unknown as new () => Error
 const SessionIdConflictError = SessionIdConflict as unknown as new () => Error
 const SessionNotOpenError = SessionNotOpen as unknown as new () => Error
 
@@ -71,6 +75,27 @@ test('session registry: an unknown or closed session fails the open check', (t) 
   openSession('once')
   closeSession('once')
   t.exception(() => assertSessionOpen('once'), SessionNotOpenError)
+})
+
+test('session registry: runtime-wide operations are refused for a session and allowed for the owner', (t) => {
+  t.alike(
+    Array.from(OWNER_ONLY_OPERATIONS).sort(),
+    ['deleteCache', 'resume', 'startRpcServer', 'stopRpcServer', 'suspend'],
+    'the set of operations the shared runtime reserves for the owner'
+  )
+  for (const type of OWNER_ONLY_OPERATIONS) {
+    assertOwnerOperation({ type })
+    assertOwnerOperation({ type, sessionId: undefined })
+    t.exception(() => assertOwnerOperation({ type, sessionId: 's-1' }), OwnerOnlyError, type)
+  }
+  assertOwnerOperation({ type: 'state', sessionId: 's-1' })
+  assertOwnerOperation({ type: 'discoverRpcServers', sessionId: 's-1' })
+  try {
+    assertOwnerOperation({ type: 'suspend', sessionId: 's-1' })
+  } catch (error) {
+    t.is((error as OwnerOnly).operation, 'suspend')
+    t.is((error as OwnerOnly).sessionId, 's-1')
+  }
 })
 
 test('session registry: clearSessions drops every record', (t) => {

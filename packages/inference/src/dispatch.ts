@@ -25,7 +25,7 @@ import { handlerSupportsProgress, selectHandler } from '@/selection'
 import { assertLifecycleAllowed } from '@/runtime/runtime-lifecycle'
 import { resolveModelConfig, setConfig, setRuntimeContext, isConfigSet } from '@/runtime/state'
 import { initialize, close as closeEngine } from '@/runtime/lifecycle'
-import { assertWireSessionOpen } from '@/runtime/session-registry'
+import { assertOwnerOperation, assertWireSessionOpen } from '@/runtime/session-registry'
 import { getAllPlugins } from '@/plugins/index'
 import { hasRpcServerProvider } from '@/rpc/provider'
 import { resolveConfig } from '@/config/resolve-config'
@@ -198,16 +198,18 @@ function prepareRequest<T extends Request>(request: T): Request {
   if (profilingMeta !== undefined) {
     ;(validated as Record<PropertyKey, unknown>)[PROFILING_KEY] = profilingMeta
   }
-  assertRequestSessionOpen(validated)
+  assertRequestSessionAllowed(validated)
   return validated
 }
 
 // A request runs as the session it names, or as the owner when it names none.
 // The session handlers validate their own `sessionId`: open registers a new id
-// and close removes one, so neither can require it to be open already.
-function assertRequestSessionOpen(request: Request): void {
+// and close removes one, so neither can require it to be open already. A
+// session may not run the operations reserved for the owner.
+function assertRequestSessionAllowed(request: Request): void {
   if (request.type === 'openSession' || request.type === 'closeSession') return
   assertWireSessionOpen(request)
+  assertOwnerOperation(request)
 }
 
 function invokeHandler(request: Request, handler: HandlerEntry['handler']): HandlerResult {

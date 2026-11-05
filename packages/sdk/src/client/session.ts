@@ -34,7 +34,10 @@ type Api = typeof api
  * - `close()` cancels the session's requests and releases its leases.
  *
  * A session never shuts the runtime down. Only the module-level `close()`,
- * the owner's call, does that, and it ends every session with it.
+ * the owner's call, does that, and it ends every session with it. The
+ * operations that change the runtime for every session (`suspend`, `resume`,
+ * `deleteCache`, `startRpcServer`, `stopRpcServer`) are not on the handle;
+ * the worker refuses them from a session with `OwnerOnlyError`.
  */
 export interface QvacSession {
   readonly sessionId: string
@@ -89,7 +92,6 @@ export interface QvacSession {
   vlaSetEmbodiment: Api['vlaSetEmbodiment']
   invokePlugin: Api['invokePlugin']
   invokePluginStream: Api['invokePluginStream']
-  deleteCache: Api['deleteCache']
   getModelInfo: Api['getModelInfo']
   getLoadedModelInfo: Api['getLoadedModelInfo']
   getSystemResources: Api['getSystemResources']
@@ -100,11 +102,7 @@ export interface QvacSession {
   modelRegistryList: Api['modelRegistryList']
   modelRegistrySearch: Api['modelRegistrySearch']
   modelRegistryGetModel: Api['modelRegistryGetModel']
-  suspend: Api['suspend']
-  resume: Api['resume']
   state: Api['state']
-  startRpcServer: Api['startRpcServer']
-  stopRpcServer: Api['stopRpcServer']
   discoverRpcServers: Api['discoverRpcServers']
 }
 
@@ -257,7 +255,6 @@ function createSessionHandle(
     invokePlugin: (options, rpcOptions) => api.invokePlugin(options, withSession(rpcOptions)),
     invokePluginStream: (options, rpcOptions) =>
       api.invokePluginStream(options, withSession(rpcOptions)),
-    deleteCache: (params, options) => api.deleteCache(params, withSession(options)),
     getModelInfo: (params, options) => api.getModelInfo(params, withSession(options)),
     getLoadedModelInfo: (params, options) => api.getLoadedModelInfo(params, withSession(options)),
     getSystemResources: (input, options) => api.getSystemResources(input, withSession(options)),
@@ -270,11 +267,7 @@ function createSessionHandle(
     modelRegistrySearch: (params, options) => api.modelRegistrySearch(params, withSession(options)),
     modelRegistryGetModel: (registryPath, registrySource, options) =>
       api.modelRegistryGetModel(registryPath, registrySource, withSession(options)),
-    suspend: (options) => api.suspend(withSession(options)),
-    resume: (options) => api.resume(withSession(options)),
     state: (options) => api.state(withSession(options)),
-    startRpcServer: (options, rpcOptions) => api.startRpcServer(options, withSession(rpcOptions)),
-    stopRpcServer: (options, rpcOptions) => api.stopRpcServer(options, withSession(rpcOptions)),
     discoverRpcServers: (options, rpcOptions) =>
       api.discoverRpcServers(options, withSession(rpcOptions))
   }

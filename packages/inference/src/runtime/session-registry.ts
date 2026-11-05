@@ -1,4 +1,4 @@
-import { SessionIdConflictError, SessionNotOpenError } from '@/errors/index'
+import { OwnerOnlyError, SessionIdConflictError, SessionNotOpenError } from '@/errors/index'
 import { getEngineLogger } from '@/logging/index'
 import { OWNER_SESSION_ID } from '@/runtime/session-id'
 
@@ -59,6 +59,29 @@ export function assertSessionOpen(id: string): void {
 export function assertWireSessionOpen(request: { sessionId?: string | undefined }): void {
   if (request.sessionId === OWNER_SESSION_ID) throw new SessionNotOpenError(OWNER_SESSION_ID)
   assertSessionOpen(request.sessionId ?? OWNER_SESSION_ID)
+}
+
+/**
+ * Operations that change the shared runtime for every session: pausing and
+ * resuming it, deleting its model storage, and starting or stopping its RPC
+ * servers. Only the owner may call them; a session that tries is refused with
+ * `OwnerOnlyError` before the handler runs.
+ */
+export const OWNER_ONLY_OPERATIONS: ReadonlySet<string> = new Set([
+  'suspend',
+  'resume',
+  'deleteCache',
+  'startRpcServer',
+  'stopRpcServer'
+])
+
+export function assertOwnerOperation(request: {
+  type: string
+  sessionId?: string | undefined
+}): void {
+  if (request.sessionId !== undefined && OWNER_ONLY_OPERATIONS.has(request.type)) {
+    throw new OwnerOnlyError(request.type, request.sessionId)
+  }
 }
 
 export function listSessions(): SessionEntry[] {
