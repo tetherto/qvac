@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import type { ToolCall, CompletionStats } from '@qvac/sdk'
 import { sdkToolCallsToOpenai } from '@/serve/extensions/openai/adapters/tool-calls'
 import { completionTokensFromStats } from '@/serve/core/completion'
+import type { ToolNamespaces } from '@/serve/extensions/openai/schemas/responses'
 
 export function responseId(): string {
   return `resp_${randomId()}`
@@ -34,6 +35,8 @@ export interface BuildResponseObjectParams {
   store: boolean
   /** When set (e.g. streaming), must match SSE item ids so finalized response matches the stream. */
   messageItemId?: string
+  /** Maps a namespaced tool's qualified name back to the client's `namespace` + `name`. */
+  toolNamespaces?: ToolNamespaces
   /** When set, must align with `toolCalls` length; same ids as streamed function_call items. */
   functionCallItemIds?: string[]
   /** From SDK completion stats; `emittedTokens` / `generatedTokens` map to `usage.output_tokens`. */
@@ -77,7 +80,7 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
         type: 'function_call',
         id: fcId,
         call_id: tc.id,
-        name: tc.function.name,
+        ...clientToolName(tc.function.name, params.toolNamespaces),
         arguments: tc.function.arguments,
         status: 'completed'
       })
@@ -124,7 +127,7 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
           id: tc.id,
           type: 'function',
           function: {
-            name: tc.function.name,
+            ...clientToolName(tc.function.name, params.toolNamespaces),
             arguments: tc.function.arguments
           }
         }))
@@ -141,4 +144,13 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
   if (params.previousResponseId) base['previous_response_id'] = params.previousResponseId
 
   return base
+}
+
+/** `name`, plus `namespace` when the tool was declared inside one. */
+export function clientToolName(
+  name: string,
+  namespaces: ToolNamespaces | undefined
+): { name: string; namespace?: string } {
+  const declared = namespaces?.get(name)
+  return declared ? { name: declared.name, namespace: declared.namespace } : { name }
 }
