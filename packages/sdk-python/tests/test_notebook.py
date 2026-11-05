@@ -15,7 +15,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-from _worker_env import BARE_BIN, WORKER_AVAILABLE, WORKER_PATH
+from _worker_env import WORKER_AVAILABLE, WORKER_PATH
 
 from tetherto.qvac_sdk.client import WorkerNotFoundError
 from tetherto.qvac_sdk.notebook import EmbedFailedError, SyncClient
@@ -159,14 +159,14 @@ def test_text_to_speech_returns_float32_pcm_array():
 
 @pytest.mark.skipif(
     not WORKER_AVAILABLE,
-    reason=f"no built SDK worker + Bare runtime (worker={WORKER_PATH!r}, bare={BARE_BIN!r})",
+    reason=f"no built SDK worker (worker={WORKER_PATH!r})",
 )
 def test_sync_client_notebook_flow_against_real_worker():
     """The notebook quickstart, blocking end to end from plain sync code:
     spawn a worker, load a model, run a live-streamed completion, unload."""
     from tetherto.qvac_sdk.models import QWEN3_600M_INST_Q4
 
-    with SyncClient(worker_path=WORKER_PATH, bare_path=BARE_BIN) as client:
+    with SyncClient(worker_path=WORKER_PATH) as client:
         model_id = client.load_model(
             model_src=QWEN3_600M_INST_Q4, model_config={"ctx_size": 2048}
         )
