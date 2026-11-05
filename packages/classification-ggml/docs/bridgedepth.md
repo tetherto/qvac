@@ -37,6 +37,9 @@ downsampling inputs above 720p; the graph memory grows with the pixel count.
 Backend selection, `backendsDir`, `load()`, `unload()`, `destroy()` and the
 runtime statistics behave as for [MegaLoc](megaloc.md). `cpu_fallback_nodes`
 counts compute nodes the scheduler placed on the CPU while a GPU was selected.
+On Metal, CUDA and Vulkan it is 0. OpenCL has no kernel for the `roll` and
+`top_k` ops this graph uses, so on OpenCL those nodes run on the CPU, with
+copies between the device and the CPU around each of them.
 
 ## Accuracy
 
