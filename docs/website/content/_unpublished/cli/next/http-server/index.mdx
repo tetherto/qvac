@@ -306,7 +306,7 @@ Chat requests automatically cache each conversation's prefix under `~/.qvac/kv-c
 Caches held by an in-flight request are never evicted.
 
 <Callout type="warn">
-**Other named caches are not covered.** Responses sessions get the same quota and TTL (counted separately from automatic caches), and the endpoint below reclaims them too. Because other QVAC processes can share the directory, the quota and the endpoint only delete Responses caches this server has used; the 24-hour TTL applies to all of them. Other caller-owned named caches, such as `completion({ kvCache: "my-session" })` through the SDK, are exempt from both, and the endpoint never touches them. Clean those up with [`deleteCache({ kvCacheKey })`](/sdk/reference/api#deletecache).
+**Other named caches are not covered.** Responses sessions get the same quota and TTL (counted separately from automatic caches), and the endpoint below reclaims them too. Because other QVAC processes can share the directory, the quota and the endpoint only delete Responses caches this server has used; the 24-hour TTL applies to all of them. A cache that any running QVAC process is using is never deleted. Other caller-owned named caches, such as `completion({ kvCache: "my-session" })` through the SDK, are exempt from both, and the endpoint never touches them. Clean those up with [`deleteCache({ kvCacheKey })`](/sdk/reference/api#deletecache).
 </Callout>
 
 ### `DELETE /qvac/v1/kv_cache`

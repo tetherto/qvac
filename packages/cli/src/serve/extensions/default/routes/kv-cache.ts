@@ -27,7 +27,8 @@ is lost, since a KV cache is derived data.
 \`/v1/responses\` caches (selected by \`X-QVAC-KV-Cache-Key\`,
 \`metadata.qvac_kv_cache_key\` or \`prompt_cache_key\`) follow the same quota
 and TTL, and this endpoint removes every one this server has used and no
-request is using now. Responses caches of other processes are left to the TTL.
+request is using now. Responses caches of other processes are left to the TTL,
+and a cache any running QVAC process is using is never deleted.
 
 Other caller-owned *named* caches (\`completion({ kvCache: "my-session" })\`) sit
 outside the retention policy and outside this endpoint. Use the SDK's

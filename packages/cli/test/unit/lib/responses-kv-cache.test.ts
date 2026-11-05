@@ -1,6 +1,6 @@
 import { describe, it, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, mkdir, rm, utimes, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, stat, unlink, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createNamedKvCacheRetention, folderUsage } from '@/serve/lib/responses-kv-cache'
@@ -276,6 +276,75 @@ describe('createNamedKvCacheRetention', () => {
     ;(await r.acquire(K.c))()
     await r.sweep()
     assert.deepEqual(deleted, [])
+  })
+
+  describe('across processes', () => {
+    // This process is pid 1; pid 2 is another live QVAC server, pid 3 is dead.
+    function shared(dir: string, deleted: string[]) {
+      return createNamedKvCacheRetention({
+        prefix: 'responses-',
+        dir,
+        maxBytes: 1000,
+        idleTtlMs: 24 * HOUR_MS,
+        now: () => NOW,
+        pid: 1,
+        isAlive: (pid) => pid === 1 || pid === 2,
+        deleteKey: (key) => {
+          deleted.push(key)
+          return Promise.resolve()
+        }
+      })
+    }
+    async function leaseFile(dir: string, name: string): Promise<string> {
+      await mkdir(join(dir, '.responses-leases'), { recursive: true })
+      const file = join(dir, '.responses-leases', name)
+      await writeFile(file, '')
+      return file
+    }
+
+    it('never deletes a cache another live process holds, by TTL or reclaim', async (t) => {
+      const dir = await cacheDir(t, { [K.old]: { bytes: 10, ageMs: 30 * HOUR_MS } })
+      await leaseFile(dir, `${K.old}.lease-2-0`)
+      const deleted: string[] = []
+      const r = shared(dir, deleted)
+      ;(await r.acquire(K.old))()
+      await r.sweep()
+      await r.sweep({ all: true })
+      assert.deepEqual(deleted, [])
+    })
+
+    it("ignores and removes a dead process's lease", async (t) => {
+      const dir = await cacheDir(t, { [K.old]: { bytes: 10, ageMs: 30 * HOUR_MS } })
+      const stale = await leaseFile(dir, `${K.old}.lease-3-0`)
+      const deleted: string[] = []
+      await shared(dir, deleted).sweep()
+      assert.deepEqual(deleted, [K.old])
+      await assert.rejects(stat(stale), { code: 'ENOENT' })
+    })
+
+    it('makes a request wait while another process deletes its key', async (t) => {
+      const dir = await cacheDir(t, {})
+      const marker = await leaseFile(dir, `${K.a}.sweep-2`)
+      const r = shared(dir, [])
+      let acquired = false
+      const pending = r.acquire(K.a).then((release) => {
+        acquired = true
+        return release
+      })
+      await new Promise((resolve) => setTimeout(resolve, 120))
+      assert.equal(acquired, false)
+      await unlink(marker)
+      ;(await pending)()
+      assert.equal(acquired, true)
+    })
+
+    it('leaves a key another live process is already sweeping', async (t) => {
+      const dir = await cacheDir(t, { [K.old]: { bytes: 10, ageMs: 30 * HOUR_MS } })
+      await leaseFile(dir, `${K.old}.sweep-2`)
+      const deleted: string[] = []
+      await shared(dir, deleted).sweep()
+      assert.deepEqual(deleted, [])
+    })
   })
 
   it('treats a missing cache directory as empty', async () => {

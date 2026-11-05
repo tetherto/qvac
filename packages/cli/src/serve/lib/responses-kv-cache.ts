@@ -1,5 +1,5 @@
-import type { Dirent } from 'node:fs'
-import { readdir, stat } from 'node:fs/promises'
+import { unlinkSync, type Dirent } from 'node:fs'
+import { mkdir, readdir, stat, unlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { deleteCache } from '@qvac/sdk'
@@ -24,6 +24,9 @@ export interface NamedKvCacheRetentionOptions {
   sweepIntervalMs?: number
   now?: () => number
   deleteKey?: (key: string) => Promise<void>
+  /** This process, as named in lease files; overridable for tests. */
+  pid?: number
+  isAlive?: (pid: number) => boolean
 }
 
 export interface NamedKvCacheRetention {
@@ -54,9 +57,13 @@ interface CacheEntry {
 // This applies the same policy to the caches it names: a 24-hour idle TTL and
 // a 4 GiB least-recently-used quota, swept at most every five minutes.
 //
-// Other QVAC processes can share the cache directory, and only this one's
-// in-use keys are known here. So the quota and `all` delete only keys this
-// server has used; the idle TTL, like the SDK's own, applies to every key.
+// Other QVAC processes can share the cache directory. A request leaves a
+// lease file (named by its pid) while it uses a key, and a sweep claims a key
+// with a marker before deleting it. Each side writes its own file before
+// checking for the other's, so a sweep never deletes a key a live process
+// holds, and a request waits out a deletion in progress. Files left by dead
+// processes are ignored and cleaned up. The quota and `all` also only delete
+// keys this server has used; the idle TTL applies to every key.
 export function createNamedKvCacheRetention(
   opts: NamedKvCacheRetentionOptions
 ): NamedKvCacheRetention {
@@ -68,6 +75,10 @@ export function createNamedKvCacheRetention(
   const now = opts.now ?? Date.now
   const deleteKey =
     opts.deleteKey ?? ((kvCacheKey: string) => deleteCache({ kvCacheKey }).then(() => undefined))
+  const pid = opts.pid ?? process.pid
+  const isAlive = opts.isAlive ?? processAlive
+  const leases = join(dir, '.responses-leases')
+  let leaseSeq = 0
   const keyShape = new RegExp(`^${opts.prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[0-9a-f]{64}$`)
   const inUse = new Map<string, number>()
   const owned = new Set<string>()
@@ -78,18 +89,66 @@ export function createNamedKvCacheRetention(
   // and the first to finish would clear its deletion while the other still runs.
   let queue: Promise<unknown> = Promise.resolve()
 
+  // `<key>.lease-<pid>-<n>` / `<key>.sweep-<pid>` files whose process is
+  // alive; a dead process's file is removed on the way. Kept flat in one
+  // directory so nothing ever removes a folder another process is writing into.
+  async function liveFiles(key: string, kind: 'lease' | 'sweep'): Promise<string[]> {
+    const prefix = `${key}.${kind}-`
+    const names = (await gone(() => readdir(leases))) ?? []
+    const live: string[] = []
+    for (const name of names) {
+      if (!name.startsWith(prefix)) continue
+      const owner = Number(name.slice(prefix.length).split('-')[0])
+      if (isAlive(owner)) live.push(name)
+      else await unlink(join(leases, name)).catch(() => undefined)
+    }
+    return live
+  }
+
   async function acquire(key: string): Promise<() => void> {
     while (deleting.has(key)) await deleting.get(key)!.catch(() => undefined)
     inUse.set(key, (inUse.get(key) ?? 0) + 1)
     owned.add(key)
+    const lease = join(leases, `${key}.lease-${pid}-${leaseSeq++}`)
+    await mkdir(leases, { recursive: true })
+    await writeFile(lease, '')
+    // Another process may be deleting this key; wait until it has finished.
+    while ((await liveFiles(key, 'sweep')).length > 0) await delay(50)
     let released = false
     return () => {
       if (released) return
       released = true
+      try {
+        unlinkSync(lease)
+      } catch {
+        // Already gone with the whole cache directory.
+      }
       const count = (inUse.get(key) ?? 1) - 1
       if (count > 0) inUse.set(key, count)
       else inUse.delete(key)
     }
+  }
+
+  // Marks the key as being deleted by this process. Null when a live process
+  // holds a lease on it or another process is already sweeping it.
+  async function claim(key: string): Promise<(() => Promise<void>) | null> {
+    const marker = join(leases, `${key}.sweep-${pid}`)
+    await mkdir(leases, { recursive: true })
+    try {
+      await writeFile(marker, '', { flag: 'wx' })
+    } catch {
+      return null
+    }
+    const sweepers = await liveFiles(key, 'sweep')
+    const holders = await liveFiles(key, 'lease')
+    const done = async (): Promise<void> => {
+      await unlink(marker).catch(() => undefined)
+    }
+    if (sweepers.length > 1 || holders.length > 0) {
+      await done()
+      return null
+    }
+    return done
   }
 
   async function entries(): Promise<CacheEntry[]> {
@@ -148,12 +207,15 @@ export function createNamedKvCacheRetention(
       const evictable = mine && (all || total > maxBytes)
       if (!expired && !evictable) continue
       if (inUse.has(entry.key)) continue
+      const release = await claim(entry.key)
+      if (!release) continue
       const deletion = deleteKey(entry.key)
       deleting.set(entry.key, deletion)
       try {
         await deletion
       } finally {
         deleting.delete(entry.key)
+        await release()
       }
       if (mine) total -= current.bytes
       owned.delete(entry.key)
@@ -220,3 +282,17 @@ async function gone<T>(read: () => Promise<T>): Promise<T | null> {
 export const responsesKvCacheRetention = createNamedKvCacheRetention({
   prefix: RESPONSES_KV_CACHE_PREFIX
 })
+
+function processAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (err) {
+    // EPERM: it exists but belongs to another user.
+    return (err as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
