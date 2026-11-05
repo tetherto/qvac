@@ -34,11 +34,11 @@ It resumes interrupted transfers and reuses verified files, including the VAE
 without a token when already cached. Invalid partial downloads are removed so
 the next run can retry. Downloaded weights retain their source licenses.
 
-| File | Source |
-| --- | --- |
-| `flux3-image-klein-Q8_0.gguf` | [leejet FLUX.3 Image Klein](https://huggingface.co/leejet/flux-3-image-klein-GGUF/tree/1c2ad2f9b9247ccca6506a23bdb033fdb0873321) |
-| `Qwen3VL-4B-Instruct-Q4_K_M.gguf` | [Qwen3-VL 4B](https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/tree/1cd86afb9a95c410a6038ab3b40d8b578c892266) |
-| `flux3-vae.safetensors` | [FLUX.3 `ae.safetensors`](https://huggingface.co/black-forest-labs/flux-3-image-klein/tree/09561231f44e41381c461caf53d5452005a60ac9) |
+| File                              | Source                                                                                                                               |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `flux3-image-klein-Q8_0.gguf`     | [leejet FLUX.3 Image Klein](https://huggingface.co/leejet/flux-3-image-klein-GGUF/tree/1c2ad2f9b9247ccca6506a23bdb033fdb0873321)     |
+| `Qwen3VL-4B-Instruct-Q4_K_M.gguf` | [Qwen3-VL 4B](https://huggingface.co/Qwen/Qwen3-VL-4B-Instruct-GGUF/tree/1cd86afb9a95c410a6038ab3b40d8b578c892266)                   |
+| `flux3-vae.safetensors`           | [FLUX.3 `ae.safetensors`](https://huggingface.co/black-forest-labs/flux-3-image-klein/tree/09561231f44e41381c461caf53d5452005a60ac9) |
 
 These files total approximately 9 GB. The downloader fetches the gated VAE
 first to report access failures before downloading the larger public files.
@@ -75,6 +75,17 @@ Run the downloader behavior tests without downloading model weights:
 node --test scripts/download-model-flux3.test.mjs
 ```
 
-The generation example exercises the actual addon when run with a rebuilt
-native package and downloaded weights. Engine-only validation results do not
-replace a rebuilt-addon generation check.
+To check Bash 3.2 compatibility, set `BASH_BIN` to that shell when running
+the downloader tests.
+
+With a rebuilt native package and checksum-verified downloaded weights, run
+the addon integration test for both one-reference and multiple-reference editing:
+
+```bash
+FLUX3_MODELS_DIR="$PWD/models/flux3" FLUX3_BACKEND=cuda0 \
+  bare test/integration/generate-image-flux3-i2i.test.js --exit
+```
+
+The integration test is opt-in: without `FLUX3_MODELS_DIR`, it is skipped.
+It generates one-step 256×256 images to exercise native reference dispatch;
+use the generation example for image-quality checks.
