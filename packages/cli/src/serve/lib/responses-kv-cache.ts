@@ -118,9 +118,12 @@ export function createNamedKvCacheRetention(
   async function sweepNow({ all = false }: { all?: boolean }): Promise<number> {
     const caches = await entries()
     // A failed or cancelled first turn can leave no folder behind; forget it.
+    // The listing above is a snapshot, so a folder created since is re-checked.
     const present = new Set(caches.map((entry) => entry.key))
-    for (const key of owned) {
-      if (!present.has(key) && !inUse.has(key)) owned.delete(key)
+    for (const key of [...owned]) {
+      if (present.has(key) || inUse.has(key)) continue
+      const exists = await gone(() => stat(join(dir, key)))
+      if (!exists && !inUse.has(key)) owned.delete(key)
     }
     let total = caches.reduce((sum, entry) => sum + entry.bytes, 0)
     const idle = caches
