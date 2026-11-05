@@ -225,7 +225,7 @@ jobs:
       - name: Check @qvac/sdk
         run: node .github/scripts/check-shared-runtime-libs.mjs packages/sdk --local packages/inference
 
-  # publish-inference.yml's Pear e2e, on the train's @qvac/inference tarball.
+  # publish-npm.yml's inference Pear e2e, on the train's @qvac/inference tarball.
   pear-e2e:
     name: Pear e2e
     needs: [train, build]
