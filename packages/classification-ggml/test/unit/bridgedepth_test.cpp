@@ -53,6 +53,32 @@ std::string expectThrows(const std::function<void()>& run) {
 
 } // namespace
 
+TEST(BridgeDepthPosEmbed, KeepsTheStoredTableAtItsOwnGrid) {
+  // DAv2 ViT-S stores a 37 x 37 grid (518 / 14). A 592 x 592 padded input
+  // gives a 592 / 8 * 7 = 518 px mono image, so exactly that grid.
+  constexpr int grid = 37;
+  constexpr int patch = 14;
+  constexpr int paddedSide = 592;
+  ASSERT_EQ(paddedSide / 8 * 7 / patch, grid);
+  constexpr int dim = 4;
+  constexpr unsigned seed = 26696;
+  std::mt19937 rng(seed);
+  std::uniform_real_distribution<float> uniform(-1.0f, 1.0f);
+  std::vector<float> table(static_cast<size_t>(1 + grid * grid) * dim);
+  for (float& v : table)
+    v = uniform(rng);
+
+  EXPECT_EQ(bd::interpolatePosEmbed(table, grid, grid, grid), table);
+
+  // Any other grid is resampled: the class token is copied, the rest is not
+  // the stored table.
+  const auto other = bd::interpolatePosEmbed(table, grid, grid - 1, grid);
+  ASSERT_EQ(other.size(), static_cast<size_t>(1 + (grid - 1) * grid) * dim);
+  EXPECT_TRUE(std::equal(table.begin(), table.begin() + dim, other.begin()));
+  EXPECT_FALSE(
+      std::equal(other.begin() + dim, other.end(), table.begin() + dim));
+}
+
 TEST(BridgeDepthPadding, MatchesInputPadderTopAndRight) {
   const auto pad = bd::computePadding(100, 200, bd::PAD_DIVISOR);
   EXPECT_EQ(pad.top, 12);

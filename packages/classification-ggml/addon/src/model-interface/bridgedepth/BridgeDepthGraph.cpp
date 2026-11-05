@@ -19,6 +19,8 @@ namespace {
 
 constexpr size_t GRAPH_SIZE = 32768;
 constexpr size_t POS_CACHE_LIMIT = 8;
+// DINOv2 interpolate_offset: the pos-embed resize scale is (n + 0.1) / M.
+constexpr double POS_INTERPOLATE_OFFSET = 0.1;
 constexpr float MEAN_RGB[3] = {123.675f, 116.28f, 103.53f};
 constexpr float STD_RGB[3] = {58.395f, 57.12f, 57.375f};
 
@@ -252,6 +254,43 @@ struct HostTensor {
 };
 } // namespace
 
+std::vector<float>
+interpolatePosEmbed(const std::vector<float>& table, int grid, int ph, int pw) {
+  // DINOv2 returns the stored table unchanged at its own square grid; the
+  // resampling below is not an identity there.
+  if (ph == grid && pw == grid)
+    return table;
+  const int mDim = grid;
+  const int64_t dDim = static_cast<int64_t>(table.size()) / (1 + mDim * mDim);
+  // DINOv2 passes scale_factor = (n + offset) / M and PyTorch derives the
+  // source index from that scale, not from the size ratio.
+  auto ty = cubicTaps(
+      mDim, ph, (static_cast<double>(ph) + POS_INTERPOLATE_OFFSET) / mDim);
+  auto tx = cubicTaps(
+      mDim, pw, (static_cast<double>(pw) + POS_INTERPOLATE_OFFSET) / mDim);
+  std::vector<float> out(static_cast<size_t>(1 + ph * pw) * dDim);
+  std::copy(table.begin(), table.begin() + dDim, out.begin());
+  const float* src = table.data() + dDim;
+  for (int y = 0; y < ph; ++y) {
+    for (int x = 0; x < pw; ++x) {
+      float* dst = out.data() + static_cast<size_t>(1 + y * pw + x) * dDim;
+      for (int64_t d = 0; d < dDim; ++d) {
+        float acc = 0.0f;
+        for (int i = 0; i < 4; ++i) {
+          float accx = 0.0f;
+          for (int j = 0; j < 4; ++j) {
+            accx += tx[x].w[j] *
+                    src[(ty[y].idx[i] * mDim + tx[x].idx[j]) * dDim + d];
+          }
+          acc += ty[y].w[i] * accx;
+        }
+        dst[d] = acc;
+      }
+    }
+  }
+  return out;
+}
+
 struct BridgeDepthGraph::Impl {
   using Outputs = std::vector<std::pair<std::string, T*>>;
   ggml_context* wctx = nullptr;
@@ -421,39 +460,12 @@ struct BridgeDepthGraph::Impl {
     return result;
   }
 
-  // DINOv2 interpolate_pos_encoding for a ph x pw patch grid, cached per grid.
+  // interpolatePosEmbed for a ph x pw patch grid, cached per grid.
   const std::vector<float>& posEmbed(int ph, int pw) {
     auto it = posCache.find({ph, pw});
     if (it != posCache.end())
       return it->second;
-    const int mDim = posGrid;
-    const int64_t dDim =
-        static_cast<int64_t>(posEmbedHost.size()) / (1 + mDim * mDim);
-    // DINOv2 passes scale_factor = (n + 0.1) / M and PyTorch derives the source
-    // index from that scale, not from the size ratio.
-    auto ty = cubicTaps(mDim, ph, (static_cast<double>(ph) + 0.1) / mDim);
-    auto tx = cubicTaps(mDim, pw, (static_cast<double>(pw) + 0.1) / mDim);
-    std::vector<float> out(static_cast<size_t>(1 + ph * pw) * dDim);
-    std::copy(posEmbedHost.begin(), posEmbedHost.begin() + dDim, out.begin());
-    const float* grid = posEmbedHost.data() + dDim;
-    std::vector<float> row(dDim);
-    for (int y = 0; y < ph; ++y) {
-      for (int x = 0; x < pw; ++x) {
-        float* dst = out.data() + static_cast<size_t>(1 + y * pw + x) * dDim;
-        for (int64_t d = 0; d < dDim; ++d) {
-          float acc = 0.0f;
-          for (int i = 0; i < 4; ++i) {
-            float accx = 0.0f;
-            for (int j = 0; j < 4; ++j) {
-              accx += tx[x].w[j] *
-                      grid[(ty[y].idx[i] * mDim + tx[x].idx[j]) * dDim + d];
-            }
-            acc += ty[y].w[i] * accx;
-          }
-          dst[d] = acc;
-        }
-      }
-    }
+    std::vector<float> out = interpolatePosEmbed(posEmbedHost, posGrid, ph, pw);
     if (posCache.size() >= POS_CACHE_LIMIT)
       posCache.clear(); // callers may cycle through many sizes
     return posCache.emplace(std::make_pair(ph, pw), std::move(out))

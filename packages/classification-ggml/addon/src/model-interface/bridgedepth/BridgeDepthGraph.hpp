@@ -31,6 +31,12 @@ std::vector<float> padImage(const float* chw, int h, int w, Padding pad);
 // Same, written to `out`, which holds 3 * (h + top) * (w + right) floats.
 void padImageInto(const float* chw, int h, int w, Padding pad, float* out);
 
+// DINOv2 interpolate_pos_encoding with bicubic resampling. `table` is
+// [1 + grid * grid, D] (class token first); returns [1 + ph * pw, D]. At
+// ph == pw == grid it returns `table` unchanged, as DINOv2 does.
+std::vector<float>
+interpolatePosEmbed(const std::vector<float>& table, int grid, int ph, int pw);
+
 // Device or memory failures, as opposed to a bad file or input.
 struct ResourceError : std::runtime_error {
   using std::runtime_error::runtime_error;
