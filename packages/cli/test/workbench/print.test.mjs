@@ -374,7 +374,7 @@ test('--model switches the agent before sending', async () => {
   const engine = fakeEngine({ script: { sendMessage: answer } })
   await runPrint(engine, {
     deviceId: 'aa',
-    options: { mode: 'text', prompt: 'x', model: 'big' },
+    options: { mode: 'text', prompt: 'x', model: 'big', modelChosen: true },
     io: io()
   })
   assert.deepEqual(engine.calls.find((c) => c[0] === 'updateAgent')[1], {
@@ -382,6 +382,19 @@ test('--model switches the agent before sending', async () => {
     agentId: 'agent-1',
     config: { modelName: 'big' }
   })
+})
+
+test('the automatic model pick keeps an existing agent model', async () => {
+  const engine = fakeEngine({ script: { sendMessage: answer } })
+  await runPrint(engine, {
+    deviceId: 'aa',
+    options: { mode: 'text', prompt: 'x', model: 'big' },
+    io: io()
+  })
+  assert.equal(
+    engine.calls.find((c) => c[0] === 'updateAgent'),
+    undefined
+  )
 })
 
 function rpcInput() {

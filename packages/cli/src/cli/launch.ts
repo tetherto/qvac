@@ -136,12 +136,17 @@ function applyConfig(options: LaunchOptions, { loaded }: { loaded: LoadedConfig 
   options.theme = tui.theme || 'terminal'
   core.dataDir = options.dataDir
   fs.mkdirSync(options.dataDir, { recursive: true, mode: 0o700 })
-  options.runtimeConfig = path.join(options.dataDir, 'cli-runtime-config.json')
-  fs.writeFileSync(options.runtimeConfig, runtimeJson(loaded), { mode: 0o600 })
+  const runtimeConfig = path.join(options.dataDir, `cli-runtime-config.${process.pid}.json`)
+  options.runtimeConfig = runtimeConfig
+  fs.writeFileSync(runtimeConfig, runtimeJson(loaded), { mode: 0o600 })
   // the SDK's own keys sit beside QV.AC's three in qvac.config; the harness passes them to the SDK
   const { core: _core, harness: _harness, tui: _tui, ...sdk } = loaded.config
-  const sdkOptions = path.join(options.dataDir, 'cli-sdk-options.json')
+  const sdkOptions = path.join(options.dataDir, `cli-sdk-options.${process.pid}.json`)
   fs.writeFileSync(sdkOptions, JSON.stringify(sdk), { mode: 0o600 })
+  process.once('exit', () => {
+    fs.rmSync(runtimeConfig, { force: true })
+    fs.rmSync(sdkOptions, { force: true })
+  })
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     QVAC_CLI_CONFIG: options.runtimeConfig,

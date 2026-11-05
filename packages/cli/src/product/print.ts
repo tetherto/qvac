@@ -98,7 +98,7 @@ async function prepare(
     remembered: config.activeAgentId,
     modelName: options.model
   })
-  if (options.model && agent.modelName !== options.model) {
+  if (options.modelChosen && options.model && agent.modelName !== options.model) {
     agent = await engine.updateAgent({
       meshId,
       agentId: agent.id,
@@ -373,7 +373,7 @@ class RpcSession {
   }
 
   running() {
-    return !!this.pendingRun || !!activeRun(this.list)
+    return !!this.watch && (!!this.pendingRun || !!activeRun(this.list))
   }
 
   wake() {
@@ -427,6 +427,7 @@ class RpcSession {
     }
 
     if (iterator === this.watch) {
+      this.watch = null
       this.pendingRun = null
       this.wake()
     }
@@ -489,6 +490,8 @@ function rpcCommands(rpcSession: RpcSession): RpcCommands {
       if (result.chatId !== chatId) {
         rpcSession.open(result.chatId)
         await session.remember(engine, { agentId: agent.id, chatId: result.chatId }).catch(noop)
+      } else if (!rpcSession.watch) {
+        rpcSession.open(result.chatId, { quiet: true })
       }
 
       rpcSession.pendingRun = result.runId

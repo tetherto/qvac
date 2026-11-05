@@ -369,7 +369,7 @@ export class ProductApp {
             remembered: config.activeAgentId,
             modelName: options.model
           }))
-        if (options.model && agent.modelName !== options.model) {
+        if (options.modelChosen && options.model && agent.modelName !== options.model) {
           agent = await engine.updateAgent({
             meshId,
             agentId: agent.id,
@@ -518,7 +518,7 @@ export class ProductApp {
     this.runStarted = Date.now()
     this.scroll = 0
     this.notice = ''
-    const { chatId, meshId, agent } = this
+    const { chatId, meshId, agent, chatTag: tag } = this
     const context = chatId ? '' : contextPreamble(this.contextFiles)
 
     return this.tui.batch(this.spin(), async () => {
@@ -533,7 +533,7 @@ export class ProductApp {
                 title: text.split('\n')[0]!.slice(0, 48)
               }
         )
-        return { type: 'chat.sent', chatId: result.chatId, text }
+        return { type: 'chat.sent', chatId: result.chatId, text, tag }
       } catch (error) {
         return { type: 'chat.send-error', error, text }
       }
@@ -597,6 +597,7 @@ export class ProductApp {
       originDeviceId: this.originDeviceId
     }
     this.notice = `Attaching ${file.fileName}…`
+    const tag = this.chatTag
 
     return this.effect(async () => {
       if (!scope.chatId) {
@@ -611,7 +612,7 @@ export class ProductApp {
 
       await session.upload(this.engine!, scope, file)
 
-      return { chatId: scope.chatId, fileName: file.fileName }
+      return { chatId: scope.chatId, fileName: file.fileName, tag }
     }, 'chat.attached')
   }
 

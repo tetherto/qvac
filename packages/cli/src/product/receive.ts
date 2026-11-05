@@ -167,8 +167,8 @@ function downloadsChanged(app: ProductApp, msg: Value<WatchFrame<'modelDownloads
   return app.watch('downloads')
 }
 
-function sent(app: ProductApp, msg: { chatId?: string | null }): Command {
-  if (msg.chatId && msg.chatId !== app.chatId) {
+function sent(app: ProductApp, msg: { chatId?: string | null; tag: number }): Command {
+  if (msg.tag === app.chatTag && msg.chatId && msg.chatId !== app.chatId) {
     return app.openChat(msg.chatId)
   }
 
@@ -230,9 +230,12 @@ function shellFinished(
   )
 }
 
-function attached(app: ProductApp, msg: Value<{ fileName: string; chatId: string }>): Command {
+function attached(
+  app: ProductApp,
+  msg: Value<{ fileName: string; chatId: string; tag: number }>
+): Command {
   app.notice = `Attached ${msg.value.fileName}`
-  if (msg.value.chatId !== app.chatId) {
+  if (msg.value.tag === app.chatTag && msg.value.chatId !== app.chatId) {
     return app.openChat(msg.value.chatId)
   }
 
