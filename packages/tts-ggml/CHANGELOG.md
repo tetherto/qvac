@@ -29,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Explicit LavaSR Core ML models and compute policies in the enhancer and
   denoiser options.
+- Optional Chatterbox Turbo and Multilingual Core ML sidecars on Apple
+  platforms for the S3Gen encoder, CFM estimator and HiFT vocoder, picked up
+  next to the S3Gen GGUF. With `maxSentenceChars` set, S3Gen vocodes each
+  sentence on the Neural Engine while T3 decodes the next on the GPU.
 
 ### Changed
 
