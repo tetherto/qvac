@@ -24,7 +24,6 @@ unload_model, delete_cache, model_registry_*).
 from __future__ import annotations
 
 from .schemas import *  # noqa: F401,F403
-from .schemas import EmbedRequest as EmbedRequest
 from .schemas import __all__ as _schemas_all
 from .methods import *  # noqa: F401,F403
 from .methods import __all__ as _methods_all
