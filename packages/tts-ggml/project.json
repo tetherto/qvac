@@ -103,13 +103,57 @@
           "args": "--platform=linux --arch=x64 -D ENABLE_CUDA=ON",
           "ci": {
             "runner": "linux_ubuntu2204_x64"
-          }
+          },
+          "commands": [
+            {
+              "command": "pnpm run build:ts",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "pnpm exec bare-make generate -D BUILD_TESTING=OFF",
+              "forwardAllArgs": true
+            },
+            {
+              "command": "pnpm exec bare-make build",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "pnpm exec bare-make install",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs prebuilds/linux-x64",
+              "forwardAllArgs": false
+            }
+          ]
         },
         "linux-arm64": {
           "args": "--platform=linux --arch=arm64",
           "ci": {
             "runner": "ubuntu_2204_arm"
-          }
+          },
+          "commands": [
+            {
+              "command": "pnpm run build:ts",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "pnpm exec bare-make generate -D BUILD_TESTING=OFF",
+              "forwardAllArgs": true
+            },
+            {
+              "command": "pnpm exec bare-make build",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "pnpm exec bare-make install",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs prebuilds/linux-arm64",
+              "forwardAllArgs": false
+            }
+          ]
         },
         "android-arm64": {
           "args": "--platform=android --arch=arm64 -D ANDROID_STL=c++_shared",

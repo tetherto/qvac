@@ -190,6 +190,9 @@ Before npm publish:
   sdk, as their `verify:deps` targets run it.
 - **`sdk-python`**: the Python contract check, build, version lockstep and
   `twine check`.
+- **`pear-e2e`**: `test-inference-pear-e2e.yml` on the train's
+  `@qvac/inference` tarball, as `publish-inference.yml` runs it. Pin upstream
+  with the `PEAR_E2E_*_VERSION` repository variables.
 - after the install, no package outside the train is linked from the
   workspace.
 
