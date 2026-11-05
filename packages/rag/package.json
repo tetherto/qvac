@@ -19,7 +19,7 @@
     "#crypto": {
       "types": "./src/shims/crypto.ts",
       "bare": "bare-crypto",
-      "node": "node:crypto",
+      "node": "crypto",
       "react-native": "./dist/shims/crypto.js",
       "default": "./dist/shims/crypto.js"
     }
