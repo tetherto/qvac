@@ -2,19 +2,22 @@
 
 ## [0.27.0] - 2026-11-05
 
-Linux x64 packages now include the AMD XDNA backend and its compiled NPU kernels. This release uses the published Fabric registry port so source and CI builds share the same native dependency definition.
+### Fixed
 
-## Features
+- Native builds use `qvac-fabric 11739.0.0#1` from the registry instead of a
+  package-local overlay, so source and CI builds use the same port definition.
+- CUDA and XDNA share a private ggml core compiled against libstdc++. CUDA
+  retains static runtime linkage, while XDNA links the system runtime to match
+  XRT.
 
-The XDNA backend ships with its kernel binaries and instruction stream beside the module. It uses system XRT 2.25 or newer and the matching system C++ runtime; hosts without XRT can continue using the other backends. Building the kernels requires the pinned IRON toolchain, but does not require NPU hardware.
+### Added
 
-## Other
-
-Native builds consume `qvac-fabric 11739.0.0#1` from the registry instead of a package-local overlay. CUDA and XDNA share a private ggml core compiled against libstdc++; CUDA retains static runtime linkage, while XDNA uses dynamic linkage to match XRT. Build validation checks the XDNA kernel files and runtime dependencies while preserving the checks for all other modules.
-
-## Pull Requests
-
-- [#5574](https://github.com/tetherto/qvac/pull/5574) - Build Fabric XDNA backend with provisioned XRT.
+- Linux x64 packages ship the AMD XDNA backend with its compiled NPU kernels
+  and instruction stream beside the module. It requires system XRT 2.25 or
+  newer; hosts without XRT can continue using the other backends. Building the
+  kernels requires the pinned IRON toolchain but does not require NPU hardware.
+- Build validation checks the XDNA kernel files, instruction stream and runtime
+  dependencies alongside the existing checks for other backend modules.
 
 ## [0.26.0] - 2026-11-04
 
