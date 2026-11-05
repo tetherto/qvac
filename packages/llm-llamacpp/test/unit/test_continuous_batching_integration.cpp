@@ -804,26 +804,53 @@ void expectForcedOpenerStreamedOnce(LlamaModel& model) {
     return text.rfind("<think>", 0) == 0 &&
            text.find("<think>", 1) == std::string::npos;
   };
+  const auto makePrompt = [](const char* input, std::string* streamed) {
+    LlamaModel::Prompt prompt;
+    prompt.input = input;
+    if (streamed != nullptr) {
+      prompt.outputCallback = [streamed](const std::string& piece) {
+        *streamed += piece;
+      };
+    }
+    return prompt;
+  };
+  const char* first = R"([{"role":"user","content":"What is 17 * 23?"}])";
+  const char* second = R"([{"role":"user","content":"What is 12 * 11?"}])";
 
-  LlamaModel::Prompt singlePrompt;
-  singlePrompt.input = R"([{"role":"user","content":"What is 17 * 23?"}])";
-  const std::string single = model.processPrompt(singlePrompt);
+  const std::string single = model.processPrompt(makePrompt(first, nullptr));
   EXPECT_TRUE(startsWithOpenerOnce(single)) << single;
 
+  // A single `run()` with `parallel >= 2` reaches the scheduler as a
+  // one-prompt batch.
+  std::string streamedAlone;
+  const auto alone = model.processPromptBatch(
+      std::vector<LlamaModel::Prompt>{makePrompt(first, &streamedAlone)});
+  ASSERT_EQ(alone.size(), 1u);
+  EXPECT_TRUE(startsWithOpenerOnce(alone[0])) << alone[0];
+  EXPECT_EQ(streamedAlone, alone[0]);
+
   std::string streamed;
-  LlamaModel::Prompt first;
-  first.input = singlePrompt.input;
-  first.outputCallback = [&streamed](const std::string& piece) {
-    streamed += piece;
-  };
-  LlamaModel::Prompt second;
-  second.input = R"([{"role":"user","content":"What is 12 * 11?"}])";
-  std::vector<LlamaModel::Prompt> prompts{std::move(first), std::move(second)};
-  const auto outputs = model.processPromptBatch(prompts);
+  const auto outputs = model.processPromptBatch(
+      std::vector<LlamaModel::Prompt>{
+          makePrompt(first, &streamed), makePrompt(second, nullptr)});
   ASSERT_EQ(outputs.size(), 2u);
   EXPECT_TRUE(startsWithOpenerOnce(outputs[0])) << outputs[0];
   EXPECT_TRUE(startsWithOpenerOnce(outputs[1])) << outputs[1];
   EXPECT_EQ(streamed, outputs[0]);
+
+  // The opener is owed per request: a sibling with thinking off gets none.
+  std::string streamedOn;
+  std::string streamedOff;
+  auto thinkingOff = makePrompt(second, &streamedOff);
+  thinkingOff.generationParams.reasoning_budget = 0;
+  const auto mixed = model.processPromptBatch(
+      std::vector<LlamaModel::Prompt>{
+          makePrompt(first, &streamedOn), std::move(thinkingOff)});
+  ASSERT_EQ(mixed.size(), 2u);
+  EXPECT_TRUE(startsWithOpenerOnce(mixed[0])) << mixed[0];
+  EXPECT_EQ(mixed[1].find("<think>"), std::string::npos) << mixed[1];
+  EXPECT_EQ(streamedOn, mixed[0]);
+  EXPECT_EQ(streamedOff, mixed[1]);
 }
 } // namespace
 
