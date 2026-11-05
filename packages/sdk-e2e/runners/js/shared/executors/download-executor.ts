@@ -1,4 +1,4 @@
-import { downloadAsset, cancel, WHISPER_TINY, BERGAMOT_ZH_EN } from '@qvac/sdk'
+import { downloadAsset, cancel, WHISPER_TINY_Q8_0, BERGAMOT_ZH_EN } from '@qvac/sdk'
 import { BaseExecutor, type TestResult } from '@qvac/test-suite'
 import {
   downloadCancelIsolation,
@@ -50,7 +50,7 @@ export class DownloadExecutor extends BaseExecutor<typeof downloadTests> {
     const startTime = Date.now()
 
     const survivorPromise = downloadAsset({
-      assetSrc: WHISPER_TINY,
+      assetSrc: WHISPER_TINY_Q8_0,
       onProgress: () => {}
     }).then(
       (id: string) => ({ status: 'ok' as const, id }),
