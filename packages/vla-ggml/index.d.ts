@@ -22,6 +22,7 @@ declare class VlaModel {
     private _job;
     private _run;
     private _handle;
+    private _instanceGeneration;
     private _hparams;
     private _backendName;
     private _hasActiveResponse;
