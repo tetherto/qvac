@@ -2,7 +2,7 @@ import {
   downloadAsset,
   cancel,
   deleteCache,
-  WHISPER_TINY,
+  WHISPER_TINY_Q8_0,
   BERGAMOT_ZH_EN,
   WHISPER_FRENCH_TINY_Q8_0,
   WHISPER_GERMAN_TINY_Q8_0
@@ -253,7 +253,7 @@ export class DownloadExecutor extends BaseExecutor<typeof downloadTests> {
     const startTime = Date.now()
 
     const survivorPromise = downloadAsset({
-      assetSrc: WHISPER_TINY,
+      assetSrc: WHISPER_TINY_Q8_0,
       onProgress: () => {}
     }).then(
       (id: string) => ({ status: 'ok' as const, id }),
