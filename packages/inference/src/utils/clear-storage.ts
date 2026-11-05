@@ -21,27 +21,28 @@ export function resolveClearStorageTarget(
 }
 
 /**
- * Returns the deletion targets for `clearStorage` on a sharded model. A shard
- * directory in the QVAC cache (`sharded/<key>/`) holds only that model and is
- * removed whole. Anywhere else, only the model's own files are removed, never
- * the directory they sit in.
+ * Whether a sharded model sits directly in a cache shard directory,
+ * `<cache>/sharded/<key>/`. That directory holds one model, so it is the only
+ * one `clearStorage` may remove whole. Backslashes count as separators only
+ * when `sep` is one (Windows), and dot segments never match.
  */
-export function resolveShardedClearStorageTargets(
+export function isCacheShardPath(
   modelPath: string,
   modelsCacheDir: string,
-  modelFiles: readonly string[]
-): { path: string; kind: 'file' | 'directory' }[] {
-  const normalizedCache = modelsCacheDir.replace(/\\/g, '/').replace(/\/+$/, '')
-  const normalizedPath = modelPath.replace(/\\/g, '/')
-  const lastSlash = normalizedPath.lastIndexOf('/')
-  const shardDir = lastSlash === -1 ? '.' : normalizedPath.slice(0, lastSlash)
+  sep: string = '/'
+): boolean {
+  const toSlashes = (p: string) => (sep === '\\' ? p.replace(/\\/g, '/') : p)
+  const normalizedCache = toSlashes(modelsCacheDir).replace(/\/+$/, '')
+  const normalizedPath = toSlashes(modelPath)
 
-  if (normalizedPath.startsWith(`${normalizedCache}/`)) {
-    const parts = normalizedPath.slice(normalizedCache.length + 1).split('/')
-    if (parts.length === 3 && parts[0] === 'sharded' && parts[1] && parts[2]) {
-      return [{ path: shardDir, kind: 'directory' }]
-    }
+  if (!normalizedPath.startsWith(`${normalizedCache}/`)) {
+    return false
   }
 
-  return modelFiles.map((name) => ({ path: `${shardDir}/${name}`, kind: 'file' as const }))
+  const parts = normalizedPath.slice(normalizedCache.length + 1).split('/')
+  return (
+    parts.length === 3 &&
+    parts[0] === 'sharded' &&
+    parts.every((part) => part !== '' && part !== '.' && part !== '..')
+  )
 }
