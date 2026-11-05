@@ -1114,7 +1114,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
       // Unlike the two above, those have no per-slot source to move to.
       {"avgConcurrentSeq", stats.avgConcurrentSeq()},
       {"backendDevice", runtimeBackendDevice_},
-      {qvac_lib_inference_addon_llama::backend_reporting::kBackendNameId,
+      {qvac_lib_inference_addon_llama::backend_reporting::K_BACKEND_NAME_ID,
        runtimeBackendName_->snapshot()}};
   // Unlike the vision counters, the stop reason IS per-sequence, so a job can
   // report its own without misattribution — a single concurrent prompt would
@@ -1719,7 +1719,7 @@ LlamaModel::batchRuntimeStatsLocked() const {
       // per-batch value would be misattributed / racy. See singleRuntimeStats.
       {"avgConcurrentSeq", stats.avgConcurrentSeq()},
       {"backendDevice", runtimeBackendDevice_},
-      {qvac_lib_inference_addon_llama::backend_reporting::kBackendNameId,
+      {qvac_lib_inference_addon_llama::backend_reporting::K_BACKEND_NAME_ID,
        runtimeBackendName_->snapshot()}};
   appendSpeculativeStats(
       result,
@@ -1784,7 +1784,7 @@ LlamaModel::singleRuntimeStatsLocked() const {
        static_cast<int64_t>(state_->llmContext_->getVisionEncodeTiles())},
       {"avgConcurrentSeq", 1.0},
       {"backendDevice", runtimeBackendDevice_},
-      {qvac_lib_inference_addon_llama::backend_reporting::kBackendNameId,
+      {qvac_lib_inference_addon_llama::backend_reporting::K_BACKEND_NAME_ID,
        runtimeBackendName_->snapshot()}};
   appendSpeculativeStats(
       stats,
