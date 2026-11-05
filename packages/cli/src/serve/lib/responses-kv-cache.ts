@@ -125,7 +125,9 @@ export function createNamedKvCacheRetention(
       const exists = await gone(() => stat(join(dir, key)))
       if (!exists && !inUse.has(key)) owned.delete(key)
     }
-    let total = caches.reduce((sum, entry) => sum + entry.bytes, 0)
+    // The quota covers only this server's caches, the ones it can evict: other
+    // processes' caches would otherwise keep it over the limit and evict ours.
+    let total = caches.reduce((sum, entry) => (owned.has(entry.key) ? sum + entry.bytes : sum), 0)
     const idle = caches
       .filter((entry) => !inUse.has(entry.key))
       .sort((a, b) => a.lastUsedMs - b.lastUsedMs)
@@ -136,13 +138,14 @@ export function createNamedKvCacheRetention(
       // awaited, so decide on what the cache looks like now.
       if (inUse.has(entry.key)) continue
       const current = await folderUsage(join(dir, entry.key))
+      const mine = owned.has(entry.key)
       if (!current) {
-        total -= entry.bytes
+        if (mine) total -= entry.bytes
         continue
       }
-      total += current.bytes - entry.bytes
+      if (mine) total += current.bytes - entry.bytes
       const expired = now() - current.lastUsedMs > idleTtlMs
-      const evictable = owned.has(entry.key) && (all || total > maxBytes)
+      const evictable = mine && (all || total > maxBytes)
       if (!expired && !evictable) continue
       if (inUse.has(entry.key)) continue
       const deletion = deleteKey(entry.key)
@@ -152,7 +155,7 @@ export function createNamedKvCacheRetention(
       } finally {
         deleting.delete(entry.key)
       }
-      total -= current.bytes
+      if (mine) total -= current.bytes
       owned.delete(entry.key)
       deleted++
     }

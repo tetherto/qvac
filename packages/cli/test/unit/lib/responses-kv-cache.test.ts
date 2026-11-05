@@ -263,6 +263,21 @@ describe('createNamedKvCacheRetention', () => {
     assert.deepEqual(deleted, [])
   })
 
+  it("does not evict this server's caches because of another server's", async (t) => {
+    const dir = await cacheDir(t, {
+      [K.a]: { bytes: 900, ageMs: 2 * HOUR_MS },
+      [K.b]: { bytes: 900, ageMs: HOUR_MS },
+      [K.c]: { bytes: 50, ageMs: 3 * HOUR_MS }
+    })
+    const deleted: string[] = []
+    const r = retention(dir, deleted)
+    // Only c is ours: 50 bytes, well under the 1000-byte quota, so nothing goes
+    // even though a and b push the directory over it.
+    ;(await r.acquire(K.c))()
+    await r.sweep()
+    assert.deepEqual(deleted, [])
+  })
+
   it('treats a missing cache directory as empty', async () => {
     const deleted: string[] = []
     const r = retention(join(tmpdir(), 'qvac-kv-retention-missing'), deleted)
