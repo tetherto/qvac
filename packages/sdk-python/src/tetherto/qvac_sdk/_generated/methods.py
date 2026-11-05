@@ -184,7 +184,7 @@ async def bci_transcribe_stream(
 async def calc_tokens(
     transport: Transport, params: CalcTokensRequest
 ) -> CalcTokensResponse:
-    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    payload = params.model_dump(mode="json", by_alias=True, exclude_none=True)
     payload.setdefault("type", "calcTokens")
     return CalcTokensResponse.model_validate(await transport.call(payload))
 

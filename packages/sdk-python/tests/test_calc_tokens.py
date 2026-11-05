@@ -40,6 +40,40 @@ async def test_calc_tokens_sends_default_discriminator() -> None:
     }
 
 
+@pytest.mark.asyncio
+async def test_calc_tokens_sends_nested_tool_defaults() -> None:
+    transport = FakeTransport()
+    request = CalcTokensRequest.model_validate(
+        {
+            "modelId": "llm",
+            "text": "Hello",
+            "tools": [
+                {
+                    "name": "search",
+                    "description": "Search for a document.",
+                    "parameters": {"properties": {}},
+                }
+            ],
+        }
+    )
+
+    await calc_tokens(transport, request)
+
+    assert transport.payload == {
+        "modelId": "llm",
+        "text": "Hello",
+        "tools": [
+            {
+                "type": "function",
+                "name": "search",
+                "description": "Search for a document.",
+                "parameters": {"type": "object", "properties": {}},
+            }
+        ],
+        "type": "calcTokens",
+    }
+
+
 def test_calc_tokens_rejects_unknown_fields() -> None:
     with pytest.raises(ValidationError):
         CalcTokensRequest.model_validate(

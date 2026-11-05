@@ -592,7 +592,8 @@ def render_methods_module(manifest_methods: list[dict]) -> str:
         request_title = f"{pascal_case(name)}Request"
         response_title = f"{pascal_case(name)}Response"
         lines.append("")
-        dump = "params.model_dump(mode='json', by_alias=True, exclude_unset=True)"
+        exclude = "exclude_none=True" if name == "calcTokens" else "exclude_unset=True"
+        dump = f"params.model_dump(mode='json', by_alias=True, {exclude})"
         if shape == "reply":
             lines.append(
                 f"async def {func_name}(transport: Transport, params: {request_title}) -> {response_title}:"
