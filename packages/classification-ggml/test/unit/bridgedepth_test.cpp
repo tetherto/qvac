@@ -333,6 +333,11 @@ TEST_F(BridgeDepthReference, MatchesTorchWithReferenceSeeds) {
   } else {
     EXPECT_GE(within(disparity, 0.05), 0.999);
   }
+  // A GPU op that falls back to the CPU keeps parity and only costs speed.
+  // OpenCL lacks ops this graph needs and is left out.
+  if (deviceId == 1 || deviceId == 2 || deviceId == 3) {
+    EXPECT_EQ(graph.cpuFallbackNodes(), 0);
+  }
 }
 
 // The production path: decode, own top-k seeds, unpad. Measured 2026-11-03:

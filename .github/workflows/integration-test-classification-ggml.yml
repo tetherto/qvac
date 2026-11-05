@@ -290,6 +290,7 @@ jobs:
           # (noise is bounded to a few lines per sample image).
           QVAC_CLASSIFICATION_TRACE: "1"
           QVAC_MEGALOC_EXPECT_GPU: ${{ matrix.gpu && '1' || '0' }}
+          QVAC_BRIDGEDEPTH_EXPECT_GPU: ${{ matrix.gpu && '1' || '0' }}
         run: npm run test:integration
 
       - name: Upload performance report

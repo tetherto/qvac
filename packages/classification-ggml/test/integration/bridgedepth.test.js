@@ -10,8 +10,11 @@ const { isMobile, TEST_TIMEOUT } = require('./utils')
 // Weights are not bundled: convert them (docs/bridgedepth.md) into
 // test/fixtures/bridgedepth-vits-f32.gguf or set QVAC_BRIDGEDEPTH_MODEL_PATH.
 // Without a model the parity test is skipped on desktop and fails on mobile.
-// QVAC_BRIDGEDEPTH_BACKEND picks the device.
-const backend = env.QVAC_BRIDGEDEPTH_BACKEND || 'CPU'
+// QVAC_BRIDGEDEPTH_BACKEND picks the device. On GPU runners CI sets
+// QVAC_BRIDGEDEPTH_EXPECT_GPU=1 instead, which uses automatic selection and
+// requires a GPU.
+const expectGpu = env.QVAC_BRIDGEDEPTH_EXPECT_GPU === '1'
+const backend = env.QVAC_BRIDGEDEPTH_BACKEND || (expectGpu ? undefined : 'CPU')
 const fixtures = path.join(__dirname, '..', 'fixtures')
 
 function asset(filename, modelEnv) {
@@ -86,7 +89,7 @@ test(
       const reference = floats('bridgedepth-disparity-f32.bin')
       const fraction = within(result.disparity, reference, 0.2)
       t.comment(
-        `${backend}: ${fraction} within 0.2 px, stats=${JSON.stringify(model.getRuntimeStats())}`
+        `${backend || 'auto'}: ${fraction} within 0.2 px, stats=${JSON.stringify(model.getRuntimeStats())}`
       )
       // Top-k tie breaks in the DPN differ from torch on a few pixels. Measured
       // on the fixture: CPU, CUDA and Vulkan 99.8%, Metal 99.79%.
@@ -94,6 +97,7 @@ test(
       const stats = model.getRuntimeStats()
       t.ok(stats.total_time_ms > 0)
       t.ok(stats.weight_bytes > 100000000)
+      if (expectGpu) t.not(stats.backend_id, 0, 'GPU runner runs on the GPU')
       // A GPU op that falls back to the CPU keeps the result right and only
       // costs speed, so parity alone misses it. OpenCL lacks ops this graph
       // needs and is left out.
