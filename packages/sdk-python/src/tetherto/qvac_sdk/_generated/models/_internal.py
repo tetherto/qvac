@@ -2661,6 +2661,7 @@ class BatchCompletionStreamResponseEventsItemEventCompletionStatsStats(
     ] = None
     cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
     prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
+    full_prompt_tokens: Annotated[float | None, Field(alias="fullPromptTokens")] = None
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
     emitted_tokens: Annotated[float | None, Field(alias="emittedTokens")] = None
     avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
@@ -2800,6 +2801,7 @@ class BatchCompletionStreamResponseStats(GeneratedBaseModel):
     ] = None
     cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
     prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
+    full_prompt_tokens: Annotated[float | None, Field(alias="fullPromptTokens")] = None
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
     emitted_tokens: Annotated[float | None, Field(alias="emittedTokens")] = None
     avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
@@ -4188,6 +4190,7 @@ class CompletionOrchestrateResponseEventsItemCompletionStatsStats(GeneratedBaseM
     ] = None
     cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
     prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
+    full_prompt_tokens: Annotated[float | None, Field(alias="fullPromptTokens")] = None
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
     emitted_tokens: Annotated[float | None, Field(alias="emittedTokens")] = None
     avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None
@@ -4835,6 +4838,7 @@ class CompletionStreamResponseEventsItemCompletionStatsStats(GeneratedBaseModel)
     ] = None
     cache_tokens: Annotated[float | None, Field(alias="cacheTokens")] = None
     prompt_tokens: Annotated[float | None, Field(alias="promptTokens")] = None
+    full_prompt_tokens: Annotated[float | None, Field(alias="fullPromptTokens")] = None
     generated_tokens: Annotated[float | None, Field(alias="generatedTokens")] = None
     emitted_tokens: Annotated[float | None, Field(alias="emittedTokens")] = None
     avg_concurrent_seq: Annotated[float | None, Field(alias="avgConcurrentSeq")] = None

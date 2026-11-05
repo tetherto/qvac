@@ -2872,6 +2872,9 @@
                           "promptTokens": {
                             "type": "number"
                           },
+                          "fullPromptTokens": {
+                            "type": "number"
+                          },
                           "generatedTokens": {
                             "type": "number"
                           },
@@ -3004,6 +3007,9 @@
               "type": "number"
             },
             "promptTokens": {
+              "type": "number"
+            },
+            "fullPromptTokens": {
               "type": "number"
             },
             "generatedTokens": {
@@ -4483,6 +4489,9 @@
                       "promptTokens": {
                         "type": "number"
                       },
+                      "fullPromptTokens": {
+                        "type": "number"
+                      },
                       "generatedTokens": {
                         "type": "number"
                       },
@@ -5183,6 +5192,9 @@
                         "type": "number"
                       },
                       "promptTokens": {
+                        "type": "number"
+                      },
+                      "fullPromptTokens": {
                         "type": "number"
                       },
                       "generatedTokens": {

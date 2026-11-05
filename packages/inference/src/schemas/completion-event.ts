@@ -13,7 +13,11 @@ export const completionStatsSchema = z.object({
   tokensPerSecond: z.number().optional(),
   promptTokensPerSecond: z.number().optional(),
   cacheTokens: z.number().optional(),
+  // Tokens this request prefilled; a KV-cache hit leaves out the reused prefix.
   promptTokens: z.number().optional(),
+  // The whole prompt: reused cache prefix + `promptTokens`. Per request, so it
+  // stays exact when other requests overlap. Prefer it for usage reporting.
+  fullPromptTokens: z.number().optional(),
   // Decode count (`llama_perf` `n_eval`) — length / KV-cache budget decisions.
   generatedTokens: z.number().optional(),
   // Non-empty addon stream pieces — prefer for usage reporting when present.

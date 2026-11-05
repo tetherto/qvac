@@ -7,6 +7,8 @@ export interface LlmStats {
   ppTPS?: number
   CacheTokens?: number
   promptTokens?: number
+  // Reused cache prefix + `promptTokens`; absent on addons before it shipped.
+  fullPromptTokens?: number
   generatedTokens?: number
   avgConcurrentSeq?: number
   // Renders in this request that provably left the supplied tool definitions

@@ -73,6 +73,7 @@ test('completionStatsSchema: all fields optional, promptTokens carries a number'
     promptTokensPerSecond: 850.5,
     cacheTokens: 100,
     promptTokens: 1234,
+    fullPromptTokens: 2048,
     generatedTokens: 56,
     emittedTokens: 40,
     avgConcurrentSeq: 3.5,
@@ -85,6 +86,7 @@ test('completionStatsSchema: all fields optional, promptTokens carries a number'
   // undefined` after parsing.
   bad({ promptTokens: '1234' })
   bad({ promptTokens: null })
+  bad({ fullPromptTokens: '2048' })
   bad({ avgConcurrentSeq: '3.5' })
   bad({ promptTokensPerSecond: '850.5' })
 })

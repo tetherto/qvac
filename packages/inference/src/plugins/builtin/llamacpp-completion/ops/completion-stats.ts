@@ -13,6 +13,7 @@ export function normalizeCompletionStats(stats: LlmStats | undefined) {
   const promptTokensPerSecond = finiteNumber(stats.ppTPS)
   const cacheTokens = finiteNumber(stats.CacheTokens)
   const promptTokens = finiteNumber(stats.promptTokens)
+  const fullPromptTokens = finiteNumber(stats.fullPromptTokens)
   const generatedTokens = finiteNumber(stats.generatedTokens)
   const avgConcurrentSeq = finiteNumber(stats.avgConcurrentSeq)
   const toolDefinitionsDropped = finiteNumber(stats.toolDefinitionsDropped)
@@ -25,6 +26,7 @@ export function normalizeCompletionStats(stats: LlmStats | undefined) {
     ...(promptTokensPerSecond !== undefined && { promptTokensPerSecond }),
     ...(cacheTokens !== undefined && { cacheTokens }),
     ...(promptTokens !== undefined && { promptTokens }),
+    ...(fullPromptTokens !== undefined && { fullPromptTokens }),
     ...(generatedTokens !== undefined && { generatedTokens }),
     ...(avgConcurrentSeq !== undefined && { avgConcurrentSeq }),
     ...(toolDefinitionsDropped !== undefined && { toolDefinitionsDropped }),
@@ -39,6 +41,7 @@ export function normalizeCompletionStats(stats: LlmStats | undefined) {
     promptTokensPerSecond === undefined &&
     cacheTokens === undefined &&
     promptTokens === undefined &&
+    fullPromptTokens === undefined &&
     generatedTokens === undefined &&
     avgConcurrentSeq === undefined &&
     toolDefinitionsDropped === undefined &&

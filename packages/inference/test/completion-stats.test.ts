@@ -43,6 +43,14 @@ test('normalizeCompletionStats: keeps prefill throughput as the only stat', (t) 
   t.alike(normalizeCompletionStats({ ppTPS: 640 }), { promptTokensPerSecond: 640 })
 })
 
+test('normalizeCompletionStats: maps the full prompt size next to the prefilled tail', (t) => {
+  t.alike(normalizeCompletionStats({ promptTokens: 12, fullPromptTokens: 412 }), {
+    promptTokens: 12,
+    fullPromptTokens: 412
+  })
+  t.alike(normalizeCompletionStats({ fullPromptTokens: Number.NaN }), undefined)
+})
+
 test('normalizeCompletionStats: maps the speculative draft counters', (t) => {
   const normalized = normalizeCompletionStats({
     TPS: 30,

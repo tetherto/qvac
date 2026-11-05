@@ -193,6 +193,8 @@ data class QvacCompletionStats(
     val tokensPerSecond: Double? = null,
     val cacheTokens: Double? = null,
     val promptTokens: Double? = null,
+    /** The whole prompt: the reused KV-cache prefix plus [promptTokens]. */
+    val fullPromptTokens: Double? = null,
     val generatedTokens: Double? = null,
     val emittedTokens: Double? = null,
     val averageConcurrentSequences: Double? = null,
@@ -522,6 +524,7 @@ private fun CompletionStreamResponseEventsItemCompletionStatsStats.toCompletionS
         tokensPerSecond = tokensPerSecond,
         cacheTokens = cacheTokens,
         promptTokens = promptTokens,
+        fullPromptTokens = fullPromptTokens,
         generatedTokens = generatedTokens,
         emittedTokens = emittedTokens,
         averageConcurrentSequences = avgConcurrentSeq,
