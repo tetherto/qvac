@@ -231,6 +231,8 @@ jobs:
         env:
           PROJECT: ${{ matrix.project.name }}
           BENCHMARK_ARGS: ${{ inputs.args }}
+          # The desktop rows this run benchmarked, so a report can tell a lost result from one never run.
+          BENCHMARK_ROWS: ${{ inputs.run_desktop && toJSON(fromJSON(needs.select.outputs.matrices).benchmark) || '[]' }}
         run: pnpm exec nx run-many -t benchmark -p "$PROJECT" -c report --exclude-task-dependencies --outputStyle=stream
       - if: always() && matrix.project.benchmarkReport
         uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
