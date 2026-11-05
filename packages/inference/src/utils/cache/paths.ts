@@ -9,7 +9,7 @@ import { generateShortHash } from '@/utils/formatting'
 import { getSingleFileCacheName } from '@/utils/cache/layout'
 import { getEngineLogger } from '@/logging/index'
 import { nowMs } from '@/profiling/index'
-import { resolveClearStorageTarget } from '@/utils/clear-storage'
+import { resolveClearStorageTarget, resolveShardedClearStorageTargets } from '@/utils/clear-storage'
 
 const logger = getEngineLogger()
 
@@ -123,6 +123,17 @@ export function getClearStorageTarget(modelPath: string): {
   kind: 'file' | 'directory'
 } {
   return resolveClearStorageTarget(modelPath, getModelsCacheDir())
+}
+
+/**
+ * Returns the deletion targets for `clearStorage` on a sharded model: its
+ * cache directory when it lives in the QVAC cache, otherwise only its files.
+ */
+export function getShardedClearStorageTargets(
+  modelPath: string,
+  modelFiles: readonly string[]
+): { path: string; kind: 'file' | 'directory' }[] {
+  return resolveShardedClearStorageTargets(modelPath, getModelsCacheDir(), modelFiles)
 }
 
 /**
