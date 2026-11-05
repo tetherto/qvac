@@ -10,7 +10,8 @@
     },
     {
       "name": "ggml-speech",
-      "default-features": false
+      "default-features": false,
+      "version>=": "2026-11-05"
     },
     {
       "name": "speech-cpp",
@@ -20,7 +21,8 @@
         "metal",
         "coreml"
       ],
-      "platform": "osx | ios"
+      "platform": "osx | ios",
+      "version>=": "2026-11-05#1"
     },
     {
       "name": "speech-cpp",
@@ -30,7 +32,8 @@
         "vulkan",
         "opencl"
       ],
-      "platform": "android"
+      "platform": "android",
+      "version>=": "2026-11-05#1"
     },
     {
       "name": "speech-cpp",
@@ -39,7 +42,8 @@
         "tts",
         "vulkan"
       ],
-      "platform": "!(osx | ios | android)"
+      "platform": "!(osx | ios | android)",
+      "version>=": "2026-11-05#1"
     }
   ],
   "features": {
@@ -53,7 +57,8 @@
           "features": [
             "cuda"
           ],
-          "platform": "!(osx | ios | android)"
+          "platform": "!(osx | ios | android)",
+          "version>=": "2026-11-05#1"
         }
       ]
     },
@@ -100,7 +105,8 @@
           "features": [
             "vulkan"
           ],
-          "platform": "!(osx | ios)"
+          "platform": "!(osx | ios)",
+          "version>=": "2026-11-05#1"
         }
       ]
     },
@@ -112,7 +118,8 @@
           "default-features": false,
           "features": [
             "webgpu"
-          ]
+          ],
+          "version>=": "2026-11-05#1"
         },
         {
           "name": "dawn",
@@ -124,12 +131,12 @@
   "overrides": [
     {
       "name": "ggml-speech",
-      "version": "2026-10-27",
-      "port-version": 1
+      "version": "2026-11-05",
+      "port-version": 0
     },
     {
       "name": "speech-cpp",
-      "version": "2026-11-04",
+      "version": "2026-11-05",
       "port-version": 1
     },
     {
