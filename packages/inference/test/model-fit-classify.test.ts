@@ -276,6 +276,7 @@ test('published bci fit results keep their memory breakdown', (t) => {
 test('published audiogen fit results keep their totals', (t) => {
   const outcome = classifyFit(legacyAudiogen(), PROVENANCE)
 
+  t.is(outcome.verdict, 'fit')
   t.is(outcome.projection?.deviceBytes, 3 * 1024 ** 3)
   t.is(outcome.projection?.hostBytes, 128 * 1024 ** 2)
   t.absent(outcome.projection?.weightsBytes)
