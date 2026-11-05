@@ -1,5 +1,5 @@
 import type { TestDefinition } from '../types/test-definition.js'
-import { getPlatformSkipReason } from './platform-match.js'
+import { getPlatformSkipReason, isSkippedEverywhere } from './platform-match.js'
 
 export interface SelectionOptions {
   /** Include only tests tagged with one of these suites */
@@ -101,8 +101,9 @@ export interface RunSelection extends Selection {
 }
 
 /**
- * The tests one consumer leg executes: `selectTests` minus what it skips on its platform, as a
- * consumer narrows `filteredTestIds` before it bootstraps.
+ * The tests one consumer leg executes: `selectTests` minus the tests the producer skips everywhere
+ * (it never queues them) and the tests the leg skips on its platform, as a consumer narrows
+ * `filteredTestIds` before it bootstraps.
  */
 export function selectRunTests(
   catalog: readonly TestDefinition[],
@@ -112,6 +113,7 @@ export function selectRunTests(
   const tests: TestDefinition[] = []
   const platformSkippedTestIds: string[] = []
   for (const test of selection.tests) {
+    if (isSkippedEverywhere(test)) continue
     if (getPlatformSkipReason(test, options.platform) === null) tests.push(test)
     else platformSkippedTestIds.push(test.testId)
   }
