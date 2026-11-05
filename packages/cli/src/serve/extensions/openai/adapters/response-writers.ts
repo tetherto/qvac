@@ -23,6 +23,7 @@ import {
   functionCallItem,
   clientToolName,
   functionCallOutputItemId,
+  inputTokensFromStats,
   messageId,
   outputItem,
   reasoningItemId,
@@ -230,6 +231,7 @@ export async function writeBlockingResponse(
   let turnHistory = p.history
   let drained
   let total: DrainedOpenAICompletion | undefined
+  let inputTokens = 0
   const timeline = createOutputTimeline(p.tools, p.toolNamespaces)
   for (let round = 0; ; round++) {
     if (round > 0) timeline.endRound()
@@ -240,6 +242,8 @@ export async function writeBlockingResponse(
       timeline.toolCall
     )
     total = accumulateUsage(total, drained)
+    // Per round: the overlap guard needs each round's own concurrency.
+    inputTokens += inputTokensFromStats(drained.stats)
     if (round >= MAX_TOOL_SEARCH_ROUNDS) break
     const extended = foldToolSearch(
       p.tools,
@@ -272,6 +276,7 @@ export async function writeBlockingResponse(
     store: p.storeEnabled,
     ...(p.toolNamespaces !== undefined ? { toolNamespaces: p.toolNamespaces } : {}),
     completionTokens,
+    inputTokens,
     ...(stopReason !== undefined ? { stopReason } : {}),
     ...(stats !== undefined ? { stats } : {})
   })
@@ -345,6 +350,7 @@ export async function writeStreamingResponse(
   let turnHistory = p.history
   let drained
   let total: DrainedOpenAICompletion | undefined
+  let inputTokens = 0
   for (let round = 0; ; round++) {
     // A search turn's preamble stays in the response object: it was streamed at
     // its own output_index, which must match its position in `output`.
@@ -356,6 +362,8 @@ export async function writeStreamingResponse(
       timeline.toolCall
     )
     total = accumulateUsage(total, drained)
+    // Per round: the overlap guard needs each round's own concurrency.
+    inputTokens += inputTokensFromStats(drained.stats)
 
     const extended =
       round >= MAX_TOOL_SEARCH_ROUNDS
@@ -393,6 +401,7 @@ export async function writeStreamingResponse(
     store: p.storeEnabled,
     ...(p.toolNamespaces !== undefined ? { toolNamespaces: p.toolNamespaces } : {}),
     completionTokens,
+    inputTokens,
     ...(stopReason !== undefined ? { stopReason } : {}),
     ...(stats !== undefined ? { stats } : {})
   })

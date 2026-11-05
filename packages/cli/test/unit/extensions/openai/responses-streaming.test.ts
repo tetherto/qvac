@@ -562,3 +562,56 @@ describe('writeStreamingResponse: deferred tools', () => {
     assert.equal(completed['output_text'], 'Looking that up. Opened it.')
   })
 })
+
+describe('writeStreamingResponse: input tokens across search rounds', () => {
+  it('counts input per round when an overlapping search round precedes a solo one', async () => {
+    const holder = createStreamResponse()
+    const turns = [
+      fakeStreamCompletion({
+        tokens: [],
+        toolCalls: [{ id: 'c1', name: 'tool_search', arguments: { query: 'create_issue' } }],
+        text: '',
+        stats: {
+          promptTokens: 100,
+          cacheTokens: 900,
+          generatedTokens: 5,
+          emittedTokens: 5,
+          avgConcurrentSeq: 2
+        }
+      }),
+      fakeStreamCompletion({
+        tokens: ['Done.'],
+        toolCalls: [],
+        text: 'Done.',
+        stats: {
+          promptTokens: 20,
+          cacheTokens: 218,
+          generatedTokens: 10,
+          emittedTokens: 10,
+          avgConcurrentSeq: 1
+        }
+      })
+    ]
+    let turn = 0
+    const completed = await writeStreamingResponse(
+      holder.res,
+      {
+        ...baseHandlerParams('resp_rounds'),
+        tools: [
+          {
+            type: 'function' as const,
+            name: 'create_issue',
+            description: 'Open a new issue on a repository',
+            deferLoading: true,
+            parameters: {
+              type: 'object' as const,
+              properties: { title: { type: 'string' as const } }
+            }
+          }
+        ]
+      },
+      () => turns[turn++]!
+    )
+    assert.equal((completed['usage'] as { input_tokens: number }).input_tokens, 308)
+  })
+})

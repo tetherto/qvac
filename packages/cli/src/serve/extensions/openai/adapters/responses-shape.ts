@@ -78,20 +78,47 @@ export interface BuildResponseObjectParams {
    * tool calls take precedence with `requires_action`.
    */
   stopReason?: string
+  /**
+   * Input tokens summed per generation round (see `inputTokensFromStats`).
+   * Wins over the stats, whose counts are summed before that guard could run.
+   */
+  inputTokens?: number
+}
+
+// Every tool-call field (output items, status, required_action) comes from this
+// one list: the ordered items when given, otherwise `toolCalls`.
+function responseToolCalls(params: BuildResponseObjectParams): FunctionCallSegment[] {
+  if (params.items) {
+    return params.items.filter((item): item is FunctionCallSegment => item.type === 'function_call')
+  }
+  return (sdkToolCallsToOpenai(params.toolCalls) ?? []).map((tc, i) => ({
+    type: 'function_call',
+    id: params.functionCallItemIds?.[i] ?? functionCallOutputItemId(),
+    callId: tc.id,
+    ...clientToolName(tc.function.name, params.toolNamespaces),
+    arguments: tc.function.arguments
+  }))
+}
+
+function requiredAction(calls: FunctionCallSegment[]): Record<string, unknown> {
+  return {
+    type: 'submit_tool_outputs',
+    submit_tool_outputs: {
+      tool_calls: calls.map((call) => ({
+        id: call.callId,
+        type: 'function',
+        function: {
+          name: call.name,
+          ...(call.namespace !== undefined && { namespace: call.namespace }),
+          arguments: call.arguments
+        }
+      }))
+    }
+  }
 }
 
 export function buildResponseObject(params: BuildResponseObjectParams): Record<string, unknown> {
-  // Every tool-call field (output items, status, required_action) comes from
-  // this one list: the ordered items when given, otherwise `toolCalls`.
-  const calls: FunctionCallSegment[] = params.items
-    ? params.items.filter((item): item is FunctionCallSegment => item.type === 'function_call')
-    : (sdkToolCallsToOpenai(params.toolCalls) ?? []).map((tc, i) => ({
-        type: 'function_call',
-        id: params.functionCallItemIds?.[i] ?? functionCallOutputItemId(),
-        callId: tc.id,
-        ...clientToolName(tc.function.name, params.toolNamespaces),
-        arguments: tc.function.arguments
-      }))
+  const calls = responseToolCalls(params)
   const hasToolCalls = calls.length > 0
   const output: unknown[] = params.items
     ? params.items.map(outputItem)
@@ -104,7 +131,7 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
     typeof params.completionTokens === 'number' && Number.isFinite(params.completionTokens)
       ? params.completionTokens
       : completionTokensFromStats(params.text || '', params.stats)
-  const inputTokens = inputTokensFromStats(params.stats)
+  const inputTokens = params.inputTokens ?? inputTokensFromStats(params.stats)
   const usage = {
     input_tokens: inputTokens,
     output_tokens: outputTokens,
@@ -131,22 +158,7 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
     base['incomplete_details'] = { reason: 'max_output_tokens' }
   }
 
-  if (hasToolCalls) {
-    base['required_action'] = {
-      type: 'submit_tool_outputs',
-      submit_tool_outputs: {
-        tool_calls: calls.map((call) => ({
-          id: call.callId,
-          type: 'function',
-          function: {
-            name: call.name,
-            ...(call.namespace !== undefined && { namespace: call.namespace }),
-            arguments: call.arguments
-          }
-        }))
-      }
-    }
-  }
+  if (hasToolCalls) base['required_action'] = requiredAction(calls)
 
   if (params.metadata !== undefined && params.metadata !== null) {
     base['metadata'] = params.metadata
@@ -184,7 +196,7 @@ export function messageItem(id: string, text: string): Record<string, unknown> {
 // plus what was generated), so the full input is that minus the generated part.
 // cacheTokens is scheduler-wide, though: when other requests overlapped this
 // one it includes theirs, so promptTokens, this request's own, is used instead.
-function inputTokensFromStats(stats: CompletionStats | undefined): number {
+export function inputTokensFromStats(stats: CompletionStats | undefined): number {
   const prompt = stats?.promptTokens ?? 0
   const held = stats?.cacheTokens
   const generated = stats?.generatedTokens

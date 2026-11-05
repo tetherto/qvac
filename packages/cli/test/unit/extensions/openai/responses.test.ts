@@ -604,4 +604,64 @@ describe('historyPrefixFromStoredResponse', () => {
       ]
     )
   })
+
+  it('counts input per round when an overlapping search round precedes a solo one', async () => {
+    let sent = false
+    const res = {
+      setHeader: (): void => {},
+      writeHead: (): void => {
+        sent = true
+      },
+      end: (): void => {},
+      get headersSent(): boolean {
+        return sent
+      }
+    } as unknown as ServerResponse
+    const turns = [
+      fakeCompletion({
+        text: '',
+        toolCalls: [{ id: 'c1', name: 'tool_search', arguments: { query: 'create_issue' } }],
+        stats: {
+          promptTokens: 100,
+          cacheTokens: 900,
+          generatedTokens: 5,
+          emittedTokens: 5,
+          avgConcurrentSeq: 2
+        }
+      }),
+      fakeCompletion({
+        text: 'Done.',
+        toolCalls: [],
+        stats: {
+          promptTokens: 20,
+          cacheTokens: 218,
+          generatedTokens: 10,
+          emittedTokens: 10,
+          avgConcurrentSeq: 1
+        }
+      })
+    ]
+    let turn = 0
+    const obj = await writeBlockingResponse(
+      res,
+      {
+        ...baseHandlerParams(),
+        tools: [
+          {
+            type: 'function' as const,
+            name: 'create_issue',
+            description: 'Open a new issue on a repository',
+            deferLoading: true,
+            parameters: {
+              type: 'object' as const,
+              properties: { title: { type: 'string' as const } }
+            }
+          }
+        ]
+      },
+      () => turns[turn++]!
+    )
+    // 100 (overlap: its own promptTokens) + 218 - 10 (solo: full prompt).
+    assert.equal((obj['usage'] as { input_tokens: number }).input_tokens, 308)
+  })
 })
