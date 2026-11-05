@@ -45,6 +45,9 @@ struct Request {
   std::optional<size_t> pendingCheckpointAt;
   size_t prefillTokenCount = 0;
   size_t prefillFedCount = 0;
+  /// Positions already in the sequence at admission (reused cache prefix).
+  /// Added to the prefilled count, it gives this request's full prompt size.
+  llama_pos promptStartPos = 0;
   std::vector<llama_token> generatedTokens;
   llama_pos currentPos = 0;
   bool hasUnfedSample = false;

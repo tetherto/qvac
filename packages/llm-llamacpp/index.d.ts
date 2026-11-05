@@ -673,7 +673,13 @@ declare namespace LlmLlamacpp {
         /** Final cache tokens for single requests, or the sum across completed batch slots. */
         CacheTokens: number;
         generatedTokens: number;
+        /** Prompt tokens this request decoded. A cache hit leaves out the reused prefix. */
         promptTokens: number;
+        /**
+         * The request's whole prompt: the reused cache prefix plus `promptTokens`.
+         * Per request on every path, so it stays exact when other requests overlap.
+         */
+        fullPromptTokens: number;
         /**
          * Number of prompt renders in this request that provably left the tool
          * definitions out — the template either rejected them, or supplying them

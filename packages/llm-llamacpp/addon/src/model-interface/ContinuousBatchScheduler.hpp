@@ -80,6 +80,9 @@ struct ObservedRequestStats {
   double genTps = 0.0;
   int64_t generatedTokens = 0;
   int64_t promptTokens = 0;
+  /// The request's whole prompt: the reused cache prefix plus `promptTokens`.
+  /// `promptTokens` alone shrinks on a cache hit.
+  int64_t fullPromptTokens = 0;
   /// Renders where this request's own chat template dropped the tool
   /// definitions. Read off the slot driver at drain rather than off the
   /// scheduler-wide accumulator: that
@@ -191,6 +194,7 @@ struct RuntimeStatsSnapshot {
   int64_t toolDefinitionsDropped = 0;
   int64_t generatedTokens = 0;
   int64_t promptTokens = 0;
+  int64_t fullPromptTokens = 0;
 
   void reset();
 

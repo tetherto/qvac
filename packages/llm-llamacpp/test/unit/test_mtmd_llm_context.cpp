@@ -271,9 +271,11 @@ TEST_F(MtmdLlmContextTest, CalcTokensMatchesPromptTokensOfAFreshRun) {
   LlamaModel::Prompt prompt;
   prompt.input = input;
   (void)model->processPrompt(prompt);
+  const auto stats = model->runtimeStats();
+  EXPECT_EQ(static_cast<double>(count), getStatValue(stats, "promptTokens"));
+  // A fresh run reuses nothing: the full prompt is what it prefilled.
   EXPECT_EQ(
-      static_cast<double>(count),
-      getStatValue(model->runtimeStats(), "promptTokens"));
+      static_cast<double>(count), getStatValue(stats, "fullPromptTokens"));
 
   try {
     (void)model->calcTokens(

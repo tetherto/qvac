@@ -522,7 +522,8 @@ whether a per-job stats source exists for that id:
   differ from it while the sum over the epoch's jobs matches.
 - Per-job override (the job ran through the batch engine): the job's terminal
   snapshot starts from that same aggregate, then `TTFT`, `TPS`,
-  `generatedTokens` and `promptTokens` are overridden with the job's OWN
+  `generatedTokens`, `promptTokens` and `fullPromptTokens` are overridden
+  with the job's OWN
   observed figures, and so are `draftTokens` / `draftAcceptedTokens` when
   the model decodes speculatively (`spec-type`; see the README's
   speculative decoding section). All other keys (`ppTPS`, `CacheTokens`,
@@ -548,12 +549,18 @@ engine per request):
   experienced while sharing the GPU, not isolated compute speed (which is
   unmeasurable under fused batch decode).
 - `generatedTokens` / `promptTokens` — the request's own token counts.
+  `promptTokens` is what the request prefilled, so a cache hit leaves out the
+  reused prefix.
+- `fullPromptTokens` — the request's whole prompt: the reused cache prefix it
+  was admitted onto plus `promptTokens`. Use it for usage reporting: it is per
+  request, while `CacheTokens` also counts every overlapping job.
 
 ### 1. Single request, no batching (`parallel = 1`)
 
 Single-prompt path, counted and timed by the context itself, as llama-server
 and the batch path do: `TTFT` is the prefill's wall-clock time, `promptTokens`
-the tokens it decoded, `TPS` the generated tokens over the generation's
+the tokens it decoded, `fullPromptTokens` the cursor once the prompt is in
+(reused prefix included), `TPS` the generated tokens over the generation's
 wall-clock time. llama's perf counters are not used, because they book a
 decode of exactly one token as generation: a fully cached prompt, which
 re-decodes only its last token for fresh logits, would report no prompt work.
@@ -569,6 +576,7 @@ overridden.
   "CacheTokens": 210,
   "generatedTokens": 180,
   "promptTokens": 30,
+  "fullPromptTokens": 30,
   "stopReason": "eos",
   "visionEncodeMs": 0,
   "visionEncodeTiles": 0,
@@ -584,8 +592,9 @@ a multimodal one fills them in.)
 
 Each request is its own tagged job; the scheduler batches whatever overlaps.
 Every job gets its own `JobEnded`, routed to its own response sink by job id,
-with `TTFT` / `TPS` / `generatedTokens` / `promptTokens` overridden by that
-job's observed figures:
+with `TTFT` / `TPS` / `generatedTokens` / `promptTokens` / `fullPromptTokens`
+overridden by that job's observed figures. This job resumed a cached
+conversation, so it prefilled 28 of its 412 prompt tokens:
 
 ```json
 {
@@ -595,6 +604,7 @@ job's observed figures:
   "CacheTokens": 840,
   "generatedTokens": 174,
   "promptTokens": 28,
+  "fullPromptTokens": 412,
   "stopReason": "eos",
   "avgConcurrentSeq": 2.9,
   "backendDevice": "gpu"
@@ -627,7 +637,7 @@ the group collapses its OWN prompts into one figure set:
   drag the averages down). Averaged, not summed, because the group's prompts
   run simultaneously — summing rates would double-count wall-clock. The
   average answers "what did one of my prompts typically experience".
-- `generatedTokens`, `promptTokens` — summed over the group (tokens are
+- `generatedTokens`, `promptTokens`, `fullPromptTokens` — summed over the group (tokens are
   additive).
 - `stopReason` — kept only if every prompt of the group stopped for the same
   reason; otherwise the key is absent rather than guessed. The sample below
@@ -648,6 +658,7 @@ the model actually interleaved ~3-4 sequences, i.e. Y's prompts ran too):
   "CacheTokens": 840,
   "generatedTokens": 355,
   "promptTokens": 61,
+  "fullPromptTokens": 61,
   "avgConcurrentSeq": 3.4,
   "backendDevice": "gpu"
 }

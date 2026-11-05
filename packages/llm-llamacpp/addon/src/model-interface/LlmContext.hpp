@@ -423,11 +423,17 @@ public:
     return lastPromptTokenCount_;
   }
   [[nodiscard]] double lastPromptEvalMs() const { return lastPromptEvalMs_; }
+  /// The most recent single-prompt request's whole prompt: the reused cache
+  /// prefix plus the `lastPromptTokenCount` tokens it decoded.
+  [[nodiscard]] int64_t lastPromptContextTokens() const {
+    return lastPromptContextTokens_;
+  }
   [[nodiscard]] double lastGenerationMs() const { return lastGenerationMs_; }
 
 protected:
   int32_t lastGeneratedTokenCount_ = 0;
   int64_t lastPromptTokenCount_ = 0;
+  int64_t lastPromptContextTokens_ = 0;
   double lastPromptEvalMs_ = 0.0;
   double lastGenerationMs_ = 0.0;
 

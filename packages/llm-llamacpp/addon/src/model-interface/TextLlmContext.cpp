@@ -535,6 +535,7 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
   requestRollback_.clear();
   lastGeneratedTokenCount_ = 0;
   lastPromptTokenCount_ = 0;
+  lastPromptContextTokens_ = 0;
   lastPromptEvalMs_ = 0.0;
   lastGenerationMs_ = 0.0;
 
@@ -676,6 +677,7 @@ LlmContext::EvalMessageResult TextLlmContext::evalMessageWithTools(
   lastPromptEvalMs_ = std::chrono::duration<double, std::milli>(
                           std::chrono::steady_clock::now() - prefillStart)
                           .count();
+  lastPromptContextTokens_ = nPast_;
 
   onPrefillComplete(nPast_, inputTokens.size());
   return {};

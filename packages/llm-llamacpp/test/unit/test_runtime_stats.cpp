@@ -314,6 +314,49 @@ TEST(ObservedRequestStats, GroupAggregateSumsPerSlotCounters) {
   EXPECT_EQ(single.toolDefinitionsDropped, 1);
 }
 
+// A request admitted onto a reused cache prefix prefills only its tail, so
+// `promptTokens` shrinks on a cache hit. `fullPromptTokens` adds the prefix
+// back: the size of the prompt the model actually conditioned on.
+TEST(ObservedRequestStats, FullPromptAddsTheReusedPrefix) {
+  constexpr unsigned maxTokens = 256;
+  std::vector<llama_token> tail(10, 1);
+  Request req(/*rid=*/0, std::move(tail), maxTokens, /*initialPos=*/90);
+  req.pendingPrefillTokens.clear();
+  req.prefillFedCount = 0;
+  ASSERT_TRUE(req.isPrefillComplete());
+
+  const ObservedRequestStats observed =
+      computeObservedStats(std::chrono::steady_clock::time_point{}, req);
+  EXPECT_EQ(observed.promptTokens, 10);
+  EXPECT_EQ(observed.fullPromptTokens, 100);
+
+  RuntimeStatsSnapshot stats;
+  stats.accumulateSlot(/*nPast=*/100, /*toolsDropped=*/0, req);
+  EXPECT_EQ(stats.promptTokens, 10);
+  EXPECT_EQ(stats.fullPromptTokens, 100);
+}
+
+TEST(ObservedRequestStats, FullPromptOfACancelledPrefillCountsWhatWasFed) {
+  constexpr unsigned maxTokens = 256;
+  std::vector<llama_token> tail(10, 1);
+  Request req(/*rid=*/0, std::move(tail), maxTokens, /*initialPos=*/90);
+  req.prefillFedCount = 4;
+  ASSERT_FALSE(req.isPrefillComplete());
+
+  const ObservedRequestStats observed =
+      computeObservedStats(std::chrono::steady_clock::time_point{}, req);
+  EXPECT_EQ(observed.promptTokens, 4);
+  EXPECT_EQ(observed.fullPromptTokens, 94);
+}
+
+TEST(ObservedRequestStats, GroupAggregateSumsFullPromptTokens) {
+  const ObservedRequestStats agg = aggregateObservedStats(
+      {{.promptTokens = 10, .fullPromptTokens = 100},
+       {.promptTokens = 20, .fullPromptTokens = 20}});
+  EXPECT_EQ(agg.promptTokens, 30);
+  EXPECT_EQ(agg.fullPromptTokens, 120);
+}
+
 TEST(ObservedRequestStats, GroupAggregateOfNothingIsZero) {
   const ObservedRequestStats agg = aggregateObservedStats({});
   EXPECT_DOUBLE_EQ(agg.ttftMs, 0.0);

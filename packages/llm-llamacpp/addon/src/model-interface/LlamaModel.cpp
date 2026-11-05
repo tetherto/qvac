@@ -1091,6 +1091,7 @@ qvac_lib_inference_addon_cpp::RuntimeStats LlamaModel::jobTerminalStats(
       {"CacheTokens", stats.cacheTokens},
       {"generatedTokens", observed.generatedTokens},
       {"promptTokens", observed.promptTokens},
+      {"fullPromptTokens", observed.fullPromptTokens},
       // This comes from `observed`, not the aggregate: the aggregate is
       // `group->stats = stats_`, a copy of the scheduler-wide accumulator, so
       // under overlapping top-level `run()` calls it reports a peer's figures
@@ -1701,6 +1702,7 @@ LlamaModel::batchRuntimeStatsLocked() const {
       {"CacheTokens", stats.cacheTokens},
       {"generatedTokens", stats.generatedTokens},
       {"promptTokens", stats.promptTokens},
+      {"fullPromptTokens", stats.fullPromptTokens},
       {"toolDefinitionsDropped", stats.toolDefinitionsDropped},
       // visionEncodeMs/Tiles intentionally omitted in batch mode: multiple
       // prompts share the one per-context accumulator (reset per prompt), so a
@@ -1729,6 +1731,8 @@ LlamaModel::singleRuntimeStatsLocked() const {
   const int64_t generatedTokens =
       wasPrefill ? 0 : static_cast<int64_t>(context.lastGeneratedTokenCount());
   const int64_t promptTokens = wasPrefill ? 0 : promptTokenCount;
+  const int64_t fullPromptTokens =
+      wasPrefill ? 0 : context.lastPromptContextTokens();
   const double generationMs = context.lastGenerationMs();
   const double tokensPerSecond = (!wasPrefill && generationMs > 0)
                                      ? kMillisInSecond / generationMs *
@@ -1747,6 +1751,7 @@ LlamaModel::singleRuntimeStatsLocked() const {
        static_cast<int64_t>(state_->llmContext_->getCacheTokens())},
       {"generatedTokens", generatedTokens},
       {"promptTokens", promptTokens},
+      {"fullPromptTokens", fullPromptTokens},
       {"toolDefinitionsDropped",
        static_cast<int64_t>(state_->llmContext_->getToolDefinitionsDropped())},
       // Why the generation stopped, as the numeric GenerationStopReason

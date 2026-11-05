@@ -585,6 +585,7 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
 
   lastGeneratedTokenCount_ = 0;
   lastPromptTokenCount_ = 0;
+  lastPromptContextTokens_ = 0;
   lastPromptEvalMs_ = 0.0;
   lastGenerationMs_ = 0.0;
 
@@ -920,6 +921,7 @@ LlmContext::EvalMessageResult MtmdLlmContext::evalMessageWithTools(
                           .count();
   lastPromptTokenCount_ =
       std::max<llama_pos>(0, current_.cacheTokens - cacheTokensAtPrefill);
+  lastPromptContextTokens_ = current_.cacheTokens;
   // The single-prompt path does not go through `onPrefillComplete`, so mark
   // the phase here: from now on a cancel keeps the request's state.
   prefillComplete_ = true;

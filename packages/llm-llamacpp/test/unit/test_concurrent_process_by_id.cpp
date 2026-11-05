@@ -114,6 +114,19 @@ protected:
     return prompt;
   }
 
+  static inline const std::string K_NOTE =
+      "Remember this note for later questions. " + repeatWord("apple", 200);
+
+  /// The `K_NOTE` conversation one turn later, history included.
+  static LlamaModel::Prompt makeTwoTurnPrompt() {
+    LlamaModel::Prompt prompt;
+    prompt.input =
+        R"([{"role":"user","content":")" + K_NOTE +
+        R"("},{"role":"assistant","content":"Noted."},)"
+        R"({"role":"user","content":"Which fruit was in the note? One word."}])";
+    return prompt;
+  }
+
   std::unordered_map<std::string, std::string> config_;
   test_common::TestModelPath model_;
 };
@@ -452,6 +465,89 @@ TEST_F(ConcurrentProcessByIdTest, FullWidthBatchGroupMatchesAggregate) {
       static_cast<int64_t>(test_common::getStatValue(generic, "promptTokens")));
   EXPECT_GT(test_common::getStatValue(generic, "avgConcurrentSeq"), 1.0)
       << "full-width admission must actually decode in parallel";
+}
+
+/// A warm request that overlaps another job reports its whole prompt. Its
+/// `promptTokens` is only the tail it prefilled on top of the reused
+/// conversation, and `CacheTokens` is scheduler-wide (it includes the peer),
+/// so neither gives the prompt size; `fullPromptTokens` must equal what a
+/// cold run of the same conversation prefills.
+TEST_F(ConcurrentProcessByIdTest, WarmOverlappingJobReportsFullPrompt) {
+  REQUIRE_MODEL(model_);
+  config_["parallel"] = "2";
+  config_["ctx_size"] = "4096";
+  config_["n_predict"] = "16";
+  auto model = loadModel();
+  const ScopedCacheFile cacheFile("qvac-full-prompt-tokens.bin");
+
+  model->process(std::any(makeTwoTurnPrompt()), JobId{50});
+  const auto cold = model->consumeJobStats(JobId{50});
+  ASSERT_FALSE(cold.empty());
+  const double coldPrompt = test_common::getStatValue(cold, "promptTokens");
+  EXPECT_EQ(test_common::getStatValue(cold, "fullPromptTokens"), coldPrompt)
+      << "a cold request prefills its whole prompt";
+
+  auto seed = makePrompt(K_NOTE);
+  seed.cacheKey = cacheFile.key();
+  model->process(std::any(seed), JobId{51});
+  ASSERT_FALSE(model->consumeJobStats(JobId{51}).empty());
+
+  auto warm = makeTwoTurnPrompt();
+  warm.cacheKey = cacheFile.key();
+  auto peer = makePrompt(
+      "Count from one to forty in words, separated by commas. " +
+      repeatWord("go", 100));
+  peer.generationParams.n_predict = 64;
+
+  auto runJob = [&model](const LlamaModel::Prompt& prompt, JobId id) {
+    std::any out = model->process(std::any(prompt), id);
+    return std::any_cast<std::string>(out);
+  };
+  auto peerFuture = std::async(std::launch::async, runJob, peer, JobId{52});
+  auto warmFuture = std::async(std::launch::async, runJob, warm, JobId{53});
+  ASSERT_EQ(
+      warmFuture.wait_for(std::chrono::seconds(120)),
+      std::future_status::ready);
+  ASSERT_EQ(
+      peerFuture.wait_for(std::chrono::seconds(120)),
+      std::future_status::ready);
+  warmFuture.get();
+  peerFuture.get();
+
+  const auto stats = model->consumeJobStats(JobId{53});
+  ASSERT_FALSE(stats.empty());
+  EXPECT_GT(test_common::getStatValue(stats, "avgConcurrentSeq"), 1.0)
+      << "test setup: the warm job did not overlap the peer";
+  EXPECT_LT(test_common::getStatValue(stats, "promptTokens"), coldPrompt / 2)
+      << "test setup: the warm job did not reuse the seeded conversation";
+  EXPECT_EQ(test_common::getStatValue(stats, "fullPromptTokens"), coldPrompt);
+}
+
+/// The sequential path (parallel = 1) reports the same figure for a warm turn.
+TEST_F(ConcurrentProcessByIdTest, SinglePathWarmTurnReportsFullPrompt) {
+  REQUIRE_MODEL(model_);
+  config_["parallel"] = "1";
+  config_["ctx_size"] = "4096";
+  config_["n_predict"] = "16";
+  auto model = loadModel();
+  const ScopedCacheFile cacheFile("qvac-full-prompt-tokens-single.bin");
+
+  model->process(std::any(makeTwoTurnPrompt()), JobId{60});
+  const auto cold = model->runtimeStats();
+  const double coldPrompt = test_common::getStatValue(cold, "promptTokens");
+  EXPECT_EQ(test_common::getStatValue(cold, "fullPromptTokens"), coldPrompt);
+
+  auto seed = makePrompt(K_NOTE);
+  seed.cacheKey = cacheFile.key();
+  model->process(std::any(seed), JobId{61});
+
+  auto warm = makeTwoTurnPrompt();
+  warm.cacheKey = cacheFile.key();
+  model->process(std::any(warm), JobId{62});
+  const auto stats = model->runtimeStats();
+  EXPECT_LT(test_common::getStatValue(stats, "promptTokens"), coldPrompt / 2)
+      << "test setup: the warm turn did not reuse the seeded conversation";
+  EXPECT_EQ(test_common::getStatValue(stats, "fullPromptTokens"), coldPrompt);
 }
 
 /// cancelById(id) must cancel only the targeted job: the cancelled job stops

@@ -1465,9 +1465,11 @@ void RuntimeStatsSnapshot::accumulateSlot(
   // reports the partial prefillFedCount (0 if no step ever ran). This keeps the
   // `cacheTokens ~= promptTokens + generatedTokens` invariant honest on the
   // cancel path.
-  promptTokens += req.isPrefillComplete()
-                      ? static_cast<int64_t>(req.prefillTokenCount)
-                      : static_cast<int64_t>(req.prefillFedCount);
+  const int64_t prefilled = req.isPrefillComplete()
+                                ? static_cast<int64_t>(req.prefillTokenCount)
+                                : static_cast<int64_t>(req.prefillFedCount);
+  promptTokens += prefilled;
+  fullPromptTokens += static_cast<int64_t>(req.promptStartPos) + prefilled;
 }
 
 double RuntimeStatsSnapshot::avgConcurrentSeq() const {
@@ -2485,6 +2487,8 @@ ObservedRequestStats computeObservedStats(
   observed.promptTokens = req.isPrefillComplete()
                               ? static_cast<int64_t>(req.prefillTokenCount)
                               : static_cast<int64_t>(req.prefillFedCount);
+  observed.fullPromptTokens =
+      static_cast<int64_t>(req.promptStartPos) + observed.promptTokens;
   if (!req.firstTokenAt.has_value()) {
     return observed; // never sampled a token: no timing figures exist
   }
@@ -2520,6 +2524,7 @@ aggregateObservedStats(const std::vector<ObservedRequestStats>& all) {
   for (const ObservedRequestStats& stats : all) {
     agg.generatedTokens += stats.generatedTokens;
     agg.promptTokens += stats.promptTokens;
+    agg.fullPromptTokens += stats.fullPromptTokens;
     // Summed like the token counts rather than averaged: a multi-item group's
     // caller asked one question, and "two of my renders dropped their tools"
     // is the honest answer to it.

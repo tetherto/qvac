@@ -11,7 +11,8 @@ Request::Request(
     uint32_t rid, PrefillPlan&& plan, unsigned maxTokens, llama_pos initialPos)
     : seqId(rid), pendingPrefillTokens(std::move(plan.tokens)),
       pendingMediaBarriers(std::move(plan.mediaBarriers)),
-      pendingCheckpointAt(plan.checkpointAtTextTokens), currentPos(initialPos),
+      pendingCheckpointAt(plan.checkpointAtTextTokens),
+      promptStartPos(initialPos), currentPos(initialPos),
       maxTokensPerSequence(maxTokens) {
   prefillTokenCount = pendingPrefillTokens.size();
   for (const auto& barrier : pendingMediaBarriers) {
