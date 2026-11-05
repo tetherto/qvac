@@ -52,6 +52,10 @@ on:
         description: QVAC_PERF_WARMUP_RUNS pushed to the device; empty keeps the test default
         type: string
         default: ""
+      weekly:
+        description: Run each package's <platform>Weekly test groups, as the weekend schedule does
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -306,6 +310,7 @@ jobs:
           extra-pre-test-commands: ${{ steps.prepare.outputs.pre-test-commands }}
           test-groups: ${{ steps.prepare.outputs.test-groups }}
           device-env: ${{ steps.prepare.outputs.device-env }}
+          weekly: ${{ inputs.weekly }}
           perf-runs: ${{ inputs.perf_runs }}
           perf-warmup-runs: ${{ inputs.perf_warmup_runs }}
           bundle-id: ${{ env.BUNDLE_ID }}

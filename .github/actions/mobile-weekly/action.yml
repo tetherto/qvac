@@ -1,0 +1,34 @@
+name: Weekly mobile run
+description: find lists the packages with androidWeekly/iosWeekly test groups; report files one weekly-mobile-report issue per package that ran.
+inputs:
+  command:
+    description: find or report
+    required: true
+  root:
+    description: Checkout holding packages/*/test/mobile, for find
+    default: "."
+  projects:
+    description: The _select-projects projects that ran, one JSON array per line, for report
+    default: ""
+  logs:
+    description: Directory holding the console-logs-<slug>-<platform> artifacts, for report
+    default: logs
+outputs:
+  android:
+    description: Comma-separated package directories with androidWeekly groups
+    value: ${{ steps.run.outputs.android }}
+  ios:
+    description: Comma-separated package directories with iosWeekly groups
+    value: ${{ steps.run.outputs.ios }}
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      env:
+        COMMAND: ${{ inputs.command }}
+        ROOT: ${{ inputs.root }}
+        PROJECTS: ${{ inputs.projects }}
+        LOGS: ${{ inputs.logs }}
+        GITHUB_TOKEN: ${{ github.token }}
+      run: node "$GITHUB_ACTION_PATH/mobile-weekly.mjs" "$COMMAND"

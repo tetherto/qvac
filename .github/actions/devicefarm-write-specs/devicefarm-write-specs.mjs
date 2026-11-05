@@ -41,12 +41,15 @@ export function platformValues(platform, bundleId) {
       }
 }
 
-// An explicit list wins, then the package's test-groups.json, then one spec running everything.
-export function resolveGroups(explicit, groupsFile, platform) {
+// An explicit list wins, then the package's test-groups.json, then one spec running everything. A weekly run reads
+// the <platform>Weekly groups instead, as main's weekend runs did.
+export function resolveGroups(explicit, groupsFile, platform, weekly = false) {
   const given = explicit ? JSON.parse(explicit) : []
   if (given.length) return given
   if (groupsFile && existsSync(groupsFile)) {
-    const map = JSON.parse(readFileSync(groupsFile, 'utf8'))[platform.toLowerCase()]
+    const map = JSON.parse(readFileSync(groupsFile, 'utf8'))[
+      `${platform.toLowerCase()}${weekly ? 'Weekly' : ''}`
+    ]
     if (map && typeof map === 'object')
       return Object.entries(map).map(([name, tests]) => ({
         name,
@@ -139,7 +142,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     groups: resolveGroups(
       env.TESTS ? JSON.stringify([{ name: 'manual', grep: env.TESTS }]) : env.TEST_GROUPS || '',
       join(env.WORKDIR, 'test/mobile/test-groups.json'),
-      env.PLATFORM
+      env.PLATFORM,
+      env.WEEKLY === 'true'
     ),
     allTests: existsSync(auto)
       ? [...readFileSync(auto, 'utf8').matchAll(/async function (run[A-Za-z0-9]+)/g)].map(
