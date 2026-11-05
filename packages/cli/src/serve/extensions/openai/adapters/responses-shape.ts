@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import type { ToolCall, CompletionStats } from '@qvac/sdk'
 import { sdkToolCallsToOpenai } from '@/serve/extensions/openai/adapters/tool-calls'
 import { completionTokensFromStats } from '@/serve/core/completion'
+import type { ToolNamespaces } from '@/serve/extensions/openai/schemas/responses'
 
 export function responseId(): string {
   return `resp_${randomId()}`
@@ -26,7 +27,17 @@ function randomId(): string {
 /** One output item, in the order the model produced it. */
 export type OutputSegment =
   | { type: 'message' | 'reasoning'; id: string; text: string }
-  | { type: 'function_call'; id: string; callId: string; name: string; arguments: string }
+  | {
+      type: 'function_call'
+      id: string
+      callId: string
+      /** As the client declared it; a namespaced tool's `namespace` is split out. */
+      name: string
+      namespace?: string
+      arguments: string
+    }
+
+type FunctionCallSegment = Extract<OutputSegment, { type: 'function_call' }>
 
 export interface BuildResponseObjectParams {
   id: string
@@ -49,6 +60,8 @@ export interface BuildResponseObjectParams {
   store: boolean
   /** When set (e.g. streaming), must match SSE item ids so finalized response matches the stream. */
   messageItemId?: string
+  /** Maps a namespaced tool's qualified name back to the client's `namespace` + `name`. */
+  toolNamespaces?: ToolNamespaces
   /** When set, must align with `toolCalls` length; same ids as streamed function_call items. */
   functionCallItemIds?: string[]
   /** From SDK completion stats; `emittedTokens` / `generatedTokens` map to `usage.output_tokens`. */
@@ -68,46 +81,24 @@ export interface BuildResponseObjectParams {
 }
 
 export function buildResponseObject(params: BuildResponseObjectParams): Record<string, unknown> {
-  const hasToolCalls =
-    params.toolCalls !== null && params.toolCalls !== undefined && params.toolCalls.length > 0
-  const msgId = params.messageItemId ?? messageId()
-  const output: unknown[] = []
-
-  if (params.items) {
-    for (const item of params.items) output.push(outputItem(item))
-  } else {
-    output.push(messageItem(msgId, params.text || ''))
-  }
-
-  const openaiCalls = params.items
-    ? params.items.flatMap((item) =>
-        item.type === 'function_call'
-          ? [
-              {
-                id: item.callId,
-                type: 'function',
-                function: { name: item.name, arguments: item.arguments }
-              }
-            ]
-          : []
-      )
-    : sdkToolCallsToOpenai(params.toolCalls)
-  if (hasToolCalls && !params.items) {
-    const ids = params.functionCallItemIds
-    let i = 0
-    for (const tc of openaiCalls ?? []) {
-      const fcId = ids !== undefined && ids[i] !== undefined ? ids[i]! : functionCallOutputItemId()
-      i++
-      output.push({
+  // Every tool-call field (output items, status, required_action) comes from
+  // this one list: the ordered items when given, otherwise `toolCalls`.
+  const calls: FunctionCallSegment[] = params.items
+    ? params.items.filter((item): item is FunctionCallSegment => item.type === 'function_call')
+    : (sdkToolCallsToOpenai(params.toolCalls) ?? []).map((tc, i) => ({
         type: 'function_call',
-        id: fcId,
-        call_id: tc.id,
-        name: tc.function.name,
-        arguments: tc.function.arguments,
-        status: 'completed'
-      })
-    }
-  }
+        id: params.functionCallItemIds?.[i] ?? functionCallOutputItemId(),
+        callId: tc.id,
+        ...clientToolName(tc.function.name, params.toolNamespaces),
+        arguments: tc.function.arguments
+      }))
+  const hasToolCalls = calls.length > 0
+  const output: unknown[] = params.items
+    ? params.items.map(outputItem)
+    : [
+        messageItem(params.messageItemId ?? messageId(), params.text || ''),
+        ...calls.map((call) => functionCallItem(call, 'completed'))
+      ]
 
   const outputTokens =
     typeof params.completionTokens === 'number' && Number.isFinite(params.completionTokens)
@@ -144,12 +135,13 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
     base['required_action'] = {
       type: 'submit_tool_outputs',
       submit_tool_outputs: {
-        tool_calls: (openaiCalls ?? []).map((tc) => ({
-          id: tc.id,
+        tool_calls: calls.map((call) => ({
+          id: call.callId,
           type: 'function',
           function: {
-            name: tc.function.name,
-            arguments: tc.function.arguments
+            name: call.name,
+            ...(call.namespace !== undefined && { namespace: call.namespace }),
+            arguments: call.arguments
           }
         }))
       }
@@ -202,7 +194,7 @@ function inputTokensFromStats(stats: CompletionStats | undefined): number {
 }
 
 export function functionCallItem(
-  item: Extract<OutputSegment, { type: 'function_call' }>,
+  item: FunctionCallSegment,
   status: 'in_progress' | 'completed'
 ): Record<string, unknown> {
   return {
@@ -210,6 +202,7 @@ export function functionCallItem(
     id: item.id,
     call_id: item.callId,
     name: item.name,
+    ...(item.namespace !== undefined && { namespace: item.namespace }),
     arguments: status === 'completed' ? item.arguments : '',
     status
   }
@@ -220,4 +213,13 @@ export function outputItem(item: OutputSegment): Record<string, unknown> {
   return item.type === 'message'
     ? messageItem(item.id, item.text)
     : reasoningItem(item.id, item.text)
+}
+
+/** `name`, plus `namespace` when the tool was declared inside one. */
+export function clientToolName(
+  name: string,
+  namespaces: ToolNamespaces | undefined
+): { name: string; namespace?: string } {
+  const declared = namespaces?.get(name)
+  return declared ? { name: declared.name, namespace: declared.namespace } : { name }
 }

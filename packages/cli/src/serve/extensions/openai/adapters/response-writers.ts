@@ -14,10 +14,14 @@ import {
   stripToolSearchCalls
 } from '@/serve/lib/tool-search'
 import type { GenerationParams, ResponseFormat } from '@/serve/extensions/openai/schemas/common'
-import type { ResponsesHistoryItem } from '@/serve/extensions/openai/schemas/responses'
+import type {
+  ResponsesHistoryItem,
+  ToolNamespaces
+} from '@/serve/extensions/openai/schemas/responses'
 import {
   buildResponseObject,
   functionCallItem,
+  clientToolName,
   functionCallOutputItemId,
   messageId,
   outputItem,
@@ -52,6 +56,7 @@ export interface ResponsesHandlerParams {
   sdkModelId: string
   history: ResponsesHistoryItem[]
   tools?: Tool[] | undefined
+  toolNamespaces?: ToolNamespaces | undefined
   generationParams?: GenerationParams | undefined
   responseFormat?: ResponseFormat | undefined
   modelAlias: string
@@ -85,7 +90,11 @@ type TextKind = 'message' | 'reasoning'
 // Each item finishes before the next starts, so text that follows reasoning or
 // a call opens a new message item. Streaming passes `send` to emit the matching
 // SSE events; blocking does not.
-function createOutputTimeline(tools: Tool[] | undefined, send?: SendEvent): OutputTimeline {
+function createOutputTimeline(
+  tools: Tool[] | undefined,
+  namespaces: ToolNamespaces | undefined,
+  send?: SendEvent
+): OutputTimeline {
   type Open = Extract<OutputSegment, { type: TextKind }> & { outputIndex: number }
   let nextOutputIndex = 0
   let open: Open | undefined
@@ -166,7 +175,7 @@ function createOutputTimeline(tools: Tool[] | undefined, send?: SendEvent): Outp
       type: 'function_call' as const,
       id: functionCallOutputItemId(),
       callId: tc.id,
-      name: tc.function.name,
+      ...clientToolName(tc.function.name, namespaces),
       arguments: tc.function.arguments
     }
     const outputIndex = nextOutputIndex++
@@ -221,7 +230,7 @@ export async function writeBlockingResponse(
   let turnHistory = p.history
   let drained
   let total: DrainedOpenAICompletion | undefined
-  const timeline = createOutputTimeline(p.tools)
+  const timeline = createOutputTimeline(p.tools, p.toolNamespaces)
   for (let round = 0; ; round++) {
     if (round > 0) timeline.endRound()
     drained = await drainCompletion(
@@ -261,6 +270,7 @@ export async function writeBlockingResponse(
     parallelToolCalls: p.parallelToolCalls,
     previousResponseId: p.previousResponseId,
     store: p.storeEnabled,
+    ...(p.toolNamespaces !== undefined ? { toolNamespaces: p.toolNamespaces } : {}),
     completionTokens,
     ...(stopReason !== undefined ? { stopReason } : {}),
     ...(stats !== undefined ? { stats } : {})
@@ -294,14 +304,24 @@ export async function writeBlockingResponse(
   return responseObject
 }
 
+// Every event of a Responses stream carries one increasing sequence number;
+// kept per response so an error path outside the writer continues it.
+const streamSequence = new WeakMap<ServerResponse, number>()
+
+export function takeSequenceNumber(res: ServerResponse): number {
+  const next = streamSequence.get(res) ?? 0
+  streamSequence.set(res, next + 1)
+  return next
+}
+
 export async function writeStreamingResponse(
   res: ServerResponse,
   p: ResponsesHandlerParams,
   runTurn: RunTurn
 ): Promise<Record<string, unknown>> {
   // Every event carries one increasing sequence number.
-  let sequence = 0
-  const emit: SendEvent = (event) => sendSSE(res, { ...event, sequence_number: sequence++ })
+  const emit: SendEvent = (event) =>
+    sendSSE(res, { ...event, sequence_number: takeSequenceNumber(res) })
 
   emit({
     type: 'response.created',
@@ -318,7 +338,9 @@ export async function writeStreamingResponse(
   // by the normalizer, so a search turn emits no text deltas to withhold; what
   // it can emit is a preamble, which is fine to show. Only the SSE stream is
   // held open across a search round.
-  const timeline = createOutputTimeline(p.tools, (event) => emit({ ...event, response_id: p.rid }))
+  const timeline = createOutputTimeline(p.tools, p.toolNamespaces, (event) =>
+    emit({ ...event, response_id: p.rid })
+  )
 
   let turnHistory = p.history
   let drained
@@ -369,6 +391,7 @@ export async function writeStreamingResponse(
     parallelToolCalls: p.parallelToolCalls,
     previousResponseId: p.previousResponseId,
     store: p.storeEnabled,
+    ...(p.toolNamespaces !== undefined ? { toolNamespaces: p.toolNamespaces } : {}),
     completionTokens,
     ...(stopReason !== undefined ? { stopReason } : {}),
     ...(stats !== undefined ? { stats } : {})

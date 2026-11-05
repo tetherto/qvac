@@ -157,7 +157,7 @@ const plugin: FastifyPluginAsync<ErrorHandlerOptions> = async (app, opts) => {
 }
 
 // SDK errors a client can act on, rather than a server fault.
-function sdkErrorAsHttp(err: unknown): HttpError | undefined {
+export function sdkErrorAsHttp(err: unknown): HttpError | undefined {
   if (err instanceof ContextOverflowError) {
     return new HttpError(
       400,

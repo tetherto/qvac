@@ -1552,6 +1552,10 @@ The following OpenAI parameters are forwarded to the model on each request:
 | `presence_penalty` | `presence_penalty` | Penalize already-present tokens |
 | `reasoning_budget` | `reasoning_budget` | Boolean toggle for hybrid-thinking models: `true` keeps reasoning on, `false` disables it. Despite the name, it does not take a positive token cap — only the booleans (or their numeric equivalents `-1`/`0`). |
 
+#### Instructions (`system` and `developer`)
+
+`system` and `developer` messages are merged, in order, into one system message at the start of the conversation, wherever they appear. Many chat templates (e.g. Qwen3.5) reject a `developer` role or a system message after the first turn, and would otherwise render the prompt without the tools. `/v1/responses` treats `instructions` and `developer` input items the same way.
+
 #### Reasoning (`reasoning_content`)
 
 Models that emit `<think>…</think>` blocks (e.g. Qwen3.5) have their reasoning routed to the `reasoning_content` channel instead of leaking into `content`:
@@ -1680,7 +1684,9 @@ When generation is truncated because it hit `max_output_tokens` / `max_tokens`, 
 
 Reasoning from models that emit `<think>…</think>` blocks is returned in `reasoning` output items, with the text in `content[0]` (`type: "reasoning_text"`); `output_text` carries only the answer. Items follow the order the model produced them, in buffered and streamed responses alike: each run of reasoning is one `reasoning` item, each run of answer text one `message` item, and each tool call one `function_call` item, so text after a later reasoning block or call starts a new message. A turn that only calls tools returns only its `function_call` items. Every streamed event carries an increasing `sequence_number`. When streaming, each item is finished (`response.output_item.done`) before the next is added, and reasoning arrives as `response.reasoning_text.delta` events. Items streamed during a `tool_search` round, such as a preamble, stay in the response object, so every streamed `output_index` matches the item's position in `output`.
 
-The following Responses-API features are intentionally rejected with `400`: `conversation`, `background: true`, and built-in tools (`web_search`, `file_search`, `code_interpreter`). `function`-typed tools work when the model was loaded with `config.tools: true`; otherwise the request returns `400 tools_not_enabled`.
+The following Responses-API features are intentionally rejected with `400`: `conversation` and `background: true`. `function` tools work when the model was loaded with `config.tools: true`; otherwise the request returns `400 tools_not_enabled`. The functions inside a `namespace` tool work the same way: the model sees each as `<namespace>__<name>`, and its calls come back with `name` and `namespace` split again. A malformed `namespace` tool, or two tools that end up with the same name, returns `400 invalid_tools`. `defer_loading` works on namespaced tools, and a forced `tool_choice` can name one with `namespace` and `name`. Built-in tools (`web_search`, `file_search`, `code_interpreter`, …) are left out of the request and logged instead of rejected.
+
+When a streamed response fails after it has started (for example `context_length_exceeded`), the stream ends with a `response.failed` event whose `response.error` carries the code and message.
 
 `tool_choice` is supported in the same shapes as chat completions, except that the object form is the Responses API's flattened `{ "type": "function", "name": "get_weather" }`.
 

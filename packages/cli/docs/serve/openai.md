@@ -286,9 +286,20 @@ under `serve.models` (any alias whose endpoint category is `chat`).
 > not durable. Pass `store: false` in the request body to skip persistence
 > entirely.
 
-Intentionally rejected with `400`: `conversation`, `background: true`, and
-built-in tools (`web_search`, `file_search`, `code_interpreter`).
-`function`-typed tools work normally.
+Intentionally rejected with `400`: `conversation` and `background: true`.
+
+`function` tools work normally, and so do the functions inside a `namespace`
+tool: the model sees each as `<namespace>__<name>`, and its calls come back
+with `name` and `namespace` split again (a malformed `namespace`, or two tools that end
+up with the same name, returns `400 invalid_tools`). Built-in tools (`web_search`,
+`file_search`, `code_interpreter`, …) are left out of the request and logged.
+A streamed response that fails after it starts ends with `response.failed`,
+whose `response.error` carries the code (e.g. `context_length_exceeded`).
+
+`instructions` and every `system` or `developer` input item are merged, in
+order, into one leading system message, so chat templates that reject a
+`developer` role or a late system turn still render the tools. Chat
+completions does the same with `system` and `developer` messages.
 
 `usage.input_tokens` is the prompt size reported by the SDK, and
 `total_tokens` is input plus output. Reasoning from `<think>` models is

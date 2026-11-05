@@ -249,6 +249,29 @@ describe('buildResponseObject', () => {
     assert.equal(o['incomplete_details'], undefined)
   })
 
+  it('returns a namespaced tool call as name + namespace', () => {
+    const o = buildResponseObject({
+      id: 'resp_ns',
+      modelAlias: 'm',
+      text: '',
+      toolCalls: [{ id: 'call_1', name: 'mcp__node_repl__js', arguments: { code: '1+1' } }],
+      createdAtSec: 1,
+      metadata: undefined,
+      temperature: undefined,
+      topP: undefined,
+      maxOutputTokens: undefined,
+      parallelToolCalls: true,
+      previousResponseId: null,
+      store: true,
+      toolNamespaces: new Map([['mcp__node_repl__js', { namespace: 'mcp__node_repl', name: 'js' }]])
+    })
+    const call = (o['output'] as Array<Record<string, unknown>>).find(
+      (item) => item['type'] === 'function_call'
+    )!
+    assert.equal(call['name'], 'js')
+    assert.equal(call['namespace'], 'mcp__node_repl')
+  })
+
   it('ids use uuid suffix after prefix', () => {
     const o = buildResponseObject({
       id: 'resp_test',

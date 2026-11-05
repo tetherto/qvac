@@ -434,6 +434,35 @@ describe('writeStreamingResponse: tool calls and sequence numbers', () => {
   })
 })
 
+describe('writeStreamingResponse: namespaced tools', () => {
+  it('streams a namespaced call as name + namespace', async () => {
+    const holder = createStreamResponse()
+    const p = {
+      ...baseHandlerParams('resp_ns'),
+      toolNamespaces: new Map([['mcp__node_repl__js', { namespace: 'mcp__node_repl', name: 'js' }]])
+    }
+    const result = fakeStreamCompletion({
+      tokens: [],
+      toolCalls: [{ id: 'call_1', name: 'mcp__node_repl__js', arguments: { code: '1+1' } }],
+      text: ''
+    })
+
+    const completed = await writeStreamingResponse(holder.res, p, () => result)
+    const events = parseSseJsonEvents(holder.raw) as Array<Record<string, unknown>>
+    const items = events
+      .filter((e) => e['type'] === 'response.output_item.done')
+      .map((e) => e['item'] as Record<string, unknown>)
+      .filter((item) => item['type'] === 'function_call')
+    assert.equal(items[0]!['name'], 'js')
+    assert.equal(items[0]!['namespace'], 'mcp__node_repl')
+    const final = (completed['output'] as Array<Record<string, unknown>>).find(
+      (item) => item['type'] === 'function_call'
+    )!
+    assert.equal(final['name'], 'js')
+    assert.equal(final['namespace'], 'mcp__node_repl')
+  })
+})
+
 describe('writeStreamingResponse: deferred tools', () => {
   const deferredTool = {
     type: 'function' as const,
