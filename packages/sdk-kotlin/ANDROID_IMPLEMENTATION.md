@@ -26,8 +26,7 @@ The `android-barekit` AAR packages:
 The all-in-one profile is restricted to `arm64-v8a`, API 29+, and packages
 every current SDK addon: completion/embeddings, Whisper/Parakeet/BCI
 transcription, translation, TTS/OCR/classification, audio generation,
-diffusion/video/world/upscaling, and VLA. Its MobileNetV3 weights are packaged
-as a checksummed AAR asset. Six smaller, immutable profiles are published
+diffusion/video/world/upscaling, and VLA. Six smaller, immutable profiles are published
 alongside it: `assistant`, `llm`, `speech`, `vision`, `media`, and `robotics`. Every AAR
 contains `qvac/profile.json`, and the transports expose it as a
 `QvacRuntimeProfile` so unsupported operations fail before dispatch.
