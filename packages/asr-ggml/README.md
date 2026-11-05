@@ -475,6 +475,27 @@ bare examples/parakeet-streaming-metadata.js \
   ./examples/parakeet-samples/sample-16k.wav cpu
 ```
 
+Nemotron streams only at the cadences its cache-aware encoder was trained
+for: 80, 160, 320, 560 or 1120 ms. `runStreaming()` checks the cadence a run
+asks for (a positive run-level `chunkMs`; `0` or unset keeps the load-time
+`streamingChunkMs`, where `0` or unset is the 320 ms default) before it opens
+the session and rejects any other value with `INVALID_CONFIG` (24015) naming
+the supported ones, leaving the model usable. A load-time `streamingChunkMs`
+the model does not support never reaches `runStreaming()`: with
+`streaming: true` the engine refuses it when the model loads, and `load()`
+rejects with `FAILED_TO_ACTIVATE` (24006) carrying the engine's message. The
+list is exposed (frozen) for callers that want to validate or offer choices
+up front:
+
+```javascript
+const ASRGgml = require('@qvac/asr-ggml')
+ASRGgml.NEMOTRON_STREAMING_CHUNK_MS // [80, 160, 320, 560, 1120]
+```
+
+A session start the engine itself refuses (for any reason) rejects with
+`FAILED_TO_START_STREAMING` (6012, the shared code) carrying the engine's
+message.
+
 ### MOSS-Transcribe-Diarize — batch `run()` with hotwords
 
 ```javascript
@@ -604,7 +625,7 @@ Engine-specific segment fields:
 
 `assessFit` projects a load against the memory free right now. It reads model metadata and never weight data. The registry publishes a weightless copy of each model, and passing it answers the same as passing the model itself, so the projection can run before the model is downloaded: for parakeet a GGUF without its data, for whisper and its Silero VAD model a GGUF description of the `.bin` (its settings, vocabulary sizes and tensor list, tens of KB). It is a module export, not an instance method — nothing is loaded to call it.
 
-`assessFit` returns a Promise. Concurrent calls run one at a time. A model the fitter cannot read resolves with `status: 'error'`; only a broken request rejects.
+`assessFit` returns a Promise. Concurrent calls run one at a time. A model the fitter cannot read, or an invalid request, rejects with the engine's reason as an `InvalidArgument` error. `status` is `unknown`, with no rows, for a load the fitter cannot measure, such as one whose device memory it cannot read.
 
 ```js
 const ASRGgml = require('@qvac/asr-ggml')
@@ -617,18 +638,17 @@ const fit = await ASRGgml.assessFit({
   decoders: 5
 })
 
-fit.status // 'fits' | 'does-not-fit' | 'error'
-fit.reason // the engine's own wording, e.g. 'model-unreadable', 'workload-too-large'
-fit.modelType // whisper: 'tiny' … 'large v3'; parakeet: 'ctc' | 'rnnt' | 'tdt' | 'eou' | 'nemotron' | 'sortformer' | 'nemotron-diarization'
-fit.deviceName
-fit.deviceBytes
-fit.weightsBytes
-fit.hostBytes
-fit.coremlBytes // parakeet on macOS and iOS: Core ML diarizer sidecars the workload can load
-fit.report
+fit.status // 'fits' | 'does-not-fit' | 'unknown'
+fit.devices // the device the load resolves to, then the host CPU
+fit.devices[0] // { id, name, unified, usedBytes, freeBytes, totalBytes }
+fit.stats // {}
 ```
 
-`engine` picks the fitter and defaults to parakeet. Each engine fills its own breakdown on the result: whisper reports `kvBytes`, `computeBytes`, `vadBytes` and `hostOverflowBytes`; parakeet and MOSS report `encoderComputeBytes`, `decoderStateBytes` and `decoderComputeBytes`.
+Each device row gives the memory the load takes on that device, as `usedBytes`, and the device's free and total memory. `id` is the PCI bus ID when the backend reports one, and the device name otherwise. `unified` is true for memory the host owns: the CPU, an integrated GPU, a GPU that shares the host's memory, Android's OpenCL GPU, and a device that reports no memory of its own, which takes the host's figures. A load on the CPU is one row that holds both its device and host memory.
+
+On an iOS device every unified row shares the app's own memory limit, `os_proc_available_memory()`. Each such row's free memory is capped at that limit, and a load whose unified rows together take more than the limit less the margin does not fit. A limit of 0 means the app has none left.
+
+`engine` picks the fitter and defaults to parakeet.
 
 | Option | Description |
 | --- | --- |
@@ -656,7 +676,7 @@ const fit = await ASRGgml.assessFit({
   threads: 4,
   gpuLayers: 1
 })
-console.log(fit.report)
+console.log(fit.devices)
 ```
 
 `audioSeconds` is required and must be positive and finite. `threads` follows
@@ -665,21 +685,17 @@ console.log(fit.report)
 prompt/hotword exclusion and 0 or omitted token allowance selecting the GGUF default.
 The projection reads GGUF metadata only and supports a metadata-only copy with the
 same tensor table and tokenizer. It measures the runtime encoder and decoder graphs,
-the aligned KV cache, and host buffers. A workload exceeding the model context returns
-`error` / `workload-too-large`.
+the aligned KV cache, and host buffers. A workload exceeding the model context rejects
+with `workload-too-large`.
 
-Encoder and decoder reuse one scheduler allocation: `decoderComputeBytes` is the
-additional compute above `encoderComputeBytes`, so their sum is the peak allocation.
-On CPU and unified-memory GPUs, host bytes also count against available device memory.
-This projection covers one batch transcription, matching MOSS's existing API.
+Encoder and decoder reuse one scheduler allocation, and the device usage counts its
+peak. This projection covers one batch transcription, the one mode MOSS runs.
 
 Run [`examples/moss-transcribe-fit.js`](examples/moss-transcribe-fit.js) with:
 
 ```sh
 bare examples/moss-transcribe-fit.js /models/moss-transcribe-diarize-q8_0.gguf 90
 ```
-
-A model the fitter cannot read is `status: "error"` with the engine's reason; only a broken request throws.
 
 ## Configuration Reference
 
@@ -835,7 +851,7 @@ with the default `useGPU: false`; `{ backend: 'cpu', useGPU: true }` selects
 the CPU ggml backend. `auto` (or an empty selector) preserves automatic selection and fallback.
 Pass the same `backend` to `assessFit({ engine: 'moss-transcribe', ... })`
 to project on that device; it overrides `gpuLayers`. A missing explicit device
-returns a fit error instead of a CPU projection. `getBackendInfo()` reports
+rejects instead of projecting on the CPU. `getBackendInfo()` reports
 the resolved backend after load. CUDA, Vulkan and Metal require compatible
 native `speech-cpp` libraries and the corresponding backend in the addon build.
 
@@ -1006,8 +1022,8 @@ Diarizer bundles load on first use, and each capacity costs 190-220 MiB of
 weights. They pay off on base and Pro chips and iOS (1.4-2.7x over Metal on an
 M4). A Max or Ultra GPU is as fast as the Neural Engine (0.70-1.17x on an M3
 Ultra), so leave them out there. `PARAKEET_COREML_DIARIZER_DISABLE=1` ignores
-them and keeps the encoder-only sidecars. `assessFit` charges the bundles a
-workload can load as `coremlBytes`. Diarizer bundles are not in the model
+them and keeps the encoder-only sidecars. `assessFit` counts the bundles a
+workload can load in the host row. Diarizer bundles are not in the model
 registry yet: export them with
 `engines/parakeet/scripts/export-nemotron-diarization-coreml.py` and
 `export-sortformer-diarizer-coreml.py`. The
@@ -1123,7 +1139,9 @@ The map spans **two ranges**, because no historical code was allowed to move:
   `MODEL_NOT_FOUND` 24009, `INVALID_AUDIO_FORMAT` 24010, `INVALID_CONFIG`
   24015, `INSTANCE_DESTROYED` 24018, `JOB_CANCELLED` 24019. Shared verbs
   raised *by the parakeet engine* also stay in `24xxx` (a parakeet append
-  failure is 24003, not 6003).
+  failure is 24003, not 6003), except `FAILED_TO_START_STREAMING`, which is
+  new in 0.11.x and has no historical parakeet number: both engines raise
+  6012.
 
 Every number from both historical tables is registered, so pre-merge codes
 still resolve to a name and message. See

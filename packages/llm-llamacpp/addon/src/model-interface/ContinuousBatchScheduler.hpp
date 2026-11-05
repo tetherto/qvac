@@ -21,11 +21,16 @@
 #include <concurrentqueue/concurrentqueue.h>
 #include <llama.h>
 
+#include "CacheSourceSelection.hpp"
 #include "LlmContext.hpp"
 #include "MediaLoadOrder.hpp"
 #include "MultiRequestBatcher.hpp"
 #include "SequenceDriver.hpp"
 #include "SlotStateCache.hpp"
+
+namespace qvac_lib_inference_addon_llama::cache {
+class CacheFileIndex;
+} // namespace qvac_lib_inference_addon_llama::cache
 
 /// Defined in test/unit/test_internal_peers.hpp (tests only); befriended below
 /// so unit tests can inject decode/media-eval stubs. Never defined in
@@ -286,6 +291,11 @@ using DriverFactory = std::function<std::unique_ptr<SequenceDriver>(
 /// Callers enqueue request groups and wait for their result. A scheduler-owned
 /// worker thread admits queued requests into free slots, runs decode chunks,
 /// and refills slots as soon as completed requests are drained.
+///
+/// It is also where an admitted request looks for a conversation that serves
+/// more of its prompt than its own sequence (`cache::CacheSourceProvider`):
+/// other parked sequences, the RAM tier and the cacheKey files the model has
+/// used.
 class ContinuousBatchScheduler {
 public:
   /// @param shared             Live llama handles. Must outlive `*this`.
@@ -416,6 +426,10 @@ public:
   /// budget disables it. Resident slots do not depend on it.
   void setRamTier(std::shared_ptr<SlotStateCache> ramTier);
 
+  /// cacheKey files the model has used, shared with the single-prompt path.
+  /// Every key a request names is noted in it.
+  void setFileIndex(std::shared_ptr<cache::CacheFileIndex> fileIndex);
+
   /// Writes every parked, non-ephemeral conversation with unsaved turns to
   /// its `cacheKey` file. Run when the model is reloaded or unloaded; skipped
   /// while a slot is decoding.
@@ -455,6 +469,8 @@ public:
   /// Test seams: how often admission reused a parked slot or a RAM-tier state.
   [[nodiscard]] uint64_t residentHitsForTesting() const;
   [[nodiscard]] uint64_t ramTierHitsForTesting() const;
+  /// How often an admitted request started from another conversation.
+  [[nodiscard]] uint64_t donorHitsForTesting() const;
 
   /// Decode function used by stepLocked() (defaults to llama_decode), context
   /// synchronization used before recording decode/media step time (defaults to
@@ -716,11 +732,29 @@ private:
   void notifyDoneNoexcept(uint32_t seqId) noexcept;
   void freeSlot(uint32_t seqId) noexcept;
   /// Free sequence for a request on `cacheKey`: the one parked with that key,
-  /// else one with nothing parked, else the least recently used parked one,
-  /// evicted first. Nullopt when every sequence is busy.
-  [[nodiscard]] std::optional<uint32_t>
-  chooseSeqIdLocked(const std::string& cacheKey);
-  void evictParkedLocked(uint32_t seqId) noexcept;
+  /// else one with nothing parked, else the least recently used parked one
+  /// (anonymous ones first), evicted first. Nullopt when every sequence is
+  /// busy. An evicted conversation's cells stay in the sequence and its
+  /// ledger words are returned in `evicted`, so the request can reuse the
+  /// prefix it shares with them.
+  [[nodiscard]] std::optional<uint32_t> chooseSeqIdLocked(
+      const std::string& cacheKey,
+      std::optional<std::vector<llama_token>>& evicted);
+  /// Moves the conversation parked on `seqId` to the RAM tier or its file
+  /// (see `evictParked`) and clears the sequence, unless `keepCells` is set:
+  /// the cells then stay, and the ledger words describing them are returned.
+  std::optional<std::vector<llama_token>>
+  evictParkedLocked(uint32_t seqId, bool keepCells = false) noexcept;
+  /// Neither the batcher nor the scheduler holds a request on `seqId` (see
+  /// the note in `submitLocked` on the drain window).
+  [[nodiscard]] bool isFreeLocked(uint32_t seqId) const;
+  /// The `cache::CacheSourceProvider` of the driver admitted on `seqId`,
+  /// called from its `preparePrefill` under the scheduler lock. A parked
+  /// sequence, the RAM tier and the files each lend a copy; none of them
+  /// changes.
+  bool offerDonorLocked(
+      llama_seq_id seqId, const cache::Ledger& prompt, bool trimmable,
+      size_t minimum, const cache::DonorAdopter& adopt);
   /// Writes the live state of `seqId`, described by `ledgerWords`, to
   /// `cacheKey` through a temp file, followed by the newest of the
   /// conversation's `checkpoints` (see `cache::appendCheckpointSection`).
@@ -815,9 +849,12 @@ private:
   void storeCheckpointsLocked(
       const std::string& cacheKey, cache::Checkpoints&& checkpoints);
 
-  /// A committed keyed conversation kept in its sequence after its request
-  /// ended, for the next request on the same `cacheKey`. The sequence is free
-  /// for admission; claiming it for another key evicts this first.
+  /// A committed conversation kept in its sequence after its request ended,
+  /// for the next request on the same `cacheKey` and as a state other
+  /// requests can start from. A request without a key parks anonymously
+  /// (empty `cacheKey`, ephemeral): never written, dropped when evicted
+  /// without a RAM tier. The sequence is free for admission; claiming it for
+  /// another key evicts this first.
   struct ParkedState {
     std::string cacheKey;
     std::vector<llama_token> ledgerWords;
@@ -831,6 +868,7 @@ private:
   std::vector<std::optional<ParkedState>> parked_;
   uint64_t parkClock_ = 0;
   std::shared_ptr<SlotStateCache> ramTier_;
+  std::shared_ptr<cache::CacheFileIndex> fileIndex_;
   /// Keys with a request in a slot. A request on a busy key waits in
   /// `keyDeferred_` so each key is served in order and never forks.
   std::unordered_set<std::string> busyKeys_;
@@ -845,6 +883,7 @@ private:
   std::deque<std::shared_ptr<SaveJob>> saveJobs_;
   uint64_t residentHits_ = 0;
   uint64_t ramTierHits_ = 0;
+  uint64_t donorHits_ = 0;
   bool teardownDeferred_ = false;
   /// Live tagged groups, so a cancel can find a group that holds no slot yet.
   /// Guarded by `mutex_`; an entry lives exactly as long as its `processBatch`

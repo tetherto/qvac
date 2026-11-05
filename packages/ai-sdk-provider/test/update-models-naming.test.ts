@@ -12,6 +12,28 @@ const { allModels } = modelConstants
 
 const cases = [
   {
+    path: 'ggml/parakeet/2026-10-23/parakeet-mosaic.gguf',
+    quantization: 'q4_0/q8_0',
+    expected: 'PARAKEET_MOSAIC_Q4_0_Q8_0'
+  },
+  {
+    path: 'ggml/parakeet/2026-10-23/parakeet-mosaic-compact.gguf',
+    quantization: 'q4_0/q8_0/q3_k/iq3_s',
+    expected: 'PARAKEET_MOSAIC_COMPACT_Q4_0_Q8_0_Q3_K_IQ3_S'
+  },
+  ...['parakeet-mosaic', 'parakeet-mosaic-compact'].flatMap((stem) =>
+    [
+      { path: 'analytics/coremldata.bin', expected: 'PARAKEET_COREMLDATA' },
+      { path: 'coremldata.bin', expected: 'PARAKEET_COREMLDATA' },
+      { path: 'model.mil', expected: 'PARAKEET_MODEL' },
+      { path: 'weights/weight.bin', expected: 'PARAKEET_WEIGHT' }
+    ].map(({ path, expected }) => ({
+      path: `ggml/parakeet/2026-10-23/${stem}-encoder.mlmodelc/${path}`,
+      quantization: '',
+      expected
+    }))
+  ),
+  {
     path: 'ggml/nemotron/2026-10-09/Nemotron-3-Diarization.q8_0.gguf',
     quantization: 'q8_0',
     expected: 'PARAKEET_NEMOTRON_3_DIARIZATION_Q8_0'

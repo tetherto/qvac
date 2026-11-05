@@ -93,12 +93,18 @@ class E2eRunner(
             // A test without a declarative body is written per client; this one has none of those.
             return StepResult.incomplete("${definition["testId"]} carries no steps and this client has no body for it")
         }
-        return runtime().interpreter.run(
-            steps = steps,
-            params = asMap(definition["params"]),
-            expectation = asMap(definition["expectation"]),
-            teardown = asList(definition["finally"]).map(::asMap),
-        )
+        val runtime = runtime()
+        try {
+            return runtime.interpreter.run(
+                steps = steps,
+                params = asMap(definition["params"]),
+                expectation = asMap(definition["expectation"]),
+                teardown = asList(definition["finally"]).map(::asMap),
+            )
+        } finally {
+            // Runs on timeout too: unloads are non-cancellable.
+            runtime.resources.evictSingleUse()
+        }
     }
 
     override suspend fun reload() = runtime().resources.close()

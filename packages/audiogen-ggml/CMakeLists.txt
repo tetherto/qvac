@@ -203,4 +203,16 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
   endif()
 endif()
 
+if(BUILD_TESTING)
+  find_package(GTest CONFIG REQUIRED)
+  enable_testing()
+
+  add_executable(audiogen_ggml_tests addon/tests/test_app_memory_budget.cpp)
+  target_include_directories(audiogen_ggml_tests PRIVATE
+    ${PROJECT_SOURCE_DIR}/addon/src
+  )
+  target_link_libraries(audiogen_ggml_tests PRIVATE GTest::gtest_main)
+  add_test(NAME audiogen_ggml_tests COMMAND audiogen_ggml_tests)
+endif()
+
 qvac_addon_add_fuzz_subdirectory()

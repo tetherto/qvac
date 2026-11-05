@@ -316,7 +316,7 @@ bool renderIsUnchangedWithoutTools(
   probe.tools.clear();
   try {
     auto probeParams = common_chat_templates_apply(tmpls, probe);
-    return probeParams.prompt == promptWithTools;
+    return probeParams.prompt.str() == promptWithTools;
   } catch (...) {
     // A template that cannot render this conversation without tools raises
     // here. That is not evidence the definitions were emitted — but it is not
@@ -373,7 +373,7 @@ PromptRenderResult exportParams(
     common_chat_params&& params, bool renderedByJinja,
     bool toolDefinitionsDropped) {
   PromptRenderResult out;
-  out.prompt = std::move(params.prompt);
+  out.prompt = params.prompt.str();
   out.thinkingForcedOpen = params.thinking_forced_open;
   out.thinkingStartTag = std::move(params.thinking_start_tag);
   out.thinkingEndTag = params.thinking_end_tags.empty()
@@ -395,7 +395,8 @@ PromptRenderResult exportParams(
 
 PromptRenderResult getPrompt(
     const struct common_chat_templates* tmpls,
-    struct common_chat_templates_inputs& inputs) {
+    struct common_chat_templates_inputs& inputs, bool forRequest) {
+  const auto fallbackPriority = forRequest ? Priority::ERROR : Priority::DEBUG;
   // A template can fail either because it rejects the tool definitions or
   // because it rejects the shape of the message list (e.g. Qwen3.5 raises
   // when there is no user turn to anchor its tool block on). Retry without
@@ -414,12 +415,12 @@ PromptRenderResult getPrompt(
     // tools-aware render.
     const bool legacyDroppedTools = !inputs.use_jinja && !inputs.tools.empty();
     const bool jinjaOmittedTools =
-        inputs.use_jinja && !inputs.tools.empty() &&
-        jinjaRenderOmittedTools(tmpls, inputs, params.prompt);
+        forRequest && inputs.use_jinja && !inputs.tools.empty() &&
+        jinjaRenderOmittedTools(tmpls, inputs, params.prompt.str());
     const bool droppedTools = legacyDroppedTools || jinjaOmittedTools;
     if (jinjaOmittedTools) {
       QLOG_IF(
-          Priority::ERROR,
+          fallbackPriority,
           "[ChatTemplateUtils] supplying the tools did not change the rendered "
           "prompt; the chat template left the definitions out and the model "
           "never saw them\n");
@@ -446,7 +447,7 @@ PromptRenderResult getPrompt(
     try {
       auto params = common_chat_templates_apply(tmpls, withoutTools);
       QLOG_IF(
-          Priority::ERROR,
+          fallbackPriority,
           string_format(
               "[ChatTemplateUtils] chat template rejected the tool "
               "definitions; rendering without tools. Error: %s\n",
@@ -463,7 +464,7 @@ PromptRenderResult getPrompt(
   }
 
   QLOG_IF(
-      Priority::ERROR,
+      fallbackPriority,
       string_format(
           "[ChatTemplateUtils] chat template could not render this "
           "conversation; falling back to the legacy renderer, which ignores "
@@ -520,7 +521,7 @@ bool plainRenderFallsShort(
   try {
     const auto params = common_chat_templates_apply(tmpls, inputs);
     return !inputs.tools.empty() &&
-           jinjaRenderOmittedTools(tmpls, inputs, params.prompt);
+           jinjaRenderOmittedTools(tmpls, inputs, params.prompt.str());
   } catch (...) {
     return true;
   }
@@ -554,7 +555,7 @@ std::optional<PromptRenderResult> renderWithoutUserTurn(
       withUser.messages.push_back(std::move(placeholder));
       withUser.add_generation_prompt = false;
       auto params = common_chat_templates_apply(tmpls, withUser);
-      prompts.push_back(params.prompt);
+      prompts.push_back(params.prompt.str());
       if (!first.has_value()) {
         first = std::move(params);
       }
@@ -589,7 +590,7 @@ std::optional<PromptRenderResult> renderWithoutUserTurn(
       withUserNoTools.add_generation_prompt = false;
       withUserNoTools.tools.clear();
       promptWithoutTools =
-          common_chat_templates_apply(tmpls, withUserNoTools).prompt;
+          common_chat_templates_apply(tmpls, withUserNoTools).prompt.str();
     } catch (...) {
       QLOG_IF(
           Priority::WARNING,
@@ -1047,6 +1048,27 @@ void requireToolChoiceHonoured(
             "tool-call grammar could be applied to constrain it",
             logTag));
   }
+}
+
+size_t countRenderedChatTokens(
+    const struct common_chat_templates* tmpls,
+    const std::vector<common_chat_msg>& messages,
+    const std::vector<common_chat_tool>& tools, bool useJinja,
+    bool enableThinking, const Tokenizer& tokenize) {
+  common_chat_templates_inputs inputs;
+  inputs.use_jinja = useJinja;
+  inputs.enable_thinking = enableThinking;
+  inputs.messages = messages;
+  inputs.add_generation_prompt =
+      !messages.empty() &&
+      (messages.back().role == "user" || messages.back().role == "tool");
+  ResolvedToolChoice toolChoice = resolveToolChoice(std::nullopt, tools);
+  if (!toolChoice.tools.empty()) {
+    inputs.tools = std::move(toolChoice.tools);
+    inputs.tool_choice = toolChoice.choice;
+  }
+  return tokenize(getPrompt(tmpls, inputs, /* forRequest = */ false).prompt)
+      .size();
 }
 
 bool configureTemplateDerivedSampling(

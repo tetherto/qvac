@@ -229,7 +229,7 @@ The synthetic `{ type: "endOfTurn", source: "parakeet" }` event surfaces wheneve
 
 ### `qvac-fabric-speech.cpp`
 
-The following script shows an example of `qvac-fabric-speech.cpp` transcription with prompt-guided decoding, VAD, and GPU acceleration:
+The following script shows an example of `qvac-fabric-speech.cpp` transcription with prompt-guided decoding, VAD, and GPU acceleration. Pass the path of a 16 kHz mono WAV file as the first argument:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -259,7 +259,7 @@ The following script shows an example of `qvac-fabric-speech.cpp` transcription 
 
 ### Parakeet TDT
 
-The following script shows an example of multilingual transcription using the Parakeet TDT model from a WAV file:
+The following script shows an example of multilingual transcription using the Parakeet TDT model from a WAV file. Pass the path of a 16 kHz mono WAV file as the first argument; an optional second argument overrides the default model:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -277,11 +277,19 @@ The following script shows an example of multilingual transcription using the Pa
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/transcription_parakeet_tdt.py title="transcription_parakeet_tdt.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Parakeet CTC
 
-The following script shows an example of English-only transcription using the Parakeet CTC model from a WAV file:
+The following script shows an example of English-only transcription using the Parakeet CTC model from a WAV file. Pass the path of a 16 kHz mono WAV file as the first argument; an optional second argument overrides the default model:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -299,11 +307,19 @@ The following script shows an example of English-only transcription using the Pa
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/transcription_parakeet_ctc.py title="transcription_parakeet_ctc.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Parakeet Unified
 
-The following script shows an example of English transcription using the Parakeet Unified model from a WAV file. Load it once and use it with either `transcribe()` for batch or `transcribeStream()` for low-latency streaming.
+The following script shows an example of English transcription using the Parakeet Unified model from a WAV file. Load it once and use it with either `transcribe()` for batch or `transcribeStream()` for low-latency streaming. The script uses batch `transcribe()`. Pass the path of a 16 kHz mono WAV file as the first argument; an optional second argument overrides the default model:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -321,11 +337,19 @@ The following script shows an example of English transcription using the Parakee
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/transcription_parakeet_unified.py title="transcription_parakeet_unified.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Parakeet Unified with Core ML
 
-The following macOS script loads a regenerated Unified GGUF from disk, downloads its five Core ML encoder files through the registry, and transcribes a WAV file:
+The following macOS script loads a regenerated Unified GGUF from disk, downloads its five Core ML encoder files through the registry, and transcribes a WAV file. Pass the path of the regenerated GGUF (`parakeet-unified-en-0.6b.{f16,q4_0,q8_0}.gguf`) as the first argument and the path of a 16 kHz mono WAV file as the second:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -343,11 +367,19 @@ The following macOS script loads a regenerated Unified GGUF from disk, downloads
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/transcription_parakeet_unified_coreml.py title="transcription_parakeet_unified_coreml.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### TranscribePsy
 
-The following script transcribes a file with TranscribePsy. By default it loads the ggml GGUF; on macOS, `--coreml` loads the Core ML distribution and reports whether the encoder ran on the Neural Engine, and `--window-sec` sets an explicit long-form window:
+The following script transcribes a file with TranscribePsy. By default it loads the ggml GGUF; on macOS, `--coreml` loads the Core ML distribution and reports whether the encoder ran on the Neural Engine, and `--window-sec` sets an explicit long-form window. Pass the path of the audio file as the first argument:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -365,11 +397,19 @@ The following script transcribes a file with TranscribePsy. By default it loads 
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/transcription_parakeet_transcribepsy.py title="transcription_parakeet_transcribepsy.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Parakeet Indic Conformer
 
-The following script shows an example of Indic-language transcription using the Parakeet Indic Conformer CTC model from a WAV file:
+The following script shows an example of Indic-language transcription using the Parakeet Indic Conformer CTC model from a WAV file. Pass the path of a 16 kHz mono WAV file as the first argument and the audio's language code (e.g., `hi`, `ta`) as the second; the language is required. An optional third argument overrides the default model:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -387,11 +427,19 @@ The following script shows an example of Indic-language transcription using the 
 ```
 </WrapCode>
 </Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/transcription_parakeet_indic_conformer.py title="transcription_parakeet_indic_conformer.py" lineNumbers
+```
+</WrapCode>
+</Tab>
 </Tabs>
 
 ### Parakeet Sortformer
 
-The following script shows an example of speaker diarization using the Parakeet Sortformer model, followed by per-segment transcription with the TDT model:
+The following script shows an example of speaker diarization using the Parakeet Sortformer model, followed by per-segment transcription with the TDT model. Pass the path of a 16 kHz mono 16-bit WAV file as the first argument; an optional second argument overrides the default Sortformer model. To try it with a multi-speaker recording, download [`diarization-sample-16k.wav`](https://github.com/tetherto/qvac/blob/main/packages/sdk/examples/audio/diarization-sample-16k.wav) next to the example and pass its path:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>
@@ -406,6 +454,14 @@ The following script shows an example of speaker diarization using the Parakeet 
 <WrapCode>
 
 ```ts file=<rootDir>/packages/sdk/examples/asr/parakeet-sortformer.ts title="parakeet-sortformer.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/transcription_parakeet_sortformer.py title="transcription_parakeet_sortformer.py" lineNumbers
 ```
 </WrapCode>
 </Tab>

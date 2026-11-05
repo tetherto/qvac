@@ -7,7 +7,7 @@ const path = require('bare-path')
 function loadFit() {
   const filename = path.resolve(__dirname, '../../lib/fit.js')
   const calls = []
-  const result = { status: 'error', reason: 'no-backend-device' }
+  const result = { status: 'fits', devices: [], stats: {} }
   const binding = {
     assessFit(request) {
       calls.push(request)
@@ -32,8 +32,7 @@ test('MOSS fit preserves explicit selectors and gpuLayers at the native boundary
       t.is(calls.at(-1).gpuLayers, gpuLayers)
     }
   }
-  // An unavailable device must remain a native error, not trigger a CPU retry.
-  t.is(calls.length, 12)
+  t.is(calls.length, 12, 'one native call per request, never a retry on another device')
 })
 
 test('MOSS fit retains the default selector and rejects invalid selector types', async (t) => {

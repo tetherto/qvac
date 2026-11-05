@@ -24,6 +24,8 @@
 // future changes are made, please validate with thorough parity tests and
 // benchmarking before removing these suppressions. NOLINTBEGIN
 
+#include "nmt_loader_parse.hpp"
+
 // NOLINTBEGIN(readability-identifier-naming,modernize-use-using,cppcoreguidelines-macro-to-enum,modernize-macro-to-enum,readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers,readability-uppercase-literal-suffix)
 using nmt_pos = int32_t;
 using nmt_token = int32_t;
@@ -507,14 +509,6 @@ struct nmt_context {
     model.config.top_p = top_p;
   }
 };
-
-typedef struct nmt_model_loader {
-  void* context;
-
-  size_t (*read)(void* ctx, void* output, size_t read_size);
-  bool (*eof)(void* ctx);
-  void (*close)(void* ctx);
-} nmt_model_loader;
 
 int nmt_encode(struct nmt_context* ctx);
 

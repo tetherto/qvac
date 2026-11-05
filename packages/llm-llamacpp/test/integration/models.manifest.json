@@ -209,9 +209,7 @@
       "bytes": 1917190432
     },
     "bitnet_b1_58-large-TQ2_0.gguf": {
-      "urls": [
-        "https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/e3131d78f06395ab62f7e7fb6c9ae9c00d829db0/bitnet_b1_58-large-TQ2_0.gguf"
-      ],
+      "s3Path": "qvac_models_compiled/ggml/bitnet/2026-03-05/bitnet_b1_58-large-TQ2_0.gguf",
       "sha256": "281aafb18a9f4a3124c10a1d8683e2296f0cfe8a2944da0a5667d17488a951bb",
       "bytes": 217082208
     },
@@ -306,13 +304,6 @@
       ],
       "sha256": "f9a68fabba69c3b81e153367b2c7521030b0fa8bb0de400c9599c8e6725f9c82",
       "bytes": 445053216
-    },
-    "Qwen3-0.6B-UD-IQ1_S.tensors.txt": {
-      "urls": [
-        "https://huggingface.co/jmb95/Qwen3-0.6B-UD-IQ1_S-sharded/resolve/d1538d52a81de36a7a0d6879ab96ebc6502ce822/Qwen3-0.6B-UD-IQ1_S.tensors.txt"
-      ],
-      "sha256": "c10b950a18ec75d3ee61b55ed1ba5b4c3ff3d7afd726651b813d48165bd5847a",
-      "bytes": 7067
     },
     "Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf": {
       "urls": [
