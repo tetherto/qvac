@@ -15,7 +15,7 @@ const MODEL = {
   bytes: 277852192
 }
 
-test('Knowledge indexing: CPU flash-attention timing and vector parity for 57 chunks', async (t) => {
+test('Knowledge indexing: CPU scheduling timing and vector parity for 57 chunks', async (t) => {
   t.timeout(600_000)
   t.is(chunks.length, 57, 'fixed workload size')
 
@@ -32,17 +32,23 @@ test('Knowledge indexing: CPU flash-attention timing and vector parity for 57 ch
   emit({ event: 'model-file', ms: Date.now() - preparedAt, sha256: MODEL.sha256 })
 
   let baseline
-  // Reverse the second pair so one setting does not always run on a hotter device.
-  const flashModes = ['off', 'on', 'on', 'off']
-  for (const [pass, flashAttention] of flashModes.entries()) {
+  // Reverse the second sweep so one setting does not always run on a hotter device.
+  const arms = [
+    { label: 'default', config: {} },
+    { label: 'poll50', config: { poll: '50' } },
+    { label: 'threads4', config: { threads: '4' } },
+    { label: 'threads4-poll50', config: { threads: '4', poll: '50' } }
+  ]
+  for (const [pass, arm] of [...arms, ...arms.toReversed()].entries()) {
     const inference = new GGMLBert({
       files: { model: [modelPath] },
       config: {
         device: 'cpu',
         gpu_layers: '0',
-        flash_attn: flashAttention,
+        flash_attn: 'on',
         batch_size: '1024',
-        openclCacheDir: path.dirname(modelPath)
+        openclCacheDir: path.dirname(modelPath),
+        ...arm.config
       },
       logger: new TestLogger(),
       opts: { stats: true }
@@ -50,9 +56,9 @@ test('Knowledge indexing: CPU flash-attention timing and vector parity for 57 ch
     try {
       const loadAt = Date.now()
       await inference.load()
-      emit({ event: 'load', pass, flashAttention, ms: Date.now() - loadAt })
+      emit({ event: 'load', pass, arm: arm.label, ms: Date.now() - loadAt })
 
-      for (let round = 0; round < 2; round++) {
+      for (let round = 0; round < 1; round++) {
         const startedAt = Date.now()
         const batchMs = []
         const nativeStats = []
@@ -79,7 +85,8 @@ test('Knowledge indexing: CPU flash-attention timing and vector parity for 57 ch
         emit({
           event: 'round',
           pass,
-          flashAttention,
+          arm: arm.label,
+          config: arm.config,
           round,
           ms: elapsedMs,
           batchMs,
