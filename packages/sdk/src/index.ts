@@ -27,6 +27,7 @@ export {
   createVectorIndex,
   loadVectorIndex,
   type VectorIndex,
+  type VectorIndexOperation,
   textToSpeech,
   textToSpeechStream,
   getModelInfo,

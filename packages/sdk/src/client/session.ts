@@ -5,6 +5,7 @@ import type {
   AbortableRPCOptions
 } from '@qvac/inference/surface'
 import * as api from '@/client/api'
+import { createVectorIndexClient } from '@/client/api/vector-index'
 import { send } from '@/client/rpc/rpc-client'
 import { generateClientRequestId } from '@/client/api/client-request-id'
 import {
@@ -153,6 +154,13 @@ function createSessionHandle(
   const withSession = <T extends RPCOptions | AbortableRPCOptions | undefined>(options: T) =>
     ({ ...options, sessionId }) as NonNullable<T>
 
+  // A vector index handle outlives the call that opened it, so its client is
+  // built over a session-stamped transport: every later call on the handle
+  // runs as this session too.
+  const vectorIndexes = createVectorIndexClient((request, options) =>
+    send(request, withSession(options))
+  )
+
   // `loadModel` is overloaded, so its parameter type is not contextually
   // available; the public type is restored by the cast.
   const loadModel = ((options: unknown, rpcOptions?: RPCOptions) => {
@@ -233,8 +241,8 @@ function createSessionHandle(
     ragListWorkspaces: (options) => api.ragListWorkspaces(withSession(options)),
     ragCloseWorkspace: (params, options) => api.ragCloseWorkspace(params, withSession(options)),
     ragDeleteWorkspace: (params, options) => api.ragDeleteWorkspace(params, withSession(options)),
-    createVectorIndex: (params, options) => api.createVectorIndex(params, withSession(options)),
-    loadVectorIndex: (params, options) => api.loadVectorIndex(params, withSession(options)),
+    createVectorIndex: vectorIndexes.createVectorIndex,
+    loadVectorIndex: vectorIndexes.loadVectorIndex,
     ocr: (params, options) => api.ocr(params, withSession(options)),
     classify: (params, options) => api.classify(params, withSession(options)),
     diffusion: (params, options) => api.diffusion(params, withSession(options)),
