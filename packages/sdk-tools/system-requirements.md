@@ -4,7 +4,7 @@ Minimum host requirements for running `@qvac/sdk` and `@qvac/sdk-tools`. You can
 validate your environment against this list with:
 
 ```bash
-qvac-sdk doctor
+qvac sdk doctor
 ```
 
 Use `--deep` to start the project SDK worker and verify a heartbeat plus clean
@@ -13,11 +13,11 @@ the exit code (`0` when all required checks pass, `1` otherwise).
 
 ## Scope: CLI host vs. SDK deploy targets
 
-The `qvac-sdk` CLI itself runs on desktops only. The QVAC SDK, however, ships
+`qvac sdk` itself runs on desktops only. The QVAC SDK, however, ships
 to a broader set of **deploy targets** via BareKit/Expo — including Android
-and iOS. `qvac-sdk doctor` reports both, in two distinct sections of its output:
+and iOS. `qvac sdk doctor` reports both, in two distinct sections of its output:
 
-- **Runtime → CLI host** — where the `qvac-sdk` command can execute. Desktop
+- **Runtime → CLI host** — where `qvac sdk` can execute. Desktop
   platforms only; this is a `fail` if your shell isn't on a supported host.
 - **Deploy targets (SDK)** — the full set of platforms your SDK
   applications can target. Android and iOS appear here, with host
@@ -26,11 +26,11 @@ and iOS. `qvac-sdk doctor` reports both, in two distinct sections of its output:
 
 ## Required
 
-| Requirement                                 | Notes                                                                                                                                          |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| Node.js `^22.21.0 \|\| >=24.9.0`            | Bundling (`qvac-sdk bundle sdk`) needs Node 22.21+ on the 22 line or 24.9+. Matches `engines.node`.                                            |
-| Supported CLI host                          | `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `win32-x64`. The `qvac-sdk` CLI cannot run on mobile; those are deploy targets only. |
-| Total RAM `>= 2 GB` (recommended `>= 4 GB`) | Below 4 GB, most LLMs will fail to load.                                                                                                       |
+| Requirement                                 | Notes                                                                                                                                  |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Node.js `^22.21.0 \|\| >=24.9.0`            | Bundling (`qvac sdk bundle`) needs Node 22.21+ on the 22 line or 24.9+. Matches `engines.node`.                                        |
+| Supported CLI host                          | `darwin-arm64`, `darwin-x64`, `linux-arm64`, `linux-x64`, `win32-x64`. `qvac sdk` cannot run on mobile; those are deploy targets only. |
+| Total RAM `>= 2 GB` (recommended `>= 4 GB`) | Below 4 GB, most LLMs will fail to load.                                                                                               |
 
 When `--deep` is requested, the project SDK must resolve and its isolated
 worker probe must import the SDK, complete `heartbeat()`, and complete
@@ -46,7 +46,7 @@ worker probe must import the SDK, complete `heartbeat()`, and complete
 
 ## Deploy targets
 
-These checks are informational/recommended — they never cause `qvac-sdk doctor`
+These checks are informational/recommended — they never cause `qvac sdk doctor`
 to exit non-zero, because bundling for any target is always supported via
 bare-pack's prebuilt binaries. What's checked here is the host toolchain
 needed to install/deploy to each target class.
@@ -75,7 +75,7 @@ they are missing but does not fail.
 
 ## Deep SDK runtime probe
 
-`qvac-sdk doctor --deep` runs the installed project SDK in an isolated Node.js
+`qvac sdk doctor --deep` runs the installed project SDK in an isolated Node.js
 child process. The child reports its import, heartbeat, and cleanup result over
 a private structured channel, while stdout and stderr are captured separately
 and bounded. A valid success result and exit code `0` are both required.

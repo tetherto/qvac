@@ -46,11 +46,11 @@ export function registerServeCommand(program: Command): void {
     serveCmd
       .command('openai')
       .description(
-        'Deprecated: start the OpenAI-compatible REST API server with `qvac-sdk serve --openai --no-default`'
+        'Deprecated: start the OpenAI-compatible REST API server with `qvac sdk serve --openai --no-default`'
       )
   ).action(async (_options: ServeOptions, command: Command) => {
     console.warn(
-      '`qvac-sdk serve openai` is deprecated. Use `qvac-sdk serve --openai --no-default`.'
+      '`qvac sdk serve openai` is deprecated. Use `qvac sdk serve --openai --no-default`.'
     )
     const merged = command.optsWithGlobals() as ServeOptions
     await runServe({ ...merged, openai: true, [DEFAULT_EXTENSION]: false })

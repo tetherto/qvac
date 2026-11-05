@@ -3,12 +3,8 @@ import { collect } from '@/cli/options'
 import { handleError } from '@/errors'
 
 export function registerBundleCommand(program: Command): void {
-  const bundleCmd = program
+  program
     .command('bundle')
-    .description('Bundle QVAC artifacts for different runtimes')
-
-  bundleCmd
-    .command('sdk')
     .description('Generate a tree-shaken Bare worker bundle with selected plugins')
     .option('-c, --config <path>', 'Config file path (default: auto-detect qvac.config.*)')
     .option('--sdk-path <path>', 'Path to SDK package (default: auto-detect in node_modules)')

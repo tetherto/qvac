@@ -19,7 +19,7 @@ build step handles this; the test scripts don't re-build.
 ### 1. In-process, via Fastify `app.inject()` — **default for `/v1/*` routes**
 
 Helpers: `helpers/server.ts` (`createServer`, `useServer`, `useModelServer`).
-Builds the _same_ server code `qvac-sdk serve --openai` runs (`buildServer`) and injects
+Builds the _same_ server code `qvac sdk serve --openai` runs (`buildServer`) and injects
 requests without opening a socket. Fast, deterministic, no port.
 
 Use for HTTP API behavior: routing, request/response shape, validation + error
@@ -38,7 +38,7 @@ hijacked `reply.raw` SSE writes, including `[DONE]`).
 Spawns `node dist/index.js` (= `npx qvac-sdk`). Use when `app.inject` can't reach it:
 
 - **CLI commands** (`runCli`): `version`/`help`, `verify deps`, `verify bundle`,
-  `bundle sdk`, `doctor`, `openai spec` — assert stdout/stderr/exit code.
+  `bundle`, `doctor`, `openai spec` — assert stdout/stderr/exit code.
 - **Serve lifecycle** (`startCliServer`): the built binary actually binds a port,
   serves over a real socket, logs its startup banner, shuts down on SIGTERM.
 - **Real-socket streaming fidelity** (`useSpawnedServer`): SSE chunks delivered

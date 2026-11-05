@@ -2,7 +2,7 @@
 
 Command-line tools for building with the QVAC SDK: the OpenAI-compatible HTTP server, the worker bundler, and the `doctor`, `configure` and `verify` checks.
 
-This package is published to npm as **`@qvac/sdk-tools`** and lives in the QVAC monorepo at **`packages/sdk-tools`**. It installs the **`qvac-sdk`** command. Earlier releases shipped these commands as **`@qvac/cli`** with the `qvac` command; older instructions may also refer to the deprecated **`qvac-cli`** package name.
+This package is published to npm as **`@qvac/sdk-tools`** and lives in the QVAC monorepo at **`packages/sdk-tools`**. Users run it through the QVAC CLI (**`@qvac/cli`**) as **`qvac sdk <command>`**. Tools and integrations that need only these commands can depend on `@qvac/sdk-tools` directly and run its **`qvac-sdk`** binary. Earlier `@qvac/cli` releases shipped these commands at the top level, such as `qvac serve` and `qvac bundle sdk`; older instructions may also refer to the deprecated **`qvac-cli`** package name.
 
 ## Table of Contents
 
@@ -10,7 +10,7 @@ This package is published to npm as **`@qvac/sdk-tools`** and lives in the QVAC 
 - [Command Reference](#command-reference)
   - [`doctor`](#doctor)
   - [`configure`](#configure)
-  - [`bundle sdk`](#bundle-sdk)
+  - [`bundle`](#bundle)
   - [`verify deps`](#verify-deps)
   - [`verify bundle`](#verify-bundle)
   - [`serve`](#serve)
@@ -21,19 +21,19 @@ This package is published to npm as **`@qvac/sdk-tools`** and lives in the QVAC 
 
 ## Installation
 
-Install globally:
+Install the QVAC CLI globally:
 
 ```bash
-npm i -g @qvac/sdk-tools
+npm i -g @qvac/cli
 ```
 
-Once installed, use the `qvac-sdk` command:
+Then run the SDK commands under `qvac sdk`:
 
 ```bash
-qvac-sdk <command>
+qvac sdk <command>
 ```
 
-Or run directly via npx:
+To run them without the CLI, use the package's own binary, which takes the same commands:
 
 ```bash
 npx @qvac/sdk-tools <command>
@@ -66,7 +66,7 @@ hit runtime errors. The command prints a human-readable report by default and
 exits `1` when any required check fails.
 
 ```bash
-qvac-sdk doctor [options]
+qvac sdk doctor [options]
 ```
 
 **Options:**
@@ -115,22 +115,22 @@ thresholds and rationale.
 
 ```bash
 # Human-readable report
-qvac-sdk doctor
+qvac sdk doctor
 
 # Exercise SDK worker startup without loading a model
-qvac-sdk doctor --deep
+qvac sdk doctor --deep
 
 # JSON for CI / scripts
-qvac-sdk doctor --json
+qvac sdk doctor --json
 
 # Fail-fast in a script (exit 1 on any required check)
-qvac-sdk doctor --quiet || exit 1
+qvac sdk doctor --quiet || exit 1
 ```
 
 ### `configure`
 
 Interactively build a `qvac.config.json` with a starter `serve.models`, so you can go
-straight to `qvac-sdk serve --openai`. It searches the models the SDK provides — by name or by
+straight to `qvac sdk serve --openai`. It searches the models the SDK provides — by name or by
 capability (role, addon, quantization) — and on a wide terminal previews, for the
 highlighted result, the exact `serve.models` entry it would produce. Pick a model, rename
 its alias, set config parameters (guided by the SDK's config schema — each field shows its
@@ -140,10 +140,10 @@ result before adding it. Press `Esc` (or choose `Back`) to step back one menu; `
 aborts without writing. Existing entries are preserved; re-running is idempotent per model.
 
 ```bash
-qvac-sdk configure                 # interactive
-qvac-sdk configure --yes           # non-interactive: write a chat + transcription starter
-qvac-sdk configure --modality chat --modality image
-qvac-sdk configure --modality decision
+qvac sdk configure                 # interactive
+qvac sdk configure --yes           # non-interactive: write a chat + transcription starter
+qvac sdk configure --modality chat --modality image
+qvac sdk configure --modality decision
 ```
 
 | Flag                  | Description                                                                                                              |
@@ -159,12 +159,12 @@ Text-to-speech is emitted as a best-effort example with a `referenceAudioSrc` pl
 set it to a real `.wav` and see the linked TTS docs to finish. Runs in a terminal; for
 non-TTY use `--yes` / `--modality`.
 
-### `bundle sdk`
+### `bundle`
 
 Generate a tree-shaken Bare worker bundle containing the plugins you select (defaults to all built-in plugins).
 
 ```bash
-qvac-sdk bundle sdk [options]
+qvac sdk bundle [options]
 ```
 
 **What it does:**
@@ -193,16 +193,16 @@ qvac-sdk bundle sdk [options]
 
 ```bash
 # Bundle with default settings (all platforms)
-qvac-sdk bundle sdk
+qvac sdk bundle
 
 # Bundle for specific platforms only
-qvac-sdk bundle sdk --host darwin-arm64 --host linux-x64
+qvac sdk bundle --host darwin-arm64 --host linux-x64
 
 # Use a custom config file
-qvac-sdk bundle sdk --config ./my-config.json
+qvac sdk bundle --config ./my-config.json
 
 # Verbose output for debugging
-qvac-sdk bundle sdk --verbose
+qvac sdk bundle --verbose
 ```
 
 **Output:**
@@ -221,7 +221,7 @@ Detect native Bare addon package changes between two git refs by comparing
 npm `package-lock.json` contents.
 
 ```bash
-qvac-sdk verify deps --base <ref> --head <ref> [options]
+qvac sdk verify deps --base <ref> --head <ref> [options]
 ```
 
 Both `--base` and `--head` are required.
@@ -239,13 +239,13 @@ Both `--base` and `--head` are required.
 
 ```bash
 # Local fork checkout
-qvac-sdk verify deps --base upstream/main --head HEAD
+qvac sdk verify deps --base upstream/main --head HEAD
 
 # Direct clone where origin points at the canonical repo
-qvac-sdk verify deps --base origin/main --head HEAD
+qvac sdk verify deps --base origin/main --head HEAD
 
 # Package with a nested npm lockfile
-qvac-sdk verify deps --base upstream/main --head HEAD --lockfile packages/sdk/package-lock.json
+qvac sdk verify deps --base upstream/main --head HEAD --lockfile packages/sdk/package-lock.json
 ```
 
 **Exit codes:**
@@ -273,11 +273,11 @@ an installed `node_modules` tree has prebuilds for the requested host(s) and a
 declared `engines.bare` range compatible with the installed Bare runtime.
 
 ```bash
-qvac-sdk verify bundle --addons-source <path> --host <target> [--host <target>...] [options]
+qvac sdk verify bundle --addons-source <path> --host <target> [--host <target>...] [options]
 ```
 
 `--addons-source` may be either a `qvac/worker.bundle.js` produced by
-`qvac-sdk bundle sdk` or a `node_modules` directory. The source kind is detected
+`qvac sdk bundle` or a `node_modules` directory. The source kind is detected
 automatically: files are parsed as bare-pack bundles, directories are walked
 as `node_modules` trees.
 
@@ -297,26 +297,26 @@ as `node_modules` trees.
 **Examples:**
 
 ```bash
-# Mobile bundle, runs after `qvac-sdk bundle sdk` writes qvac/worker.bundle.js
-qvac-sdk verify bundle --addons-source qvac/worker.bundle.js \
+# Mobile bundle, runs after `qvac sdk bundle` writes qvac/worker.bundle.js
+qvac sdk verify bundle --addons-source qvac/worker.bundle.js \
   --host android-arm64 \
   --host ios-arm64 \
   --host ios-arm64-simulator \
   --host ios-x64-simulator
 
 # Desktop / Electron dev tree
-qvac-sdk verify bundle --addons-source ./node_modules \
+qvac sdk verify bundle --addons-source ./node_modules \
   --host darwin-arm64 --host linux-x64 --host win32-x64
 
 # Packaged Electron app (validates what actually ships)
-qvac-sdk verify bundle \
+qvac sdk verify bundle \
   --addons-source dist/mac-arm64/MyApp.app/Contents/Resources/app.asar.unpacked/node_modules \
   --host darwin-arm64
 
 # Force the runtime version of a desktop build (e.g. an Electron app that
 # ships its own Bare). Do not pin mobile hosts: the pin replaces the version
 # read from react-native-bare-kit.
-qvac-sdk verify bundle --addons-source ./node_modules \
+qvac sdk verify bundle --addons-source ./node_modules \
   --host darwin-arm64 --bare-runtime-version 1.33.4
 
 # Pin via qvac.config.json (committed with the project; same caveat)
@@ -324,11 +324,11 @@ qvac-sdk verify bundle --addons-source ./node_modules \
 #   "plugins": ["llamacpp-completion"],
 #   "bareRuntimeVersion": "1.33.4"
 # }
-qvac-sdk verify bundle --addons-source ./node_modules \
+qvac sdk verify bundle --addons-source ./node_modules \
   --host darwin-arm64
 
 # Structured output for CI consumers
-qvac-sdk verify bundle --addons-source qvac/worker.bundle.js \
+qvac sdk verify bundle --addons-source qvac/worker.bundle.js \
   --host darwin-arm64 --json | jq '.issues[] | select(.level == "error")'
 ```
 
@@ -393,7 +393,7 @@ range, and for each failing package fetches its abbreviated package metadata fro
 `--offline`) to find the newest release that runs on the current Bare and that
 its dependents accept. The override is printed in the syntax of the project's
 package manager, detected the same way as for the addon platform-package
-install in `bundle sdk`: npm `overrides`, pnpm `pnpm.overrides`, yarn
+install in `bundle`: npm `overrides`, pnpm `pnpm.overrides`, yarn
 `resolutions`, or bun `overrides`. It is scoped to the
 accepting dependents when another dependent still requires the current version.
 
@@ -402,13 +402,13 @@ accepting dependents when another dependent still requires the current version.
 Run an HTTP server backed by locally configured QVAC models (`serve.models` in `qvac.config.*`), with an optional **OpenAI-compatible** extension.
 
 ```bash
-qvac-sdk serve --openai [options]
+qvac sdk serve --openai [options]
 ```
 
 The OpenAI extension includes `POST /v1/decisions` for local typed decisions.
 See [Decisions API](docs/serve/openai.md#post-v1decisions) for setup and request examples.
 
-`--no-default` leaves the QVAC surface out. `qvac-sdk serve openai` is a deprecated alias for `qvac-sdk serve --openai --no-default`.
+`--no-default` leaves the QVAC surface out. `qvac sdk serve openai` is a deprecated alias for `qvac sdk serve --openai --no-default`.
 
 | Flag                             | Description                                                                                                                         |
 | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -436,7 +436,7 @@ With lazy loading on (the default), the server starts even when some preload mod
 `serve.cors.origins` in `qvac.config.*` and repeatable `--cors-origin` flags are combined. Origins must be exact HTTP(S) origins without credentials, paths, queries, or fragments. `--cors` is only a compatibility validation switch and does not enable CORS itself. It fails without an explicit CLI/config origin, including with `--docs`. Existing `--cors` scripts must add every trusted origin explicitly:
 
 ```bash
-qvac-sdk serve --openai --cors --cors-origin https://app.example.com
+qvac sdk serve --openai --cors --cors-origin https://app.example.com
 ```
 
 Independently, `--docs` enables CORS for same-port `localhost`, `127.0.0.1`, and `[::1]`, plus the bound host when that host is itself loopback. `/openapi.json`, `/docs`, and `/docs/*` are exempt from bearer authentication. Do not expose docs on a non-loopback bind unless public introspection is acceptable.
@@ -459,7 +459,7 @@ If no config file is found, the CLI bundles all built-in plugins.
 
 > **Note:** `qvac.config.ts` is supported via `tsx` internally (no user setup required).
 
-This file is primarily the SDK runtime config, but `qvac-sdk bundle sdk` also reads this **bundler-only** key (ignored by the SDK at runtime):
+This file is primarily the SDK runtime config, but `qvac sdk bundle` also reads this **bundler-only** key (ignored by the SDK at runtime):
 
 | Key       | Type       | Required | Description                                                                      |
 | --------- | ---------- | -------- | -------------------------------------------------------------------------------- |
@@ -507,7 +507,7 @@ required and recommended host dependencies. You can validate your environment
 at any time with:
 
 ```bash
-qvac-sdk doctor
+qvac sdk doctor
 ```
 
 ## Development
@@ -519,7 +519,7 @@ qvac-sdk doctor
 
 ### Agent-stack test ownership
 
-For tests that touch `qvac-sdk serve --openai`, `@qvac/ai-sdk-provider`, or agent-tool plugins, see
+For tests that touch `qvac sdk serve --openai`, `@qvac/ai-sdk-provider`, or agent-tool plugins, see
 [`test/AGENT_STACK_E2E.md`](./test/AGENT_STACK_E2E.md). It defines which layer owns SDK e2e,
 CLI contract tests, CLI in-process HTTP e2e, CLI spawned-binary e2e, provider integration, and plugin integration.
 
@@ -579,11 +579,11 @@ committed.
 ```bash
 # From packages/sdk-tools after a build
 npm run build
-node ./dist/index.js bundle sdk
+node ./dist/index.js bundle
 
 # Or link globally for testing
 npm link
-qvac-sdk bundle sdk
+qvac-sdk bundle
 ```
 
 ## License

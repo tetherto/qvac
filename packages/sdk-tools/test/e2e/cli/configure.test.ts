@@ -39,7 +39,7 @@ describe('cli: configure', () => {
       const parsed = parseServeConfig(config as Parameters<typeof parseServeConfig>[0], {})
       assert.equal(parsed.models.get('qwen3-600m-inst-q4')?.endpointCategory, 'chat')
       assert.equal(parsed.models.get('laya-multilingual-322m-q8-0')?.endpointCategory, 'decision')
-      assert.match(response.output, /qvac-sdk serve --openai/)
+      assert.match(response.output, /qvac sdk serve --openai/)
       const again = await runCli(args, { cwd: dir })
       assert.equal(again.code, 0, again.output)
       assert.match(again.output, /Already configured/)

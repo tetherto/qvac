@@ -249,7 +249,7 @@ export function formatVerifyDepsResult(result: VerifyDepsResult): string {
     ...formatList('Removed', result.diff.removed, '-'),
     ...formatUnknownRemovedList(result.diff.unknownRemoved),
     'Confirm new natives and unknown removals are intentional.',
-    'Run `qvac-sdk verify bundle` for full prebuild + ABI validation.',
+    'Run `qvac sdk verify bundle` for full prebuild + ABI validation.',
     ...formatUnclassifiedWarning(result)
   ]
 

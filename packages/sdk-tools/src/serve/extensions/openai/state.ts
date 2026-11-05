@@ -64,7 +64,7 @@ export async function createOpenAIState(
   const ffmpegAvailable = await probeFfmpegAvailable()
   if (!ffmpegAvailable) {
     logger.warn(
-      'ffmpeg not on PATH — /v1/videos/{id}/content defaults to video/avi and /v1/audio/speech rejects mp3/opus/aac/flac. Install ffmpeg to serve those. See: qvac-sdk doctor'
+      'ffmpeg not on PATH — /v1/videos/{id}/content defaults to video/avi and /v1/audio/speech rejects mp3/opus/aac/flac. Install ffmpeg to serve those. See: qvac sdk doctor'
     )
   }
 

@@ -27,7 +27,7 @@ export class UnsupportedLockfileError extends Error {
   constructor(lockfilePath: string) {
     super(
       `Unsupported lockfile: ${lockfilePath}\n\n` +
-        `  qvac-sdk verify deps currently supports npm ${NPM_LOCKFILE} files only.\n` +
+        `  qvac sdk verify deps currently supports npm ${NPM_LOCKFILE} files only.\n` +
         '  Yarn, Bun, and pnpm lockfiles are planned follow-ups.'
     )
     this.name = 'UnsupportedLockfileError'

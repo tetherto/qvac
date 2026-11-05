@@ -290,7 +290,7 @@ describe('formatVerifyDepsResult', () => {
     assert.match(output, /Native addon changes between upstream\/main\.\.HEAD/)
     assert.match(output, /\+ bare-tcp@2\.2\.12/)
     assert.match(output, /- bare-os@3\.8\.0/)
-    assert.match(output, /qvac-sdk verify bundle/)
+    assert.match(output, /qvac sdk verify bundle/)
   })
 
   it('formats removed packages whose native status is unknown', () => {

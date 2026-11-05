@@ -1,5 +1,5 @@
 ---
-description: User-facing SDK capabilities must land on qvac-sdk serve / qvac-sdk configure (@qvac/sdk-tools) in the same PR unless marked library-only
+description: User-facing SDK capabilities must land on qvac sdk serve / qvac sdk configure (@qvac/sdk-tools) in the same PR unless marked library-only
 globs:
   - packages/sdk/server/bare/plugins/**
   - packages/sdk/client/api/**

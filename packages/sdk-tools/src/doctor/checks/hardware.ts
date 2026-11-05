@@ -138,7 +138,7 @@ export const checkGpuAcceleration: Check = (ctx) => {
       status: 'info',
       severity: 'informational',
       value: `not checked on ${ctx.platform}`,
-      hint: `'qvac-sdk doctor' does not validate GPU acceleration on ${ctx.platform}.`
+      hint: `'qvac sdk doctor' does not validate GPU acceleration on ${ctx.platform}.`
     }
   }
   const r = ctx.probe('vulkaninfo', ['--summary'])

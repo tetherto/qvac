@@ -16,7 +16,7 @@ Source code and tests win over historical agent notes.
 - Treat exported constants, schemas, RPC shapes, streaming, cancellation, and model
   lifecycle behavior as public contracts. Update contract generation and focused
   tests when changing them.
-- Treat `qvac-sdk serve` and `qvac-sdk configure` (`@qvac/sdk-tools`) as
+- Treat `qvac sdk serve` and `qvac sdk configure` (`@qvac/sdk-tools`) as
   first-class SDK products. A user-facing inference capability must include
   matching `@qvac/sdk-tools` support in the same PR, or the PR must explicitly
   explain why it is library-only. Native-addon PRs remain native; apply this

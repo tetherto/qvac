@@ -30,7 +30,7 @@ export interface CheckContext {
 export type Check = (ctx: CheckContext) => CheckResult
 
 // Cap probes at 3s so a hung/interactive binary (or an adb that is
-// waiting for a device) cannot make `qvac-sdk doctor` hang. 3s is generous
+// waiting for a device) cannot make `qvac sdk doctor` hang. 3s is generous
 // for a `--version` style call while still short enough to keep the
 // command snappy.
 const PROBE_TIMEOUT_MS = 3000

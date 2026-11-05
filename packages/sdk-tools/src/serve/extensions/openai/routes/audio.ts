@@ -389,7 +389,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
         throw new HttpError(
           503,
           'transcode_unavailable',
-          `response_format "${formatMapping.format}" requires ffmpeg on the server's PATH (not found). Use "wav" or "pcm", or install ffmpeg. See: qvac-sdk doctor`
+          `response_format "${formatMapping.format}" requires ffmpeg on the server's PATH (not found). Use "wav" or "pcm", or install ffmpeg. See: qvac sdk doctor`
         )
       }
 

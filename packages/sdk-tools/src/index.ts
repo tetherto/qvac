@@ -16,8 +16,10 @@ function setupCli(): void {
   const program = new Command()
 
   program
-    .name('qvac-sdk')
-    .description('Command-line interface for the QVAC ecosystem')
+    .name('qvac sdk')
+    .description(
+      'QVAC SDK tools: OpenAI-compatible server, worker bundler, doctor, configure and verify'
+    )
     .version(pkg.version)
 
   registerBundleCommand(program)

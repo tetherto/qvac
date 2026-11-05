@@ -57,8 +57,8 @@ describe('cli: version & help', () => {
     }
   })
 
-  it('bundle sdk --help shows options', async () => {
-    const r = await runCli(['bundle', 'sdk', '--help'])
+  it('bundle --help shows options', async () => {
+    const r = await runCli(['bundle', '--help'])
     assert.equal(r.code, 0)
     assert.ok(r.output.includes('--config') && r.output.includes('--sdk-path'))
   })

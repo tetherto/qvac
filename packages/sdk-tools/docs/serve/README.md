@@ -1,6 +1,6 @@
-# `qvac-sdk serve`
+# `qvac sdk serve`
 
-`qvac-sdk serve` runs a local HTTP server backed by QVAC models. The server itself is
+`qvac sdk serve` runs a local HTTP server backed by QVAC models. The server itself is
 surface-agnostic: it owns configuration, model loading, authentication, CORS and the
 OpenAPI document, and mounts one or more **extensions** that contribute the actual routes.
 
@@ -10,12 +10,12 @@ OpenAPI document, and mounts one or more **extensions** that contribute the actu
 | `openai`  | `--openai`         | `/v1/...`      | [openai.md](openai.md)   |
 
 ```bash
-qvac-sdk serve                          # the QVAC surface
-qvac-sdk serve --openai                 # QVAC + OpenAI-compatible
-qvac-sdk serve --openai --no-default    # OpenAI-compatible only
+qvac sdk serve                          # the QVAC surface
+qvac sdk serve --openai                 # QVAC + OpenAI-compatible
+qvac sdk serve --openai --no-default    # OpenAI-compatible only
 ```
 
-`qvac-sdk serve openai` is a deprecated alias for `qvac-sdk serve --openai --no-default`.
+`qvac sdk serve openai` is a deprecated alias for `qvac sdk serve --openai --no-default`.
 
 The OpenAPI document describes whatever is mounted. It is always at `/openapi.json`;
 `--docs` additionally serves Swagger UI at `/docs`.
@@ -42,7 +42,7 @@ Prefer `--api-key-file`: `--api-key` places the token in the process's command l
 CORS only governs cross-origin requests. A page that points its own domain at `127.0.0.1` (DNS rebinding) is same-origin with the server, so every request, `/openapi.json` included, must also carry a `Host` header naming a loopback host (`localhost`, `*.localhost`, `127.0.0.0/8`, `[::1]`), an IP address, the bind host, the `--public-base-url` host or an allowed host; the port is ignored and anything else gets `403 host_not_allowed`. Add names that reach the server through a proxy or DNS with `--allowed-host` or `serve.allowedHosts`; a leading dot covers the domain and its subdomains:
 
 ```bash
-qvac-sdk serve --openai --allowed-host qvac.internal --allowed-host .corp.example
+qvac sdk serve --openai --allowed-host qvac.internal --allowed-host .corp.example
 ```
 
 `--allow-any-host` (or `"allowedHosts": true`) turns the check off.
@@ -50,7 +50,7 @@ qvac-sdk serve --openai --allowed-host qvac.internal --allowed-host .corp.exampl
 Browser access requires explicit trusted origins unless `--docs` enables its same-port loopback defaults. Repeat `--cors-origin` or configure `serve.cors.origins`; wildcard (`*`) is rejected:
 
 ```bash
-qvac-sdk serve --openai \
+qvac sdk serve --openai \
   --api-key "$QVAC_API_KEY" \
   --cors-origin https://app.example.com \
   --cors-origin http://localhost:3000
@@ -92,7 +92,7 @@ startup, the response names its exit code or signal. If startup times out while
 the worker is still running, the response reports a startup timeout.
 Full diagnostics, including worker stderr, are written to the server's error log;
 the HTTP response contains only the startup summary. Check the terminal running
-`qvac-sdk serve` or your service's captured stderr for the cause.
+`qvac sdk serve` or your service's captured stderr for the cause.
 A per-load deadline set with `serve.load.timeoutMs` returns
 `503 model_load_timeout` instead.
 
@@ -186,4 +186,4 @@ Unknown `CONSTANT_CASE` values are rejected with the full config path.
 
 ## Related references
 
-For the broader coding-agent stack — `@qvac/ai-sdk-provider`, managed `qvac-sdk serve`, `@qvac/opencode-plugin`, models.dev, layer ownership, and release choreography — see [Agent Integrations](../../../../docs/architecture/AGENT-INTEGRATIONS.md). Use these files for CLI serve route/config details; use the agent integration reference when deciding whether behavior belongs in SDK, CLI, provider, plugin, docs, or models.dev.
+For the broader coding-agent stack — `@qvac/ai-sdk-provider`, managed `qvac sdk serve`, `@qvac/opencode-plugin`, models.dev, layer ownership, and release choreography — see [Agent Integrations](../../../../docs/architecture/AGENT-INTEGRATIONS.md). Use these files for CLI serve route/config details; use the agent integration reference when deciding whether behavior belongs in SDK, CLI, provider, plugin, docs, or models.dev.

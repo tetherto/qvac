@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { runCli } from '../helpers/cli.js'
 import { tempDir } from '../helpers/tmp.js'
 
-// bundle sdk resolves @qvac/sdk from the project's node_modules and emits a
+// bundle resolves @qvac/sdk from the project's node_modules and emits a
 // worker bundle + addons manifest; verify bundle then validates that bundle for
 // the host. The exhaustive option matrix lives in the SDK.
 const INSTALLED_SDK = fileURLToPath(new URL('../../../node_modules/@qvac/sdk', import.meta.url))
@@ -65,15 +65,15 @@ async function linkInstalledQvacScope(sdkPath: string, destScope: string) {
   await linkScope(join(await realpath(sdkPath), 'node_modules', '@qvac'))
 }
 
-describe('cli: bundle sdk → verify bundle (chain)', () => {
+describe('cli: bundle → verify bundle (chain)', () => {
   it('bundles the SDK worker, then verifies the produced bundle', async (t) => {
     const dir = await project(t)
 
-    const bundle = await runCli(['bundle', 'sdk', '--host', HOST, '-q'], {
+    const bundle = await runCli(['bundle', '--host', HOST, '-q'], {
       cwd: dir,
       timeoutMs: 300_000
     })
-    assert.equal(bundle.code, 0, `bundle sdk failed:\n${bundle.output}`)
+    assert.equal(bundle.code, 0, `bundle failed:\n${bundle.output}`)
     assert.ok(await exists(join(dir, 'qvac', 'worker.bundle.js')), 'expected qvac/worker.bundle.js')
     assert.ok(
       await exists(join(dir, 'qvac', 'addons.manifest.json')),
@@ -98,13 +98,13 @@ describe('cli: bundle sdk → verify bundle (chain)', () => {
   })
 })
 
-describe('cli: bundle sdk addon platform packages', () => {
+describe('cli: bundle addon platform packages', () => {
   // The throwaway project has no lockfile, so no package manager can be
   // chosen and nothing is installed.
   it('names the platform packages it cannot install and fails without them', async (t) => {
     const dir = await project(t)
 
-    const bundle = await runCli(['bundle', 'sdk', '--host', 'android-arm64'], {
+    const bundle = await runCli(['bundle', '--host', 'android-arm64'], {
       cwd: dir,
       timeoutMs: 300_000
     })
@@ -120,7 +120,7 @@ describe('cli: bundle sdk addon platform packages', () => {
   it('skips the install with --no-install and names the pins to add', async (t) => {
     const dir = await project(t)
 
-    const bundle = await runCli(['bundle', 'sdk', '--host', 'android-arm64', '--no-install'], {
+    const bundle = await runCli(['bundle', '--host', 'android-arm64', '--no-install'], {
       cwd: dir,
       timeoutMs: 300_000
     })

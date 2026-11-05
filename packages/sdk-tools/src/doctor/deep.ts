@@ -29,7 +29,7 @@ const PROBE_TIMEOUT_HEADROOM_MS = DEFAULT_TIMEOUT_MS - DEFAULT_RPC_INIT_TIMEOUT_
  * honours `QVAC_RPC_INIT_TIMEOUT_MS`; this cap has to allow for the same budget
  * or it kills a worker the SDK is still legitimately waiting for.
  *
- * Only the environment variable is read. `qvac-sdk doctor` does not load the
+ * Only the environment variable is read. `qvac sdk doctor` does not load the
  * project's config, so an `rpcInitTimeoutMs` set only in `qvac.config.*` does
  * not extend the probe.
  */
@@ -317,7 +317,7 @@ const FAILURE_RULES: readonly FailureRule[] = [
     matches: (result, diagnostics) =>
       result.outcome === 'timeout' ||
       /RPC_INIT_TIMEOUT|RPCInitTimeoutError|RPC initialization timed out/i.test(diagnostics),
-    hint: 'The SDK worker did not complete its startup handshake. Re-run with --verbose to inspect the bounded worker output. On slow storage or embedded hardware, re-run as QVAC_RPC_INIT_TIMEOUT_MS=<ms> qvac-sdk doctor, which raises this probe as well as the SDK handshake budget; set rpcInitTimeoutMs in qvac.config.* to make it permanent for the app.'
+    hint: 'The SDK worker did not complete its startup handshake. Re-run with --verbose to inspect the bounded worker output. On slow storage or embedded hardware, re-run as QVAC_RPC_INIT_TIMEOUT_MS=<ms> qvac sdk doctor, which raises this probe as well as the SDK handshake budget; set rpcInitTimeoutMs in qvac.config.* to make it permanent for the app.'
   },
   {
     id: 'spawn-error',

@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url)
 const { engines } = require('../../../package.json') as { engines: { node: string } }
 const NODE_ENGINES = engines.node
 
-// Where the `qvac-sdk` CLI itself can run. This is NOT the set of SDK deploy
+// Where `qvac sdk` itself can run. This is NOT the set of SDK deploy
 // targets — the SDK additionally targets Android and iOS via Expo/BareKit,
 // which are reported in the "Deploy targets" section.
 const SUPPORTED_CLI_HOSTS: ReadonlyArray<string> = [
@@ -67,6 +67,6 @@ export const checkCliHost: Check = (ctx) => {
     status: 'fail',
     severity: 'required',
     value: host,
-    hint: `The 'qvac-sdk' CLI cannot run on "${host}". Supported CLI hosts: ${SUPPORTED_CLI_HOSTS.join(', ')}. (Android/iOS are supported as SDK deploy targets, not as CLI hosts.)`
+    hint: `'qvac sdk' cannot run on "${host}". Supported CLI hosts: ${SUPPORTED_CLI_HOSTS.join(', ')}. (Android/iOS are supported as SDK deploy targets, not as CLI hosts.)`
   }
 }

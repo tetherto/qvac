@@ -142,11 +142,11 @@ kill "${SRV_PID}" 2>/dev/null
 wait "${SRV_PID}" 2>/dev/null
 rm -rf "${TMP}"
 
-# ── Scenario 4: real `qvac-sdk serve --openai` + diag block ────────────────
+# ── Scenario 4: real `qvac sdk serve --openai` + diag block ────────────────
 # Mirrors the real-model e2e config and spawned serve command. We deliberately
 # fire the diag while the server is still warming so the block runs against a
 # realistic partial state.
-SCENARIO="4: live qvac-sdk serve + diag block"
+SCENARIO="4: live qvac sdk serve + diag block"
 echo "── ${SCENARIO} ─────────────────────────────────────" >&2
 
 CLI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

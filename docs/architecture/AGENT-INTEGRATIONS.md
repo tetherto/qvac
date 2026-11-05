@@ -43,7 +43,7 @@ The design rule is: keep general OpenAI-compatible behavior in `@qvac/sdk-tools`
 | Package / area | Path | Public package | Primary role |
 | --- | --- | --- | --- |
 | SDK | `packages/sdk` | `@qvac/sdk` | Canonical QVAC API: model loading, completion, tool-call parsing, registry integration, cancellation primitives, native addon RPC. |
-| SDK tools OpenAI server | `packages/sdk-tools/src/serve` | `@qvac/sdk-tools` | Runs `qvac-sdk serve --openai`. `serve/core` owns model alias routing, auth/CORS, cancellation, queueing, lifecycle for loaded models, completion draining, and the in-memory file, vector-store, and job stores; `serve/extensions/openai` owns the OpenAI-compatible routes and request/response translation. |
+| SDK tools OpenAI server | `packages/sdk-tools/src/serve` | `@qvac/sdk-tools` | Runs `qvac sdk serve --openai`. `serve/core` owns model alias routing, auth/CORS, cancellation, queueing, lifecycle for loaded models, completion draining, and the in-memory file, vector-store, and job stores; `serve/extensions/openai` owns the OpenAI-compatible routes and request/response translation. |
 | AI SDK provider | `packages/ai-sdk-provider` | `@qvac/ai-sdk-provider` | Vercel AI SDK provider wrapper. Owns `createQvac`, external/managed modes, typed model metadata exports, friendly catalog ids, and managed serve reuse/lifecycle. |
 | OpenCode plugin | `plugins/opencode` | `@qvac/opencode-plugin` | OpenCode-specific turnkey setup. Starts a host process, injects a `qvac` provider into OpenCode config, selects project model defaults, applies temporary OpenAI-compat shims, and tears down on exit. |
 | OpenClaw plugin | `plugins/openclaw` | `@qvac/openclaw-plugin` | OpenClaw provider plugin: plugin-owned local `qvac serve` started from `prepareRuntimeAuth` on a port it reports, static catalog from `@qvac/ai-sdk-provider/models`. |
@@ -99,7 +99,7 @@ Implement here when the change is about QVAC's core inference semantics:
 
 Do not implement OpenCode-specific request-shape hacks here unless the behavior is actually required by the OpenAI-compatible API generally. The SDK should not know about OpenCode, Cline, Aider, or any other agent.
 
-### `@qvac/sdk-tools` / `qvac-sdk serve --openai`
+### `@qvac/sdk-tools` / `qvac sdk serve --openai`
 
 Implement here when the behavior belongs to the OpenAI-compatible HTTP API:
 
@@ -358,7 +358,7 @@ Before opening or updating PRs for this stack:
 
 ## Related references
 
-- `packages/sdk-tools/docs/serve/` — `qvac-sdk serve` reference: shared config in `README.md`, per-extension routes in `default.md` and `openai.md`.
+- `packages/sdk-tools/docs/serve/` — `qvac sdk serve` reference: shared config in `README.md`, per-extension routes in `default.md` and `openai.md`.
 - `docs/architecture/ARCHITECTURE.md` — SDK architecture.
 - `.cursor/rules/agent-integrations.mdc` — Cursor-local quick reference for this stack.
 - `.cursor/rules/sdk/main.mdc` — SDK coding conventions.
