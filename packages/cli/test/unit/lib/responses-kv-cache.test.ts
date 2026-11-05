@@ -338,6 +338,31 @@ describe('createNamedKvCacheRetention', () => {
       assert.equal(acquired, true)
     })
 
+    it('treats a lease not refreshed lately as dead, even if its pid is alive', async (t) => {
+      const dir = await cacheDir(t, { [K.old]: { bytes: 10, ageMs: 30 * HOUR_MS } })
+      // pid 2 is alive here, as a reused pid would be, but the file is 10 minutes old.
+      const lease = await leaseFile(dir, `${K.old}.lease-2-0`)
+      const old = new Date(NOW - 10 * 60 * 1000)
+      await utimes(lease, old, old)
+      const deleted: string[] = []
+      await shared(dir, deleted).sweep()
+      assert.deepEqual(deleted, [K.old])
+      await assert.rejects(stat(lease), { code: 'ENOENT' })
+    })
+
+    it('releases the key when its lease cannot be written', async (t) => {
+      const dir = await cacheDir(t, { [K.old]: { bytes: 10, ageMs: 30 * HOUR_MS } })
+      // A plain file where the lease folder should be makes the lease write fail.
+      await writeFile(join(dir, '.responses-leases'), '')
+      const deleted: string[] = []
+      const r = shared(dir, deleted)
+      await assert.rejects(r.acquire(K.old))
+      await rm(join(dir, '.responses-leases'))
+      // The failed acquire left nothing reserved, so the expired cache goes.
+      await r.sweep()
+      assert.deepEqual(deleted, [K.old])
+    })
+
     it('leaves a key another live process is already sweeping', async (t) => {
       const dir = await cacheDir(t, { [K.old]: { bytes: 10, ageMs: 30 * HOUR_MS } })
       await leaseFile(dir, `${K.old}.sweep-2`)
