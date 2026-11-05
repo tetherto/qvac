@@ -98,7 +98,8 @@ export async function downloadSingleFileFromRegistry(
   progressCallback?: (progress: ModelProgressUpdate) => void,
   signal?: AbortSignal,
   blobBinding?: QVACBlobBinding,
-  hooks?: DownloadHooks
+  hooks?: DownloadHooks,
+  shouldClearCache?: () => boolean
 ): Promise<void> {
   if (signal?.aborted) {
     throw new DownloadCancelledError()
@@ -126,7 +127,8 @@ export async function downloadSingleFileFromRegistry(
     config: getConfig(),
     outputFile: modelPath,
     onProgress,
-    signal
+    signal,
+    shouldClearCache
   })
 
   if (blobBinding) {

@@ -1,5 +1,7 @@
 'use strict'
 
+const binding = require('../../binding.js')
+
 const test = require('brittle')
 
 const LlmLlamacpp = require('../../index.js')
@@ -135,7 +137,6 @@ test(
   { timeout: 4 * 60 * 1000, skip: !(isLinuxX64 || isWindowsX64) },
   async (t) => {
     const shardFiles = [
-      'Qwen3-0.6B-UD-IQ1_S.tensors.txt',
       'Qwen3-0.6B-UD-IQ1_S-00001-of-00003.gguf',
       'Qwen3-0.6B-UD-IQ1_S-00002-of-00003.gguf',
       'Qwen3-0.6B-UD-IQ1_S-00003-of-00003.gguf'
@@ -155,7 +156,7 @@ test(
     }
 
     const addon = new LlmLlamacpp({
-      files: { model: shardPaths },
+      files: { model: [shardPaths[0]] },
       config,
       logger: console,
       opts: { stats: true }
@@ -177,4 +178,22 @@ test(
 // which can cause segfaults (exit code 139)
 setImmediate(() => {
   setTimeout(() => {}, 500)
+})
+
+test('native binding does not expose weight streaming', function (t) {
+  t.is(binding.loadWeights, undefined)
+})
+
+// prestage-ignore: missing-model-00001-of-10000000.gguf — intentionally missing path for the allocation regression
+test('oversized shard count in a missing disk filename does not allocate shard names', async function (t) {
+  const model = new LlmLlamacpp({
+    files: { model: [path.resolve(__dirname, 'missing-model-00001-of-10000000.gguf')] },
+    config: { device: 'cpu', gpu_layers: '0', ctx_size: '256' }
+  })
+  try {
+    await t.exception(() => model.load(), /Failed to read GGUF metadata from disk/)
+    t.is(model.getState().configLoaded, false)
+  } finally {
+    await model.unload()
+  }
 })

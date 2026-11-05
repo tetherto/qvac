@@ -20,6 +20,7 @@
 #include "common/log.h"
 #include "inference-addon-cpp/Logger.hpp"
 #include "utils/ChatTemplateUtils.hpp"
+#include "utils/LlamaBatch.hpp"
 #include "utils/LogSafeString.hpp"
 #include "utils/LoggingMacros.hpp"
 #include "utils/ModelMemoryPolicy.hpp"
@@ -824,6 +825,7 @@ void TextLlmContext::onPrefillComplete(
   if (thinkingForcedOpen_ && reasoningEnabled_) {
     reasoningState_.inside_reasoning = true;
   }
+  thinkingOpenerPending_ = thinkingForcedOpen_;
 }
 
 void TextLlmContext::flushPendingUtf8ToCallback(
@@ -867,6 +869,7 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
   // opener to the visible stream so consumers see a balanced tag pair;
   // `inside_reasoning` and the span capture were already set in
   // `onPrefillComplete`.
+  thinkingOpenerPending_ = false;
   if (thinkingForcedOpen_ && outputCallback) {
     outputCallback(thinkingForcedOpenText_);
     reasoningState_.inside_reasoning = true;
@@ -904,7 +907,7 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
       break;
     }
 
-    common_batch_clear(*batch);
+    llamaBatchClear(*batch);
     if (stopGeneration_.load()) {
       // Route through the post-loop `onCancel` instead of injecting
       // EOT — EOT would advance `nPast_` past the rollback target.
@@ -913,7 +916,7 @@ LlmContext::GenerateResponseResult TextLlmContext::generateResponse(
       ++lastGeneratedTokenCount_;
       break;
     }
-    common_batch_add(*batch, step.token, nPast_, {seqId_}, true);
+    llamaBatchAdd(*batch, step.token, nPast_, {seqId_}, true);
 
     // NOLINT(clang-analyzer-core.CallAndMessage)
     if (llama_decode(modelCtx_.lctx, *batch) != 0) {
@@ -991,8 +994,8 @@ void TextLlmContext::generateSpeculative(
         generatedAfterAccept >= static_cast<unsigned>(params_.n_predict)) {
       // The plain loop decodes the token it stops on for the prediction
       // budget, so the sequence and the ledger hold it.
-      common_batch_clear(*batch);
-      common_batch_add(*batch, sampled, nPast_, {seqId_}, false);
+      llamaBatchClear(*batch);
+      llamaBatchAdd(*batch, sampled, nPast_, {seqId_}, false);
       if (llama_decode(modelCtx_.lctx, *batch) != 0) {
         throw qvac_errors::StatusError(
             ADDON_ID,
@@ -1013,12 +1016,12 @@ void TextLlmContext::generateSpeculative(
       spec_.afterDraft();
     }
 
-    common_batch_clear(*batch);
+    llamaBatchClear(*batch);
     const bool verifying = spec_.hasDraft();
     if (verifying) {
       spec_.addToBatch(*batch, sampled, nPast_);
     } else {
-      common_batch_add(*batch, sampled, nPast_, {seqId_}, true);
+      llamaBatchAdd(*batch, sampled, nPast_, {seqId_}, true);
     }
     // NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage)
     if (llama_decode(modelCtx_.lctx, *batch) != 0) {
@@ -1189,6 +1192,12 @@ SequenceStepResult TextLlmContext::onLogitsReady(
     int logitIdx, unsigned generatedAfterAccept,
     const std::function<void(const std::string&)>& outputCallback,
     LlamaBatch* inlineDecodeBatch) {
+  // The batch path has no `generateResponse`; its first sample emits the
+  // force-opened reasoning opener, as `generateResponse` does.
+  if (thinkingOpenerPending_) {
+    thinkingOpenerPending_ = false;
+    emitOutputPiece(outputCallback, thinkingForcedOpenText_);
+  }
   const SequenceStepResult result = sampleFromLogits(
       logitIdx, generatedAfterAccept, outputCallback, inlineDecodeBatch);
   // The single-prompt loop records a token itself once it decoded it; on the
@@ -2187,6 +2196,7 @@ void TextLlmContext::resetStateKeepingMemory(bool resetStats) {
   utf8Buffer_.clear();
   thinkingForcedOpen_ = false;
   thinkingForcedOpenText_.clear();
+  thinkingOpenerPending_ = false;
   requestRollback_.clear();
   llama_synchronize(modelCtx_.lctx);
   if (resetStats) {

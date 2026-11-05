@@ -22,7 +22,6 @@
 #endif
 
 #include "addon/BertErrors.hpp"
-#include "inference-addon-cpp/LlamacppUtils.hpp"
 #include "logging.hpp"
 #include "utils.hpp"
 
@@ -497,30 +496,11 @@ LlamaModelSetup setupParams(
   return result;
 }
 
-void LlamaModelLoader::resolveShardPaths(
-    GGUFShards& shards, const std::string& modelPath) {
-  if (shards.gguf_files.empty()) {
-    return;
-  }
-  const std::filesystem::path baseDir =
-      std::filesystem::path(modelPath).parent_path();
-  if (baseDir.empty()) {
-    return;
-  }
-  for (std::string& f : shards.gguf_files) {
-    f = (baseDir / f).string();
-  }
-  shards.tensors_file = (baseDir / shards.tensors_file).string();
-}
-
 LlamaModelLoader::LlamaModelLoader(
-    const std::string& modelName, Hooks hooks, const std::string& modelGgufPath,
+    Hooks hooks, const std::string& modelGgufPath,
     const std::unordered_map<std::string, std::string>& config,
     const std::string& backendsDir)
-    : hooks_(std::move(hooks)),
-      loadingContext_(InitLoader::getLoadingContext(modelName)),
-      shards_(GGUFShards::expandGGUFIntoShards(modelGgufPath)),
-      asyncWeightsLoader_(shards_, initLoader_, loadingContext_, &metadata_) {
+    : hooks_(std::move(hooks)) {
   auto modelInit = [this](
                        const std::string& path,
                        const std::unordered_map<std::string, std::string>& cfg,
@@ -535,12 +515,8 @@ LlamaModelLoader::LlamaModelLoader(
       backendsDir);
 }
 
-LlamaModelLoader::LlamaModelLoader(
-    const std::string& modelName, Hooks hooks, LlamaModelSetup& setup)
-    : hooks_(std::move(hooks)),
-      loadingContext_(InitLoader::getLoadingContext(modelName)),
-      shards_(GGUFShards::expandGGUFIntoShards(setup.params.model.path)),
-      asyncWeightsLoader_(shards_, initLoader_, loadingContext_, &metadata_) {
+LlamaModelLoader::LlamaModelLoader(Hooks hooks, LlamaModelSetup& setup)
+    : hooks_(std::move(hooks)) {
   auto modelInit = [this](LlamaModelSetup s) { this->init(s); };
 
   initLoader_.init(InitLoader::LOADER_TYPE::DELAYED, modelInit, setup);
@@ -579,30 +555,12 @@ void LlamaModelLoader::init(LlamaModelSetup& setup) {
   initializeBackend();
   llama_numa_init(params.numa);
 
-  const std::string errorWhenFailed = toString(UnableToLoadModel);
-
-  if (!asyncWeightsLoader_.isStreaming()) {
-    LlamaModelLoader::resolveShardPaths(shards_, params.model.path);
-  }
-
-  metadata_.parse(
-      params.model.path, shards_, asyncWeightsLoader_.isStreaming(), ADDON_ID);
+  metadata_.parse(params.model.path, ADDON_ID);
   if (hooks_.configureParams) {
     hooks_.configureParams(params, metadata_, setup.ctxSizeConfigured);
   }
 
-  std::map<std::string, std::unique_ptr<std::basic_streambuf<char>>>
-      streamedFiles = asyncWeightsLoader_.extractIndividualStreamedFiles();
-
-  common_init_result_ptr llamaInit = initFromConfig(
-      params,
-      params.model.path,
-      streamedFiles,
-      shards_,
-      loadingContext_,
-      asyncWeightsLoader_.isStreaming(),
-      ADDON_ID,
-      errorWhenFailed);
+  common_init_result_ptr llamaInit = common_init_from_params(params);
 
   init_.params = params;
   init_.result = std::move(llamaInit);
@@ -640,9 +598,11 @@ void LlamaModelLoader::initializeBackend(
 }
 
 void LlamaModelLoader::setWeightsForFile(
-    const std::string& filename,
-    std::unique_ptr<std::basic_streambuf<char>>&& shard) {
-  asyncWeightsLoader_.setWeightsForFile(filename, std::move(shard));
+    const std::string&, std::unique_ptr<std::basic_streambuf<char>>&&) {
+  throw qvac_errors::StatusError(
+      qvac_errors::general_error::InvalidArgument,
+      "Weight streaming is no longer supported. Pass a disk path; for a "
+      "sharded model, pass only the first shard path.");
 }
 
 bool LlamaModelLoader::isLoaded() const {

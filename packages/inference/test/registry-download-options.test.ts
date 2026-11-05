@@ -18,6 +18,7 @@ test('buildRegistryClientOptions: falls back to default timeout and omits maxRet
   t.is(opts.maxRetries, undefined)
   t.is(opts.onProgress, undefined)
   t.is(opts.signal, undefined)
+  t.is(opts.clearBlocksOnCancel, undefined, 'the client default applies')
 })
 
 test('buildRegistryClientOptions: propagates registryStreamTimeoutMs from config', (t) => {
@@ -60,6 +61,21 @@ test('buildRegistryClientOptions: forwards onProgress and signal when provided',
 
   t.is(opts.onProgress, onProgress)
   t.is(opts.signal, controller.signal)
+})
+
+test('buildRegistryClientOptions: forwards shouldClearCache as clearBlocksOnCancel', (t) => {
+  let clearCache = false
+  const shouldClearCache = () => clearCache
+
+  const opts = buildRegistryClientOptions({
+    config: {},
+    outputFile,
+    shouldClearCache
+  })
+
+  t.is(opts.clearBlocksOnCancel?.(), false)
+  clearCache = true
+  t.is(opts.clearBlocksOnCancel?.(), true, 'read lazily, at cancel time')
 })
 
 test('buildRegistryClientOptions: config with both values passes both through', (t) => {

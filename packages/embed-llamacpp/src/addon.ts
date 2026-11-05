@@ -1,3 +1,6 @@
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- bare-path uses CommonJS.
+import path = require("bare-path");
+
 export type NumericLike = `${number}`;
 
 export interface GGMLConfig {
@@ -167,12 +170,6 @@ export function toBertJobInput(input: EmbedRunInput): BertJobInput {
   throw new TypeError("input must be a string, an array or { inputs: [...] }");
 }
 
-export interface LoadWeightsData {
-  filename: string;
-  chunk: Uint8Array | null;
-  completed: boolean;
-}
-
 export interface RuntimeStats {
   total_tokens: number;
   total_time_ms: number;
@@ -198,13 +195,11 @@ export interface BertBinding {
   ): object;
   activate(handle: unknown): Promise<void> | void;
   runJob(handle: unknown, input: BertJobInput): Promise<boolean>;
-  loadWeights(handle: unknown, data: LoadWeightsData): Promise<void>;
   cancel(handle: unknown): Promise<void>;
   destroyInstance(handle: unknown): void;
 }
 
 export interface Addon {
-  loadWeights(data: LoadWeightsData): Promise<void>;
   activate(): Promise<void>;
   runJob(input: BertJobInput): Promise<boolean>;
   cancel(): Promise<void>;
@@ -257,13 +252,26 @@ export function mapAddonEvent(
 }
 
 /**
- * Returns the first shard (matching `-NNNNN-of-MMMMM.gguf`) or the sole
- * entry for single-file models. Matches the C++ shard-expansion contract
- * in `GGUFShards::expandGGUFIntoShards`.
+ * Validates the single disk path. For a sharded GGUF, pass only the first
+ * shard; Fabric discovers the remaining shards. Weight streaming is unsupported.
  */
-export function pickPrimaryGgufPath(files: string[]): string {
-  const SHARD_REGEX = /-\d+-of-\d+\.gguf$/;
-  return files.find((p) => SHARD_REGEX.test(p)) || files[0];
+export function validateModelPath(files: string[]): string {
+  if (!Array.isArray(files) || files.length === 0) {
+    throw new TypeError("files.model must contain one absolute disk path");
+  }
+  if (files.length !== 1) {
+    throw new TypeError(
+      "Weight streaming is no longer supported. Pass only one disk path in files.model; " +
+        "for a sharded model, pass only the first shard path. Do not pass a tensor-name file.",
+    );
+  }
+  if (typeof files[0] !== "string" || files[0].length === 0 || !path.isAbsolute(files[0])) {
+    throw new TypeError("files.model[0] must be an absolute disk path string; weight buffers are not supported");
+  }
+  if (files[0].endsWith(".tensors.txt")) {
+    throw new TypeError("Weight streaming is no longer supported. Pass the first GGUF shard path, not a tensor-name file.");
+  }
+  return files[0];
 }
 
 /** An interface between the Bare C++ addon and the JS runtime. */
@@ -300,10 +308,6 @@ export class BertInterface implements Addon {
    */
   async runJob(data: BertJobInput): Promise<boolean> {
     return this._binding.runJob(this._handle, data);
-  }
-
-  async loadWeights(data: LoadWeightsData): Promise<void> {
-    return this._binding.loadWeights(this._handle, data);
   }
 
   /** Activates the model to start processing the queue. */

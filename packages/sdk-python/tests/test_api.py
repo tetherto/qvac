@@ -223,6 +223,15 @@ async def test_delete_cache_by_kv_cache_key():
     }
 
 
+async def test_delete_cache_by_model_src():
+    transport = FakeTransport({"type": "deleteCache", "success": True})
+    await api.delete_cache(transport, model_src="registry://s3/models/m.gguf")
+    assert transport.sent == {
+        "type": "deleteCache",
+        "modelSrc": "registry://s3/models/m.gguf",
+    }
+
+
 async def test_delete_cache_requires_all_or_kv_cache_key():
     transport = FakeTransport({"type": "deleteCache", "success": True})
     with pytest.raises(api.InvalidDeleteCacheParamsError):

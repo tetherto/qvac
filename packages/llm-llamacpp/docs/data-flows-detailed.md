@@ -22,13 +22,16 @@ This document contains detailed diagrams showing how data moves through the `@qv
 - Emits: Output (streaming), JobEnded, Error — there is no start event; admission is signalled by `runJob` resolving its `AdmissionResult`
 
 **Weight Loading:**
-- Caller passes every file (primary model + every shard + `.tensors.txt` companion) as an array of absolute paths in `files.model`
-- `LlmLlamacpp._streamShards()` iterates those paths, opening `bare-fs.createReadStream` and forwarding chunks via `addon.loadWeights`
-- C++ creates `std::streambuf` over JS ArrayBuffers (zero-copy)
-- For streamed sharded models, the first shard is lent to `ModelMetaData` for GGUF metadata extraction before proceeding to weight loading
-- llama.cpp reads weights via stream interface
-- JS references kept alive during load, cleaned up after
-- The addon performs **no** download, discovery, or shard expansion — the caller owns transport
+
+Models load from disk only. Pass exactly one absolute path in `files.model`:
+the single GGUF file, or the first shard (`*-00001-of-000NN.gguf`). All shards
+must already be in the same directory with their original names. Fabric reads
+the GGUF metadata, discovers the remaining shards and reads their weights.
+No JavaScript weight buffers or `.tensors.txt` file are needed.
+
+Passing multiple paths or weight buffers is rejected. Migrate an old all-files
+list to `[firstShardPath]`. The `loadWeights()` API has been removed.
+This removes model-weight streaming, while generated output still streams as before.
 
 **Session Cache:**
 - Optional KV cache persistence to disk via `CacheManager`
@@ -192,203 +195,41 @@ callback is invoked as `(handle, eventType, data, error, jobId)`.
 
 ## Weight Loading Flow
 
-### Streaming Weight Loading
+Models load from disk only. Pass exactly one absolute path in `files.model`:
+the single GGUF file, or the first shard (`*-00001-of-000NN.gguf`). All shards
+must already be in the same directory with their original names. Fabric reads
+the GGUF metadata, discovers the remaining shards and reads their weights.
+No JavaScript weight buffers or `.tensors.txt` file are needed.
 
-The caller is responsible for providing the **complete** list of files in `files.model`: the `.tensors.txt` companion first, followed by every shard in ascending order (for sharded models). The addon picks the first entry matching the shard regex `/-\d+-of-\d+\.gguf$/` as the primary path (falling back to `files.model[0]` for non-sharded models). The addon does no discovery, no expansion, and no download.
+Passing multiple paths or weight buffers is rejected. Migrate an old all-files
+list to `[firstShardPath]`. The `loadWeights()` API has been removed.
+This removes model-weight streaming, while generated output still streams as before.
 
 ```mermaid
 sequenceDiagram
-    participant User as User code
-    participant LLM as LlmLlamacpp (index.js)
-    participant FS as bare-fs
-    participant IF as LlamaInterface
-    participant Bind as Native Binding
-    participant WL as WeightsLoader
-    participant Model as LlamaModel
-    participant LC as llama.cpp
-
-    User->>LLM: new LlmLlamacpp({ files, config, logger, opts })
-    User->>LLM: load()
-
-    Note over LLM: _load(): build configurationParams with<br/>path = pickPrimaryGgufPath(files.model), projectionPath, config
-    LLM->>IF: new LlamaInterface(binding, configurationParams, outputCb)
-
-    alt files.model.length > 1 (sharded)
-        loop For each filePath in files.model (in order)
-            LLM->>FS: createReadStream(filePath)
-            loop For each chunk
-                FS-->>LLM: chunk (Uint8Array)
-                LLM->>IF: loadWeights({ filename, chunk, completed: false })
-                IF->>Bind: loadWeights(handle, data)
-                Bind->>WL: addChunk()
-                WL->>WL: js_create_reference (pin from GC)
-                WL->>WL: Store reference
-                Bind-->>IF: void
-                IF-->>LLM: void
-            end
-            LLM->>IF: loadWeights({ filename, chunk: null, completed: true })
-            IF->>Bind: loadWeights(handle, final)
-            Bind->>WL: addChunk() + finalize
-            WL->>WL: Create FinalizedStream
-            WL->>WL: Create BlobsStream (std::streambuf)
-            WL->>Model: set_weights_for_file(filename, stream)
-        end
-    end
-
-    LLM->>IF: activate()
-    IF->>Bind: activate(handle)
-    Bind->>Model: load via llama.cpp
-    Model->>LC: llama_model_load_from_file(stream)
-
-    LC->>LC: Read via streambuf->sgetn()
-    Note over LC: Zero-copy access to JS buffers
-    LC->>LC: Parse GGUF metadata
-    LC->>LC: Load weights
-    LC-->>Model: Model loaded
-
-    Model->>WL: Mark for deletion
-    WL->>WL: Queue js_delete_reference
-    Bind->>WL: Process deletion queue (during activate)
-    WL->>WL: js_delete_reference (unpin)
-
-    IF-->>LLM: activated
-    LLM-->>User: load() resolves
-
-    Note over User: GC can now collect ArrayBuffers
+    participant App as Application
+    participant JS as JS addon
+    participant Native as Native model
+    participant Fabric as Fabric
+    participant Disk as Local GGUF files
+    App->>JS: new Model({files: {model: [firstPath]}})
+    JS->>JS: Validate one absolute disk path
+    App->>JS: load()
+    JS->>Native: createInstance(path, config)
+    JS->>Native: activate()
+    Native->>Fabric: Read metadata from path
+    Fabric->>Disk: Read first GGUF header
+    Native->>Fabric: common_init_from_params(params)
+    Fabric->>Disk: Discover and read disk shards, if split
+    Native-->>JS: Model ready
+    JS-->>App: load() resolves
 ```
-
-<details>
-<summary>📊 LLM-Friendly: Weight Loading Steps</summary>
-
-**Memory Lifecycle:**
-
-| Stage | JS Buffer State | C++ Reference State | Memory Location | Notes |
-|-------|-----------------|---------------------|-----------------|-------|
-| 1. Read from disk | Allocated by bare-fs | None | JS heap | Uint8Array chunk yielded by read stream |
-| 2. loadWeights() | Passed to C++ | js_create_reference() | JS heap | Pinned from GC |
-| 3. Accumulation | Still in JS | Stored in vector | JS heap | Multiple refs held |
-| 4. Finalize | Still in JS | Owned by FinalizedStream | JS heap | RAII wrapper |
-| 5. activate() load | Still in JS | Active | JS heap | Zero-copy access from llama.cpp |
-| 6. Load complete | Still in JS | Marked for deletion | JS heap | Queued cleanup |
-| 7. activate() returns | Still in JS | js_delete_reference() | JS heap | Unpinned during activate |
-| 8. After return | May be GC'd | None | Freed | Memory reclaimed |
-
-**Sharded Model Handling (caller-owned):**
-
-For a 4-shard model, the caller must pass **five** absolute paths in `files.model`, in this exact order:
-
-1. `model.tensors.txt` (companion file — **required**)
-2. `model-00001-of-00004.gguf`
-3. `model-00002-of-00004.gguf`
-4. `model-00003-of-00004.gguf`
-5. `model-00004-of-00004.gguf`
-
-`_load()` uses `pickPrimaryGgufPath(files.model)` — the first entry matching the shard regex `/-\d+-of-\d+\.gguf$/`, falling back to `files.model[0]` for non-sharded models — as the primary path passed to the native addon constructor. `_streamShards()` iterates **all** entries streaming each via `bare-fs`. C++ concatenates them into a single logical stream per filename.
-
-**Performance:**
-
-| Operation | Duration | Memory Impact | Notes |
-|-----------|----------|---------------|-------|
-| bare-fs chunk | depends on FS | +chunk size in JS heap | Async I/O |
-| loadWeights() call | <1ms | +small C++ overhead | Non-blocking |
-| FinalizeStream | ~0.1ms | Transfer ownership | Zero-copy |
-| llama_model_load() | Seconds | +model size in RAM | During activate() |
-| Reference cleanup | <0.1ms | -chunk size per reference | During activate() |
-
-</details>
-
----
 
 ## Metadata Extraction Flow
 
-`ModelMetaData` extracts GGUF key-value metadata (e.g., quantization type, architecture) from the model file *before* weights are loaded. This allows early decisions like backend selection and quantization detection without loading gigabytes of tensor data into memory.
-
-### Disk-Based Models
-
-For models loaded from disk, metadata is read directly from the file:
-
-```mermaid
-sequenceDiagram
-    participant Init as LlamaModel::init
-    participant Meta as ModelMetaData
-    participant GGUF as llama_model_meta_from_file
-
-    Init->>Meta: parse(modelPath, shards, isStreaming=false)
-    Meta->>GGUF: llama_model_meta_from_file(path)
-    GGUF-->>Meta: metadata handle
-    Meta-->>Init: ready for queries
-
-    Init->>Meta: tryGetU32("general.file_type")
-    Meta-->>Init: e.g. 7 (Q8_0)
-```
-
-### Streamed Models (Sharded)
-
-For streamed models, the first shard must be shared between metadata parsing and weight loading. `AsyncWeightsLoader` coordinates this handoff:
-
-```mermaid
-sequenceDiagram
-    participant DL as Download Thread
-    participant AWL as AsyncWeightsLoader
-    participant Worker as firstShardWorker (async)
-    participant State as FirstFileFromGgufStreamState
-    participant Meta as ModelMetaData::parse
-    participant LC as llama.cpp
-
-    Note over DL,Meta: setWeightsForFile() receives first shard
-
-    DL->>AWL: setWeightsForFile(filename, shard)
-    AWL->>AWL: ensureLoadInBackground()
-    AWL->>Worker: launch async (lendFirstShardAndWaitForRelease)
-
-    Worker->>State: provide(lentShard)
-    Note over State: Sets firstFileFromGgufStream_,<br/>notifies CV
-
-    Note over Meta: parse() was waiting on CV
-    State-->>Meta: CV wakes, borrows streambuf
-
-    Meta->>Meta: llama_model_meta_from_streambuf()
-    Meta->>State: clear() — resets optional,<br/>notifies CV
-
-    Note over Worker: waitForRelease() wakes
-    State-->>Worker: buffer released
-
-    Worker->>LC: fulfillSplitFuture(filename, shard)
-    Note over LC: Shard proceeds to weight loading
-
-    DL->>AWL: setWeightsForFile(shard 2..N)
-    AWL->>LC: fulfillSplitFuture() directly
-```
-
-<details>
-<summary>📊 LLM-Friendly: Metadata Extraction Details</summary>
-
-**Thread Coordination:**
-
-| Thread | Role | Blocks On |
-|--------|------|-----------|
-| Download (JS) | Delivers shards via `setWeightsForFile()` | Nothing (first shard launches async worker) |
-| firstShardWorker | Lends first shard to metadata, then forwards to llama.cpp | `waitForRelease()` — metadata consumer releasing the buffer |
-| Init (background) | Calls `metadata_.parse()` which waits for streamed buffer | `waitConsumeAndClear()` — provider delivering the buffer |
-
-**Synchronization:**
-
-| Primitive | Purpose | Timeout |
-|-----------|---------|---------|
-| `condition_variable` + `wait_for` | `waitConsumeAndClear` blocks until `provide()` delivers the buffer | 15s (configurable via template parameter) |
-| `condition_variable` + `wait_for` | `waitForRelease` blocks until metadata consumer releases the buffer | 60s (configurable via template parameter) |
-
-**Available Metadata Queries:**
-
-| Method | Returns | Use Case |
-|--------|---------|----------|
-| `tryGetU32(key)` | `optional<uint32_t>` | Read any GGUF u32 key |
-| `isU32OneOf(key, values)` | `bool` | Check if a key matches expected values |
-| `hasOneBitQuantization()` | `bool` | Detect TQ1_0/TQ2_0 quantization |
-
-</details>
-
----
+The native addon calls `llama_model_meta_from_file()` with the supplied disk
+path before configuring the context. For a split model, the first shard holds
+the model metadata. No streamed buffer is borrowed or consumed.
 
 ## Multimodal Inference Flow
 

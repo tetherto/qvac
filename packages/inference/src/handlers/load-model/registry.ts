@@ -48,9 +48,15 @@ const logger = getEngineLogger()
 /**
  * Find all shards for a model using path prefix query.
  */
-async function findModelShards(
-  registryPath: string
-): Promise<{ path: string; source: string; size: number; checksum: string }[]> {
+export async function findModelShards(registryPath: string): Promise<
+  {
+    path: string
+    source: string
+    size: number
+    checksum: string
+    blobBinding: QVACBlobBinding | undefined
+  }[]
+> {
   const client = await getRegistryClient()
 
   const shardInfo = detectShardedModel(registryPath.split('/').pop() || '')
@@ -82,7 +88,8 @@ async function findModelShards(
       path: s.path,
       source: s.source,
       size: s.blobBinding?.byteLength || 0,
-      checksum: (s.blobBinding as unknown as Record<string, string>)?.['sha256'] || s.sha256 || ''
+      checksum: (s.blobBinding as unknown as Record<string, string>)?.['sha256'] || s.sha256 || '',
+      blobBinding: s.blobBinding
     }))
 
   logger.info(`📦 Found ${sortedShards.length} shards`)
@@ -101,7 +108,8 @@ async function downloadShardedFilesFromRegistry(
   progressCallback?: (progress: ModelProgressUpdate) => void,
   signal?: AbortSignal,
   localShardMetadata?: RegistryItem['shardMetadata'],
-  hooks?: DownloadHooks
+  hooks?: DownloadHooks,
+  shouldClearCache?: () => boolean
 ): Promise<string> {
   if (signal?.aborted) {
     throw new DownloadCancelledError()
@@ -231,7 +239,8 @@ async function downloadShardedFilesFromRegistry(
       shardProgressCallback,
       signal,
       shard.blobBinding,
-      hooks
+      hooks,
+      shouldClearCache
     )
 
     overallDownloaded += shard.size
@@ -341,7 +350,8 @@ export async function downloadModelFromRegistry(
             ctx.broadcastProgress,
             ctx.signal,
             localShardMeta,
-            hooks
+            hooks,
+            ctx.shouldClearCache
           )
         } catch (error) {
           if (error instanceof DownloadCancelledError && ctx.shouldClearCache()) {
@@ -495,7 +505,8 @@ export async function downloadModelFromRegistry(
           ctx.broadcastProgress,
           ctx.signal,
           blobBinding,
-          hooks
+          hooks,
+          ctx.shouldClearCache
         )
       } catch (error) {
         if (error instanceof DownloadCancelledError && ctx.shouldClearCache()) {

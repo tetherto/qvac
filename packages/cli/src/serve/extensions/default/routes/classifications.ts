@@ -21,8 +21,8 @@ Classify an image with a configured classification model, backed by the SDK's
 \`classify()\`.
 
 \`model\` names a \`serve.models\` alias whose endpoint category is
-\`classification\`. An alias without \`src\` loads the addon's bundled
-MobileNetV3-Small, whose labels are \`food\`, \`report\` and \`other\`.
+\`classification\`. The \`MOBILENETV3_3CLASS_V3_FP16\` model's labels are
+\`food\`, \`report\` and \`other\`.
 
 Send the request as JSON or \`multipart/form-data\`. \`image\` is a PNG or JPEG:
 a multipart file part, a base64 data URL, or the \`id\` of a file uploaded with

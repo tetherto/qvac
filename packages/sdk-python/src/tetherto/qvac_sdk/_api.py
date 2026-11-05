@@ -716,19 +716,24 @@ async def delete_cache(
     auto: bool | None = None,
     kv_cache_key: str | None = None,
     model_id: str | None = None,
+    model_src: str | None = None,
 ) -> dict[str, bool]:
-    """Delete KV cache files.
+    """Delete KV cache files, or a registry model's cached download.
 
     ``all`` wipes the cache root, caller-owned named caches included. ``auto``
     reclaims only the engine-generated automatic caches that no request is
     using, covering the whole cache directory — which is shared by every QVAC
     process under the same home directory. ``kv_cache_key`` targets one key,
-    optionally narrowed to one ``model_id``.
+    optionally narrowed to one ``model_id``. ``model_src`` takes a
+    ``registry://`` source and deletes its cached files plus the registry
+    blocks a cancelled or failed download kept for resume.
     """
     if all:
         payload: dict[str, Any] = {"type": "deleteCache", "all": True}
     elif auto:
         payload = {"type": "deleteCache", "auto": True}
+    elif model_src is not None:
+        payload = {"type": "deleteCache", "modelSrc": model_src}
     elif kv_cache_key is not None:
         payload = {"type": "deleteCache", "kvCacheKey": kv_cache_key}
         if model_id is not None:

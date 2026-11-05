@@ -18,6 +18,8 @@ const MINIMAX_SHORT_PROMPT_TOKENS = 64
 const OVERFLOWING_DURATION_SECONDS = 1e20
 const minimaxModelsDir = proc.env.AUDIOGEN_TEST_MINIMAX_MODELS_DIR
 const isMobile = os.platform() === 'android' || os.platform() === 'ios'
+// CI sets NO_GPU=true on the CPU-only matrix entries.
+const NO_GPU = proc.env.NO_GPU === 'true'
 
 function modelsDir() {
   return path.join(getBaseDir(), 'models')
@@ -65,12 +67,16 @@ test('a CPU load is one host row', { timeout: TEST_TIMEOUT_MS }, async (t) => {
   if (dir === null) return
 
   const fit = await assessFit({ modelsDir: dir, durationSeconds: 10, gpuLayers: 0 })
-  const offloaded = await assessFit({ modelsDir: dir, durationSeconds: 10, gpuLayers: 99 })
 
   t.ok(isVerdict(fit), 'a verdict')
   t.is(fit.devices.length, 1, 'one row')
   t.ok(fit.devices[0].unified, 'the row is the host')
   t.ok(fit.devices[0].usedBytes > 0, 'the pipeline peak was measured')
+  // A CPU-only runner has no GPU to offload to, and the darwin-x64 runner's
+  // paravirtual Metal device cannot hold the LM, so its offloaded fit rejects.
+  if (NO_GPU) return
+
+  const offloaded = await assessFit({ modelsDir: dir, durationSeconds: 10, gpuLayers: 99 })
   // The CPU pool is both the device and the host pool, so its peak is counted
   // once: the staged pipeline needs about what it needs offloaded, never twice.
   t.ok(

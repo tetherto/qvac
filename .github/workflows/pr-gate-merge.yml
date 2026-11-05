@@ -297,6 +297,14 @@ jobs:
       packages: read
     uses: ./.github/workflows/pr-checks-sdk-pod.yml
 
+  error-code-ranges:
+    needs: [authorize, fork-approval]
+    if: needs.authorize.outputs.allowed == 'true'
+    cache-mode: none
+    permissions:
+      contents: read
+    uses: ./.github/workflows/on-pr-error-code-ranges.yml
+
   qvac-merge-guard:
     needs:
       [
@@ -308,6 +316,7 @@ jobs:
         verify-cpp-tests,
         sdk-pod-checks,
         sdk-kotlin-checks,
+        error-code-ranges,
       ]
     if: |
       always() && !cancelled() &&
@@ -321,10 +330,10 @@ jobs:
       # authorized. Without this, an unapproved fork (fork-approval failed,
       # authorize skipped, or authorize returned allowed=false) would skip
       # sanity-checks / verify-prebuilds / verify-cpp-tests / sdk-pod-checks /
-      # sdk-kotlin-checks and their
+      # sdk-kotlin-checks / error-code-ranges and their
       # skipped=success would green the required check. Require the full
       # authorization chain up front so those skips fail closed instead.
       sanity-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sanity-checks.result == 'success' || needs.sanity-checks.result == 'skipped') }}
       build-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.verify-prebuilds.result == 'success' || needs.verify-prebuilds.result == 'skipped') }}
-      general-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped') && (needs.sdk-kotlin-checks.result == 'success' || needs.sdk-kotlin-checks.result == 'skipped') }}
+      general-checks-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.sdk-pod-checks.result == 'success' || needs.sdk-pod-checks.result == 'skipped') && (needs.sdk-kotlin-checks.result == 'success' || needs.sdk-kotlin-checks.result == 'skipped') && needs.error-code-ranges.result == 'success' }}
       cpp-tests-status: ${{ needs.fork-approval.result == 'success' && needs.authorize.result == 'success' && needs.authorize.outputs.allowed == 'true' && (needs.verify-cpp-tests.result == 'success' || needs.verify-cpp-tests.result == 'skipped') }}

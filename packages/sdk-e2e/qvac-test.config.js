@@ -89,7 +89,8 @@ export default {
           // result can only have come from the client. The Bare runtime is
           // resolved by the framework and injected as QVAC_BARE_PATH, so it
           // stays out of this file.
-          QVAC_WORKER_PATH: '../../qvac/worker.entry.mjs'
+          QVAC_WORKER_PATH: '../../qvac/worker.entry.mjs',
+          QVAC_RESOURCE_PLATFORM: 'desktop-python'
         }
       },
       {

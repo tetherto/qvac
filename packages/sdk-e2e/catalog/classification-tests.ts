@@ -15,11 +15,9 @@ const classifySteps = (checks: Step[], topK?: string): Step[] => [
   ...checks
 ]
 
-// The bundled MobileNetV3-Small classifier returns 3 classes
-// ("food", "report", "other") with softmax probabilities. These tests
-// exercise the SDK's `classify()` client function end-to-end against
-// the bundled weights. Numerical correctness lives in the addon's own
-// integration suite — here we focus on the SDK shape contract.
+// The classifier returns 3 classes ("food", "report", "other") with softmax
+// probabilities. Numerical correctness lives in the addon's own integration
+// suite; these tests check the SDK's shape contract.
 
 const createClassificationTest = (
   testId: string,
@@ -45,8 +43,8 @@ const createClassificationTest = (
 })
 
 // Result shape: an array of `{label, confidence}` objects sorted by
-// descending confidence. With the bundled MobileNetV3-Small all three
-// canonical labels must appear and every confidence must be in [0, 1].
+// descending confidence. All three canonical labels must appear and every
+// confidence must be in [0, 1].
 export const classificationResultsShape = createClassificationTest(
   'classification-results-shape',
   {},

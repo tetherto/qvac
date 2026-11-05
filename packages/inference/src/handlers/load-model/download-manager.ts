@@ -1,6 +1,11 @@
 import type { ModelProgressUpdate } from '@/schemas/index'
 import { AbortController, type AbortSignal } from 'bare-abort-controller'
-import { DownloadCancelledError, InferenceCancelledError } from '@/errors/index'
+import {
+  DeleteCacheFailedError,
+  DownloadCancelledError,
+  InferenceCancelledError,
+  ModelLoadFailedError
+} from '@/errors/index'
 import { getEngineLogger } from '@/logging/index'
 import { getRequestRegistry } from '@/runtime/index'
 import type { DisposableScope } from '@/runtime/disposable-scope'
@@ -66,6 +71,7 @@ export interface StartOrJoinResult {
 }
 
 const activeTransfers = new Map<string, Transfer>()
+const deletingKeys = new Set<string>()
 let nextSubscriberId = 0
 
 function createSubscriber(
@@ -205,6 +211,16 @@ export function startOrJoinDownload(
   onProgress?: (progress: ModelProgressUpdate) => void,
   request?: SubscriberRequestBinding
 ): StartOrJoinResult {
+  if (deletingKeys.has(getCacheResourceKey(downloadKey))) {
+    return {
+      promise: Promise.reject(
+        new ModelLoadFailedError(`The cache for ${downloadKey} is being deleted`)
+      ),
+      joined: false,
+      getCacheHit: () => undefined
+    }
+  }
+
   const existing = activeTransfers.get(downloadKey)
   if (existing && !existing.abortController.signal.aborted) {
     logger.info(`📥 Reusing existing download for: ${downloadKey}`)
@@ -319,6 +335,45 @@ export function markClearCacheForRequest(requestId: string): boolean {
     }
   }
   return false
+}
+
+/**
+ * Runs `fn` while new downloads and loads writing `resourceKey` are refused, so
+ * a cache deletion cannot remove files another call is writing or loading.
+ */
+export async function withDownloadBlocked<T>(
+  resourceKeys: string[],
+  fn: () => Promise<T>
+): Promise<T> {
+  const busy = resourceKeys.find((key) => deletingKeys.has(key))
+  if (busy) {
+    throw new DeleteCacheFailedError(`The cache for ${busy} is already being deleted`)
+  }
+  for (const key of resourceKeys) deletingKeys.add(key)
+  try {
+    return await fn()
+  } finally {
+    for (const key of resourceKeys) deletingKeys.delete(key)
+  }
+}
+
+export function hasActiveTransfer(resourceKey: string): boolean {
+  for (const [downloadKey, transfer] of activeTransfers) {
+    if (getCacheResourceKey(downloadKey) !== resourceKey) continue
+    if (!transfer.abortController.signal.aborted) return true
+  }
+  return false
+}
+
+// The registry cache is laid out by path alone, so every source of a path
+// writes the same files.
+export function createRegistryCacheKey(registryPath: string): string {
+  return `registry-cache:${registryPath}`
+}
+
+function getCacheResourceKey(downloadKey: string): string {
+  const registry = /^registry:[^:]*:(.*)$/.exec(downloadKey)
+  return registry ? createRegistryCacheKey(registry[1]!) : downloadKey
 }
 
 export function cancelTransfer(downloadKey: string, clearCache = false): void {

@@ -1,6 +1,6 @@
 {
   "name": "@qvac/ocr-ggml",
-  "version": "0.31.1",
+  "version": "0.32.0",
   "description": "GGML-backed OCR addon for qvac (EasyOCR and DocTR pipelines on GGUF weights)",
   "addon": true,
   "engines": {
@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "npm run build:ts && npm run build:native",
-    "build:native": "bare-make generate && bare-make build && bare-make install",
+    "build:native": "bare-make generate -D BUILD_FUZZING=OFF && bare-make build && bare-make install",
     "build:ts": "tsc -p tsconfig.build.json && prettier --write fit.js",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "check:generated": "npm run build:ts && out=$(git status --porcelain --untracked-files=all -- index.js ocr-ggml.js addonLogging.js fit.js index.d.ts ocr-ggml.d.ts addonLogging.d.ts fit.d.ts lib) && { [ -z \"$out\" ] || { echo \"$out\"; exit 1; }; }",
@@ -33,12 +33,18 @@
     "test": "npm run lint && npm run test:types && npm run test:unit && npm run test:integration",
     "test:types": "npm run typecheck && npm run check:generated",
     "test:dts": "npm run test:types",
-    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test ocr-prediction-bias-gguf-test",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D BUILD_FUZZING=OFF && bare-make build --target addon-test && bare-make build --target ocr-prediction-bias-gguf-test",
     "test:cpp:run": "cd build/addon/tests/ && ./addon-test --gtest_output=xml:cpp-test-results.xml && ./ocr-prediction-bias-gguf-test --gtest_output=xml:prediction-bias-gguf-test-results.xml",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
     "setup:venv": "bash scripts/setup-venv.sh",
     "convert-model": "bash scripts/convert-model.sh",
-    "setup-models": "bash scripts/setup-venv.sh"
+    "setup-models": "bash scripts/setup-venv.sh",
+    "fuzz:build": "bare-make generate -D BUILD_FUZZING=ON -D BUILD_TESTING=OFF -D FUZZTEST_FUZZING_MODE=OFF && bare-make build --target ocr-decode-image-fuzz",
+    "fuzz:build:continuous": "bare-make generate -D BUILD_FUZZING=ON -D BUILD_TESTING=OFF -D FUZZTEST_FUZZING_MODE=ON && bare-make build --target ocr-decode-image-fuzz",
+    "fuzz:run": "npm run test:scripts && node scripts/run-cpp-fuzz.js",
+    "fuzz": "npm run fuzz:build && npm run fuzz:run",
+    "fuzz:continuous": "npm run fuzz:build:continuous && node scripts/run-cpp-fuzz.js --continuous",
+    "test:scripts": "node --test scripts/__tests__/run-cpp-fuzz.test.js"
   },
   "files": [
     "addonLogging.js",
@@ -77,8 +83,8 @@
   "bugs": "https://github.com/tetherto/qvac/issues",
   "homepage": "https://qvac.tether.io",
   "devDependencies": {
-    "@qvac/fabric-android-arm64": "^0.25.0",
-    "@qvac/fabric-ios": "^0.25.0",
+    "@qvac/fabric-android-arm64": "^0.26.0",
+    "@qvac/fabric-ios": "^0.26.0",
     "@qvac/registry-client": "^0.4.0",
     "@types/node": "^24.2.1",
     "bare-stream": "^2.7.0",
@@ -99,7 +105,7 @@
   },
   "dependencies": {
     "@qvac/error": "^0.1.0",
-    "@qvac/fabric": "^0.25.0",
+    "@qvac/fabric": "^0.26.0",
     "@qvac/infer-base": "^0.8.0",
     "@qvac/logging": "^0.1.0",
     "bare-fetch": "^3.0.1",
@@ -111,15 +117,15 @@
     "brittle": "^3.4.0"
   },
   "optionalDependencies": {
-    "@qvac/fabric-linux-x64": "^0.25.0",
-    "@qvac/fabric-linux-arm64": "^0.25.0",
-    "@qvac/fabric-darwin-arm64": "^0.25.0",
-    "@qvac/fabric-darwin-x64": "^0.25.0",
-    "@qvac/fabric-win32-x64": "^0.25.0"
+    "@qvac/fabric-linux-x64": "^0.26.0",
+    "@qvac/fabric-linux-arm64": "^0.26.0",
+    "@qvac/fabric-darwin-arm64": "^0.26.0",
+    "@qvac/fabric-darwin-x64": "^0.26.0",
+    "@qvac/fabric-win32-x64": "^0.26.0"
   },
   "peerDependencies": {
-    "@qvac/fabric-android-arm64": "^0.25.0",
-    "@qvac/fabric-ios": "^0.25.0"
+    "@qvac/fabric-android-arm64": "^0.26.0",
+    "@qvac/fabric-ios": "^0.26.0"
   },
   "peerDependenciesMeta": {
     "@qvac/fabric-android-arm64": {

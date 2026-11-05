@@ -493,6 +493,9 @@ private:
   // tags.
   bool thinkingForcedOpen_ = false;
   std::string thinkingForcedOpenText_;
+  // The opener is owed to this request's stream: set by `onPrefillComplete`,
+  // cleared once `generateResponse` or the first `onLogitsReady` emits it.
+  bool thinkingOpenerPending_ = false;
 
   bool cacheReconciliationEnabled_ = false;
   // `cache_share_across_keys`; see `sharesCacheAcrossKeys`.

@@ -55,11 +55,6 @@ export type AddonBatchRunResult = {
     id?: never;
     ids: string[];
 };
-export interface LoadWeightsData {
-    filename: string;
-    chunk: Uint8Array | null;
-    completed: boolean;
-}
 export interface AddonConfigurationParams {
     path: string;
     projectionPath: string;
@@ -74,7 +69,6 @@ export interface AddonCalcTokensParams {
 }
 export interface LlamaBinding {
     createInstance(owner: LlamaInterface, configurationParams: AddonConfigurationParams, outputCallback: AddonOutputCallback, reserved: null): object;
-    loadWeights(handle: unknown, data: LoadWeightsData): Promise<void> | void;
     activate(handle: unknown): Promise<void> | void;
     activeJobs(handle: unknown): number;
     activeSlots(handle: unknown): number;
@@ -105,7 +99,6 @@ export declare class LlamaInterface {
     private readonly _binding;
     private _handle;
     constructor(binding: unknown, configurationParams: AddonConfigurationParams, outputCb: AddonOutputCallback);
-    loadWeights(weightsData: LoadWeightsData): Promise<void>;
     /**
      * Moves addon to the LISTENING state after all the initialization is done
      */

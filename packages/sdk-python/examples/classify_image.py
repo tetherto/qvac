@@ -1,9 +1,7 @@
 """Python port of packages/sdk/examples/classification/classify-image.ts.
 
-Classify an image using the bundled MobileNetV3-Small model.
-
-The bundled model produces three classes: "food", "report", "other".
-No model_src is needed — the model ships inside @qvac/classification-ggml.
+Classify an image with MobileNetV3-Small, which produces three classes:
+"food", "report", "other".
 
 JS's `classify` base64-encodes the image and returns the results; Python calls
 the generated stub, so the request carries the base64 image and the results
@@ -26,6 +24,7 @@ from tetherto.qvac_sdk import (
     load_model,
     unload_model,
 )
+from tetherto.qvac_sdk.models import MOBILENETV3_3CLASS_V3_FP16
 
 
 async def main() -> int:
@@ -38,7 +37,11 @@ async def main() -> int:
     async with Client() as client:
         t = client.transport
         try:
-            model_id = await load_model(t, model_type="ggml-classification")
+            model_id = await load_model(
+                t,
+                model_src=MOBILENETV3_3CLASS_V3_FP16,
+                model_type="ggml-classification",
+            )
 
             image = Path(image_path).read_bytes()
             request = ClassifyRequest.model_validate(

@@ -9,6 +9,7 @@ export interface RegistryClientDownloadOptions {
   maxRetries?: number
   onProgress?: (progress: { downloaded: number; total: number }) => void
   signal?: AbortSignal
+  clearBlocksOnCancel?: () => boolean
 }
 
 /**
@@ -21,8 +22,9 @@ export function buildRegistryClientOptions(params: {
   outputFile: string
   onProgress?: ((progress: { downloaded: number; total: number }) => void) | undefined
   signal?: AbortSignal | undefined
+  shouldClearCache?: (() => boolean) | undefined
 }): RegistryClientDownloadOptions {
-  const { config, outputFile, onProgress, signal } = params
+  const { config, outputFile, onProgress, signal, shouldClearCache } = params
   const timeout = config.registryStreamTimeoutMs ?? DEFAULT_REGISTRY_STREAM_TIMEOUT_MS
   const maxRetries = config.registryDownloadMaxRetries
 
@@ -31,6 +33,8 @@ export function buildRegistryClientOptions(params: {
     outputFile,
     ...(maxRetries !== undefined && { maxRetries }),
     ...(onProgress && { onProgress }),
-    ...(signal && { signal: signal })
+    ...(signal && { signal: signal }),
+    // Without it the client clears a cancelled download's blocks, so a pause could not resume.
+    ...(shouldClearCache && { clearBlocksOnCancel: shouldClearCache })
   }
 }

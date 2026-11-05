@@ -38,6 +38,7 @@ const ENDPOINT_CATEGORY: Record<CanonicalModelType, string> & Record<string, str
   'ggml-vla': 'vla',
   classification: 'classification',
   'ggml-classification': 'classification',
+  'ggml-image-embedding': 'image-embedding',
   vad: 'vad',
   'onnx-vad': 'vad'
 }

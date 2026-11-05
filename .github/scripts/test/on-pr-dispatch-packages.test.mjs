@@ -113,6 +113,24 @@ test('reviewed build config enables CUDA independently of the affected base', (t
   assert.equal(matrix[0].includeCudaArm64, true)
 })
 
+test('Fabric release matrix forwards XDNA provisioning from its trusted build config', (t) => {
+  const { cwd, baseRef } = configRepository(t)
+  const projectPath = join(cwd, 'packages/fabric/project.json')
+  mkdirSync(dirname(projectPath), { recursive: true })
+  writeFileSync(projectPath, readFileSync(join(root, 'packages/fabric/project.json')))
+  for (const args of [['add', '.'], ['-c', 'user.name=CI', '-c', 'user.email=ci@example.test', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'reviewed Fabric config']]) {
+    const result = spawnSync('git', args, { cwd, encoding: 'utf8' })
+    assert.equal(result.status, 0, result.stderr)
+  }
+  const result = runMatrix('["fabric"]', { cwd, baseRef, configRef: 'HEAD', target: 'build' })
+  assert.equal(result.status, 0, result.stderr)
+  const matrix = JSON.parse(result.output.match(/^matrix=(.+)$/m)[1])
+  assert.equal(matrix.length, 1)
+  assert.equal(matrix[0].includeXdna, true)
+  const release = readFileSync(join(root, '.github/workflows/prebuilds-nx.yml'), 'utf8')
+  assert.ok(jobBlock(release, 'prebuild').includes('include-xdna: ${{ matrix.includeXdna == true }}'))
+})
+
 test('empty config-ref retains the affected base configuration', (t) => {
   const result = runMatrix('["diffusion-cpp"]', { ...configRepository(t), configRef: '' })
   assert.equal(result.status, 0, result.stderr)

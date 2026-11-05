@@ -1,6 +1,6 @@
 import QvacLogger = require("@qvac/logging");
 import { type QvacResponse } from "@qvac/infer-base";
-import { type AddonOutputCallback, type LoadWeightsData } from "./addon";
+import { type AddonOutputCallback } from "./addon";
 /** A native event normalized by a model's event mapper. */
 export type MappedModelEvent<Output> = {
     type: "JobEnded";
@@ -23,7 +23,6 @@ export interface ModelConfigurationParams<Config> {
 /** The binding calls every native model instance shares. */
 export interface ModelBinding {
     activate(handle: unknown): Promise<void> | void;
-    loadWeights(handle: unknown, data: LoadWeightsData): Promise<void>;
     cancel(handle: unknown): Promise<void>;
     destroyInstance(handle: unknown): void;
 }
@@ -41,13 +40,13 @@ export declare abstract class ModelInterface<Config, Binding extends ModelBindin
      */
     protected abstract _createInstance(configurationParams: ModelConfigurationParams<Config>, outputCb: AddonOutputCallback): object;
     cancel(): Promise<void>;
-    loadWeights(data: LoadWeightsData): Promise<void>;
     activate(): Promise<void>;
     unload(): Promise<void>;
 }
 export interface ModelRunnerArgs<Config> {
+    /** One absolute disk path, or only the first shard path. Weight streaming is unsupported. */
     files: {
-        model: string[];
+        model: [string];
     };
     /** Required, with at least `device`. */
     config: Config;
@@ -57,7 +56,7 @@ export interface ModelRunnerArgs<Config> {
     };
 }
 /**
- * The lifecycle a standalone model class shares: load (streaming shards),
+ * The lifecycle a standalone model class shares: load from one disk path,
  * one request at a time, cancel and unload, over its own native instance.
  * A subclass names the model and supplies how the instance is created, how a
  * request becomes the job's input, and how native events map to outputs.
@@ -71,7 +70,7 @@ export declare abstract class ModelRunner<Config, Request, Payload, Output, Addo
         configLoaded: boolean;
     };
     protected _addon: Addon | null;
-    private readonly _files;
+    private readonly _modelPath;
     private readonly _config;
     private readonly _job;
     private readonly _run;
@@ -91,7 +90,6 @@ export declare abstract class ModelRunner<Config, Request, Payload, Output, Addo
     protected abstract _mapEvent(event: unknown, data: unknown, error: unknown): MappedModelEvent<Output> | null;
     load(): Promise<void>;
     private _load;
-    private _streamShards;
     /** Runs one request; a subclass's `run()` checks and forwards it here. */
     protected _runRequest(request: Request): Promise<QvacResponse<Output>>;
     private _runInternal;

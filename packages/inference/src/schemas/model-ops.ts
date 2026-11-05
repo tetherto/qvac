@@ -21,7 +21,15 @@ export const deleteCacheRequestSchema = z.union([
       kvCacheKey: z.string(),
       modelId: z.string().optional()
     })
-    .meta({ title: 'DeleteCacheKvEntryRequest' })
+    .meta({ title: 'DeleteCacheKvEntryRequest' }),
+  z
+    .object({
+      type: z.literal('deleteCache'),
+      modelSrc: z
+        .string()
+        .describe('registry:// source of the model whose cached download to delete')
+    })
+    .meta({ title: 'DeleteCacheModelRequest' })
 ])
 
 export const deleteCacheResponseSchema = z.object({

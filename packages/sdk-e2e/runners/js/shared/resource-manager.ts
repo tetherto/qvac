@@ -20,9 +20,8 @@ type ModelConfigResolver = () => Promise<ModelConfig>
 
 interface ModelDefinition {
   /**
-   * Registry constant for the model. Omit for addons that ship bundled
-   * weights inside the package (`@qvac/classification-ggml`) — `loadModel`
-   * is then invoked without `modelSrc` and `skipPreDownload` is implied.
+   * Registry constant for the model. Without it, `loadModel` is invoked
+   * without `modelSrc` and `skipPreDownload` is implied.
    */
   constant?: ModelConstant
   constantSourceOnly?: boolean

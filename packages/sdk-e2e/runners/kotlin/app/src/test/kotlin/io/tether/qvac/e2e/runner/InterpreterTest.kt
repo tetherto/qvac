@@ -56,7 +56,6 @@ private fun definition(text: String): Map<String, Any?> = asMap(fromJson(Json.pa
 class InterpreterTest {
     private val noHost = object : HostResolvers {
         override fun asset(kind: String, file: String) = "/fixtures/$kind/$file"
-        override fun packageAsset(pkg: String, file: String) = "/packages/$pkg/$file"
     }
 
     private fun interpreter(transport: FakeTransport, table: Map<String, Any?> = emptyMap()): Interpreter {

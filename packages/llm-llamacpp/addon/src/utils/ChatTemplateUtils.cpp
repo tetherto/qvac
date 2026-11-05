@@ -316,7 +316,7 @@ bool renderIsUnchangedWithoutTools(
   probe.tools.clear();
   try {
     auto probeParams = common_chat_templates_apply(tmpls, probe);
-    return probeParams.prompt == promptWithTools;
+    return probeParams.prompt.str() == promptWithTools;
   } catch (...) {
     // A template that cannot render this conversation without tools raises
     // here. That is not evidence the definitions were emitted — but it is not
@@ -373,7 +373,7 @@ PromptRenderResult exportParams(
     common_chat_params&& params, bool renderedByJinja,
     bool toolDefinitionsDropped) {
   PromptRenderResult out;
-  out.prompt = std::move(params.prompt);
+  out.prompt = params.prompt.str();
   out.thinkingForcedOpen = params.thinking_forced_open;
   out.thinkingStartTag = std::move(params.thinking_start_tag);
   out.thinkingEndTag = params.thinking_end_tags.empty()
@@ -416,7 +416,7 @@ PromptRenderResult getPrompt(
     const bool legacyDroppedTools = !inputs.use_jinja && !inputs.tools.empty();
     const bool jinjaOmittedTools =
         forRequest && inputs.use_jinja && !inputs.tools.empty() &&
-        jinjaRenderOmittedTools(tmpls, inputs, params.prompt);
+        jinjaRenderOmittedTools(tmpls, inputs, params.prompt.str());
     const bool droppedTools = legacyDroppedTools || jinjaOmittedTools;
     if (jinjaOmittedTools) {
       QLOG_IF(
@@ -521,7 +521,7 @@ bool plainRenderFallsShort(
   try {
     const auto params = common_chat_templates_apply(tmpls, inputs);
     return !inputs.tools.empty() &&
-           jinjaRenderOmittedTools(tmpls, inputs, params.prompt);
+           jinjaRenderOmittedTools(tmpls, inputs, params.prompt.str());
   } catch (...) {
     return true;
   }
@@ -555,7 +555,7 @@ std::optional<PromptRenderResult> renderWithoutUserTurn(
       withUser.messages.push_back(std::move(placeholder));
       withUser.add_generation_prompt = false;
       auto params = common_chat_templates_apply(tmpls, withUser);
-      prompts.push_back(params.prompt);
+      prompts.push_back(params.prompt.str());
       if (!first.has_value()) {
         first = std::move(params);
       }
@@ -590,7 +590,7 @@ std::optional<PromptRenderResult> renderWithoutUserTurn(
       withUserNoTools.add_generation_prompt = false;
       withUserNoTools.tools.clear();
       promptWithoutTools =
-          common_chat_templates_apply(tmpls, withUserNoTools).prompt;
+          common_chat_templates_apply(tmpls, withUserNoTools).prompt.str();
     } catch (...) {
       QLOG_IF(
           Priority::WARNING,

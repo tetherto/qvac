@@ -16,7 +16,7 @@ This directory contains the mobile test entrypoint for the `@qvac/llm-llamacpp` 
 
 The mobile tests run the **same integration suite** that lives under `test/integration/`. They exercise the public `LlmLlamacpp` API end-to-end:
 
-1. **Construct the addon** with the new constructor shape — `new LlmLlamacpp({ files: { model: [absolutePath] }, config, logger?, opts? })`. For sharded GGUF models the caller pre-resolves the shard list (`tensors.txt` + every `*-NNNNN-of-MMMMM.gguf` file).
+1. **Construct the addon** with the new constructor shape — `new LlmLlamacpp({ files: { model: [absolutePath] }, config, logger?, opts? })`. For sharded GGUF models, pass only the first shard path. Every shard must be in the same directory under its original name; no tensor-name file is needed.
 2. **Load** the model into memory via `model.load()`.
 3. **Run** inference, finetuning, generation-parameter, KV-cache, and other scenarios depending on which test entry is invoked.
 4. **Unload** the model via `model.unload()` (or via `t.teardown()` in brittle tests).
@@ -176,7 +176,7 @@ The app drives the auto-generated entrypoints to execute the desired test scenar
 
 ### Model file not found
 - Ensure the test asset referenced by the failing integration test is present under `test/integration/` (or `testAssets/`).
-- For sharded models, every shard plus the `*.tensors.txt` file must be present — the caller is responsible for the full file set since the addon no longer downloads weights.
+- For sharded models, every shard must be in the same directory under its original name. Pass only the first shard path; no tensor-name file is needed.
 
 ### Out of memory
 - Mobile devices have limited RAM. Prefer the smaller test models (e.g. tinyllama / Qwen-0.6B) for on-device runs and skip large-model tests where possible.

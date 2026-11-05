@@ -4,6 +4,9 @@
   "version": "0.0.0",
   "packageManager": "pnpm@11.28.2",
   "scripts": {
+    "errors:check": "node --import tsx scripts/error-codes/cli.ts",
+    "errors:test": "node --import tsx --test scripts/error-codes/*.test.ts",
+    "errors:typecheck": "tsc -p scripts/error-codes/tsconfig.json",
     "quality:audit": "tsx scripts/code-quality/cli.ts audit",
     "quality:baseline": "tsx scripts/code-quality/cli.ts baseline",
     "quality:triage": "tsx scripts/code-quality/triage-cli.ts existing",

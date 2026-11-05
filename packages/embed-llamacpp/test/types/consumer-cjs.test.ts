@@ -4,6 +4,17 @@ const rootConstructor: typeof GGMLBert = GGMLBert
 
 void rootConstructor
 
+export function diskPathTypes() {
+  for (const Model of [GGMLBert, LayaDecisions, Reranker]) {
+    // @ts-expect-error model weights must be one disk path
+    void new Model({ files: { model: ['/abs/first.gguf', '/abs/second.gguf'] }, config: { device: 'cpu' } })
+    // @ts-expect-error an empty model list is not a disk path
+    void new Model({ files: { model: [] }, config: { device: 'cpu' } })
+    // @ts-expect-error weight buffers are not disk paths
+    void new Model({ files: { model: [new Uint8Array(8)] }, config: { device: 'cpu' } })
+  }
+}
+
 export function pollingTypes(model: string) {
   return new GGMLBert({
     files: { model: [model] },

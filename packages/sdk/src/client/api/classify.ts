@@ -10,7 +10,7 @@ import { encodeBase64 } from '@/utils/encoding'
 /**
  * Classifies an image using a loaded classification model.
  *
- * The bundled MobileNetV3-Small model produces 3 labels: `"food"`, `"report"`, `"other"`.
+ * The `MOBILENETV3_3CLASS_V3_FP16` model produces 3 labels: `"food"`, `"report"`, `"other"`.
  * Custom models may emit different labels sourced from the GGUF metadata.
  *
  * @param params - The loaded model ID, image data, optional raw-image
@@ -22,7 +22,10 @@ import { encodeBase64 } from '@/utils/encoding'
  *
  * @example
  * ```typescript
- * const modelId = await loadModel({ modelType: "ggml-classification" });
+ * const modelId = await loadModel({
+ *   modelSrc: MOBILENETV3_3CLASS_V3_FP16,
+ *   modelType: "ggml-classification",
+ * });
  * const jpeg = fs.readFileSync("photo.jpg");
  * const results = await classify({ modelId, image: jpeg });
  * // [ { label: "food", confidence: 0.93 }, { label: "other", confidence: 0.05 }, ... ]

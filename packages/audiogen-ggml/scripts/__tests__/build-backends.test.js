@@ -40,6 +40,12 @@ function overridesOf(port) {
   return namedDependencies(vcpkgManifest.overrides ?? [], port)
 }
 
+function pinnedVersion(port) {
+  const override = overridesOf(port)[0]
+  const revision = override['port-version'] ?? 0
+  return revision === 0 ? override.version : `${override.version}#${revision}`
+}
+
 test('the CUDA build remains opt-in', () => {
   assert.match(cmakeSource, new RegExp(`option\\(${CUDA_OPTION} "[^"]+" OFF\\)`))
   assert.match(
@@ -71,7 +77,11 @@ test('the hybrid backend dependencies take the versions the overrides pin', () =
   assert.equal(overridesOf(GGML_PORT).length, 1)
   assert.equal(overridesOf(SPEECH_PORT).length, 1)
   assert.equal(
-    pinnedDependencies.every((dependency) => dependency['version>='] === undefined),
+    pinnedDependencies.every(
+      (dependency) =>
+        dependency['version>='] === undefined ||
+        dependency['version>='] === pinnedVersion(dependency.name)
+    ),
     true
   )
 })

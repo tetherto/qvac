@@ -16,3 +16,19 @@ set(VCPKG_BUILD_TYPE release)
 if(PORT STREQUAL "qvac-fabric" OR PORT STREQUAL "ggml")
   list(APPEND VCPKG_ENV_PASSTHROUGH QVAC_CUDA_TOOLKIT)
 endif()
+
+# XDNA embeds the system XRT path in its RUNPATH. Track that path, the
+# installed SDK version/config, and the IRON release before cache lookup.
+# VCPKG_KEEP_ENV_VARS only preserves values; it does not hash them.
+if(PORT STREQUAL "qvac-fabric" OR PORT STREQUAL "xrt")
+  list(APPEND VCPKG_ENV_PASSTHROUGH XILINX_XRT QVAC_XDNA_IRON_VERSION)
+  if(NOT "$ENV{XILINX_XRT}" STREQUAL "")
+    file(TO_CMAKE_PATH "$ENV{XILINX_XRT}" _qvac_xrt_root)
+  else()
+    set(_qvac_xrt_root "/opt/xilinx/xrt")
+  endif()
+  if(EXISTS "${_qvac_xrt_root}/share/cmake/XRT/xrt-config.cmake")
+    list(APPEND VCPKG_HASH_ADDITIONAL_FILES "${_qvac_xrt_root}/share/cmake/XRT/xrt-config.cmake")
+  endif()
+  unset(_qvac_xrt_root)
+endif()

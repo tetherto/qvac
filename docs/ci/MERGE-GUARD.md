@@ -95,7 +95,7 @@ To avoid trusting a **superseded** status (e.g. a `skipped = success` from an ea
 
 A key belongs in `CPP_TEST_KEYS` only when its producer can actually fail:
 
-- `ocr-ggml` is excluded because its `test:cpp` target has no `options.ci`, so nothing posts its status and every ocr PR would time out.
+- `ocr-ggml` uses the standard Linux C++ test lane; its bounded image-decode fuzz suite runs after the unit tests, and either failure fails its status.
 - `asr-ggml` and `bci-whispercpp` fail their jobs directly on C++ test errors and are included. TTS retains its deterministic `hardGateCommand` before its optional model round-trip tier.
 - `audiogen-ggml` is included. It has no addon-level C++ unit tests yet; its carve-out builds the native addon and then runs the bounded config-parse fuzz target, and a fuzz failure fails its status. It is also deliberately absent from `PREBUILD_KEYS`, so its prebuild failures do not reach the required check. Because it is in the `changes` paths-filter, audiogen PRs do run `sanity-checks` inside the required check.
 

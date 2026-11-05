@@ -91,6 +91,19 @@ async function completionServer(
   return { app, address }
 }
 
+// A Responses stream fails with `response.failed`; the others send a bare error frame.
+function streamError(events: ReturnType<typeof collectSSE>): unknown {
+  for (const event of events) {
+    const data = event.data as Record<string, unknown> | string | null
+    if (data === null || typeof data !== 'object') continue
+    if ('error' in data) return data
+    if (data['type'] === 'response.failed') {
+      return { error: (data['response'] as Record<string, unknown>)['error'] }
+    }
+  }
+  return undefined
+}
+
 const ROUTES = [
   {
     url: '/v1/completions',
@@ -136,10 +149,8 @@ describe('serve: context overflow errors', () => {
           assert.equal(response.status, 200, 'SSE headers are already committed')
           const payload = await response.text()
           const events = collectSSE(payload)
-          body = events.find(
-            (event) =>
-              event.data !== null && typeof event.data === 'object' && 'error' in event.data
-          )?.data as typeof body
+          body = streamError(events) as typeof body
+          if (route.url === '/v1/responses') assert.match(payload, /response\.failed/)
           assert.equal(
             events.some((event) => event.data === '[DONE]'),
             route.sentinel
@@ -197,9 +208,9 @@ describe('serve: context overflow errors', () => {
       })
       const payload = await response.text()
       const events = collectSSE(payload)
-      const failure = events.find(
-        (event) => event.data !== null && typeof event.data === 'object' && 'error' in event.data
-      )?.data as { error: { code: string; type: string; message: string } }
+      const failure = streamError(events) as {
+        error: { code: string; type: string; message: string }
+      }
 
       assert.equal(response.status, 200)
       assert.equal(failure.error.code, 'internal_error')
@@ -297,6 +308,32 @@ describe('serve: context overflow errors', () => {
       )
     }
   }
+
+  it('logs a failed Responses stream that is a server error', async (t) => {
+    const { app, address } = await completionServer(t)
+    app.qvac.extensions.openai!.completionOverride = () => {
+      async function* events(): AsyncGenerator<CompletionEvent> {
+        yield { type: 'contentDelta', seq: 0, text: 'Partial' }
+        yield { type: 'completionDone', seq: 1, stopReason: 'error' } as unknown as CompletionEvent
+      }
+      const final = Promise.resolve(undefined) as unknown as Promise<CompletionFinal>
+      return { requestId: 'error-request', events: events(), final } as unknown as CompletionRun
+    }
+    const loggedErrors: string[] = []
+    app.qvac.logger.error = (message) => loggedErrors.push(message)
+    const response = await fetch(`${address}/v1/responses`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(2000),
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model: 'chat', input: 'Synthetic meeting transcript', stream: true })
+    })
+    const failure = streamError(collectSSE(await response.text())) as {
+      error: { code: string }
+    }
+    assert.equal(failure.error.code, 'inference_failed')
+    assert.equal(loggedErrors.length, 1)
+    assert.match(loggedErrors[0]!, /streaming_error/)
+  })
 
   it('does not classify untyped errors by message text', async (t) => {
     const { address } = await completionServer(

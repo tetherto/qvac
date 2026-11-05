@@ -10,7 +10,8 @@ import {
   extractGenerationParams,
   extractToolChoice,
   withToolChoice,
-  InvalidToolChoiceError
+  InvalidToolChoiceError,
+  hoistInstructions
 } from '@/serve/extensions/openai/schemas/common'
 import {
   openaiMessagesToHistory,
@@ -40,8 +41,8 @@ import {
   validateResponsesStatefulOptions,
   normalizeResponsesInputItemsForStorage,
   historyPrefixFromStoredResponse,
-  UnsupportedToolTypeError,
   InvalidResponsesConversationError,
+  InvalidResponsesToolsError,
   InvalidResponsesBackgroundError,
   responsesBody,
   toSdkResponsesArgs
@@ -53,7 +54,74 @@ import {
 } from '@/serve/extensions/openai/schemas/completions'
 import type { VectorStoreMeta } from '@/serve/core/stores/vector-stores'
 
+describe('hoistInstructions', () => {
+  it('leaves a history with one leading system turn as is', () => {
+    const history = [
+      { role: 'system', content: 'sys' },
+      { role: 'user', content: 'hi' }
+    ]
+    assert.equal(hoistInstructions(history), history)
+  })
+
+  it('merges developer and later system turns into one leading system turn', () => {
+    assert.deepEqual(
+      hoistInstructions([
+        { role: 'system', content: 'sys' },
+        { role: 'developer', content: 'dev 1' },
+        { role: 'user', content: 'hi' },
+        { role: 'assistant', content: 'hello' },
+        { role: 'developer', content: 'dev 2' },
+        { role: 'system', content: '' },
+        { role: 'user', content: 'next' }
+      ]),
+      [
+        { role: 'system', content: 'sys\n\ndev 1\n\ndev 2' },
+        { role: 'user', content: 'hi' },
+        { role: 'assistant', content: 'hello' },
+        { role: 'user', content: 'next' }
+      ]
+    )
+  })
+
+  it('keeps the attachments of every merged instruction', () => {
+    const [system] = hoistInstructions([
+      { role: 'system', content: 'sys', attachments: [{ path: 'a.png' }] },
+      { role: 'user', content: 'hi' },
+      { role: 'developer', content: 'dev', attachments: [{ path: 'b.png' }] }
+    ])
+    assert.deepEqual(system, {
+      role: 'system',
+      content: 'sys\n\ndev',
+      attachments: [{ path: 'a.png' }, { path: 'b.png' }]
+    })
+  })
+
+  it('turns a lone developer turn into the system turn', () => {
+    assert.deepEqual(
+      hoistInstructions([
+        { role: 'user', content: 'hi' },
+        { role: 'developer', content: 'dev' }
+      ]),
+      [
+        { role: 'system', content: 'dev' },
+        { role: 'user', content: 'hi' }
+      ]
+    )
+  })
+})
+
 describe('openaiMessagesToHistory', () => {
+  it('sends developer messages as the leading system turn', () => {
+    const messages: OpenAIMessage[] = [
+      { role: 'developer', content: 'Use the tools.' },
+      { role: 'user', content: 'hello' }
+    ]
+    assert.deepEqual(openaiMessagesToHistory(messages), [
+      { role: 'system', content: 'Use the tools.' },
+      { role: 'user', content: 'hello' }
+    ])
+  })
+
   it('converts simple user/assistant messages', () => {
     const messages: OpenAIMessage[] = [
       { role: 'user', content: 'hello' },
@@ -894,6 +962,21 @@ describe('openaiResponsesInputToHistory', () => {
     ])
   })
 
+  it('merges instructions and developer items into the leading system turn', () => {
+    const h = openaiResponsesInputToHistory(
+      [
+        { type: 'message', role: 'developer', content: [{ type: 'input_text', text: 'dev' }] },
+        { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'a' }] },
+        { type: 'message', role: 'developer', content: [{ type: 'input_text', text: 'later' }] }
+      ],
+      'sys'
+    )
+    assert.deepEqual(h, [
+      { role: 'system', content: 'sys\n\ndev\n\nlater' },
+      { role: 'user', content: 'a' }
+    ])
+  })
+
   it('maps message items', () => {
     const h = openaiResponsesInputToHistory(
       [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'a' }] }],
@@ -957,15 +1040,195 @@ describe('openaiResponsesToolsToSdk', () => {
         parameters: { type: 'object', properties: {} }
       }
     ])
-    assert.ok(t && t.length === 1)
-    assert.equal(t[0]!.name, 'fn')
+    assert.equal(t.tools?.length, 1)
+    assert.equal(t.tools[0]!.name, 'fn')
   })
 
-  it('throws on web_search', () => {
-    assert.throws(
-      () => openaiResponsesToolsToSdk([{ type: 'web_search' }]),
-      UnsupportedToolTypeError
+  it('leaves out built-in tools and reports their types', () => {
+    const t = openaiResponsesToolsToSdk([
+      { type: 'web_search' },
+      { type: 'function', name: 'fn' },
+      { type: 'web_search' }
+    ])
+    assert.deepEqual(
+      t.tools?.map((tool) => tool.name),
+      ['fn']
     )
+    assert.deepEqual(t.skippedTypes, ['web_search'])
+    assert.equal(openaiResponsesToolsToSdk([{ type: 'web_search' }]).tools, undefined)
+  })
+
+  it('flattens namespace tools under qualified names', () => {
+    const t = openaiResponsesToolsToSdk([
+      {
+        type: 'namespace',
+        name: 'mcp__node_repl',
+        tools: [{ type: 'function', name: 'js', description: 'Run JS' }]
+      },
+      {
+        type: 'namespace',
+        name: 'mcp__codex_apps__gmail',
+        tools: [{ type: 'function', name: '_search_emails' }]
+      },
+      { type: 'namespace', name: 'mcp__cua_repl', tools: [{ type: 'function', name: 'js' }] }
+    ])
+    assert.deepEqual(
+      t.tools?.map((tool) => tool.name),
+      ['mcp__node_repl__js', 'mcp__codex_apps__gmail___search_emails', 'mcp__cua_repl__js']
+    )
+    assert.equal(t.tools![0]!.description, 'Run JS')
+    assert.deepEqual(t.namespaces.get('mcp__codex_apps__gmail___search_emails'), {
+      namespace: 'mcp__codex_apps__gmail',
+      name: '_search_emails'
+    })
+  })
+})
+
+describe('openaiResponsesToolsToSdk: name collisions and bad shapes', () => {
+  it('keeps tools whose names differ only by a leading underscore apart', () => {
+    const t = openaiResponsesToolsToSdk([
+      {
+        type: 'namespace',
+        name: 'files',
+        tools: [
+          { type: 'function', name: 'read' },
+          { type: 'function', name: '_read' }
+        ]
+      }
+    ])
+    assert.deepEqual(
+      t.tools?.map((tool) => tool.name),
+      ['files__read', 'files___read']
+    )
+  })
+
+  it('rejects a top-level tool spelled like a qualified name', () => {
+    assert.throws(
+      () =>
+        openaiResponsesToolsToSdk([
+          { type: 'function', name: 'files__read' },
+          { type: 'namespace', name: 'files', tools: [{ type: 'function', name: 'read' }] }
+        ]),
+      InvalidResponsesToolsError
+    )
+  })
+
+  for (const tool of [
+    { type: 'namespace', name: 'files', tools: [null] },
+    { type: 'namespace', name: 'files', tools: {} },
+    { type: 'namespace', tools: [] }
+  ]) {
+    it(`rejects malformed namespace ${JSON.stringify(tool)}`, () => {
+      assert.throws(
+        () =>
+          openaiResponsesToolsToSdk([
+            tool as Parameters<typeof openaiResponsesToolsToSdk>[0] extends
+              Array<infer T> | undefined
+              ? T
+              : never
+          ]),
+        InvalidResponsesToolsError
+      )
+    })
+  }
+})
+
+describe('Responses review follow-ups', () => {
+  it('keeps messages sent without type', () => {
+    const items = [
+      { role: 'developer', content: 'Use the tools.' },
+      { role: 'user', content: 'hello' }
+    ]
+    const expected = [
+      { role: 'system', content: 'Use the tools.' },
+      { role: 'user', content: 'hello' }
+    ]
+    assert.deepEqual(openaiResponsesInputToHistory(items, undefined), expected)
+    assert.deepEqual(
+      historyPrefixFromStoredResponse({
+        inputItems: items,
+        responseObject: { output: [], output_text: '' }
+      }),
+      [
+        { role: 'developer', content: 'Use the tools.' },
+        { role: 'user', content: 'hello' }
+      ]
+    )
+  })
+
+  it('rejects two namespaced tools that would share a qualified name', () => {
+    assert.throws(
+      () =>
+        openaiResponsesToolsToSdk([
+          { type: 'namespace', name: 'a__b', tools: [{ type: 'function', name: 'c' }] },
+          { type: 'namespace', name: 'a', tools: [{ type: 'function', name: 'b__c' }] }
+        ]),
+      InvalidResponsesToolsError
+    )
+  })
+
+  it('keeps defer_loading on top-level and namespaced tools', () => {
+    const t = openaiResponsesToolsToSdk([
+      { type: 'function', name: 'top', defer_loading: true },
+      {
+        type: 'namespace',
+        name: 'files',
+        tools: [
+          { type: 'function', name: 'read', defer_loading: true },
+          { type: 'function', name: 'list' }
+        ]
+      },
+      {
+        type: 'namespace',
+        name: 'mail',
+        defer_loading: true,
+        tools: [{ type: 'function', name: 'send' }]
+      }
+    ])
+    assert.deepEqual(
+      t.tools!.map((tool) => [tool.name, tool.deferLoading]),
+      [
+        ['top', true],
+        ['files__read', true],
+        ['files__list', undefined],
+        ['mail__send', true]
+      ]
+    )
+  })
+
+  it('forces a namespaced tool by its qualified name', () => {
+    const args = toSdkResponsesArgs(
+      responsesBody.parse({
+        model: 'm',
+        input: 'hi',
+        tools: [
+          { type: 'function', name: 'read' },
+          { type: 'namespace', name: 'files', tools: [{ type: 'function', name: 'read' }] }
+        ],
+        tool_choice: { type: 'function', namespace: 'files', name: 'read' }
+      })
+    )
+    assert.equal(args.generationParams?.tool_choice, 'files__read')
+  })
+})
+
+describe('openaiResponsesInputToHistory: namespaced calls', () => {
+  it('replays a namespaced function_call under its qualified name', () => {
+    const h = openaiResponsesInputToHistory(
+      [
+        {
+          type: 'function_call',
+          call_id: 'c1',
+          namespace: 'mcp__node_repl',
+          name: 'js',
+          arguments: '{"code":"1+1"}'
+        },
+        { type: 'function_call_output', call_id: 'c1', output: '2' }
+      ],
+      undefined
+    )
+    assert.equal(h[0]!.toolCalls![0]!.name, 'mcp__node_repl__js')
+    assert.equal(h[1]!.toolName, 'mcp__node_repl__js')
   })
 })
 

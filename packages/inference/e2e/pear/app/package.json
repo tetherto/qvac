@@ -1,0 +1,7 @@
+{
+  "name": "qvac-inference-pear-e2e-app",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Pear app fixture that starts @qvac/inference in an in-process Bare thread. Dependencies are added by ../run.mjs at install time.",
+  "main": "main.js"
+}

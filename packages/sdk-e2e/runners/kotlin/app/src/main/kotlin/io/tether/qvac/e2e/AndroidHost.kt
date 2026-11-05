@@ -37,26 +37,4 @@ class AndroidHost(private val context: Context) : HostResolvers {
         val root = Interpreter.ASSET_ROOTS[kind] ?: error("asset kind \"$kind\" has no root")
         return File(File(fixtureRoot, root), file).absolutePath
     }
-
-    /** Copied into the APK by packages/sdk-kotlin/scripts/prepare-android-runtime.mjs. */
-    override fun packageAsset(pkg: String, file: String): String {
-        val asset = PACKAGE_ASSETS["$pkg/$file"]
-            ?: error("package asset not bundled on Android: $pkg/$file -- add it to AndroidHost.PACKAGE_ASSETS")
-        // Under the fixture root, so a new install replaces it with the fixtures; written aside and
-        // renamed, so a copy cut short is never taken for a whole one.
-        val target = File(fixtureRoot, ".package-assets/$asset")
-        if (!target.exists()) {
-            target.parentFile?.mkdirs()
-            val partial = File(target.path + ".partial")
-            context.assets.open(asset).use { input -> partial.outputStream().use(input::copyTo) }
-            if (!partial.renameTo(target)) error("could not move $asset into place")
-        }
-        return target.absolutePath
-    }
-
-    private companion object {
-        val PACKAGE_ASSETS = mapOf(
-            "@qvac/classification-ggml/weights/mobilenetv3_3class_v3_fp16.gguf" to "qvac/classification/mobilenetv3_3class_v3_fp16.gguf",
-        )
-    }
 }

@@ -1,0 +1,141 @@
+name: QVAC Inference Pear e2e
+
+# Runs @qvac/inference in a Pear app's in-process Bare thread on the latest
+# pear-runtime and Bare. Gates publish-inference.yml and the sdk release train.
+# To release against last-known-good versions, set the PEAR_E2E_*_VERSION
+# repository variables.
+
+on:
+  workflow_call:
+    inputs:
+      dist-artifact:
+        description: "Artifact from this run holding packages/inference/dist"
+        required: false
+        type: string
+        default: ""
+      tarballs-artifact:
+        description: "Artifact from this run holding `release-train.mjs pack` output"
+        required: false
+        type: string
+        default: ""
+      pear-runtime-version:
+        required: false
+        type: string
+        default: ""
+      bare-runtime-version:
+        required: false
+        type: string
+        default: ""
+      bare-pack-version:
+        required: false
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      pear-runtime-version:
+        required: false
+        type: string
+      bare-runtime-version:
+        required: false
+        type: string
+      bare-pack-version:
+        required: false
+        type: string
+  pull_request:
+    paths:
+      - "packages/inference/e2e/pear/**"
+      - ".github/workflows/test-inference-pear-e2e.yml"
+
+env:
+  WORKDIR: packages/inference
+
+permissions:
+  contents: read
+
+jobs:
+  pear-e2e:
+    name: Pear e2e (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    env:
+      PEAR_RUNTIME_VERSION: ${{ inputs.pear-runtime-version || vars.PEAR_E2E_PEAR_RUNTIME_VERSION }}
+      BARE_RUNTIME_VERSION: ${{ inputs.bare-runtime-version || vars.PEAR_E2E_BARE_RUNTIME_VERSION }}
+      BARE_PACK_VERSION: ${{ inputs.bare-pack-version || vars.PEAR_E2E_BARE_PACK_VERSION }}
+      PEAR_E2E_CACHE_DIR: ${{ github.workspace }}/.pear-e2e-models
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      # Software Vulkan driver for the llama.cpp addon on a GPU-less runner.
+      - name: Linux - install Vulkan drivers
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y mesa-vulkan-drivers
+
+      # Keeps the registry download off the release path. Keyed on the checksum
+      # of the model worker.mjs loads, so other registry edits keep the cache.
+      - name: Model cache key
+        id: model-key
+        shell: bash
+        run: |
+          node - <<'EOF'
+          const fs = require('fs')
+          const worker = fs.readFileSync('packages/inference/e2e/pear/app/worker.mjs', 'utf8')
+          const models = fs.readFileSync('packages/inference/src/models/registry/models.ts', 'utf8')
+          const name = /modelSrc: (\w+)/.exec(worker)?.[1]
+          const sha = new RegExp(`name: '${name}',[^}]*?sha256Checksum: '([0-9a-f]{64})'`).exec(models)?.[1]
+          if (!sha) console.log(`::warning::No checksum for ${name}; using a fixed cache key`)
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `key=pear-e2e-models-${sha ?? 'unknown'}\n`)
+          EOF
+
+      - name: Restore model cache
+        id: models
+        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: .pear-e2e-models
+          key: ${{ steps.model-key.outputs.key }}
+          enableCrossOsArchive: true
+
+      - name: Download inference dist artifact
+        if: inputs.dist-artifact != ''
+        uses: ./.github/actions/download-release-artifact
+        with:
+          name: ${{ inputs.dist-artifact }}
+          path: ${{ env.WORKDIR }}/dist/
+
+      - name: Download train tarballs
+        if: inputs.tarballs-artifact != ''
+        uses: ./.github/actions/download-release-artifact
+        with:
+          name: ${{ inputs.tarballs-artifact }}
+          path: train-tarballs/
+
+      - name: Build inference
+        if: inputs.dist-artifact == '' && inputs.tarballs-artifact == ''
+        working-directory: ${{ env.WORKDIR }}
+        run: npm install --ignore-scripts && npm run build
+
+      - name: Run Pear e2e
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        env:
+          TARBALLS: ${{ inputs.tarballs-artifact }}
+        run: node e2e/pear/run.mjs ${TARBALLS:+--tarballs ../../train-tarballs}
+
+      - name: Save model cache
+        if: steps.models.outputs.cache-hit != 'true'
+        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+        with:
+          path: .pear-e2e-models
+          key: ${{ steps.models.outputs.cache-primary-key }}
+          enableCrossOsArchive: true

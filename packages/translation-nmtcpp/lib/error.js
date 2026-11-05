@@ -10,7 +10,7 @@ class QvacErrorAddonMarian extends QvacErrorBase {
 exports.QvacErrorAddonMarian = QvacErrorAddonMarian;
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- package metadata is read from the package root at runtime.
 const { name, version } = require("../package.json");
-// This library has error code range from 8001 to 9000
+// Reservations are maintained in packages/error/code-ranges.json, excluding OCR's block.
 exports.ERR_CODES = Object.freeze({
     FAILED_TO_LOAD_WEIGHTS: 8001,
     FAILED_TO_CANCEL: 8002,

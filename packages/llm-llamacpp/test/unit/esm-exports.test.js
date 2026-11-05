@@ -10,7 +10,7 @@ const path = require('bare-path')
 // Every entrypoint that ships, with the named exports it must keep. Driven off
 // one table so a new entrypoint cannot be added without declaring its exports.
 const ENTRYPOINTS = [
-  { file: 'index.js', named: ['pickPrimaryGgufPath', 'assessFit', 'QvacResponse'] },
+  { file: 'index.js', named: ['validateModelPath', 'assessFit', 'QvacResponse'] },
   { file: 'addon.js', named: ['LlamaInterface', 'mapAddonEvent'] },
   {
     file: 'batchHandler.js',
@@ -38,16 +38,16 @@ test('ESM default import resolves to the LlmLlamacpp class', async (t) => {
 
   t.is(typeof ns.default, 'function', 'default export is a function')
   t.is(ns.default.name, 'LlmLlamacpp', 'default export is the class')
-  t.is(typeof ns.default.pickPrimaryGgufPath, 'function', 'statics reachable via default export')
+  t.is(typeof ns.default.validateModelPath, 'function', 'statics reachable via default export')
   t.is(typeof ns.default.QvacResponse, 'function', 'QvacResponse re-export reachable')
 })
 
 test('ESM named bindings link and match the statics', async (t) => {
   const ns = await import('../../index.js')
 
-  t.is(typeof ns.pickPrimaryGgufPath, 'function', 'named pickPrimaryGgufPath binding links')
+  t.is(typeof ns.validateModelPath, 'function', 'named validateModelPath binding links')
   t.is(typeof ns.QvacResponse, 'function', 'named QvacResponse binding links')
-  t.is(ns.pickPrimaryGgufPath, ns.default.pickPrimaryGgufPath, 'named === static')
+  t.is(ns.validateModelPath, ns.default.validateModelPath, 'named === static')
   t.is(ns.QvacResponse, ns.default.QvacResponse, 'named === static')
   t.is(typeof ns.assessFit, 'function', 'named assessFit binding links')
   t.is(ns.assessFit, ns.default.assessFit, 'named === static')

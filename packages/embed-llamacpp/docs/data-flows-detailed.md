@@ -10,112 +10,46 @@
 
 - [Model Loading Flow](#model-loading-flow)
 - [Batch Embedding Generation Flow](#batch-embedding-generation-flow)
-- [Weight Streaming Flow](#weight-streaming-flow)
+- [Removed Weight Streaming](#removed-weight-streaming)
 - [Single Text Embedding Flow](#single-text-embedding-flow)
 
 ---
 
 ## Model Loading Flow
 
-### Complete Loading Sequence
+Models load from disk only. Pass exactly one absolute path in `files.model`:
+the single GGUF file, or the first shard (`*-00001-of-000NN.gguf`). All shards
+must already be in the same directory with their original names. Fabric reads
+the GGUF metadata, discovers the remaining shards and reads their weights.
+No JavaScript weight buffers or `.tensors.txt` file are needed.
+
+Passing multiple paths or weight buffers is rejected. Migrate an old all-files
+list to `[firstShardPath]`. The `loadWeights()` API has been removed.
+This removes model-weight streaming, while generated output still streams as before.
 
 ```mermaid
 sequenceDiagram
     participant App as Application
-    participant GGMLBert as GGMLBert
-    participant FS as bare-fs
-    participant BI as BertInterface
-    participant Addon as Addon<BertModel>
-    participant BM as BertModel
-    participant LLAMA as llama.cpp
-
-    App->>GGMLBert: new GGMLBert({ files, config, logger, opts })
-    GGMLBert->>GGMLBert: Store files array, config, opts
-    GGMLBert->>GGMLBert: createJobHandler + exclusiveRunQueue
-
-    App->>GGMLBert: load()
-    GGMLBert->>GGMLBert: pick primaryGgufPath = first entry matching /-\d+-of-\d+\.gguf$/<br/>(falls back to files.model[0] for non-sharded models)
-    GGMLBert->>BI: new BertInterface(binding, { path: primaryGgufPath, config }, outputCb)
-    BI->>Addon: createInstance(params)
-    Addon->>BM: BertModel(path, config, backendsDir)
-    BM->>BM: Delayed init (InitLoader)
-
-    alt Sharded Model (files.length > 1)
-        GGMLBert->>GGMLBert: _streamShards()
-        loop For each absolute path in files.model (in order)
-            GGMLBert->>FS: fs.createReadStream(absolutePath)
-            loop For each chunk
-                FS-->>GGMLBert: chunk
-                GGMLBert->>BI: loadWeights({filename, chunk, completed: false})
-                BI->>Addon: loadWeights(handle, data)
-                Addon->>BM: Append blob to streambuf for filename
-            end
-            GGMLBert->>BI: loadWeights({filename, chunk: null, completed: true})
-            BI->>Addon: mark file complete
-        end
-    else Single File Model (files.length == 1)
-        Note over GGMLBert: Skip streaming — addon will read path directly on activate()
-    end
-
-    GGMLBert->>BI: activate()
-    BI->>Addon: activate(handle)
-    Addon->>BM: load()
-    BM->>BM: init(modelPath, config, backendsDir)
-    BM->>BM: lazyCommonInit()
-    BM->>BM: initializeBackend(backendsDir)
-    BM->>BM: setupParams(modelPath, config)
-    BM->>LLAMA: initFromConfig(params, path, streams, shards)
-    LLAMA->>LLAMA: Load model weights (from streambufs or path)
-    LLAMA-->>BM: model, context
-    BM->>BM: Initialize batch, vocab, pooling
-    BM-->>Addon: Model loaded
-    Addon-->>BI: Activated
-    BI-->>GGMLBert: Ready
-    GGMLBert-->>App: Model loaded
+    participant JS as JS addon
+    participant Native as Native model
+    participant Fabric as Fabric
+    participant Disk as Local GGUF files
+    App->>JS: new Model({files: {model: [firstPath]}})
+    JS->>JS: Validate one absolute disk path
+    App->>JS: load()
+    JS->>Native: createInstance(path, config)
+    JS->>Native: activate()
+    Native->>Fabric: Read metadata from path
+    Fabric->>Disk: Read first GGUF header
+    Native->>Fabric: common_init_from_params(params)
+    Fabric->>Disk: Discover and read disk shards, if split
+    Native-->>JS: Model ready
+    JS-->>App: load() resolves
 ```
 
-### Caller Contract for `files.model`
-
-- **Absolute paths only.** `GGMLBert` does not resolve relative paths or discover companion files.
-- **Order matters.** For sharded GGUFs, callers pass the `.tensors.txt` companion first, then shards `00001-of-N`, `00002-of-N`, …, `N-of-N` in numeric order. The addon scans the array for the first entry matching the shard regex `/-\d+-of-\d+\.gguf$/` and uses that as the primary path handed to llama.cpp's `params.model.path`. For non-sharded single-file models, the only entry is used. The `.tensors.txt` file is consumed by the streaming layer (along with the shards) but is never the primary path.
-- **All files required.** Every shard and the `.tensors.txt` file must be present in the array; missing any file will fail at load time.
-- **No download step.** The addon reads bytes from disk via `bare-fs`. Distribution, caching, and integrity are the caller's responsibility.
-
-### Sharded Model Loading Detail
-
-```mermaid
-sequenceDiagram
-    participant App as Application
-    participant GGMLBert as GGMLBert
-    participant FS as bare-fs
-    participant Cpp as C++ Addon
-    participant Stream as BlobsStream
-    participant LLAMA as llama.cpp
-
-    Note over App: Caller passes every file explicitly
-    App->>GGMLBert: new GGMLBert({ files: { model: [tensorsTxt, shard1..shardN] }, ... })
-    App->>GGMLBert: load()
-
-    loop For each absolute path (in order)
-        GGMLBert->>FS: createReadStream(path)
-        loop For each chunk
-            FS-->>GGMLBert: Buffer chunk
-            GGMLBert->>Cpp: loadWeights({filename, chunk, completed: false})
-            Cpp->>Stream: Append blob to streambuf (zero-copy)
-        end
-        GGMLBert->>Cpp: loadWeights({filename, chunk: null, completed: true})
-        Cpp->>Stream: Mark file complete
-    end
-
-    Note over Cpp: activate() called
-    Cpp->>LLAMA: llama_model_load() with streambufs
-    LLAMA->>Stream: seekg(), read() operations across blobs
-    Stream-->>LLAMA: Model weight data
-    LLAMA->>LLAMA: Parse GGUF, load tensors
-    LLAMA-->>Cpp: Model loaded
-```
-
----
+This path is shared by `GGMLBert`, `LayaDecisions` and `Reranker`.
+The reranker also checks shard headers for its classifier tensors; the shard
+count comes from the bounded GGUF header, never from the filename.
 
 ## Batch Embedding Generation Flow
 
@@ -201,77 +135,17 @@ flowchart TD
 
 ---
 
-## Weight Streaming Flow
+## Removed Weight Streaming
 
-### Direct File Streaming Sequence
+Models load from disk only. Pass exactly one absolute path in `files.model`:
+the single GGUF file, or the first shard (`*-00001-of-000NN.gguf`). All shards
+must already be in the same directory with their original names. Fabric reads
+the GGUF metadata, discovers the remaining shards and reads their weights.
+No JavaScript weight buffers or `.tensors.txt` file are needed.
 
-`GGMLBert` has no `WeightsProvider` and no data loader. It streams each caller-supplied absolute path straight from disk using `bare-fs.createReadStream` and forwards chunks to the native addon. Distribution (downloading, P2P, cache, integrity) happens entirely outside this package.
-
-```mermaid
-sequenceDiagram
-    participant JS as GGMLBert
-    participant FS as bare-fs
-    participant BI as BertInterface
-    participant Addon as Addon<BertModel>
-    participant Stream as BlobsStream
-    participant LLAMA as llama.cpp
-
-    Note over JS: Caller passed files.model = [file1, file2, ...]
-    loop For each absolute path (in order)
-        JS->>FS: fs.createReadStream(path)
-        loop For each chunk
-            FS-->>JS: Buffer chunk
-            JS->>BI: loadWeights({filename, chunk, completed: false})
-            BI->>Addon: loadWeights(handle, data)
-            Addon->>Stream: Append blob (zero-copy ArrayBuffer ref)
-        end
-        FS-->>JS: stream end
-        JS->>BI: loadWeights({filename, chunk: null, completed: true})
-        BI->>Addon: loadWeights(handle, data)
-        Addon->>Stream: Mark file complete
-    end
-
-    Note over Addon: activate() called later
-    Addon->>LLAMA: llama_model_load() with streambufs
-    LLAMA->>Stream: seekg(offset)
-    Stream->>Stream: Find blob containing offset
-    Stream->>Stream: Calculate position within blob
-    Stream-->>LLAMA: Position ready
-    LLAMA->>Stream: read(buffer, size)
-    Stream->>Stream: Copy from ArrayBuffer to buffer
-    Stream-->>LLAMA: Weight data
-    LLAMA->>LLAMA: Parse GGUF, load tensors
-```
-
-### Memory Lifecycle
-
-```mermaid
-sequenceDiagram
-    participant JS as JavaScript
-    participant Cpp as C++ Addon
-    participant Stream as BlobsStream
-    participant RefMgr as ThreadQueuedRefDeleter
-    
-    Note over JS: ArrayBuffer created from stream
-    JS->>Cpp: loadWeights({chunk: ArrayBuffer})
-    Cpp->>Cpp: js_get_typedarray_info() - get pointer
-    Cpp->>Stream: Append blob (store pointer, no copy)
-    Note over Cpp: ArrayBuffer reference kept alive
-    
-    Note over Cpp: Model loading in progress
-    Cpp->>Stream: read() operations
-    Stream->>Stream: Access ArrayBuffer memory directly
-    
-    Note over Cpp: Loading complete
-    Cpp->>RefMgr: Schedule ArrayBuffer deletion
-    RefMgr->>RefMgr: Queue for JS thread
-    
-    Note over JS: JS thread processes queue
-    RefMgr->>JS: js_delete_reference() on JS thread
-    JS->>JS: ArrayBuffer eligible for GC
-```
-
----
+Passing multiple paths or weight buffers is rejected. Migrate an old all-files
+list to `[firstShardPath]`. The `loadWeights()` API has been removed.
+This removes model-weight streaming, while generated output still streams as before.
 
 ## Single Text Embedding Flow
 

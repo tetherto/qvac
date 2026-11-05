@@ -754,6 +754,32 @@ OCR_GGML_RECOGNIZER=$PWD/models/latin_g2.gguf \
 npm run test:integration
 ```
 
+### Image decoder fuzzing (Linux)
+
+The encoded-image and raw-bitmap fuzz properties run without OCR models or
+linking the Fabric runtime, with full ASan and LeakSanitizer enabled.
+
+```bash
+npm run fuzz             # Build and run bounded properties and regression seeds
+npm run fuzz:build       # Build bounded mode only
+npm run fuzz:run         # Test the runner and run an existing bounded build
+npm run fuzz:continuous -- --fuzz_for 30m
+npm run fuzz:continuous -- OcrDecodeImageFuzz.RawNeverCrashes --fuzz_for=30m
+```
+
+Use the repository's locked Bare toolchain and vcpkg setup, as for C++ tests.
+Fuzz-only builds configure `BUILD_FUZZING=ON` and `BUILD_TESTING=OFF` in `build/`.
+`fuzz:build:continuous` builds coverage-guided mode without running it; continuous
+runs continue until interrupted unless `--fuzz_for` sets a duration. Put a custom
+property selector before binary flags. Both `--flag=value` and `--flag value`
+are forwarded; a second `--` after npm's separator passes all remaining arguments
+unchanged to the binary.
+
+Shared Linux C++ CI runs the existing unit tests first, then builds and runs the
+bounded fuzz target. Re-run `test:cpp:build` to switch the tree back to unit-test
+mode after fuzzing, or `build:native` to rebuild and install the native addon. Both
+commands explicitly reset `BUILD_FUZZING=OFF`. See [Native Addon Fuzz Testing](../../docs/architecture/ADDON-FUZZING.md).
+
 ### Running the suite on Vulkan (GPU)
 
 The harness **auto-detects** the backend. When the package ships a

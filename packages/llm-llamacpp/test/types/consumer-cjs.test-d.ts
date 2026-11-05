@@ -19,11 +19,19 @@ void missingArgs;
 const missingFiles = new LlmLlamacpp({});
 void missingFiles;
 
-const primary: string = LlmLlamacpp.pickPrimaryGgufPath([
+const primary: string = LlmLlamacpp.validateModelPath([
   "/abs/model-00001-of-00002.gguf",
-  "/abs/model-00002-of-00002.gguf",
 ]);
 void primary;
+
+// @ts-expect-error - model weights must be one disk path
+void new LlmLlamacpp({ files: { model: ["/abs/first.gguf", "/abs/second.gguf"] }, config: { device: "cpu" } });
+// @ts-expect-error - an empty model list is not a disk path
+void new LlmLlamacpp({ files: { model: [] }, config: { device: "cpu" } });
+// @ts-expect-error - weight buffers are not disk paths
+void new LlmLlamacpp({ files: { model: [new Uint8Array(8)] }, config: { device: "cpu" } });
+// @ts-expect-error - the weight streaming API has been removed
+void model.addon?.loadWeights;
 
 // Attached at runtime, deliberately absent from the type surface.
 // @ts-expect-error - not part of the published constructor surface

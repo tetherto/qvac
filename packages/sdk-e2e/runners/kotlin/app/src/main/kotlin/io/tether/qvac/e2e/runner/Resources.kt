@@ -20,9 +20,6 @@ class UnknownResourceError(message: String) : Exception(message)
 interface HostResolvers {
     /** A bundled fixture, as a path the worker can open. */
     fun asset(kind: String, file: String): String
-
-    /** A data file shipped inside an npm package, as a path the worker can open. */
-    fun packageAsset(pkg: String, file: String): String
 }
 
 /**
@@ -68,17 +65,15 @@ class Resources(
         return merged
     }
 
-    /** Replace `$const`, `$asset` and `$packageAsset` placeholders, recursively. */
+    /** Replace `$const` and `$asset` placeholders, recursively. */
     fun resolve(value: Any?): Any? = when (value) {
         is List<*> -> value.map(::resolve)
         is Map<*, *> -> {
             val name = value["\$const"]
             val asset = value["\$asset"] as? Map<*, *>
-            val packageAsset = value["\$packageAsset"] as? Map<*, *>
             when {
                 name is String -> descriptor(constant(name))
                 asset != null -> host.asset(asset["kind"].toString(), asset["file"].toString())
-                packageAsset != null -> host.packageAsset(packageAsset["package"].toString(), packageAsset["file"].toString())
                 else -> value.entries.associateTo(LinkedHashMap()) { (key, item) -> key.toString() to resolve(item) }
             }
         }
@@ -111,7 +106,6 @@ class Resources(
     fun loadArgs(params: Map<String, Any?>): LoadArgs {
         val source = params["modelSrc"]
         val descriptor = source as? Map<*, *>
-        // A bundled model (classification) is named by its config; the JS client sends an empty modelSrc.
         val src = (descriptor?.get("src") ?: source)?.toString() ?: ""
         val declaredType = params["modelType"]?.toString() ?: descriptor?.get("engine")?.toString()
             ?: throw Wire.refusal("MODEL_TYPE_REQUIRED", MODEL_TYPE_REQUIRED)

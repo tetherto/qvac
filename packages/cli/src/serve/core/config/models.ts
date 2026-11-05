@@ -141,9 +141,6 @@ export function resolveModelConstant(alias: string, entry: ConstantModelEntry): 
   }
 }
 
-// The classification addon ships its own weights; the SDK loads them for an empty src.
-const BUNDLED_WEIGHTS_CATEGORIES = new Set(['classification'])
-
 function parseExplicitEntry(alias: string, entry: ExplicitModelEntry): ResolvedModelEntry {
   if (!entry.type) {
     throw new Error(`serve.models.${alias}: "type" is required`)
@@ -152,10 +149,10 @@ function parseExplicitEntry(alias: string, entry: ExplicitModelEntry): ResolvedM
   const rawConfig = entry.config ?? {}
   const resolved = resolveForAlias(alias, entry.type, rawConfig)
 
-  if (!entry.src && !BUNDLED_WEIGHTS_CATEGORIES.has(resolved.endpointCategory)) {
+  if (!entry.src) {
     throw new Error(`serve.models.${alias}: "src" is required`)
   }
-  const src = entry.src ?? ''
+  const src = entry.src
 
   // Allow `entry.src` to be either a path or a known SDK model-constant name.
   // Constant names look like `WAN2_1_T2V_1_3B_FP16`; paths contain `/` or

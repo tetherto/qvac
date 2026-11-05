@@ -25,6 +25,7 @@
           "includeVulkanSdk": true,
           "setupPythonOnWindows": true,
           "includeCuda": true,
+          "verifyLinuxModuleCxxRuntime": true,
           "platformCmakeDefines": "linux-x64: -D ENABLE_CUDA=ON"
         }
       },

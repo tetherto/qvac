@@ -109,27 +109,6 @@ class AndroidContractInstrumentationTest {
         )
         assertEquals(workerDigest, profile["workerSha256"]?.jsonPrimitive?.content)
         assertTrue(profile["addons"]?.let { it is kotlinx.serialization.json.JsonArray && it.isNotEmpty() } == true)
-
-        if (QvacCapability.CLASSIFICATION in expectedCapabilities) {
-            val classificationResource = profile["resources"]
-                ?.let { it as? kotlinx.serialization.json.JsonArray }
-                ?.map { it.jsonObject }
-                ?.firstOrNull {
-                    it["name"]?.jsonPrimitive?.content ==
-                        "classification/mobilenetv3_3class_v3_fp16.gguf"
-                }
-            val classificationDigest = context.assets.open(
-                "qvac/classification/mobilenetv3_3class_v3_fp16.gguf",
-            ).use { input ->
-                MessageDigest.getInstance("SHA-256")
-                    .digest(input.readBytes())
-                    .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
-            }
-            assertEquals(
-                classificationDigest,
-                classificationResource?.get("sha256")?.jsonPrimitive?.content,
-            )
-        }
     }
 
     @Test

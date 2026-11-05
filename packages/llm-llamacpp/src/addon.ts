@@ -70,12 +70,6 @@ export type AddonBatchRunResult =
     }
   | { accepted: false; id?: never; ids: string[] };
 
-export interface LoadWeightsData {
-  filename: string;
-  chunk: Uint8Array | null;
-  completed: boolean;
-}
-
 export interface AddonConfigurationParams {
   path: string;
   projectionPath: string;
@@ -104,7 +98,6 @@ export interface LlamaBinding {
     outputCallback: AddonOutputCallback,
     reserved: null,
   ): object;
-  loadWeights(handle: unknown, data: LoadWeightsData): Promise<void> | void;
   activate(handle: unknown): Promise<void> | void;
   activeJobs(handle: unknown): number;
   activeSlots(handle: unknown): number;
@@ -211,10 +204,6 @@ export class LlamaInterface {
     }
 
     this._handle = this._binding.createInstance(this, configurationParams, outputCb, null);
-  }
-
-  loadWeights(weightsData: LoadWeightsData): Promise<void> {
-    return Promise.resolve(this._binding.loadWeights(this._handle, weightsData));
   }
 
   /**

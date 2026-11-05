@@ -109,12 +109,7 @@ function registerCodes(codes, pkg = { name, version }) {
             throw err;
         }
     }
-    const unowned = {};
-    for (const [numeric, definition] of Object.entries(codes)) {
-        const numericCode = Number(numeric);
-        if (!isCodeRegistered(numericCode))
-            unowned[numericCode] = definition;
-    }
+    const unowned = Object.fromEntries(Object.entries(codes).filter(([numeric]) => !isCodeRegistered(Number(numeric))));
     if (Object.keys(unowned).length > 0) {
         addCodes(unowned, pkg);
     }

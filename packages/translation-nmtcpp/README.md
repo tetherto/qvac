@@ -69,6 +69,7 @@ This library simplifies the process of running various translation models within
     - [JavaScript Tests](#javascript-tests)
     - [C++ Tests](#c-tests)
       - [npm Commands (Recommended - Cross-Platform)](#npm-commands-recommended---cross-platform)
+    - [Fuzz Testing (Linux)](#fuzz-testing-linux)
   - [Glossary](#glossary)
   - [Resources](#resources)
   - [Contributing](#contributing)
@@ -1151,6 +1152,38 @@ npm run coverage:cpp       # Complete coverage workflow
 # Combined Testing
 npm run test:all           # Run both JavaScript and C++ tests
 ```
+
+### Fuzz Testing (Linux)
+
+The GGML weight-header fuzz target tests dimensions, bounded strings, counts and
+tensor types without loading a model or linking the Fabric runtime. It uses full
+ASan and LeakSanitizer (`detect_leaks=1:abort_on_error=1`). Install the package
+dependencies and use the repository's locked Bare toolchain and vcpkg setup,
+just as for native C++ builds.
+
+```bash
+npm run fuzz             # Build and run all bounded fuzz properties and seeds
+npm run fuzz:build       # Build bounded mode only
+npm run fuzz:run         # Run the existing bounded build
+npm run fuzz:continuous -- --fuzz_for 30m
+# Select a different property; place the selector before binary flags:
+npm run fuzz:continuous -- NmtWeightHeaderFuzz.BoundedStringNeverCrashes --fuzz_for=30m
+```
+
+`fuzz:continuous` rebuilds with coverage-guided fuzzing enabled. It runs until
+interrupted unless `--fuzz_for` supplies a time limit. `fuzz:build:continuous`
+builds that mode without running it. Both `--flag=value` and `--flag value` are
+forwarded to the binary. For explicit passthrough, use a second separator:
+`npm run fuzz:continuous -- -- --fuzz_for 30m` (npm consumes the first `--`).
+
+Fuzz builds use `build-fuzz/` and `test/fuzz/vcpkg.json`; model tests and their
+coverage files stay in `build/`. The separate trees keep FuzzTest's ASan Abseil
+apart from production NMT's Abseil. Do not enable `BUILD_TESTING` and
+`BUILD_FUZZING` in the same tree. `coverage:cpp:build` builds both trees, and
+`coverage:cpp:run` runs fuzz before the model tests, so CI exercises this target
+before collecting the model-test coverage report. See
+[Native Addon Fuzz Testing](../../docs/architecture/ADDON-FUZZING.md) for the
+shared design.
 
 ## Glossary
 

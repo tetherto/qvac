@@ -167,6 +167,13 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  pear-e2e:
+    name: Pear e2e
+    needs: [build]
+    uses: ./.github/workflows/test-inference-pear-e2e.yml
+    with:
+      dist-artifact: dist-inference
+
   publish-npm:
     name: Publish @qvac/inference to NPM
     needs:
@@ -174,9 +181,11 @@ jobs:
       - build
       - release-merge-guard
       - shared-runtime-libs
+      - pear-e2e
     if: >-
       needs.shared-runtime-libs.result == 'success' &&
-      needs.release-merge-guard.result == 'success'
+      needs.release-merge-guard.result == 'success' &&
+      needs.pear-e2e.result == 'success'
     runs-on: ubuntu-latest
     environment: npm
     outputs:

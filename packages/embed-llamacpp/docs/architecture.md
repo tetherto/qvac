@@ -25,7 +25,7 @@
 - [Decision 1: llama.cpp as Inference Backend](#decision-1-llamacpp-as-inference-backend)
 - [Decision 2: Bare Runtime over Node.js](#decision-2-bare-runtime-over-nodejs)
 - [Decision 3: Caller-Provided File Paths](#decision-3-caller-provided-file-paths)
-- [Decision 4: Incremental Buffer-Based Weight Loading](#decision-4-incremental-buffer-based-weight-loading)
+- [Decision 4: Disk-Based Weight Loading](#decision-4-disk-based-weight-loading)
 - [Decision 5: Batch Processing as Primary Use Case](#decision-5-batch-processing-as-primary-use-case)
 - [Decision 6: Exclusive Run Queue](#decision-6-exclusive-run-queue)
 - [Decision 7: TypeScript Definitions](#decision-7-typescript-definitions)
@@ -46,7 +46,7 @@
 
 **Core value:**
 - High-level JavaScript API for embedding generation
-- Direct file streaming from disk via `bare-fs` (no download/loader layer)
+- Disk-path loading through Fabric (no addon download layer)
 - Batch processing for high-throughput use cases
 - Vector embeddings for semantic search and similarity
 
@@ -55,12 +55,12 @@ The package also runs Laya decision models (`LayaDecisions`): a ModernBERT or mm
 ## Key Features
 
 - **Cross-platform**: macOS, Linux, Windows, iOS, Android
-- **Caller-supplied paths**: Application passes absolute file paths; addon streams them from disk
+- **Caller-supplied paths**: Application passes one absolute disk path; Fabric reads model files
 - **Batch processing**: Process multiple texts in a single forward pass
 - **GPU acceleration**: Metal, Vulkan, OpenCL
 - **Multi-GPU**: `split-mode`/`tensor-split` config for pipeline (`'layer'`) parallelism (see `examples/multiGpuBenchmark.js`). `split-mode: 'row'` is rejected at load: it needs split buffers, which none of the backends this addon admits provide, and fabric marks the mode deprecated. Use `'layer'`
 - **Quantized models**: GGUF format (Q2-Q8, 1-bit variants)
-- **Sharded loading**: Caller passes every shard + `.tensors.txt` companion; addon streams them in order
+- **Sharded loading**: Caller passes the first shard; Fabric discovers and reads the other disk shards
 - **Encoder-only models**: Optimized for embedding generation
 - **Laya decisions**: `choice` / `score` / `noul` answers as probabilities over the question's options, through fabric's `common_laya` request handling (see [Decision 8](#decision-8-laya-decisions-as-a-separate-model-class))
 
@@ -81,7 +81,7 @@ Tier 1: Platform targets for which prebuilds are provided as defined by the .git
 - @qvac/infer-base: Provides `createJobHandler` and `exclusiveRunQueue` helpers (composition, no base class)
 - @qvac/logging: `QvacLogger` wrapper and native logging bridge
 - @qvac/fabric (^0.22.0): Shared llama.cpp/ggml inference engine. The runtime and backends ship in a `@qvac/fabric-<host>` platform package: optional dependencies on desktop, a direct dependency of the app on mobile
-- Bare Runtime (≥1.24.0): JavaScript runtime (provides `bare-fs` for direct file streaming)
+- Bare Runtime (≥1.24.0): JavaScript runtime
 
 ---
 
@@ -149,7 +149,7 @@ graph TB
 | JavaScript | GGMLBert | Constructor | `{ files, config, logger, opts }` (single object) |
 | GGMLBert | createJobHandler / exclusiveRunQueue | Composition | Function calls |
 | GGMLBert | BertInterface | Composition | Method calls |
-| GGMLBert | bare-fs | `bare-fs.createReadStream(path)` | Raw chunks per shard |
+| Native model | Fabric | `common_init_from_params` | Single GGUF path or first disk shard path |
 | BertInterface | C++ Addon | require.addon() | Native binding |
 | Application | package exports | `.` / `./addonLogging` | Public API plus native log bridge |
 
@@ -195,7 +195,6 @@ classDiagram
 
     class BertInterface {
         +runJob(input) Promise~boolean~
-        +loadWeights(data) Promise
         +activate() Promise
         +cancel() Promise
         +unload() Promise
@@ -214,7 +213,7 @@ classDiagram
 
 | Class / Helper | Responsibility | Lifecycle | Dependencies |
 |----------------|----------------|-----------|--------------|
-| GGMLBert | Standalone class. Orchestrate model lifecycle, stream files from disk, dispatch inference | Created by user, persistent | `createJobHandler`, `exclusiveRunQueue`, `BertInterface`, `bare-fs` |
+| GGMLBert | Standalone class. Orchestrate disk model loading and dispatch inference | Created by user, persistent | `createJobHandler`, `exclusiveRunQueue`, `BertInterface` |
 | createJobHandler | Factory producing a job handler with `start/output/end/fail` semantics; returns a `QvacResponse` | Created once per GGMLBert | None |
 | exclusiveRunQueue | Factory producing a promise queue that serialises `load()` / `run()` / `unload()` calls | Created once per GGMLBert | None |
 | QvacResponse | Return embedding results and expose `await()`/`cancel()`/`stats` | Created per `run()` call, short-lived | None |
@@ -227,7 +226,7 @@ classDiagram
 | GGMLBert | createJobHandler | Composition | Job state machine + response emission |
 | GGMLBert | exclusiveRunQueue | Composition | Serialise concurrent callers |
 | GGMLBert | BertInterface | Composition | Native addon calls |
-| GGMLBert | bare-fs | Direct use | Stream each caller-supplied path into the addon |
+| Native model | Fabric | Disk loading API | Read the GGUF and any disk shards from the first path |
 
 </details>
 
@@ -258,7 +257,6 @@ graph TB
         JOB["createJobHandler<br/>(@qvac/infer-base)"]
         QUEUE["exclusiveRunQueue<br/>(@qvac/infer-base)"]
         RESPONSE["QvacResponse<br/>(@qvac/infer-base)"]
-        BAREFS["bare-fs<br/>createReadStream"]
     end
 
     subgraph "Layer 2: Bridge"
@@ -272,7 +270,6 @@ graph TB
     subgraph "Layer 3: C++ Addon"
         JSINTERFACE["JsInterface<br/>(js-interface/binding.cpp)"]
         ADDON["AddonCpp / AddonJs<br/>(addon/src/addon/AddonCpp.hpp<br/>addon/src/addon/AddonJs.hpp)"]
-        WEIGHTSLOAD["WeightsLoader<br/>(addon-cpp)"]
     end
 
     subgraph "Layer 4: Model"
@@ -303,19 +300,15 @@ graph TB
     RERANKIF -. extends .-> MODELIF
     MODELRUNNER --> JOB
     MODELRUNNER --> QUEUE
-    MODELRUNNER --> BAREFS
     BERTCLASS --> JOB
     BERTCLASS --> QUEUE
     BERTCLASS --> BERTIF
-    BERTCLASS --> BAREFS
     JOB -.-> RESPONSE
 
     BERTIF --> BINDING
     BINDING --> JSINTERFACE
-    BAREFS -. chunks .-> BERTIF
 
     JSINTERFACE --> ADDON
-    ADDON --> WEIGHTSLOAD
     ADDON --> BERTMODEL
     ADDON --> LAYAMODEL
     ADDON --> RERANKMODEL
@@ -346,7 +339,7 @@ graph TB
 
 | Layer | Components | Responsibility | Language | Why This Layer |
 |-------|------------|----------------|----------|----------------|
-| 1. JavaScript API | GGMLBert (standalone), LayaDecisions and Reranker (on ModelRunner), `createJobHandler`, `exclusiveRunQueue`, `bare-fs` | High-level API, file streaming, job/queue composition | JS | Ergonomic API for npm consumers |
+| 1. JavaScript API | GGMLBert (standalone), LayaDecisions and Reranker (on ModelRunner), `createJobHandler`, `exclusiveRunQueue` | High-level API, disk-path validation, job/queue composition | JS | Ergonomic API for npm consumers |
 | 2. Bridge | BertInterface, LayaInterface and RerankInterface (on ModelInterface), binding.js | JS↔C++ communication | JS wrapper | Lifecycle management, handle safety |
 | 3. C++ Addon | JsInterface, AddonCpp/AddonJs | Single-job runner, threading, callbacks | C++ | Performance, native integration |
 | 4. Model | BertModel, LayaModel, RerankModel, LlamaModelLoader | Inference logic, batch processing; shared model loading | C++ | Direct llama.cpp integration |
@@ -374,16 +367,16 @@ graph TB
 
 #### **GGMLBert (index.js)**
 
-**Responsibility:** Main API class. Standalone (no base class) — uses composition with `createJobHandler` and `exclusiveRunQueue` from `@qvac/infer-base`. Orchestrates the model lifecycle, streams each caller-supplied file path directly from disk via `bare-fs`, and dispatches inference jobs.
+**Responsibility:** Main API class. Standalone (no base class) — uses composition with `createJobHandler` and `exclusiveRunQueue` from `@qvac/infer-base`. Validates one disk path, delegates model loading to the native addon and dispatches inference jobs.
 
 **Constructor:** `new GGMLBert({ files, config, logger, opts })` — a single options object.
-- `files.model` — ordered array of absolute paths. Caller is responsible for passing every file the model needs (for sharded GGUF: the `.tensors.txt` companion first, then all `.gguf` shards in numerical order).
+- `files.model` — exactly one absolute disk path, or only the first shard path for a split GGUF.
 - `config` — llama.cpp hyper-parameters (all string values).
 - `logger` — wrapped in a `QvacLogger`.
 - `opts.stats` — emit runtime stats on the response.
-- `pickPrimaryGgufPath()` is exported for callers that need to apply the same primary-shard selection logic outside the class.
+- `validateModelPath()` is exported for callers that need to apply the same single disk-path validation outside the class.
 
-**`load()`** takes no arguments. For single-file models it just activates the addon using the provided path. For sharded models it opens `bare-fs.createReadStream(path)` on each file in order, pipes chunks into `addon.loadWeights({ filename, chunk, completed: false })`, and sends a final `completed: true` marker for each file before calling `addon.activate()`.
+**`load()`** takes no arguments. It activates the native addon with the stored disk path; Fabric reads a single file or the complete shard set.
 
 **Why JavaScript:**
 - High-level API ergonomics for npm consumers
@@ -404,7 +397,7 @@ graph TB
 
 #### **ModelRunner / ModelInterface (modelRunner.js)**
 
-**Responsibility:** The lifecycle `LayaDecisions` and `Reranker` share, as base classes: path checks, loading with shard streaming, one request at a time over `createJobHandler` and `exclusiveRunQueue`, output-event dispatch, cancel and unload, and the native handle's `activate` / `loadWeights` / `cancel` / `unload`. A subclass supplies how its native instance is created, how a request becomes the job's input and how its events map to outputs.
+**Responsibility:** The lifecycle `LayaDecisions` and `Reranker` share, as base classes: path checks, loading from a disk path, one request at a time over `createJobHandler` and `exclusiveRunQueue`, output-event dispatch, cancel and unload, and the native handle's `activate` / `cancel` / `unload`. A subclass supplies how its native instance is created, how a request becomes the job's input and how its events map to outputs.
 
 #### **LayaDecisions / LayaInterface (laya.js)**
 
@@ -434,7 +427,7 @@ graph TB
 
 #### **LlamaModelLoader (model-interface/LlamaModelLoader.cpp)**
 
-**Responsibility:** Everything a load needs that does not depend on what the model is used for, shared by `BertModel` and `LayaModel`: config to `common_params` with backend and split-device selection, GGUF shards and metadata, streamed weights, `initFromConfig`, the backends handle and the deferred `InitLoader` initialization.
+**Responsibility:** The disk-loading lifecycle shared by `BertModel`, `LayaModel` and `RerankModel`: config to `common_params` with backend and split-device selection, disk metadata, `common_init_from_params`, the backends handle and deferred `InitLoader` initialization. Fabric discovers and reads disk shards from the first path.
 
 Each model owns a loader (composition, no base class) and customizes the load through two hooks: `configureParams(params, metadata, ctxSizeConfigured)` before the model is created, and `onLoaded(model, ctx)` once it exists, which rejects a model by throwing. The loader is the model's last member, so the llama context it owns is freed before the members its hooks write.
 
@@ -452,7 +445,7 @@ Each model owns a loader (composition, no base class) and customizes the load th
 **Responsibility:** Relevance scores from reranker (cross-encoder) GGUFs, as llama-server's `/rerank`.
 
 - `checkConfig` (constructor): accepts only the rerank load options, with thread counts checked as for Laya
-- `configureParams`: before the weights load, rejects a GGUF whose `<arch>.pooling_type` is anything but RANK (an embedding model; many converted rerankers omit the key), and one without a classifier head (`cls.weight` or `cls.output.weight`, read from the GGUF headers with fabric's `gguf` API; a streamed model is not checked). Then sets RANK pooling and a single-pass context: `n_ctx = n_ubatch = n_batch`, up to `min(256, n_batch)` sequences in a unified KV cache
+- `configureParams`: before the weights load, rejects a GGUF whose `<arch>.pooling_type` is anything but RANK (an embedding model; many converted rerankers omit the key), and one without a classifier head (`cls.weight` or `cls.output.weight`, read from disk shard headers with fabric's `gguf` API). Then sets RANK pooling and a single-pass context: `n_ctx = n_ubatch = n_batch`, up to `min(256, n_batch)` sequences in a unified KV cache
 - `onLoaded`: allocates the batch and sets the abort callback
 - `process(vector<string>)`: the query, then the documents. Each pair is tokenized as llama-server's `format_prompt_rerank` does: the model's `rerank` chat template when it has one, filled in one pass and tokenized with special tokens parsed (in the query and document too, as llama-server does), `[BOS]query[EOS][SEP]document[EOS]` otherwise. Whole pairs are packed into passes of up to `batch_size` tokens and the sequence limit; a pair longer than either `batch_size` (`InputTokensExceedBatchSize`) or the trained context (`ContextOverflow`) is rejected before any pass. The score is the first of the pair's `n_cls_out` outputs, unnormalized; returns `RerankScores{scores}`
 
@@ -631,105 +624,26 @@ See [inference-addon-cpp Decision 4: Why Bare Runtime](https://github.com/tether
 
 ## Decision 3: Caller-Provided File Paths
 
-<details>
-<summary>⚡ TL;DR</summary>
+Models load from disk only. Pass exactly one absolute path in `files.model`:
+the single GGUF file, or the first shard (`*-00001-of-000NN.gguf`). All shards
+must already be in the same directory with their original names. Fabric reads
+the GGUF metadata, discovers the remaining shards and reads their weights.
+No JavaScript weight buffers or `.tensors.txt` file are needed.
 
-**Chose:** Caller passes absolute paths to every required file; addon streams them from disk via `bare-fs`
-**Why:** Remove the download/loader abstraction, push distribution concerns up to the application
-**Cost:** Callers must discover and order shard files themselves; no built-in P2P or HTTP loader
+Passing multiple paths or weight buffers is rejected. Migrate an old all-files
+list to `[firstShardPath]`. The `loadWeights()` API has been removed.
+This removes model-weight streaming, while generated output still streams as before.
 
-</details>
 
-### Context
+## Decision 4: Disk-Based Weight Loading
 
-Earlier versions of this package bundled a `WeightsProvider` abstraction and a `downloadWeights()` entry point that delegated to pluggable data loaders (Hyperdrive, filesystem, etc.). In practice this added an extra abstraction layer, coupled the addon to a specific loader ecosystem, and made sharded model handling implicit.
+The addon passes a path to Fabric rather than pointers to JavaScript memory.
+Metadata is read from the first GGUF file. `common_init_from_params()` loads
+both single-file and split models, so Fabric owns file discovery and weight
+reading. The addon does not expand a filename into a list of shard names.
 
-The SDK and higher-level applications already have their own download, cache, and catalog pipelines. Embedding the loader into the addon was redundant and obscured the real contract between the addon and the model files on disk.
-
-### Decision
-
-Remove the data loader / `WeightsProvider` / `downloadWeights` surface entirely. The addon now takes an explicit list of absolute file paths at construction time and streams them from disk via `bare-fs.createReadStream` when `load()` is called. Distribution (P2P, HTTP, bundled asset, cache, etc.) is entirely the caller's responsibility.
-
-```js
-const model = new GGMLBert({
-  files: { model: [tensorsTxtPath, shard1, shard2, ...] },
-  config,
-  logger,
-  opts: { stats: true }
-})
-await model.load()
-```
-
-### Rationale
-
-**Simplicity:**
-- One less abstraction layer inside the addon
-- No runtime dependency on any specific data loader
-- The contract is explicit: "give me the exact file list, in order"
-
-**Separation of Concerns:**
-- Inference engine only cares about bytes on disk
-- Distribution strategy lives where it belongs (SDK / application)
-- Easier to test and reason about model loading
-
-**Predictability:**
-- Sharded models require the caller to pass every shard and the `.tensors.txt` companion file in numerical order — no hidden discovery
-- No partial loading states caused by implicit shard expansion
-
-### Trade-offs
-- ✅ Smaller, more focused addon surface
-- ✅ No loader coupling — works with any distribution mechanism
-- ❌ Caller must discover and order sharded files themselves
-- ❌ No built-in progress reporting during the disk-stream phase
-
----
-
-## Decision 4: Incremental Buffer-Based Weight Loading
-
-<details>
-<summary>⚡ TL;DR</summary>
-
-**Chose:** Buffer-based weight loader using custom std::streambuf over JavaScript ArrayBuffers
-**Why:** Zero-copy bridge between `bare-fs` chunks and llama.cpp, supports incremental shard-by-shard loading
-**Cost:** Complex streambuf implementation, JavaScript reference lifecycle management
-
-</details>
-
-### Context
-
-ML models can be gigabytes in size. llama.cpp expects either:
-1. A file descriptor (simple but requires file on disk)
-2. A buffer (via `std::streambuf` interface)
-
-**Problem:** JavaScript reads files chunk-by-chunk via `bare-fs.createReadStream`. We want to feed those chunks into llama.cpp without first materialising the entire model in a single contiguous buffer (which would double RAM usage for multi-GB models).
-
-### Decision
-
-Use the custom `std::streambuf` over JavaScript-owned ArrayBuffers provided by `inference-addon-cpp`. `GGMLBert._streamShards()` opens `bare-fs.createReadStream(path)` on each caller-supplied file, forwards each chunk into `addon.loadWeights({ filename, chunk, completed: false })`, and sends a final `{ completed: true }` marker per file. The addon appends each chunk as a blob in the streambuf; llama.cpp then reads across blobs without allocating a contiguous buffer.
-
-### Rationale
-
-**Memory Efficiency:**
-- No need to buffer the entire model in JS before handing it to llama.cpp
-- C++ reads directly from JavaScript ArrayBuffer memory — no memcpy of multi-GB model files
-- Works naturally with the chunked output of `bare-fs.createReadStream`
-
-**Sharded Loading:**
-- Each file is delivered as a sequence of `{ filename, chunk, completed }` messages
-- llama.cpp parses the GGUF index and loads tensors lazily across all shards
-
-**Uniform Path:**
-- The same streambuf path is used whether the caller has one file or many
-- The addon does not care where the bytes came from — it only sees chunks and filenames
-
-### Trade-offs
-- ✅ No contiguous multi-GB buffers in JS or C++
-- ✅ Same path for single-file and sharded models
-- ❌ Complex streambuf implementation with seeking across blobs
-- ❌ Must keep JS buffers alive during load, defer cleanup to correct thread
-- ❌ Seeking overhead O(N) across N blobs (acceptable, rarely needed)
-
----
+The old buffer-loading implementation and its first-shard handoff worker have
+been removed. `loadWeights()` is no longer exposed by either the JS or native API.
 
 ## Decision 5: Batch Processing as Primary Use Case
 
@@ -947,7 +861,7 @@ In fabric, the scoring is part of the library (`llama_get_embeddings_seq` return
 - ✅ Reranking ships with the addon, without waiting on a fabric release
 - ✅ `BertModel` and `RerankModel` share the load path
 - ❌ A change to llama-server's pair formatting has to be mirrored by hand
-- ❌ A streamed model is not checked for a classifier head, since its tensor table is not on disk
+- ✅ Classifier-head checks include later disk shards, discovered from the first GGUF header
 - ❌ Special-token text in a query or document is parsed as special tokens in a templated pair, as in llama-server
 
 ---
