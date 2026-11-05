@@ -109,7 +109,7 @@ export function pluginRoutes(ops: PluginOperations = SDK_OPERATIONS): FastifyPlu
         },
         preHandler: async function (req, reply) {
           const { name } = req.params
-          const { model } = req.body
+          const model = req.body.model.trim()
           if (BUILTIN_PLUGINS.has(name)) {
             throw new HttpError(
               400,
@@ -117,6 +117,7 @@ export function pluginRoutes(ops: PluginOperations = SDK_OPERATIONS): FastifyPlu
               `"${name}" is a built-in plugin. Use its own endpoint.`
             )
           }
+          if (!model) throw new HttpError(400, 'missing_model', '"model" is required.')
           const entry =
             resolveModelAlias(req.server.qvac.serveConfig, model) ??
             req.server.qvac.registry.getEntry(model)

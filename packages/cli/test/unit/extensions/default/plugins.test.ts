@@ -179,6 +179,15 @@ describe('plugin invoke with --enable-admin', () => {
     assert.equal(code(res), 'missing_model')
   })
 
+  it('trims model like the other model routes', async () => {
+    const res = await invoke({ model: ' echo ', handler: 'ping' })
+    assert.equal(res.statusCode, 200, res.payload)
+    assert.equal(fake.calls[0]?.modelId, 'sdk-echo')
+    const blank = await invoke({ model: '  ', handler: 'ping' })
+    assert.equal(blank.statusCode, 400)
+    assert.equal(code(blank), 'missing_model')
+  })
+
   it('refuses unknown body fields', async () => {
     const res = await invoke({ model: 'echo', handler: 'ping', modelId: 'sdk-chat' })
     assert.equal(res.statusCode, 400)
