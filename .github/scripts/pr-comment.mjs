@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 // Posts a run's results on the dispatched branch's open PR, one comment per key, edited in place on later runs.
-// `mobile` reads devicefarm-summarize-results' test-case-details.json; `report` posts a markdown file as is.
+// `mobile` reads devicefarm-summarize-results' test-case-details.json; `report` posts every markdown file in REPORT.
 // A branch with no open PR posts nothing.
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const ICON = { passed: '✅', failed: '❌', skipped: '⏭️' }
+// Under GitHub's 65536-character comment limit, with room for the marker and the run link.
+const MAX = 60000
 
 export function mobileBody({ workflow, npm, platform, state, details, runUrl }) {
   const head = `### ${workflow}: ${npm} (${platform})`
@@ -75,8 +78,13 @@ async function main(kind, env) {
     return upsert(env.GITHUB_REPOSITORY, branch, `mobile:${workflow}:${env.NPM}:${env.PLATFORM}`, body)
   }
   if (kind === 'report') {
-    const body = `${readFileSync(env.REPORT, 'utf8')}\n\n[Run](${runUrl})`
-    return upsert(env.GITHUB_REPOSITORY, branch, `report:${env.KEY}`, body)
+    const files = existsSync(env.REPORT)
+      ? readdirSync(env.REPORT).filter((f) => f.endsWith('.md')).sort()
+      : []
+    if (!files.length) return console.log(`No markdown report in ${env.REPORT}; nothing to post.`)
+    let text = files.map((f) => readFileSync(join(env.REPORT, f), 'utf8').trim()).join('\n\n')
+    if (text.length > MAX) text = `${text.slice(0, MAX)}\n\n…truncated; the full report is in the run's artifacts.`
+    return upsert(env.GITHUB_REPOSITORY, branch, `report:${env.KEY}`, `${text}\n\n[Run](${runUrl})`)
   }
   throw new Error('usage: pr-comment.mjs mobile|report')
 }
