@@ -1,7 +1,10 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { ServerResponse } from 'node:http'
-import { buildResponseObject } from '@/serve/extensions/openai/adapters/responses-shape'
+import {
+  buildResponseObject,
+  responseUsage
+} from '@/serve/extensions/openai/adapters/responses-shape'
 import { writeBlockingResponse } from '@/serve/extensions/openai/adapters/response-writers'
 import { historyPrefixFromStoredResponse } from '@/serve/extensions/openai/schemas/responses'
 import type {
@@ -11,6 +14,28 @@ import type {
 import type { CompletionRun, ToolCall, CompletionStats } from '@qvac/sdk'
 
 const uuidSuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+describe('responseUsage', () => {
+  it('prefers summed per-round input and the drained completion count', () => {
+    assert.deepEqual(
+      responseUsage({
+        text: 'one two three',
+        stats: { promptTokens: 10, emittedTokens: 99 },
+        completionTokens: 4,
+        inputTokens: 30
+      }),
+      { input_tokens: 30, output_tokens: 4, total_tokens: 34 }
+    )
+  })
+
+  it('falls back to the stats when no counts are passed', () => {
+    assert.deepEqual(responseUsage({ text: 'hi', stats: { promptTokens: 12, emittedTokens: 3 } }), {
+      input_tokens: 12,
+      output_tokens: 3,
+      total_tokens: 15
+    })
+  })
+})
 
 describe('buildResponseObject', () => {
   it('builds text response', () => {

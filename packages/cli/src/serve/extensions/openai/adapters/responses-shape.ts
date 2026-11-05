@@ -117,6 +117,21 @@ function requiredAction(calls: FunctionCallSegment[]): Record<string, unknown> {
   }
 }
 
+export function responseUsage(
+  params: Pick<BuildResponseObjectParams, 'text' | 'stats' | 'completionTokens' | 'inputTokens'>
+): { input_tokens: number; output_tokens: number; total_tokens: number } {
+  const outputTokens =
+    typeof params.completionTokens === 'number' && Number.isFinite(params.completionTokens)
+      ? params.completionTokens
+      : completionTokensFromStats(params.text || '', params.stats)
+  const inputTokens = params.inputTokens ?? inputTokensFromStats(params.stats)
+  return {
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    total_tokens: inputTokens + outputTokens
+  }
+}
+
 export function buildResponseObject(params: BuildResponseObjectParams): Record<string, unknown> {
   const calls = responseToolCalls(params)
   const hasToolCalls = calls.length > 0
@@ -127,16 +142,7 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
         ...calls.map((call) => functionCallItem(call, 'completed'))
       ]
 
-  const outputTokens =
-    typeof params.completionTokens === 'number' && Number.isFinite(params.completionTokens)
-      ? params.completionTokens
-      : completionTokensFromStats(params.text || '', params.stats)
-  const inputTokens = params.inputTokens ?? inputTokensFromStats(params.stats)
-  const usage = {
-    input_tokens: inputTokens,
-    output_tokens: outputTokens,
-    total_tokens: inputTokens + outputTokens
-  }
+  const usage = responseUsage(params)
 
   const truncated = !hasToolCalls && params.stopReason === 'length'
   const status = hasToolCalls ? 'requires_action' : truncated ? 'incomplete' : 'completed'
