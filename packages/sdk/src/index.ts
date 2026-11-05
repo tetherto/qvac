@@ -4,6 +4,7 @@ export {
   completion,
   deleteCache,
   calcTokens,
+  type CalcTokensClientParams,
   loadModel,
   downloadAsset,
   heartbeat,

@@ -4,27 +4,49 @@ import {
   calcTokensParamsSchema,
   calcTokensResponseSchema,
   type CalcTokensParams,
-  type RPCOptions
+  type RPCOptions,
+  type Tool
 } from '@qvac/inference/surface'
 import { InvalidResponseError } from '@/utils/errors-client'
+import { validateTools, type ToolInput } from '@/utils/tool-helpers'
+
+export type CalcTokensClientParams = Omit<CalcTokensParams, 'tools'> & {
+  tools?: Tool[] | ToolInput[]
+}
 
 /**
  * Counts tokens with a loaded language model without running generation.
  *
- * `text` alone is counted raw. Supplying `history` renders the conversation
+ * `text` alone is counted raw. Supplying `history` or enabled tools renders the conversation
  * with the model's chat template; `text`, when present, becomes its final user
- * turn. Tools are counted as part of that rendered prompt.
+ * turn. Tools are counted only when the model was loaded with `modelConfig.tools: true`.
+ * Attachments are not supported.
+ *
+ * @param params - Loaded model ID and at least one prompt source: `text` or non-empty `history`.
+ * @param options - RPC transport options.
+ * @returns The number of tokens in the prompt the model would receive.
+ * @throws {RequestValidationFailedError} If the request is invalid.
+ * @throws {ModelNotFoundError} If `modelId` is not loaded.
+ * @throws {ModelOperationNotSupportedError} If the loaded model is not a language model.
+ * @throws {InvalidResponseError} If the worker returns a malformed result.
  */
-export async function calcTokens(params: CalcTokensParams, options?: RPCOptions): Promise<number> {
+export async function calcTokens(
+  params: CalcTokensClientParams,
+  options?: RPCOptions
+): Promise<number> {
   return createCalcTokensCall(params, options)
 }
 
 export async function createCalcTokensCall(
-  params: CalcTokensParams,
+  params: CalcTokensClientParams,
   options?: RPCOptions,
   sendRequest: typeof send = send
 ): Promise<number> {
-  const input = parseClientInput(calcTokensParamsSchema, params)
+  const tools = params.tools ? validateTools(params.tools).tools : undefined
+  const input = parseClientInput(calcTokensParamsSchema, {
+    ...params,
+    ...(tools !== undefined && { tools })
+  })
   const response = await sendRequest({ ...input, type: 'calcTokens' }, options)
   if (response.type !== 'calcTokens') throw new InvalidResponseError('calcTokens')
   const parsed = calcTokensResponseSchema.safeParse(response)

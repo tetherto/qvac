@@ -1037,15 +1037,9 @@ data class CalcTokensRequestTextToolsItem(
 data class CalcTokensRequestTextHistoryItem(
     @SerialName("role") val `role`: String,
     @SerialName("content") val `content`: String? = null,
-    @SerialName("attachments") val `attachments`: List<CalcTokensRequestTextHistoryItemAttachmentsItem>? = null,
     @SerialName("toolCalls") val `toolCalls`: List<CalcTokensRequestTextHistoryItemToolCallsItem>? = null,
     @SerialName("toolCallId") val `toolCallId`: String? = null,
     @SerialName("toolName") val `toolName`: String? = null,
-)
-
-@Serializable
-data class CalcTokensRequestTextHistoryItemAttachmentsItem(
-    @SerialName("path") val `path`: String,
 )
 
 @Serializable
@@ -1080,15 +1074,9 @@ data class CalcTokensRequestHistoryToolsItem(
 data class CalcTokensRequestHistoryHistoryItem(
     @SerialName("role") val `role`: String,
     @SerialName("content") val `content`: String? = null,
-    @SerialName("attachments") val `attachments`: List<CalcTokensRequestHistoryHistoryItemAttachmentsItem>? = null,
     @SerialName("toolCalls") val `toolCalls`: List<CalcTokensRequestHistoryHistoryItemToolCallsItem>? = null,
     @SerialName("toolCallId") val `toolCallId`: String? = null,
     @SerialName("toolName") val `toolName`: String? = null,
-)
-
-@Serializable
-data class CalcTokensRequestHistoryHistoryItemAttachmentsItem(
-    @SerialName("path") val `path`: String,
 )
 
 @Serializable

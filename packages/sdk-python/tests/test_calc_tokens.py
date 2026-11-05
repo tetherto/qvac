@@ -51,7 +51,9 @@ async def test_calc_tokens_sends_nested_tool_defaults() -> None:
                 {
                     "name": "search",
                     "description": "Search for a document.",
-                    "parameters": {"properties": {}},
+                    "parameters": {
+                        "properties": {"query": {"type": "string", "default": None}}
+                    },
                 }
             ],
         }
@@ -67,7 +69,10 @@ async def test_calc_tokens_sends_nested_tool_defaults() -> None:
                 "type": "function",
                 "name": "search",
                 "description": "Search for a document.",
-                "parameters": {"type": "object", "properties": {}},
+                "parameters": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string", "default": None}},
+                },
             }
         ],
         "type": "calcTokens",
@@ -78,4 +83,20 @@ def test_calc_tokens_rejects_unknown_fields() -> None:
     with pytest.raises(ValidationError):
         CalcTokensRequest.model_validate(
             {"modelId": "llm", "text": "Hello", "tool": []}
+        )
+
+
+def test_calc_tokens_rejects_attachments() -> None:
+    with pytest.raises(ValidationError):
+        CalcTokensRequest.model_validate(
+            {
+                "modelId": "llm",
+                "history": [
+                    {
+                        "role": "user",
+                        "content": "Describe this image",
+                        "attachments": [{"path": "/tmp/image.png"}],
+                    }
+                ],
+            }
         )

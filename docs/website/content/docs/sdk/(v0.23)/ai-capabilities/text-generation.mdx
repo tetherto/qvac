@@ -20,7 +20,8 @@ Output is generated based on the full sequence of messages provided in `history`
 Use the following sequence of function calls:
 1. [`loadModel()`](/sdk/reference/api#loadmodel)
 2. [`completion()`](/sdk/reference/api#completion)
-3. [`unloadModel()`](/sdk/reference/api#unloadmodel)
+3. [`calcTokens()`](/sdk/reference/api#calctokens)
+4. [`unloadModel()`](/sdk/reference/api#unloadmodel)
 
 For how to use each function, see [SDK — API reference](/sdk/reference/api/).
 
@@ -298,7 +299,7 @@ const tokens = await calcTokens({
 })
 ```
 
-`text` by itself is counted as raw text. When `history` is present, the SDK renders it with the loaded model's chat template, adds the model's configured system prompt when the history has none, and appends `text` as the final user turn. You can also pass `tools` to include the tool definitions the model would see. The call returns a number and can run while the model is generating.
+`text` by itself is counted as raw text. When `history` or enabled `tools` are present, the SDK renders the prompt with the loaded model's chat template, adds the model's configured system prompt when the history has none, and appends `text` as the final user turn. Load the model with `modelConfig: { tools: true }` for tool definitions to be counted; otherwise they are ignored and text-only input remains raw. Attachments are not supported. The call returns a number and can run while the model is generating.
 
 ### KV cache
 

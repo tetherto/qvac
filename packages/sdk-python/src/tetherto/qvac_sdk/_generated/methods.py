@@ -123,7 +123,6 @@ async def assess_model_fit(
     transport: Transport, params: AssessModelFitRequest
 ) -> AssessModelFitResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "assessModelFit")
     return AssessModelFitResponse.model_validate(await transport.call(payload))
 
 
@@ -131,7 +130,6 @@ async def audio_edit_stream(
     transport: Transport, params: AudioEditStreamRequest
 ) -> AsyncIterator[AudioEditStreamResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "audioEditStream")
     async for chunk in transport.call_stream(payload):
         yield AudioEditStreamResponse.model_validate(chunk)
 
@@ -140,7 +138,6 @@ async def audio_gen_stream(
     transport: Transport, params: AudioGenStreamRequest
 ) -> AsyncIterator[AudioGenStreamResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "audioGenStream")
     async for chunk in transport.call_stream(payload):
         yield AudioGenStreamResponse.model_validate(chunk)
 
@@ -149,7 +146,6 @@ async def audio_understand(
     transport: Transport, params: AudioUnderstandRequest
 ) -> AsyncIterator[AudioUnderstandResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "audioUnderstand")
     async for chunk in transport.call_stream(payload):
         yield AudioUnderstandResponse.model_validate(chunk)
 
@@ -158,7 +154,6 @@ async def batch_completion_stream(
     transport: Transport, params: BatchCompletionStreamRequest
 ) -> AsyncIterator[BatchCompletionStreamResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "batchCompletionStream")
     async for chunk in transport.call_stream(payload):
         yield BatchCompletionStreamResponse.model_validate(chunk)
 
@@ -167,7 +162,6 @@ async def bci_transcribe(
     transport: Transport, params: BciTranscribeRequest
 ) -> AsyncIterator[BciTranscribeResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "bciTranscribe")
     async for chunk in transport.call_stream(payload):
         yield BciTranscribeResponse.model_validate(chunk)
 
@@ -176,7 +170,6 @@ async def bci_transcribe_stream(
     transport: Transport, params: BciTranscribeStreamRequest, up: AsyncIterable[bytes]
 ) -> AsyncIterator[BciTranscribeStreamResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "bciTranscribeStream")
     async for chunk in transport.call_duplex(payload, up):
         yield BciTranscribeStreamResponse.model_validate(chunk)
 
@@ -184,14 +177,12 @@ async def bci_transcribe_stream(
 async def calc_tokens(
     transport: Transport, params: CalcTokensRequest
 ) -> CalcTokensResponse:
-    payload = params.model_dump(mode="json", by_alias=True, exclude_none=True)
-    payload.setdefault("type", "calcTokens")
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     return CalcTokensResponse.model_validate(await transport.call(payload))
 
 
 async def cancel(transport: Transport, params: CancelRequest) -> CancelResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "cancel")
     return CancelResponse.model_validate(await transport.call(payload))
 
 
@@ -199,7 +190,6 @@ async def classify(
     transport: Transport, params: ClassifyRequest
 ) -> AsyncIterator[ClassifyResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "classify")
     async for chunk in transport.call_stream(payload):
         yield ClassifyResponse.model_validate(chunk)
 
@@ -208,7 +198,6 @@ async def completion_orchestrate(
     transport: Transport, params: CompletionOrchestrateRequest, up: AsyncIterable[bytes]
 ) -> AsyncIterator[CompletionOrchestrateResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "completionOrchestrate")
     async for chunk in transport.call_duplex(payload, up):
         yield CompletionOrchestrateResponse.model_validate(chunk)
 
@@ -217,14 +206,12 @@ async def completion_stream(
     transport: Transport, params: CompletionStreamRequest
 ) -> AsyncIterator[CompletionStreamResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "completionStream")
     async for chunk in transport.call_stream(payload):
         yield CompletionStreamResponse.model_validate(chunk)
 
 
 async def decide(transport: Transport, params: DecideRequest) -> DecideResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "decide")
     return DecideResponse.model_validate(await transport.call(payload))
 
 
@@ -232,7 +219,6 @@ async def delete_cache(
     transport: Transport, params: DeleteCacheRequest
 ) -> DeleteCacheResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "deleteCache")
     return DeleteCacheResponse.model_validate(await transport.call(payload))
 
 
@@ -240,7 +226,6 @@ async def diffusion_stream(
     transport: Transport, params: DiffusionStreamRequest
 ) -> AsyncIterator[DiffusionStreamResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "diffusionStream")
     async for chunk in transport.call_stream(payload):
         yield DiffusionStreamResponse.model_validate(chunk)
 
@@ -249,7 +234,6 @@ async def discover_rpc_servers(
     transport: Transport, params: DiscoverRpcServersRequest
 ) -> DiscoverRpcServersResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "discoverRpcServers")
     return DiscoverRpcServersResponse.model_validate(await transport.call(payload))
 
 
@@ -257,7 +241,6 @@ async def download_asset(
     transport: Transport, params: DownloadAssetRequest
 ) -> DownloadAssetResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "downloadAsset")
     return DownloadAssetResponse.model_validate(await transport.call(payload))
 
 
@@ -270,7 +253,6 @@ async def download_asset_with_progress(
     # chunk if the server ends up replying unary instead (e.g. an
     # operation that doesn't support progress for this method).
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "downloadAsset")
     payload["withProgress"] = True
     async for chunk in transport.call_stream(payload):
         if chunk.get("type") == "modelProgress":
@@ -281,13 +263,11 @@ async def download_asset_with_progress(
 
 async def embed(transport: Transport, params: EmbedRequest) -> EmbedResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "embed")
     return EmbedResponse.model_validate(await transport.call(payload))
 
 
 async def finetune(transport: Transport, params: FinetuneRequest) -> FinetuneResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "finetune")
     return FinetuneResponse.model_validate(await transport.call(payload))
 
 
@@ -300,7 +280,6 @@ async def finetune_with_progress(
     # chunk if the server ends up replying unary instead (e.g. an
     # operation that doesn't support progress for this method).
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "finetune")
     payload["withProgress"] = True
     async for chunk in transport.call_stream(payload):
         if chunk.get("type") == "finetune:progress":
@@ -313,7 +292,6 @@ async def get_loaded_model_info(
     transport: Transport, params: GetLoadedModelInfoRequest
 ) -> GetLoadedModelInfoResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "getLoadedModelInfo")
     return GetLoadedModelInfoResponse.model_validate(await transport.call(payload))
 
 
@@ -321,7 +299,6 @@ async def get_model_info(
     transport: Transport, params: GetModelInfoRequest
 ) -> GetModelInfoResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "getModelInfo")
     return GetModelInfoResponse.model_validate(await transport.call(payload))
 
 
@@ -329,7 +306,6 @@ async def get_system_resources(
     transport: Transport, params: GetSystemResourcesRequest
 ) -> GetSystemResourcesResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "getSystemResources")
     return GetSystemResourcesResponse.model_validate(await transport.call(payload))
 
 
@@ -337,7 +313,6 @@ async def heartbeat(
     transport: Transport, params: HeartbeatRequest
 ) -> HeartbeatResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "heartbeat")
     return HeartbeatResponse.model_validate(await transport.call(payload))
 
 
@@ -345,7 +320,6 @@ async def load_model(
     transport: Transport, params: LoadModelRequest
 ) -> LoadModelResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "loadModel")
     return LoadModelResponse.model_validate(await transport.call(payload))
 
 
@@ -358,7 +332,6 @@ async def load_model_with_progress(
     # chunk if the server ends up replying unary instead (e.g. an
     # operation that doesn't support progress for this method).
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "loadModel")
     payload["withProgress"] = True
     async for chunk in transport.call_stream(payload):
         if chunk.get("type") == "modelProgress":
@@ -371,7 +344,6 @@ async def logging_stream(
     transport: Transport, params: LoggingStreamRequest
 ) -> AsyncIterator[LoggingStreamResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "loggingStream")
     async for chunk in transport.call_stream(payload):
         yield LoggingStreamResponse.model_validate(chunk)
 
@@ -380,7 +352,6 @@ async def model_registry_get_model(
     transport: Transport, params: ModelRegistryGetModelRequest
 ) -> ModelRegistryGetModelResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "modelRegistryGetModel")
     return ModelRegistryGetModelResponse.model_validate(await transport.call(payload))
 
 
@@ -388,7 +359,6 @@ async def model_registry_list(
     transport: Transport, params: ModelRegistryListRequest
 ) -> ModelRegistryListResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "modelRegistryList")
     return ModelRegistryListResponse.model_validate(await transport.call(payload))
 
 
@@ -396,7 +366,6 @@ async def model_registry_search(
     transport: Transport, params: ModelRegistrySearchRequest
 ) -> ModelRegistrySearchResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "modelRegistrySearch")
     return ModelRegistrySearchResponse.model_validate(await transport.call(payload))
 
 
@@ -404,7 +373,6 @@ async def ocr_stream(
     transport: Transport, params: OcrStreamRequest
 ) -> AsyncIterator[OcrStreamResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "ocrStream")
     async for chunk in transport.call_stream(payload):
         yield OcrStreamResponse.model_validate(chunk)
 
@@ -413,7 +381,6 @@ async def plugin_invoke(
     transport: Transport, params: PluginInvokeRequest
 ) -> PluginInvokeResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "pluginInvoke")
     return PluginInvokeResponse.model_validate(await transport.call(payload))
 
 
@@ -421,14 +388,12 @@ async def plugin_invoke_stream(
     transport: Transport, params: PluginInvokeStreamRequest
 ) -> AsyncIterator[PluginInvokeStreamResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "pluginInvokeStream")
     async for chunk in transport.call_stream(payload):
         yield PluginInvokeStreamResponse.model_validate(chunk)
 
 
 async def rag(transport: Transport, params: RagRequest) -> RagResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "rag")
     return RagResponse.model_validate(await transport.call(payload))
 
 
@@ -441,7 +406,6 @@ async def rag_with_progress(
     # chunk if the server ends up replying unary instead (e.g. an
     # operation that doesn't support progress for this method).
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "rag")
     payload["withProgress"] = True
     async for chunk in transport.call_stream(payload):
         if chunk.get("type") == "rag:progress":
@@ -452,13 +416,11 @@ async def rag_with_progress(
 
 async def rerank(transport: Transport, params: RerankRequest) -> RerankResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "rerank")
     return RerankResponse.model_validate(await transport.call(payload))
 
 
 async def resume(transport: Transport, params: ResumeRequest) -> ResumeResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "resume")
     return ResumeResponse.model_validate(await transport.call(payload))
 
 
@@ -466,13 +428,11 @@ async def start_rpc_server(
     transport: Transport, params: StartRpcServerRequest
 ) -> StartRpcServerResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "startRpcServer")
     return StartRpcServerResponse.model_validate(await transport.call(payload))
 
 
 async def state(transport: Transport, params: StateRequest) -> StateResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "state")
     return StateResponse.model_validate(await transport.call(payload))
 
 
@@ -480,13 +440,11 @@ async def stop_rpc_server(
     transport: Transport, params: StopRpcServerRequest
 ) -> StopRpcServerResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "stopRpcServer")
     return StopRpcServerResponse.model_validate(await transport.call(payload))
 
 
 async def suspend(transport: Transport, params: SuspendRequest) -> SuspendResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "suspend")
     return SuspendResponse.model_validate(await transport.call(payload))
 
 
@@ -494,7 +452,6 @@ async def text_to_speech(
     transport: Transport, params: TextToSpeechRequest
 ) -> AsyncIterator[TextToSpeechResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "textToSpeech")
     async for chunk in transport.call_stream(payload):
         yield TextToSpeechResponse.model_validate(chunk)
 
@@ -503,7 +460,6 @@ async def text_to_speech_stream(
     transport: Transport, params: TextToSpeechStreamRequest, up: AsyncIterable[bytes]
 ) -> AsyncIterator[TextToSpeechStreamResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "textToSpeechStream")
     async for chunk in transport.call_duplex(payload, up):
         yield TextToSpeechStreamResponse.model_validate(chunk)
 
@@ -512,7 +468,6 @@ async def transcribe(
     transport: Transport, params: TranscribeRequest
 ) -> AsyncIterator[TranscribeResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "transcribe")
     async for chunk in transport.call_stream(payload):
         yield TranscribeResponse.model_validate(chunk)
 
@@ -521,7 +476,6 @@ async def transcribe_stream(
     transport: Transport, params: TranscribeStreamRequest, up: AsyncIterable[bytes]
 ) -> AsyncIterator[TranscribeStreamResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "transcribeStream")
     async for chunk in transport.call_duplex(payload, up):
         yield TranscribeStreamResponse.model_validate(chunk)
 
@@ -530,7 +484,6 @@ async def translate(
     transport: Transport, params: TranslateRequest
 ) -> AsyncIterator[TranslateResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "translate")
     async for chunk in transport.call_stream(payload):
         yield TranslateResponse.model_validate(chunk)
 
@@ -539,7 +492,6 @@ async def unload_model(
     transport: Transport, params: UnloadModelRequest
 ) -> UnloadModelResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "unloadModel")
     return UnloadModelResponse.model_validate(await transport.call(payload))
 
 
@@ -547,7 +499,6 @@ async def upscale_stream(
     transport: Transport, params: UpscaleStreamRequest
 ) -> AsyncIterator[UpscaleStreamResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "upscaleStream")
     async for chunk in transport.call_stream(payload):
         yield UpscaleStreamResponse.model_validate(chunk)
 
@@ -556,7 +507,6 @@ async def vector_index(
     transport: Transport, params: VectorIndexRequest
 ) -> VectorIndexResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "vectorIndex")
     return VectorIndexResponse.model_validate(await transport.call(payload))
 
 
@@ -564,7 +514,6 @@ async def video_stream(
     transport: Transport, params: VideoStreamRequest
 ) -> AsyncIterator[VideoStreamResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "videoStream")
     async for chunk in transport.call_stream(payload):
         yield VideoStreamResponse.model_validate(chunk)
 
@@ -573,7 +522,6 @@ async def world_scene_stream(
     transport: Transport, params: WorldSceneStreamRequest
 ) -> AsyncIterator[WorldSceneStreamResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "worldSceneStream")
     async for chunk in transport.call_stream(payload):
         yield WorldSceneStreamResponse.model_validate(chunk)
 
@@ -582,7 +530,6 @@ async def world_step_stream(
     transport: Transport, params: WorldStepStreamRequest
 ) -> AsyncIterator[WorldStepStreamResponse]:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
-    payload.setdefault("type", "worldStepStream")
     async for chunk in transport.call_stream(payload):
         yield WorldStepStreamResponse.model_validate(chunk)
 

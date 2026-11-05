@@ -3770,7 +3770,7 @@
               "description": "Loaded language model to tokenize with."
             },
             "tools": {
-              "description": "Tools to include in the rendered prompt.",
+              "description": "Tools to include in the rendered prompt when the model was loaded with `modelConfig.tools: true`.",
               "type": "array",
               "items": {
                 "type": "object",
@@ -3909,21 +3909,6 @@
                       }
                     ]
                   },
-                  "attachments": {
-                    "description": "Optional file attachments for multimodal models.",
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "path": {
-                          "type": "string",
-                          "description": "Absolute or resolvable path to the attachment file (e.g., image for multimodal models)."
-                        }
-                      },
-                      "required": ["path"],
-                      "title": "CalcTokensRequestTextHistoryItemAttachmentsItem"
-                    }
-                  },
                   "toolCalls": {
                     "description": "Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
                     "type": "array",
@@ -3963,9 +3948,10 @@
                   }
                 },
                 "required": ["role"],
+                "additionalProperties": false,
                 "title": "CalcTokensRequestTextHistoryItem"
               },
-              "description": "Text-only conversation to render with the loaded model chat template. Attachments are not supported by token counting."
+              "description": "Text-only conversation to render with the loaded model chat template."
             },
             "type": {
               "type": "string",
@@ -3985,7 +3971,7 @@
               "description": "Loaded language model to tokenize with."
             },
             "tools": {
-              "description": "Tools to include in the rendered prompt.",
+              "description": "Tools to include in the rendered prompt when the model was loaded with `modelConfig.tools: true`.",
               "type": "array",
               "items": {
                 "type": "object",
@@ -4125,21 +4111,6 @@
                       }
                     ]
                   },
-                  "attachments": {
-                    "description": "Optional file attachments for multimodal models.",
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "path": {
-                          "type": "string",
-                          "description": "Absolute or resolvable path to the attachment file (e.g., image for multimodal models)."
-                        }
-                      },
-                      "required": ["path"],
-                      "title": "CalcTokensRequestHistoryHistoryItemAttachmentsItem"
-                    }
-                  },
                   "toolCalls": {
                     "description": "Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
                     "type": "array",
@@ -4179,9 +4150,10 @@
                   }
                 },
                 "required": ["role"],
+                "additionalProperties": false,
                 "title": "CalcTokensRequestHistoryHistoryItem"
               },
-              "description": "Text-only conversation to render with the loaded model chat template. Attachments are not supported by token counting."
+              "description": "Text-only conversation to render with the loaded model chat template."
             },
             "type": {
               "type": "string",

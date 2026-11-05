@@ -107,9 +107,18 @@ test('calcTokens contract requires text or a non-empty history', (t) => {
       tool: []
     }).success
   )
+  t.absent(
+    calcTokensRequestSchema.safeParse({
+      type: 'calcTokens',
+      modelId: 'llm',
+      history: [
+        { role: 'user', content: 'Describe this image', attachments: [{ path: '/tmp/image.png' }] }
+      ]
+    }).success
+  )
 })
 
-test('calcTokens drops tools when the model has tools disabled but keeps the system prompt', async (t) => {
+test('calcTokens drops tools without switching raw text to the chat template', async (t) => {
   let input: unknown
   fixture(
     t,
@@ -135,9 +144,33 @@ test('calcTokens drops tools when the model has tools disabled but keeps the sys
     ]
   })
 
+  t.alike(input, { text: 'Hello' })
+})
+
+test('calcTokens renders tools and the configured system prompt when tools are enabled', async (t) => {
+  let input: unknown
+  fixture(t, 'tools-enabled', async (value) => {
+    input = value
+    return 6
+  })
+  const tool = {
+    type: 'function' as const,
+    name: 'weather',
+    description: 'Get weather',
+    parameters: { type: 'object' as const, properties: {} }
+  }
+
+  await calcTokens({
+    type: 'calcTokens',
+    modelId: 'tools-enabled',
+    text: 'Hello',
+    tools: [tool]
+  })
+
   t.alike(input, {
     text: 'Hello',
-    history: [{ role: 'system', content: 'Configured system prompt' }]
+    history: [{ role: 'system', content: 'Configured system prompt' }],
+    tools: [tool]
   })
 })
 

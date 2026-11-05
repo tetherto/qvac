@@ -3661,15 +3661,6 @@ class CalcTokensRequestTextToolsItem(GeneratedBaseModel):
     ]
 
 
-class CalcTokensRequestTextHistoryItemAttachmentsItem(GeneratedBaseModel):
-    path: Annotated[
-        str,
-        Field(
-            description="Absolute or resolvable path to the attachment file (e.g., image for multimodal models)."
-        ),
-    ]
-
-
 class CalcTokensRequestTextHistoryItemToolCallsItemArguments(RootModel[dict[str, Any]]):
     root: Annotated[
         dict[str, Any],
@@ -3698,6 +3689,9 @@ class CalcTokensRequestTextHistoryItemToolCallsItem(GeneratedBaseModel):
 
 
 class CalcTokensRequestTextHistoryItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
     role: Annotated[
         str,
         Field(
@@ -3709,10 +3703,6 @@ class CalcTokensRequestTextHistoryItem(GeneratedBaseModel):
         Field(
             description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
         ),
-    ] = None
-    attachments: Annotated[
-        list[CalcTokensRequestTextHistoryItemAttachmentsItem] | None,
-        Field(description="Optional file attachments for multimodal models."),
     ] = None
     tool_calls: Annotated[
         list[CalcTokensRequestTextHistoryItemToolCallsItem] | None,
@@ -3751,7 +3741,9 @@ class CalcTokensRequestText(GeneratedBaseModel):
     ]
     tools: Annotated[
         list[CalcTokensRequestTextToolsItem] | None,
-        Field(description="Tools to include in the rendered prompt."),
+        Field(
+            description="Tools to include in the rendered prompt when the model was loaded with `modelConfig.tools: true`."
+        ),
     ] = None
     text: Annotated[
         str,
@@ -3760,7 +3752,7 @@ class CalcTokensRequestText(GeneratedBaseModel):
     history: Annotated[
         list[CalcTokensRequestTextHistoryItem] | None,
         Field(
-            description="Text-only conversation to render with the loaded model chat template. Attachments are not supported by token counting."
+            description="Text-only conversation to render with the loaded model chat template."
         ),
     ] = None
     type: Literal["calcTokens"] = "calcTokens"
@@ -3855,15 +3847,6 @@ class CalcTokensRequestHistoryToolsItem(GeneratedBaseModel):
     ]
 
 
-class CalcTokensRequestHistoryHistoryItemAttachmentsItem(GeneratedBaseModel):
-    path: Annotated[
-        str,
-        Field(
-            description="Absolute or resolvable path to the attachment file (e.g., image for multimodal models)."
-        ),
-    ]
-
-
 class CalcTokensRequestHistoryHistoryItemToolCallsItemArguments(
     RootModel[dict[str, Any]]
 ):
@@ -3894,6 +3877,9 @@ class CalcTokensRequestHistoryHistoryItemToolCallsItem(GeneratedBaseModel):
 
 
 class CalcTokensRequestHistoryHistoryItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
     role: Annotated[
         str,
         Field(
@@ -3905,10 +3891,6 @@ class CalcTokensRequestHistoryHistoryItem(GeneratedBaseModel):
         Field(
             description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
         ),
-    ] = None
-    attachments: Annotated[
-        list[CalcTokensRequestHistoryHistoryItemAttachmentsItem] | None,
-        Field(description="Optional file attachments for multimodal models."),
     ] = None
     tool_calls: Annotated[
         list[CalcTokensRequestHistoryHistoryItemToolCallsItem] | None,
@@ -3947,7 +3929,9 @@ class CalcTokensRequestHistory(GeneratedBaseModel):
     ]
     tools: Annotated[
         list[CalcTokensRequestHistoryToolsItem] | None,
-        Field(description="Tools to include in the rendered prompt."),
+        Field(
+            description="Tools to include in the rendered prompt when the model was loaded with `modelConfig.tools: true`."
+        ),
     ] = None
     text: Annotated[
         str | None,
@@ -3956,7 +3940,7 @@ class CalcTokensRequestHistory(GeneratedBaseModel):
     history: Annotated[
         list[CalcTokensRequestHistoryHistoryItem],
         Field(
-            description="Text-only conversation to render with the loaded model chat template. Attachments are not supported by token counting.",
+            description="Text-only conversation to render with the loaded model chat template.",
             min_length=1,
         ),
     ]

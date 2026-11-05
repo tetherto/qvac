@@ -1,4 +1,5 @@
 import test from 'brittle'
+import { z } from 'zod'
 import { createCalcTokensCall } from '@/client/api/calc-tokens'
 import { InvalidResponseError } from '@/utils/errors-client'
 
@@ -17,6 +18,46 @@ test('calcTokens sends the prompt and returns the non-negative integer count', a
 
   t.is(tokens, 12)
   t.alike(request, { ...params, type: 'calcTokens' })
+})
+
+test('calcTokens converts Zod tool inputs like completion', async (t) => {
+  let request: unknown
+  await createCalcTokensCall(
+    {
+      modelId: 'llm',
+      text: 'Weather in Paris?',
+      tools: [
+        {
+          name: 'weather',
+          description: 'Get weather',
+          parameters: z.object({ city: z.string() })
+        }
+      ]
+    },
+    undefined,
+    async (input) => {
+      request = input
+      return { type: 'calcTokens', tokens: 12 }
+    }
+  )
+
+  t.alike(request, {
+    type: 'calcTokens',
+    modelId: 'llm',
+    text: 'Weather in Paris?',
+    tools: [
+      {
+        type: 'function',
+        name: 'weather',
+        description: 'Get weather',
+        parameters: {
+          type: 'object',
+          properties: { city: { type: 'string' } },
+          required: ['city']
+        }
+      }
+    ]
+  })
 })
 
 test('calcTokens rejects invalid input before RPC', async (t) => {

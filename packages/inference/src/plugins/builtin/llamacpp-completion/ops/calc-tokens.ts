@@ -13,11 +13,16 @@ interface TokenCountingModel {
 
 export async function calcTokens(request: CalcTokensRequest): Promise<CalcTokensResponse> {
   const modelConfig = getModelConfig(request.modelId)
-  const rendersPrompt = request.history !== undefined || (request.tools?.length ?? 0) > 0
-  const history = rendersPrompt
-    ? seedConfiguredSystemPrompt(request.history ?? [], modelConfig)
-    : undefined
   const toolsEnabled = (modelConfig as { tools?: boolean }).tools === true
+  const rendersTools = toolsEnabled && (request.tools?.length ?? 0) > 0
+  const rendersPrompt = request.history !== undefined || rendersTools
+  const requestHistory = request.history?.map((message) => ({
+    ...message,
+    content: message.content ?? ''
+  }))
+  const history = rendersPrompt
+    ? seedConfiguredSystemPrompt(requestHistory ?? [], modelConfig)
+    : undefined
   const deferred = toolsEnabled ? resolveDeferredTools(request.tools, history ?? []) : null
   const tools: Tool[] | undefined = toolsEnabled
     ? (deferred?.toolsToRender ?? request.tools?.map(toWireTool))

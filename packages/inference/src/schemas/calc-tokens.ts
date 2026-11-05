@@ -1,15 +1,18 @@
 import { z } from 'zod'
-import { historyMessageSchema } from '@/schemas/completion-stream'
+import { historyMessageWithoutAttachmentsSchema } from '@/schemas/completion-stream'
 import { toolSchema } from '@/schemas/tools'
 
 const modelId = z.string().min(1).describe('Loaded language model to tokenize with.')
 const text = z.string().describe('Raw text, or the final user turn when history is present.')
 const history = z
-  .array(historyMessageSchema)
+  .array(historyMessageWithoutAttachmentsSchema)
+  .describe('Text-only conversation to render with the loaded model chat template.')
+const tools = z
+  .array(toolSchema)
+  .optional()
   .describe(
-    'Text-only conversation to render with the loaded model chat template. Attachments are not supported by token counting.'
+    'Tools to include in the rendered prompt when the model was loaded with `modelConfig.tools: true`.'
   )
-const tools = z.array(toolSchema).optional().describe('Tools to include in the rendered prompt.')
 
 const commonFields = {
   modelId,
