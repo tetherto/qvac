@@ -61,6 +61,22 @@ export function cxxRuntimeViolations({ needed, undefinedSymbols }) {
   }
 }
 
+/** XRT exchanges libstdc++ types with XDNA; this module must use its system ABI. */
+export function xdnaRuntimeViolations({ needed, undefinedSymbols }) {
+  return {
+    needed: [
+      ...['libstdc++.so.6', 'libxrt_coreutil.so.2']
+        .filter((lib) => !needed.includes(lib))
+        .map((lib) => `missing ${lib}`),
+      ...needed.filter((lib) => /^libc\+\+(abi)?\.so/.test(lib))
+    ],
+    // XDNA embeds ggml-base and must not bind to Fabric's libc++ objects.
+    symbols: undefinedSymbols.filter(
+      (symbol) => /^(ggml|gguf)_/.test(symbol) || /_ZNK?St3__1/.test(symbol)
+    )
+  }
+}
+
 export function formatViolations(file, { needed, symbols }, shown = 10) {
   const lines = [file]
   if (needed.length > 0) lines.push(`  NEEDED: ${needed.join(', ')}`)

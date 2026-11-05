@@ -4,6 +4,15 @@ All notable changes to this package will be documented here. The format
 follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the
 project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Reject encoded images whose byte length would truncate when cast to `int`,
+  and raw bitmaps whose width × height × bpp overflows `size_t`, instead of
+  wrapping into an undersized `cv::Mat`. Empty encoded buffers are rejected
+  before OpenCV `imdecode`.
+
 ## [0.32.0] - 2026-11-04
 
 ### Breaking
