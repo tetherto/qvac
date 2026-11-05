@@ -24,7 +24,8 @@ const chunkSchema = z
   .object({
     id: z.string().min(1).optional(),
     content: z.string(),
-    metadataJson: z.string().optional(),
+    // The encoding stores '' as absent, so it could not be read back.
+    metadataJson: z.string().min(1).optional(),
     embedding: vectorSchema,
     spaceId: z.string().min(1)
   })

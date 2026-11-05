@@ -238,6 +238,17 @@ test('ingest validates everything before committing anything', async (t) => {
   )
   await rejectsWithCode(
     t,
+    rag.ingest({
+      namespace: 'ns',
+      documents: [
+        { id: 'm', chunks: [{ content: 'x', metadataJson: '', embedding: [1, 0, 0], spaceId }] }
+      ]
+    }),
+    ERR_CODES.INVALID_INPUT,
+    'empty chunk metadataJson'
+  )
+  await rejectsWithCode(
+    t,
     rag.ingest({ namespace: 'missing', documents: [doc('a', spaceId, [['x', [1, 0, 0]]])] }),
     ERR_CODES.NAMESPACE_NOT_FOUND,
     'unknown namespace'

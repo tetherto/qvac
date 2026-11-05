@@ -73,7 +73,7 @@ Creates a namespace pinned to one embedding space and returns `{ name, spaceId, 
 
 ### `ingest({ namespace, documents })`
 
-Each document is `{ id, metadata?, chunks }`, and each chunk is `{ id?, content, metadataJson?, embedding, spaceId }`. A chunk's `spaceId` must equal the namespace's, and its embedding must have the space's dimensions. Chunk IDs default to `<documentId>:<ordinal>`.
+Each document is `{ id, metadata?, chunks }`, and each chunk is `{ id?, content, metadataJson?, embedding, spaceId }`. A chunk's `spaceId` must equal the namespace's, and its embedding must have the space's dimensions. Chunk IDs default to `<documentId>:<ordinal>`. Omit `metadataJson` rather than passing an empty string, which is rejected.
 
 - The whole call is validated before anything is written.
 - Each document commits in its own HyperDB batch. If a later document fails, earlier ones stay committed.
