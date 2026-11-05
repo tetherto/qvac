@@ -7,6 +7,7 @@
 #include <utility>
 
 #include <inference-addon-cpp/Errors.hpp>
+#include <stb_image.h>
 
 #include "BridgeDepthGraph.hpp"
 #include "model-interface/GgmlBackend.hpp"
@@ -22,6 +23,22 @@ using qvac_errors::general_error::InvalidArgument;
 void check(bool condition, const std::string& message) {
   if (!condition)
     throw StatusError(InvalidArgument, "BridgeDepth: " + message);
+}
+
+void checkSize(uint32_t width, uint32_t height) {
+  check(
+      width >= static_cast<uint32_t>(MIN_SIDE) &&
+          height >= static_cast<uint32_t>(MIN_SIDE),
+      "image sides must be at least " + std::to_string(MIN_SIDE) + " pixels");
+  check(
+      width <= MAX_SIDE && height <= MAX_SIDE,
+      "image sides must be at most " + std::to_string(MAX_SIDE) + " pixels");
+  check(
+      gridCells(width, height) <= MAX_GRID_CELLS,
+      "image " + std::to_string(width) + "x" + std::to_string(height) +
+          " is too large: at most about 2 MP is supported, (height/8) * "
+          "(width/8) after padding to a multiple of 16 must be at most " +
+          std::to_string(MAX_GRID_CELLS) + " (1920x1080 fits)");
 }
 
 } // namespace
@@ -46,22 +63,26 @@ toPlanarRgb(const ImageInput& input, uint32_t& width, uint32_t& height) {
     check(
         preprocess::isEncodedImage(rgb),
         "expects JPEG/PNG or raw RGB with dimensions");
+    // The shared decoder accepts up to MAX_IMAGE_DIMENSION per side, so check
+    // the header against the much smaller BridgeDepth limits before decoding.
+    int headerWidth = 0;
+    int headerHeight = 0;
+    int headerChannels = 0;
+    if (stbi_info_from_memory(
+            rgb.data(),
+            static_cast<int>(rgb.size()),
+            &headerWidth,
+            &headerHeight,
+            &headerChannels) != 0 &&
+        headerWidth > 0 && headerHeight > 0) {
+      checkSize(
+          static_cast<uint32_t>(headerWidth),
+          static_cast<uint32_t>(headerHeight));
+    }
     decoded = preprocess::decodeToRgb(rgb, width, height);
     rgb = decoded;
   }
-  check(
-      width >= static_cast<uint32_t>(MIN_SIDE) &&
-          height >= static_cast<uint32_t>(MIN_SIDE),
-      "image sides must be at least " + std::to_string(MIN_SIDE) + " pixels");
-  check(
-      width <= MAX_SIDE && height <= MAX_SIDE,
-      "image sides must be at most " + std::to_string(MAX_SIDE) + " pixels");
-  check(
-      gridCells(width, height) <= MAX_GRID_CELLS,
-      "image " + std::to_string(width) + "x" + std::to_string(height) +
-          " is too large: at most about 2 MP is supported, (height/8) * "
-          "(width/8) after padding to a multiple of 16 must be at most " +
-          std::to_string(MAX_GRID_CELLS) + " (1920x1080 fits)");
+  checkSize(width, height);
   const size_t plane = static_cast<size_t>(width) * height;
   std::vector<float> chw(plane * 3);
   for (size_t i = 0; i < plane; ++i) {

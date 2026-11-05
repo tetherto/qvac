@@ -130,6 +130,17 @@ TEST(BridgeDepthInput, RejectsSizesOutsideTheSupportedRange) {
         bd::toPlanarRgb(wide, width, height);
       }).find("too large"),
       std::string::npos);
+  // A PNG signature, an IHDR claiming 4096x4096 and an empty IDAT, which is
+  // enough for stbi_info but not for a decode. The size error proves the
+  // header is checked before the full decode.
+  ImageInput hugePng;
+  hugePng.data = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n', 0, 0, 0,    13,
+                  'I',  'H', 'D', 'R', 0,    0,    0x10, 0,    0, 0, 0x10, 0,
+                  8,    2,   0,   0,   0,    0,    0,    0,    0, 0, 0,    0,
+                  0,    'I', 'D', 'A', 'T',  0,    0,    0,    0};
+  const std::string hugeError =
+      expectThrows([&] { bd::toPlanarRgb(hugePng, width, height); });
+  EXPECT_NE(hugeError.find("at most"), std::string::npos) << hugeError;
   ImageInput garbage;
   garbage.data = {1, 2, 3, 4};
   EXPECT_NE(
@@ -177,13 +188,18 @@ protected:
   void TearDown() override { std::filesystem::remove_all(directory_); }
 
   // A metadata-complete file whose single tensor does not match the layout.
-  void write(const char* architecture, bool withMetadata) {
+  // supportedKv writes the converter's hyperparameters, otherwise all are 4.
+  void
+  write(const char* architecture, bool withMetadata, bool supportedKv = false) {
     std::unique_ptr<ggml_context, decltype(&ggml_free)> context(
         ggml_init({1024 * 1024, nullptr, false}), ggml_free);
     std::unique_ptr<gguf_context, decltype(&gguf_free)> file(
         gguf_init_empty(), gguf_free);
     gguf_set_val_str(file.get(), "general.architecture", architecture);
     if (withMetadata) {
+      const uint32_t supported[] = {
+          12, 6, 37, 40, 4, 2, 4, 5, 4, 6, 5, 4, 5, 128};
+      int index = 0;
       for (const char* key :
            {"bridgedepth.mono.depth",
             "bridgedepth.mono.n_heads",
@@ -199,7 +215,7 @@ protected:
             "bridgedepth.nmp.refine_window_size",
             "bridgedepth.nmp.num_refine_layers",
             "bridgedepth.backbone.out_channels"})
-        gguf_set_val_u32(file.get(), key, 4);
+        gguf_set_val_u32(file.get(), key, supportedKv ? supported[index++] : 4);
       const int32_t layers[] = {2, 5, 8, 11};
       gguf_set_arr_data(
           file.get(),
@@ -232,8 +248,13 @@ TEST_F(BridgeDepthGgufTest, RejectsMissingMetadata) {
   EXPECT_NE(loadError().find("missing or non-u32 kv"), std::string::npos);
 }
 
-TEST_F(BridgeDepthGgufTest, RejectsForeignTensorLayout) {
+TEST_F(BridgeDepthGgufTest, RejectsUnsupportedHyperparameters) {
   write("bridgedepth", true);
+  EXPECT_NE(loadError().find("unsupported hyperparameters"), std::string::npos);
+}
+
+TEST_F(BridgeDepthGgufTest, RejectsForeignTensorLayout) {
+  write("bridgedepth", true, true);
   EXPECT_NE(loadError().find("unsupported GGUF layout"), std::string::npos);
 }
 

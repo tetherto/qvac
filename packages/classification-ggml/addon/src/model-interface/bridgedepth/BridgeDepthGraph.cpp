@@ -1741,7 +1741,8 @@ namespace {
 // layout and ggml aborts (it does not throw) on a shape mismatch, so a GGUF is
 // accepted only when this matches the converter's output exactly. It catches
 // wrong converter output, not a crafted file: FNV-1a can be forced to collide.
-// Tensor data that indexes memory is range checked separately at load.
+// So the hyperparameters, the pos_embed shape and the tensor data that indexes
+// memory are checked separately at load.
 uint64_t layoutFingerprint(
     const gguf_context* gctx, const ggml_context* wctx,
     const std::vector<uint32_t>& kv) {
@@ -1830,6 +1831,15 @@ BridgeDepthGraph::BridgeDepthGraph(
       outChannels};
   for (const int l : m.monoLayers)
     kv.push_back(static_cast<uint32_t>(l));
+  // The host code divides by and indexes with these values, so they are pinned
+  // to the converter output directly. The fingerprint alone can be forged.
+  const std::vector<uint32_t> expectedKv{
+      12, 6, 37, 40, 4, 2, 4, 5, 4, 6, 5, 4, 5, 128, 2, 5, 8, 11};
+  if (kv != expectedKv) {
+    throw std::runtime_error(
+        "BridgeDepth: unsupported hyperparameters; convert with "
+        "scripts/convert-bridgedepth.py");
+  }
   const uint64_t layout = layoutFingerprint(m.gctx, m.wctx, kv);
   if (layout != EXPECTED_LAYOUT) {
     throw std::runtime_error(
@@ -1866,6 +1876,9 @@ BridgeDepthGraph::BridgeDepthGraph(
     ggml_backend_tensor_set(t, buf.data(), 0, buf.size());
   }
   T* pos = m.weight("mono.pretrained.pos_embed");
+  // posEmbed() indexes this as [1 + pos_grid^2, D] on the host.
+  if (pos->type != GGML_TYPE_F32 || pos->ne[1] != 1 + m.posGrid * m.posGrid)
+    throw std::runtime_error("BridgeDepth: pos_embed does not match pos_grid");
   m.posEmbedHost.resize(ggml_nelements(pos));
   ggml_backend_tensor_get(pos, m.posEmbedHost.data(), 0, ggml_nbytes(pos));
   // relative_position_index buffers are expanded on the host per run (M, N
