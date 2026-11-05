@@ -185,7 +185,8 @@ export function createRag(options: CreateRagOptions): Rag {
       for (const documentId of documentIds) {
         const document = await tx.get<DocumentRecord>(DOCUMENTS, { namespace, documentId })
         if (!document) continue
-        removed.push(...(await deleteGeneration(tx, document)))
+        // A spread push would exceed the argument limit on large documents.
+        for (const nativeId of await deleteGeneration(tx, document)) removed.push(nativeId)
         await tx.delete(DOCUMENTS, { namespace, documentId })
         deleted.push(documentId)
       }
