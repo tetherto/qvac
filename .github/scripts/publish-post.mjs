@@ -71,7 +71,7 @@ async function main(env) {
   const pkg = basename(env.DIR)
   const prefix = project.targets.publish?.metadata?.publish?.tagPrefix
   const { version } = JSON.parse(readFileSync(join(env.DIR, 'package.json'), 'utf8'))
-  const tag = `${prefix}-v${version}`
+  const tag = env.DISPATCH_REF || `${prefix}-v${version}`
   const dispatches = plan(project, pkg)
   nx(['run', `${env.PROJECT}:publish:post`, '--exclude-task-dependencies', '--outputStyle=stream'], {
     stdio: 'inherit'
