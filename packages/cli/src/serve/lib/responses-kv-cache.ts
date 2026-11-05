@@ -27,6 +27,8 @@ export interface NamedKvCacheRetentionOptions {
 }
 
 export interface NamedKvCacheRetention {
+  /** Keys this server has used and still tracks; exposed for tests. */
+  ownedKeys: () => ReadonlySet<string>
   /**
    * Marks a key in use until the returned release runs; in-use keys are never
    * swept. Waits first if that key is being deleted.
@@ -115,6 +117,11 @@ export function createNamedKvCacheRetention(
 
   async function sweepNow({ all = false }: { all?: boolean }): Promise<number> {
     const caches = await entries()
+    // A failed or cancelled first turn can leave no folder behind; forget it.
+    const present = new Set(caches.map((entry) => entry.key))
+    for (const key of owned) {
+      if (!present.has(key) && !inUse.has(key)) owned.delete(key)
+    }
     let total = caches.reduce((sum, entry) => sum + entry.bytes, 0)
     const idle = caches
       .filter((entry) => !inUse.has(entry.key))
@@ -166,7 +173,7 @@ export function createNamedKvCacheRetention(
       })
   }
 
-  return { acquire, sweep, maybeSweep }
+  return { acquire, sweep, maybeSweep, ownedKeys: () => owned }
 }
 
 // A cache can be removed while it is scanned (a cancelled turn, another

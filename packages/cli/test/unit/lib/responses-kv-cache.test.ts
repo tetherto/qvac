@@ -241,6 +241,18 @@ describe('createNamedKvCacheRetention', () => {
     assert.deepEqual(deleted, [K.a])
   })
 
+  it('forgets a key whose cache folder is gone once it is no longer in use', async (t) => {
+    const dir = await cacheDir(t, {})
+    const deleted: string[] = []
+    const r = retention(dir, deleted)
+    const release = await r.acquire(K.a)
+    await r.sweep()
+    assert.ok(r.ownedKeys().has(K.a), 'kept while in use')
+    release()
+    await r.sweep()
+    assert.equal(r.ownedKeys().has(K.a), false)
+  })
+
   it('treats a missing cache directory as empty', async () => {
     const deleted: string[] = []
     const r = retention(join(tmpdir(), 'qvac-kv-retention-missing'), deleted)
