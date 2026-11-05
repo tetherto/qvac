@@ -36,7 +36,16 @@ inline int backendIdFromName(const std::string& name) {
   if (name.rfind("CUDA",   0) == 0) return 2;
   if (name.rfind("Vulkan", 0) == 0) return 3;
   if (name.rfind("OpenCL", 0) == 0) return 4;
+  if (name.rfind("WebGPU", 0) == 0)
+    return 5;
   return 99;
+}
+
+inline int backendDeviceFromName(const std::string& name) {
+  const auto id = backendIdFromName(name);
+  if (id == 99)
+    return 99;
+  return id == 0 ? kBackendDeviceCpu : kBackendDeviceGpu;
 }
 
 inline int backendDeviceCode(tts_cpp::BackendDevice d) {

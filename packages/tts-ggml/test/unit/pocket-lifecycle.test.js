@@ -262,10 +262,36 @@ test('pocket lifecycle: reload releases the old model before the replacement and
   t.execution(() => pocket.checkReload(), 'the lock is released')
 })
 
+test('pocket lifecycle: reload switches GPU intent without retaining a conflicting derived flag', async (t) => {
+  const host = fakeHost()
+  const pocket = new PocketLifecycle(host)
+  await pocket.reload({ nGpuLayers: 99 })
+  t.is(host.setup.config.useGPU, true)
+  t.is(host.setup.pocket.params.nGpuLayers, 99)
+  await pocket.reload({ useGPU: false })
+  t.is(host.setup.config.useGPU, false)
+  t.absent(host.setup.pocket.params.nGpuLayers)
+  await pocket.reload({ useGPU: true })
+  t.is(host.setup.config.useGPU, true)
+  await pocket.reload({ nGpuLayers: 0 })
+  t.is(host.setup.config.useGPU, false)
+  await t.exception(pocket.reload({ useGPU: true, nGpuLayers: 0 }), /conflicts/)
+})
+
+test('pocket lifecycle: reload rejects other engines new controls before unloading', async (t) => {
+  const host = fakeHost()
+  const pocket = new PocketLifecycle(host)
+  const original = host.addon
+  await t.exception(pocket.reload({ coremlDecoder: true }), /parler-only/)
+  await t.exception(pocket.reload({ forceSpeechTokens: [1] }), /cosyvoice3-only/)
+  t.is(host.addon, original)
+  t.alike(host.events, [])
+})
+
 test('pocket lifecycle: reload validates before it touches the model and refuses the wrong state', async (t) => {
   const host = fakeHost()
   const pocket = new PocketLifecycle(host)
-  await t.exception(pocket.reload({ useGPU: true }))
+  await t.exception(pocket.reload({ useGPU: 'invalid' }))
   t.alike(host.events, [], 'a rejected option leaves the loaded model alone')
   t.ok(host.state.weightsLoaded)
 
