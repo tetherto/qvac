@@ -250,7 +250,7 @@
     "bare-crypto": "^1.15.0",
     "bare-env": "^3.0.0",
     "bare-events": "2.9.1",
-    "bare-fs": "^4.5.1",
+    "bare-fs": "^4.8.4",
     "bare-gpu-info": "0.1.1",
     "bare-link": "^4.0.1",
     "bare-net": "^2.3.2",

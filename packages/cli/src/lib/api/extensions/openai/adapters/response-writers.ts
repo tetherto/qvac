@@ -13,9 +13,13 @@ import {
   stripToolSearchCalls
 } from '@/lib/api/lib/tool-search'
 import type { GenerationParams, ResponseFormat } from '@/lib/api/extensions/openai/schemas/common'
-import type { ResponsesHistoryItem } from '@/lib/api/extensions/openai/schemas/responses'
+import type {
+  ResponsesHistoryItem,
+  ToolNamespaces
+} from '@/lib/api/extensions/openai/schemas/responses'
 import {
   buildResponseObject,
+  clientToolName,
   functionCallOutputItemId,
   messageId
 } from '@/lib/api/extensions/openai/adapters/responses-shape'
@@ -47,6 +51,7 @@ export interface ResponsesHandlerParams {
   sdkModelId: string
   history: ResponsesHistoryItem[]
   tools?: Tool[] | undefined
+  toolNamespaces?: ToolNamespaces | undefined
   generationParams?: GenerationParams | undefined
   responseFormat?: ResponseFormat | undefined
   modelAlias: string
@@ -104,6 +109,7 @@ export async function writeBlockingResponse(
     parallelToolCalls: p.parallelToolCalls,
     previousResponseId: p.previousResponseId,
     store: p.storeEnabled,
+    ...(p.toolNamespaces !== undefined ? { toolNamespaces: p.toolNamespaces } : {}),
     completionTokens,
     ...(stopReason !== undefined ? { stopReason } : {}),
     ...(stats !== undefined ? { stats } : {})
@@ -262,7 +268,7 @@ export async function writeStreamingResponse(
           type: 'function_call',
           id: fcItemId,
           call_id: tc.id,
-          name: tc.function.name,
+          ...clientToolName(tc.function.name, p.toolNamespaces),
           arguments: '',
           status: 'in_progress'
         },
@@ -289,7 +295,7 @@ export async function writeStreamingResponse(
           type: 'function_call',
           id: fcItemId,
           call_id: tc.id,
-          name: tc.function.name,
+          ...clientToolName(tc.function.name, p.toolNamespaces),
           arguments: argsStr,
           status: 'completed'
         },
@@ -312,6 +318,7 @@ export async function writeStreamingResponse(
     parallelToolCalls: p.parallelToolCalls,
     previousResponseId: p.previousResponseId,
     store: p.storeEnabled,
+    ...(p.toolNamespaces !== undefined ? { toolNamespaces: p.toolNamespaces } : {}),
     messageItemId: msgId,
     completionTokens,
     ...(hasToolCalls ? { functionCallItemIds: fcItemIds } : {}),
