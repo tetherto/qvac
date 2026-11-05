@@ -14,11 +14,8 @@ const MODEL = {
   sha256: 'edc6015cb15694c27be7d1d33f1bc015db9a358ff51ed524628c027504907ba9',
   bytes: 277852192
 }
-const cpuOnly =
-  (os.platform() === 'darwin' && os.arch() === 'x64') ||
-  (os.platform() === 'linux' && os.arch() === 'arm64')
 
-test('Knowledge indexing: CPU/GPU timing and vector parity for 57 chunks', async (t) => {
+test('Knowledge indexing: CPU flash-attention timing and vector parity for 57 chunks', async (t) => {
   t.timeout(600_000)
   t.is(chunks.length, 57, 'fixed workload size')
 
@@ -27,7 +24,6 @@ test('Knowledge indexing: CPU/GPU timing and vector parity for 57 chunks', async
     event: 'start',
     chunks: chunks.length,
     characters: chunks.join('').length,
-    cpuOnly,
     platform: os.platform(),
     arch: os.arch()
   })
@@ -36,14 +32,15 @@ test('Knowledge indexing: CPU/GPU timing and vector parity for 57 chunks', async
   emit({ event: 'model-file', ms: Date.now() - preparedAt, sha256: MODEL.sha256 })
 
   let baseline
-  // Reverse the order on the second pair so GPU does not always run on a hotter device.
-  const devices = cpuOnly ? ['cpu', 'cpu'] : ['cpu', 'gpu', 'gpu', 'cpu']
-  for (const [pass, device] of devices.entries()) {
+  // Reverse the second pair so one setting does not always run on a hotter device.
+  const flashModes = ['off', 'on', 'on', 'off']
+  for (const [pass, flashAttention] of flashModes.entries()) {
     const inference = new GGMLBert({
       files: { model: [modelPath] },
       config: {
-        device,
-        gpu_layers: device === 'cpu' ? '0' : '999',
+        device: 'cpu',
+        gpu_layers: '0',
+        flash_attn: flashAttention,
         batch_size: '1024',
         openclCacheDir: path.dirname(modelPath)
       },
@@ -53,7 +50,7 @@ test('Knowledge indexing: CPU/GPU timing and vector parity for 57 chunks', async
     try {
       const loadAt = Date.now()
       await inference.load()
-      emit({ event: 'load', pass, device, ms: Date.now() - loadAt })
+      emit({ event: 'load', pass, flashAttention, ms: Date.now() - loadAt })
 
       for (let round = 0; round < 2; round++) {
         const startedAt = Date.now()
@@ -67,7 +64,7 @@ test('Knowledge indexing: CPU/GPU timing and vector parity for 57 chunks', async
           const embedding = (await waitForCompletion(response)).flat()
           batchMs.push(Date.now() - batchAt)
           nativeStats.push(response.stats)
-          t.is(response.stats.backendDevice, device, 'requested backend actually ran')
+          t.is(response.stats.backendDevice, 'cpu', 'requested backend actually ran')
           t.is(embedding.length, batch.length, 'one vector per chunk')
           t.ok(
             embedding.every((row) => row.length === 768 && row.every(Number.isFinite)),
@@ -78,11 +75,11 @@ test('Knowledge indexing: CPU/GPU timing and vector parity for 57 chunks', async
         const elapsedMs = Date.now() - startedAt
         if (!baseline) baseline = vectors
         const minCosine = Math.min(...vectors.map((row, i) => cosine(row, baseline[i])))
-        t.ok(minCosine > 0.99, `matches CPU vectors (minimum cosine ${minCosine})`)
+        t.ok(minCosine > 0.999, `matches CPU vectors (minimum cosine ${minCosine})`)
         emit({
           event: 'round',
           pass,
-          device,
+          flashAttention,
           round,
           ms: elapsedMs,
           batchMs,
