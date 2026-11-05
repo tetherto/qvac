@@ -2,7 +2,7 @@
 
 from tetherto.qvac_sdk.methods import heartbeat, load_model_with_progress
 ...
-response = await heartbeat(transport, HeartbeatRequest(type="heartbeat"))
+response = await heartbeat(transport, HeartbeatRequest())
 """
 
 from __future__ import annotations
