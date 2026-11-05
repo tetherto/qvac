@@ -1147,6 +1147,41 @@ test('queue: cancel({ modelId }) drains queued waiters for that model', async (t
   t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
 })
 
+test('queue: cancel({ modelId }) aborts every queued waiter, even past the cancel-before-begin cap', async (t) => {
+  const r = createRequestRegistry()
+  r.policy({
+    kind: 'tts',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    maxQueueDepthPerModel: 256
+  })
+
+  const holder = await r.begin({ requestId: 'holder', kind: 'tts', modelId: 'm1' })
+  // More queued waiters than the cancel-before-begin set holds, so a cancel
+  // routed through that set would evict the first waiters' markers.
+  const queuedCount = __requestRegistryTestHooks.cancelBeforeBeginMaxEntries + 10
+  const queuedPromises = Array.from({ length: queuedCount }, (_, i) =>
+    r.begin({ requestId: `q-${i}`, kind: 'tts', modelId: 'm1' })
+  )
+  await settle()
+
+  t.is(r.cancel({ modelId: 'm1', reason: 'stop' }), queuedCount + 1)
+  const queued = await Promise.all(queuedPromises)
+
+  const live = queued.filter((ctx) => !ctx.signal.aborted)
+  t.is(live.length, 0, 'every queued waiter resolves aborted, none runs without a slot')
+  t.ok(
+    queued.every((ctx) => ctx.state === 'cancelling' && ctx.signal.reason === 'stop'),
+    'each carries the cancel reason'
+  )
+  const sizeProbe = r as unknown as { __cancelBeforeBeginSize: () => number }
+  t.is(sizeProbe.__cancelBeforeBeginSize(), 0, 'no tripwire left for a later reuse')
+
+  for (const ctx of queued) await ctx[Symbol.asyncDispose]()
+  await holder[Symbol.asyncDispose]()
+  t.is(keyStateProbe(r).__keyStateSize(), 0, 'no KeyState leak after drain')
+})
+
 test('queue: cancelAll drains queued waiters so no begin() promise hangs', async (t) => {
   const r = createRequestRegistry()
   r.policy({
