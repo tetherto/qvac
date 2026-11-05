@@ -34,7 +34,7 @@ jobs:
       # Trusted checkout of only the poller scripts; never PR code. For a PR this
       # is the default branch; for a manual dispatch it is the dispatched ref.
       - name: Checkout await-ts-checks scripts
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # 7.0.1
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || github.event.repository.default_branch }}
           sparse-checkout: .github/scripts/await-ts-checks
