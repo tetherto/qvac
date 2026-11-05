@@ -6519,6 +6519,10 @@ class Text1(RootModel[list[Text1Item]]):
 
 
 class EmbedTextRequest(GeneratedBaseModel):
+    __forbidden_fields__ = frozenset({"inputs"})
+    __forbidden_field_guidance__ = {
+        "inputs": "This field is not allowed in this request shape."
+    }
     model_id: Annotated[
         str,
         Field(
@@ -6531,7 +6535,6 @@ class EmbedTextRequest(GeneratedBaseModel):
             description="Text to embed. A string returns one vector; an array returns one vector per string."
         ),
     ]
-    inputs: Any | None = None
     type: Literal["embed"] = "embed"
     request_id: Annotated[
         str | None,
@@ -6579,6 +6582,10 @@ class Inputs1(RootModel[list[str | EmbedInputsRequestInputsItemItem]]):
 
 
 class EmbedInputsRequest(GeneratedBaseModel):
+    __forbidden_fields__ = frozenset({"text"})
+    __forbidden_field_guidance__ = {
+        "text": "This field is not allowed in this request shape."
+    }
     model_id: Annotated[
         str,
         Field(
@@ -6592,7 +6599,6 @@ class EmbedInputsRequest(GeneratedBaseModel):
             min_length=1,
         ),
     ]
-    text: Any | None = None
     type: Literal["embed"] = "embed"
     request_id: Annotated[
         str | None,
@@ -22934,11 +22940,16 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
 
 
 class ReloadConfigRequest(GeneratedBaseModel):
+    __forbidden_fields__ = frozenset(
+        {"modelSrc", "model_src", "seed", "withProgress", "with_progress"}
+    )
+    __forbidden_field_guidance__ = {
+        "model_src": "This field is not allowed in this request shape.",
+        "seed": "This field is not allowed in this request shape.",
+        "with_progress": "This field is not allowed in this request shape.",
+    }
     type: Literal["loadModel"] = "loadModel"
     model_id: Annotated[str, Field(alias="modelId", pattern="^[0-9a-f]{16}$")]
-    model_src: Annotated[Any | None, Field(alias="modelSrc")] = None
-    with_progress: Annotated[Any | None, Field(alias="withProgress")] = None
-    seed: Any | None = None
     model_type: Annotated[
         ReloadConfigRequestModelType,
         Field(
