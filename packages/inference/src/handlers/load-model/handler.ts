@@ -10,7 +10,7 @@ import {
   OPERATION_EVENT_KEY,
   type OperationEvent
 } from '@/schemas/index'
-import { loadModel } from '@/plugins/ops/load-model'
+import { loadModel, withModelWorkLock } from '@/plugins/ops/load-model'
 import { createResolveSession } from '@/handlers/load-model/resolve-session'
 import { nowMs, generateProfileId } from '@/profiling/clock'
 import { getModelEntry, updateModelConfig } from '@/runtime/model-registry'
@@ -256,50 +256,11 @@ export async function handleLoadModel(
 }
 
 async function handleConfigReload(request: ReloadConfigRequest): Promise<LoadModelResponse> {
-  const { modelId, modelType, modelConfig } = request
-
   try {
-    const entry = getModelEntry(modelId)
-    if (!entry) {
-      throw new ModelNotFoundError(modelId)
-    }
-
-    const storedModelType = entry.local.modelType
-    const normalizedRequestType = normalizeModelType(modelType)
-    if (storedModelType !== normalizedRequestType) {
-      throw new ModelTypeMismatchError(storedModelType, normalizedRequestType)
-    }
-
-    const model = entry.local.model
-    const currentConfig = entry.local.config
-
-    if (typeof model.reload !== 'function') {
-      throw new ConfigReloadNotSupportedError(modelId)
-    }
-
-    // A reload mutates the one shared native model, so it is refused while
-    // any other session depends on the current configuration.
-    const sessionId = resolveSessionId(request)
-    const otherLeases = Array.from(entry.leases).filter((id) => id !== sessionId).length
-    if (otherLeases > 0) {
-      throw new ModelLeasedError(modelId, otherLeases)
-    }
-
-    const mergedConfig = {
-      ...(currentConfig as Record<string, unknown>),
-      ...(modelConfig as Record<string, unknown>)
-    }
-
-    const reloadConfig = transformConfigForReload(storedModelType, mergedConfig)
-
-    await model.reload(reloadConfig)
-    updateModelConfig(modelId, mergedConfig)
-
-    return {
-      type: 'loadModel',
-      success: true,
-      modelId
-    }
+    // Under the same lock as a load of this id: a session loading the same
+    // configuration waits until the reload is done instead of taking a lease
+    // on a model whose configuration is changing.
+    return await withModelWorkLock(request.modelId, () => reloadConfig(request))
   } catch (error) {
     // A refused reload is a typed error the client reacts to, not a
     // generic `success: false` envelope.
@@ -310,6 +271,52 @@ async function handleConfigReload(request: ReloadConfigRequest): Promise<LoadMod
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'
     }
+  }
+}
+
+async function reloadConfig(request: ReloadConfigRequest): Promise<LoadModelResponse> {
+  const { modelId, modelType, modelConfig } = request
+
+  const entry = getModelEntry(modelId)
+  if (!entry) {
+    throw new ModelNotFoundError(modelId)
+  }
+
+  const storedModelType = entry.local.modelType
+  const normalizedRequestType = normalizeModelType(modelType)
+  if (storedModelType !== normalizedRequestType) {
+    throw new ModelTypeMismatchError(storedModelType, normalizedRequestType)
+  }
+
+  const model = entry.local.model
+  const currentConfig = entry.local.config
+
+  if (typeof model.reload !== 'function') {
+    throw new ConfigReloadNotSupportedError(modelId)
+  }
+
+  // A reload mutates the one shared native model, so it is refused while
+  // any other session depends on the current configuration.
+  const sessionId = resolveSessionId(request)
+  const otherLeases = Array.from(entry.leases).filter((id) => id !== sessionId).length
+  if (otherLeases > 0) {
+    throw new ModelLeasedError(modelId, otherLeases)
+  }
+
+  const mergedConfig = {
+    ...(currentConfig as Record<string, unknown>),
+    ...(modelConfig as Record<string, unknown>)
+  }
+
+  const nativeConfig = transformConfigForReload(storedModelType, mergedConfig)
+
+  await model.reload(nativeConfig)
+  updateModelConfig(modelId, mergedConfig)
+
+  return {
+    type: 'loadModel',
+    success: true,
+    modelId
   }
 }
 

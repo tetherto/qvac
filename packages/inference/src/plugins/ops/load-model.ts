@@ -52,23 +52,65 @@ export interface LoadModelOptions {
   sessionId?: string
 }
 
+// A load or reload in progress per model id. Two sessions loading the same
+// configuration at once would both pass the loaded check and both load
+// natively; the second native model could never be registered or unloaded.
+// The id is a hash of the configuration, so one native load per id is the
+// rule, and a lease is taken only once the model is registered or reconfigured.
+const modelWorkInFlight = new Map<string, Promise<unknown>>()
+
+/**
+ * Runs `task` as the only load or reload of `modelId`. A caller that arrives
+ * while one is running waits for it to settle before running its own task,
+ * so it sees the model registered (and takes a lease) or finds it absent
+ * (and loads it itself after a failed load).
+ */
+export async function withModelWorkLock<T>(modelId: string, task: () => Promise<T>): Promise<T> {
+  let pending = modelWorkInFlight.get(modelId)
+  while (pending !== undefined) {
+    await pending
+    pending = modelWorkInFlight.get(modelId)
+  }
+  const run = task()
+  modelWorkInFlight.set(
+    modelId,
+    run.then(
+      () => undefined,
+      () => undefined
+    )
+  )
+  try {
+    return await run
+  } finally {
+    modelWorkInFlight.delete(modelId)
+  }
+}
+
 export async function loadModel(
   params: LoadModelServerParams,
   options?: LoadModelOptions
 ): Promise<LoadModelResult> {
-  const {
-    modelId,
-    modelPath,
-    options: modelOptions,
-    artifacts,
-    modelName
-  } = loadModelServerParamsSchema.parse(params)
+  const parsed = loadModelServerParamsSchema.parse(params)
+  return withModelWorkLock(parsed.modelId, () => loadModelLocked(parsed, options))
+}
+
+async function loadModelLocked(
+  params: LoadModelServerParams,
+  options?: LoadModelOptions
+): Promise<LoadModelResult> {
+  const { modelId, modelPath, options: modelOptions, artifacts, modelName } = params
   const { modelConfig, modelType: rawModelType, modelFitPolicy } = modelOptions
 
   // Normalize modelType to canonical form (handles aliases and custom types)
   const modelType = normalizeModelType(rawModelType)
 
   const sessionId = options?.sessionId ?? OWNER_SESSION_ID
+
+  // A cancel that landed while this load waited for another load of the same
+  // model must not take a lease the caller no longer wants.
+  if (options?.request?.signal.aborted === true) {
+    throw new InferenceCancelledError(options.request.requestId)
+  }
 
   // An already loaded model is shared: the caller takes a lease on it.
   if (isModelLoaded(modelId)) {
