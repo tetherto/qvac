@@ -117,8 +117,9 @@ concurrency:
   # same addon can still be tested on 2-3 branches in parallel. workflow_call
   # (benchmarks / weekend / on-merge) is keyed per run and never cancels —
   # inputs.platform is only ever set on a manual dispatch, and under workflow_call
-  # github.* resolves to the CALLER, so run_id keeps each call self-contained.
-  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, github.ref) || format('mobile-call-{0}', github.run_id) }}
+  # github.* resolves to the CALLER, so run_id plus a literal package name keeps
+  # each call apart from sibling mobile calls in the same caller run.
+  group: ${{ inputs.platform != '' && format('mobile-dispatch-{0}-{1}', github.workflow, github.ref) || format('mobile-call-{0}-asr-ggml', github.run_id) }}
   cancel-in-progress: ${{ inputs.platform != '' }}
 
 jobs:
