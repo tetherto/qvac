@@ -195,7 +195,7 @@ test('every package with generated wrappers is covered by a pipeline', () => {
   // flag, so this cannot collapse to an empty filter.
   // A package on the CI contract is covered when it declares verify:generated, which publish-npm.yml runs before it
   // publishes.
-  const contractVerifies = /^ {6}targets: build,verify:generated,publish$/m.test(read('.github/workflows/publish-npm.yml'))
+  const contractVerifies = /^ {6}targets: build,verify:generated,publish(,publish:post)?$/m.test(read('.github/workflows/publish-npm.yml'))
   const published = new Set(consolidatedPackages())
   const offenders = gated.filter((pkg) => {
     const project = JSON.parse(read(`packages/${pkg}/project.json`))
