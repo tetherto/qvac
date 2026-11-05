@@ -219,7 +219,7 @@ for (const slug of ['ocr-ggml', 'translation-nmtcpp']) {
     test(`${slug}: publishing on the CI contract never runs integration tests (QVAC-24365)`, () => {
       for (const workflow of ['publish-npm.yml', 'publish-gpr.yml']) {
         const source = read(`.github/workflows/${workflow}`)
-        assert.match(source, /^ {6}targets: build,verify:generated,publish$/m, workflow)
+        assert.match(source, /^ {6}targets: build,verify:generated,publish(,publish:post)?$/m, workflow)
         assert.doesNotMatch(source, /test:integration|_desktop\.yml/, workflow)
       }
     })
