@@ -12,7 +12,7 @@
 
 namespace qvac_lib_inference_addon_llama::backend_reporting {
 
-inline constexpr const char* kBackendNameId = "_backendNameId";
+inline constexpr const char* K_BACKEND_NAME_ID = "_backendNameId";
 
 // Stats capture an index into these names before a reload can change placement.
 // Repeated placements reuse their index, so storage does not grow per job.

@@ -19,6 +19,7 @@
 #else
 // Fabric 0.25 exports this staged API but does not install llama-ext.h.
 // Keep the declaration identical to Fabric's src/llama-ext.h.
+// NOLINTNEXTLINE(readability-identifier-naming)
 struct llama_memory_breakdown_data {
   size_t model = 0;
   size_t context = 0;
@@ -29,6 +30,7 @@ struct llama_memory_breakdown_data {
 using llama_memory_breakdown =
     std::map<ggml_backend_buffer_type_t, llama_memory_breakdown_data>;
 LLAMA_API llama_memory_breakdown
+// NOLINTNEXTLINE(readability-identifier-naming)
 llama_get_memory_breakdown(const struct llama_context* ctx);
 #endif
 

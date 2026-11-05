@@ -36,7 +36,7 @@ public:
         std::any_cast<qvac_lib_inference_addon_cpp::RuntimeStats>(output);
     std::string name;
     std::erase_if(stats, [this, &name](const auto& stat) {
-      if (stat.first != kBackendNameId) {
+      if (stat.first != K_BACKEND_NAME_ID) {
         return false;
       }
       if (const auto* id = std::get_if<int64_t>(&stat.second)) {
