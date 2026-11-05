@@ -19,7 +19,7 @@ test('RPC call rejects when bare workers are killed mid-call', async function (t
     } catch {}
   })
 
-  // Warm-up: killing before handshake hits RPCInitTimeoutError instead.
+  // Warm-up: killing before ready hits a startup error instead.
   await heartbeat()
 
   const pids = await waitForBareChildren(process.pid)
@@ -32,7 +32,7 @@ test('RPC call rejects when bare workers are killed mid-call', async function (t
     } catch {}
   }
 
-  // rpcInstance is still cached; send() reuses the now-dead socket.
+  // rpcInstance is still cached; send() reuses the now-dead channel.
   const promise = heartbeat()
   promise.catch(() => {})
 
