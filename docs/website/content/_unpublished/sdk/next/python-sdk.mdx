@@ -108,16 +108,16 @@ Create `qvac.config.json` with the server provider:
 }
 ```
 
-Build the worker:
+Build the worker for Python:
 
 ```bash
-npx qvac bundle sdk
+npx qvac bundle sdk --language python
 ```
 
-Python's `Client()` does not automatically select the generated `qvac/worker.entry.mjs`. Set `QVAC_WORKER_PATH` when running the serving example, or pass that path as `worker_path=` to `Client()`:
+Python's `Client()` does not automatically select the generated `qvac/worker/`. Set `QVAC_WORKER_PATH` when running the serving example, or pass that folder as `worker_path=` to `Client()`:
 
 ```bash
-QVAC_WORKER_PATH=./qvac/worker.entry.mjs python rpc_servers.py serve <private-ipv4> <topic>
+QVAC_WORKER_PATH=./qvac/worker python rpc_servers.py serve <private-ipv4> <topic>
 ```
 
 Replace `<private-ipv4>` and `<topic>` with your server's private IPv4 address and shared discovery topic. Discovery uses the default worker and does not require the server provider:
