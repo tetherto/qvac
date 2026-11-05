@@ -96,6 +96,7 @@ jobs:
       actions: read
       packages: read
       id-token: write
+      pull-requests: write
     uses: ./.github/workflows/_mobile.yml
     secrets: inherit
     with:
