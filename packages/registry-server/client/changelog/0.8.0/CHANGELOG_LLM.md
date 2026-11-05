@@ -27,7 +27,7 @@ pausing = true
 controller.abort()
 ```
 
-The default is `true`, so a caller that passes nothing keeps 0.7.0's behaviour. A callback that throws falls back to clearing.
+The default is `true`, so a caller that passes nothing keeps 0.7.0's behaviour. A callback that throws falls back to clearing. The option applies only with `outputFile`: a download returned as a stream drops its blocks when the stream ends or is destroyed.
 
 ### `clearBlob(binding)` (#5534)
 
@@ -39,9 +39,9 @@ await client.clearBlob(model.blobBinding)
 
 ## 🔧 Changed
 
-### Failed downloads keep their blocks
+### Failed file downloads keep their blocks
 
-A download that fails without being cancelled, for example after its retries run out, now keeps its blocks so the next attempt resumes. Use `clearBlob` to reclaim a download that will not be retried.
+A download to `outputFile` that fails without being cancelled, for example after its retries run out, now keeps its blocks so the next attempt resumes. Use `clearBlob` to reclaim a download that will not be retried.
 
 ## 🐛 Fixed
 

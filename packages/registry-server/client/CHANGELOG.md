@@ -6,12 +6,12 @@ Release Date: 2026-11-05
 
 ### ✨ Features
 
-- `downloadModel` and `downloadBlob` take `clearBlocksOnCancel`, a boolean or a callback read when the signal aborts. Pass `false` to keep a cancelled download's blocks so the next download resumes from them; the default still clears them. (see PR [#5534](https://github.com/tetherto/qvac/pull/5534))
+- `downloadModel` and `downloadBlob` take `clearBlocksOnCancel`, a boolean or a callback read when the signal aborts. With `outputFile`, pass `false` to keep a cancelled download's blocks so the next download resumes from them; the default still clears them. (see PR [#5534](https://github.com/tetherto/qvac/pull/5534))
 - `clearBlob(binding)` deletes a blob's cached blocks, such as those a kept cancel or a failed download left behind. (see PR [#5534](https://github.com/tetherto/qvac/pull/5534))
 
 ### 🔧 Changed
 
-- A download that fails without being cancelled keeps its blocks, so a retry resumes instead of starting from zero. Reclaim them with `clearBlob`.
+- A download to `outputFile` that fails without being cancelled keeps its blocks, so a retry resumes instead of starting from zero. Reclaim them with `clearBlob`.
 
 ### 🐛 Fixed
 
