@@ -10,7 +10,9 @@ import {
 import { InvalidResponseError } from '@/utils/errors-client'
 import { validateTools, type ToolInput } from '@/utils/tool-helpers'
 
-export type CalcTokensClientParams = Omit<CalcTokensParams, 'tools'> & {
+type OmitTools<T> = T extends unknown ? Omit<T, 'tools'> : never
+
+export type CalcTokensClientParams = OmitTools<CalcTokensParams> & {
   tools?: Tool[] | ToolInput[]
 }
 
