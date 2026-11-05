@@ -60,27 +60,27 @@ const CORE_NAME = 'qvac-rag'
 
 // One HyperDB per core, shared by every RAG opened on it. Separate instances
 // would each serialize only their own transactions and overwrite each other.
-// The core id alone is not enough: two directories can hold cores with the
-// same key, so databases are grouped by the Corestore's storage first.
+// Databases are keyed by the state every session of one core shares, so a
+// Corestore session or wrapper finds the same writer, and two directories
+// holding a core with the same key do not.
 interface SharedDatabase {
   opening: Promise<HyperDBInstance>
   refs: number
 }
 
-const sharedDatabases = new WeakMap<object, Map<string, SharedDatabase>>()
+const sharedDatabases = new WeakMap<object, SharedDatabase>()
 
 async function acquireDatabase(
-  storage: object,
   core: Hypercore
 ): Promise<{ db: HyperDBInstance; release: () => Promise<void> }> {
-  let id: string | null = null
+  let identity: object | null = null
   try {
     await core.ready()
-    id = core.id
-    if (!id) {
+    identity = core.core ?? null
+    if (!identity) {
       throw new QvacErrorRAG({
         code: ERR_CODES.DB_OPERATION_FAILED,
-        adds: 'the RAG core has no id'
+        adds: 'the Corestore did not return a Hypercore with shared core state'
       })
     }
   } catch (error) {
@@ -88,21 +88,15 @@ async function acquireDatabase(
     throw error
   }
 
-  let databases = sharedDatabases.get(storage)
-  if (!databases) {
-    databases = new Map()
-    sharedDatabases.set(storage, databases)
-  }
-  const byId = databases
-  const key = id
-  let entry = byId.get(key)
+  const key = identity
+  let entry = sharedDatabases.get(key)
   const reused = entry !== undefined
   if (!entry) {
     const created: SharedDatabase = { opening: openDatabase(core), refs: 0 }
     created.opening.catch(() => {
-      if (byId.get(key) === created) byId.delete(key)
+      if (sharedDatabases.get(key) === created) sharedDatabases.delete(key)
     })
-    byId.set(key, created)
+    sharedDatabases.set(key, created)
     entry = created
   }
   const acquired = entry
@@ -110,20 +104,16 @@ async function acquireDatabase(
   try {
     if (reused) await core.close()
     const db = await acquired.opening
-    return { db, release: () => releaseDatabase(byId, key, acquired) }
+    return { db, release: () => releaseDatabase(key, acquired) }
   } catch (error) {
     acquired.refs--
     throw error
   }
 }
 
-async function releaseDatabase(
-  byId: Map<string, SharedDatabase>,
-  key: string,
-  entry: SharedDatabase
-): Promise<void> {
+async function releaseDatabase(key: object, entry: SharedDatabase): Promise<void> {
   if (--entry.refs > 0) return
-  if (byId.get(key) === entry) byId.delete(key)
+  if (sharedDatabases.get(key) === entry) sharedDatabases.delete(key)
   await (await entry.opening).close()
 }
 
@@ -168,9 +158,7 @@ export function createRag(options: CreateRagOptions): Rag {
 
   async function open(): Promise<void> {
     await corestore.ready()
-    // A Corestore without `storage` (such as a wrapper) is its own identity.
-    const storage = corestore.storage ?? corestore
-    const acquired = await acquireDatabase(storage, corestore.get({ name: CORE_NAME }))
+    const acquired = await acquireDatabase(corestore.get({ name: CORE_NAME }))
     db = acquired.db
     release = acquired.release
   }

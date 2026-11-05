@@ -2,8 +2,9 @@
 // members this package uses are described.
 
 export interface Hypercore {
-  // Set once ready() resolves; identifies the core across Corestore sessions.
-  id: string | null
+  // Hypercore's internal state, shared by every session of this core in one
+  // storage. Set once ready() resolves.
+  core?: object | null
   ready(): Promise<void>
   close(): Promise<void>
 }
@@ -11,8 +12,6 @@ export interface Hypercore {
 export interface Corestore {
   ready(): Promise<void>
   get(options: { name: string }): Hypercore
-  // Shared by every session of one Corestore; distinct per storage directory.
-  storage?: object
 }
 
 export interface HyperDBStream<T> extends AsyncIterable<T> {

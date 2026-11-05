@@ -185,6 +185,51 @@ test('two instances on the same core share one writer', async (t) => {
   await reopened.close()
 })
 
+test('a wrapper around a store in use shares its writer', async (t) => {
+  const store = new Corestore(await tmp(t))
+  t.teardown(() => store.close())
+  const wrapper = {
+    ready: () => store.ready(),
+    get: (options: { name: string }) => store.get(options)
+  }
+  const a = createRag({ corestore: store })
+  const b = createRag({ corestore: wrapper })
+  await Promise.all([a.ready(), b.ready()])
+  const { spaceId } = await a.createNamespace({ name: 'ns', space: SPACE })
+
+  await Promise.all([
+    a.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['from a', [1, 0, 0]]])] }),
+    b.ingest({ namespace: 'ns', documents: [doc('b', spaceId, [['from b', [1, 0, 0]]])] })
+  ])
+  const hits = await a.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], spaceId, k: 10 })
+  t.alike(hits.map((hit) => hit.documentId).sort(), ['a', 'b'], 'both writes are kept')
+  await a.close()
+  await b.close()
+})
+
+test('a core without shared state is rejected instead of opened unshared', async (t) => {
+  let closed = false
+  const unidentified = {
+    ready: () => Promise.resolve(),
+    get: () => ({
+      ready: () => Promise.resolve(),
+      close: () => {
+        closed = true
+        return Promise.resolve()
+      }
+    })
+  }
+  const rag = createRag({ corestore: unidentified })
+  await rejectsWithCode(
+    t,
+    rag.ready(),
+    ERR_CODES.DB_OPERATION_FAILED,
+    'no shared core state',
+    /shared core state/
+  )
+  t.ok(closed, 'the unused core was closed')
+})
+
 test('stores in separate directories stay separate when their cores share a key', async (t) => {
   const primaryKey = new Uint8Array(32).fill(7)
   const first = new Corestore(await tmp(t), { primaryKey, unsafe: true })
