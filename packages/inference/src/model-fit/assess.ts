@@ -46,10 +46,10 @@ type Evaluation =
   | { kind: 'unknown'; reasons: readonly string[]; assumptions?: readonly string[] }
 
 /**
- * An engine's verdict with no breakdown to compare — audiogen reports a peak
- * across pipeline phases, diffusion a per-module table. A refusal stands
- * whatever else is in the set. A fit stands only for a lone candidate, since
- * it carries nothing to add to another model's bytes.
+ * An engine's verdict with no usable totals to compare, or with only a partial
+ * breakdown. A refusal stands whatever else is in the set. A fit stands only
+ * for a lone candidate, since it carries nothing to add to another model's
+ * bytes.
  */
 interface BareEvaluation {
   kind: 'bare'
@@ -59,10 +59,10 @@ interface BareEvaluation {
 }
 
 /**
- * What one engine fitter measured, as bytes that compose. Weights and the KV
- * cache stay resident for the model's lifetime; the compute buffers are one
- * operation's peak, and only that is shared between models that never run at
- * once. A host figure carries no breakdown, so it counts as resident whole.
+ * What one engine fitter measured. With a complete breakdown, weights and the
+ * KV cache stay resident for the model's lifetime while compute is one
+ * operation's peak. Totals without a breakdown, and host totals, count as
+ * resident whole.
  */
 interface NativeEvaluation {
   kind: 'native'

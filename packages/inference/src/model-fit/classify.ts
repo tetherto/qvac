@@ -31,7 +31,12 @@ interface LegacyTtsProbe {
   }
 }
 
-type CompatibleProbe = FitProbeResult | LegacyBciProbe | LegacyTtsProbe
+interface LegacyAudiogenProbe {
+  engine: 'audiogen-ggml'
+  result: LegacySpeechResult
+}
+
+type CompatibleProbe = FitProbeResult | LegacyAudiogenProbe | LegacyBciProbe | LegacyTtsProbe
 type SharedProbe = CompatibleProbe extends infer Probe
   ? Probe extends { result: { devices: { usedBytes: number }[]; stats: object } }
     ? Probe

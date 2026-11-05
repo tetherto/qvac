@@ -477,6 +477,24 @@ test('assess: total-only native measurements combine conservatively', (t) => {
   t.ok(result.assumptions.some((assumption) => assumption.includes('totals only')))
 })
 
+test('assess: published audiogen totals stay resident beside an LLM working peak', (t) => {
+  const result = assessModelFitFromResources({
+    models: [
+      candidate({ model: { name: 'AUDIOGEN', sha256Checksum: 'a'.repeat(64) } }),
+      candidate({ model: { name: 'LLM', sha256Checksum: 'b'.repeat(64) } })
+    ],
+    execution: 'sequential',
+    resources: resources({ totalBytes: 4.5 * GIB, usedBytes: 0 }),
+    platform: 'darwin-arm64',
+    resolveProfile: () => undefined,
+    nativeFits: [measuredTotal(2 * GIB), measured(1 * GIB, 1 * GIB)]
+  })
+
+  t.is(result.verdict, 'likely-too-large')
+  t.is(result.evidence, 'native-fit')
+  t.ok(result.assumptions.some((assumption) => assumption.includes('totals only')))
+})
+
 test('assess: a partial OCR measurement falls back to its floor in a set', (t) => {
   const partialOcr: NativeCandidateFit = {
     fit: {

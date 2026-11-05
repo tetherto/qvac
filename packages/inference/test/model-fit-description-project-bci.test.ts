@@ -13,6 +13,7 @@ import { ModelType } from '@/schemas/index'
 import { projectFitFromLoad } from '@/model-fit/description/project'
 import type { FitBlobBinding, FitStubEntry } from '@/model-fit/description/fetch'
 import type { FitProbeRequest } from '@/model-fit/run/engine'
+import type { FitRunResult } from '@/model-fit/run/run'
 
 /**
  * The projection `assessModelFit` runs for a BCI load before download: the
@@ -88,7 +89,26 @@ interface Seen {
   embedder: string | undefined
 }
 
-function bciResult(embedderReadable: boolean) {
+interface PublishedBciFitResult {
+  status: 'fits' | 'error'
+  reason: 'fits' | 'embedder-unreadable'
+  modelType: 'base'
+  deviceName: string
+  deviceIsCpu: boolean
+  deviceSharesHostMemory: boolean
+  deviceFreeBytes: number
+  deviceTotalBytes: number
+  deviceBytes: number
+  weightsBytes: number
+  kvBytes: number
+  computeBytes: number
+  hostOverflowBytes: number
+  hostBytes: number
+  embedderBytes: number
+  report: string
+}
+
+function bciResult(embedderReadable: boolean): PublishedBciFitResult {
   const embedderBytes = embedderReadable ? EMBEDDER_BYTES : 0
   return {
     status: embedderReadable ? ('fits' as const) : ('error' as const),
@@ -128,7 +148,7 @@ function bciFitter() {
     return {
       status: 'completed',
       probe: { engine: 'bci-whispercpp', result: bciResult(embedder !== undefined) }
-    }
+    } satisfies { status: FitRunResult['status']; probe: object }
   }
   return { seen, runFit: runFit as never }
 }
