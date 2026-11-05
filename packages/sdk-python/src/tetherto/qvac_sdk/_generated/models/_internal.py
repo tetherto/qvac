@@ -6034,6 +6034,17 @@ class DeleteCacheKvEntryRequest(GeneratedBaseModel):
     model_id: Annotated[str | None, Field(alias="modelId")] = None
 
 
+class DeleteCacheModelRequest(GeneratedBaseModel):
+    type: Literal["deleteCache"] = "deleteCache"
+    model_src: Annotated[
+        str,
+        Field(
+            alias="modelSrc",
+            description="registry:// source of the model whose cached download to delete",
+        ),
+    ]
+
+
 class DeleteCacheResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -27858,11 +27869,17 @@ class Request_2(RootModel[DecideSingleRequest | DecideBatchRequest]):
 
 class Request_3(
     RootModel[
-        DeleteCacheAllRequest | DeleteCacheAutoRequest | DeleteCacheKvEntryRequest
+        DeleteCacheAllRequest
+        | DeleteCacheAutoRequest
+        | DeleteCacheKvEntryRequest
+        | DeleteCacheModelRequest
     ]
 ):
     root: Annotated[
-        DeleteCacheAllRequest | DeleteCacheAutoRequest | DeleteCacheKvEntryRequest,
+        DeleteCacheAllRequest
+        | DeleteCacheAutoRequest
+        | DeleteCacheKvEntryRequest
+        | DeleteCacheModelRequest,
         Field(title="DeleteCacheRequest"),
     ]
 

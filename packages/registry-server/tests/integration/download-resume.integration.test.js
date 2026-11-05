@@ -136,69 +136,38 @@ async function createTestClient(t, serviceCtx, bootstrap, storage) {
   const db = new RegistryDatabase(viewCore, { extension: false })
   await db.ready()
 
-  const proto = QVACRegistryClient.prototype
-  const client = {
-    corestore,
-    db,
-    logger: noopLogger,
-
-    _validateString: proto._validateString,
-    _checkBlobProgress: proto._checkBlobProgress,
-    _getBlobsCore: proto._getBlobsCore.bind({ corestore, logger: noopLogger }),
-
-    // lunte-disable-next-line require-await
-    async ready() {},
-
-    async getModel(modelPath, source) {
-      const result = await db.getModel(modelPath, source)
-      return result ?? null
-    },
-
-    async downloadModel(modelPath, source, options = {}) {
-      proto._validateString(modelPath, 'path')
-      proto._validateString(source, 'source')
-
-      const model = await this.getModel(modelPath, source)
-      if (!model) throw new Error('Model not found')
-      if (!model.blobBinding || !model.blobBinding.coreKey) {
-        throw new Error('Model missing blob binding')
-      }
-
-      const { core, blobs } = await this._getBlobsCore(model.blobBinding.coreKey)
-
-      swarm.join(core.discoveryKey, { client: true, server: false })
-      await swarm.flush()
-      await core.update({ wait: true })
-
-      const totalSize = model.blobBinding.byteLength
-
-      if (options.outputFile) {
-        await proto._streamBlobToFile.call(
-          { logger: noopLogger, _checkBlobProgress: proto._checkBlobProgress },
-          blobs,
-          core,
-          model.blobBinding,
-          options.outputFile,
-          options
-        )
-        await blobs.close()
-        await core.close()
-        return { model, artifact: { path: options.outputFile, totalSize } }
-      }
-
-      const stream = blobs.createReadStream(model.blobBinding, {
-        wait: true,
-        timeout: options.timeout || 30000
-      })
-      stream.on('close', async () => {
-        await blobs.close().catch(() => {})
-        await core.close().catch(() => {})
-      })
-      return { model, artifact: { stream, totalSize } }
-    }
+  // Real client methods on a test-owned corestore/swarm, so downloads run the
+  // production cancel and cleanup path. Only metadata access is stubbed.
+  const client = Object.create(QVACRegistryClient.prototype)
+  Object.assign(client, { corestore, db, hyperswarm: swarm, logger: noopLogger })
+  // lunte-disable-next-line require-await
+  client._ensureMetadata = async () => {}
+  // lunte-disable-next-line require-await
+  client.ready = async () => {}
+  client.getModel = async (modelPath, source) => {
+    const result = await db.getModel(modelPath, source)
+    return result ?? null
   }
 
   return { client, swarm, corestore, storage: clientStorage }
+}
+
+// Counts the model's blocks in a client store nothing is replicating into, so
+// blocks fetched by a later download cannot be mistaken for kept ones.
+async function countStoredBlocks(storage, blobBinding) {
+  const store = new Corestore(storage)
+  const core = store.get({ key: IdEnc.decode(blobBinding.coreKey) })
+  await core.ready()
+
+  let blocks = 0
+  const end = blobBinding.blockOffset + blobBinding.blockLength
+  for (let index = blobBinding.blockOffset; index < end; index++) {
+    if (await core.has(index)) blocks++
+  }
+
+  await core.close()
+  await store.close()
+  return blocks
 }
 
 async function cleanupTestClient(ctx) {
@@ -261,6 +230,7 @@ test('download cancel and resume produces correct file', async (t) => {
         outputFile,
         timeout: 30000,
         signal: ac.signal,
+        clearBlocksOnCancel: false,
         onProgress: (progress) => {
           if (progress.downloaded > 0 && !ac.signal.aborted) {
             ac.abort()
@@ -278,15 +248,26 @@ test('download cancel and resume produces correct file', async (t) => {
     throw err
   }
 
+  t.ok(
+    (await countStoredBlocks(clientStorage, model.blobBinding)) > 0,
+    'cancel kept the downloaded blocks'
+  )
+
   // Phase 2: resume with new client on same persistent storage
   const clientCtx2 = await createTestClient(t, ctx, bootstrap, clientStorage)
 
   try {
+    const progressEvents = []
+
     await clientCtx2.client.downloadModel(model.path, model.source, {
       outputFile,
-      timeout: 30000
+      timeout: 30000,
+      onProgress: (progress) => {
+        progressEvents.push({ ...progress })
+      }
     })
 
+    t.ok(progressEvents[0].cachedBlocks > 0, 'resume starts from the kept blocks')
     t.ok(fs.existsSync(outputFile), 'output file exists after resume')
     const downloaded = fs.readFileSync(outputFile)
     t.is(downloaded.length, testPayload.length, 'resumed file has correct size')
@@ -316,19 +297,28 @@ test('onProgress reports initial cached bytes on resume', async (t) => {
         outputFile,
         timeout: 30000,
         signal: ac.signal,
+        clearBlocksOnCancel: false,
         onProgress: (progress) => {
           if (progress.downloaded > 0 && !ac.signal.aborted) {
             ac.abort()
           }
         }
       })
-    } catch {}
+      t.fail('should have thrown on cancel')
+    } catch (err) {
+      t.is(err.message, 'Download cancelled', 'throws cancel error')
+    }
 
     await cleanupTestClient(clientCtx1)
   } catch (err) {
     await cleanupTestClient(clientCtx1)
     throw err
   }
+
+  t.ok(
+    (await countStoredBlocks(clientStorage, model.blobBinding)) > 0,
+    'cancel kept the downloaded blocks'
+  )
 
   // Phase 2: resume and verify first progress event reflects cached state
   const clientCtx2 = await createTestClient(t, ctx, bootstrap, clientStorage)
@@ -346,11 +336,114 @@ test('onProgress reports initial cached bytes on resume', async (t) => {
 
     t.ok(progressEvents.length > 0, 'received progress events')
 
+    // A fresh download's first event also has downloaded > 0 (from the first
+    // block), so only cachedBlocks tells a resume apart.
     const firstEvent = progressEvents[0]
+    t.ok(firstEvent.cachedBlocks > 0, 'first progress event counts cached blocks')
     t.ok(firstEvent.downloaded > 0, 'first progress event shows cached bytes')
     t.ok(firstEvent.total === testPayload.length, 'total matches expected size')
   } finally {
     await cleanupTestClient(clientCtx2)
     await cleanupService(ctx)
   }
+})
+
+test('cancel leaves no blocks for the next download by default', async (t) => {
+  t.timeout(60000)
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const { ctx, model, testPayload } = await setupRegistryWithModel(t, bootstrap)
+
+  const clientStorage = await createTempStorage(t)
+  const outputFile = path.join(await createTempStorage(t), 'output.bin')
+
+  const clientCtx1 = await createTestClient(t, ctx, bootstrap, clientStorage)
+
+  try {
+    const ac = new AbortController()
+
+    try {
+      await clientCtx1.client.downloadModel(model.path, model.source, {
+        outputFile,
+        timeout: 30000,
+        signal: ac.signal,
+        onProgress: (progress) => {
+          if (progress.downloaded > 0 && !ac.signal.aborted) {
+            ac.abort()
+          }
+        }
+      })
+      t.fail('should have thrown on cancel')
+    } catch (err) {
+      t.is(err.message, 'Download cancelled', 'throws cancel error')
+    }
+
+    await cleanupTestClient(clientCtx1)
+  } catch (err) {
+    await cleanupTestClient(clientCtx1)
+    throw err
+  }
+
+  t.is(
+    await countStoredBlocks(clientStorage, model.blobBinding),
+    0,
+    'no blocks survived the cancel'
+  )
+
+  const clientCtx2 = await createTestClient(t, ctx, bootstrap, clientStorage)
+
+  try {
+    await clientCtx2.client.downloadModel(model.path, model.source, {
+      outputFile,
+      timeout: 30000
+    })
+
+    const downloaded = fs.readFileSync(outputFile)
+    t.ok(downloaded.equals(testPayload), 'fresh download has correct content')
+  } finally {
+    await cleanupTestClient(clientCtx2)
+    await cleanupService(ctx)
+  }
+})
+
+test('clearBlob reclaims the blocks a kept cancel left behind', async (t) => {
+  t.timeout(60000)
+  const { bootstrap } = await createTestnet(3, t.teardown)
+  const { ctx, model } = await setupRegistryWithModel(t, bootstrap)
+
+  const clientStorage = await createTempStorage(t)
+  const outputFile = path.join(await createTempStorage(t), 'output.bin')
+
+  const clientCtx = await createTestClient(t, ctx, bootstrap, clientStorage)
+
+  try {
+    const ac = new AbortController()
+
+    try {
+      await clientCtx.client.downloadModel(model.path, model.source, {
+        outputFile,
+        timeout: 30000,
+        signal: ac.signal,
+        clearBlocksOnCancel: false,
+        onProgress: (progress) => {
+          if (progress.downloaded > 0 && !ac.signal.aborted) {
+            ac.abort()
+          }
+        }
+      })
+      t.fail('should have thrown on cancel')
+    } catch (err) {
+      t.is(err.message, 'Download cancelled', 'throws cancel error')
+    }
+
+    await clientCtx.client.clearBlob(model.blobBinding)
+  } finally {
+    await cleanupTestClient(clientCtx)
+    await cleanupService(ctx)
+  }
+
+  t.is(
+    await countStoredBlocks(clientStorage, model.blobBinding),
+    0,
+    'clearBlob removed the kept blocks'
+  )
 })
