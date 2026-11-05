@@ -67,7 +67,9 @@ Caches held by an in-flight request are never evicted.
 
 **Responses caches follow the same policy.** `/v1/responses` names one cache per
 conversation key (`responses-<sha256>`); serve applies the same quota and TTL to those,
-counted separately, and the endpoint below reclaims them too. Any other caller-owned named
+counted separately, and the endpoint below reclaims them too. The quota and the endpoint
+only delete Responses caches this server has used, since other processes may share the
+directory; the TTL applies to all of them. Any other caller-owned named
 cache — `completion({ kvCache: "my-session" })` through the SDK — is exempt from both, and
 the endpoint never touches it. Clean those up with the SDK's `deleteCache({ kvCacheKey })`.
 

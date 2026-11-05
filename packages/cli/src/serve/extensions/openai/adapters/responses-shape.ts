@@ -52,6 +52,8 @@ export interface BuildResponseObjectParams {
   stopReason?: string
   /** The request named a KV cache session; only then is `qvac_cache_tokens` reported. */
   kvCached?: boolean
+  /** SDK cacheTokens of the last generation round; the stats sum every round. */
+  cacheOccupancy?: number
 }
 
 export function buildResponseObject(params: BuildResponseObjectParams): Record<string, unknown> {
@@ -93,7 +95,7 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
   // Keep existing OpenAI token accounting. SDK cacheTokens is cache occupancy,
   // not tokens reused by this request, so expose it as a QVAC diagnostic only.
   const inputTokens = 0
-  const cacheTokens = params.stats?.cacheTokens
+  const cacheTokens = params.cacheOccupancy
   const usage = {
     input_tokens: inputTokens,
     ...(params.kvCached &&

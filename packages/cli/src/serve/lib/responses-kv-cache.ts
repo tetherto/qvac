@@ -15,6 +15,7 @@ interface Logger {
 }
 
 export interface NamedKvCacheRetentionOptions {
+  /** Every key this server generates: `<prefix>` then a 64-hex SHA-256 digest. */
   prefix: string
   /** The SDK's KV cache directory, which holds one folder per cache key. */
   dir?: string
@@ -31,7 +32,10 @@ export interface NamedKvCacheRetention {
    * swept. Waits first if that key is being deleted.
    */
   acquire: (key: string) => Promise<() => void>
-  /** Deletes idle and over-quota caches, or with `all`, every cache not in use. */
+  /**
+   * Deletes caches idle past the TTL, then this server's own caches over the
+   * quota, or with `all`, every cache of its own that is not in use.
+   */
   sweep: (opts?: { all?: boolean }) => Promise<number>
   /** Starts a sweep unless one ran within the sweep interval. */
   maybeSweep: (logger?: Logger) => void
@@ -47,6 +51,10 @@ interface CacheEntry {
 // names one per conversation would grow the cache directory without bound.
 // This applies the same policy to the caches it names: a 24-hour idle TTL and
 // a 4 GiB least-recently-used quota, swept at most every five minutes.
+//
+// Other QVAC processes can share the cache directory, and only this one's
+// in-use keys are known here. So the quota and `all` delete only keys this
+// server has used; the idle TTL, like the SDK's own, applies to every key.
 export function createNamedKvCacheRetention(
   opts: NamedKvCacheRetentionOptions
 ): NamedKvCacheRetention {
@@ -58,7 +66,9 @@ export function createNamedKvCacheRetention(
   const now = opts.now ?? Date.now
   const deleteKey =
     opts.deleteKey ?? ((kvCacheKey: string) => deleteCache({ kvCacheKey }).then(() => undefined))
+  const keyShape = new RegExp(`^${opts.prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[0-9a-f]{64}$`)
   const inUse = new Map<string, number>()
+  const owned = new Set<string>()
   const deleting = new Map<string, Promise<void>>()
   let lastSweepMs = Number.NEGATIVE_INFINITY
   let sweeping: Promise<number> | undefined
@@ -69,6 +79,7 @@ export function createNamedKvCacheRetention(
   async function acquire(key: string): Promise<() => void> {
     while (deleting.has(key)) await deleting.get(key)!.catch(() => undefined)
     inUse.set(key, (inUse.get(key) ?? 0) + 1)
+    owned.add(key)
     let released = false
     return () => {
       if (released) return
@@ -89,7 +100,7 @@ export function createNamedKvCacheRetention(
     }
     const out: CacheEntry[] = []
     for (const dirent of dirents) {
-      if (!dirent.isDirectory() || !dirent.name.startsWith(opts.prefix)) continue
+      if (!dirent.isDirectory() || !keyShape.test(dirent.name)) continue
       const usage = await folderUsage(join(dir, dirent.name))
       if (usage) out.push({ key: dirent.name, ...usage })
     }
@@ -110,9 +121,19 @@ export function createNamedKvCacheRetention(
       .sort((a, b) => a.lastUsedMs - b.lastUsedMs)
     let deleted = 0
     for (const entry of idle) {
-      const expired = now() - entry.lastUsedMs > idleTtlMs
-      if (!all && !expired && total <= maxBytes) continue
-      // A request may have taken the key while an earlier deletion awaited.
+      if (!all && total <= maxBytes && now() - entry.lastUsedMs <= idleTtlMs) continue
+      // A request may have taken or refreshed the key while an earlier deletion
+      // awaited, so decide on what the cache looks like now.
+      if (inUse.has(entry.key)) continue
+      const current = await folderUsage(join(dir, entry.key))
+      if (!current) {
+        total -= entry.bytes
+        continue
+      }
+      total += current.bytes - entry.bytes
+      const expired = now() - current.lastUsedMs > idleTtlMs
+      const evictable = owned.has(entry.key) && (all || total > maxBytes)
+      if (!expired && !evictable) continue
       if (inUse.has(entry.key)) continue
       const deletion = deleteKey(entry.key)
       deleting.set(entry.key, deletion)
@@ -121,7 +142,8 @@ export function createNamedKvCacheRetention(
       } finally {
         deleting.delete(entry.key)
       }
-      total -= entry.bytes
+      total -= current.bytes
+      owned.delete(entry.key)
       deleted++
     }
     return deleted

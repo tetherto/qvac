@@ -106,6 +106,9 @@ export async function writeBlockingResponse(
     previousResponseId: p.previousResponseId,
     store: p.storeEnabled,
     ...(p.kvCached ? { kvCached: true } : {}),
+    ...(drained?.stats?.cacheTokens !== undefined
+      ? { cacheOccupancy: drained.stats.cacheTokens }
+      : {}),
     completionTokens,
     ...(stopReason !== undefined ? { stopReason } : {}),
     ...(stats !== undefined ? { stats } : {})
@@ -315,6 +318,9 @@ export async function writeStreamingResponse(
     previousResponseId: p.previousResponseId,
     store: p.storeEnabled,
     ...(p.kvCached ? { kvCached: true } : {}),
+    ...(drained?.stats?.cacheTokens !== undefined
+      ? { cacheOccupancy: drained.stats.cacheTokens }
+      : {}),
     messageItemId: msgId,
     completionTokens,
     ...(hasToolCalls ? { functionCallItemIds: fcItemIds } : {}),
