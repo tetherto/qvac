@@ -24,6 +24,7 @@
 #include "addon/LlmErrors.hpp"
 #include "inference-addon-cpp/Logger.hpp"
 #include "utils/ChatTemplateUtils.hpp"
+#include "utils/LlamaBatch.hpp"
 #include "utils/LogSafeString.hpp"
 #include "utils/LoggingMacros.hpp"
 #include "utils/ModelMemoryPolicy.hpp"
@@ -1159,7 +1160,7 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
       break;
     }
 
-    common_batch_clear(*batch);
+    llamaBatchClear(*batch);
     if (stopGeneration_.load()) {
       // Route through the post-loop `cancelGenerationCleanup` instead
       // of injecting EOT — EOT would advance the cursor past rollback.
@@ -1168,7 +1169,7 @@ LlmContext::GenerateResponseResult MtmdLlmContext::generateResponse(
       ++lastGeneratedTokenCount_;
       break;
     }
-    common_batch_add(*batch, tokenId, current_.pos, {seqId_}, true);
+    llamaBatchAdd(*batch, tokenId, current_.pos, {seqId_}, true);
 
     // eval the token
     if (llama_decode(modelCtx_.lctx, *batch) != 0) {
@@ -2279,8 +2280,8 @@ void MtmdLlmContext::generateSpeculative(
     }
     if (nRemain == 0) {
       // The plain loop decodes the token it stops on for the budget.
-      common_batch_clear(*batch);
-      common_batch_add(*batch, sampled, current_.pos, {seqId_}, false);
+      llamaBatchClear(*batch);
+      llamaBatchAdd(*batch, sampled, current_.pos, {seqId_}, false);
       decodeOrThrow();
       advanceDecodedTextToken(sampled);
       return;
@@ -2294,12 +2295,12 @@ void MtmdLlmContext::generateSpeculative(
       spec_.afterDraft();
     }
 
-    common_batch_clear(*batch);
+    llamaBatchClear(*batch);
     const bool verifying = spec_.hasDraft();
     if (verifying) {
       spec_.addToBatch(*batch, sampled, current_.pos);
     } else {
-      common_batch_add(*batch, sampled, current_.pos, {seqId_}, true);
+      llamaBatchAdd(*batch, sampled, current_.pos, {seqId_}, true);
     }
     decodeOrThrow();
 

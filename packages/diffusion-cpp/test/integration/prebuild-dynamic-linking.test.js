@@ -115,6 +115,77 @@ function elfInfo(buffer) {
   return { needed, unresolvedCxx }
 }
 
+// Windows twin of the ELF reader: the DLL names in a PE32+ import table and
+// delay-load import table (a delay-loaded vulkan-1.dll would still mean the
+// GPU backend is linked into the addon). Enough for the prebuild artifacts
+// this test inspects; not a general PE parser.
+function peImports(buffer) {
+  const isMz = buffer.length > 0x40 && buffer[0] === 0x4d && buffer[1] === 0x5a
+  if (!isMz) throw new Error('not a PE file')
+  const pe = buffer.readUInt32LE(0x3c)
+  if (buffer.readUInt32LE(pe) !== 0x00004550) throw new Error('missing PE signature')
+  const numberOfSections = buffer.readUInt16LE(pe + 6)
+  const sizeOfOptionalHeader = buffer.readUInt16LE(pe + 20)
+  const optional = pe + 24
+  if (buffer.readUInt16LE(optional) !== 0x20b) throw new Error('only PE32+ is supported')
+
+  const sections = []
+  for (let i = 0; i < numberOfSections; i++) {
+    const off = optional + sizeOfOptionalHeader + i * 40
+    sections.push({
+      virtualAddress: buffer.readUInt32LE(off + 12),
+      sizeOfRawData: buffer.readUInt32LE(off + 16),
+      pointerToRawData: buffer.readUInt32LE(off + 20)
+    })
+  }
+  const rvaToOffset = (rva) => {
+    const s = sections.find(
+      (sec) => rva >= sec.virtualAddress && rva < sec.virtualAddress + sec.sizeOfRawData
+    )
+    if (!s) throw new Error('RVA outside every section: ' + rva)
+    return rva - s.virtualAddress + s.pointerToRawData
+  }
+
+  const imports = []
+  const readNames = (dirRva, descriptorSize, nameField) => {
+    if (dirRva === 0) return
+    for (let pos = rvaToOffset(dirRva); ; pos += descriptorSize) {
+      const nameRva = buffer.readUInt32LE(pos + nameField)
+      if (nameRva === 0) break
+      const nameOff = rvaToOffset(nameRva)
+      let end = nameOff
+      while (end < buffer.length && buffer[end] !== 0) end++
+      imports.push(buffer.toString('utf8', nameOff, end).toLowerCase())
+    }
+  }
+
+  // PE32+ puts the data directory at optional header offset 112, preceded by
+  // its entry count. Entry 1 is the import table (20-byte descriptors, name
+  // at +12), entry 13 the delay-load import table (32-byte descriptors, name
+  // at +4).
+  const numberOfRvaAndSizes = buffer.readUInt32LE(optional + 108)
+  const dirRva = (index) =>
+    index < numberOfRvaAndSizes ? buffer.readUInt32LE(optional + 112 + index * 8) : 0
+  readNames(dirRva(1), 20, 12)
+  readNames(dirRva(13), 32, 4)
+  return imports
+}
+
+// The Windows counterparts of FORBIDDEN_NEEDED and FORBIDDEN_RUNTIME: the
+// addon must not import the Vulkan loader, and neither it nor the backend
+// module may import the dynamic Visual C++ runtime (the prebuild links the
+// static CRT, see vcpkg-overlays/triplets/x64-windows.cmake). A dynamic UCRT
+// shows up as the api-ms-win-crt-* API sets, not as ucrtbase.dll.
+const FORBIDDEN_WIN_IMPORTS = [
+  'vulkan-1.dll',
+  'opencl.dll',
+  'nvcuda.dll',
+  'cudart64',
+  'cublas64',
+  'cublaslt64'
+]
+const FORBIDDEN_WIN_RUNTIME = ['vcruntime', 'msvcp', 'ucrtbase.dll', 'api-ms-win-crt-']
+
 test('linux prebuild has no hard GPU-loader deps and ships DL backend modules', async (t) => {
   if (os.platform() !== 'linux') {
     t.pass('dynamic-linking layout check is linux-only')
@@ -198,9 +269,62 @@ test('linux prebuild has no hard GPU-loader deps and ships DL backend modules', 
   }
 })
 
+test('win32 prebuild has no hard GPU-loader imports and ships the Vulkan backend DLL', async (t) => {
+  if (os.platform() !== 'win32') {
+    t.pass('PE import layout check is win32-only')
+    return
+  }
+  if (proc.env && proc.env.QVAC_SKIP_PREBUILD_LINK_CHECK === 'true') {
+    t.pass('QVAC_SKIP_PREBUILD_LINK_CHECK=true; skipping (custom local build)')
+    return
+  }
+
+  const target = `${os.platform()}-${os.arch()}`
+  const moduleName = moduleNameForHost(target)
+  const addonPath = path.join(PREBUILDS_DIR, target, `${moduleName}.bare`)
+  t.ok(fs.existsSync(addonPath), `prebuild present: ${addonPath}`)
+
+  // 1. The addon must load on a host without a Vulkan runtime: no GPU loader
+  //    and no dynamic CRT in its import table (QVAC-25560).
+  const addonImports = peImports(fs.readFileSync(addonPath))
+  t.comment(`${moduleName}.bare imports: ${addonImports.join(', ')}`)
+  for (const dll of [...FORBIDDEN_WIN_IMPORTS, ...FORBIDDEN_WIN_RUNTIME]) {
+    t.absent(
+      addonImports.find((n) => n.startsWith(dll)),
+      `addon must not import ${dll}* (breaks hosts without it)`
+    )
+  }
+
+  // 2. GPU support must not silently disappear: the Vulkan backend has to
+  //    ship as a runtime-loaded DLL next to the addon...
+  const vulkanModulePath = path.join(
+    PREBUILDS_DIR,
+    target,
+    moduleName,
+    'qvac-diffusion-ggml-vulkan.dll'
+  )
+  t.ok(fs.existsSync(vulkanModulePath), `Vulkan DL backend module present: ${vulkanModulePath}`)
+
+  // 3. ...and that DLL is where the vulkan-1.dll import belongs. It must be
+  //    self-contained w.r.t. the CRT, or LoadLibrary fails on a stock host
+  //    and the GPU never registers.
+  const moduleImports = peImports(fs.readFileSync(vulkanModulePath))
+  t.comment(`qvac-diffusion-ggml-vulkan.dll imports: ${moduleImports.join(', ')}`)
+  t.ok(
+    moduleImports.find((n) => n === 'vulkan-1.dll'),
+    'Vulkan module imports vulkan-1.dll (loaded only when present at runtime)'
+  )
+  for (const dll of FORBIDDEN_WIN_RUNTIME) {
+    t.absent(
+      moduleImports.find((n) => n.startsWith(dll)),
+      `Vulkan module must not import ${dll}* (LoadLibrary must work on stock hosts)`
+    )
+  }
+})
+
 // File-level layout checks above prove the module EXISTS; this proves Linux
-// can actually dlopen and register it. A packaging mistake in the backends
-// subdir, the dlopen search path, or module registration would pass the
+// and Windows can actually load and register it. A packaging mistake in the
+// backends subdir, the module search path, or registration would pass the
 // layout checks while GPU selection silently fell back to CPU. Backend
 // registration is PROCESS-GLOBAL and happens on the first model load in the
 // suite, so this test cannot rely on catching the one-time
@@ -209,11 +333,11 @@ test('linux prebuild has no hard GPU-loader deps and ships DL backend modules', 
 // Device index zero may be CUDA on a Linux release, so it is not a stable
 // way to select Vulkan. An unavailable explicit backend fails model load.
 test(
-  'linux GPU host registers the Vulkan backend through the DL module',
+  'linux and win32 GPU hosts register the Vulkan backend through the DL module',
   { timeout: 600000 },
   async (t) => {
-    if (os.platform() !== 'linux') {
-      t.pass('DL backend registration check is linux-only')
+    if (os.platform() !== 'linux' && os.platform() !== 'win32') {
+      t.pass('DL backend registration check is linux and win32 only')
       return
     }
     if (proc.env && proc.env.NO_GPU === 'true') {
