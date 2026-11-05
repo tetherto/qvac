@@ -207,7 +207,10 @@ if(BUILD_TESTING)
   find_package(GTest CONFIG REQUIRED)
   enable_testing()
 
-  add_executable(audiogen_ggml_tests addon/tests/test_app_memory_budget.cpp)
+  add_executable(audiogen_ggml_tests
+    addon/tests/test_app_memory_budget.cpp
+    addon/tests/test_output_gain.cpp
+  )
   target_include_directories(audiogen_ggml_tests PRIVATE
     ${PROJECT_SOURCE_DIR}/addon/src
   )
