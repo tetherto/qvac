@@ -72,7 +72,7 @@ jobs:
   # One package per dispatch, as main's per-addon mobile workflows ran one addon each, so the per-package run cap in
   # devicefarm-check-devices caps the whole dispatch.
   one-package:
-    if: github.event_name == 'workflow_dispatch'
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -117,7 +117,7 @@ jobs:
       dependency_prebuild_run_id: ${{ inputs.dependency_prebuild_run_id }}
 
   weekly:
-    if: github.event.schedule == '0 6 * * 0'
+    if: github.event.schedule == '0 6 * * 0' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
