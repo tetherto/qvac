@@ -49,6 +49,14 @@
         "sources": ["npm"]
       }
     },
+    "publish:pre": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/ai-sdk-provider",
+        "parallel": false,
+        "commands": ["npm run format", "npm run lint", "npm run typecheck", "npm run test:unit"]
+      }
+    },
     "publish": {
       "executor": "nx:noop",
       "metadata": {

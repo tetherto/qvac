@@ -69,6 +69,14 @@
         "timeoutMinutes": 180
       }
     },
+    "publish:pre": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/cli",
+        "parallel": false,
+        "commands": ["npm run format", "npm run lint", "npm run typecheck"]
+      }
+    },
     "publish": {
       "executor": "nx:run-commands",
       "options": {
