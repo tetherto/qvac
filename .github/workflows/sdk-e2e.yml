@@ -309,9 +309,11 @@ jobs:
           platform: ${{ env.PLATFORM }}
           run-arns: ${{ steps.pool.outputs.run-arns }}
           files: |
-            bare_console.log
+            testconsumer.log
+            react-native-logs.log
+            test-results.txt
+            testconsumer-logarchive.log
             appium.log
-            logcat_full.txt
           skip-extensions: ${{ env.PLATFORM == 'Android' && 'mp4' || '' }}
       - if: always() && steps.logs.outcome == 'success'
         uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
