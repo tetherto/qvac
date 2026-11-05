@@ -20,6 +20,7 @@ It also runs [Laya](https://github.com/NandhaKishorM/laya) decision models throu
 - [API behavior by state](#api-behavior-by-state)
 - [Laya decision models](#laya-decision-models)
 - [Rerankers](#rerankers)
+- [Converting EmbeddingGemma-300M](#converting-embeddinggemma-300m)
 - [Assessing fit](#assessing-fit)
 - [Vector index](#vector-index)
 - [Quickstart Example](#quickstart-example)
@@ -477,6 +478,17 @@ With `opts: { stats: true }`, `response.stats` holds `total_tokens`, `total_time
 A reranker GGUF that declares no pooling at all, as many converted cross-encoders do, is accepted. The classifier-head check reads the disk headers, including later shards discovered from the first GGUF.
 
 `run()` throws a `TypeError` when the request is not `{ query: string, documents: string[] }`, and otherwise rejects with an error that carries only a `message`: a document that with the query is longer than `batch_size` (`increase batch_size`) or than the model's trained context, a failed forward pass (`llama_decode failed`), or `Job cancelled` after `cancel()`.
+
+## Converting EmbeddingGemma-300M
+
+EmbeddingGemma-300M ends with two Dense projections after mean pooling. A GGUF converted without them still loads and returns 768-dimensional vectors, but they are pooled hidden states rather than EmbeddingGemma embeddings, so they do not match other runtimes and lose accuracy when truncated. [scripts/convert-embeddinggemma-300m.py](scripts/convert-embeddinggemma-300m.py) downloads a pinned revision, checks every file against a pinned SHA256, and converts it with the Dense layers:
+
+```bash
+pip install -r <fabric>/requirements/requirements-convert_hf_to_gguf.txt
+python scripts/convert-embeddinggemma-300m.py --fabric <fabric> --quantize <fabric>/build/bin/llama-quantize --output-dir models
+```
+
+`<fabric>` is a [qvac-fabric-llm.cpp](https://github.com/tetherto/qvac-fabric-llm.cpp) checkout, and `--quantize` is its `llama-quantize`. The script writes `embeddinggemma-300M-BF16.gguf`, `embeddinggemma-300M-Q8_0.gguf` and `embeddinggemma-300M-Q4_0.gguf`; repeat `--outtype` to write only some of them, and `--quantize` is then needed only for `q4_0`. Q4_0 is quantized from an F32 conversion and keeps the token embedding at Q8_0. `google/embeddinggemma-300m` is gated: log in to Hugging Face with an account that accepted the Gemma license, or pass `--repo unsloth/embeddinggemma-300m`, an ungated mirror with identical files. The script fails if an output lacks `dense_2` or `dense_3`, and never overwrites an existing file.
 
 ## Assessing fit
 
