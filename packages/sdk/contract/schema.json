@@ -2894,6 +2894,10 @@
                             "type": "string",
                             "enum": ["cpu", "gpu"],
                             "title": "BatchCompletionStreamResponseEventsItemEventCompletionStatsStatsBackendDevice"
+                          },
+                          "backendName": {
+                            "description": "Backend families used by the primary model after loading and fitting, in lowercase. Multiple families are sorted and comma-separated. Optional with older addons.",
+                            "type": "string"
                           }
                         },
                         "additionalProperties": false,
@@ -3028,6 +3032,10 @@
               "type": "string",
               "enum": ["cpu", "gpu"],
               "title": "BatchCompletionStreamResponseStatsBackendDevice"
+            },
+            "backendName": {
+              "description": "Backend families used by the primary model after loading and fitting, in lowercase. Multiple families are sorted and comma-separated. Optional with older addons.",
+              "type": "string"
             }
           },
           "additionalProperties": false,
@@ -4505,6 +4513,10 @@
                         "type": "string",
                         "enum": ["cpu", "gpu"],
                         "title": "CompletionOrchestrateResponseEventsItemCompletionStatsStatsBackendDevice"
+                      },
+                      "backendName": {
+                        "description": "Backend families used by the primary model after loading and fitting, in lowercase. Multiple families are sorted and comma-separated. Optional with older addons.",
+                        "type": "string"
                       }
                     },
                     "additionalProperties": false,
@@ -5207,6 +5219,10 @@
                         "type": "string",
                         "enum": ["cpu", "gpu"],
                         "title": "CompletionStreamResponseEventsItemCompletionStatsStatsBackendDevice"
+                      },
+                      "backendName": {
+                        "description": "Backend families used by the primary model after loading and fitting, in lowercase. Multiple families are sorted and comma-separated. Optional with older addons.",
+                        "type": "string"
                       }
                     },
                     "additionalProperties": false,
@@ -7572,6 +7588,10 @@
               "type": "string",
               "enum": ["cpu", "gpu"],
               "title": "EmbedResponseStatsBackendDevice"
+            },
+            "backendName": {
+              "description": "Backend families used by the primary model after loading and fitting, in lowercase. Multiple families are sorted and comma-separated. Optional with older addons.",
+              "type": "string"
             },
             "contextSize": {
               "description": "Context size in tokens",

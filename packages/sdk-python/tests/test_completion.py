@@ -107,7 +107,7 @@ async def test_completion_aggregates_content_thinking_and_stats():
                     {
                         "type": "completionStats",
                         "seq": 3,
-                        "stats": {"generatedTokens": 5},
+                        "stats": {"generatedTokens": 5, "backendName": "metal"},
                     },
                     _done(
                         4,
@@ -135,6 +135,8 @@ async def test_completion_aggregates_content_thinking_and_stats():
     assert final.content_text == "Hello"
     assert final.thinking_text == " world"
     assert final.stats.generated_tokens == 5
+    assert final.stats.backend_name == "metal"
+    assert (await run.stats()).backend_name == "metal"
     assert final.raw_full_text == "<think> world</think>Hello"
     # Cache string strips the think block out of the raw text.
     assert final.cacheable_assistant_content == "Hello"

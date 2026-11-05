@@ -5,7 +5,7 @@ import { decodeBase64, encodeBase64 } from '@/utils/encoding'
 interface VlaRunNative {
   await(): Promise<{
     actions: Float32Array
-    stats?: Record<string, number>
+    stats?: VlaStats
   }>
   cancel(): Promise<void>
 }
@@ -64,6 +64,7 @@ function pickStats(raw: unknown): VlaStats | undefined {
   if (typeof r['ode_ms'] === 'number') out.ode_ms = r['ode_ms']
   if (typeof r['total_ms'] === 'number') out.total_ms = r['total_ms']
   if (typeof r['backendDevice'] === 'number') out.backendDevice = r['backendDevice']
+  if (typeof r['backendName'] === 'string') out.backendName = r['backendName']
   return Object.keys(out).length > 0 ? out : undefined
 }
 

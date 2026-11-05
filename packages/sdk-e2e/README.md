@@ -126,6 +126,11 @@ Which rebuild command you run depends on what changed.
   a different `--filter` or `--suite`, or just re-running to debug flakiness. The producer reads
   definitions fresh each run, so filter / suite changes are picked up without rebuilding.
 
+The `backend-name-` tests need native LLM and embedding addons that emit
+`stats.backendName`. Rebuilding inference and the SDK alone does not update the
+native binaries in the installed e2e dependencies. Use matching native builds
+for each consumer platform when testing unpublished addon changes.
+
 ### Resetting the local tree
 
 `clean:*` scripts are split by what they throw away, so a routine reset doesn't cost you more than it needs

@@ -497,3 +497,24 @@ test('batchCompletion client: routes handlers by position when ids are omitted',
   await toolPromptFinal.toolCalls[0]?.invoke?.()
   t.alike(calls, ['inline:Tokyo'])
 })
+
+test('batchCompletion client: backendName survives terminal stats on the batch run', async (t) => {
+  const run = createRun([
+    {
+      type: 'batchCompletionStream',
+      done: true,
+      ids: ['a', 'b'],
+      events: [
+        { id: 'a', event: { type: 'completionDone', seq: 0 } },
+        { id: 'b', event: { type: 'completionDone', seq: 0 } }
+      ],
+      stats: { backendDevice: 'gpu', backendName: 'cuda,vulkan' }
+    }
+  ])
+  const results = await run.results
+  t.alike(await run.stats, { backendDevice: 'gpu', backendName: 'cuda,vulkan' })
+  t.alike(
+    results.map((result) => result.final.stats),
+    [undefined, undefined]
+  )
+})

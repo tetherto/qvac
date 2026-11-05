@@ -28,6 +28,12 @@ export const embedStatsSchema = z.object({
   tokensPerSecond: z.number().optional().describe('Tokens processed per second'),
   totalTokens: z.number().optional().describe('Total tokens processed'),
   backendDevice: z.enum(['cpu', 'gpu']).optional().describe('Compute backend used for inference'),
+  backendName: z
+    .string()
+    .optional()
+    .describe(
+      'Backend families used by the primary model after loading and fitting, in lowercase. Multiple families are sorted and comma-separated. Optional with older addons.'
+    ),
   contextSize: z.number().optional().describe('Context size in tokens')
 })
 
