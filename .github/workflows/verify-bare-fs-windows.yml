@@ -51,10 +51,11 @@ jobs:
         run: |
           store="$RUNNER_TEMP/qvac-store"
           rm -rf "$store"
+          bare=node_modules/bare-runtime/bin/bare
           set +e
-          npx bare reopen.js "$store" create
+          node "$bare" reopen.js "$store" create
           create=$?
-          npx bare reopen.js "$store" reopen
+          node "$bare" reopen.js "$store" reopen
           reopen=$?
           set -e
           echo "create=$create reopen=$reopen"
