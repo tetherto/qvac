@@ -20,6 +20,7 @@ import {
 import { bindTtsCancel, cancelIfAborted } from '@/plugins/builtin/tts-ggml/ops/cancel-binding'
 import type { TtsOpResult } from '@/plugins/builtin/tts-ggml/ops/text-to-speech'
 import {
+  assertVoiceJobOptionsSupported,
   resolveVoiceJobOptions,
   type VoiceJobOptions
 } from '@/plugins/builtin/tts-ggml/ops/voice-options'
@@ -158,10 +159,19 @@ export async function* textToSpeechStream(
   }
   const parlerJobOptions = getParlerJobOptions(request)
   assertParlerJobOptionsSupported(model, parlerJobOptions, 'textToSpeechStream')
-  const voiceJobOptions = await resolveVoiceJobOptions(model, request, 'textToSpeechStream')
+  assertVoiceJobOptionsSupported(model, request, 'textToSpeechStream')
 
   await using ctx = await bindTtsCancel(model, request.modelId, request.requestId)
   if (ctx.signal.aborted) return { ...buildStreamResult(0), cancelled: true }
+
+  // Resolved inside the request context: an uncached remote reference
+  // recording downloads here, and a cancel has to be able to stop that.
+  const voiceJobOptions = await resolveVoiceJobOptions(request, {
+    signal: ctx.signal,
+    scope: ctx.scope,
+    requestId: ctx.requestId
+  })
+  if (voiceJobOptions === null) return { ...buildStreamResult(0), cancelled: true }
 
   const modelStart = nowMs()
 

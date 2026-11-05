@@ -21,6 +21,7 @@ import {
 } from '@/plugins/builtin/tts-ggml/ops/parler-options'
 import { bindTtsCancel, cancelIfAborted } from '@/plugins/builtin/tts-ggml/ops/cancel-binding'
 import {
+  assertVoiceJobOptionsSupported,
   resolveVoiceJobOptions,
   type VoiceJobOptions
 } from '@/plugins/builtin/tts-ggml/ops/voice-options'
@@ -81,7 +82,7 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
   const model = getModel(modelId)
   const mossJobOptions = getMossJobOptions(model, request)
   assertParlerJobOptionsSupported(model, parlerJobOptions, 'textToSpeech')
-  const voiceJobOptions = await resolveVoiceJobOptions(model, request, 'textToSpeech')
+  assertVoiceJobOptionsSupported(model, request, 'textToSpeech')
 
   // MOSS streams natively: one job over the whole text, emitting a chunk every
   // `streamChunkTokens` codec frames while the backbone is still generating.
@@ -105,6 +106,15 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
 
   await using ctx = await bindTtsCancel(model, modelId, request.requestId)
   if (ctx.signal.aborted) return { ...buildStreamResult(0), cancelled: true }
+
+  // Resolved inside the request context: an uncached remote reference
+  // recording downloads here, and a cancel has to be able to stop that.
+  const voiceJobOptions = await resolveVoiceJobOptions(request, {
+    signal: ctx.signal,
+    scope: ctx.scope,
+    requestId: ctx.requestId
+  })
+  if (voiceJobOptions === null) return { ...buildStreamResult(0), cancelled: true }
 
   const modelStart = nowMs()
 

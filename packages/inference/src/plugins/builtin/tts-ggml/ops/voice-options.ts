@@ -1,4 +1,5 @@
 import type { TextToSpeechStreamRequest, TtsRequest, TtsCosyvoice3Instruct } from '@/schemas/index'
+import type { DownloadRequestBinding } from '@/handlers/load-model/types'
 import { PluginRequestValidationFailedError } from '@/errors/index'
 import { resolveModelPath } from '@/handlers/load-model/resolve'
 import { getTtsEngineType } from '@/plugins/builtin/tts-ggml/ops/parler-options'
@@ -31,20 +32,20 @@ export function toAddonInstruct(instruct: TtsCosyvoice3Instruct) {
 }
 
 /**
- * The per-request voice controls of whichever engine is loaded. The request
- * schema only knows an opaque modelId, so the engine check lives here: the
- * addon would reject the same fields with its own throw, and naming the SDK
+ * Rejects per-request voice controls the loaded engine does not take. The
+ * request schema only knows an opaque modelId, so the engine check lives here:
+ * the addon would reject the same fields with its own throw, and naming the SDK
  * field and the engine that takes it is clearer than surfacing that.
  *
- * `referenceAudioSrc` goes through the same source resolution as the load-time
- * `referenceAudioSrc` (a local path, or a registry / remote source cached on
- * first use), so a request can name a voice the same way a load config does.
+ * Synchronous on purpose: both ops call it before they open their request
+ * context, so a request that can never run fails without queueing for the
+ * model.
  */
-export async function resolveVoiceJobOptions(
+export function assertVoiceJobOptionsSupported(
   model: unknown,
   request: VoiceOptionsRequest,
   handlerName: 'textToSpeech' | 'textToSpeechStream'
-): Promise<VoiceJobOptions> {
+): void {
   const engine = getTtsEngineType(model)
 
   if (request.instruct !== undefined && engine !== 'cosyvoice3') {
@@ -63,11 +64,41 @@ export async function resolveVoiceJobOptions(
       `${referenceKeys.join(', ')} ${referenceKeys.length === 1 ? 'is' : 'are'} only supported per request by Audio8 models (engine is ${engine ?? 'unknown'})`
     )
   }
+}
 
-  const referenceAudio =
-    request.referenceAudioSrc !== undefined
-      ? await resolveModelPath(request.referenceAudioSrc)
-      : undefined
+/**
+ * The per-request voice controls in the addon's spelling, or `null` when the
+ * request was cancelled while its reference recording was being fetched.
+ *
+ * `referenceAudioSrc` goes through the same source resolution as the load-time
+ * `referenceAudioSrc` (a local path, or a registry / remote source cached on
+ * first use), so a request can name a voice the same way a load config does.
+ * An uncached remote source downloads here, which can take as long as the
+ * synthesis itself. The op therefore resolves it inside its request context
+ * and hands that context over as `binding`: the request is already in the
+ * registry, so `cancel({ modelId })` finds it, and the download is subscribed
+ * to its abort signal, so that cancel and `cancel({ requestId })` both stop
+ * the transfer instead of letting speech generation follow it.
+ */
+export async function resolveVoiceJobOptions(
+  request: VoiceOptionsRequest,
+  binding: DownloadRequestBinding
+): Promise<VoiceJobOptions | null> {
+  let referenceAudio: string | undefined
+  if (request.referenceAudioSrc !== undefined) {
+    try {
+      referenceAudio = await resolveModelPath(
+        request.referenceAudioSrc,
+        undefined,
+        undefined,
+        binding.signal,
+        { requestBinding: binding }
+      )
+    } catch (error) {
+      if (binding.signal.aborted) return null
+      throw error
+    }
+  }
 
   return {
     ...(request.instruct !== undefined ? { instruct: toAddonInstruct(request.instruct) } : {}),

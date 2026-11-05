@@ -46,9 +46,13 @@ export function appendPcm(target: number[], samples: ArrayLike<number>) {
 /**
  * The addon stats that keep their name on the wire. `audioDurationMs` is the
  * one rename (`audioDuration`, the name the SDK has always exposed) and is
- * handled on its own below. Every entry is a key of both the addon's stats and
- * `ttsStatsSchema`, so a field added to one side without the other fails to
- * compile here rather than being dropped silently.
+ * handled on its own below.
+ *
+ * Two compile-time checks keep this table honest. `satisfies` requires every
+ * entry to be a key of both the addon's stats and `ttsStatsSchema`, and
+ * `UnforwardedTtsStats` below requires every key of either type to be an
+ * entry. A stat added to one side only, or to both without a line here, fails
+ * to compile rather than being dropped silently.
  */
 const TTS_FORWARDED_STATS = [
   'totalTime',
@@ -98,6 +102,19 @@ const TTS_FORWARDED_STATS = [
   'codecSynthMs',
   'resampleMs'
 ] as const satisfies readonly (keyof AddonTtsStats & keyof TtsStats)[]
+
+type ForwardedTtsStat = (typeof TTS_FORWARDED_STATS)[number]
+
+// The stats either side declares that the table does not cover, apart from the
+// renamed pair. Anything left here is a field `collectTtsStats` would drop.
+type UnforwardedTtsStats =
+  | Exclude<keyof AddonTtsStats, ForwardedTtsStat | 'audioDurationMs'>
+  | Exclude<keyof TtsStats, ForwardedTtsStat | 'audioDuration'>
+
+// Fails with the missing field's name: "Type '"newStat"' does not satisfy the
+// constraint 'never'".
+type AssertNoUnforwardedTtsStats<T extends never> = T
+export type TtsStatsTableIsExhaustive = AssertNoUnforwardedTtsStats<UnforwardedTtsStats>
 
 // Presence, not truthiness: `backendDevice: 0` (CPU) and a zero stage time are
 // real reports, so only `undefined` is dropped.

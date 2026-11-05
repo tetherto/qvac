@@ -1,12 +1,15 @@
 import test from 'brittle'
 import Buffer from 'bare-buffer'
 import fs from 'bare-fs'
+import http from 'bare-http1'
 import os from 'bare-os'
 import path from 'bare-path'
+import { getRequestRegistry } from '@/runtime/index'
 import { registerModel, unregisterModel } from '@/runtime/model-registry'
 import { textToSpeech } from '@/plugins/builtin/tts-ggml/ops/text-to-speech'
 import { textToSpeechStream } from '@/plugins/builtin/tts-ggml/ops/text-to-speech-stream'
 import type { TtsOpResult } from '@/plugins/builtin/tts-ggml/ops/text-to-speech'
+import { useTestCacheDir } from './fixtures/test-cache'
 
 // The per-request voice controls @qvac/tts-ggml takes on every entry point:
 // CosyVoice3's `instruct` and Audio8's reference recording + transcript. The
@@ -63,6 +66,42 @@ function duplex(request: Record<string, unknown>, text: string) {
       yield Buffer.from(text)
     })()
   )
+}
+
+// A loopback server that accepts the reference download and never answers it,
+// which parks the op in the fetch for as long as a test needs. `requested`
+// settles once the download has reached the server, so a test cancels at a
+// known point instead of racing the op.
+async function startStalledServer() {
+  let onRequest!: () => void
+  const requested = new Promise<void>((resolve) => {
+    onRequest = resolve
+  })
+  const sockets = new Set<{ destroy: () => void }>()
+  const server = http.createServer(() => onRequest())
+  server.on('connection', (socket: { destroy: () => void }) => sockets.add(socket))
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()))
+  const { port } = server.address()!
+  return {
+    url: `http://127.0.0.1:${port}/someone-else.wav`,
+    requested,
+    close: async () => {
+      for (const socket of sockets) socket.destroy()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  }
+}
+
+async function withTimeout<T>(work: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>
+  const expiry = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), ms)
+  })
+  try {
+    return await Promise.race([work, expiry])
+  } finally {
+    clearTimeout(timer!)
+  }
 }
 
 test('CosyVoice3: a per-request instruct reaches run(), runStream() and runStreaming()', async (t) => {
@@ -216,4 +255,78 @@ test('per-request referenceText is rejected on engines other than Audio8', async
   } finally {
     unregisterModel('cosyvoice3-reference')
   }
+})
+
+// An uncached remote `referenceAudioSrc` downloads before the engine is asked
+// for anything. That wait is part of the request: it has to be in the registry
+// for `cancel({ modelId })` to find it, and the transfer has to be bound to it
+// for either cancel to stop the fetch rather than be followed by synthesis.
+test('Audio8: a model-scoped cancel stops the reference download before any synthesis', async (t) => {
+  useTestCacheDir()
+  const modelId = 'audio8-reference-cancel'
+  const requestId = 'req-reference-cancel'
+  const server = await startStalledServer()
+  const calls: unknown[] = []
+  register(modelId, 'audio8', calls)
+  t.teardown(async () => {
+    unregisterModel(modelId)
+    await server.close()
+  })
+
+  const pending = drain(
+    textToSpeech({
+      type: 'textToSpeech',
+      modelId,
+      requestId,
+      inputType: 'text',
+      text: 'Spoken in another voice.',
+      stream: false,
+      sentenceStream: false,
+      referenceAudioSrc: server.url,
+      referenceText: 'What that recording says.'
+    })
+  )
+  await withTimeout(server.requested, 5000, 'the reference download never reached the server')
+
+  t.is(
+    getRequestRegistry().cancel({ modelId }),
+    1,
+    'the request is registered while its reference recording downloads'
+  )
+  const result = await withTimeout(pending, 5000, 'the cancel did not stop the download')
+  t.is(result.cancelled, true, 'the op reports the cancellation')
+  t.is(calls.length, 0, 'nothing reached the engine')
+  t.is(getRequestRegistry().get(requestId), null, 'the model slot is released')
+})
+
+test('Audio8: cancelling by requestId stops a duplex session still fetching its reference', async (t) => {
+  useTestCacheDir()
+  const modelId = 'audio8-reference-cancel-duplex'
+  const requestId = 'req-reference-cancel-duplex'
+  const server = await startStalledServer()
+  const calls: unknown[] = []
+  register(modelId, 'audio8', calls)
+  t.teardown(async () => {
+    unregisterModel(modelId)
+    await server.close()
+  })
+
+  const pending = drain(
+    duplex(
+      {
+        modelId,
+        requestId,
+        referenceAudioSrc: server.url,
+        referenceText: 'What that recording says.'
+      },
+      'Hi.'
+    )
+  )
+  await withTimeout(server.requested, 5000, 'the reference download never reached the server')
+
+  t.is(getRequestRegistry().cancel({ requestId }), 1, 'the request is addressable by its id')
+  const result = await withTimeout(pending, 5000, 'the cancel did not stop the download')
+  t.is(result.cancelled, true, 'the op reports the cancellation')
+  t.is(calls.length, 0, 'nothing reached the engine')
+  t.is(getRequestRegistry().get(requestId), null, 'the model slot is released')
 })
