@@ -17,7 +17,8 @@
       "runModelLoadingTest",
       "runFitTest",
       "runRerankTest",
-      "runMultimodalTest"
+      "runMultimodalTest",
+      "runKnowledgeIndexingTest"
     ],
     "multi": ["runMultiGpuTest", "runMultiInstanceTest"]
   }

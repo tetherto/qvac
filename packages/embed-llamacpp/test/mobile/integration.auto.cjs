@@ -180,6 +180,11 @@ async function runFitTest (options = {}) { // eslint-disable-line no-unused-vars
   return runIntegrationModule('../integration/fit.test.js', options)
 }
 
+async function runKnowledgeIndexingTest (options = {}) { // eslint-disable-line no-unused-vars
+  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runKnowledgeIndexingTest')) return __FILTERED
+  return runIntegrationModule('../integration/knowledge-indexing.test.js', options)
+}
+
 async function runLayaTest (options = {}) { // eslint-disable-line no-unused-vars
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runLayaTest')) return __FILTERED
   return runIntegrationModule('../integration/laya.test.js', options)
