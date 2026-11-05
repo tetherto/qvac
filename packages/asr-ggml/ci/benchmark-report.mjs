@@ -23,18 +23,27 @@ mkdirSync(REPORT, { recursive: true })
 const d = dispatch((process.env.BENCHMARK_ARGS ?? '').split(/\s+/).filter(Boolean))
 if (d.suite === 'rtf') {
   const md = join(REPORT, 'asr-ggml-performance-findings.md')
-  sh('node', [
-    '../../scripts/perf-report/aggregate-asr-ggml-rtf.js',
-    '--dir',
-    RESULTS,
-    '--manual-dir',
-    join(PKG, 'benchmarks/manual-results'),
-    '--output',
-    md,
-    '--output-json',
-    join(REPORT, 'asr-ggml-performance-findings.json')
-  ])
-  summary(md)
+  // Every desktop row this run benchmarked must report, as main's --expect-devices gate did: a lost result fails
+  // the report instead of shrinking it. Rows carry the runner label each result names its device by.
+  const expected = JSON.parse(process.env.BENCHMARK_ROWS || '[]')
+    .filter((r) => r.project === '@qvac/asr-ggml' && !r.config.endsWith('-accuracy'))
+    .map((r) => r.runner)
+  try {
+    sh('node', [
+      '../../scripts/perf-report/aggregate-asr-ggml-rtf.js',
+      '--dir',
+      RESULTS,
+      '--manual-dir',
+      join(PKG, 'benchmarks/manual-results'),
+      '--output',
+      md,
+      '--output-json',
+      join(REPORT, 'asr-ggml-performance-findings.json'),
+      ...(expected.length ? ['--expect-devices', [...new Set(expected)].join(',')] : [])
+    ])
+  } finally {
+    if (existsSync(md)) summary(md)
+  }
 } else if (existsSync(ACCURACY)) {
   // The client's summary reads benchmarks/results/<model>/, as main's merged download laid it out.
   for (const dir of readdirSync(ACCURACY))

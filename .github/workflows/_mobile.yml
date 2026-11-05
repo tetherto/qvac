@@ -116,6 +116,7 @@ jobs:
       actions: read
       packages: read
       id-token: write
+      pull-requests: write
     strategy:
       fail-fast: false
       matrix:
@@ -136,6 +137,9 @@ jobs:
         || matrix.row.meta.mobile.devicefarmProject == 'WHISPERCPP' && secrets.AWS_DEVICE_FARM_PROJECT_ARN_WHISPERCPP
         || matrix.row.meta.mobile.devicefarmProject == 'DECODER_AUDIO' && secrets.AWS_DEVICE_FARM_PROJECT_ARN_DECODER_AUDIO
         || '' }}
+      GITHUB_TOKEN: ${{ github.token }}
+      NPM: ${{ matrix.row.npm }}
+      PLATFORM: ${{ inputs.platform }}
     steps:
       - name: Checkout actions
         uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
@@ -143,9 +147,11 @@ jobs:
           sparse-checkout: |
             .github/actions
             .github/bare-toolchain
+            .github/scripts
             scripts/perf-report
             scripts/test-utils
           persist-credentials: false
+      - run: node .github/scripts/pr-comment.mjs mobile
       - name: Checkout source
         uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
@@ -229,7 +235,6 @@ jobs:
         env:
           PROJECT: ${{ matrix.row.project }}
           CONFIG: ${{ matrix.row.config }}
-          PLATFORM: ${{ inputs.platform }}
           AWS_REGION: us-west-2
           MODEL_S3_BUCKET: tether-ai-dev-us
           # The registry bucket S3-only manifest entries are mirrored from into the US bucket.
@@ -378,6 +383,11 @@ jobs:
           tap-files: bare_console.log logcat_full.txt
           results-file: test-results.json
           min-pass-ms: "500"
+      - if: always()
+        env:
+          STATE: ${{ job.status }}
+          DETAILS: ${{ steps.logs.outputs.console-dir }}/test-case-details.json
+        run: node .github/scripts/pr-comment.mjs mobile
       - if: always() && steps.logs.outcome == 'success'
         uses: tetherto/qvac-actions/upload-artifact@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
