@@ -29,7 +29,7 @@ import hmac
 import json
 import os
 import secrets
-from collections.abc import AsyncIterable, AsyncIterator, Sequence
+from collections.abc import AsyncIterable, AsyncIterator, Callable, Sequence
 from typing import Any
 
 import bare_rpc
@@ -146,7 +146,15 @@ class BareRpcTransport:
         self._writer: asyncio.StreamWriter | None = None
         self._read_task: asyncio.Task | None = None
         self._handshakes: set[asyncio.Task] = set()
+        self._closing = False
+        self._on_worker_lost: list[Callable[[], None]] = []
         self.rpc: bare_rpc.RPC | None = None
+
+    def on_worker_lost(self, callback: Callable[[], None]) -> None:
+        """Registers `callback` to run once when the worker connection ends on
+        its own: the worker exited or crashed. A `close()` by this side does
+        not count."""
+        self._on_worker_lost.append(callback)
 
     async def connect(self, *, timeout: float = 30) -> BareRpcTransport:
         connected: asyncio.Future[None] = asyncio.get_running_loop().create_future()
@@ -203,6 +211,7 @@ class BareRpcTransport:
                 # Idempotent with close(), which may have already closed it.
                 if self.rpc is not None:
                     self.rpc.close()
+                self._notify_worker_lost()
 
         # Loopback TCP on every OS -- see the module docstring for why this is
         # not a Unix socket. port=0 lets the kernel pick a free port.
@@ -281,7 +290,16 @@ class BareRpcTransport:
             return False
         return hmac.compare_digest(presented, token + b"\n")
 
+    def _notify_worker_lost(self) -> None:
+        if self._closing:
+            return
+        callbacks = self._on_worker_lost
+        self._on_worker_lost = []
+        for callback in callbacks:
+            callback()
+
     async def close(self) -> None:
+        self._closing = True
         for handshake in list(self._handshakes):
             handshake.cancel()
         if self._read_task:

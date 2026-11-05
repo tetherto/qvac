@@ -201,6 +201,7 @@ class Client:
         self._transport = BareRpcTransport(
             [bare, worker], home_dir=home_dir, config=config
         )
+        self._transport.on_worker_lost(lambda: self._end_sessions("crashed"))
         self._connected = False
         self._sessions: list[Session] = []
 
@@ -225,11 +226,14 @@ class Client:
         self._sessions.append(session)
         return session
 
+    def _end_sessions(self, reason: str) -> None:
+        for session in self._sessions:
+            session.transport.end(reason)
+        self._sessions.clear()
+
     async def close(self) -> None:
         """Owner shutdown. Every session opened on this client ends with it."""
-        for session in self._sessions:
-            session.transport.end("shutdown")
-        self._sessions.clear()
+        self._end_sessions("shutdown")
         if self._connected:
             await self._transport.close()
             self._connected = False

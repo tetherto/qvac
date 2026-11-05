@@ -1,9 +1,13 @@
 """Unit tests for tetherto.qvac_sdk.caller_session: the session transport stamps
-every payload with the session id, holds the handle's lifecycle, and refuses
-calls locally once the session ended. Runs against a fake transport."""
+every payload with the session id, holds the handle's lifecycle, records the
+models loaded through it, and refuses calls locally once the session ended.
+Runs against a fake transport."""
 
 from __future__ import annotations
 
+import json
+import os
+import tempfile
 from collections.abc import AsyncIterable
 from typing import Any
 
@@ -11,6 +15,7 @@ import pytest
 
 from tetherto.qvac_sdk import _api as api
 from tetherto.qvac_sdk.caller_session import Session, open_session
+from tetherto.qvac_sdk.client import Client
 from tetherto.qvac_sdk.errors import (
     InvalidResponseError,
     ModelHandleInvalidatedError,
@@ -43,6 +48,8 @@ class FakeTransport:
             return {"type": "cancel", "success": True, "cancelled": 0}
         if kind == "unloadModel":
             return {"type": "unloadModel", "success": True, "hasActiveModels": True}
+        if kind == "loadModel":
+            return {"type": "loadModel", "success": True, "modelId": "m-1"}
         if kind == "heartbeat":
             return {"type": "heartbeat", "number": 1}
         return {"type": kind}
@@ -135,13 +142,32 @@ async def test_close_sends_close_session_and_ends_the_handle():
         await session.close()
 
 
+async def test_load_and_unload_through_a_session_track_the_held_model():
+    owner = FakeTransport()
+    session = await open_session(owner)
+    assert not session.is_model_held("m-1")
+
+    model_id = await api.load_model(
+        session.transport, model_src="/models/x.gguf", model_type="llamacpp-completion"
+    )
+    assert model_id == "m-1"
+    assert session.is_model_held("m-1"), "a load through the session is recorded"
+    assert owner.sent[-1]["sessionId"] == session.session_id
+
+    await api.unload_model(session.transport, "m-1")
+    assert not session.is_model_held("m-1"), "an unload releases it"
+
+
 async def test_a_held_model_names_its_own_error_after_the_session_ends():
     owner = FakeTransport()
     session = await open_session(owner)
-    session.transport.record_held_model("m-1")
+    await api.load_model(
+        session.transport, model_src="/models/x.gguf", model_type="llamacpp-completion"
+    )
     assert session.is_model_held("m-1")
 
     session.transport.end("shutdown")
+    assert session.is_model_held("m-1"), "the handle still reports what it held"
 
     with pytest.raises(ModelHandleInvalidatedError) as info:
         await session.transport.call({"type": "embed", "modelId": "m-1", "text": "x"})
@@ -165,3 +191,85 @@ async def test_a_wrong_reply_type_is_refused():
 
     with pytest.raises(InvalidResponseError):
         await open_session(WrongReply())
+
+
+class FakeRpc:
+    """Stands in for bare_rpc.RPC on an unconnected BareRpcTransport: answers
+    the session round trips so Client can be driven without a worker."""
+
+    async def request(self, *, command: int, data: bytes) -> bytes:
+        payload = json.loads(data)
+        return json.dumps(
+            {
+                "type": payload["type"],
+                "success": True,
+                "sessionId": payload["sessionId"],
+            }
+        ).encode("utf-8")
+
+    def close(self) -> None:
+        pass
+
+
+def _client_without_a_worker(tmp_dir: str) -> Client:
+    bare = os.path.join(tmp_dir, "bare")
+    worker = os.path.join(tmp_dir, "worker.js")
+    for path in (bare, worker):
+        with open(path, "w", encoding="utf-8"):
+            pass
+    client = Client(worker_path=worker, bare_path=bare)
+    client._transport.rpc = FakeRpc()  # type: ignore[assignment]
+    client._connected = True
+    return client
+
+
+async def test_worker_loss_ends_every_session_the_client_opened():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        client = _client_without_a_worker(tmp_dir)
+        first = await client.open_session(name="first")
+        second = await client.open_session(name="second")
+
+        client._transport._notify_worker_lost()
+
+        for session in (first, second):
+            with pytest.raises(SessionInvalidatedError) as info:
+                await session.transport.call({"type": "heartbeat"})
+            assert info.value.reason == "crashed"
+        later = await client.open_session(name="later")
+        assert later.transport.ended is None, "a session opened afterwards is usable"
+
+
+async def test_the_owner_close_ends_its_sessions_before_the_transport():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        client = _client_without_a_worker(tmp_dir)
+        session = await client.open_session()
+
+        await client.close()
+
+        with pytest.raises(SessionInvalidatedError) as info:
+            await session.transport.call({"type": "heartbeat"})
+        assert info.value.reason == "shutdown"
+        client._transport._notify_worker_lost()
+        assert session.transport.ended == "shutdown", "the first end reason is kept"
+
+
+def test_the_transport_reports_worker_loss_once_and_not_on_its_own_close():
+    from tetherto.qvac_sdk.bare_rpc_transport import BareRpcTransport
+
+    transport = BareRpcTransport(["bare", "worker.js"])
+    calls = 0
+
+    def lost() -> None:
+        nonlocal calls
+        calls += 1
+
+    transport.on_worker_lost(lost)
+    transport._notify_worker_lost()
+    transport._notify_worker_lost()
+    assert calls == 1
+
+    closing = BareRpcTransport(["bare", "worker.js"])
+    closing.on_worker_lost(lost)
+    closing._closing = True
+    closing._notify_worker_lost()
+    assert calls == 1, "an EOF caused by close() is not a lost worker"
