@@ -2,16 +2,36 @@
 
 Selected performance profiles for FLUX.2 Klein, MiniMax-H3 and LTX are implemented with device/API selection, explicit overrides and conservative fallbacks.
 
-This report covers the implementation pass on 4 November 2026. Radeon 8060S HIP/Vulkan results are retained from 3 November; Strix was not booked for this pass. Paired speed comparisons keep the checkpoint, prompt, seed, dimensions, sampler and steps fixed. Generation latency excludes model loading and warmup. Small timing differences on unchanged paths are measurement variation, not claimed improvements.
+This report combines the 4 November 2026 implementation checks with the 5 November Radeon 8060S HIP/Vulkan follow-up. Paired speed comparisons keep the checkpoint, prompt, seed, dimensions, sampler and steps fixed. Generation latency excludes model loading and warmup. Small timing differences on unchanged paths are not claimed improvements.
 
-The 5 November Strix follow-up found an inconsistent repeated FLUX HIP GEMM output. Automatic HIP GEMM has therefore been removed from the allowlist: direct convolution remains the default. The measured 68.8 → 34.0 s candidate (−50.6%, 2.0×) is not an accepted production improvement. Two comparisons measured 54.6 dB PSNR; the other measured 32.8 dB with a maximum channel difference of 212/255. Fresh repeated and explicit-GEMM controls are in progress. This check uses ROCm 7.2.2; the earlier research used 7.2.4.
+The Strix follow-up confirms H3's short-clip HIP gain and rejects automatic FLUX HIP GEMM because one repeated output was inconsistent. The corrected CI binary retains direct convolution and produces byte-identical outputs to baseline. LTX checks remain incomplete: competing work interrupted the 97-frame HIP attempt, and a host reboot ended the remaining queue. The reboot cause is unknown; kernel logs were inaccessible. No further inference was launched after it.
 
 | Platform | Accelerator / API checked | Evidence |
 | --- | --- | --- |
 | Linux x64 | NVIDIA GeForce RTX 5090 / CUDA and Vulkan | Fresh implementation checks |
 | Linux arm64 | NVIDIA GB10 / CUDA | Fresh implementation checks on DGX Spark; Vulkan not checked |
 | macOS arm64 | Apple M3 Ultra, 60 GPU cores, 96 GiB / Metal | Fresh implementation checks; M3 Pro not checked |
-| Linux x64 | Ryzen AI MAX+ 395, Radeon 8060S / HIP and Vulkan | Dated research plus selection tests; no fresh HIP binary check |
+| Linux x64 | Ryzen AI MAX+ 395, Radeon 8060S / HIP and Vulkan | Fresh FLUX/H3 checks; LTX incomplete. ROCm 7.2.2, RADV Mesa 25.2.8 / Vulkan 1.4.318 |
+
+## Measured warm-generation improvements
+
+**A** = addon selection using existing engine features. **F** = diffusion engine change; here the engine is `stable-diffusion.cpp`, not Fabric. **FA** = both layers. No Fabric PR is needed. Times are seconds; factors and percentages use unrounded medians. Each cell compares the same workload on the same device, not performance across devices.
+
+| Model | RTX 5090 CUDA | RTX 5090 Vulkan | DGX Spark GB10 CUDA | M3 Ultra Metal | Radeon 8060S HIP | Radeon 8060S Vulkan |
+| --- | --- | --- | --- | --- | --- | --- |
+| FLUX.2 Klein | 8.7 → 2.8 s **×3.1 FA [x1]**, −67.6% | Defaults retained | 40.8 → 15.4 s **×2.7 FA [x1]**, −62.3% | Defaults retained | Defaults retained **[x4]** | Defaults retained **[x5]** |
+| MiniMax-H3 | 120.9 → 112.1 s **×1.1 FA [x2]**, −7.3% | 103.6 → 92.1 s **×1.1 FA [x2]**, −11.1% | 657.5 → 596.9 s **×1.1 A**, −9.2% | 1531.2 → 1238.1 s **×1.2 A**, −19.1% | 70.0 → 61.1 s **×1.1 A [x3]**, −12.8% | Defaults retained **[x5]** |
+| LTX-2.3 | Defaults retained | Defaults retained | Defaults retained | 91.8 → 86.8 s **×1.1 A [x6]**, −5.4% | Defaults retained **[x7]** | Defaults retained **[x7]** |
+
+- **[x1] FLUX CUDA:** automatic only for supported single 512²/1024² text-to-image requests and at least 16 GiB free after load. RTX VRAM rises 11.1 → 15.3 GiB (+37.7%). Reviewed images are visually identical, not byte-identical. Callers already setting `vae_conv_direct:false` already receive this gain.
+- **[x2] H3 RTX:** the combined attention/graph profile needs at least 28 GiB free at load and 960×544×124 output; otherwise retain the original graph with attention alone. RTX CUDA VRAM rises 21.9 → 23.2 GiB (+5.7%). Reviewed video is visually identical; audio is exact.
+- **[x3] H3 HIP:** fresh timing covers 512×288×39, eight steps, CPU-resident parameters, one prompt, one warmup and two measured requests per mode. Video is visually identical (48.1 dB PSNR), audio exact. Full-size repeated timing remains open. HIP is source-built; this PR adds no HIP release package.
+- **[x4] FLUX HIP:** the 68.8 → 34.0 s GEMM candidate (×2.0, −50.6%) is rejected for automatic use. One of three outputs had 32.8 dB agreement versus 54.6 dB in the other two. Root cause and explicit-GEMM control remain open. The final default matches baseline pixels exactly; manually forcing GEMM remains experimental.
+- **[x5] Strix Vulkan:** defaults and exact FLUX/H3 outputs are preserved. One measured request per mode gives 31.1 → 32.2 s for FLUX (+3.4%) and 101.4 → 101.1 s for H3 (−0.4%). These small-sample timings do not establish latency equivalence or an improvement. Earlier attention/GEMM research does not justify changing these defaults.
+- **[x6] LTX Metal:** automatic only after the caller declares all output bounds up to 512×320×97 and memory guards pass. Exact video/audio, but process RSS rises 36.7 → 62.3 GiB (+70.0%) and loading 8.7 → 15.8 s (+82.1%). Load plus first clip is 2.4% slower. Single-clip callers should use `off` until cold-start validation; the gain applies to warm generation.
+- **[x7] LTX Strix:** no accepted off/auto pair in this follow-up. HIP's 97-frame attempt was interrupted; the shorter fallback queue ended with a host reboot. Retained defaults are a policy decision, not a completed no-regression measurement. Long-repeat stability remains open.
+
+Spark Vulkan and M3 Pro are not covered. RTX, Spark and Mac values are the dated 4 November implementation measurements; those hosts were not retested on 5 November.
 
 ## Implemented selection
 
@@ -36,12 +56,14 @@ Generates video with synchronized audio. Two selected methods are implemented: g
 | RTX 5090 / Vulkan | Attention + H3 graph | 103.6 → 92.1 s | **−11.1%**, 1.1× | Enable with graph memory guard; visually identical, exact audio |
 | GB10 / CUDA | Attention | 657.5 → 596.9 s | **−9.2%**, 1.1× | Enable; visually identical, exact audio; original graph retained |
 | M3 Ultra / Metal | Attention | 1531.2 → 1238.1 s | **−19.1%**, 1.2× | Enable; visually identical, exact audio |
-| Radeon 8060S / HIP | Attention | 68.8 → 61.1 s | **−11.1%**, short clips | Dated research; full-size quality passed, repeated full-size timing remains open |
-| Radeon 8060S / Vulkan | None | Research attention gain 3.2% | Below threshold | Keep baseline; no automatic graph change |
+| Radeon 8060S / HIP | Attention | 70.0 → 61.1 s | **−12.8%**, 1.1× | Fresh short-clip pair; visually identical video, exact audio; full-size repeated timing remains open |
+| Radeon 8060S / Vulkan | None | 101.4 → 101.1 s | −0.4%, one measured request | Keep baseline; exact video/audio; earlier 3.2% attention gain was below threshold |
 
 RTX CUDA numbers use the final CI binary; the earlier source build measured 122.4 → 111.7 s (−8.8%) with identical outputs. RTX medians use two measured requests after one warmup; Mac uses one measured request after one warmup. Spark's first exploratory baseline had an unusually slow first denoising step and is not used as the final speed estimate. The new repeat excludes two warmups before two measured requests per mode.
 
-**Recommendation:** enable global flash attention only for the listed GPU/API pairs; add the graph changes on RTX when the memory and request guards pass. CUDA and Vulkan combined profiles save 8.8 s (7.3%) and 11.5 s (11.1%) respectively. Spark saves 60.6 s (9.2%); Mac saves 293.2 s (19.1%). Keep the original graph elsewhere. Explicit attention settings take precedence. A later request with different dimensions/frame count restores the original graph in the same context.
+Strix uses 512×288×39 frames, eight steps, CPU-resident parameters and one prompt. HIP has two measured requests after one warmup per mode; all three paired outputs agree at 48.1 dB PSNR with exact audio and repeat identically within each mode. Vulkan has one measured request after warmup per mode and exact output agreement. Interrupted or contended runs are excluded. These short-clip timings are not comparable with the full-size timings on the other GPUs.
+
+**Recommendation:** enable global flash attention only for the listed GPU/API pairs; add the graph changes on RTX when the memory and request guards pass. CUDA and Vulkan combined profiles save 8.8 s (7.3%) and 11.5 s (11.1%) respectively. Spark saves 60.6 s (9.2%); Mac saves 293.2 s (19.1%); Strix HIP saves 8.9 s (12.8%) on the short workload. Keep the original graph elsewhere. Explicit attention settings take precedence. A later request with different dimensions/frame count restores the original graph in the same context.
 
 RTX CUDA quality measured 53.6 dB PSNR, Vulkan 52.5 dB, Spark CUDA 53.5 dB, and Mac Metal 59.1 dB; reviewed frames are visually identical and audio is exact. CUDA sampled GPU memory increases from 21.9 to 23.2 GiB (+1.2 GiB, +5.7%). Mac process RSS rises from 55.5 to 56.1 GiB (+0.6 GiB, +1.2%). The global-attention improvement is mainly faster VAE decoding. The graph changes add only a few percent by themselves, so they are enabled as part of the validated combined profile, not independently when attention is explicitly configured.
 
@@ -56,13 +78,15 @@ Generates images from text. One selected method is implemented: GEMM VAE convolu
 | RTX 5090 / Vulkan | None | 2.6 → 2.6 s | −0.2%, timing variation | Keep direct convolution; byte-identical fallback |
 | M3 Ultra / Metal | None | 27.9 → 27.9 s | +0.1%, timing variation | Keep direct convolution; byte-identical fallback |
 | Radeon 8060S / HIP | Experimental VAE GEMM | 68.8 → 34.0 s | **−50.6%**, 2.0× | Keep baseline: one repeated output failed quality agreement; not accepted for automatic selection |
-| Radeon 8060S / Vulkan | None | Research GEMM was 59.6% slower | Regression rejected | Keep direct convolution |
+| Radeon 8060S / Vulkan | None | 31.1 → 32.2 s | +3.4%, one measured request | Exact pixels; retain direct convolution. Research GEMM was 59.6% slower |
 
-RTX CUDA numbers use the final CI binary; its outputs exactly match the source build. CUDA and Metal values use three measured requests after one warmup; Vulkan uses two. Direct/GEMM research regressions were also measured on RTX Vulkan (+6.4%) and Mac Metal (+10.4%), so neither receives the GEMM profile.
+RTX CUDA numbers use the final CI binary; its outputs exactly match the source build. CUDA and Metal values use three measured requests after one warmup; RTX Vulkan uses two. Strix's original HIP pair uses two measured requests after warmup; its corrected HIP fallback and Vulkan pair each use one. Direct/GEMM research regressions were also measured on RTX Vulkan (+6.4%) and Mac Metal (+10.4%), so neither receives the GEMM profile.
 
 **Recommendation:** select GEMM on the validated CUDA requests and retain direct convolution on HIP/Metal/Vulkan. RTX saves 5.9 s (67.6%), Spark 25.4 s (62.3%). The existing CUDA example already supplies `vae_conv_direct:false`; these are not additional gains for callers already using it.
 
 Across three CUDA prompts, PSNR is 58.2–60.5 dB and maximum channel difference is 4/255. Reviewed images are visually identical. Around 59.0 dB means about 0.3 intensity levels of RMS difference on a 0–255 scale, not a percentage of quality retained. Sampled RTX memory rises from 11.1 to 15.3 GiB (+4.2 GiB, +37.7%). Dated Strix HIP results use 11.7→16.6 GB (+42.2%).
+
+The 5 November HIP candidate used ROCm 7.2.2, versus 7.2.4 in earlier research. Its warmup and second measured output both reached 54.6 dB PSNR with a maximum difference of 6/255; the first measured output reached only 32.8 dB and 212/255. The cause is unresolved, so this is an output-repeatability failure rather than an accepted speed/quality tradeoff. After removing automatic HIP GEMM, both outputs from the corrected CI binary are byte-identical to the original baseline. The observed 68.8 → 67.4 s on the unchanged direct path is not claimed as an optimization. Explicit-GEMM diagnosis did not complete.
 
 Mixed-size requests, explicit direct/GEMM overrides and tiled requests test that the context returns to its baseline path when needed. No API is switched automatically: Strix Vulkan direct convolution was already faster than HIP GEMM in research.
 
@@ -77,7 +101,7 @@ Generates video with audio. One selected method is implemented: bounded F16 tran
 | RTX 5090 / CUDA, 193 frames | None | 20.8 → 20.9 s | +0.2%, timing variation | Existing settings preserved; byte-identical output |
 | GB10 / CUDA, 193 frames | None | 72.9 → 73.0 s | +0.2%, timing variation | Existing settings preserved; byte-identical output |
 | RTX 5090 / Vulkan | None | Research VAE residency saved 6.8–9.3% against CPU-resident controls | No new default gain | GPU VAE residency already defaults on; explicit CPU choices remain untouched |
-| Radeon 8060S / HIP and Vulkan | None | No accepted automatic profile | Not freshly measured | Keep baseline; research stability/precision checks remain incomplete |
+| Radeon 8060S / HIP and Vulkan | None | No accepted automatic profile or completed fresh pair | Incomplete | Keep baseline; contention and a host reboot ended checks; long-repeat stability remains open |
 
 Mac uses 512×320×97 frames and three measured requests after one warmup. RTX uses three measured requests; Spark uses one, both after one warmup. Temporal tiling is identical within each pair.
 
@@ -114,18 +138,19 @@ The addon already defaults to `temporal_tiling:false`. Research's LTX CUDA full-
 
 ## Validation evidence
 
-Measured native implementation revision: `4e027082eadc94819adfdcde8187d946e875cc56`; engine revision: `bc3890d`. The 5 November follow-up removes automatic FLUX HIP GEMM after its repeatability failure; other device/API selections are unchanged. Earlier measurements used the same selected computations before the final request and memory guards. Final source hashes and policy checks establish which revision each host tested.
+The 4 November native implementation revision is `4e027082eadc94819adfdcde8187d946e875cc56`; engine revision is `bc3890d`. The 5 November HIP fallback correction is `def6a7c3bd3105b7e32d288ace674a78c7ead4c3`; it removes only automatic FLUX HIP GEMM. Strix's corrected FLUX fallback and H3 HIP/Vulkan pairs use that exact CI binary. FLUX's rejected HIP candidate and Vulkan pair use the earlier binary. Full revision and binary hashes are recorded with each measurement.
 
 - Windows: TypeScript/lint, 137 Bare unit tests and 91 Node unit tests passed. The two new inference schema tests passed all 17 assertions; its broader Windows suite has unrelated failures described below.
 - RTX: all 331 native tests passed with every model fixture and no skips. Twelve profile tests passed. The final GitHub Actions prebuild was downloaded and its archive SHA-256 verified, then used for FLUX/H3 measurements. CI/source outputs are byte-identical. Actual tiled FLUX and unsupported-size fallbacks are byte-identical to baseline; a full → small → full H3 sequence verifies graph disable/re-enable with exact output.
 - Mac and Spark: all 331 native tests passed on each host, with all fixtures and no skips. Twelve profile tests passed on both. Mac uses Metal for native generation; Spark uses the native suite's CPU device, with CUDA separately covered by paired model runs. All three hosts match the final profile, model-interface and policy-test source hashes.
 - Engine: all 17 CTest tests and the new GPU operation-equivalence test passed on RTX, Spark and Mac. The [engine CI matrix](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/actions/runs/41886687513) passed all nine native build targets, including CUDA, Vulkan, ROCm, macOS and CPU.
 - [Addon CI at the native revision](https://github.com/tetherto/qvac/actions/runs/41907990288): all nine prebuild targets, all three C++ targets, all seven desktop integration lanes, linking, lint, TypeScript and sanity checks passed. Windows integration initially failed before checkout because of a locked runner workspace; the unchanged retry passed. No tests, labels or workflows were disabled or weakened.
-- The later documentation run failed in the existing Linux ABot integration test with a GPU allocation failure. An unchanged retry is in progress; this is separate from the Strix quality finding. The HIP fallback correction receives the full existing CI matrix.
+- Strix: all four existing HIP backend tests passed. The corrected CI addon archive was SHA-256 verified and loaded with the matching source-built HIP module. H3 HIP speed/quality, H3 Vulkan parity and corrected FLUX HIP fallback passed. FLUX Vulkan also has exact pixel parity. The full 331-test addon suite was not rerun on Strix. No LTX performance or stability pass is claimed.
+- [CI for the HIP fallback correction](https://github.com/tetherto/qvac/actions/runs/42028874536): all nine prebuilds and all three C++ targets passed. Remaining desktop lanes were still running or queued at report time. [Windows integration](https://github.com/tetherto/qvac/actions/runs/42028874536/job/127259941020) failed before checkout because a stale Python runner workspace was locked. This infrastructure blocker is documented; no test was disabled or weakened. The earlier documentation run's Linux GPU-allocation failure remains recorded; its retry was superseded by this full run.
 
-Full-precision timings, workload configuration, quality metrics and output hashes are in [the measurement data](performance-profiles-metrics.json). Reported percentages use unrounded medians. CUDA device indices in that data are process-local; the RTX run was restricted to the booked physical GPU.
+Full-precision timings, workload configuration, quality metrics and output hashes are in the [4 November data](performance-profiles-metrics.json) and [5 November Strix data](performance-profiles-strix-metrics.json). Reported percentages use unrounded medians. CUDA device indices in that data are process-local; the RTX run was restricted to the booked physical GPU.
 
-All three booked test directories were removed after preserving results. The final cleanup freed 220.1 GiB; no files outside those directories were removed.
+All three original test directories were removed after preserving results, freeing 220.1 GiB. The separate Strix test directory and models were also removed before its booking ended, freeing another 70.4 GiB. No files outside these task directories were removed.
 
 ## Validation and remaining limits
 
@@ -133,6 +158,7 @@ All three booked test directories were removed after preserving results. The fin
 - Engine operation tests exercise fused SwiGLU, exact QKV views, strided normalization, changing inputs, multiple shapes and batches. Engine defaults and context-parameter ABI layout are unchanged.
 - Linux native tests use their existing CPU device setting; GPU model execution is validated separately. Direct runs with GPU driver modules initialized reported process-exit driver allocations under LeakSanitizer. No new leak suppression or test exclusion was added. Preserve these diagnostics alongside the final CPU-lane result.
 - The local Windows SDK/inference suite has unrelated Unix-path, permission, RPC timing and shared-state failures. New schema tests pass. Its draft PR remains low priority and is not presented as fully validated.
+- Strix still needs a complete LTX HIP/Vulkan fallback and repeat-stability pass, full-size repeated H3 HIP timing, and diagnosis of the rejected FLUX HIP output. A host reboot ended the final queue; it cannot be attributed to a model or driver from the available evidence. No system configuration was changed.
 - This is a narrow checkpoint/workload validation, not a family-wide quality benchmark. More prompts, longer/larger outputs, adapters, concurrent contexts, other GPU variants and new checkpoint layouts need paired measurements before expanding the allowlist. GPU memory peaks are sampled, not exact allocator high-water marks. PSNR/SSIM measure numerical agreement, not human preference.
 - No mobile performance profile was added. Keep the existing mobile prebuild matrix; Device Farm was not required for the desktop-only allowlist.
 
