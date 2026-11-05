@@ -34,12 +34,12 @@ on:
         type: boolean
         default: false
       platform:
-        description: Mobile platform
+        description: Mobile platform; Both runs Android and iOS, as main's mobile benchmarks did
         type: choice
-        options: [Android, iOS]
-        default: Android
+        options: [Both, Android, iOS]
+        default: Both
       devices:
-        description: Comma-separated Device Farm models for the mobile run, e.g. Google Pixel 9
+        description: Comma-separated Device Farm models for one platform; empty is Google Pixel 9 on Android and Apple iPhone 16 Pro on iOS
         type: string
         default: ""
       tests:
@@ -61,18 +61,28 @@ jobs:
     with:
       targets: build,benchmark
       packages: ${{ inputs.packages }}
-      configs: ${{ inputs.configs && format('{0}{1}', inputs.configs, inputs.run_mobile && (inputs.platform == 'iOS' && ',ios-arm64' || ',android-arm64') || '') || '' }}
+      configs: ${{ inputs.configs && format('{0}{1}', inputs.configs, inputs.run_mobile && (inputs.platform == 'iOS' && ',ios-arm64' || inputs.platform == 'Android' && ',android-arm64' || ',android-arm64,ios-arm64') || '') || '' }}
 
-  # The mobile rows of the one platform asked for.
-  select-mobile:
-    if: inputs.run_mobile
+  # The mobile rows of each platform asked for, one select per platform so each _mobile.yml call gets its own rows.
+  select-android:
+    if: inputs.run_mobile && inputs.platform != 'iOS'
     permissions:
       contents: read
     uses: ./.github/workflows/_select-projects.yml
     with:
       targets: test:mobile
       packages: ${{ inputs.packages }}
-      configs: ${{ inputs.platform == 'iOS' && 'ios-arm64' || 'android-arm64' }}
+      configs: android-arm64
+
+  select-ios:
+    if: inputs.run_mobile && inputs.platform != 'Android'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/_select-projects.yml
+    with:
+      targets: test:mobile
+      packages: ${{ inputs.packages }}
+      configs: ios-arm64
 
   build:
     needs: select
@@ -130,19 +140,40 @@ jobs:
       perf_warmup_runs: ${{ inputs.perf_warmup_runs }}
       args: ${{ inputs.args }}
 
-  mobile:
-    needs: [select-mobile, merge]
+  mobile-android:
+    needs: [select-android, merge]
     permissions:
       contents: read
       actions: read
       packages: read
       id-token: write
+      pull-requests: write
     uses: ./.github/workflows/_mobile.yml
     secrets: inherit
     with:
-      rows: ${{ toJSON(fromJSON(needs.select-mobile.outputs.matrices)['test:mobile']) }}
-      platform: ${{ inputs.platform }}
-      devices: ${{ inputs.devices }}
+      rows: ${{ toJSON(fromJSON(needs.select-android.outputs.matrices)['test:mobile']) }}
+      platform: Android
+      devices: ${{ inputs.devices || 'Google Pixel 9' }}
+      tests: ${{ inputs.tests }}
+      prebuild_run_id: ${{ github.run_id }}
+      args: ${{ inputs.args }}
+      perf_runs: ${{ inputs.perf_runs }}
+      perf_warmup_runs: ${{ inputs.perf_warmup_runs }}
+
+  mobile-ios:
+    needs: [select-ios, merge]
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+      id-token: write
+      pull-requests: write
+    uses: ./.github/workflows/_mobile.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.select-ios.outputs.matrices)['test:mobile']) }}
+      platform: iOS
+      devices: ${{ inputs.devices || 'Apple iPhone 16 Pro' }}
       tests: ${{ inputs.tests }}
       prebuild_run_id: ${{ github.run_id }}
       args: ${{ inputs.args }}
@@ -151,7 +182,7 @@ jobs:
 
   # benchmark's report configuration, once per package, over every desktop and mobile result this run uploaded.
   report:
-    needs: [select, desktop, mobile]
+    needs: [select, desktop, mobile-android, mobile-ios]
     if: always() && !cancelled() && needs.select.result == 'success'
     name: report ${{ matrix.project.slug }}
     runs-on: ubuntu-latest
@@ -159,6 +190,7 @@ jobs:
     permissions:
       contents: read
       actions: read
+      pull-requests: write
     strategy:
       fail-fast: false
       matrix:
@@ -207,3 +239,10 @@ jobs:
           path: ${{ matrix.project.dir }}/benchmarks/report/
           if-no-files-found: warn
           retention-days: "30"
+      # Every package's report on the dispatched branch's open PR, as main's PR perf reports were; one comment per package.
+      - if: always() && matrix.project.benchmarkReport
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPORT: ${{ matrix.project.dir }}/benchmarks/report
+          KEY: ${{ matrix.project.slug }}
+        run: node .github/scripts/pr-comment.mjs report
