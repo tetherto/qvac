@@ -23,8 +23,9 @@ export function mobileBody({ workflow, npm, platform, state, details, runUrl }) 
   const out = [head, '', `${ok ? '✅ Passed' : '❌ Failed'}. [Run](${runUrl})`, '']
   if (!devices.length) out.push('No device reported results.')
   for (const [device, tests] of failed) {
-    const n = testCases.filter((t) => t.results[device]).length
-    out.push(`- **${device}**: ${tests.length ? `${tests.length} of ${n} failed` : `${n} passed`}`)
+    const n = (s) => testCases.filter((t) => t.results[device]?.status === s).length
+    const counts = [`${n('passed')} passed`, ...(n('skipped') ? [`${n('skipped')} skipped`] : [])]
+    out.push(`- **${device}**: ${tests.length ? `${tests.length} failed, ` : ''}${counts.join(', ')}`)
     for (const t of tests) out.push(`  - ${ICON.failed} ${t}`)
   }
   return out.join('\n')
