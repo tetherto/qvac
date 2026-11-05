@@ -248,6 +248,47 @@ describe('resolveNestedModelSrcConstants', () => {
   })
 })
 
+describe('parseServeConfig src', () => {
+  it('requires src for an alias without a model constant', () => {
+    assert.throws(
+      () => parseServeConfig({ serve: { models: { cls: { type: 'ggml-classification' } } } }, {}),
+      /serve\.models\.cls: "src" is required/
+    )
+    assert.throws(
+      () => parseServeConfig({ serve: { models: { ocr: { type: 'ggml-ocr' } } } }, {}),
+      /serve\.models\.ocr: "src" is required/
+    )
+  })
+
+  it('loads the classifier from its model constant', () => {
+    const cfg = parseServeConfig(
+      { serve: { models: { cls: { model: 'MOBILENETV3_3CLASS_V3_FP16' } } } },
+      {}
+    )
+    const cls = cfg.models.get('cls')!
+    assert.equal(cls.endpointCategory, 'classification')
+    assert.equal(
+      typeof cls.modelSrc === 'object' && cls.modelSrc.name,
+      'MOBILENETV3_3CLASS_V3_FP16'
+    )
+  })
+})
+
+describe('parseServeConfig enableAdmin', () => {
+  it('is off unless the flag or serve.enableAdmin turns it on', () => {
+    assert.equal(parseServeConfig({}, {}).enableAdmin, false)
+    assert.equal(parseServeConfig({}, { enableAdmin: true }).enableAdmin, true)
+    assert.equal(parseServeConfig({ serve: { enableAdmin: true } }, {}).enableAdmin, true)
+  })
+
+  it('rejects a non-boolean serve.enableAdmin', () => {
+    assert.throws(
+      () => parseServeConfig({ serve: { enableAdmin: 'yes' } }, {}),
+      /serve\.enableAdmin must be a boolean/
+    )
+  })
+})
+
 describe('parseServeConfig nested companions', () => {
   it('resolves nested constants for explicit image / video entries', () => {
     const cfg = parseServeConfig(

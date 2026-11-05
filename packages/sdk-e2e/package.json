@@ -9,6 +9,7 @@
     "prepare:sdk": "node scripts/prepare-sdk.mjs",
     "build": "npm run clean && tsc && npm run emit:resource-table",
     "build:catalog": "tsc -p catalog",
+    "emit:catalog-json": "npm run build:catalog && node scripts/emit-catalog-json.mjs",
     "bundle:sdk": "node scripts/bundle-sdk.mjs",
     "install:build": "npm install --install-links && npm run build",
     "install:build:sdk": "npm run prepare:sdk && npm run clean:sdk-snapshot && npm run reconcile:inference && npm run install:build && npm run bundle:sdk && npm run unpin:consumer-inference",
@@ -41,7 +42,7 @@
   },
   "dependencies": {
     "@qvac/sdk": "file:../sdk",
-    "@qvac/test-suite": "^0.12.2",
+    "@qvac/test-suite": "^0.13.0",
     "custom-echo-plugin": "file:./fixtures/echo-plugin",
     "mqtt": "^5.14.1",
     "react-native": "0.81.5",

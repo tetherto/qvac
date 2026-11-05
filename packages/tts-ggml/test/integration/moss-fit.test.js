@@ -40,18 +40,18 @@ test('MOSS metadata-only fit covers batch, streaming and cloning', async (t) => 
     referenceSamples: 0,
     streaming: false
   }
+  const used = (fit) => fit.devices.reduce((total, row) => total + row.usedBytes, 0)
+
   const batch = await TTSGgml.assessFit(request)
-  t.not(batch.status, 'error', batch.report)
-  t.ok(batch.weightsBytes > 0)
-  t.ok(batch.lmComputeBytes > 0)
-  t.ok(batch.codecComputeBytes > 0)
+  t.ok(batch.status === 'fits' || batch.status === 'does-not-fit', JSON.stringify(batch))
+  t.ok(batch.devices[0].usedBytes > 0)
   const stream = await TTSGgml.assessFit({ ...request, streaming: true })
-  t.not(stream.status, 'error', stream.report)
+  t.ok(stream.status === 'fits' || stream.status === 'does-not-fit', JSON.stringify(stream))
   const cloning = await TTSGgml.assessFit({
     ...request,
     mossCodecEncoderPath: path.join(modelDir, 'moss-codec-encoder-f16.gguf'),
     referenceSamples: 24000
   })
-  t.not(cloning.status, 'error', cloning.report)
-  t.ok(cloning.weightsBytes > batch.weightsBytes)
+  t.ok(cloning.status === 'fits' || cloning.status === 'does-not-fit', JSON.stringify(cloning))
+  t.ok(used(cloning) > used(batch), 'the encoder adds to the demand')
 })

@@ -255,7 +255,7 @@ async function validateCachedFile(
     if (localSize === expectedSize) {
       logger.info(`✅ Model cached with correct size: ${modelPath}`)
 
-      // Always validate checksum if provided, even when size matches
+      // Validate against the expected checksum, reusing the digest only for unchanged files
       if (expectedChecksum && expectedChecksum.length === 64) {
         const checksum = await measureChecksum(modelPath, hooks)
         if (checksum !== expectedChecksum) {

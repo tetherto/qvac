@@ -76,6 +76,23 @@ test('contract diffusion load config: memory controls and removed options', (t) 
   t.is(validate({ stream_layers: 'true' }), false)
 })
 
+test('contract diffusion load config: optional vision projector accepts local model sources', (t) => {
+  const document: unknown = JSON.parse(
+    readFileSync(new URL('../contract/schema.json', import.meta.url), 'utf8')
+  )
+  const schema = findSchemaTitle(document, 'LoadModelSrcRequestSdcppGenerationModelConfig')
+  t.ok(schema)
+  if (!schema) return
+  const validate = new Ajv2020({ strict: false }).compile(schema)
+  t.ok(validate({ llmModelSrc: '/models/encoder.gguf' }), 'text-only loading needs no projector')
+  for (const projectionModelSrc of ['/models/projector.gguf', { src: '/models/projector.gguf' }]) {
+    t.ok(validate({ llmModelSrc: '/models/encoder.gguf', projectionModelSrc }))
+  }
+  for (const projectionModelSrc of [false, 123, {}, []]) {
+    t.is(validate({ projectionModelSrc }), false)
+  }
+})
+
 test('contract regeneration preserves four-coordinate OCR boxes', (t) => {
   for (const [bbox, valid] of [
     [[1, 2, 3, 4], true],
@@ -120,6 +137,17 @@ test('contract world load config: memory controls reach generated clients', (t) 
 // committed contract/schema.json (what generated clients consume). The Zod
 // round-trip checks for these same schemas live in @qvac/inference's suite; here
 // we only assert the exported JSON Schema contract stays faithful to them.
+
+test('contract completion requests: prefill is an optional boolean', (t) => {
+  for (const type of ['completionStream', 'completionOrchestrate']) {
+    const request = { type, modelId: 'model', history: [], stream: false, kvCache: 'prime' }
+    for (const prefill of [undefined, false, true]) {
+      const wire = JSON.parse(JSON.stringify({ ...request, prefill }))
+      t.ok(contractValidate(`${type}.request`, wire).valid)
+    }
+    t.is(contractValidate(`${type}.request`, { ...request, prefill: 'true' }).valid, false)
+  }
+})
 
 test('contract completionStream.response: validates streaming event chunks', (t) => {
   const statsChunk = {

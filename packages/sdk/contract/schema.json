@@ -101,6 +101,9 @@
           "$ref": "#/$defs/rag.request"
         },
         {
+          "$ref": "#/$defs/rerank.request"
+        },
+        {
           "$ref": "#/$defs/resume.request"
         },
         {
@@ -260,6 +263,9 @@
           "$ref": "#/$defs/rag:progress.response"
         },
         {
+          "$ref": "#/$defs/rerank.response"
+        },
+        {
           "$ref": "#/$defs/resume.response"
         },
         {
@@ -411,6 +417,7 @@
                               "bci-whispercpp-transcription",
                               "llamacpp-embedding",
                               "llamacpp-decision",
+                              "llamacpp-rerank",
                               "nmtcpp-translation",
                               "onnx-tts",
                               "tts-ggml",
@@ -457,6 +464,7 @@
                   "bci-whispercpp-transcription",
                   "llamacpp-embedding",
                   "llamacpp-decision",
+                  "llamacpp-rerank",
                   "nmtcpp-translation",
                   "onnx-tts",
                   "tts-ggml",
@@ -1033,6 +1041,10 @@
               "type": "number"
             },
             "backendId": {
+              "type": "number"
+            },
+            "gpuFallbackReason": {
+              "description": "Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
               "type": "number"
             },
             "emittedFrames": {
@@ -1615,6 +1627,10 @@
             "backendId": {
               "type": "number"
             },
+            "gpuFallbackReason": {
+              "description": "Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
+              "type": "number"
+            },
             "emittedFrames": {
               "description": "MiniMax only: semantic frames the autoregressive stage emitted (25 per second). Below the frame cap when the song ended at the model end-of-sequence.",
               "type": "number"
@@ -2042,6 +2058,10 @@
             "backendId": {
               "type": "number"
             },
+            "gpuFallbackReason": {
+              "description": "Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
+              "type": "number"
+            },
             "emittedFrames": {
               "description": "MiniMax only: semantic frames the autoregressive stage emitted (25 per second). Below the frame cap when the song ended at the model end-of-sequence.",
               "type": "number"
@@ -2425,7 +2445,7 @@
                     "minLength": 1
                   },
                   "parallel_tool_calls": {
-                    "description": "Whether one response may carry more than one tool call. `true` lets the chat template and tool-call grammar accept several; unset or `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.",
+                    "description": "Whether one response may carry more than one tool call. `true` (default) lets the chat template and tool-call grammar accept several; `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.",
                     "type": "boolean"
                   }
                 },
@@ -2864,6 +2884,12 @@
                           "toolDefinitionsDropped": {
                             "type": "number"
                           },
+                          "draftTokens": {
+                            "type": "number"
+                          },
+                          "draftAcceptedTokens": {
+                            "type": "number"
+                          },
                           "backendDevice": {
                             "type": "string",
                             "enum": ["cpu", "gpu"],
@@ -2992,6 +3018,12 @@
             "toolDefinitionsDropped": {
               "type": "number"
             },
+            "draftTokens": {
+              "type": "number"
+            },
+            "draftAcceptedTokens": {
+              "type": "number"
+            },
             "backendDevice": {
               "type": "string",
               "enum": ["cpu", "gpu"],
@@ -3101,9 +3133,11 @@
               "type": "number"
             },
             "encoderTime": {
+              "description": "Parakeet encoder time, or the MOSS audio-encoder time, in ms.",
               "type": "number"
             },
             "decoderTime": {
+              "description": "Parakeet decoder time, or the MOSS decode time, in ms.",
               "type": "number"
             },
             "melSpecTime": {
@@ -3170,6 +3204,26 @@
             },
             "encoderUsedCoreml": {
               "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
+              "type": "number"
+            },
+            "aoscActive": {
+              "description": "Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.",
+              "type": "number"
+            },
+            "prefillTime": {
+              "description": "MOSS: prompt prefill time, in ms.",
+              "type": "number"
+            },
+            "audioTokens": {
+              "description": "MOSS: audio tokens fed to the decoder.",
+              "type": "number"
+            },
+            "promptTokens": {
+              "description": "MOSS: prompt tokens prefilled before decoding.",
+              "type": "number"
+            },
+            "generatedTokens": {
+              "description": "MOSS: tokens the decoder generated.",
               "type": "number"
             }
           },
@@ -3239,6 +3293,49 @@
             "startsWord": {
               "description": "Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
               "type": "boolean"
+            },
+            "language": {
+              "description": "Language the segment's window was decoded in, as an ISO 639-1 code such as `en`; the detected language under `language: 'auto'`. Whisper engine only.",
+              "type": "string"
+            },
+            "noSpeechProb": {
+              "description": "Probability (0–1) that the segment's window holds no speech, the value `no_speech_thold` is compared against. Whisper engine only.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "speakerTurnNext": {
+              "description": "A speaker turn follows this segment. Whisper engine only, with `tdrz_enable` on a tinydiarize model.",
+              "type": "boolean"
+            },
+            "tokens": {
+              "description": "Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "probability": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Decoder probability of the token (0–1)."
+                  }
+                },
+                "required": ["text", "startMs", "endMs", "probability"],
+                "additionalProperties": false,
+                "title": "BciTranscribeResponseSegmentTokensItem"
+              }
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -3432,9 +3529,11 @@
               "type": "number"
             },
             "encoderTime": {
+              "description": "Parakeet encoder time, or the MOSS audio-encoder time, in ms.",
               "type": "number"
             },
             "decoderTime": {
+              "description": "Parakeet decoder time, or the MOSS decode time, in ms.",
               "type": "number"
             },
             "melSpecTime": {
@@ -3501,6 +3600,26 @@
             },
             "encoderUsedCoreml": {
               "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
+              "type": "number"
+            },
+            "aoscActive": {
+              "description": "Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.",
+              "type": "number"
+            },
+            "prefillTime": {
+              "description": "MOSS: prompt prefill time, in ms.",
+              "type": "number"
+            },
+            "audioTokens": {
+              "description": "MOSS: audio tokens fed to the decoder.",
+              "type": "number"
+            },
+            "promptTokens": {
+              "description": "MOSS: prompt tokens prefilled before decoding.",
+              "type": "number"
+            },
+            "generatedTokens": {
+              "description": "MOSS: tokens the decoder generated.",
               "type": "number"
             }
           },
@@ -3570,6 +3689,49 @@
             "startsWord": {
               "description": "Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
               "type": "boolean"
+            },
+            "language": {
+              "description": "Language the segment's window was decoded in, as an ISO 639-1 code such as `en`; the detected language under `language: 'auto'`. Whisper engine only.",
+              "type": "string"
+            },
+            "noSpeechProb": {
+              "description": "Probability (0–1) that the segment's window holds no speech, the value `no_speech_thold` is compared against. Whisper engine only.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "speakerTurnNext": {
+              "description": "A speaker turn follows this segment. Whisper engine only, with `tdrz_enable` on a tinydiarize model.",
+              "type": "boolean"
+            },
+            "tokens": {
+              "description": "Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "probability": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Decoder probability of the token (0–1)."
+                  }
+                },
+                "required": ["text", "startMs", "endMs", "probability"],
+                "additionalProperties": false,
+                "title": "BciTranscribeStreamResponseSegmentTokensItem"
+              }
             },
             "windowStartTimestep": {
               "description": "Absolute index of the 20 ms timestep at which this segment's owning decode window began. Emitted with `emit: 'delta'` only: the segment's own timestamps are window-local, so add `windowStartTimestep * 20` ms to `startMs` / `endMs` to place them on the stream timeline.",
@@ -3641,6 +3803,7 @@
                 "batchCompletion",
                 "embeddings",
                 "decision",
+                "rerank",
                 "transcribe",
                 "translate",
                 "diffusion",
@@ -3853,6 +4016,10 @@
             }
           ]
         },
+        "prefill": {
+          "description": "Evaluate the prompt without generating an answer. Requires an enabled KV cache.",
+          "type": "boolean"
+        },
         "tools": {
           "description": "Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call.",
           "type": "array",
@@ -4021,7 +4188,7 @@
               "minLength": 1
             },
             "parallel_tool_calls": {
-              "description": "Whether one response may carry more than one tool call. `true` lets the chat template and tool-call grammar accept several; unset or `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.",
+              "description": "Whether one response may carry more than one tool call. `true` (default) lets the chat template and tool-call grammar accept several; `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.",
               "type": "boolean"
             }
           },
@@ -4328,6 +4495,12 @@
                       "toolDefinitionsDropped": {
                         "type": "number"
                       },
+                      "draftTokens": {
+                        "type": "number"
+                      },
+                      "draftAcceptedTokens": {
+                        "type": "number"
+                      },
                       "backendDevice": {
                         "type": "string",
                         "enum": ["cpu", "gpu"],
@@ -4553,6 +4726,10 @@
             }
           ]
         },
+        "prefill": {
+          "description": "Evaluate the prompt without generating an answer. Requires an enabled KV cache.",
+          "type": "boolean"
+        },
         "tools": {
           "description": "Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call.",
           "type": "array",
@@ -4721,7 +4898,7 @@
               "minLength": 1
             },
             "parallel_tool_calls": {
-              "description": "Whether one response may carry more than one tool call. `true` lets the chat template and tool-call grammar accept several; unset or `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.",
+              "description": "Whether one response may carry more than one tool call. `true` (default) lets the chat template and tool-call grammar accept several; `false` keeps one. Only honoured by llama.cpp-backed models; other backends ignore it.",
               "type": "boolean"
             }
           },
@@ -5020,6 +5197,12 @@
                       "toolDefinitionsDropped": {
                         "type": "number"
                       },
+                      "draftTokens": {
+                        "type": "number"
+                      },
+                      "draftAcceptedTokens": {
+                        "type": "number"
+                      },
                       "backendDevice": {
                         "type": "string",
                         "enum": ["cpu", "gpu"],
@@ -5182,6 +5365,7 @@
         "bci-whispercpp-transcription",
         "llamacpp-embedding",
         "llamacpp-decision",
+        "llamacpp-rerank",
         "nmtcpp-translation",
         "onnx-tts",
         "tts-ggml",
@@ -5199,6 +5383,7 @@
         "bciWhispercppTranscription",
         "llamacppEmbedding",
         "llamacppDecision",
+        "llamacppRerank",
         "nmtcppTranslation",
         "onnxTts",
         "ttsGgml",
@@ -5218,6 +5403,7 @@
         "@qvac/sdk/llamacpp-completion/plugin",
         "@qvac/sdk/llamacpp-embedding/plugin",
         "@qvac/sdk/llamacpp-decision/plugin",
+        "@qvac/sdk/llamacpp-rerank/plugin",
         "@qvac/sdk/whispercpp-transcription/plugin",
         "@qvac/sdk/bci-whispercpp-transcription/plugin",
         "@qvac/sdk/moss-transcribe/plugin",
@@ -5233,6 +5419,7 @@
         "LLM",
         "EMBEDDING",
         "DECISION",
+        "RERANK",
         "WHISPER",
         "BCI",
         "MOSS_TRANSCRIBE",
@@ -6843,6 +7030,21 @@
           },
           "required": ["type", "kvCacheKey"],
           "title": "DeleteCacheKvEntryRequest"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "deleteCache"
+            },
+            "modelSrc": {
+              "type": "string",
+              "description": "registry:// source of the model whose cached download to delete"
+            }
+          },
+          "required": ["type", "modelSrc"],
+          "title": "DeleteCacheModelRequest"
         }
       ]
     },
@@ -6881,14 +7083,14 @@
           "type": "string"
         },
         "width": {
-          "description": "Image width in pixels (must be a multiple of 8).",
+          "description": "Image width in pixels. Multiple of 8; Qwen-Image-2.1 requires a multiple of 32.",
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991,
           "multipleOf": 8
         },
         "height": {
-          "description": "Image height in pixels (must be a multiple of 8).",
+          "description": "Image height in pixels. Multiple of 8; Qwen-Image-2.1 requires a multiple of 32.",
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991,
@@ -6901,7 +7103,7 @@
           "maximum": 9007199254740991
         },
         "cfg_scale": {
-          "description": "Classifier-free guidance scale for SD 1.x / 2.x / XL / SD3 models; typical range 1–20, default 7",
+          "description": "Classifier-free guidance scale for SD and Qwen-Image models; typical range 1-20, default 7",
           "type": "number"
         },
         "img_cfg_scale": {
@@ -6973,13 +7175,13 @@
           "type": "string"
         },
         "init_image": {
-          "description": "Base64-encoded image for img2img generation. Mutually exclusive with init_images.",
+          "description": "Base64-encoded PNG/JPEG for img2img or reference editing. Qwen-Image-2.1 requires projectionModelSrc for editing and preserves reference alpha. Mutually exclusive with init_images.",
           "type": "string",
           "minLength": 1,
           "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
         },
         "init_images": {
-          "description": "FLUX.2-only multi-reference fusion: array of base64-encoded PNG/JPEG buffers. Each buffer becomes a separate reference image that the FLUX.2 transformer attends to. Mutually exclusive with init_image; requires the model to be loaded with config.prediction='flux2_flow' and a Qwen3 text encoder via llmModelSrc.",
+          "description": "Ordered base64-encoded PNG/JPEG references for models with reference editing, including FLUX.2 and Qwen-Image-2.1. Native model detection validates support. Qwen-Image-2.1 requires projectionModelSrc, preserves alpha, and does not need FLUX @imageN tags or a prediction override. Mutually exclusive with init_image.",
           "minItems": 1,
           "type": "array",
           "items": {
@@ -7003,13 +7205,13 @@
           "pattern": "^(\\/|[A-Za-z]:[\\\\/]|\\\\\\\\)"
         },
         "strength": {
-          "description": "img2img denoising strength (0.0 = keep source, 1.0 = ignore source); used by the SD/SDXL SDEdit path. No-op for FLUX.2, which uses in-context conditioning and ignores this field.",
+          "description": "img2img denoising strength for SD/SDXL SDEdit. Does not control reference-editing strength for FLUX.2 or Qwen-Image-2.1; these models start the target from noise.",
           "type": "number",
           "minimum": 0,
           "maximum": 1
         },
         "upscale": {
-          "description": "Post-generation ESRGAN upscale. `true` (or `{}` / `{ repeats: 1 }`) runs a single upscale pass at the model's native scale factor (e.g. x4 for RealESRGAN_x4plus). `false` is a no-op (same as omitting the field). `{ repeats: N }` runs the upscaler N times sequentially — each pass multiplies the output dimensions by the model's scale factor. When `batch_count > 1`, every output image is upscaled independently. Requires the model to be loaded with `upscaler.model_src` set in modelConfig.",
+          "description": "Post-generation ESRGAN upscale. `true` (or `{}` / `{ repeats: 1 }`) runs a single upscale pass at the model's native scale factor (e.g. x4 for RealESRGAN_x4plus). `false` is a no-op (same as omitting the field). `{ repeats: N }` runs the upscaler N times sequentially — each pass multiplies the output dimensions by the model's scale factor. When `batch_count > 1`, every output image is upscaled independently. Requires the model to be loaded with `upscaler.model_src` set in modelConfig. ESRGAN accepts RGB only; Qwen-Image-2.1 RGBA output rejects upscaling.",
           "anyOf": [
             {
               "type": "boolean"
@@ -12596,6 +12798,30 @@
                       "minimum": -1,
                       "maximum": 2147483647
                     },
+                    "spec_type": {
+                      "description": "Speculative decoding, as llama-server's `--spec-type`. `'draft-mtp'` drafts with the model's own multi-token-prediction head, or with an external MTP head given as `draftModelSrc`; the head, when given, otherwise the model, must ship MTP layers, and a head must match the model, or the load fails. `'draft-dflash'` drafts with the DFlash model given as `draftModelSrc`, which it requires. The model verifies every draft, so output keeps the distribution of plain decoding. `'none'` (default) decodes one token per step. Works with multimodal prompts, `parallel` and `kvCache`. Completion stats then report `draftTokens` and `draftAcceptedTokens`.",
+                      "type": "string",
+                      "enum": ["none", "draft-mtp", "draft-dflash"],
+                      "title": "LoadModelSrcRequestLlamacppCompletionModelConfigSpecType"
+                    },
+                    "spec_draft_n_max": {
+                      "description": "Longest draft per step (1–64, default 3). Lowered at load, with a warning, to fit one `ubatch-size` and each sequence’s share of `batch-size`. Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`.",
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 64
+                    },
+                    "spec_draft_n_min": {
+                      "description": "Shortest draft worth verifying (0–64, default 0, at most `spec_draft_n_max`); shorter drafts are dropped. Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 64
+                    },
+                    "spec_draft_p_min": {
+                      "description": "Minimum draft-head probability for a token to extend the draft (0–1, default 0). Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`.",
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
                     "projectionModelSrc": {
                       "description": "Multimodal projection (mmproj / vision encoder) model source; multimodal models only.",
                       "anyOf": [
@@ -12656,6 +12882,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -12690,6 +12917,104 @@
                           },
                           "required": ["src"],
                           "title": "LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc"
+                        }
+                      ]
+                    },
+                    "draftModelSrc": {
+                      "description": "Draft model source, as llama-server's `--spec-draft-model`: the DFlash model, required by `spec_type: 'draft-dflash'`, or an external MTP head for `spec_type: 'draft-mtp'`, such as the MTP quantization of the same model or a Gemma 4 assistant for its Gemma 4 model. Placed like the model (`device`, `gpu_layers`). Model fit checks count an MTP head's memory but not a DFlash model's or a Gemma 4 assistant's, so leave room for those.",
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "src": {
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                            },
+                            "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
+                              "type": "string"
+                            },
+                            "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
+                              "type": "string"
+                            },
+                            "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
+                              "type": "string"
+                            },
+                            "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
+                              "type": "string"
+                            },
+                            "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
+                              "type": "string"
+                            },
+                            "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                              "type": "number"
+                            },
+                            "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                              "type": "string"
+                            },
+                            "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
+                              "type": "number"
+                            },
+                            "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
+                              "type": "string"
+                            },
+                            "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "llamacpp-completion",
+                                    "whispercpp-transcription",
+                                    "bci-whispercpp-transcription",
+                                    "llamacpp-embedding",
+                                    "llamacpp-decision",
+                                    "llamacpp-rerank",
+                                    "nmtcpp-translation",
+                                    "onnx-tts",
+                                    "tts-ggml",
+                                    "parakeet-transcription",
+                                    "moss-transcribe",
+                                    "ggml-ocr",
+                                    "sdcpp-generation",
+                                    "audiogen-ggml",
+                                    "ggml-vla",
+                                    "ggml-classification",
+                                    "llm",
+                                    "whisper",
+                                    "bci",
+                                    "embeddings",
+                                    "nmt",
+                                    "parakeet",
+                                    "tts",
+                                    "ocr",
+                                    "diffusion",
+                                    "audiogen",
+                                    "vla",
+                                    "classification"
+                                  ],
+                                  "title": "LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrcAddon"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "vad"
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["src"],
+                          "title": "LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc"
                         }
                       ]
                     },
@@ -12879,6 +13204,10 @@
                       "description": "Initial prompt (context) prepended to the transcription.",
                       "type": "string"
                     },
+                    "carry_initial_prompt": {
+                      "description": "Prepend `initial_prompt` to every decode window instead of only the first. Default false.",
+                      "type": "boolean"
+                    },
                     "language": {
                       "description": "Transcription language (ISO 639-1) or `'auto'` to detect.",
                       "type": "string"
@@ -12997,8 +13326,27 @@
                           "type": "boolean"
                         },
                         "gpu_device": {
-                          "description": "GPU device index to use.",
+                          "description": "GPU device index to use (legacy GPU/IGPU ordinal). Cannot be combined with `main-gpu`.",
                           "type": "number"
+                        },
+                        "main-gpu": {
+                          "description": "GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+                          "anyOf": [
+                            {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 2147483647
+                            },
+                            {
+                              "type": "string",
+                              "pattern": "^\\d+$"
+                            },
+                            {
+                              "type": "string",
+                              "enum": ["dedicated", "integrated"],
+                              "title": "LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParamsMainGpu"
+                            }
+                          ]
                         }
                       },
                       "title": "LoadModelSrcRequestWhispercppTranscriptionModelConfigContextParams"
@@ -13079,6 +13427,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -13360,6 +13709,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -13512,8 +13862,24 @@
                       "type": "boolean"
                     },
                     "streamingEnergyVad": {
-                      "description": "CTC/TDT/Nemotron-only energy-based voice-activity hint; affects speech segmentation but adds no new event types. For standalone VAD `speaking`/`probability` events, use the whisper engine. Default false.",
+                      "description": "Run the engine's RMS energy detector on CTC, TDT, RNN-T, and Nemotron streaming sessions and emit `{ type: 'vad', source: 'energy' }` events on each speech/silence transition. Tune it with `streamingEnergyVadThresholdDb`, `streamingEnergyVadWindowMs`, and `streamingEnergyVadHangoverMs`. Default false.",
                       "type": "boolean"
+                    },
+                    "streamingEnergyVadThresholdDb": {
+                      "description": "Energy-VAD speech threshold in dBFS RMS; audio above it counts as speech. Default -35.",
+                      "type": "number"
+                    },
+                    "streamingEnergyVadWindowMs": {
+                      "description": "Energy-VAD RMS window in ms; the engine caps it at 1000. Default 30.",
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "streamingEnergyVadHangoverMs": {
+                      "description": "Silence the energy VAD requires before leaving the speaking state, in ms. Default 200.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
                     },
                     "streamingLeftContextMs": {
                       "description": "ASR encoder left-context window in ms; omit to keep the model default (10000).",
@@ -13580,6 +13946,27 @@
                       "description": "AOSC: FIFO-overflow pop-out count. Default 144.",
                       "type": "integer",
                       "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "prewarm": {
+                      "description": "Run one synthetic encoder pass while loading so the first request does not pay the GPU shader or kernel compile; Nemotron 3 Diarization also runs one streaming chunk. Default false.",
+                      "type": "boolean"
+                    },
+                    "prewarmAudioSeconds": {
+                      "description": "Length of the prewarm pass in seconds of audio; must be greater than 0. Default 1.",
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    },
+                    "longFormWindowFrames": {
+                      "description": "Offline encoder window for long recordings, in 80 ms encoder frames. `0` takes the window the model recommends (TranscribePsy: 750 frames, 60 s, with 94 frames of context on each side; other models: the engine's balanced automatic windows); a negative value encodes the whole input in one pass. Default 0.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "longFormContextFrames": {
+                      "description": "Encoder frames of context shared with each neighbouring long-form window. `0` lets the engine choose; `-1` runs the windows without context.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "backendsDir": {
@@ -13665,8 +14052,12 @@
                       "maximum": 9007199254740991
                     },
                     "useGPU": {
-                      "description": "Enable the linked GPU backend, including Metal. Default false.",
+                      "description": "Select a GPU automatically when `backend` is `auto`, including Metal. Default false.",
                       "type": "boolean"
+                    },
+                    "backend": {
+                      "description": "Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `metal`, or an exact ggml device name such as `CUDA0`. An explicit selection overrides `useGPU` and the load fails if it is unavailable.",
+                      "type": "string"
                     },
                     "backendsDir": {
                       "description": "Directory containing dynamically loaded ggml backend libraries.",
@@ -14016,6 +14407,158 @@
                   "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
                   "type": "string",
                   "enum": ["log", "refuse", "off"],
+                  "title": "LoadModelSrcRequestLlamacppRerankModelFitPolicy"
+                },
+                "requestId": {
+                  "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "modelType": {
+                  "type": "string",
+                  "const": "llamacpp-rerank"
+                },
+                "modelConfig": {
+                  "type": "object",
+                  "properties": {
+                    "device": {
+                      "description": "Compute device. Default 'gpu'.",
+                      "type": "string",
+                      "enum": ["cpu", "gpu"],
+                      "title": "LoadModelSrcRequestLlamacppRerankModelConfigDevice"
+                    },
+                    "gpu_layers": {
+                      "description": "Layers to offload. Unset lets the addon choose placement.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "batch_size": {
+                      "description": "Tokens per forward pass. Default 2048; each document paired with the query must fit.",
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "backend": {
+                      "description": "Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with 'split-mode': 'layer'.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": ["cuda", "vulkan", "metal", "opencl", "auto"],
+                        "title": "LoadModelSrcRequestLlamacppRerankModelConfigBackendItem"
+                      }
+                    },
+                    "poll": {
+                      "description": "CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "pollBatch": {
+                      "description": "CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "threads": {
+                      "description": "CPU threads, at most the CPU count. Zero or below uses all logical CPUs.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "threads-batch": {
+                      "description": "Batch CPU threads. Unset uses threads; zero or below uses all logical CPUs.",
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "flash_attn": {
+                      "description": "Flash attention mode. Default auto.",
+                      "type": "string",
+                      "enum": ["on", "off", "auto"],
+                      "title": "LoadModelSrcRequestLlamacppRerankModelConfigFlashAttn"
+                    },
+                    "verbosity": {
+                      "description": "Native log level: 0 error, 1 warn, 2 info, 3 debug.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 3
+                    },
+                    "main-gpu": {
+                      "description": "GPU index or device class.",
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "string",
+                          "enum": ["integrated", "dedicated"],
+                          "title": "LoadModelSrcRequestLlamacppRerankModelConfigMainGpu"
+                        }
+                      ]
+                    },
+                    "split-mode": {
+                      "description": "Multi-GPU split mode.",
+                      "type": "string",
+                      "enum": ["none", "layer"],
+                      "title": "LoadModelSrcRequestLlamacppRerankModelConfigSplitMode"
+                    },
+                    "tensor-split": {
+                      "description": "Per-GPU tensor split proportions.",
+                      "type": "string"
+                    },
+                    "openclCacheDir": {
+                      "description": "Writable OpenCL kernel cache directory, required on Android.",
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "title": "LoadModelSrcRequestLlamacppRerankModelConfig"
+                }
+              },
+              "required": ["type", "modelSrc", "modelType"],
+              "additionalProperties": false,
+              "title": "LoadModelSrcRequestLlamacppRerank"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "loadModel"
+                },
+                "modelSrc": {
+                  "type": "string",
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
+                },
+                "modelName": {
+                  "type": "string"
+                },
+                "withProgress": {
+                  "type": "boolean"
+                },
+                "seed": {
+                  "type": "boolean"
+                },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "modelFitPolicy": {
+                  "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+                  "type": "string",
+                  "enum": ["log", "refuse", "off"],
                   "title": "LoadModelSrcRequestNmtcppTranslationModelFitPolicy"
                 },
                 "requestId": {
@@ -14257,6 +14800,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -14354,6 +14898,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -14496,6 +15041,7 @@
                                             "bci-whispercpp-transcription",
                                             "llamacpp-embedding",
                                             "llamacpp-decision",
+                                            "llamacpp-rerank",
                                             "nmtcpp-translation",
                                             "onnx-tts",
                                             "tts-ggml",
@@ -14594,6 +15140,7 @@
                                             "bci-whispercpp-transcription",
                                             "llamacpp-embedding",
                                             "llamacpp-decision",
+                                            "llamacpp-rerank",
                                             "nmtcpp-translation",
                                             "onnx-tts",
                                             "tts-ggml",
@@ -14691,6 +15238,7 @@
                                             "bci-whispercpp-transcription",
                                             "llamacpp-embedding",
                                             "llamacpp-decision",
+                                            "llamacpp-rerank",
                                             "nmtcpp-translation",
                                             "onnx-tts",
                                             "tts-ggml",
@@ -15093,6 +15641,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -15190,6 +15739,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -15287,6 +15837,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -15384,6 +15935,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -15481,6 +16033,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -15578,6 +16131,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -15803,6 +16357,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -15900,6 +16455,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -16174,6 +16730,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -16271,6 +16828,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -16500,6 +17058,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -16597,6 +17156,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -16694,6 +17254,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -16791,6 +17352,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -16888,6 +17450,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -17062,6 +17625,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -17160,6 +17724,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -17257,6 +17822,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -17410,6 +17976,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -17508,6 +18075,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -17605,6 +18173,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -17706,6 +18275,7 @@
                                           "bci-whispercpp-transcription",
                                           "llamacpp-embedding",
                                           "llamacpp-decision",
+                                          "llamacpp-rerank",
                                           "nmtcpp-translation",
                                           "onnx-tts",
                                           "tts-ggml",
@@ -17911,6 +18481,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -18141,6 +18712,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -18238,7 +18810,7 @@
                   "properties": {
                     "mode": {
                       "default": "diffusion",
-                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` selects MiniMax-H3 text/image-to-video (optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
+                      "description": "Operation mode for the diffusion plugin. `'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX / Qwen-Image pipeline from the primary model plus optional auxiliary text encoders, VAE, unconditional diffusion model, and ESRGAN upscaler, and exposes diffusion({ ... }). `'upscale'` builds a standalone ESRGAN upscaler from the primary model file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). `'video'` builds a `VideoStableDiffusion` pipeline and exposes video({ ... }). The video layout is selected from the auxiliary sources: supplying `embeddingsConnectorsModelSrc` loads the LTX-2 layout (Gemma text encoder via `llmModelSrc` + video VAE + connectors, optional `audioVaeModelSrc` for synchronized audio). Without connectors, `llmModelSrc` + `vaeModelSrc` selects MiniMax-H3 text/image-to-video (optional `audioVaeModelSrc` for synchronized audio); otherwise the Wan layout is used (UMT5 text encoder via `t5XxlModelSrc` + VAE). On React Native, loading the video model on-device will likely fail because the video diffusion models currently shipped by QVAC are too large to load on typical mobile devices. `'world'` builds an ABot-World interactive world session and exposes worldCreateScene({ ... }) and worldStep({ ... }). It requires `taehvModelSrc`, plus `t5XxlModelSrc` + `vaeModelSrc` to create scenes and/or `sceneSrc` to walk a pre-built one. World sessions run only on the machine hosting the worker and need a dedicated GPU. At 832x480, the default walk with resident weights needs at least 20 GB free VRAM. `world.paramsBackend`, `world.maxVram`, and `world.streamLayers` can reduce that requirement.",
                       "type": "string",
                       "enum": ["diffusion", "upscale", "video", "world"],
                       "title": "LoadModelSrcRequestSdcppGenerationModelConfigMode"
@@ -18443,6 +19015,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -18540,6 +19113,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -18637,6 +19211,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -18675,7 +19250,7 @@
                       ]
                     },
                     "llmModelSrc": {
-                      "description": "LLM text encoder model — required for FLUX.2 [klein] (Qwen3), Ideogram 4 (Qwen3-VL), LTX-2 video (Gemma), and MiniMax-H3 (H3-specific Qwen3-VL).",
+                      "description": "LLM text encoder model — required for FLUX.2 [klein] (Qwen3), Qwen-Image-2.1 and Ideogram 4 (Qwen3-VL), LTX-2 video (Gemma), and MiniMax-H3 (H3-specific Qwen3-VL).",
                       "anyOf": [
                         {
                           "type": "string"
@@ -18734,6 +19309,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -18771,8 +19347,8 @@
                         }
                       ]
                     },
-                    "vaeModelSrc": {
-                      "description": "VAE decoder model — required for FLUX.2 [klein], Ideogram 4, LTX-2 video, and MiniMax-H3 video; optional for SDXL.",
+                    "projectionModelSrc": {
+                      "description": "Vision projector for the LLM encoder. Required for Qwen-Image-2.1 reference editing with its GGUF Qwen3-VL encoder; optional for text-to-image. Requires llmModelSrc and diffusion mode.",
                       "anyOf": [
                         {
                           "type": "string"
@@ -18831,6 +19407,105 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
+                                    "nmtcpp-translation",
+                                    "onnx-tts",
+                                    "tts-ggml",
+                                    "parakeet-transcription",
+                                    "moss-transcribe",
+                                    "ggml-ocr",
+                                    "sdcpp-generation",
+                                    "audiogen-ggml",
+                                    "ggml-vla",
+                                    "ggml-classification",
+                                    "llm",
+                                    "whisper",
+                                    "bci",
+                                    "embeddings",
+                                    "nmt",
+                                    "parakeet",
+                                    "tts",
+                                    "ocr",
+                                    "diffusion",
+                                    "audiogen",
+                                    "vla",
+                                    "classification"
+                                  ],
+                                  "title": "LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon"
+                                },
+                                {
+                                  "type": "string",
+                                  "const": "vad"
+                                }
+                              ]
+                            }
+                          },
+                          "required": ["src"],
+                          "title": "LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc"
+                        }
+                      ]
+                    },
+                    "vaeModelSrc": {
+                      "description": "VAE decoder model, required for Qwen-Image-2.1, FLUX.2 [klein], Ideogram 4, LTX-2 video, and MiniMax-H3 video; optional for SDXL.",
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "src": {
+                              "type": "string",
+                              "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                            },
+                            "name": {
+                              "description": "Display name for this model instance; overrides the name derived from the source.",
+                              "type": "string"
+                            },
+                            "modelId": {
+                              "description": "Unique identifier used to reference the model in QVAC calls.",
+                              "type": "string"
+                            },
+                            "registryPath": {
+                              "description": "Registry-relative path to the model (set for registry-backed models).",
+                              "type": "string"
+                            },
+                            "registrySource": {
+                              "description": "Registry source identifier, e.g. `huggingface`.",
+                              "type": "string"
+                            },
+                            "blobCoreKey": {
+                              "description": "Hyperdrive blob core key for the model file.",
+                              "type": "string"
+                            },
+                            "blobIndex": {
+                              "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                              "type": "number"
+                            },
+                            "engine": {
+                              "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                              "type": "string"
+                            },
+                            "expectedSize": {
+                              "description": "Expected total size of the model file in bytes.",
+                              "type": "number"
+                            },
+                            "sha256Checksum": {
+                              "description": "Expected SHA-256 checksum of the model file.",
+                              "type": "string"
+                            },
+                            "addon": {
+                              "description": "Inference addon / capability category this model belongs to.",
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "llamacpp-completion",
+                                    "whispercpp-transcription",
+                                    "bci-whispercpp-transcription",
+                                    "llamacpp-embedding",
+                                    "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -18928,6 +19603,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -19025,6 +19701,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -19122,6 +19799,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -19219,6 +19897,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -19316,6 +19995,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -19413,6 +20093,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -19510,6 +20191,7 @@
                                     "bci-whispercpp-transcription",
                                     "llamacpp-embedding",
                                     "llamacpp-decision",
+                                    "llamacpp-rerank",
                                     "nmtcpp-translation",
                                     "onnx-tts",
                                     "tts-ggml",
@@ -19548,7 +20230,7 @@
                       ]
                     },
                     "world": {
-                      "description": "ABot-World session tuning — mode: 'world' only, rejected in every other mode. Forwarded to the native session as-is.",
+                      "description": "ABot-World session tuning — mode: 'world' only, rejected in every other mode. Session settings reach the addon; fitSteps controls only memory fit.",
                       "type": "object",
                       "properties": {
                         "seed": {
@@ -19556,6 +20238,12 @@
                           "type": "integer",
                           "minimum": -9007199254740991,
                           "maximum": 9007199254740991
+                        },
+                        "fitSteps": {
+                          "description": "Walk steps covered by memory fit. Defaults to 100; does not limit generation or retained history.",
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1000000
                         },
                         "threads": {
                           "description": "CPU threads for the session. -1 = auto-detect (default).",
@@ -19720,6 +20408,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -19946,6 +20635,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -20043,6 +20733,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -20140,6 +20831,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -20237,6 +20929,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -20380,6 +21073,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -20477,6 +21171,7 @@
                                         "bci-whispercpp-transcription",
                                         "llamacpp-embedding",
                                         "llamacpp-decision",
+                                        "llamacpp-rerank",
                                         "nmtcpp-translation",
                                         "onnx-tts",
                                         "tts-ggml",
@@ -20926,6 +21621,10 @@
                   "description": "Initial prompt (context) prepended to the transcription.",
                   "type": "string"
                 },
+                "carry_initial_prompt": {
+                  "description": "Prepend `initial_prompt` to every decode window instead of only the first. Default false.",
+                  "type": "boolean"
+                },
                 "language": {
                   "description": "Transcription language (ISO 639-1) or `'auto'` to detect.",
                   "type": "string"
@@ -21044,8 +21743,27 @@
                       "type": "boolean"
                     },
                     "gpu_device": {
-                      "description": "GPU device index to use.",
+                      "description": "GPU device index to use (legacy GPU/IGPU ordinal). Cannot be combined with `main-gpu`.",
                       "type": "number"
+                    },
+                    "main-gpu": {
+                      "description": "GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        {
+                          "type": "string",
+                          "pattern": "^\\d+$"
+                        },
+                        {
+                          "type": "string",
+                          "enum": ["dedicated", "integrated"],
+                          "title": "ReloadConfigRequestModelConfigContextParamsMainGpu"
+                        }
+                      ]
                     }
                   },
                   "title": "ReloadConfigRequestModelConfigContextParams"
@@ -21126,6 +21844,7 @@
                                 "bci-whispercpp-transcription",
                                 "llamacpp-embedding",
                                 "llamacpp-decision",
+                                "llamacpp-rerank",
                                 "nmtcpp-translation",
                                 "onnx-tts",
                                 "tts-ggml",
@@ -21430,6 +22149,7 @@
                 "bci-whispercpp-transcription",
                 "llamacpp-embedding",
                 "llamacpp-decision",
+                "llamacpp-rerank",
                 "nmtcpp-translation",
                 "onnx-tts",
                 "tts-ggml",
@@ -21440,6 +22160,7 @@
                 "audiogen-ggml",
                 "ggml-vla",
                 "ggml-classification",
+                "ggml-image-embedding",
                 "onnx-vad"
               ],
               "description": "Canonical inference engine identifier.",
@@ -21577,6 +22298,7 @@
                   "bci-whispercpp-transcription",
                   "llamacpp-embedding",
                   "llamacpp-decision",
+                  "llamacpp-rerank",
                   "nmtcpp-translation",
                   "onnx-tts",
                   "tts-ggml",
@@ -21587,6 +22309,7 @@
                   "audiogen-ggml",
                   "ggml-vla",
                   "ggml-classification",
+                  "ggml-image-embedding",
                   "onnx-vad"
                 ],
                 "description": "Canonical inference engine identifier.",
@@ -21755,6 +22478,7 @@
                   "bci-whispercpp-transcription",
                   "llamacpp-embedding",
                   "llamacpp-decision",
+                  "llamacpp-rerank",
                   "nmtcpp-translation",
                   "onnx-tts",
                   "tts-ggml",
@@ -21765,6 +22489,7 @@
                   "audiogen-ggml",
                   "ggml-vla",
                   "ggml-classification",
+                  "ggml-image-embedding",
                   "onnx-vad"
                 ],
                 "description": "Canonical inference engine identifier.",
@@ -22719,6 +23444,58 @@
       "required": ["type", "operation", "workspace", "stage", "current", "total", "timestamp"],
       "additionalProperties": false
     },
+    "rerank.request": {
+      "title": "RerankRequest",
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Query to score each document against."
+        },
+        "documents": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Documents to score. Each one, paired with the query, must fit in `batch_size`."
+        },
+        "modelId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "const": "rerank"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["query", "documents", "modelId", "type"],
+      "additionalProperties": false
+    },
+    "rerank.response": {
+      "title": "RerankResponse",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "rerank"
+        },
+        "scores": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "One relevance score per document, in input order. Higher is more relevant. Scores are the model's raw classifier output, so compare them within one model only."
+        }
+      },
+      "required": ["type", "scores"],
+      "additionalProperties": false
+    },
     "resume.request": {
       "title": "ResumeRequest",
       "type": "object",
@@ -23206,6 +23983,14 @@
             "enhancerBackendId": {
               "type": "number"
             },
+            "denoiserBackendDevice": {
+              "description": "LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed.",
+              "type": "number"
+            },
+            "denoiserBackendId": {
+              "description": "LavaSR denoiser backend family, same codes as `backendId`.",
+              "type": "number"
+            },
             "codecSidecarLoaded": {
               "description": "Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired.",
               "type": "number"
@@ -23403,6 +24188,14 @@
             "enhancerBackendId": {
               "type": "number"
             },
+            "denoiserBackendDevice": {
+              "description": "LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed.",
+              "type": "number"
+            },
+            "denoiserBackendId": {
+              "description": "LavaSR denoiser backend family, same codes as `backendId`.",
+              "type": "number"
+            },
             "codecSidecarLoaded": {
               "description": "Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired.",
               "type": "number"
@@ -23543,9 +24336,11 @@
               "type": "number"
             },
             "encoderTime": {
+              "description": "Parakeet encoder time, or the MOSS audio-encoder time, in ms.",
               "type": "number"
             },
             "decoderTime": {
+              "description": "Parakeet decoder time, or the MOSS decode time, in ms.",
               "type": "number"
             },
             "melSpecTime": {
@@ -23612,6 +24407,26 @@
             },
             "encoderUsedCoreml": {
               "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
+              "type": "number"
+            },
+            "aoscActive": {
+              "description": "Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.",
+              "type": "number"
+            },
+            "prefillTime": {
+              "description": "MOSS: prompt prefill time, in ms.",
+              "type": "number"
+            },
+            "audioTokens": {
+              "description": "MOSS: audio tokens fed to the decoder.",
+              "type": "number"
+            },
+            "promptTokens": {
+              "description": "MOSS: prompt tokens prefilled before decoding.",
+              "type": "number"
+            },
+            "generatedTokens": {
+              "description": "MOSS: tokens the decoder generated.",
               "type": "number"
             }
           },
@@ -23681,6 +24496,49 @@
             "startsWord": {
               "description": "Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
               "type": "boolean"
+            },
+            "language": {
+              "description": "Language the segment's window was decoded in, as an ISO 639-1 code such as `en`; the detected language under `language: 'auto'`. Whisper engine only.",
+              "type": "string"
+            },
+            "noSpeechProb": {
+              "description": "Probability (0–1) that the segment's window holds no speech, the value `no_speech_thold` is compared against. Whisper engine only.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "speakerTurnNext": {
+              "description": "A speaker turn follows this segment. Whisper engine only, with `tdrz_enable` on a tinydiarize model.",
+              "type": "boolean"
+            },
+            "tokens": {
+              "description": "Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "probability": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Decoder probability of the token (0–1)."
+                  }
+                },
+                "required": ["text", "startMs", "endMs", "probability"],
+                "additionalProperties": false,
+                "title": "TranscribeResponseSegmentTokensItem"
+              }
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -23700,6 +24558,10 @@
               "type": "boolean"
             },
             "probability": {
+              "type": "number"
+            },
+            "timestamp": {
+              "description": "Parakeet: event time in seconds from the start of the streaming session.",
               "type": "number"
             },
             "source": {
@@ -23908,6 +24770,19 @@
             "emitEnergyVad": {
               "type": "boolean"
             },
+            "energyVadThresholdDb": {
+              "type": "number"
+            },
+            "energyVadWindowMs": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "energyVadHangoverMs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
             "emitSpeakerVad": {
               "type": "boolean"
             },
@@ -23995,9 +24870,11 @@
               "type": "number"
             },
             "encoderTime": {
+              "description": "Parakeet encoder time, or the MOSS audio-encoder time, in ms.",
               "type": "number"
             },
             "decoderTime": {
+              "description": "Parakeet decoder time, or the MOSS decode time, in ms.",
               "type": "number"
             },
             "melSpecTime": {
@@ -24064,6 +24941,26 @@
             },
             "encoderUsedCoreml": {
               "description": "Parakeet offline ASR: `1` when this run used Core ML for encoding, `0` on fallback.",
+              "type": "number"
+            },
+            "aoscActive": {
+              "description": "Parakeet Sortformer streaming: `1` when the v2.1 AOSC speaker cache was active, `0` otherwise.",
+              "type": "number"
+            },
+            "prefillTime": {
+              "description": "MOSS: prompt prefill time, in ms.",
+              "type": "number"
+            },
+            "audioTokens": {
+              "description": "MOSS: audio tokens fed to the decoder.",
+              "type": "number"
+            },
+            "promptTokens": {
+              "description": "MOSS: prompt tokens prefilled before decoding.",
+              "type": "number"
+            },
+            "generatedTokens": {
+              "description": "MOSS: tokens the decoder generated.",
               "type": "number"
             }
           },
@@ -24133,6 +25030,49 @@
             "startsWord": {
               "description": "Segment begins a new SentencePiece word, for joining partial segments without splitting words. Parakeet engine only; absent on whisper.",
               "type": "boolean"
+            },
+            "language": {
+              "description": "Language the segment's window was decoded in, as an ISO 639-1 code such as `en`; the detected language under `language: 'auto'`. Whisper engine only.",
+              "type": "string"
+            },
+            "noSpeechProb": {
+              "description": "Probability (0–1) that the segment's window holds no speech, the value `no_speech_thold` is compared against. Whisper engine only.",
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "speakerTurnNext": {
+              "description": "A speaker turn follows this segment. Whisper engine only, with `tdrz_enable` on a tinydiarize model.",
+              "type": "boolean"
+            },
+            "tokens": {
+              "description": "Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "startMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "endMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "probability": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Decoder probability of the token (0–1)."
+                  }
+                },
+                "required": ["text", "startMs", "endMs", "probability"],
+                "additionalProperties": false,
+                "title": "TranscribeStreamResponseSegmentTokensItem"
+              }
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -24152,6 +25092,10 @@
               "type": "boolean"
             },
             "probability": {
+              "type": "number"
+            },
+            "timestamp": {
+              "description": "Parakeet: event time in seconds from the start of the streaming session.",
               "type": "number"
             },
             "source": {

@@ -12,8 +12,9 @@ import {
 import { createStreamLogger, registerAddonLogger, getEngineLogger } from '@/logging/index'
 import { isMobile } from '@/runtime/state'
 import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
+import { getModelShardFiles } from '@/utils/shard-utils'
 import { decide } from './ops/decide'
-import { transformDecisionConfig, decisionModelFiles } from './helpers'
+import { transformDecisionConfig } from './helpers'
 
 function createDecisionModel(params: CreateModelParams): LayaDecisions {
   const config = { ...transformDecisionConfig(decisionConfigSchema.parse(params.modelConfig)) }
@@ -28,7 +29,7 @@ function createDecisionModel(params: CreateModelParams): LayaDecisions {
   const logger = createStreamLogger(params.modelId, ModelType.llamacppDecision)
   registerAddonLogger(params.modelId, ModelType.llamacppDecision, logger)
   return new LayaDecisions({
-    files: { model: decisionModelFiles(params.modelPath) },
+    files: { model: getModelShardFiles(params.modelPath) },
     config,
     logger
   })

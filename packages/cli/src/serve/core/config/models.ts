@@ -16,7 +16,7 @@ export interface ConstantModelEntry {
 }
 
 export interface ExplicitModelEntry {
-  src: string
+  src?: string
   type: string
   default?: boolean
   preload?: boolean
@@ -142,9 +142,6 @@ export function resolveModelConstant(alias: string, entry: ConstantModelEntry): 
 }
 
 function parseExplicitEntry(alias: string, entry: ExplicitModelEntry): ResolvedModelEntry {
-  if (!entry.src) {
-    throw new Error(`serve.models.${alias}: "src" is required`)
-  }
   if (!entry.type) {
     throw new Error(`serve.models.${alias}: "type" is required`)
   }
@@ -152,11 +149,16 @@ function parseExplicitEntry(alias: string, entry: ExplicitModelEntry): ResolvedM
   const rawConfig = entry.config ?? {}
   const resolved = resolveForAlias(alias, entry.type, rawConfig)
 
+  if (!entry.src) {
+    throw new Error(`serve.models.${alias}: "src" is required`)
+  }
+  const src = entry.src
+
   // Allow `entry.src` to be either a path or a known SDK model-constant name.
   // Constant names look like `WAN2_1_T2V_1_3B_FP16`; paths contain `/` or
   // start with `.`. If the string is a registered constant, swap in the
   // ModelConstant object so the P2P registry resolves it.
-  const modelSrc: string | ModelConstant = loadModelConstants().get(entry.src) ?? entry.src
+  const modelSrc: string | ModelConstant = loadModelConstants().get(src) ?? src
 
   return {
     alias,

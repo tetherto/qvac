@@ -1,0 +1,9 @@
+{
+  "name": "qvac-bare-toolchain",
+  "private": true,
+  "description": "The Bare build and addon-linking toolchain CI uses. The lockfile pins bare-make, bare-link and their dependencies, so upstream releases change nothing until a pull request updates the lockfile. Install with install.mjs.",
+  "dependencies": {
+    "bare-make": "2.1.1",
+    "bare-link": "4.2.0"
+  }
+}

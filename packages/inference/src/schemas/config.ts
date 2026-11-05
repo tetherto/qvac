@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { logLevelSchema } from '@/schemas/logging-stream'
 import { decisionConfigBaseSchema } from '@/schemas/decision'
+import { rerankConfigBaseSchema } from '@/schemas/rerank'
 import { ModelType } from '@/schemas/model-types'
 import { llmConfigBaseSchema, embedConfigBaseSchema } from '@/schemas/llamacpp-config'
 import {
@@ -55,6 +56,7 @@ export const deviceConfigDefaultsSchema = z
     [ModelType.llamacppCompletion]: llmConfigBaseSchema.optional(),
     [ModelType.llamacppEmbedding]: embedConfigBaseSchema.optional(),
     [ModelType.llamacppDecision]: decisionConfigBaseSchema.optional(),
+    [ModelType.llamacppRerank]: rerankConfigBaseSchema.optional(),
     [ModelType.whispercppTranscription]: whisperConfigSchema.partial().optional(),
     [ModelType.parakeetTranscription]: parakeetConfigSchema.partial().optional(),
     [ModelType.mossTranscribe]: mossTranscribeConfigSchema.optional(),

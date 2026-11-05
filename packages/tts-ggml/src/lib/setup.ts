@@ -18,6 +18,7 @@ import type {
 } from "./engineSetup";
 import { renderCosyvoiceInstruct } from "./engines/cosyvoice";
 import { mossVoiceSettings } from "./engines/moss";
+import { resolveFabricOptions, validateBackendOption } from "./fabricOptions";
 import {
   firstNonEmpty,
   normalizeGgmlFiles,
@@ -26,6 +27,7 @@ import {
 import { validateEngineOptions } from "./optionValidation";
 import { buildPocketParams } from "./pocketConfig";
 import type {
+  LavaSRCoreMLOptions,
   LavaSRDenoiserOptions,
   LavaSREnhancerOptions,
   TTSGgmlOptions,
@@ -34,6 +36,38 @@ import type {
 const { platform } = bareOs;
 const MIN_OUTPUT_SAMPLE_RATE = 8000;
 const MAX_OUTPUT_SAMPLE_RATE = 192000;
+const LAVASR_COREML_COMPUTE_UNITS = [
+  "CPU_ONLY",
+  "CPU_AND_GPU",
+  "CPU_AND_NE",
+  "ALL",
+];
+
+function validateLavaSRCoreML(
+  options: LavaSRCoreMLOptions | undefined,
+  ggufPath: string | undefined,
+  stage: string,
+): void {
+  const modelPath = options?.coremlModelPath;
+  const computeUnits = options?.coremlComputeUnits;
+  if (modelPath === undefined && computeUnits === undefined) return;
+  if (typeof modelPath !== "string" || modelPath.trim().length === 0) {
+    throw new Error(`${stage}.coremlModelPath must be a non-empty string`);
+  }
+  if (
+    typeof computeUnits !== "string" ||
+    !LAVASR_COREML_COMPUTE_UNITS.includes(computeUnits)
+  ) {
+    throw new Error(
+      `${stage}.coremlComputeUnits must be CPU_ONLY, CPU_AND_GPU, CPU_AND_NE or ALL`,
+    );
+  }
+  if (!ggufPath) {
+    throw new Error(
+      `${stage} Core ML requires the corresponding LavaSR GGUF path`,
+    );
+  }
+}
 
 export function resolveDefaultLazySessionLoading(
   lazySessionLoading?: boolean,
@@ -67,10 +101,7 @@ function resolveEnhancerGgufPath(
       `tts-ggml: unknown enhancer.type '${String(enhancer.type)}', expected 'lavasr'.`,
     );
   }
-  return firstNonEmpty(
-    files.lavasrEnhancer,
-    enhancer?.enhancerPath,
-  );
+  return firstNonEmpty(files.lavasrEnhancer, enhancer?.enhancerPath);
 }
 
 function resolveDenoiserGgufPath(
@@ -150,6 +181,9 @@ function settingsFromOptions(options: TTSGgmlOptions): SynthesisSettings {
     maxFrames: options.maxFrames,
     minNewTokens: options.minNewTokens,
     normalizeNumbers: options.normalizeNumbers,
+    coremlDecoder: options.coremlDecoder,
+    coremlComputeUnits: options.coremlComputeUnits,
+    coremlStrict: options.coremlStrict,
     ...mossVoiceSettings(options),
   };
 }
@@ -159,12 +193,26 @@ function resolveBackendPaths(
   options: TTSGgmlOptions,
   config: TTSGgmlRuntimeConfig,
 ): BackendPaths {
+  const enhancerGgufPath = resolveEnhancerGgufPath(files, options.enhancer);
+  const denoiserGgufPath = resolveDenoiserGgufPath(files, options.denoiser);
+  validateLavaSRCoreML(options.enhancer, enhancerGgufPath, "enhancer");
+  validateLavaSRCoreML(options.denoiser, denoiserGgufPath, "denoiser");
   return {
-    enhancerGgufPath: resolveEnhancerGgufPath(files, options.enhancer),
-    denoiserGgufPath: resolveDenoiserGgufPath(files, options.denoiser),
+    enhancerGgufPath,
+    denoiserGgufPath,
+    enhancerCoremlModelPath: options.enhancer?.coremlModelPath,
+    enhancerCoremlComputeUnits: options.enhancer?.coremlComputeUnits,
+    denoiserCoremlModelPath: options.denoiser?.coremlModelPath,
+    denoiserCoremlComputeUnits: options.denoiser?.coremlComputeUnits,
     backendsDir: firstNonEmpty(options.backendsDir, config.backendsDir),
-    openclCacheDir: firstNonEmpty(options.openclCacheDir, config.openclCacheDir),
-    vulkanCacheDir: firstNonEmpty(options.vulkanCacheDir, config.vulkanCacheDir),
+    openclCacheDir: firstNonEmpty(
+      options.openclCacheDir,
+      config.openclCacheDir,
+    ),
+    vulkanCacheDir: firstNonEmpty(
+      options.vulkanCacheDir,
+      config.vulkanCacheDir,
+    ),
   };
 }
 
@@ -189,6 +237,7 @@ export function resolveEngineSetup(options: TTSGgmlOptions): EngineSetup {
   const config: TTSGgmlRuntimeConfig = { ...(options.config || {}) };
   const outputSampleRate = validateOutputSampleRate(config.outputSampleRate);
   const engineType = detectEngineType(options.engine, files);
+  validateBackendOption(engineType, config.backend);
   const mossVoice = mossVoiceSettings(options);
   const pocket =
     engineType === ENGINE_POCKET
@@ -201,6 +250,7 @@ export function resolveEngineSetup(options: TTSGgmlOptions): EngineSetup {
     dialogue: mossVoice.dialogueReferences !== undefined,
   });
   const settings = settingsFromOptions(options);
+  Object.assign(settings, resolveFabricOptions(engineType, options));
   const backend = resolveBackendPaths(files, options, config);
   const setup: EngineSetup = {
     engineType,

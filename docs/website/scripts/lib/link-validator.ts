@@ -116,14 +116,80 @@ function resolveLink(
   fileIndex: Set<string>,
 ): boolean {
   return contentPathsOfLink(linkPath, sourcePath).some((contentPath) =>
-    [
-      `${contentPath}.mdx`,
-      `${contentPath}.md`,
-      `${contentPath}/index.mdx`,
-      `${contentPath}/index.md`,
-      contentPath,
-    ].some((candidate) => fileIndex.has(candidate)),
+    hasPage(fileIndex, contentPath),
   );
+}
+
+/**
+ * `true` when a content path names a page present in the index.
+ *
+ * The empty path is the index of the tree itself, which is what a link to a
+ * collection's root resolves to once the collection segment is dropped.
+ */
+function hasPage(index: Set<string>, contentPath: string): boolean {
+  const candidates =
+    contentPath === ""
+      ? ["index.mdx", "index.md"]
+      : [
+          `${contentPath}.mdx`,
+          `${contentPath}.md`,
+          `${contentPath}/index.mdx`,
+          `${contentPath}/index.md`,
+          contentPath,
+        ];
+  return candidates.some((candidate) => index.has(candidate));
+}
+
+/**
+ * Validate the internal links of a collection's development line.
+ *
+ * The line sits outside `content/docs/`, so the build never renders it and
+ * nothing reports a break in it until the cutoff copies it into the
+ * collection — on the one PR of the release that cannot wait. This is what
+ * moves that report back onto the PR that wrote the link.
+ *
+ * Resolution treats the line as the line it is about to become: a
+ * same-collection link resolves inside it, because the page it points at was
+ * written in the same sprint and will be published alongside it; a link naming
+ * a version, or naming another collection, resolves against the docs tree the
+ * way a published page's would.
+ */
+export async function validateDevelopmentLine(
+  slug: string,
+  lineDir: string,
+  docsBase: string,
+): Promise<BrokenLink[]> {
+  const [files, lineIndex, docsIndex] = await Promise.all([
+    collectMdxFiles(lineDir),
+    buildFileIndex(lineDir),
+    buildFileIndex(docsBase),
+  ]);
+  const versions = getDocumentedSoftware(`/${slug}`)?.versions ?? [];
+  const broken: BrokenLink[] = [];
+
+  for (const file of files) {
+    const content = await fs.readFile(file, "utf-8");
+    const source = path.relative(lineDir, file).replaceAll("\\", "/");
+
+    for (const linkPath of extractInternalLinks(content)) {
+      const cleaned = linkPath.replace(/\/$/, "").replace(/^\//, "");
+      const [collection, ...rest] = cleaned.split("/");
+      const named = versions.some((entry) => entry.version === rest[0]);
+
+      // The line's own pages are indexed from the line's root, so the
+      // collection segment the published path carries is dropped here.
+      const resolved =
+        collection === slug && !named
+          ? hasPage(lineIndex, rest.join("/"))
+          : // Prefixed with the collection so the reader counts as outside
+            // every other one, which is how a cross-collection link resolves.
+            resolveLink(linkPath, `${slug}/${source}`, docsIndex);
+
+      if (!resolved) broken.push({ source, target: linkPath });
+    }
+  }
+
+  return broken;
 }
 
 /**

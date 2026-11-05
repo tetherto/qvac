@@ -2,6 +2,8 @@ import type { QvacResponse } from "@qvac/infer-base";
 import { ParakeetInterface, type ParakeetConfigurationParams, type StreamingConfig } from "./parakeet";
 import type { ASRRunOutput, AudioInput, BackendInfo } from "../../lib/types";
 import type { ASRGgmlFiles, ASRGgmlReloadConfig, ASRRunOptions, ASRStreamingOptions, AsrDriver, DriverContext, NormalizedAudioStream, StreamingSession } from "../types";
+import { type ParakeetSpeakerAttributionConfig } from "./options";
+export type { ParakeetSpeakerAttributionConfig } from "./options";
 /**
  * Parakeet-specific configuration options. CTC, TDT, RNN-T, EOU, Nemotron,
  * and Sortformer are auto-detected from the loaded GGUF metadata.
@@ -11,6 +13,10 @@ export interface ParakeetConfig {
     maxThreads?: number;
     /** Enable the linked ggml GPU backend (Metal / Vulkan / OpenCL). */
     useGPU?: boolean;
+    /** Native ggml backend name or exact device name; omitted preserves automatic selection. */
+    backend?: string;
+    /** Combine this ASR model with a separate diarization model in batch run(). */
+    speakerAttribution?: ParakeetSpeakerAttributionConfig;
     /** Audio sample rate in Hz (default: 16000; engine assumes 16 kHz). */
     sampleRate?: number;
     /** Number of audio channels (default: 1, must be mono). */
@@ -146,7 +152,7 @@ export declare class ParakeetDriver implements AsrDriver {
     private readonly ctx;
     private readonly _files;
     constructor(ctx: DriverContext, files: ASRGgmlFiles, config: ParakeetEngineConfig);
-    validateConfig(): void;
+    validateConfig(params?: ParakeetConfig): void;
     normalizeAudio(input: AudioInput): NormalizedAudioStream;
     load(): Promise<void>;
     unload(): Promise<void>;
@@ -156,6 +162,21 @@ export declare class ParakeetDriver implements AsrDriver {
     getBackendInfo(): BackendInfo | null;
     run(audio: NormalizedAudioStream, options?: ASRRunOptions): Promise<QvacResponse<ASRRunOutput>>;
     createStreamingSession(audio: NormalizedAudioStream, opts?: ASRStreamingOptions): Promise<StreamingSession>;
+    /**
+     * The cadence the native session will run at, following its own fallback
+     * rules: a run-level `chunkMs` of 0 is ignored (`applyStreamingOverrides`),
+     * a load-time `streamingChunkMs` of 0 means the model default
+     * (`resolveStreamingChunkMs`). `undefined` = the model default, which is
+     * always a trained cadence.
+     */
+    _effectiveStreamingChunkMs(runChunkMs: number | undefined): number | undefined;
+    /**
+     * Nemotron's cache-aware encoder only runs at its trained chunk cadences;
+     * the engine rejects any other `chunkMs` when the session opens. Reject it
+     * here first, before a response is started, so the run settles with a
+     * configuration error instead of a failed session start.
+     */
+    _assertNemotronChunkMs(chunkMs: number | undefined): void;
     _validateStreamingOptions(opts: ASRStreamingOptions): ParakeetStreamingRunConfig;
     _pumpBatchAudio(audio: NormalizedAudioStream): Promise<void>;
     _pumpStreamingAudio(audio: NormalizedAudioStream, markClosing: () => void): Promise<void>;

@@ -13,8 +13,7 @@ import asyncio
 import contextlib
 import sys
 
-from tetherto.qvac_sdk import SDK_LOG_ID, Client, LoadModelRequest, logging_stream
-from tetherto.qvac_sdk.methods import load_model
+from tetherto.qvac_sdk import SDK_LOG_ID, Client, load_model, logging_stream
 from tetherto.qvac_sdk.models import GPT_OSS_20B_INST_Q4_K_M
 
 
@@ -31,29 +30,17 @@ async def main() -> int:
         t = client.transport
         verdicts = asyncio.create_task(print_fit_verdicts(t))
         try:
-            # The ergonomic `load_model` wrapper has no `model_fit_policy`
-            # parameter, so the policy goes through the generated stub instead:
-            # camelCase fields, `modelSrc` as the constant's `src` string, and
-            # the `modelType` the wrapper would otherwise infer.
-            #
             # gpt-oss-20B fits here at the default KV cache type and does not at f32.
-            request = LoadModelRequest.model_validate(
-                {
-                    "type": "loadModel",
-                    "modelSrc": GPT_OSS_20B_INST_Q4_K_M.src,
-                    "modelType": "llamacpp-completion",
-                    "modelConfig": {
-                        "ctx_size": 131072,
-                        "cache-type-k": "f32",
-                        "cache-type-v": "f32",
-                    },
-                    "modelFitPolicy": "refuse",
-                }
+            await load_model(
+                t,
+                model_src=GPT_OSS_20B_INST_Q4_K_M,
+                model_config={
+                    "ctx_size": 131072,
+                    "cache-type-k": "f32",
+                    "cache-type-v": "f32",
+                },
+                model_fit_policy="refuse",
             )
-            resp = await load_model(t, request)
-            if not resp.success:
-                print(f"✖ {resp.error}", file=sys.stderr)
-                return 1
 
             print("▸ Loaded — the fitter projected this one to fit here")
         except Exception as error:

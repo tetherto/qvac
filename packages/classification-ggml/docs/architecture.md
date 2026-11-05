@@ -1,9 +1,8 @@
 # Architecture — `@qvac/classification-ggml`
 
 The addon contains two independent `IModel` implementations: MobileNetV3-Small
-image classification and MegaLoc image embeddings. `ImageClassifier` keeps the
-bundled MobileNet default; `MegaLoc` uses a caller-provided GGUF. Both use the
-same native binding and Fabric runtime. See [MegaLoc](megaloc.md) for its graph,
+image classification and MegaLoc image embeddings. Both load a caller-provided
+GGUF through the same native binding and Fabric runtime. See [MegaLoc](megaloc.md) for its graph,
 backend selection, input format, conversion and validation details.
 
 ## Model selection and activation

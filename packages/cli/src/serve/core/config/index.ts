@@ -12,6 +12,7 @@ interface RawServeConfig {
       origins?: unknown
     }
     allowedHosts?: unknown
+    enableAdmin?: unknown
     load?: RawLoadConfig
     /** `serve.<extension>` blocks; each extension parses its own. */
     [extension: string]: unknown
@@ -31,6 +32,7 @@ interface CLIServeOptions {
   corsOrigins?: string[] | undefined
   allowedHosts?: string[] | undefined
   allowAnyHost?: boolean | undefined
+  enableAdmin?: boolean | undefined
   lazyLoad?: boolean | undefined
   loadConcurrency?: number | undefined
   loadTimeoutMs?: number | null | undefined
@@ -62,11 +64,14 @@ export function parseServeConfig(
     publicBaseUrl: normalizePublicBaseUrl(cliOptions.publicBaseUrl ?? serve.publicBaseUrl),
     cors: { origins: parseCorsOrigins(serve.cors?.origins, cliOptions.corsOrigins) },
     allowedHosts: parseAllowedHosts(serve.allowedHosts, cliOptions),
+    enableAdmin:
+      cliOptions.enableAdmin === true ||
+      (asBoolean(serve.enableAdmin, 'serve.enableAdmin') ?? false),
     extensions: parseExtensionConfigs(serve, extensions)
   }
 }
 
-const CORE_SERVE_KEYS = ['models', 'publicBaseUrl', 'cors', 'allowedHosts', 'load']
+const CORE_SERVE_KEYS = ['models', 'publicBaseUrl', 'cors', 'allowedHosts', 'enableAdmin', 'load']
 
 /** `serve.*` keys that belong to neither core nor a registered extension. */
 export function unknownServeKeys(

@@ -137,11 +137,11 @@ export function filterCatalog(
 
 // No default limit: an omitted `limit` returns every matching entry from
 // `offset` onward. A limit is applied only when the caller asks for one.
-export function paginate(
-  entries: ModelCatalogEntry[],
+export function paginate<T>(
+  entries: T[],
   limit?: number,
   offset = 0
-): { data: ModelCatalogEntry[]; hasMore: boolean } {
+): { data: T[]; hasMore: boolean } {
   const end = limit === undefined ? entries.length : offset + limit
   const data = entries.slice(offset, end)
   return { data, hasMore: end < entries.length }

@@ -7,7 +7,6 @@ import {
   assertSupportedImageOutputParams,
   coerceMultipartFields,
   extractImageEditParams,
-  logImageEditExtraWarnings,
   InvalidImagePromptError,
   InvalidImageSizeError,
   InvalidImageBatchCountError,
@@ -299,60 +298,55 @@ describe('extractImageEditParams', () => {
 
   it('sets init_image and forwards prompt', () => {
     const body: Record<string, unknown> = { model: 'ignored', prompt: 'x', n: 2 }
-    const p = extractImageEditParams(body, buf, 'sdk-1')
+    const p = extractImageEditParams(body, [buf], 'sdk-1')
     assert.equal(p.modelId, 'sdk-1')
     assert.equal(p.prompt, 'x')
     assert.deepEqual(Array.from(p.init_image!), Array.from(buf))
+    assert.equal(p.init_images, undefined)
     assert.equal(p.batch_count, 2)
   })
 
   it('maps strength when in range', () => {
     const body: Record<string, unknown> = { prompt: 'p', strength: 0.5 }
-    const p = extractImageEditParams(body, buf, 'm')
+    const p = extractImageEditParams(body, [buf], 'm')
     assert.equal(p.strength, 0.5)
   })
 
   it('throws InvalidImageStrengthError when strength is out of range', () => {
     assert.throws(
-      () => extractImageEditParams({ prompt: 'p', strength: 2 }, buf, 'm'),
+      () => extractImageEditParams({ prompt: 'p', strength: 2 }, [buf], 'm'),
       InvalidImageStrengthError
     )
     assert.throws(
-      () => extractImageEditParams({ prompt: 'p', strength: -0.1 }, buf, 'm'),
+      () => extractImageEditParams({ prompt: 'p', strength: -0.1 }, [buf], 'm'),
       InvalidImageStrengthError
     )
   })
 
   it('throws InvalidImageStrengthError when strength is non-numeric', () => {
     assert.throws(
-      () => extractImageEditParams({ prompt: 'p', strength: 'half' }, buf, 'm'),
+      () => extractImageEditParams({ prompt: 'p', strength: 'half' }, [buf], 'm'),
       InvalidImageStrengthError
     )
   })
 
   it('treats absent strength as no-op', () => {
-    const p = extractImageEditParams({ prompt: 'p' }, buf, 'm')
+    const p = extractImageEditParams({ prompt: 'p' }, [buf], 'm')
     assert.equal(p.strength, undefined)
   })
 
   it('propagates InvalidImagePromptError', () => {
     assert.throws(
-      () => extractImageEditParams({ prompt: '' } as Record<string, unknown>, buf, 'm'),
+      () => extractImageEditParams({ prompt: '' } as Record<string, unknown>, [buf], 'm'),
       InvalidImagePromptError
     )
   })
-})
 
-describe('logImageEditExtraWarnings', () => {
-  it('warns on extra images', () => {
-    const { warnings, logger } = makeLogger()
-    logImageEditExtraWarnings({}, { extraImageCount: 2 }, logger)
-    assert.ok(warnings.some((w) => w.includes('3 files')))
-  })
-
-  it('does not warn when there is exactly one image', () => {
-    const { warnings, logger } = makeLogger()
-    logImageEditExtraWarnings({}, { extraImageCount: 0 }, logger)
-    assert.equal(warnings.length, 0)
+  it('sets ordered init_images without init_image for multiple references', () => {
+    const images = [buf, new Uint8Array([4, 5, 6])]
+    const p = extractImageEditParams({ prompt: 'Combine the subjects.', n: 2 }, images, 'm')
+    assert.deepEqual(p.init_images, images)
+    assert.equal(p.init_image, undefined)
+    assert.equal(p.batch_count, 2)
   })
 })

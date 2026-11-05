@@ -111,6 +111,7 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 |-------|---------|----------|
 | [`qv-holepunch-dev`](../qv-holepunch-dev/SKILL.md) | Holepunch/P2P/Bare/Pear API discovery via docs.pears.com and `gh`. | Hypercore, Hyperswarm, Autobase, Bare, Pear development. **Auto** |
 | [`qv-notice-generate`](../qv-notice-generate/SKILL.md) | NOTICE files and third-party attributions for monorepo packages. | License compliance, release NOTICE updates. **Auto** |
+| [`qv-error-code-reserve`](../qv-error-code-reserve/SKILL.md) | Reserve numeric error code blocks in the shared registry. | New package or external product, allocation expansion, occupied ranges. **Auto** |
 
 ---
 
@@ -119,7 +120,8 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 | Skill | Purpose | Use when |
 |-------|---------|----------|
 | [`qv-docs-update`](../qv-docs-update/SKILL.md) | Updates the docs website after a change to the SDK or CLI. | You added or changed a feature and the docs need to catch up. **Manual:** `/qv-docs-update` |
-| [`qv-docs-line-cut`](../qv-docs-line-cut/SKILL.md) | Cuts the next documentation line of every versioned collection whose release has shipped. | A release went live, or a sprint starts and the coming version needs a folder to land in. **Manual:** `/qv-docs-line-cut` |
+| [`qv-docs-cutoff`](../qv-docs-cutoff/SKILL.md) | Opens the one documentation PR of a release cutoff: it publishes the line of the version being released, per collection the release moves. | A release cutoff: `qv-release-train` invokes it at step 6 after cutting the train branch, `qv-sdk-changelog` at step 8 of a single-package release. **Manual:** `/qv-docs-cutoff` to redo a cutoff's PR. |
+| [`qv-docs-line-cut`](../qv-docs-line-cut/SKILL.md) | Publishes the documentation line of the version being released, in each collection the release moves. | Step 3 of a cutoff, invoked by `qv-docs-cutoff`. Manual invocation is the out-of-band exception. |
 
 ---
 
@@ -160,8 +162,10 @@ Rule nudge: `.cursor/rules/qip-triage.mdc`
 | Publish a Solutions page from a use case | `qv-docs-solution-create` |
 | Holepunch stack help | `qv-holepunch-dev` |
 | Generate NOTICE files | `qv-notice-generate` |
+| Reserve or inspect error code ranges | `qv-error-code-reserve` |
 | Update the docs website after an SDK/CLI change | `qv-docs-update` |
-| Cut the next docs line after a release | `qv-docs-line-cut` |
+| Open the docs PR of a release cutoff | `qv-docs-cutoff` |
+| Publish the docs line of a release | `qv-docs-line-cut` (invoked by `qv-docs-cutoff`) |
 | Check if a QIP is needed | `qv-qip-triage` |
 | Draft a QIP | `qv-qip-create` |
 | Review a QIP | `qv-qip-review` |

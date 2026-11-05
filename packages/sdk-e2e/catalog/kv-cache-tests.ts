@@ -1,4 +1,5 @@
 import type { Step, TestDefinition } from '@qvac/test-suite'
+import { kvCachePrefillTests } from './kv-cache-prefill-tests.js'
 
 /** Deleting a cache: by key, by key and model, or the whole cache root. */
 const deleteCacheSteps = (): Step[] => [
@@ -747,6 +748,7 @@ export const kvCacheCancelKeepsCommittedCache: TestDefinition = {
 }
 
 export const kvCacheTests = [
+  ...kvCachePrefillTests,
   kvCacheCancelKeepsCommittedCache,
   kvCacheConcurrentSameKey,
   kvCacheConcurrentSameKeyAuto,

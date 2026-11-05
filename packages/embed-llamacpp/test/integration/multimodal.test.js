@@ -159,6 +159,9 @@ function deviceConfig(device, modelPath) {
 }
 
 async function withModel(t, device, fn, extraConfig = {}) {
+  // A model load plus several media embeddings on a CPU-only runner outlasts
+  // brittle's 30 s default; the first call also downloads the models.
+  t.timeout(600_000)
   const files = await modelFiles()
   const model = new GGMLBert({
     files: { model: [files.model], projectionModel: files.projectionModel },

@@ -8,7 +8,7 @@ import {
   type AnyModel
 } from '@/runtime/model-registry'
 import { getRequestRegistry } from '@/runtime'
-import { ModelType } from '@/schemas'
+import { ModelType, type Tool } from '@/schemas'
 
 // -----------------------------------------------------------------------------
 // A kv-cache turn sends the same prompt as an uncached one: the full history
@@ -31,14 +31,10 @@ type RecordedCall = {
   messages: { role?: string; type?: string; name?: string; content?: string }[]
   prefill: boolean
   toolChoice?: string | undefined
+  parallelToolCalls?: boolean | undefined
 }
 
-type ToolDef = {
-  type: string
-  name: string
-  description: string
-  parameters: unknown
-}
+type ToolDef = Tool
 
 type HistoryEntry = { role: string; content: string; attachments: never[] }
 
@@ -159,18 +155,20 @@ function registerRecordingModel(
         opts?: {
           prefill?: boolean
           cacheKey?: string
-          generationParams?: { tool_choice?: string }
+          generationParams?: { tool_choice?: string; parallel_tool_calls?: boolean }
         }
       ) {
         calls.push({
           messages: prompt as RecordedCall['messages'],
           prefill: opts?.prefill === true,
-          toolChoice: opts?.generationParams?.tool_choice
+          toolChoice: opts?.generationParams?.tool_choice,
+          parallelToolCalls: opts?.generationParams?.parallel_tool_calls
         })
         if (cachePaths && opts?.cacheKey !== undefined) cachePaths.push(opts.cacheKey)
         conversations.hold(opts?.cacheKey)
         return {
           iterate: async function* () {
+            if (opts?.prefill) return
             yield 'The area is 25 square units.'
           },
           await: () => Promise.resolve(),
@@ -192,7 +190,8 @@ function completer(modelId: string, kvCache: string | true | undefined) {
   return async (
     history: HistoryEntry[],
     tools?: ToolDef[],
-    generationParams?: Record<string, unknown>
+    generationParams?: Record<string, unknown>,
+    prefill?: boolean
   ): Promise<void> => {
     request += 1
     const gen = handler({
@@ -200,6 +199,7 @@ function completer(modelId: string, kvCache: string | true | undefined) {
       requestId: `${modelId}-${request}`,
       history,
       stream: true,
+      ...(prefill !== undefined && { prefill }),
       ...(kvCache !== undefined ? { kvCache } : {}),
       ...(tools ? { tools } : {}),
       ...(generationParams ? { generationParams } : {})
@@ -207,6 +207,149 @@ function completer(modelId: string, kvCache: string | true | undefined) {
     for await (const _ of gen) void _
   }
 }
+
+test('completion: prefill saves a named system and tools cache without generating', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+  const modelId = 'named-prefill'
+  const calls: RecordedCall[] = []
+  const paths: string[] = []
+  const held = registerRecordingModel(modelId, calls, { tools: true }, paths)
+  const complete = completer(modelId, 'prefill-chat')
+  const history = [system('Use the area tool.')]
+  await complete(history, [areaTool], undefined, true)
+  t.is(calls[0]?.prefill, true)
+  t.alike(shape(calls[0]!), ['system', 'tool'])
+  t.alike(toolNames(calls[0]!), ['calculate_triangle_area'])
+  t.ok(await holdsCommittedBytes(paths[0]))
+  t.is(held.saved.length, 1)
+  await complete([...history, user('Find the area.')], [areaTool])
+  t.is(calls[1]?.prefill, false)
+  t.is(paths[1], paths[0], 'the question uses the primed key')
+  clearRegistry()
+})
+
+test('completion: auto prefill commits the full normalized history without an assistant', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+  const { getCurrentCacheInfo, generateConfigHash } = await import('@/plugins/ops/kv-cache-utils')
+  const { normalizeCacheMessage } = await import('@/utils/cache/auto-history')
+  const modelId = 'auto-prefill'
+  const calls: RecordedCall[] = []
+  const paths: string[] = []
+  registerRecordingModel(modelId, calls, { tools: true }, paths)
+  const complete = completer(modelId, true)
+  const history = [system('Use the area tool.')]
+  await complete(history, [areaTool], undefined, true)
+  const first = paths[0]!
+  t.ok(await holdsCommittedBytes(first), 'new zero-output prime is persisted')
+  await complete(history, [areaTool], undefined, true)
+  t.is(paths[1], first, 'same-history existing prime uses static commit without deadlock')
+
+  const longer = [...history, user('Hello'), assistant(' <think>plan</think> Hello. ')]
+  const configHash = generateConfigHash(history[0]!.content)
+  const prefix = await getCurrentCacheInfo(
+    modelId,
+    configHash,
+    longer.slice(0, -1).map(normalizeCacheMessage),
+    [areaTool]
+  )
+  await writeCacheFile(prefix.cachePath)
+  await complete(longer, [areaTool], undefined, true)
+  t.is(paths[2], prefix.cachePath, 'priming starts at the shorter cached history')
+  const target = await getCurrentCacheInfo(modelId, configHash, longer.map(normalizeCacheMessage))
+  t.ok(
+    await holdsCommittedBytes(target.cachePath),
+    'prime moves to the normalized full-history key'
+  )
+  await complete([...longer, user('Find the area.')], [areaTool])
+  t.is(paths[3], target.cachePath, 'the next question finds the prepared full prefix')
+  clearRegistry()
+})
+
+test('completion: tools-only auto prefill is reused by the first question', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+  const modelId = 'tools-only-prefill'
+  const calls: RecordedCall[] = []
+  const paths: string[] = []
+  registerRecordingModel(modelId, calls, { tools: true }, paths)
+  const complete = completer(modelId, true)
+  await complete([], [areaTool], undefined, true)
+  t.alike(shape(calls[0]!), ['tool'])
+  t.ok(await holdsCommittedBytes(paths[0]), 'tools-only prime is persisted')
+  await complete([user('Find the area.')], [areaTool])
+  t.is(paths[1], paths[0], 'the first user message finds the empty-history prefix')
+  clearRegistry()
+})
+
+test('completion: unrelated requests do not consume tool-bearing auto prefills', async (t) => {
+  for (const systemPrompt of [undefined, 'Use the area tool.']) {
+    await setIsolatedHome()
+    clearRegistry()
+    const modelId = `isolated-prefill-${systemPrompt ? 'system' : 'tools-only'}`
+    const calls: RecordedCall[] = []
+    const paths: string[] = []
+    registerRecordingModel(modelId, calls, { tools: true }, paths)
+    const complete = completer(modelId, true)
+    const prefix = systemPrompt ? [system(systemPrompt)] : []
+
+    await complete(prefix, [areaTool], undefined, true)
+    const primedPath = paths[0]
+    await complete([...prefix, user('Give this chat a title.')])
+    t.not(paths[1], primedPath, 'a tool-less request does not take the tools prime')
+    await complete([...prefix, user('Check the weather.')], [makeTool('lookup_weather')])
+    t.not(paths[2], primedPath, 'a request with different tools does not take the prime')
+    await complete([...prefix, user('Find the area.')], [areaTool])
+    t.is(paths[3], primedPath, 'the intended tools request still finds the prime')
+  }
+  clearRegistry()
+})
+
+test('completion: interrupted auto prefills do not commit new caches', async (t) => {
+  const { getCurrentCacheInfo, generateConfigHash } = await import('@/plugins/ops/kv-cache-utils')
+  const { normalizeCacheMessage } = await import('@/utils/cache/auto-history')
+  const fs = await import('bare-fs')
+  for (const existing of [false, true]) {
+    for (const outcome of ['cancel', 'overflow', 'failure']) {
+      await setIsolatedHome()
+      clearRegistry()
+      const modelId = `prefill-${outcome}-${existing}`
+      const calls: RecordedCall[] = []
+      const paths: string[] = []
+      const history = [system('Hello')]
+      const info = await getCurrentCacheInfo(
+        modelId,
+        generateConfigHash('Hello'),
+        history.map(normalizeCacheMessage)
+      )
+      if (existing) await writeCacheFile(info.cachePath)
+      const held = registerScriptedModel(modelId, calls, paths, {
+        tokensOnRun: () => [],
+        ...(outcome === 'cancel' && { cancelOnRun: 0 }),
+        ...(outcome === 'failure' && { statsThrowOnRun: 0 }),
+        statsOnRun: () => ({
+          generatedTokens: 0,
+          stopReason: outcome === 'overflow' ? 'contextOverflow' : 'none'
+        })
+      })
+      let error: unknown
+      try {
+        await completer(modelId, true)(history, undefined, undefined, true)
+      } catch (caught) {
+        error = caught
+      }
+      t.is(error instanceof Error, outcome === 'failure', `${outcome}: error outcome`)
+      t.is(
+        fs.existsSync(info.cachePath),
+        existing,
+        `${outcome}: preserves only an established cache`
+      )
+      if (!existing) t.is(held.saved.length, 0, 'does not explicitly save an incomplete prime')
+    }
+  }
+  clearRegistry()
+})
 
 test('completion: kv-cache sends the tool block with the turn', async (t) => {
   await setIsolatedHome()
@@ -592,6 +735,30 @@ test('completion: kv-cache sends the full tool block under a named tool_choice',
   clearRegistry()
 })
 
+test('completion: parallel_tool_calls reaches the addon as true unless the caller sets it', async (t) => {
+  await setIsolatedHome()
+  clearRegistry()
+
+  const modelId = `parallel-tool-calls-${Date.now()}`
+  const calls: RecordedCall[] = []
+  registerRecordingModel(modelId, calls)
+
+  const complete = completer(modelId, undefined)
+  const question = user('Area of a triangle, base 10 height 5?')
+  await complete([question], [areaTool])
+  await complete([question], [areaTool], { parallel_tool_calls: false })
+  await complete([question])
+
+  const turnCalls = calls.filter((call) => !call.prefill)
+  t.is(turnCalls.length, 3, 'all three turns reached the model')
+  t.is(turnCalls[0]!.parallelToolCalls, true, 'unset reaches the addon as true')
+  t.is(turnCalls[1]!.parallelToolCalls, false, 'an explicit false is kept')
+  t.is(turnCalls[2]!.parallelToolCalls, true, 'a turn without tools carries the default too')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
+
 // The fake throws on the given non-prefill run, so a refusal between two
 // committed turns can be pinned against the cache file.
 function registerSecondTurnThrowingModel(
@@ -914,7 +1081,7 @@ function registerScriptedModel(
           iterate: async function* () {
             for (const token of tokens) yield token
             if (run === script.cancelOnRun) {
-              registry.cancel({ requestId: `${modelId}-${run}` })
+              registry.cancel({ requestId: `${modelId}-${calls.length}` })
               await new Promise<void>((resolve) => setTimeout(resolve, 0))
             }
           },
@@ -1347,10 +1514,9 @@ test('completion: kv-cache places the tool block after the system message', asyn
 
 // -----------------------------------------------------------------------------
 // Deferred tools (`deferLoading`). A deferred schema must stay out of the
-// prompt until the model searches for it, and loading one must not disturb the
-// prefix: the block at the front of the payload has to render identically
-// before and after, or the cache diverges at the block and everything behind it
-// is re-prefilled.
+// prompt until the model searches for it. Once loaded it is declared in the
+// block at the front of the payload, so the cache diverges there on the turn
+// after the search; the same cache file is reused.
 // -----------------------------------------------------------------------------
 
 function deferredTool(name: string): ToolDef & { deferLoading: boolean; group: string } {
@@ -1411,7 +1577,7 @@ test('completion: registration-only fields stay out of the prompt when nothing d
   clearRegistry()
 })
 
-test('completion: loading a deferred tool leaves the prefix block untouched', async (t) => {
+test('completion: loading a deferred tool declares it and keeps the grammar on', async (t) => {
   await setIsolatedHome()
   clearRegistry()
 
@@ -1439,21 +1605,33 @@ test('completion: loading a deferred tool leaves the prefix block untouched', as
     tools
   )
   const after = calls.filter((call) => !call.prefill).at(-1)!
+  await complete(
+    [
+      ...history,
+      { role: 'assistant', content: '<call tool_search>', attachments: [] },
+      { role: 'tool', content: loaded, attachments: [] }
+    ],
+    tools,
+    { tool_choice: 'auto' }
+  )
+  const explicitAuto = calls.filter((call) => !call.prefill).at(-1)!
 
   t.alike(toolNames(before), ['tool_search'], 'the cold turn declared only the search tool')
   t.alike(
-    after.messages.slice(0, before.messages.length),
-    before.messages,
-    'the warm turn opens with the whole cold prompt, tool block first'
+    toolNames(after),
+    ['tool_search', 'calculate_area'],
+    'the warm turn declares the loaded tool after the search tool'
   )
+  const outsideBlock = (call: RecordedCall) => call.messages.filter((msg) => !isToolEntry(msg))
   t.alike(
-    after.messages.filter(isToolEntry),
-    before.messages.filter(isToolEntry),
-    'loading a definition does not change the declared block'
+    outsideBlock(after).slice(0, outsideBlock(before).length),
+    outsideBlock(before),
+    'everything outside the tool block opens with the cold prompt'
   )
   t.is(new Set(cachePaths).size, 1, 'loading a definition does not open a second cache file')
   t.is(before.toolChoice, undefined, 'nothing loaded yet: the tool grammar stays on')
-  t.is(after.toolChoice, 'none', 'the loaded tool is outside the grammar, so it is turned off')
+  t.is(after.toolChoice, undefined, 'the loaded tool is in the grammar, so it stays on')
+  t.is(explicitAuto.toolChoice, 'auto', 'an explicit "auto" is passed through')
 
   unregisterModel(modelId)
   clearRegistry()

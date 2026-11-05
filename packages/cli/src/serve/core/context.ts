@@ -1,3 +1,4 @@
+import type { LifecycleState } from '@qvac/sdk'
 import type { ModelRegistry, ModelEntry } from '@/serve/core/model-registry'
 import type { ServeConfig } from '@/serve/core/config/types'
 import type { LoadManager, LoadModelFn } from '@/serve/core/load-manager'
@@ -13,6 +14,13 @@ export interface QvacContext {
   files: EphemeralFilesStore
   /** State owned by each mounted extension, keyed by extension name. */
   extensions: Partial<ServeExtensionState>
+  /**
+   * Last lifecycle state this server read from the SDK; anything but `active`
+   * gates requests. `pending` counts suspend/resume calls in flight, and
+   * `epoch` moves at each start and end of one, so a state read that began
+   * before either cannot overwrite what the transition set.
+   */
+  runtime: { state: LifecycleState; pending: number; epoch: number }
   /** Test seam — overrides the SDK model load when set, so lazy-load and preload
    * can be exercised without a real (expensive) model load. Backed by an
    * accessor in `buildServer`, hence the explicit `| undefined`. */

@@ -6,9 +6,9 @@ import java.util.zip.ZipFile
 import java.security.MessageDigest
 
 plugins {
-    kotlin("multiplatform") version "2.3.20"
-    kotlin("plugin.serialization") version "2.3.20"
-    id("org.jetbrains.kotlin.plugin.compose") version "2.3.20" apply false
+    kotlin("multiplatform") version "2.4.20"
+    kotlin("plugin.serialization") version "2.4.20"
+    id("org.jetbrains.kotlin.plugin.compose") version "2.4.20" apply false
     id("maven-publish")
     id("signing")
     id("org.jetbrains.dokka") version "2.2.0"
@@ -19,12 +19,24 @@ plugins {
 }
 
 group = "io.tether"
+// The Kotlin SDK carries the version of the @qvac/sdk it is generated from: the
+// sibling package in the monorepo, or the exact pin in this package's own
+// manifest for a checkout of packages/sdk-kotlin alone (checkVersionAlignment
+// keeps the two equal).
 val sdkPackageJson = projectDir.parentFile.resolve("sdk/package.json")
-val sdkVersion = Regex("\"version\"\\s*:\\s*\"([^\"]+)\"")
-    .find(sdkPackageJson.readText())
-    ?.groupValues
-    ?.get(1)
-    ?: error("Could not read @qvac/sdk version from $sdkPackageJson")
+val sdkVersion = if (sdkPackageJson.exists()) {
+    Regex("\"version\"\\s*:\\s*\"([^\"]+)\"")
+        .find(sdkPackageJson.readText())
+        ?.groupValues
+        ?.get(1)
+        ?: error("Could not read @qvac/sdk version from $sdkPackageJson")
+} else {
+    Regex("\"@qvac/sdk\"\\s*:\\s*\"([^\"]+)\"")
+        .find(projectDir.resolve("package.json").readText())
+        ?.groupValues
+        ?.get(1)
+        ?: error("Could not read the @qvac/sdk pin from ${projectDir.resolve("package.json")}")
+}
 version = sdkVersion
 
 // Keep the existing coordinates/publications; delegate Central's deployment
@@ -93,15 +105,12 @@ val checkContract = tasks.register<Exec>("checkContract") {
 val testContractGenerator = tasks.register<Exec>("testContractGenerator") {
     commandLine("python3", "-m", "unittest", "discover", "-s", "$projectDir/scripts", "-p", "test_*.py")
 }
-val checkWireFixtures = tasks.register<Exec>("checkWireFixtures") {
-    dependsOn(":android-barekit:npmCi")
-    commandLine("node", "$projectDir/scripts/generate-wire-fixtures.cjs", "--check")
-}
 val checkWireLiterals = tasks.register<Exec>("checkWireLiterals") {
     commandLine("python3", "$projectDir/scripts/check-wire-literals.py")
 }
 checkContract.configure { dependsOn(testContractGenerator, checkWireLiterals) }
-tasks.matching { it.name == "jvmTest" }.configureEach { dependsOn(checkWireFixtures) }
+// UpstreamRpcProcessTest runs the JavaScript bare-rpc peer from node_modules.
+tasks.matching { it.name == "jvmTest" }.configureEach { dependsOn(":android-barekit:npmCi") }
 val testReleaseGate = tasks.register<Exec>("testReleaseGate") {
     commandLine("node", "--test", "$projectDir/scripts/verify-published-worker.test.mjs", "$projectDir/scripts/platform-package.test.mjs")
 }
@@ -292,6 +301,10 @@ kotlin {
         commonMain.dependencies {
             api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
             api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+            // Its RemoteException reaches callers, so it is part of the API.
+            api("com.github.holepunchto.bare-rpc-kotlin:bare-rpc-kotlin:v0.3.0")
+            // bare-rpc-kotlin's own codec dependency, used to read frame headers.
+            implementation("com.github.holepunchto.compact-encoding-kotlin:compact-encoding-kotlin:v0.2.0")
         }
 
         commonTest.dependencies {

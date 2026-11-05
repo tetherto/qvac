@@ -24,13 +24,18 @@ function verdictFor(status: 'fits' | 'does-not-fit' | 'error'): NativeProbeVerdi
 }
 
 /**
- * The diffusion fitter reports a placement rather than a reason string.
- * `changed` means it reached a fitting arrangement only by moving modules
- * between backends, which is why the status is already `does-not-fit`.
+ * The diffusion fitter reports a placement alongside its reason. `changed`
+ * means it reached a fitting arrangement only by moving modules between
+ * backends, which is why the status is already `does-not-fit`.
  */
-function diffusionReason(result: { status: string; changed: boolean; backend: string }): string {
+function diffusionReason(result: {
+  status: string
+  reason: string
+  changed: boolean
+  backend: string
+}): string {
   if (result.status === 'fits') return 'fits'
-  if (result.status === 'error') return 'model-unreadable'
+  if (result.status === 'error') return result.reason
   return result.changed ? `does-not-fit-as-configured (${result.backend})` : 'does-not-fit'
 }
 
