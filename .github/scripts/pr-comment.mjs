@@ -8,8 +8,8 @@ import { pathToFileURL } from 'node:url'
 
 const ICON = { passed: '✅', failed: '❌', skipped: '⏭️' }
 
-export function mobileBody({ npm, platform, state, details, runUrl }) {
-  const head = `### Mobile tests: ${npm} (${platform})`
+export function mobileBody({ workflow, npm, platform, state, details, runUrl }) {
+  const head = `### ${workflow}: ${npm} (${platform})`
   if (!state) return [head, '', `⏳ Running. [Run](${runUrl})`].join('\n')
   const { devices = [], testCases = [] } = details ?? {}
   const failed = devices.map((d) => [
@@ -69,8 +69,10 @@ async function main(kind, env) {
   if (kind === 'mobile') {
     const file = env.DETAILS ?? ''
     const details = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null
-    const body = mobileBody({ npm: env.NPM, platform: env.PLATFORM, state: env.STATE, details, runUrl })
-    return upsert(env.GITHUB_REPOSITORY, branch, `mobile:${env.NPM}:${env.PLATFORM}`, body)
+    const workflow = env.GITHUB_WORKFLOW
+    const body = mobileBody({ workflow, npm: env.NPM, platform: env.PLATFORM, state: env.STATE, details, runUrl })
+    // Keyed by workflow too, so a Benchmarks run never overwrites a Mobile tests result.
+    return upsert(env.GITHUB_REPOSITORY, branch, `mobile:${workflow}:${env.NPM}:${env.PLATFORM}`, body)
   }
   if (kind === 'report') {
     const body = `${readFileSync(env.REPORT, 'utf8')}\n\n[Run](${runUrl})`
