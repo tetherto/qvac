@@ -23,12 +23,10 @@ function randomId(): string {
   return crypto.randomUUID()
 }
 
-/** One `message` or `reasoning` output item, in the order the model produced it. */
-export interface OutputSegment {
-  type: 'message' | 'reasoning'
-  id: string
-  text: string
-}
+/** One output item, in the order the model produced it. */
+export type OutputSegment =
+  | { type: 'message' | 'reasoning'; id: string; text: string }
+  | { type: 'function_call'; id: string; callId: string; name: string; arguments: string }
 
 export interface BuildResponseObjectParams {
   id: string
@@ -36,8 +34,8 @@ export interface BuildResponseObjectParams {
   /** The answer, all message text joined; `output_text`. */
   text: string
   /**
-   * Message and reasoning items in order. Without it, `output` holds one
-   * message carrying `text`.
+   * Output items in order, function calls included. Without it, `output` holds
+   * one message carrying `text`, then a `function_call` per entry of `toolCalls`.
    */
   items?: OutputSegment[]
   toolCalls: ToolCall[] | null | undefined
@@ -76,19 +74,25 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
   const output: unknown[] = []
 
   if (params.items) {
-    for (const item of params.items) {
-      output.push(
-        item.type === 'message'
-          ? messageItem(item.id, item.text)
-          : reasoningItem(item.id, item.text)
-      )
-    }
+    for (const item of params.items) output.push(outputItem(item))
   } else {
     output.push(messageItem(msgId, params.text || ''))
   }
 
-  const openaiCalls = sdkToolCallsToOpenai(params.toolCalls)
-  if (hasToolCalls) {
+  const openaiCalls = params.items
+    ? params.items.flatMap((item) =>
+        item.type === 'function_call'
+          ? [
+              {
+                id: item.callId,
+                type: 'function',
+                function: { name: item.name, arguments: item.arguments }
+              }
+            ]
+          : []
+      )
+    : sdkToolCallsToOpenai(params.toolCalls)
+  if (hasToolCalls && !params.items) {
     const ids = params.functionCallItemIds
     let i = 0
     for (const tc of openaiCalls ?? []) {
@@ -109,7 +113,7 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
     typeof params.completionTokens === 'number' && Number.isFinite(params.completionTokens)
       ? params.completionTokens
       : completionTokensFromStats(params.text || '', params.stats)
-  const inputTokens = params.stats?.promptTokens ?? 0
+  const inputTokens = inputTokensFromStats(params.stats)
   const usage = {
     input_tokens: inputTokens,
     output_tokens: outputTokens,
@@ -181,4 +185,36 @@ export function messageItem(id: string, text: string): Record<string, unknown> {
     role: 'assistant',
     content: [{ type: 'output_text', text, annotations: [] }]
   }
+}
+
+// On a KV-cache hit the SDK's promptTokens counts only the newly evaluated
+// tail. cacheTokens is what the context holds after the run (the whole prompt
+// plus what was generated), so the full input is that minus the generated part.
+function inputTokensFromStats(stats: CompletionStats | undefined): number {
+  const prompt = stats?.promptTokens ?? 0
+  const held = stats?.cacheTokens
+  const generated = stats?.generatedTokens
+  if (typeof held !== 'number' || typeof generated !== 'number') return prompt
+  return Math.max(prompt, held - generated)
+}
+
+export function functionCallItem(
+  item: Extract<OutputSegment, { type: 'function_call' }>,
+  status: 'in_progress' | 'completed'
+): Record<string, unknown> {
+  return {
+    type: 'function_call',
+    id: item.id,
+    call_id: item.callId,
+    name: item.name,
+    arguments: status === 'completed' ? item.arguments : '',
+    status
+  }
+}
+
+export function outputItem(item: OutputSegment): Record<string, unknown> {
+  if (item.type === 'function_call') return functionCallItem(item, 'completed')
+  return item.type === 'message'
+    ? messageItem(item.id, item.text)
+    : reasoningItem(item.id, item.text)
 }

@@ -1,5 +1,5 @@
 import type { ServerResponse } from 'node:http'
-import type { CompletionRun, Tool } from '@qvac/sdk'
+import type { CompletionRun, Tool, ToolCall } from '@qvac/sdk'
 import { sendSSE, endSSE } from '@/serve/lib/sse'
 import { accumulateUsage, formatToolErrors } from '@/serve/core/completion'
 import {
@@ -10,16 +10,17 @@ import { sdkToolCallsToOpenai } from '@/serve/extensions/openai/adapters/tool-ca
 import {
   MAX_TOOL_SEARCH_ROUNDS,
   foldToolSearch,
+  isInternalToolSearch,
   stripToolSearchCalls
 } from '@/serve/lib/tool-search'
 import type { GenerationParams, ResponseFormat } from '@/serve/extensions/openai/schemas/common'
 import type { ResponsesHistoryItem } from '@/serve/extensions/openai/schemas/responses'
 import {
   buildResponseObject,
+  functionCallItem,
   functionCallOutputItemId,
   messageId,
-  messageItem,
-  reasoningItem,
+  outputItem,
   reasoningItemId,
   type OutputSegment
 } from '@/serve/extensions/openai/adapters/responses-shape'
@@ -71,22 +72,26 @@ type SendEvent = (event: Record<string, unknown>) => void
 interface OutputTimeline {
   text: (token: string) => void
   reasoning: (token: string) => void
+  toolCall: (call: ToolCall) => void
   /** Ends a generation round; the next round's output starts new items. */
   endRound: () => void
-  /** Closes the open item and returns every item, always with a message. */
-  finish: () => { items: OutputSegment[]; nextOutputIndex: number }
+  /** Closes the open item and returns every item; an empty turn gets an empty message. */
+  finish: () => OutputSegment[]
 }
 
-// Output items in the order the model produces them. Each item finishes before
-// the next starts, so text that follows reasoning opens a new message item.
-// Streaming passes `send` to emit the matching SSE events; blocking does not.
-function createOutputTimeline(send?: SendEvent): OutputTimeline {
-  type Open = OutputSegment & { outputIndex: number }
+type TextKind = 'message' | 'reasoning'
+
+// Output items in the order the model produces them, function calls included.
+// Each item finishes before the next starts, so text that follows reasoning or
+// a call opens a new message item. Streaming passes `send` to emit the matching
+// SSE events; blocking does not.
+function createOutputTimeline(tools: Tool[] | undefined, send?: SendEvent): OutputTimeline {
+  type Open = Extract<OutputSegment, { type: TextKind }> & { outputIndex: number }
   let nextOutputIndex = 0
   let open: Open | undefined
-  const turn: Open[] = []
+  const items: OutputSegment[] = []
 
-  function start(type: OutputSegment['type']): Open {
+  function start(type: TextKind): Open {
     close()
     const item: Open = {
       type,
@@ -95,7 +100,7 @@ function createOutputTimeline(send?: SendEvent): OutputTimeline {
       outputIndex: nextOutputIndex++
     }
     open = item
-    turn.push(item)
+    items.push(item)
     const part = type === 'message' ? 'output_text' : 'reasoning_text'
     send?.({
       type: 'response.output_item.added',
@@ -137,14 +142,11 @@ function createOutputTimeline(send?: SendEvent): OutputTimeline {
     send?.({
       type: 'response.output_item.done',
       output_index: item.outputIndex,
-      item:
-        item.type === 'message'
-          ? messageItem(item.id, item.text)
-          : reasoningItem(item.id, item.text)
+      item: outputItem(item)
     })
   }
 
-  function add(type: OutputSegment['type'], token: string): void {
+  function add(type: TextKind, token: string): void {
     const item = open?.type === type ? open : start(type)
     item.text += token
     send?.({
@@ -156,26 +158,56 @@ function createOutputTimeline(send?: SendEvent): OutputTimeline {
     })
   }
 
+  function toolCall(call: ToolCall): void {
+    if (isInternalToolSearch(tools, call)) return
+    close()
+    const tc = sdkToolCallsToOpenai([call])![0]!
+    const item = {
+      type: 'function_call' as const,
+      id: functionCallOutputItemId(),
+      callId: tc.id,
+      name: tc.function.name,
+      arguments: tc.function.arguments
+    }
+    const outputIndex = nextOutputIndex++
+    items.push(item)
+    send?.({
+      type: 'response.output_item.added',
+      output_index: outputIndex,
+      item: functionCallItem(item, 'in_progress')
+    })
+    send?.({
+      type: 'response.function_call_arguments.delta',
+      item_id: item.id,
+      output_index: outputIndex,
+      delta: item.arguments
+    })
+    send?.({
+      type: 'response.function_call_arguments.done',
+      item_id: item.id,
+      output_index: outputIndex,
+      arguments: item.arguments
+    })
+    send?.({ type: 'response.output_item.done', output_index: outputIndex, item: outputItem(item) })
+  }
+
   return {
     text: (token) => add('message', token),
     reasoning: (token) => add('reasoning', token),
+    toolCall,
     endRound: close,
     finish: () => {
-      if (!turn.some((item) => item.type === 'message')) start('message')
+      if (!items.some((item) => item.type !== 'reasoning')) start('message')
       close()
-      return {
-        items: turn.map(({ type, id, text }) => ({ type, id, text })),
-        nextOutputIndex
-      }
+      return items.map((item) =>
+        item.type === 'function_call' ? item : { type: item.type, id: item.id, text: item.text }
+      )
     }
   }
 }
 
 function answerText(items: OutputSegment[]): string {
-  return items
-    .filter((item) => item.type === 'message')
-    .map((item) => item.text)
-    .join('')
+  return items.map((item) => (item.type === 'message' ? item.text : '')).join('')
 }
 
 export async function writeBlockingResponse(
@@ -189,10 +221,15 @@ export async function writeBlockingResponse(
   let turnHistory = p.history
   let drained
   let total: DrainedOpenAICompletion | undefined
-  const timeline = createOutputTimeline()
+  const timeline = createOutputTimeline(p.tools)
   for (let round = 0; ; round++) {
     if (round > 0) timeline.endRound()
-    drained = await drainCompletion(runTurn(turnHistory), timeline.text, timeline.reasoning)
+    drained = await drainCompletion(
+      runTurn(turnHistory),
+      timeline.text,
+      timeline.reasoning,
+      timeline.toolCall
+    )
     total = accumulateUsage(total, drained)
     if (round >= MAX_TOOL_SEARCH_ROUNDS) break
     const extended = foldToolSearch(
@@ -208,7 +245,7 @@ export async function writeBlockingResponse(
     p.tools,
     total ?? drained
   )
-  const { items } = timeline.finish()
+  const items = timeline.finish()
 
   const responseObject = buildResponseObject({
     id: p.rid,
@@ -262,7 +299,11 @@ export async function writeStreamingResponse(
   p: ResponsesHandlerParams,
   runTurn: RunTurn
 ): Promise<Record<string, unknown>> {
-  sendSSE(res, {
+  // Every event carries one increasing sequence number.
+  let sequence = 0
+  const emit: SendEvent = (event) => sendSSE(res, { ...event, sequence_number: sequence++ })
+
+  emit({
     type: 'response.created',
     response: {
       id: p.rid,
@@ -277,7 +318,7 @@ export async function writeStreamingResponse(
   // by the normalizer, so a search turn emits no text deltas to withhold; what
   // it can emit is a preamble, which is fine to show. Only the SSE stream is
   // held open across a search round.
-  const timeline = createOutputTimeline((event) => sendSSE(res, { ...event, response_id: p.rid }))
+  const timeline = createOutputTimeline(p.tools, (event) => emit({ ...event, response_id: p.rid }))
 
   let turnHistory = p.history
   let drained
@@ -286,7 +327,12 @@ export async function writeStreamingResponse(
     // A search turn's preamble stays in the response object: it was streamed at
     // its own output_index, which must match its position in `output`.
     if (round > 0) timeline.endRound()
-    drained = await drainCompletion(runTurn(turnHistory), timeline.text, timeline.reasoning)
+    drained = await drainCompletion(
+      runTurn(turnHistory),
+      timeline.text,
+      timeline.reasoning,
+      timeline.toolCall
+    )
     total = accumulateUsage(total, drained)
 
     const extended =
@@ -307,61 +353,7 @@ export async function writeStreamingResponse(
     p.tools,
     total ?? drained
   )
-  const hasToolCalls = toolCalls.length > 0
-  const { items, nextOutputIndex: firstCallIndex } = timeline.finish()
-
-  const openaiCalls = sdkToolCallsToOpenai(toolCalls)
-  const fcItemIds = hasToolCalls ? (openaiCalls ?? []).map(() => functionCallOutputItemId()) : []
-
-  if (hasToolCalls) {
-    let i = 0
-    for (const tc of openaiCalls ?? []) {
-      const fcItemId = fcItemIds[i]!
-      const outputIndex = firstCallIndex + i
-      const argsStr = tc.function.arguments
-      sendSSE(res, {
-        type: 'response.output_item.added',
-        output_index: outputIndex,
-        item: {
-          type: 'function_call',
-          id: fcItemId,
-          call_id: tc.id,
-          name: tc.function.name,
-          arguments: '',
-          status: 'in_progress'
-        },
-        response_id: p.rid
-      })
-      sendSSE(res, {
-        type: 'response.function_call_arguments.delta',
-        item_id: fcItemId,
-        output_index: outputIndex,
-        delta: argsStr,
-        response_id: p.rid
-      })
-      sendSSE(res, {
-        type: 'response.function_call_arguments.done',
-        item_id: fcItemId,
-        output_index: outputIndex,
-        arguments: argsStr,
-        response_id: p.rid
-      })
-      sendSSE(res, {
-        type: 'response.output_item.done',
-        output_index: outputIndex,
-        item: {
-          type: 'function_call',
-          id: fcItemId,
-          call_id: tc.id,
-          name: tc.function.name,
-          arguments: argsStr,
-          status: 'completed'
-        },
-        response_id: p.rid
-      })
-      i++
-    }
-  }
+  const items = timeline.finish()
 
   const responseObject = buildResponseObject({
     id: p.rid,
@@ -378,7 +370,6 @@ export async function writeStreamingResponse(
     previousResponseId: p.previousResponseId,
     store: p.storeEnabled,
     completionTokens,
-    ...(hasToolCalls ? { functionCallItemIds: fcItemIds } : {}),
     ...(stopReason !== undefined ? { stopReason } : {}),
     ...(stats !== undefined ? { stats } : {})
   })
@@ -397,7 +388,7 @@ export async function writeStreamingResponse(
 
   const terminalType =
     responseObject['status'] === 'incomplete' ? 'response.incomplete' : 'response.completed'
-  sendSSE(res, { type: terminalType, response: responseObject })
+  emit({ type: terminalType, response: responseObject })
   endSSE(res, { sentinel: false })
   p.ctx.logger.info(
     `  responses stream done id=${p.rid} stored=${p.storeEnabled}${formatToolErrors(toolErrors)}`

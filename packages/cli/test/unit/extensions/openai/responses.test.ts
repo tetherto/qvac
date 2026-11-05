@@ -170,6 +170,35 @@ describe('buildResponseObject', () => {
     assert.equal(o['output_text'], 'The answer is 4.')
   })
 
+  it('reports the full input whether or not the KV cache was reused', () => {
+    const usage = (stats: CompletionStats) =>
+      buildResponseObject({
+        id: 'resp_cache',
+        modelAlias: 'm',
+        text: 'hi',
+        toolCalls: [],
+        createdAtSec: 1,
+        metadata: undefined,
+        temperature: undefined,
+        topP: undefined,
+        maxOutputTokens: undefined,
+        parallelToolCalls: true,
+        previousResponseId: null,
+        store: true,
+        stats
+      })['usage']
+    // The same 262-token prompt: cold prefills all of it, warm only the tail.
+    const cold = usage({
+      promptTokens: 262,
+      cacheTokens: 268,
+      generatedTokens: 6,
+      emittedTokens: 6
+    })
+    const warm = usage({ promptTokens: 14, cacheTokens: 268, generatedTokens: 6, emittedTokens: 6 })
+    assert.deepEqual(cold, { input_tokens: 262, output_tokens: 6, total_tokens: 268 })
+    assert.deepEqual(warm, cold)
+  })
+
   it('marks status incomplete with max_output_tokens reason when truncated by length', () => {
     const o = buildResponseObject({
       id: 'resp_len',
@@ -504,5 +533,42 @@ describe('historyPrefixFromStoredResponse', () => {
       { role: 'user', content: 'Hi' },
       { role: 'assistant', content: 'Hello!' }
     ])
+  })
+
+  it('replays a tool call with the text generated before it', async () => {
+    async function* events(): AsyncGenerator<unknown> {
+      yield { type: 'contentDelta', seq: 0, text: 'Reading it.' }
+      yield { type: 'toolCall', seq: 1, call: { id: 'call_1', name: 'read', arguments: {} } }
+      yield { type: 'contentDelta', seq: 2, text: 'Done.' }
+      yield { type: 'completionDone', seq: 3, stopReason: 'eos' }
+    }
+    const run = {
+      ...fakeCompletion({ text: '', toolCalls: [] }),
+      events: events() as unknown as CompletionRun['events']
+    }
+    let sent = false
+    const res = {
+      setHeader: (): void => {},
+      writeHead: (): void => {
+        sent = true
+      },
+      end: (): void => {},
+      get headersSent(): boolean {
+        return sent
+      }
+    } as unknown as ServerResponse
+    const responseObject = await writeBlockingResponse(res, baseHandlerParams(), () => run)
+    assert.deepEqual(
+      (responseObject['output'] as Array<{ type: string }>).map((o) => o.type),
+      ['message', 'function_call', 'message']
+    )
+    const prefix = historyPrefixFromStoredResponse({ responseObject, inputItems: [] })
+    assert.deepEqual(
+      prefix.map((turn) => [turn.content, turn.toolCalls?.map((call) => call.name)]),
+      [
+        ['Reading it.', ['read']],
+        ['Done.', undefined]
+      ]
+    )
   })
 })
