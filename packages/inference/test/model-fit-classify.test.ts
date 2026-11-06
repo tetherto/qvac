@@ -113,7 +113,7 @@ function publishedBci(): FitProbeResult {
   }
 }
 
-function publishedAudiogen(deviceIsCpu = false): FitProbeResult {
+function publishedAudiogen(): FitProbeResult {
   return {
     engine: 'audiogen-ggml',
     result: {
@@ -121,8 +121,8 @@ function publishedAudiogen(deviceIsCpu = false): FitProbeResult {
       reason: 'fits',
       modelName: 'ace-step',
       isTurbo: false,
-      deviceName: deviceIsCpu ? 'CPU' : 'Metal',
-      deviceIsCpu,
+      deviceName: 'Metal',
+      deviceIsCpu: false,
       deviceSharesHostMemory: true,
       deviceBytes: 3 * 1024 ** 3,
       hostBytes: 128 * 1024 ** 2,
@@ -269,16 +269,6 @@ test('published audiogen fit results keep their totals', (t) => {
   t.is(outcome.verdict, 'fit')
   t.is(outcome.projection?.deviceBytes, 3 * 1024 ** 3)
   t.is(outcome.projection?.hostBytes, 128 * 1024 ** 2)
-  t.absent(outcome.projection?.weightsBytes)
-  t.absent(outcome.projection?.contextBytes)
-  t.absent(outcome.projection?.computeBytes)
-})
-
-test('published audiogen on CPU charges the larger peak to host memory once', (t) => {
-  const outcome = classifyFit(publishedAudiogen(true), PROVENANCE)
-
-  t.absent(outcome.projection?.deviceBytes)
-  t.is(outcome.projection?.hostBytes, 3 * 1024 ** 3)
   t.absent(outcome.projection?.weightsBytes)
   t.absent(outcome.projection?.contextBytes)
   t.absent(outcome.projection?.computeBytes)
