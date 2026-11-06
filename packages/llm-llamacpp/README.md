@@ -36,7 +36,7 @@ This native C++ addon, built using the `Bare` Runtime, simplifies running Large 
 |----------|-------------|-------------|--------|-------------|
 | macOS | arm64, x64 | 14.0+ | ✅ Tier 1 | Metal |
 | iOS | arm64 | 17.0+ | ✅ Tier 1 | Metal |
-| Linux | arm64, x64 | Ubuntu-22+ | Tier 1 | CUDA (NVIDIA), Vulkan |
+| Linux | arm64, x64 | Ubuntu-22+ | Tier 1 | CUDA (NVIDIA), Vulkan, XDNA NPU (x64, opt-in) |
 | Android | arm64 | 12+ | ✅ Tier 1 | Vulkan, OpenCL (Adreno 700+) |
 | Windows | x64 | 10+ | Tier 1 | CUDA (NVIDIA), Vulkan |
 
