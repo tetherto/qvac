@@ -37,8 +37,16 @@ const WORD_CHAR_RE = SUPPORTS_UNICODE_PROPS
   : /[^!-/:-@[-`{-~]/
 
 // Thai, Lao, Myanmar, Khmer, Japanese kana and Chinese characters, written without spaces.
-const NO_SPACE_SCRIPT_RE =
-  /[\u0E00-\u0EFF\u1000-\u109F\u1780-\u17FF\u3040-\u30FF\u31F0-\u31FF\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\uFF66-\uFF9F]/
+// Planes 2 and 3 hold only Chinese characters, such as 𠮷, which take two UTF-16 code units.
+const NO_SPACE_CHARS =
+  '\\u0E00-\\u0EFF\\u1000-\\u109F\\u1780-\\u17FF\\u2E80-\\u2FDF\\u3005\\u3007\\u3021-\\u3029' +
+  '\\u3038-\\u303B\\u3040-\\u30FF\\u31F0-\\u31FF\\u3400-\\u4DBF\\u4E00-\\u9FFF\\uF900-\\uFAFF' +
+  '\\uFF66-\\uFF9F\\u{20000}-\\u{3FFFF}'
+// eslint-disable-next-line prefer-regex-literals
+const NO_SPACE_SCRIPT_RE = new RegExp(`[${NO_SPACE_CHARS}]`, 'u')
+// A run of those characters, kept by split() so a word is cut where the script changes.
+// eslint-disable-next-line prefer-regex-literals
+const NO_SPACE_RUN_RE = new RegExp(`([${NO_SPACE_CHARS}]+)`, 'u')
 
 // Return a word segmenter, or null where the runtime has no Intl.Segmenter.
 function createWordSegmenter(): Intl.Segmenter | null {
@@ -67,18 +75,33 @@ function trimPunctuation(token: string): string {
 }
 
 // Split lowercase text into words on whitespace and trim punctuation from their edges.
-// A segmenter, used for queries, also splits text written without spaces into words.
-function splitWords(text: string, segmenter: Intl.Segmenter | null = null): string[] {
+// With splitScripts, also cut words where text written without spaces meets other text,
+// as in 退款api. A segmenter, used for queries, also splits text written without spaces
+// into words.
+function splitWords(
+  text: string,
+  splitScripts: boolean,
+  segmenter: Intl.Segmenter | null = null
+): string[] {
   const words: string[] = []
   for (const token of text.split(/\s+/)) {
-    const word = trimPunctuation(token)
-    if (word.length === 0) continue
-    if (segmenter && NO_SPACE_SCRIPT_RE.test(word)) {
-      for (const part of segmenter.segment(word)) {
-        if (part.isWordLike) words.push(part.segment)
+    if (!splitScripts || !NO_SPACE_SCRIPT_RE.test(token)) {
+      const word = trimPunctuation(token)
+      if (word.length > 0) words.push(word)
+      continue
+    }
+    // split() with a capture group alternates other text and runs without spaces.
+    const pieces = token.split(NO_SPACE_RUN_RE)
+    for (let i = 0; i < pieces.length; i++) {
+      const word = trimPunctuation(pieces[i])
+      if (word.length === 0) continue
+      if (segmenter && i % 2 === 1) {
+        for (const part of segmenter.segment(word)) {
+          if (part.isWordLike) words.push(part.segment)
+        }
+      } else {
+        words.push(word)
       }
-    } else {
-      words.push(word)
     }
   }
   return words
@@ -86,7 +109,10 @@ function splitWords(text: string, segmenter: Intl.Segmenter | null = null): stri
 
 // Calculate the lexical score between a query and a content string.
 export function calculateTextScore(query: string, content: string): number {
-  return scoreContentAgainstTerms(splitWords(query.toLowerCase(), createWordSegmenter()), content)
+  return scoreContentAgainstTerms(
+    splitWords(query.toLowerCase(), true, createWordSegmenter()),
+    content
+  )
 }
 
 // Score content against query terms that were already split. A term matches a whole word,
@@ -94,7 +120,12 @@ export function calculateTextScore(query: string, content: string): number {
 function scoreContentAgainstTerms(queryTerms: string[], content: string): number {
   if (queryTerms.length === 0) return 0
   const contentLower = content.toLowerCase()
-  const contentTerms = splitWords(contentLower)
+  // Cutting long runs without spaces is slow, so do it only when the content has them and
+  // contains a query word in another script.
+  const splitScripts =
+    NO_SPACE_SCRIPT_RE.test(contentLower) &&
+    queryTerms.some((term) => !NO_SPACE_SCRIPT_RE.test(term) && contentLower.includes(term))
+  const contentTerms = splitWords(contentLower, splitScripts)
   let exactMatches = 0
   const positions = new Map<string, number>()
   for (const term of queryTerms) {
@@ -126,7 +157,7 @@ export function scoreDocuments(
 ): SearchResult[] {
   const results: SearchResult[] = []
   // Split the query once and reuse the terms for every document.
-  const queryTerms = splitWords(query.toLowerCase(), createWordSegmenter())
+  const queryTerms = splitWords(query.toLowerCase(), true, createWordSegmenter())
   for (const id of ids) {
     const vector = vectorMap.get(id)
     const content = contentMap.get(id)

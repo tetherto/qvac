@@ -440,11 +440,20 @@ test('calculateTextScore: should split a query written without spaces into words
   t.ok(calculateTextScore('退款政策是什么', REFUND_ZH) > 0, 'Partial match should count')
 })
 
-test('calculateTextScore: should fall back to substring matching without Intl.Segmenter', (t) => {
+// Run fn with Intl.Segmenter removed, as on runtimes that lack it.
+function withoutSegmenter(fn: () => void): void {
   const intl = (globalThis as { Intl?: { Segmenter?: unknown } }).Intl
   const original = intl?.Segmenter
   if (intl) intl.Segmenter = undefined
   try {
+    fn()
+  } finally {
+    if (intl) intl.Segmenter = original
+  }
+}
+
+test('calculateTextScore: should fall back to substring matching without Intl.Segmenter', (t) => {
+  withoutSegmenter(() => {
     t.is(calculateTextScore('退款政策', REFUND_ZH), 0.7, 'Chinese query should match')
     t.is(calculateTextScore('is', SHIPPING), 0, '"is" should not match "This"')
     t.is(
@@ -452,9 +461,26 @@ test('calculateTextScore: should fall back to substring matching without Intl.Se
       calculateTextScore('refund policy', REFUND),
       'Question mark should not count'
     )
-  } finally {
-    if (intl) intl.Segmenter = original
-  }
+  })
+})
+
+test('calculateTextScore: should match Chinese characters outside the BMP', (t) => {
+  // 𠮷 (U+20BB7) takes two UTF-16 code units, as in the name 𠮷野家.
+  t.is(calculateTextScore('𠮷', '𠮷野家'), 0.7, 'Supplementary character should match')
+  withoutSegmenter(() => {
+    t.is(calculateTextScore('𠮷', '𠮷野家'), 0.7, 'Should match without Intl.Segmenter')
+  })
+})
+
+test('calculateTextScore: should match a word where the script changes', (t) => {
+  // "Refund API" against "Refund".
+  const full = calculateTextScore('退款API', '退款API')
+  t.ok(full > calculateTextScore('退款API', '退款'), 'English word should get credit')
+  t.ok(full > 0.7, 'Both words should match')
+  t.is(calculateTextScore('api', '退款apis'), 0, '"api" should not match inside "apis"')
+  withoutSegmenter(() => {
+    t.is(calculateTextScore('退款API', '退款API'), full, 'Should match without Intl.Segmenter')
+  })
 })
 
 test('scoreDocuments: should combine vector and text scores and skip incomplete documents', (t) => {
@@ -493,5 +519,21 @@ test('scoreDocuments: should rank a whole-word match above a match inside anothe
   const results = scoreDocuments('is', [1, 0], ['inside', 'whole'], vectorMap, contentMap, 2)
 
   t.is(results[0].id, 'whole', 'Document with the word should rank first')
+  t.ok(results[0].score > results[1].score, 'Scores should differ')
+})
+
+test('scoreDocuments: should rank a mixed-script match above a partial one', (t) => {
+  // "Refund API documentation" against "Refund documentation".
+  const contentMap = new Map([
+    ['partial', '退款文档'],
+    ['full', '退款API文档']
+  ])
+  const vectorMap = new Map([
+    ['partial', [1, 0]],
+    ['full', [1, 0]]
+  ])
+  const results = scoreDocuments('退款API', [1, 0], ['partial', 'full'], vectorMap, contentMap, 2)
+
+  t.is(results[0].id, 'full', 'Document with both words should rank first')
   t.ok(results[0].score > results[1].score, 'Scores should differ')
 })
