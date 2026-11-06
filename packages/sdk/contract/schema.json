@@ -19180,6 +19180,39 @@
                       "description": "Enable flash attention to reduce memory usage",
                       "type": "boolean"
                     },
+                    "performance_profile": {
+                      "description": "Addon-owned model/GPU/API performance profiles. Default: auto. Explicit native options win. off retains baseline settings. Temporal tiling is unchanged.",
+                      "type": "string",
+                      "enum": ["auto", "off"],
+                      "title": "LoadModelSrcRequestSdcppGenerationModelConfigPerformanceProfile"
+                    },
+                    "performance_max_width": {
+                      "description": "Maximum video output width. Declare all three performance_max_* limits for bounded memory profiles.",
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 2147483647
+                    },
+                    "performance_max_height": {
+                      "description": "Maximum video output height; requests above this declared bound are rejected by the addon.",
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 2147483647
+                    },
+                    "performance_max_frames": {
+                      "description": "Maximum video output frame count; requests above this declared bound are rejected by the addon.",
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 2147483647
+                    },
+                    "vae_conv_direct": {
+                      "description": "Explicit VAE convolution selection, overriding automatic performance profiles.",
+                      "type": "boolean"
+                    },
+                    "tensor_type_rules": {
+                      "description": "Explicit native per-tensor precision rules, overriding automatic matrix precision selection.",
+                      "type": "string",
+                      "maxLength": 4096
+                    },
                     "diffusion_fa": {
                       "description": "Enable flash attention for the diffusion transformer only",
                       "type": "boolean"

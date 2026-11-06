@@ -17,6 +17,23 @@ the exported inference surface rather than maintaining an independent schema.
 Read the current source before documenting defaults; configuration fields and
 defaults are intentionally not duplicated here.
 
+Diffusion and video `modelConfig.performance_profile` delegates hardware selection
+to the diffusion addon. `off` retains baseline settings. Explicit
+`flash_attn`, `vae_conv_direct`, and `tensor_type_rules` settings take precedence.
+These controls require an addon release containing performance profiles.
+Temporal tiling remains unchanged: full-temporal decoding is already the native
+default, and an explicit `temporal_tiling` setting is preserved.
+
+LTX's automatic Metal F16 profile needs declared output limits:
+`performance_max_width: 512`, `performance_max_height: 320`, and
+`performance_max_frames: 97`. Declare all three together. The addon rejects
+requests above these limits and selects F16 only for a validated model/device
+with sufficient free memory. Unbounded contexts retain their current precision.
+The SDK forwards these controls; it does not duplicate the hardware policy.
+For bounded video contexts, load-time fit checks and `assessModelFit` assess the
+declared maximum width, height and frame count. Unbounded video uses the existing
+33-frame fit workload.
+
 `includeAudioDecoder` is a bundle-time option consumed by the SDK. Set it to
 `false` for workers that only process raw PCM or streaming audio, and list the
 required plugins explicitly. `audiogen-ggml` can also produce PCM or WAV without

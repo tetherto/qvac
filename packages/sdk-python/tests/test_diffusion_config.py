@@ -55,3 +55,39 @@ def test_unknown_diffusion_options_are_ignored() -> None:
         {"backend": "cuda0", "unknown_option": True}
     )
     assert config.model_dump(exclude_unset=True) == {"backend": "cuda0"}
+
+
+@pytest.mark.parametrize("profile", ["auto", "off"])
+def test_diffusion_performance_controls_serialize(profile: str) -> None:
+    values = {
+        "mode": "video",
+        "performance_profile": profile,
+        "performance_max_width": 512,
+        "performance_max_height": 320,
+        "performance_max_frames": 97,
+        "vae_conv_direct": False,
+        "tensor_type_rules": "",
+    }
+    config = LoadModelSrcRequestSdcppGenerationModelConfig.model_validate(values)
+    assert config.model_dump(mode="json", exclude_unset=True) == values
+    assert (
+        LoadModelSrcRequestSdcppGenerationModelConfig().model_dump(exclude_unset=True)
+        == {}
+    )
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"performance_profile": "fast"},
+        {"performance_max_width": 0},
+        {"performance_max_height": -1},
+        {"performance_max_frames": 1.5},
+        {"performance_max_frames": 2147483648},
+    ],
+)
+def test_invalid_diffusion_performance_controls_rejected(
+    values: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        LoadModelSrcRequestSdcppGenerationModelConfig.model_validate(values)

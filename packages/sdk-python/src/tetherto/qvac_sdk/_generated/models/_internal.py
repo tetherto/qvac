@@ -19214,6 +19214,11 @@ class LoadModelSrcRequestSdcppGenerationModelConfigSamplerRng(Enum):
     std_default = "std_default"
 
 
+class LoadModelSrcRequestSdcppGenerationModelConfigPerformanceProfile(Enum):
+    auto = "auto"
+    off = "off"
+
+
 class LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode(Enum):
     auto = "auto"
     immediately = "immediately"
@@ -21045,6 +21050,50 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
     ] = None
     flash_attn: Annotated[
         bool | None, Field(description="Enable flash attention to reduce memory usage")
+    ] = None
+    performance_profile: Annotated[
+        LoadModelSrcRequestSdcppGenerationModelConfigPerformanceProfile | None,
+        Field(
+            description="Addon-owned model/GPU/API performance profiles. Default: auto. Explicit native options win. off retains baseline settings. Temporal tiling is unchanged.",
+            title="LoadModelSrcRequestSdcppGenerationModelConfigPerformanceProfile",
+        ),
+    ] = None
+    performance_max_width: Annotated[
+        int | None,
+        Field(
+            description="Maximum video output width. Declare all three performance_max_* limits for bounded memory profiles.",
+            gt=0,
+            le=2147483647,
+        ),
+    ] = None
+    performance_max_height: Annotated[
+        int | None,
+        Field(
+            description="Maximum video output height; requests above this declared bound are rejected by the addon.",
+            gt=0,
+            le=2147483647,
+        ),
+    ] = None
+    performance_max_frames: Annotated[
+        int | None,
+        Field(
+            description="Maximum video output frame count; requests above this declared bound are rejected by the addon.",
+            gt=0,
+            le=2147483647,
+        ),
+    ] = None
+    vae_conv_direct: Annotated[
+        bool | None,
+        Field(
+            description="Explicit VAE convolution selection, overriding automatic performance profiles."
+        ),
+    ] = None
+    tensor_type_rules: Annotated[
+        str | None,
+        Field(
+            description="Explicit native per-tensor precision rules, overriding automatic matrix precision selection.",
+            max_length=4096,
+        ),
     ] = None
     diffusion_fa: Annotated[
         bool | None,
