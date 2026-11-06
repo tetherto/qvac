@@ -67,6 +67,14 @@ const OVERRIDE_MISS_RE = /backend override matched no available device/
 // is XDNA_Host.
 const XDNA_BUFFER_RE = /\bXDNA\w*\s+model buffer size\s*=/i
 const FUSED_REFUSAL_RE = /unsupported fused weight set|needs the .*-bit activation layout/i
+// Fabric falls back to the host when its kernels are missing or stale, and the
+// output stays correct, so these are what show the NPU had kernels to run.
+const KERNELS_FOUND_RE = /GEMM geometries: decode=gemm_/
+const KERNELS_MISSING_RE = /no GEMM kernels found|not built for design tag|no fused_layer artifact/
+
+// Fabric logs its kernel discovery once per process, on the first load, so
+// every load's native log is also kept here.
+const processLogs = []
 
 function parseKvCacheTypes(logs) {
   for (let i = logs.length - 1; i >= 0; i--) {
@@ -81,7 +89,10 @@ function parseKvCacheTypes(logs) {
 
 async function loadAndRun(modelName, extraConfig) {
   const [name, dirPath] = await ensureModel({ modelName })
-  const specLogger = attachSpecLogger({ forwardToConsole: true })
+  const specLogger = attachSpecLogger({
+    forwardToConsole: true,
+    onLog: (line) => processLogs.push(line)
+  })
 
   const model = new LlmLlamacpp({
     files: { model: [path.join(dirPath, name)] },
@@ -124,6 +135,9 @@ async function loadAndRun(modelName, extraConfig) {
 }
 
 function assertRanOnNpu(t, { output, kvTypes, logText }) {
+  const processText = processLogs.join('\n')
+  t.ok(KERNELS_FOUND_RE.test(processText), 'fabric found its NPU GEMM kernels')
+  t.absent(KERNELS_MISSING_RE.test(processText), 'NPU kernel artifacts are present and current')
   t.absent(FUSED_REFUSAL_RE.test(logText), 'fused decode layer accepted the model weights')
   t.ok(XDNA_BUFFER_RE.test(logText), 'model weights were placed in an XDNA buffer')
   t.ok(kvTypes, 'KV-cache allocation line was logged')
