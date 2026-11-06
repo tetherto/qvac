@@ -55,6 +55,7 @@ import {
 } from '@qvac/sdk'
 import { StepIncompleteError, type CollectMode, type StepBindings } from '@qvac/test-suite'
 import type { ResourceManager } from './resource-manager.js'
+import { unitVectors, cosineAtLeast, moreSimilarThan } from './vector-checks.js'
 import { decodeWavToMonoF32, f32ToLeBytes } from './wav-pcm.js'
 
 /** How the shared step interpreter reaches this SDK. */
@@ -864,6 +865,10 @@ const COMPARISONS: Record<
     output: string
   }
 > = {
+  /** The cosine similarity of the two vectors is at least `min`. */
+  cosineAtLeast,
+  /** The left vector is strictly closer by cosine to the right one than to `than`. */
+  moreSimilarThan,
   prefillReuse(left, right, args) {
     const [cold, warm, primed] = [Number(left), Number(right), Number(args.primedTokens)]
     const passed =
@@ -980,6 +985,8 @@ const ASSERTIONS: Record<
   string,
   (value: unknown, args: Record<string, unknown>) => { passed: boolean; output: string }
 > = {
+  /** Each vector has the expected size and unit norm; a bare vector is one. */
+  unitVectors,
   /** The collection has exactly the expected number of elements. */
   lengthIs(value, args) {
     if (!Array.isArray(value)) {

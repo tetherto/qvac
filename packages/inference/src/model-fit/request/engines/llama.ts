@@ -30,7 +30,7 @@ export interface LlamaFitRequestParams {
 export function createLlamaFitRequest(params: LlamaFitRequestParams): FitRequestPlan {
   const { loadKind } = params
 
-  if (loadKind === 'completion' && params.artifacts?.['projectionModelPath'] !== undefined) {
+  if (params.artifacts?.['projectionModelPath'] !== undefined) {
     return { supported: false, detail: 'multimodal projection loads are not representable' }
   }
 
