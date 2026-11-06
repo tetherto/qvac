@@ -30,6 +30,9 @@ LTX's automatic Metal F16 profile needs declared output limits:
 requests above these limits and selects F16 only for a validated model/device
 with sufficient free memory. Unbounded contexts retain their current precision.
 The SDK forwards these controls; it does not duplicate the hardware policy.
+For bounded video contexts, load-time fit checks and `assessModelFit` assess the
+declared maximum width, height and frame count. Unbounded video uses the existing
+33-frame fit workload.
 
 `includeAudioDecoder` is a bundle-time option consumed by the SDK. Set it to
 `false` for workers that only process raw PCM or streaming audio, and list the
