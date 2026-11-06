@@ -744,11 +744,68 @@ export const kvCacheCancelKeepsCommittedCache: TestDefinition = {
     generationParams: { temp: 0, top_k: 1, seed: 42, predict: 256 }
   },
   expectation: { validation: 'function', fn: () => true },
-  metadata: {
-    category: 'kv-cache',
-    dependency: 'llm',
-    estimatedDurationMs: 60000
-  }
+  metadata: { category: 'kv-cache', dependency: 'llm', estimatedDurationMs: 60000 }
+}
+
+export const kvCacheSharedPrefixDefaultIsolated: TestDefinition = {
+  testId: 'kv-cache-shared-prefix-default-isolated',
+  params: {
+    history: [
+      { role: 'system', content: 'You are a concise assistant.' },
+      {
+        role: 'user',
+        content:
+          'The access code is violet-harbor-731. Repeat only the access code, with no explanation.'
+      }
+    ],
+    sourceKey: 'shared-prefix-default-isolated-source',
+    generationParams: { temp: 0, seed: 42, predict: 8 }
+  },
+  expectation: { validation: 'type', expectedType: 'string' },
+  steps: [
+    { useModel: { deps: ['llm'], as: 'model' } },
+    {
+      call: {
+        method: 'completion',
+        collect: 'text',
+        params: {
+          modelId: '$model',
+          history: '$params.history',
+          kvCache: '$params.sourceKey',
+          generationParams: '$params.generationParams'
+        },
+        as: 'source'
+      }
+    },
+    {
+      call: {
+        method: 'completion',
+        collect: 'text',
+        params: {
+          modelId: '$model',
+          history: '$params.history',
+          generationParams: '$params.generationParams'
+        },
+        as: 'isolated'
+      }
+    },
+    { project: { from: '$source', path: 'stats.promptTokens', as: 'sourcePromptTokens' } },
+    {
+      project: {
+        from: '$isolated',
+        path: 'stats.promptTokens',
+        as: 'isolatedPromptTokens'
+      }
+    },
+    {
+      assert: {
+        on: '$isolatedPromptTokens',
+        named: 'valueIn',
+        with: { values: ['$sourcePromptTokens'] }
+      }
+    }
+  ],
+  metadata: { category: 'kv-cache', dependency: 'llm', estimatedDurationMs: 10000 }
 }
 
 export const kvCacheSharedPrefixOptIn: TestDefinition = {
@@ -812,6 +869,7 @@ export const kvCacheSharedPrefixOptIn: TestDefinition = {
 
 export const kvCacheTests = [
   ...kvCachePrefillTests,
+  kvCacheSharedPrefixDefaultIsolated,
   kvCacheSharedPrefixOptIn,
   kvCacheCancelKeepsCommittedCache,
   kvCacheConcurrentSameKey,
