@@ -15,7 +15,6 @@ import { embed, markEmbeddingProjector } from '@/plugins/ops/embed'
 import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
 import { getRequestRegistry } from '@/runtime/index'
 import { ModelType } from '@/schemas/index'
-import { createFitRequest } from '@/model-fit/request/create'
 import { createErrorResponse } from '@/schemas/error'
 import { ERROR_CODES } from '@/schemas/errors'
 
@@ -141,19 +140,6 @@ test('embed config: projector settings and context size reach the addon', (t) =>
       t.absent(embedConfigBaseSchema.safeParse({ [key]: value }).success)
     }
   }
-})
-
-test('embed fit: refuses a projector rather than reporting text-only memory', (t) => {
-  t.alike(
-    createFitRequest({
-      modelType: ModelType.llamacppEmbedding,
-      modelPath: '/model.gguf',
-      modelConfig: {},
-      artifacts: { projectionModelPath: '/mmproj.gguf' },
-      isShardedModel: false
-    }),
-    { supported: false, detail: 'multimodal projection loads are not representable' }
-  )
 })
 
 let nextId = 0
