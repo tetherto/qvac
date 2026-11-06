@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <cinttypes>
 #include <initializer_list>
 #include <iterator>
+#include <memory>
 #include <mutex>
 #include <sstream>
 #include <stdexcept>
@@ -17,6 +19,7 @@
 #include <common/chat.h>
 #include <common/log.h>
 #include <ggml-backend.h>
+#include <gguf.h>
 #include <inference-addon-cpp/Errors.hpp>
 #ifdef __APPLE__
 #include <TargetConditionals.h>
@@ -732,6 +735,97 @@ bool usesBackendFamily(
               splitDevices, matches, &backend_selection::SplitDevice::name));
 }
 
+std::optional<std::string> xdnaRefusedWeightSet(
+    uint32_t residualWidth, const std::vector<XdnaRecurrentLayer>& layers) {
+  // Mirrors ggml-xdna: a model of another width never reaches the fused layer.
+  constexpr uint32_t K_XDNA_RESIDUAL_WIDTH = 1024;
+  if (residualWidth != K_XDNA_RESIDUAL_WIDTH) {
+    return std::nullopt;
+  }
+  const auto isOneOf = [](ggml_type type, std::initializer_list<ggml_type> ok) {
+    return std::ranges::find(ok, type) != ok.end();
+  };
+  for (const XdnaRecurrentLayer& layer : layers) {
+    if (isOneOf(
+            layer.ssmOut, {GGML_TYPE_Q4_K, GGML_TYPE_Q5_K, GGML_TYPE_Q6_K}) &&
+        layer.ffnGate == GGML_TYPE_Q4_K && layer.ffnUp == GGML_TYPE_Q4_K &&
+        isOneOf(layer.ffnDown, {GGML_TYPE_Q4_K, GGML_TYPE_Q6_K})) {
+      continue;
+    }
+    return string_format(
+        "blk.%d: so=%s gate=%s up=%s down=%s",
+        layer.layer,
+        ggml_type_name(layer.ssmOut),
+        ggml_type_name(layer.ffnGate),
+        ggml_type_name(layer.ffnUp),
+        ggml_type_name(layer.ffnDown));
+  }
+  return std::nullopt;
+}
+
+std::optional<std::string> xdnaRefusedWeightSetInFile(const std::string& path) {
+  gguf_init_params init = {};
+  init.no_alloc = true;
+  const std::unique_ptr<gguf_context, decltype(&gguf_free)> owner(
+      gguf_init_from_file(path.c_str(), init), &gguf_free);
+  gguf_context* ctx = owner.get();
+  if (ctx == nullptr) {
+    return std::nullopt;
+  }
+  uint32_t width = 0;
+  if (const int64_t arch = gguf_find_key(ctx, "general.architecture");
+      arch >= 0 && gguf_get_kv_type(ctx, arch) == GGUF_TYPE_STRING) {
+    const std::string key =
+        std::string(gguf_get_val_str(ctx, arch)) + ".embedding_length";
+    if (const int64_t id = gguf_find_key(ctx, key.c_str());
+        id >= 0 && gguf_get_kv_type(ctx, id) == GGUF_TYPE_UINT32) {
+      width = gguf_get_val_u32(ctx, id);
+    }
+  }
+  const auto typeOf =
+      [ctx](int layer, const char* name) -> std::optional<ggml_type> {
+    const std::string full = string_format("blk.%d.%s.weight", layer, name);
+    const int64_t id = gguf_find_tensor(ctx, full.c_str());
+    if (id < 0) {
+      return std::nullopt;
+    }
+    return gguf_get_tensor_type(ctx, id);
+  };
+  constexpr std::string_view K_PREFIX = "blk.";
+  constexpr std::string_view K_SUFFIX = ".ssm_out.weight";
+  std::vector<XdnaRecurrentLayer> layers;
+  for (int64_t i = 0; i < gguf_get_n_tensors(ctx); ++i) {
+    const std::string_view name = gguf_get_tensor_name(ctx, i);
+    if (name.size() <= K_PREFIX.size() + K_SUFFIX.size() ||
+        !name.starts_with(K_PREFIX) || !name.ends_with(K_SUFFIX)) {
+      continue;
+    }
+    const std::string_view digits = name.substr(
+        K_PREFIX.size(), name.size() - K_PREFIX.size() - K_SUFFIX.size());
+    int layer = -1;
+    const auto [end, ec] =
+        std::from_chars(digits.data(), digits.data() + digits.size(), layer);
+    if (ec != std::errc() || end != digits.data() + digits.size()) {
+      continue;
+    }
+    const auto gate = typeOf(layer, "ffn_gate");
+    const auto up = typeOf(layer, "ffn_up");
+    const auto down = typeOf(layer, "ffn_down");
+    // A layer without a dense FFN here (another shard, or experts) is not one
+    // this check can judge.
+    if (!gate || !up || !down) {
+      continue;
+    }
+    layers.push_back(
+        {.layer = layer,
+         .ssmOut = gguf_get_tensor_type(ctx, i),
+         .ffnGate = *gate,
+         .ffnUp = *up,
+         .ffnDown = *down});
+  }
+  return xdnaRefusedWeightSet(width, layers);
+}
+
 void tuneLoadConfigMap(
     std::unordered_map<std::string, std::string>& configFilemap,
     const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
@@ -1143,7 +1237,11 @@ productionDependencies(backend_selection::llamaLogCallbackF logCallback) {
           [](const std::string& servers) {
             return ::registerRpcDevices(servers);
           },
-      .addonRpcDeviceNames = []() { return ::addonRpcDeviceNames(); }};
+      .addonRpcDeviceNames = []() { return ::addonRpcDeviceNames(); },
+      .xdnaRefusal =
+          [](const std::string& path) {
+            return xdnaRefusedWeightSetInFile(path);
+          }};
 }
 
 void validateMobileMultiDeviceConfig(
@@ -1614,6 +1712,21 @@ NormalizedLoad normalizeLoadForFit(
                   "split-mode 'layer' or 'none'.\n",
                   K_LEGACY_PARSER_NAME.data()));
         }
+        // Named explicitly, so a refusing NPU fails the load, as an absent
+        // one does.
+        if (dependencies.xdnaRefusal &&
+            usesBackendFamily(true, "", splitSelection.devices, "xdna")) {
+          if (const auto refused = dependencies.xdnaRefusal(modelPath)) {
+            throw qvac_errors::StatusError(
+                qvac_errors::general_error::InvalidArgument,
+                string_format(
+                    "%s: the XDNA NPU's fused decode layer does not take this "
+                    "model's weights (%s); requantize them or select another "
+                    "device.\n",
+                    K_LEGACY_PARSER_NAME.data(),
+                    refused->c_str()));
+          }
+        }
       }
       // This path never calls chooseBackend, so apply its Adreno restrictions
       // to the split set; an emptied list falls through to the CPU branch.
@@ -1718,6 +1831,33 @@ NormalizedLoad normalizeLoadForFit(
           metadata,
           finetuneOverrides.active,
           backendOverride);
+      // The override skips an NPU that would refuse the model, as it skips an
+      // absent one.
+      if (dependencies.xdnaRefusal &&
+          usesBackendFamily(
+              selected.type == BackendType::GPU, selected.name, {}, "xdna")) {
+        if (const auto refused = dependencies.xdnaRefusal(modelPath)) {
+          QLOG_IF(
+              Priority::WARNING,
+              string_format(
+                  "[LlamaModel] skipping %s: the NPU's fused decode layer does "
+                  "not take this model's weights (%s); falling back to the "
+                  "default backend order\n",
+                  selected.name.c_str(),
+                  refused->c_str()));
+          std::vector<std::string> withoutXdna;
+          std::ranges::copy_if(
+              backendOverride,
+              std::back_inserter(withoutXdna),
+              [](const std::string& family) { return family != "xdna"; });
+          selected = dependencies.resolveBackend(
+              preferredBackend,
+              mainGpu,
+              metadata,
+              finetuneOverrides.active,
+              withoutXdna);
+        }
+      }
       mmprojAdrenoVersion = selected.adrenoVersion;
     }
     result.adrenoVersion = selected.adrenoVersion;

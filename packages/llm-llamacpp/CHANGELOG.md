@@ -10,6 +10,10 @@
   split. The KV cache stays at `f16` on the NPU, whose attention kernels take
   only `f16` K/V. `split-mode: "tensor"` with `XDNA0` is rejected with
   `InvalidArgument`.
+- A model whose weight types the NPU's fused decode layer refuses is caught at
+  load: `backend: "xdna"` falls back to the default backend order with a
+  warning, and `devices: "XDNA0"` fails with `InvalidArgument` naming the
+  types. It used to fail at the first decode.
 
 ### Changed
 

@@ -111,6 +111,10 @@ struct NormalizationDependencies {
   /// Process-wide RPC devices registered by this addon, including earlier
   /// loads.
   std::function<std::unordered_set<std::string>()> addonRpcDeviceNames;
+  /// Why the XDNA NPU would refuse the model at `path`, or nullopt. Unset
+  /// skips the check.
+  std::function<std::optional<std::string>(const std::string& path)>
+      xdnaRefusal;
 };
 
 struct NormalizedLoad {
@@ -139,6 +143,27 @@ bool usesBackendFamily(
     bool isGpu, const std::string& selectedName,
     const std::vector<backend_selection::SplitDevice>& splitDevices,
     std::string_view family);
+
+// The weights of one recurrent layer (one with an ssm_out) that the XDNA NPU's
+// fused decode layer runs.
+struct XdnaRecurrentLayer {
+  int layer = -1;
+  ggml_type ssmOut = GGML_TYPE_COUNT;
+  ggml_type ffnGate = GGML_TYPE_COUNT;
+  ggml_type ffnUp = GGML_TYPE_COUNT;
+  ggml_type ffnDown = GGML_TYPE_COUNT;
+};
+
+// Fabric's fused decode layer runs on a 1024-wide residual stream and takes
+// only Q4_K/Q5_K/Q6_K ssm_out, Q4_K gate/up and Q4_K/Q6_K down; any other set
+// fails at the first decode. Returns the first refused layer as
+// "blk.N: so=… gate=… up=… down=…", or nullopt.
+std::optional<std::string> xdnaRefusedWeightSet(
+    uint32_t residualWidth, const std::vector<XdnaRecurrentLayer>& layers);
+
+// xdnaRefusedWeightSet for a GGUF file, reading only its header. nullopt when
+// the file cannot be read.
+std::optional<std::string> xdnaRefusedWeightSetInFile(const std::string& path);
 
 void validateMobileMultiDeviceConfig(
     const ConfigMap& configFilemap, llama_split_mode splitMode);

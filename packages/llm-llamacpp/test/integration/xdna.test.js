@@ -56,7 +56,7 @@ const FALLBACK_MODEL = 'Llama-3.2-1B-Instruct-Q4_0.gguf'
 
 // The NPU's fused decode layer accepts this quant as published: ssm_out is
 // Q5_K, ffn_gate/ffn_up Q4_K and ffn_down Q4_K/Q6_K. A Q8_0 ssm_out (such as
-// Qwen3.5-0.8B-Q8_0.gguf) is refused at the first decode.
+// Qwen3.5-0.8B-Q8_0.gguf) makes the load skip or refuse the NPU.
 const NPU_MODEL = 'Qwen3.5-0.8B-Q4_K_M.gguf'
 
 const PROMPT = [
