@@ -1,18 +1,20 @@
 #pragma once
 
 #include <any>
-#include <atomic>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <streambuf>
 #include <string>
 #include <unordered_map>
 
 #include <qvac-fabric.h>
 
+#include "LlamaLazyInitializeBackend.hpp"
 #include "inference-addon-cpp/InitLoader.hpp"
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
+#include "inference-addon-cpp/job/JobId.hpp"
 
 /// @brief One upstream decision response, serialized as JSON.
 ///
@@ -28,20 +30,29 @@ struct DecisionEngineResult {
 /// Decision parsing, prompt rendering, scheduling and answer calculation are
 /// upstream's, inside the shared fabric runtime. This class maps the addon's
 /// job lifecycle to the bridge: a delayed load, one cancellation token per
-/// running job, and bridge statuses to addon errors. A request is upstream's
+/// job, and bridge statuses to addon errors. A request is upstream's
 /// /v1/systemone JSON for one state; the result is upstream's response JSON.
 /// Fabric-format Laya checkpoints keep using LayaModel.
+///
+/// Driven by a MultiJobScheduler so that cancellation is tied to job ids: the
+/// scheduler announces each job (jobStarting) under its admission lock before
+/// the job becomes cancellable, and the job's token is created there. A cancel
+/// that lands before process() starts therefore reaches the job's token
+/// instead of being lost.
 class DecisionEngineModel
     : public qvac_lib_inference_addon_cpp::model::IModel,
       public qvac_lib_inference_addon_cpp::model::IModelAsyncLoad,
-      public qvac_lib_inference_addon_cpp::model::IModelCancel {
+      public qvac_lib_inference_addon_cpp::model::IModelCancel,
+      public qvac_lib_inference_addon_cpp::model::IModelMultiprocessor,
+      public qvac_lib_inference_addon_cpp::model::IModelCancelById,
+      public qvac_lib_inference_addon_cpp::model::IModelJobLifecycle {
 public:
   using Input = std::string;
   using Output = DecisionEngineResult;
+  using JobId = qvac_lib_inference_addon_cpp::JobId;
 
   /// @param config Load options; any other key is rejected with
-  /// InvalidConfiguration. The bridge loads the backends itself, so
-  /// backendsDir is accepted for interface parity and not used.
+  /// InvalidConfiguration.
   DecisionEngineModel(
       const std::string& modelGgufPath,
       const std::unordered_map<std::string, std::string>& config,
@@ -57,17 +68,30 @@ public:
     return "DecisionEngineModel";
   }
 
-  /// @param input std::string holding upstream's request JSON for one state.
-  /// @returns DecisionEngineResult holding upstream's response JSON.
+  /// Untagged path (no scheduler id): announces and runs one job.
   std::any process(const std::any& input) final;
 
-  DecisionEngineResult predict(const std::string& requestJson);
+  /// @param input std::string holding upstream's request JSON for one state.
+  /// @param id The job announced by jobStarting(id).
+  /// @returns DecisionEngineResult holding upstream's response JSON.
+  std::any process(const std::any& input, JobId id) final;
+
+  /// Creates the job's cancellation token. Runs under the scheduler's
+  /// admission lock, before the job can be cancelled.
+  void jobStarting(JobId id) final;
+
+  /// Cancels the job's run, or its run-to-be if process() has not started.
+  void cancelById(JobId id) const final;
+
+  /// Cancels every job announced and not yet finished. Point-in-time: jobs
+  /// announced afterwards are not affected.
+  void cancel() const final;
+
+  /// Runs one request under @p id's token (announced by jobStarting).
+  DecisionEngineResult predict(const std::string& requestJson, JobId id);
 
   [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
   runtimeStats() const final;
-
-  /// Cancels the running job, if any. Thread-safe.
-  void cancel() const final;
 
   void waitForLoadInitialization() final {
     initLoader_.waitForLoadInitialization();
@@ -90,14 +114,24 @@ public:
 
 private:
   void load(const std::string& paramsJson);
+  /// The job's token, retained for the caller; created if the job was never
+  /// announced (defensive: the scheduler always announces).
+  qvac_fabric_decision_cancel* retainToken(JobId id);
+  void finishJob(JobId id, qvac_fabric_decision_cancel* token);
 
+  std::string backendsDir_;
+  std::string openclCacheDir_;
+
+  // Backends (and their log routing, and the Android OpenCL cache location)
+  // are initialized through the addon's shared initializer before the engine
+  // is created, and released after it is destroyed (declared before engine_).
+  std::optional<LlamaBackendsHandle> backends_;
   qvac_fabric_decision* engine_ = nullptr;
   std::string info_;
 
-  // The token of the job being processed; cancel() requests it. Guarded by
-  // cancelMutex_ because cancel() runs on another thread than process().
-  mutable std::mutex cancelMutex_;
-  qvac_fabric_decision_cancel* running_ = nullptr;
+  // Tokens of the jobs announced and not yet finished, by job id.
+  mutable std::mutex tokensMutex_;
+  std::unordered_map<JobId, qvac_fabric_decision_cancel*> tokens_;
 
   long long lastInputTokens_ = 0;
   double lastMs_ = 0.0;

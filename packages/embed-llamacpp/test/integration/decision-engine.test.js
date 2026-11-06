@@ -109,6 +109,29 @@ for (const [name, mmproj, expectType] of [
   })
 }
 
+// A 32x32 RGB PNG.
+const IMAGE =
+  'data:image/png;base64,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'
+
+safeTest(
+  'a CPU engine with a projector answers about an image',
+  { timeout: 600_000 },
+  async (t) => {
+    // device: 'cpu' also keeps the projector off the GPU (mmproj_use_gpu false).
+    const config = { device: 'cpu', mmproj: await modelPath(OPENJEV_MMPROJ) }
+    await withEngine(t, OPENJEV, config, async (engine) => {
+      t.ok(engine.info().images, 'the projector is loaded')
+      const { result } = await decide(engine, {
+        state: 'What does the picture show?',
+        files: [IMAGE],
+        questions: { colorful: { type: 'noul', instructions: 'Is the image colorful?' } }
+      })
+      t.is(result.answers.colorful.type, 'noul')
+      t.ok(result.usage.input_tokens > 0)
+    })
+  }
+)
+
 safeTest(
   'rejections come back as invalid requests, and the engine keeps working',
   { timeout: 600_000 },

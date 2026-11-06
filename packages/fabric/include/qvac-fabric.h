@@ -89,7 +89,11 @@ enum qvac_fabric_decision_status {
 //   "mmproj"             string  projector GGUF path, for media input
 //   "lora"               array   [{"path": string, "scale": number}]
 //   "n_ctx", "n_batch", "n_ubatch", "n_parallel", "n_gpu_layers",
-//   "n_threads"          integer
+//   "n_threads"          integer; n_parallel, n_batch and n_ubatch must be
+//                        at least 1 and n_ctx at least 0, or the call fails
+//                        with QVAC_FABRIC_DECISION_INVALID_REQUEST
+//   "mmproj_use_gpu"     boolean (default true): run the projector on the GPU;
+//                        set false with n_gpu_layers 0 for a CPU-only engine
 //   "sleep_idle_seconds" integer (default -1, never sleep)
 // Calls qvac_fabric_load_backends() itself. On success returns
 // QVAC_FABRIC_DECISION_OK and sets *out. On failure nothing is left running,
@@ -123,6 +127,10 @@ qvac_fabric_decision_cancel_release(qvac_fabric_decision_cancel* c);
 // NOLINTNEXTLINE(readability-identifier-naming)
 QVAC_FABRIC_API void
 qvac_fabric_decision_cancel_request(qvac_fabric_decision_cancel* c);
+// Whether the token was cancelled. Thread-safe.
+// NOLINTNEXTLINE(readability-identifier-naming)
+QVAC_FABRIC_API int
+qvac_fabric_decision_cancel_is_requested(const qvac_fabric_decision_cancel* c);
 
 // Runs one /v1/systemone request (one state) and blocks until it finishes.
 // cancel may be NULL. Several runs may be in flight on one engine; upstream

@@ -28,6 +28,19 @@ std::string codeOf(const std::function<void()>& call) {
   return "no error";
 }
 
+/// The message of a std::runtime_error (e.g. "Job cancelled"), the code of a
+/// StatusError, or "no error".
+std::string outcomeOf(const std::function<void()>& call) {
+  try {
+    call();
+  } catch (const qvac_errors::StatusError& error) {
+    return error.codeString();
+  } catch (const std::runtime_error& error) {
+    return error.what();
+  }
+  return "no error";
+}
+
 json params(const std::unordered_map<std::string, std::string>& config) {
   return json::parse(DecisionEngineModel::paramsJson("/m.gguf", config));
 }
@@ -103,9 +116,11 @@ TEST(DecisionEngineConfigTest, MapsLoadOptionsToBridgeParams) {
   EXPECT_EQ(p.at("mmproj"), "/p.gguf");
 }
 
-TEST(DecisionEngineConfigTest, CpuKeepsEveryLayerOnTheCpu) {
-  const json p = params({{"device", "cpu"}, {"gpu_layers", "99"}});
+TEST(DecisionEngineConfigTest, CpuKeepsEveryLayerAndTheProjectorOnTheCpu) {
+  const json p =
+      params({{"device", "cpu"}, {"gpu_layers", "99"}, {"mmproj", "/p.gguf"}});
   EXPECT_EQ(p.at("n_gpu_layers"), 0);
+  EXPECT_EQ(p.at("mmproj_use_gpu"), false);
 }
 
 TEST(DecisionEngineConfigTest, UnsetOptionsAreLeftToUpstream) {
@@ -113,6 +128,14 @@ TEST(DecisionEngineConfigTest, UnsetOptionsAreLeftToUpstream) {
   EXPECT_FALSE(p.contains("n_gpu_layers"));
   EXPECT_FALSE(p.contains("n_ctx"));
   EXPECT_FALSE(p.contains("mmproj"));
+  EXPECT_FALSE(p.contains("mmproj_use_gpu"));
+}
+
+// openclCacheDir is applied by the addon's shared backend initializer before
+// the engine is created (GGML_OPENCL_CACHE_DIR, Android), not by the bridge.
+TEST(DecisionEngineConfigTest, OpenclCacheDirIsAcceptedAndNotABridgeParam) {
+  const json p = params({{"device", "gpu"}, {"openclCacheDir", "/data/cache"}});
+  EXPECT_FALSE(p.contains("openclCacheDir"));
 }
 
 TEST(DecisionEngineConfigTest, RejectsBadOptions) {
@@ -155,6 +178,68 @@ TEST(DecisionEngineLoadTest, MissingFileFailsToLoad) {
       "[ GTE :: UnableToLoadModel ]");
 }
 
+// The scheduler announces a job (jobStarting) under its admission lock and only
+// then marks it active, so a cancel can arrive before process() starts. These
+// tests drive the model through that exact sequence; no model file is needed:
+// a cancelled job ends before the (lazy) load, and a job that is not cancelled
+// proceeds to load and fails on the missing file instead.
+TEST(DecisionEngineCancelTest, CancelBeforeProcessReachesTheJob) {
+  DecisionEngineModel model("/nonexistent/decision.gguf", {{"device", "cpu"}});
+  model.jobStarting(7);
+  model.cancelById(7);
+  EXPECT_EQ(
+      outcomeOf([&] { model.process(std::string("{}"), 7); }), "Job cancelled");
+}
+
+TEST(DecisionEngineCancelTest, WholeModelCancelBeforeProcessReachesTheJob) {
+  DecisionEngineModel model("/nonexistent/decision.gguf", {{"device", "cpu"}});
+  model.jobStarting(9);
+  model.cancel();
+  EXPECT_EQ(
+      outcomeOf([&] { model.process(std::string("{}"), 9); }), "Job cancelled");
+}
+
+TEST(DecisionEngineCancelTest, CancelDoesNotLeakToOtherJobs) {
+  DecisionEngineModel model("/nonexistent/decision.gguf", {{"device", "cpu"}});
+  model.jobStarting(1);
+  model.jobStarting(2);
+  model.cancelById(1);
+  EXPECT_EQ(
+      outcomeOf([&] { model.process(std::string("{}"), 1); }), "Job cancelled");
+  // Late cancels for a finished job, and a whole-model cancel with nothing
+  // announced, are no-ops: job 3 is announced afterwards and is not hit.
+  model.cancelById(1);
+  model.jobStarting(3);
+  // Jobs 2 and 3 were never cancelled: they go on to load, which fails on the
+  // missing file (not a cancellation).
+  EXPECT_EQ(
+      outcomeOf([&] { model.process(std::string("{}"), 2); }),
+      "[ GTE :: UnableToLoadModel ]");
+  EXPECT_EQ(
+      outcomeOf([&] { model.process(std::string("{}"), 3); }),
+      "[ GTE :: UnableToLoadModel ]");
+}
+
+// The bridge validates slot and batch counts itself: direct C callers bypass
+// the addon's option checks. Validation runs before the model file is read.
+TEST(DecisionBridgeTest, RejectsUnusableSlotAndBatchCountsBeforeLoading) {
+  for (const char* params :
+       {R"({"model":"/nonexistent.gguf","n_parallel":0})",
+        R"({"model":"/nonexistent.gguf","n_parallel":-1})",
+        R"({"model":"/nonexistent.gguf","n_batch":0})",
+        R"({"model":"/nonexistent.gguf","n_ubatch":0})",
+        R"({"model":"/nonexistent.gguf","n_ctx":-1})"}) {
+    qvac_fabric_decision* engine = nullptr;
+    char* error = nullptr;
+    const int status = qvac_fabric_decision_create(params, &engine, &error);
+    const std::string message = error != nullptr ? error : "";
+    qvac_fabric_decision_free_string(error);
+    EXPECT_EQ(status, QVAC_FABRIC_DECISION_INVALID_REQUEST) << params;
+    EXPECT_EQ(engine, nullptr) << params;
+    EXPECT_NE(message.find("must be"), std::string::npos) << message;
+  }
+}
+
 /// Needs the openjev fixture, see fixture().
 class DecisionEngineModelTest : public ::testing::Test {
 protected:
@@ -165,6 +250,10 @@ protected:
     }
     model_ = std::make_unique<DecisionEngineModel>(path, deviceConfig());
     model_->waitForLoadInitialization();
+  }
+
+  std::string run(const std::string& request) {
+    return std::any_cast<DecisionEngineResult>(model_->process(request)).json;
   }
 
   std::unique_ptr<DecisionEngineModel> model_;
@@ -178,7 +267,7 @@ TEST_F(DecisionEngineModelTest, ReportsCapabilities) {
 }
 
 TEST_F(DecisionEngineModelTest, AnswersAllQuestionTypes) {
-  const json res = json::parse(model_->predict(kRequest).json);
+  const json res = json::parse(run(kRequest));
   const json& answers = res.at("answers");
   EXPECT_EQ(answers.at("route").at("type"), "choice");
   EXPECT_EQ(answers.at("route").at("probabilities").size(), 2U);
@@ -188,14 +277,11 @@ TEST_F(DecisionEngineModelTest, AnswersAllQuestionTypes) {
 }
 
 TEST_F(DecisionEngineModelTest, InvalidRequestsMapToInvalidRequest) {
-  EXPECT_EQ(
-      codeOf([&] { model_->predict("{not json"); }),
-      "[ GTE :: InvalidRequest ]");
+  EXPECT_EQ(codeOf([&] { run("{not json"); }), "[ GTE :: InvalidRequest ]");
   const std::string deep =
       R"({"state":)" + std::string(129, '[') + std::string(129, ']') +
       R"(,"questions":{"q":{"type":"noul","instructions":"?"}}})";
-  EXPECT_EQ(
-      codeOf([&] { model_->predict(deep); }), "[ GTE :: InvalidRequest ]");
+  EXPECT_EQ(codeOf([&] { run(deep); }), "[ GTE :: InvalidRequest ]");
 }
 
 TEST_F(DecisionEngineModelTest, CancelledRunThrowsJobCancelledThenRecovers) {
@@ -208,7 +294,7 @@ TEST_F(DecisionEngineModelTest, CancelledRunThrowsJobCancelledThenRecovers) {
   });
   std::string outcome;
   try {
-    model_->predict(kRequest);
+    run(kRequest);
     outcome = "finished";
   } catch (const std::runtime_error& e) {
     outcome = e.what();
@@ -218,6 +304,6 @@ TEST_F(DecisionEngineModelTest, CancelledRunThrowsJobCancelledThenRecovers) {
   EXPECT_TRUE(outcome == "Job cancelled" || outcome == "finished") << outcome;
 
   // No stale stop signal: the next request answers.
-  const json res = json::parse(model_->predict(kRequest).json);
+  const json res = json::parse(run(kRequest));
   EXPECT_TRUE(res.contains("answers"));
 }

@@ -31,6 +31,7 @@
 #include <inference-addon-cpp/addon/AddonJs.hpp>
 #include <inference-addon-cpp/handlers/JsOutputHandlerImplementations.hpp>
 #include <inference-addon-cpp/handlers/OutputHandler.hpp>
+#include <inference-addon-cpp/job/MultiJobScheduler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
 #include "model-interface/BertModel.hpp"
@@ -592,11 +593,42 @@ struct JsDecisionEngineOutputHandler
             }) {}
 };
 
+/// Like createModelInstance, but drives the model through a one-slot
+/// MultiJobScheduler: jobs carry ids, the model creates each job's
+/// cancellation token in jobStarting() under the scheduler's admission lock,
+/// and a cancel that lands before process() starts reaches that token instead
+/// of being lost. Args: [jsHandle, { path, config, backendsDir },
+/// outputCallback].
 inline js_value_t*
 createDecisionEngineInstance(js_env_t* env, js_callback_info_t* info) try {
-  return createModelInstance<
-      DecisionEngineModel,
-      JsDecisionEngineOutputHandler>(env, info);
+  using namespace qvac_lib_inference_addon_cpp;
+  using namespace std;
+
+  JsArgsParser args(env, info);
+  auto model = make_unique<DecisionEngineModel>(
+      args.getMapEntry(1, "path"),
+      args.getSubmap(1, "config"),
+      args.getMapEntry(1, "backendsDir"));
+
+  // One request at a time per engine, as the JS runner admits; raw model
+  // pointers stay valid: AddonCpp owns the model for the scheduler's lifetime.
+  auto scheduler = make_unique<MultiJobScheduler>(
+      static_cast<model::IModelMultiprocessor*>(model.get()),
+      1U,
+      static_cast<model::IModelCancel*>(model.get()),
+      static_cast<model::IModelCancelById*>(model.get()));
+
+  out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
+  outHandlers.add(make_shared<JsDecisionEngineOutputHandler>());
+  unique_ptr<OutputCallBackInterface> callback = make_unique<OutputCallBackJs>(
+      env,
+      args.get(0, "jsHandle"),
+      args.getFunction(2, "outputCallback"),
+      std::move(outHandlers));
+
+  auto addon = make_unique<AddonJs>(
+      env, std::move(callback), std::move(model), std::move(scheduler));
+  return JsInterface::createInstance(env, std::move(addon));
 }
 JSCATCH
 

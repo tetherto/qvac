@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstdlib>
+#include <new>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
@@ -117,7 +118,10 @@ std::string DecisionEngineModel::paramsJson(
             "device must be 'gpu' or 'cpu', got '%s'", device.c_str()));
   }
   if (device == "cpu") {
+    // CPU means CPU for the projector too: upstream defaults mmproj_use_gpu
+    // to true, which would run media encoding on the GPU.
     p["n_gpu_layers"] = 0;
+    p["mmproj_use_gpu"] = false;
   } else if (
       const std::string v = firstOf(config, {"gpu_layers", "gpu-layers"});
       !v.empty()) {
@@ -157,7 +161,9 @@ std::string DecisionEngineModel::paramsJson(
 DecisionEngineModel::DecisionEngineModel(
     const std::string& modelGgufPath,
     const std::unordered_map<std::string, std::string>& config,
-    const std::string& /*backendsDir*/) {
+    const std::string& backendsDir)
+    : backendsDir_(backendsDir),
+      openclCacheDir_(firstOf(config, {"openclCacheDir"})) {
   // Validate the options now, so a bad key fails at creation like LayaModel;
   // the model itself loads on activate().
   std::string params = paramsJson(modelGgufPath, config);
@@ -168,12 +174,22 @@ DecisionEngineModel::DecisionEngineModel(
 }
 
 DecisionEngineModel::~DecisionEngineModel() {
-  // Cancels a run still in flight and joins the engine's loop thread.
+  // Cancels a run still in flight and joins the engine's loop thread; the
+  // backends handle is released afterwards, with the members.
   qvac_fabric_decision_destroy(engine_);
   engine_ = nullptr;
+  for (auto& [id, token] : tokens_) {
+    qvac_fabric_decision_cancel_release(token);
+  }
+  tokens_.clear();
 }
 
 void DecisionEngineModel::load(const std::string& paramsJson) {
+  // The addon's shared backend initializer: loads the backends once, routes
+  // llama logs to the addon logger and, on Android, points the OpenCL kernel
+  // cache at openclCacheDir. It must run before the engine is created.
+  backends_.emplace(backendsDir_, openclCacheDir_);
+
   char* error = nullptr;
   qvac_fabric_decision* engine = nullptr;
   const int status =
@@ -201,24 +217,86 @@ std::string DecisionEngineModel::info() {
   return info_;
 }
 
-std::any DecisionEngineModel::process(const std::any& input) {
+namespace {
+const std::string& requestOf(const std::any& input) {
   if (input.type() != typeid(std::string)) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
         "DecisionEngineModel::process: the input must be the request JSON "
         "string");
   }
-  return predict(std::any_cast<const std::string&>(input));
+  return std::any_cast<const std::string&>(input);
+}
+} // namespace
+
+std::any DecisionEngineModel::process(const std::any& input) {
+  jobStarting(qvac_lib_inference_addon_cpp::kNoJobId);
+  return process(input, qvac_lib_inference_addon_cpp::kNoJobId);
+}
+
+std::any DecisionEngineModel::process(const std::any& input, JobId id) {
+  qvac_fabric_decision_cancel* token = nullptr;
+  try {
+    const std::string& request = requestOf(input);
+    token = retainToken(id);
+    DecisionEngineResult result = predict(request, id);
+    finishJob(id, token);
+    return result;
+  } catch (...) {
+    finishJob(id, token);
+    throw;
+  }
+}
+
+void DecisionEngineModel::jobStarting(JobId id) {
+  qvac_fabric_decision_cancel* token = qvac_fabric_decision_cancel_create();
+  if (token == nullptr) {
+    throw std::bad_alloc();
+  }
+  std::lock_guard<std::mutex> lock(tokensMutex_);
+  if (auto it = tokens_.find(id); it != tokens_.end()) {
+    qvac_fabric_decision_cancel_release(it->second);
+  }
+  tokens_[id] = token;
+}
+
+qvac_fabric_decision_cancel* DecisionEngineModel::retainToken(JobId id) {
+  std::lock_guard<std::mutex> lock(tokensMutex_);
+  auto it = tokens_.find(id);
+  if (it == tokens_.end()) {
+    it = tokens_.emplace(id, qvac_fabric_decision_cancel_create()).first;
+  }
+  qvac_fabric_decision_cancel_retain(it->second);
+  return it->second;
+}
+
+void DecisionEngineModel::finishJob(
+    JobId id, qvac_fabric_decision_cancel* token) {
+  // Job ids are not reused while a job is announced, so the entry for id is
+  // this job's even if process() failed before taking its own reference.
+  std::lock_guard<std::mutex> lock(tokensMutex_);
+  if (auto it = tokens_.find(id); it != tokens_.end()) {
+    qvac_fabric_decision_cancel_release(it->second);
+    tokens_.erase(it);
+  }
+  if (token != nullptr) {
+    qvac_fabric_decision_cancel_release(token);
+  }
 }
 
 DecisionEngineResult
-DecisionEngineModel::predict(const std::string& requestJson) {
-  initLoader_.waitForLoadInitialization();
-
-  qvac_fabric_decision_cancel* token = qvac_fabric_decision_cancel_create();
-  {
-    std::lock_guard<std::mutex> lock(cancelMutex_);
-    running_ = token;
+DecisionEngineModel::predict(const std::string& requestJson, JobId id) {
+  qvac_fabric_decision_cancel* token = retainToken(id);
+  // Cancelled between jobStarting() and now: end without loading or running.
+  if (qvac_fabric_decision_cancel_is_requested(token) != 0) {
+    qvac_fabric_decision_cancel_release(token);
+    throw std::runtime_error("Job cancelled");
+  }
+  try {
+    initLoader_.waitForLoadInitialization();
+  } catch (...) {
+    qvac_fabric_decision_cancel_release(token);
+    throw;
   }
 
   const auto start = std::chrono::steady_clock::now();
@@ -230,10 +308,6 @@ DecisionEngineModel::predict(const std::string& requestJson) {
                 std::chrono::steady_clock::now() - start)
                 .count();
 
-  {
-    std::lock_guard<std::mutex> lock(cancelMutex_);
-    running_ = nullptr;
-  }
   qvac_fabric_decision_cancel_release(token);
 
   switch (status) {
@@ -279,9 +353,18 @@ DecisionEngineModel::runtimeStats() const {
   return stats;
 }
 
+void DecisionEngineModel::cancelById(JobId id) const {
+  std::lock_guard<std::mutex> lock(tokensMutex_);
+  if (auto it = tokens_.find(id); it != tokens_.end()) {
+    qvac_fabric_decision_cancel_request(it->second);
+  }
+}
+
 void DecisionEngineModel::cancel() const {
-  std::lock_guard<std::mutex> lock(cancelMutex_);
-  qvac_fabric_decision_cancel_request(running_);
+  std::lock_guard<std::mutex> lock(tokensMutex_);
+  for (const auto& [id, token] : tokens_) {
+    qvac_fabric_decision_cancel_request(token);
+  }
 }
 
 void DecisionEngineModel::setWeightsForFile(

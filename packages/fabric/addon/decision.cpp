@@ -162,6 +162,23 @@ void applyParams(const common_json& p, common_params& params) {
   params.n_gpu_layers = p.value("n_gpu_layers", params.n_gpu_layers);
   params.cpuparams.n_threads = p.value("n_threads", params.cpuparams.n_threads);
   params.sleep_idle_seconds = p.value("sleep_idle_seconds", -1);
+  params.mmproj_use_gpu = p.value("mmproj_use_gpu", params.mmproj_use_gpu);
+
+  // Upstream creates one execution slot per n_parallel and does not check it
+  // (the context's sequence count is clamped to at least one, the slot list
+  // is not): with 0 slots every request stays deferred forever. Batch sizes
+  // of 0 cannot hold a token either.
+  if (params.n_parallel < 1) {
+    throw std::invalid_argument("\"n_parallel\" must be at least 1");
+  }
+  if (params.n_batch < 1 || params.n_ubatch < 1) {
+    throw std::invalid_argument(
+        "\"n_batch\" and \"n_ubatch\" must be at least 1");
+  }
+  if (params.n_ctx < 0) {
+    throw std::invalid_argument(
+        "\"n_ctx\" must be 0 (model default) or positive");
+  }
   if (p.contains("lora")) {
     for (const auto& item : p.at("lora")) {
       common_adapter_lora_info lora{};
@@ -384,6 +401,11 @@ qvac_fabric_decision_cancel_request(qvac_fabric_decision_cancel* c) {
   if (c != nullptr) {
     c->requested.store(true, std::memory_order_release);
   }
+}
+
+QVAC_FABRIC_API int
+qvac_fabric_decision_cancel_is_requested(const qvac_fabric_decision_cancel* c) {
+  return c != nullptr && c->requested.load(std::memory_order_acquire) ? 1 : 0;
 }
 
 QVAC_FABRIC_API int qvac_fabric_decision_run(

@@ -157,6 +157,7 @@ test('fabric exports the decision bridge and keeps upstream server internals pri
     'qvac_fabric_decision_cancel_retain',
     'qvac_fabric_decision_cancel_release',
     'qvac_fabric_decision_cancel_request',
+    'qvac_fabric_decision_cancel_is_requested',
     'qvac_fabric_decision_run',
     'qvac_fabric_decision_destroy',
     'qvac_fabric_decision_free_string'
