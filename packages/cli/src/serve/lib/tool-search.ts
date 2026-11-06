@@ -28,6 +28,11 @@ type DrainedTurn = {
  * client has no handler for the SDK's own tool, so surfacing it would strand
  * the conversation.
  */
+/** A `tool_search` call serve answers itself; it never reaches the client. */
+export function isInternalToolSearch(tools: Tool[] | undefined, call: ToolCall): boolean {
+  return defersAny(tools) && call.name === TOOL_SEARCH_NAME
+}
+
 export function stripToolSearchCalls<T extends DrainedTurn>(
   tools: Tool[] | undefined,
   drained: T

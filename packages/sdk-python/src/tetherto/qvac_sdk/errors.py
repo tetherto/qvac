@@ -408,7 +408,7 @@ class ModelRegistryModelNotFoundError(QvacError):
 class InvalidDeleteCacheParamsError(QvacError):
     def __init__(self, *, cause: Any = None) -> None:
         super().__init__(
-            "deleteCache needs either all=True or kv_cache_key",
+            "deleteCache needs all=True, auto=True, kv_cache_key or model_src",
             name="INVALID_DELETE_CACHE_PARAMS",
             code=_CODE_INVALID_DELETE_CACHE_PARAMS,
             cause=cause,

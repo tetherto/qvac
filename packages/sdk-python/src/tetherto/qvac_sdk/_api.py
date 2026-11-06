@@ -85,8 +85,6 @@ from .schemas import (
 
 # Contract enum values; tests/test_api_literals.py holds them to the generated models.
 ModelFitPolicy = Literal["log", "refuse", "off"]
-ModelFitExecution = Literal["sequential", "concurrent"]
-ModelFitHeadroomPolicy = Literal["interactive-v1"]
 
 
 def _dump(model: Any) -> dict[str, Any]:
@@ -197,7 +195,7 @@ def _reject_unknown_config_keys(payload: dict[str, Any], request: Any) -> None:
     if unknown:
         named = ", ".join(repr(key) for key in unknown)
         raise RequestValidationError(
-            f"modelConfig has no {named} for modelType " f"{payload.get('modelType')!r}"
+            f"modelConfig has no {named} for modelType {payload.get('modelType')!r}"
         )
 
 
@@ -348,12 +346,10 @@ async def assess_model_fit(
     transport: Transport,
     *,
     models: list[dict[str, Any]],
-    execution: ModelFitExecution | None = None,
-    policy: ModelFitHeadroomPolicy | None = None,
 ) -> AssessModelFitResponse:
     """Ergonomic assessModelFit mirroring JS's `client/api/assess-model-fit.ts`:
-    whether the given models are likely to fit in this device's memory, judged
-    before anything is downloaded.
+    whether the given models fit in this device's memory when loaded together,
+    without downloading them.
 
     - `models` holds one dict per candidate, keyed like `load_model`'s own
       arguments: `model_src`, `model_type`, `model_config`, plus the fit-only
@@ -362,13 +358,18 @@ async def assess_model_fit(
     - `model_src` accepts a plain string, a ModelConstant, or a descriptor
       dict. `model_type` may be omitted when the descriptor names its engine
       (raises ModelTypeRequiredError otherwise).
-    - `execution` is "sequential" (the default) or "concurrent": whether the
-      models are assumed to run one at a time or all at once.
-    - `policy` names the headroom policy, how much of the free memory is held
-      back. Unset uses the worker's default, "interactive-v1".
 
-    Advisory only: nothing is downloaded, reserved, or blocked. An `unknown`
-    verdict means the evidence supports no answer either way.
+    Each model's engine fitter runs against the registry's weightless
+    description of the model, or the model itself when it is on disk. The
+    memory each load takes is summed per device and compared against what is
+    free. The result carries the verdict for the set ("fits", "does-not-fit"
+    or "unknown") and each model's own verdict and stats. `unknown` is the
+    answer for a load that would start but cannot be sized: an engine with no
+    fitter, a load the fitter cannot project, a model with no registry
+    description that is not on disk, or a device that reported no free memory.
+    A load that load_model would refuse raises the same error: no plugin for
+    the model type, a config the plugin refuses, or a model the fitter cannot
+    read.
     """
     try:
         # A loop, so the alias warning's stacklevel sees no comprehension frame.
@@ -376,10 +377,6 @@ async def assess_model_fit(
         for candidate in models:
             candidates.append(_fit_candidate_to_wire(candidate))
         payload: dict[str, Any] = {"type": "assessModelFit", "models": candidates}
-        if execution is not None:
-            payload["execution"] = execution
-        if policy is not None:
-            payload["policy"] = policy
         request = AssessModelFitRequest.model_validate(payload)
     except ValidationError as error:
         raise RequestValidationError(
@@ -716,19 +713,24 @@ async def delete_cache(
     auto: bool | None = None,
     kv_cache_key: str | None = None,
     model_id: str | None = None,
+    model_src: str | None = None,
 ) -> dict[str, bool]:
-    """Delete KV cache files.
+    """Delete KV cache files, or a registry model's cached download.
 
     ``all`` wipes the cache root, caller-owned named caches included. ``auto``
     reclaims only the engine-generated automatic caches that no request is
     using, covering the whole cache directory — which is shared by every QVAC
     process under the same home directory. ``kv_cache_key`` targets one key,
-    optionally narrowed to one ``model_id``.
+    optionally narrowed to one ``model_id``. ``model_src`` takes a
+    ``registry://`` source and deletes its cached files plus the registry
+    blocks a cancelled or failed download kept for resume.
     """
     if all:
         payload: dict[str, Any] = {"type": "deleteCache", "all": True}
     elif auto:
         payload = {"type": "deleteCache", "auto": True}
+    elif model_src is not None:
+        payload = {"type": "deleteCache", "modelSrc": model_src}
     elif kv_cache_key is not None:
         payload = {"type": "deleteCache", "kvCacheKey": kv_cache_key}
         if model_id is not None:
