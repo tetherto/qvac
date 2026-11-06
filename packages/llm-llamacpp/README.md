@@ -68,7 +68,7 @@ On an XDNA2 NPU (Strix Point, Strix Halo, Krackan) with XRT 2.25 or newer instal
 - A vision model's projector follows the selection onto the NPU; untested there. Set
   `mmproj-use-gpu: false` to keep it on the CPU.
 - The backend is built around Qwen3.5. A model whose `ssm_out` quantization the fused decode
-  layer does not cover, such as a stock Qwen3.5-0.8B `Q4_K_M` with `Q8_0` `ssm_out`, fails at
+  layer does not cover, such as Qwen's own Qwen3.5-0.8B `Q4_K_M` GGUF with `Q8_0` `ssm_out`, fails at
   the first decode with `unsupported fused weight set` instead of falling back. Requantize
   `ssm_out` or use another backend.
 - Keep flash attention on (the default) and the KV cache at `f16` (the default on XDNA); the
