@@ -256,9 +256,11 @@ export function impacted({ result, include, json }) {
       `This smoke run additionally covers **${added.length}** test(s) that are not tagged \`smoke\`, adding ` +
         `roughly **${count(report.addedMinutes)} min**.`
     )
-  } else if (affected)
+  } else if (affected) {
     lines.push('Every test this PR touched is already covered by the smoke suite.')
-  else lines.push('No test could be attributed to the changed files listed below.')
+  } else {
+    lines.push('No test could be attributed to the changed files listed below.')
+  }
   lines.push(
     '',
     `**Catalog:** ${count(report.catalog)} tests · **smoke:** ${count(report.smoke)} · ` +
@@ -270,8 +272,9 @@ export function impacted({ result, include, json }) {
   )
   if (attribution.length) {
     lines.push('| Changed file | Matched via | Tests |', '| --- | --- | --- |')
-    for (const e of attribution)
+    for (const e of attribution) {
       lines.push(`| \`${strip(e.file)}\` | ${e.via} | ${count(e.tests)} |`)
+    }
     lines.push('')
   }
   if (added.length) {
@@ -341,7 +344,11 @@ export async function plan(env) {
       inference: list('inference-version', env.INFERENCE_VERSION)
     }
     const tests = list('filter', env.FILTER)
-    const rows = (rs) => rs.map((r) => ({ ...r, suite: encodeOptions(suite, options), tests }))
+    // The dispatch's suite and options are the SDK's; sdk-python and sdk-kotlin keep the suite their label gives them.
+    const rows = (rs) =>
+      rs.map((r) =>
+        r.project === '@qvac/sdk' ? { ...r, suite: encodeOptions(suite, options), tests } : r
+      )
     return output(env, {
       mode: 'dispatch',
       suite,
