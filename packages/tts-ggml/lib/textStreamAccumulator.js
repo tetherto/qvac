@@ -58,15 +58,20 @@ async function* accumulateTextStream(source, options = {}) {
             resolve();
         }
     }
+    // The pump reads the source on its own; once the consumer stops (returns,
+    // breaks or throws) it must stop reading and close the source.
+    const iterator = source[Symbol.asyncIterator]();
+    let closed = false;
+    let sourceDone = false;
+    let idleTimer = null;
+    function clearIdle() {
+        if (idleTimer) {
+            clearTimeout(idleTimer);
+            idleTimer = null;
+        }
+    }
     void (async function pump() {
         let buffer = "";
-        let idleTimer = null;
-        function clearIdle() {
-            if (idleTimer) {
-                clearTimeout(idleTimer);
-                idleTimer = null;
-            }
-        }
         function armIdle() {
             clearIdle();
             idleTimer = setTimeout(() => {
@@ -79,7 +84,15 @@ async function* accumulateTextStream(source, options = {}) {
             }, flushAfterMs);
         }
         try {
-            for await (const fragment of source) {
+            while (true) {
+                const step = await iterator.next();
+                if (closed)
+                    return;
+                if (step.done) {
+                    sourceDone = true;
+                    break;
+                }
+                const fragment = step.value;
                 clearIdle();
                 buffer += String(fragment);
                 while ((0, textChunker_1.countScalars)(buffer) >= maxScalars) {
@@ -103,21 +116,34 @@ async function* accumulateTextStream(source, options = {}) {
             push({ kind: "done" });
         }
         catch (error) {
+            sourceDone = true;
             clearIdle();
-            push({ kind: "err", error });
+            if (!closed)
+                push({ kind: "err", error });
         }
     })();
-    while (true) {
-        while (queue.length === 0) {
-            await new Promise((resolve) => {
-                notify = resolve;
-            });
+    try {
+        while (true) {
+            while (queue.length === 0) {
+                await new Promise((resolve) => {
+                    notify = resolve;
+                });
+            }
+            const item = queue.shift();
+            if (!item || item.kind === "done")
+                return;
+            if (item.kind === "err")
+                throw item.error;
+            yield item.text;
         }
-        const item = queue.shift();
-        if (!item || item.kind === "done")
-            return;
-        if (item.kind === "err")
-            throw item.error;
-        yield item.text;
+    }
+    finally {
+        closed = true;
+        clearIdle();
+        if (!sourceDone) {
+            sourceDone = true;
+            // A pending next() may still settle; the pump ignores it once closed.
+            void Promise.resolve(iterator.return?.()).catch(() => { });
+        }
     }
 }
