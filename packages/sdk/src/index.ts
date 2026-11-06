@@ -31,6 +31,7 @@ export {
   textToSpeechStream,
   getModelInfo,
   getLoadedModelInfo,
+  rpcServerStatusStream,
   startRpcServer,
   stopRpcServer,
   discoverRpcServers,
@@ -424,6 +425,9 @@ export type {
 } from '@qvac/inference/surface'
 
 export type {
+  RpcServerStatus,
+  RpcServerStatusEvent,
+  RpcServerStatusStreamOptions,
   StartRpcServerOptions,
   StopRpcServerOptions,
   DiscoverRpcServersOptions,

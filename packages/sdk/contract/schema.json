@@ -107,6 +107,9 @@
           "$ref": "#/$defs/resume.request"
         },
         {
+          "$ref": "#/$defs/rpcServerStatusStream.request"
+        },
+        {
           "$ref": "#/$defs/startRpcServer.request"
         },
         {
@@ -267,6 +270,9 @@
         },
         {
           "$ref": "#/$defs/resume.response"
+        },
+        {
+          "$ref": "#/$defs/rpcServerStatusStream.response"
         },
         {
           "$ref": "#/$defs/startRpcServer.response"
@@ -7342,6 +7348,16 @@
       "title": "DiscoverRpcServersRequest",
       "type": "object",
       "properties": {
+        "lanAddresses": {
+          "description": "Explicit local private IPv4 addresses. Bypasses automatic adapter-name selection only. Each address must be noninternal with a valid host address and subnet mask. This cannot prove an adapter is physical.",
+          "minItems": 1,
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?:10\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])|172\\.(?:1[6-9]|2[0-9]|3[01])|192\\.168)\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$"
+          }
+        },
         "topic": {
           "type": "string",
           "minLength": 1,
@@ -23519,12 +23535,113 @@
       "required": ["type"],
       "additionalProperties": false
     },
+    "rpcServerStatusStream.request": {
+      "title": "RpcServerStatusStreamRequest",
+      "type": "object",
+      "properties": {
+        "serverId": {
+          "description": "Observe one owned server, or all servers when omitted.",
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "const": "rpcServerStatusStream"
+        }
+      },
+      "required": ["type"]
+    },
+    "rpcServerStatusStream.response": {
+      "title": "RpcServerStatusStreamResponse",
+      "type": "object",
+      "properties": {
+        "serverId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "nativeState": {
+          "type": "string",
+          "enum": ["owned", "stopped"],
+          "title": "RpcServerStatusStreamResponseNativeState"
+        },
+        "advertisement": {
+          "type": "string",
+          "enum": ["inactive", "starting", "advertising", "suspended", "failed"],
+          "title": "RpcServerStatusStreamResponseAdvertisement"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "recovery": {
+          "type": "string",
+          "enum": ["none", "resume", "restart"],
+          "title": "RpcServerStatusStreamResponseRecovery"
+        },
+        "error": {
+          "description": "Structured advertisement failure, including the original cause.",
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "error"
+            },
+            "message": {
+              "type": "string"
+            },
+            "stack": {
+              "type": "string"
+            },
+            "timestamp": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "code": {
+              "type": "number"
+            },
+            "cause": {},
+            "typedFields": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {},
+              "title": "RpcServerStatusStreamResponseErrorTypedFields"
+            }
+          },
+          "required": ["type", "message"],
+          "additionalProperties": false,
+          "title": "RpcServerStatusStreamResponseError"
+        },
+        "type": {
+          "type": "string",
+          "const": "rpcServerStatusStream"
+        }
+      },
+      "required": ["serverId", "url", "nativeState", "advertisement", "reason", "recovery", "type"],
+      "additionalProperties": false
+    },
     "startRpcServer.request": {
       "title": "StartRpcServerRequest",
       "type": "object",
       "properties": {
+        "lanAddresses": {
+          "description": "Explicit local private IPv4 addresses. Bypasses automatic adapter-name selection only. Each address must be noninternal with a valid host address and subnet mask. This cannot prove an adapter is physical.",
+          "minItems": 1,
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?:10\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])|172\\.(?:1[6-9]|2[0-9]|3[01])|192\\.168)\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$"
+          }
+        },
         "host": {
-          "description": "IPv4 bind address. Defaults to 127.0.0.1.",
+          "description": "IPv4 bind address. Defaults to 127.0.0.1. With discoveryTopic and allowNonLoopbackHost: true, omission selects the only eligible private IPv4 Wi-Fi or Ethernet address. Multiple eligible addresses require an explicit host.",
           "type": "string",
           "minLength": 1
         },

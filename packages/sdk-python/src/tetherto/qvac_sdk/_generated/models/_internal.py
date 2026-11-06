@@ -6373,7 +6373,25 @@ class DiffusionStreamResponse(GeneratedBaseModel):
     ] = None
 
 
+class LanAddress(RootModel[str]):
+    root: Annotated[
+        str,
+        Field(
+            pattern="^(?:10\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])|172\\.(?:1[6-9]|2[0-9]|3[01])|192\\.168)\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])$"
+        ),
+    ]
+
+
 class DiscoverRpcServersRequest(GeneratedBaseModel):
+    lan_addresses: Annotated[
+        list[LanAddress] | None,
+        Field(
+            alias="lanAddresses",
+            description="Explicit local private IPv4 addresses. Bypasses automatic adapter-name selection only. Each address must be noninternal with a valid host address and subnet mask. This cannot prove an adapter is physical.",
+            max_length=8,
+            min_length=1,
+        ),
+    ] = None
     topic: Annotated[
         str,
         Field(
@@ -23740,6 +23758,91 @@ class ResumeResponse(GeneratedBaseModel):
     type: Literal["resume"] = "resume"
 
 
+class RpcServerStatusStreamRequest(GeneratedBaseModel):
+    server_id: Annotated[
+        str | None,
+        Field(
+            alias="serverId",
+            description="Observe one owned server, or all servers when omitted.",
+            min_length=1,
+        ),
+    ] = None
+    type: Literal["rpcServerStatusStream"] = "rpcServerStatusStream"
+
+
+class RpcServerStatusStreamResponseNativeState(Enum):
+    owned = "owned"
+    stopped = "stopped"
+
+
+class RpcServerStatusStreamResponseAdvertisement(Enum):
+    inactive = "inactive"
+    starting = "starting"
+    advertising = "advertising"
+    suspended = "suspended"
+    failed = "failed"
+
+
+class RpcServerStatusStreamResponseRecovery(Enum):
+    none = "none"
+    resume = "resume"
+    restart = "restart"
+
+
+class RpcServerStatusStreamResponseErrorTypedFields(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any], Field(title="RpcServerStatusStreamResponseErrorTypedFields")
+    ]
+
+
+class RpcServerStatusStreamResponseError(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["error"] = "error"
+    message: str
+    stack: str | None = None
+    timestamp: str | None = None
+    name: str | None = None
+    code: float | None = None
+    cause: Any | None = None
+    typed_fields: Annotated[
+        RpcServerStatusStreamResponseErrorTypedFields | None,
+        Field(
+            alias="typedFields", title="RpcServerStatusStreamResponseErrorTypedFields"
+        ),
+    ] = None
+
+
+class RpcServerStatusStreamResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    server_id: Annotated[str, Field(alias="serverId", min_length=1)]
+    url: Annotated[str, Field(min_length=1)]
+    native_state: Annotated[
+        RpcServerStatusStreamResponseNativeState,
+        Field(alias="nativeState", title="RpcServerStatusStreamResponseNativeState"),
+    ]
+    advertisement: Annotated[
+        RpcServerStatusStreamResponseAdvertisement,
+        Field(title="RpcServerStatusStreamResponseAdvertisement"),
+    ]
+    reason: str
+    recovery: Annotated[
+        RpcServerStatusStreamResponseRecovery,
+        Field(title="RpcServerStatusStreamResponseRecovery"),
+    ]
+    error: Annotated[
+        RpcServerStatusStreamResponseError | None,
+        Field(
+            description="Structured advertisement failure, including the original cause.",
+            title="RpcServerStatusStreamResponseError",
+        ),
+    ] = None
+    type: Literal["rpcServerStatusStream"] = "rpcServerStatusStream"
+
+
 class Device(RootModel[str]):
     root: Annotated[
         str, Field(description="Native server devices, in caller order.", min_length=1)
@@ -23758,9 +23861,21 @@ class Device1(RootModel[list[Device1Item]]):
 
 
 class StartRpcServerRequest(GeneratedBaseModel):
+    lan_addresses: Annotated[
+        list[LanAddress] | None,
+        Field(
+            alias="lanAddresses",
+            description="Explicit local private IPv4 addresses. Bypasses automatic adapter-name selection only. Each address must be noninternal with a valid host address and subnet mask. This cannot prove an adapter is physical.",
+            max_length=8,
+            min_length=1,
+        ),
+    ] = None
     host: Annotated[
         str | None,
-        Field(description="IPv4 bind address. Defaults to 127.0.0.1.", min_length=1),
+        Field(
+            description="IPv4 bind address. Defaults to 127.0.0.1. With discoveryTopic and allowNonLoopbackHost: true, omission selects the only eligible private IPv4 Wi-Fi or Ethernet address. Multiple eligible addresses require an explicit host.",
+            min_length=1,
+        ),
     ] = None
     port: Annotated[
         int | None,
@@ -26837,6 +26952,7 @@ class Request(
         | Request_6
         | RerankRequest
         | ResumeRequest
+        | RpcServerStatusStreamRequest
         | StartRpcServerRequest
         | StateRequest
         | StopRpcServerRequest
@@ -26888,6 +27004,7 @@ class Request(
         | Request_6
         | RerankRequest
         | ResumeRequest
+        | RpcServerStatusStreamRequest
         | StartRpcServerRequest
         | StateRequest
         | StopRpcServerRequest
@@ -26974,6 +27091,7 @@ class Response(
         | RagProgressResponse
         | RerankResponse
         | ResumeResponse
+        | RpcServerStatusStreamResponse
         | StartRpcServerResponse
         | StateResponse
         | StopRpcServerResponse
@@ -27029,6 +27147,7 @@ class Response(
         | RagProgressResponse
         | RerankResponse
         | ResumeResponse
+        | RpcServerStatusStreamResponse
         | StartRpcServerResponse
         | StateResponse
         | StopRpcServerResponse

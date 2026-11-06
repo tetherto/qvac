@@ -17,11 +17,13 @@ from tetherto.qvac_sdk import (
 )
 from tetherto.qvac_sdk.methods import (
     discover_rpc_servers,
+    rpc_server_status_stream,
     start_rpc_server,
     stop_rpc_server,
 )
 from tetherto.qvac_sdk.schemas import (
     DiscoverRpcServersRequest,
+    RpcServerStatusStreamRequest,
     StartRpcServerRequest,
     StopRpcServerRequest,
 )
@@ -267,6 +269,142 @@ async def rpc_server_cancel_discovery(
         await asyncio.gather(selected, other, return_exceptions=True)
 
 
+def _status_stream(transport: Any, server_id: str) -> Any:
+    return rpc_server_status_stream(
+        transport,
+        RpcServerStatusStreamRequest(type="rpcServerStatusStream", server_id=server_id),
+    )
+
+
+async def _close_status_stream(stream: Any) -> None:
+    # Cancel a quiet read to unwind the nested transport stream before closing the wrapper.
+    quiet = asyncio.create_task(anext(stream))
+    await asyncio.sleep(0)
+    quiet.cancel()
+    with suppress(asyncio.CancelledError, StopAsyncIteration):
+        await quiet
+    await stream.aclose()
+
+
+async def rpc_server_status_lifecycle(
+    resources: Any, _params: dict[str, Any], expectation: dict[str, Any]
+) -> StepResult:
+    transport = resources.transport
+    server = await _start_server(transport)
+    stopped = False
+    updates = _status_stream(transport, server.server_id)
+    try:
+        snapshot = await anext(updates)
+        if (
+            snapshot.server_id != server.server_id
+            or snapshot.url != server.url
+            or snapshot.native_state.value != "owned"
+            or snapshot.advertisement.value != "inactive"
+            or snapshot.recovery.value != "none"
+            or snapshot.error is not None
+        ):
+            return StepResult.fail("Unexpected owned server status snapshot")
+        await _stop_server(transport, server.server_id)
+        stopped = True
+        update = await anext(updates)
+        if (
+            update.server_id != server.server_id
+            or update.native_state.value != "stopped"
+            or update.advertisement.value != "inactive"
+        ):
+            return StepResult.fail("Missing stopped status update")
+        return validate("owned inactive snapshot; stopped update", expectation)
+    finally:
+        try:
+            await _close_status_stream(updates)
+        finally:
+            if not stopped:
+                await _stop_server(transport, server.server_id)
+
+
+async def rpc_server_status_abort(
+    resources: Any, _params: dict[str, Any], expectation: dict[str, Any]
+) -> StepResult:
+    transport = resources.transport
+    server = await _start_server(transport)
+    updates = _status_stream(transport, server.server_id)
+    try:
+        initial = await anext(updates)
+        if initial.native_state.value != "owned":
+            return StepResult.fail("Missing owned server snapshot")
+        quiet = asyncio.create_task(anext(updates))
+        await asyncio.sleep(0)
+        quiet.cancel()
+        try:
+            await quiet
+            return StepResult.fail("Cancelled quiet status subscription did not end")
+        except asyncio.CancelledError:
+            # The quiet read must raise cancellation after quiet.cancel().
+            pass
+        await updates.aclose()
+        unused = _status_stream(transport, server.server_id)
+        await unused.aclose()
+        current = _status_stream(transport, server.server_id)
+        try:
+            snapshot = await anext(current)
+            if snapshot.server_id != server.server_id or snapshot.native_state.value != "owned":
+                return StepResult.fail("Subscription cancellation lost native ownership")
+        finally:
+            await _close_status_stream(current)
+        return validate(
+            "quiet subscription cancelled; server still owned; unused subscription closed",
+            expectation,
+        )
+    finally:
+        try:
+            await updates.aclose()
+        finally:
+            await _stop_server(transport, server.server_id)
+
+
+async def rpc_server_status_invalid_id(
+    resources: Any, _params: dict[str, Any], expectation: dict[str, Any]
+) -> StepResult:
+    async def invalid() -> None:
+        updates = _status_stream(resources.transport, "")
+        try:
+            await anext(updates)
+        finally:
+            await updates.aclose()
+
+    return await _expect_error(invalid(), expectation)
+
+
+async def rpc_server_lan_invalid_serve(
+    resources: Any, _params: dict[str, Any], expectation: dict[str, Any]
+) -> StepResult:
+    async def invalid() -> None:
+        server = await _start_server(
+            resources.transport,
+            lan_addresses=["8.8.8.8"],
+            allow_non_loopback_host=True,
+            discovery_topic="invalid-lan-selection",
+        )
+        await _stop_server(resources.transport, server.server_id)
+
+    return await _expect_error(invalid(), expectation)
+
+
+async def rpc_server_lan_invalid_lookup(
+    resources: Any, _params: dict[str, Any], expectation: dict[str, Any]
+) -> StepResult:
+    async def invalid() -> None:
+        await discover_rpc_servers(
+            resources.transport,
+            DiscoverRpcServersRequest(
+                type="discoverRpcServers", topic="invalid-lan-selection",
+                lan_addresses=["8.8.8.8"], timeout_ms=100,
+            ),
+        )
+
+    return await _expect_error(invalid(), expectation)
+
+
 #: testId -> the body that runs it on this client.
 IMPERATIVE: dict[str, Body] = {
     "completion-concurrent-overlap": completion_concurrent_overlap,
@@ -275,4 +413,9 @@ IMPERATIVE: dict[str, Body] = {
     "rpc-server-unknown-stop": rpc_server_unknown_stop,
     "rpc-server-unsafe-advertisement": rpc_server_unsafe_advertisement,
     "rpc-server-cancel-discovery": rpc_server_cancel_discovery,
+    "rpc-server-status-lifecycle": rpc_server_status_lifecycle,
+    "rpc-server-status-abort": rpc_server_status_abort,
+    "rpc-server-status-invalid-id": rpc_server_status_invalid_id,
+    "rpc-server-lan-invalid-serve": rpc_server_lan_invalid_serve,
+    "rpc-server-lan-invalid-lookup": rpc_server_lan_invalid_lookup,
 }

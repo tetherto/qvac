@@ -84,6 +84,8 @@ from . import (
     RerankResponse,
     ResumeRequest,
     ResumeResponse,
+    RpcServerStatusStreamRequest,
+    RpcServerStatusStreamResponse,
     StartRpcServerRequest,
     StartRpcServerResponse,
     StateRequest,
@@ -415,6 +417,14 @@ async def resume(transport: Transport, params: ResumeRequest) -> ResumeResponse:
     return ResumeResponse.model_validate(await transport.call(payload))
 
 
+async def rpc_server_status_stream(
+    transport: Transport, params: RpcServerStatusStreamRequest
+) -> AsyncIterator[RpcServerStatusStreamResponse]:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    async for chunk in transport.call_stream(payload):
+        yield RpcServerStatusStreamResponse.model_validate(chunk)
+
+
 async def start_rpc_server(
     transport: Transport, params: StartRpcServerRequest
 ) -> StartRpcServerResponse:
@@ -563,6 +573,7 @@ __all__ = [
     "rag_with_progress",
     "rerank",
     "resume",
+    "rpc_server_status_stream",
     "start_rpc_server",
     "state",
     "stop_rpc_server",

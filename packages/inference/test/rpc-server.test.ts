@@ -1,8 +1,8 @@
 import test from 'brittle'
 import { createRpcServerManager, type RpcServerDependencies } from '@/rpc/manager'
 import { createRequestRegistry } from '@/runtime/request-context'
+import { selectLanInterfaces } from '@/rpc/lan'
 import { privateEndpoint, rpcTopic, probeTcp, waitForReady } from '@/rpc/network'
-import { parseAnnouncement } from '@/rpc/discovery'
 import {
   startRpcServerOptionsSchema,
   discoverRpcServersOptionsSchema,
@@ -12,6 +12,7 @@ import {
 import { transformLlmConfig } from '@/plugins/builtin/llamacpp-completion/transform'
 import { llmConfigSchema } from '@/schemas/llamacpp-config'
 import net from 'bare-net'
+import type { RpcServerStatus, StartRpcServerOptions } from '@/schemas/rpc-server'
 
 function fixture(overrides: Partial<RpcServerDependencies> = {}) {
   const events: string[] = []
@@ -96,7 +97,7 @@ test('RPC discovery responses preserve and require endpoint RDMA availability', 
   }
 })
 
-test('RPC discovery accepts only private IPv4 endpoints and versioned small frames', (t) => {
+test('RPC endpoints accept only private IPv4 and use a shared topic hash', (t) => {
   for (const url of ['10.0.0.2:1', '172.16.0.1:65535', '192.168.1.2:50052']) {
     t.ok(privateEndpoint(url), url)
   }
@@ -115,10 +116,6 @@ test('RPC discovery accepts only private IPv4 endpoints and versioned small fram
   ]) {
     t.absent(privateEndpoint(url), url)
   }
-  t.is(parseAnnouncement('{"version":1,"url":"10.0.0.2:50052"}'), '10.0.0.2:50052')
-  t.absent(parseAnnouncement('{"version":2,"url":"10.0.0.2:50052"}'))
-  t.absent(parseAnnouncement('x'.repeat(1025)))
-  t.absent(parseAnnouncement('{'))
   t.is(rpcTopic('test').length, 32)
   t.alike(rpcTopic('test'), rpcTopic('test'))
   t.unlike(rpcTopic('test'), rpcTopic('other'))
@@ -150,6 +147,87 @@ test('RPC manager rejects unsafe advertising before starting native resources', 
     await t.exception(manager.start(options, ctx), /private IPv4/)
   }
   t.alike(events, [])
+})
+
+const lan = { name: 'en0', address: '10.0.0.2', netmask: '255.255.255.0' }
+
+test('RPC advertising automatically selects a single eligible LAN address before native startup', async (t) => {
+  const forwarded: StartRpcServerOptions[] = []
+  const { manager, registry } = fixture({
+    lanInterfaces: () => [lan],
+    async start(options) {
+      forwarded.push(options)
+      return {
+        host: options.host!,
+        port: 50052,
+        url: `${options.host}:50052`,
+        rdmaCapable: false,
+        async stop() {}
+      }
+    }
+  })
+  await using ctx = await registry.begin({ requestId: 'auto-host', kind: 'rpcServer' })
+  const options = { discoveryTopic: 'test', allowNonLoopbackHost: true, threads: 2 }
+  try {
+    const server = await manager.start(options, ctx)
+    t.is(server.url, '10.0.0.2:50052')
+    t.alike(forwarded, [{ ...options, host: lan.address }])
+    t.absent('host' in options, 'caller options remain unchanged')
+  } finally {
+    await manager.close()
+  }
+})
+
+test('RPC automatic binding rejects missing or ambiguous addresses before starting native resources', async (t) => {
+  for (const interfaces of [
+    [],
+    [lan, { ...lan, name: 'eth0', address: '10.0.1.2' }],
+    [lan, { ...lan, address: '10.0.0.3' }]
+  ]) {
+    const { manager, events, registry } = fixture({ lanInterfaces: () => interfaces })
+    await using ctx = await registry.begin({ requestId: 'auto-invalid', kind: 'rpcServer' })
+    await t.exception(
+      manager.start({ discoveryTopic: 'test', allowNonLoopbackHost: true }, ctx),
+      interfaces.length
+        ? /Multiple eligible RPC LAN addresses; specify host explicitly/
+        : /eligible private IPv4/
+    )
+    t.alike(events, [], 'selection fails before native startup')
+    t.is(manager.size, 0)
+  }
+})
+
+test('RPC explicit hosts and non-advertising defaults bypass automatic LAN selection', async (t) => {
+  let scans = 0
+  const forwarded: StartRpcServerOptions[] = []
+  const { manager, registry } = fixture({
+    lanInterfaces: () => {
+      scans++
+      throw new Error('must not enumerate interfaces')
+    },
+    async start(options) {
+      forwarded.push(options)
+      const host = options.host ?? '127.0.0.1'
+      return { host, port: 50052, url: `${host}:50052`, rdmaCapable: false, async stop() {} }
+    }
+  })
+  await using ctx = await registry.begin({ requestId: 'explicit-host', kind: 'rpcServer' })
+  try {
+    for (const options of [{}, { allowNonLoopbackHost: true }, { host: '127.0.0.1' }, serving]) {
+      const server = await manager.start(options, ctx)
+      t.is(server.url, `${'host' in options ? options.host : '127.0.0.1'}:50052`)
+      t.alike(forwarded.at(-1), options)
+    }
+    for (const options of [
+      { discoveryTopic: 'test' },
+      { discoveryTopic: 'test', allowNonLoopbackHost: false }
+    ]) {
+      await t.exception(manager.start(options, ctx), /allowNonLoopbackHost: true/)
+    }
+    t.is(scans, 0)
+  } finally {
+    await manager.close()
+  }
 })
 
 test('RPC failed readiness stops the native handle without advertising', async (t) => {
@@ -351,4 +429,182 @@ test('RPC rollback stalled in native stop does not prevent stopping other owned 
   await failedStart
   await closing
   t.is(manager.size, 0)
+})
+
+test('RPC health preserves identity, original cause and native ownership through failure', async (t) => {
+  let changed!: NonNullable<Parameters<RpcServerDependencies['advertise']>[3]>
+  const { manager, registry } = fixture({
+    async advertise(_topic, _url, _ctx, onstatus) {
+      changed = onstatus!
+      changed('advertising')
+      return async () => {
+        changed('suspended')
+      }
+    }
+  })
+  const updates: RpcServerStatus[] = []
+  const unsubscribe = manager.subscribe((status) => updates.push(status))
+  await using ctx = await registry.begin({ requestId: 'advertisement-health', kind: 'rpcServer' })
+  try {
+    const server = await manager.start(serving, ctx)
+    changed('suspended')
+    t.is(updates.at(-1)?.recovery, 'resume')
+    changed('advertising')
+    const cause = Object.assign(
+      new Error('UDP send failed', { cause: new Error('network removed') }),
+      { code: 'ENETDOWN' }
+    )
+    changed('failed', cause)
+    const failed = updates.at(-1)!
+    t.is(failed.serverId, server.serverId)
+    t.is(failed.nativeState, 'owned')
+    t.is(failed.advertisement, 'failed')
+    t.is(failed.recovery, 'restart')
+    t.alike(failed.error?.typedFields, {
+      operation: 'advertiseRpcServer',
+      details: 'UDP send failed'
+    })
+    const wire = JSON.parse(JSON.stringify(failed.error))
+    t.is(wire.cause.code, 'ENETDOWN')
+    t.is(wire.cause.message, cause.message)
+    t.is(wire.cause.cause.message, 'network removed')
+    t.is(manager.size, 1)
+    const snapshots: RpcServerStatus[] = []
+    manager.subscribe((status) => snapshots.push(status))()
+    t.alike(snapshots, [failed], 'late subscriber receives current health')
+    await manager.stop(server.serverId)
+    t.is(updates.at(-1)?.nativeState, 'stopped')
+  } finally {
+    unsubscribe()
+    await manager.close()
+  }
+})
+
+test('RPC advertisement startup failure is observable before rollback', async (t) => {
+  const { manager, registry } = fixture({
+    async advertise() {
+      throw new Error('advertising bind failed')
+    }
+  })
+  const updates: RpcServerStatus[] = []
+  const unsubscribe = manager.subscribe((status) => updates.push(status))
+  await using ctx = await registry.begin({
+    requestId: 'advertisement-start-failure',
+    kind: 'rpcServer'
+  })
+  try {
+    await t.exception(manager.start(serving, ctx), /advertising bind failed/)
+    const failed = updates.find((status) => status.advertisement === 'failed')!
+    t.ok(failed.serverId)
+    t.is(failed.nativeState, 'owned')
+    t.is(failed.reason, 'advertising bind failed')
+    t.is(failed.recovery, 'restart')
+    t.is(updates.at(-1)?.nativeState, 'stopped')
+    t.is(manager.size, 0)
+  } finally {
+    unsubscribe()
+    await manager.close()
+  }
+})
+
+test('RPC LAN selection schema bounds canonical private IPv4 addresses', (t) => {
+  for (const schema of [startRpcServerOptionsSchema, discoverRpcServersOptionsSchema]) {
+    for (const lanAddresses of [['10.0.0.2'], ['172.16.0.2', '172.31.255.254', '192.168.1.2']]) {
+      t.ok(schema.safeParse({ topic: 'shared', lanAddresses }).success)
+    }
+    for (const lanAddresses of [
+      [],
+      Array.from({ length: 9 }, (_, i) => `10.0.0.${i + 1}`),
+      ['10.0.0.2', '10.0.0.2'],
+      ['010.0.0.2'],
+      ['127.0.0.1'],
+      ['8.8.8.8'],
+      ['172.32.0.1'],
+      ['192.168.1.256'],
+      ['10.0.0.2:50052'],
+      ['::1']
+    ]) {
+      t.absent(schema.safeParse({ topic: 'shared', lanAddresses }).success)
+    }
+  }
+})
+
+test('RPC manager selects renamed adapters only with explicit LAN opt-in before native start', async (t) => {
+  for (const name of ['WLAN', 'Office LAN', 'Réseau local']) {
+    const entry = { ...lan, family: 'IPv4' as const, internal: false, mac: '', cidr: '' }
+    const forwarded: StartRpcServerOptions[] = []
+    let advertised: string[] | undefined
+    const { manager, registry } = fixture({
+      lanInterfaces: (_all, addresses) => selectLanInterfaces({ [name]: [entry] }, addresses),
+      async start(options) {
+        forwarded.push(options)
+        return {
+          host: options.host!,
+          port: 50052,
+          url: `${options.host}:50052`,
+          rdmaCapable: false,
+          async stop() {}
+        }
+      },
+      async advertise(_topic, _url, _ctx, _onstatus, addresses) {
+        advertised = addresses
+        return async () => {}
+      }
+    })
+    await using ctx = await registry.begin({ requestId: `alias-${name}`, kind: 'rpcServer' })
+    try {
+      await t.exception(
+        manager.start({ discoveryTopic: 'shared', allowNonLoopbackHost: true }, ctx),
+        /eligible private IPv4/
+      )
+      t.is(forwarded.length, 0)
+      const options = {
+        discoveryTopic: 'shared',
+        allowNonLoopbackHost: true,
+        lanAddresses: [lan.address]
+      }
+      const server = await manager.start(options, ctx)
+      t.is(server.url, `${lan.address}:50052`)
+      t.alike(forwarded, [{ ...options, host: lan.address }])
+      t.alike(advertised, [lan.address])
+    } finally {
+      await manager.close()
+    }
+  }
+})
+
+test('RPC manager rejects missing, conflicting and ambiguous explicit selections before native startup', async (t) => {
+  const entry = { ...lan, family: 'IPv4' as const, internal: false, mac: '', cidr: '' }
+  const all = { 'Office LAN': [entry, { ...entry, address: '10.0.1.2' }] }
+  const { manager, events, registry } = fixture({
+    lanInterfaces: (_all, addresses) => selectLanInterfaces(all, addresses)
+  })
+  await using ctx = await registry.begin({ requestId: 'invalid-selection', kind: 'rpcServer' })
+  try {
+    await t.exception(
+      manager.start({ lanAddresses: [lan.address] }, ctx),
+      /requires discoveryTopic/
+    )
+    await t.exception(manager.start({ ...serving, lanAddresses: ['10.9.0.2'] }, ctx))
+    await t.exception(
+      manager.start({ ...serving, host: '10.0.1.2', lanAddresses: [lan.address] }, ctx),
+      /must belong/
+    )
+    await t.exception(
+      manager.start(
+        {
+          discoveryTopic: 'shared',
+          allowNonLoopbackHost: true,
+          lanAddresses: [lan.address, '10.0.1.2']
+        },
+        ctx
+      ),
+      /Multiple eligible/
+    )
+    t.alike(events, [])
+    const server = await manager.start({ ...serving, lanAddresses: [lan.address, '10.0.1.2'] }, ctx)
+    t.is(server.url, `${lan.address}:50052`)
+  } finally {
+    await manager.close()
+  }
 })

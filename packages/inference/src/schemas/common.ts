@@ -1,5 +1,7 @@
 import {
+  rpcServerStatusStreamRequestSchema,
   startRpcServerRequestSchema,
+  rpcServerStatusStreamResponseSchema,
   startRpcServerResponseSchema,
   stopRpcServerRequestSchema,
   stopRpcServerResponseSchema,
@@ -126,6 +128,7 @@ export const requestSchema = z.union([
   audioGenStreamRequestSchema,
   audioEditStreamRequestSchema,
   audioUnderstandRequestSchema,
+  rpcServerStatusStreamRequestSchema,
   startRpcServerRequestSchema,
   stopRpcServerRequestSchema,
   discoverRpcServersRequestSchema,
@@ -177,6 +180,7 @@ export const responseSchema = z.discriminatedUnion('type', [
   audioGenStreamResponseSchema,
   audioEditStreamResponseSchema,
   audioUnderstandResponseSchema,
+  rpcServerStatusStreamResponseSchema,
   startRpcServerResponseSchema,
   stopRpcServerResponseSchema,
   discoverRpcServersResponseSchema,

@@ -281,6 +281,14 @@ object QvacMethods {
         progressResponseType = null,
         progressCondition = null,
     )
+    val rpcServerStatusStream = QvacMethodDescriptor(
+        name = "rpcServerStatusStream",
+        callShape = QvacCallShape.SERVER_STREAM,
+        requestType = "RpcServerStatusStreamRequest",
+        responseType = "RpcServerStatusStreamResponse",
+        progressResponseType = null,
+        progressCondition = null,
+    )
     val startRpcServer = QvacMethodDescriptor(
         name = "startRpcServer",
         callShape = QvacCallShape.REQUEST_REPLY,
@@ -436,6 +444,7 @@ object QvacMethods {
         rag,
         rerank,
         resume,
+        rpcServerStatusStream,
         startRpcServer,
         state,
         stopRpcServer,

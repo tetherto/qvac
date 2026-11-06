@@ -5,6 +5,7 @@ import withAndroidNdkVersion from './withAndroidNdkVersion'
 import withDeviceInfo from './withDeviceInfo'
 import withMobileBundle, { type MobileBundleOptions } from './withMobileBundle'
 import withOpenCL from './withOpenCL'
+import withLocalNetwork from './withLocalNetwork'
 
 const { withPlugins } = configPlugins
 
@@ -40,7 +41,8 @@ function withQvacSDK(config: ExpoConfig, options: QvacSDKPluginOptions = {}): Ex
     ],
     withAndroidNdkVersion,
     withAndroidArchitecture,
-    withOpenCL
+    withOpenCL,
+    withLocalNetwork
   ])
 }
 

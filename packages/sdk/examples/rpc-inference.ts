@@ -1,4 +1,5 @@
-// npx tsx rpc-inference.ts my-private-rpc-group
+// Discovery requires the same multicast-capable Wi-Fi or Ethernet link and IPv4 subnet.
+// npx tsx rpc-inference.ts my-private-rpc-group [local-ipv4,local-ipv4]
 import {
   discoverRpcServers,
   getRpcDeviceMap,
@@ -11,14 +12,21 @@ import {
 
 try {
   const topic = process.argv[2]
-  if (!topic) throw new Error('Usage: rpc-inference.ts <topic>')
+  if (!topic) throw new Error('Usage: rpc-inference.ts <topic> [local-ipv4,local-ipv4]')
+  const lanAddresses = process.argv[3]?.split(',')
   // Prefer server RDMA offers before assigning aliases. Transport is negotiated at load time.
-  const selected = (await discoverRpcServers({ topic, timeoutMs: 5000 }))
+  const selected = (
+    await discoverRpcServers({ topic, timeoutMs: 5000, ...(lanAddresses && { lanAddresses }) })
+  )
     .sort((a, b) => Number(b.rdmaAvailable) - Number(a.rdmaAvailable) || a.url.localeCompare(b.url))
     .slice(0, 2)
   if (selected.length !== 2) throw new Error('Two idle RPC servers are required')
-  const devices = getRpcDeviceMap(selected)
-  if (!devices.length) throw new Error('The selected servers expose no devices')
+  // Assign aliases before filtering so endpoint-local indices stay intact.
+  // Zero-memory utility backends such as BLAS cannot run a full model graph.
+  const devices = getRpcDeviceMap(selected).filter(
+    (device) => device.totalMemory > 0 && device.freeMemory > 0
+  )
+  if (!devices.length) throw new Error('The selected servers expose no devices with usable memory')
   console.error(`▸ Using ${devices.length} devices across ${selected.length} servers`)
   const modelId = await loadModel({
     modelSrc: LLAMA_3_2_1B_INST_Q4_0,

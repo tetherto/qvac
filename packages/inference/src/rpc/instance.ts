@@ -18,5 +18,6 @@ export const rpcServers = createRpcServerManager({
     })
   },
   ready: (server, ctx) => waitForReady(server.host, server.port, ctx.signal),
-  advertise: advertiseRpcServer
+  advertise: (topic, url, ctx, onstatus, lanAddresses) =>
+    advertiseRpcServer(topic, url, ctx, undefined, onstatus, lanAddresses)
 })

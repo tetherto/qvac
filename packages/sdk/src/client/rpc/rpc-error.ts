@@ -1,4 +1,4 @@
-import type { ErrorResponse } from '@qvac/inference/surface'
+import { restoreErrorCause, type ErrorResponse } from '@qvac/inference/surface'
 import {
   RpcServerOperationError,
   InferenceCancelledError,
@@ -143,7 +143,7 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
     new RpcServerOperationError(
       readStringField(response.typedFields, 'operation', 'rpcServer'),
       readStringField(response.typedFields, 'details', response.message),
-      response.cause
+      restoreErrorCause(response.cause)
     ),
   REQUEST_ID_CONFLICT: (response) => {
     return new RequestIdConflictError(

@@ -79,6 +79,8 @@ suspend fun QvacClient.`rerank`(request: io.tether.qvac.sdk.generated.schema.Rer
 
 suspend fun QvacClient.`resume`(request: io.tether.qvac.sdk.generated.schema.ResumeRequest): io.tether.qvac.sdk.generated.schema.ResumeResponse = callTyped(request)
 
+fun QvacClient.`rpcServerStatusStream`(request: io.tether.qvac.sdk.generated.schema.RpcServerStatusStreamRequest): Flow<io.tether.qvac.sdk.generated.schema.RpcServerStatusStreamResponse> = streamTyped(request)
+
 suspend fun QvacClient.`startRpcServer`(request: io.tether.qvac.sdk.generated.schema.StartRpcServerRequest): io.tether.qvac.sdk.generated.schema.StartRpcServerResponse = callTyped(request)
 
 suspend fun QvacClient.`state`(request: io.tether.qvac.sdk.generated.schema.StateRequest): io.tether.qvac.sdk.generated.schema.StateResponse = callTyped(request)

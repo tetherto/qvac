@@ -1,8 +1,12 @@
 import type {
   StartRpcServerRequest,
   StopRpcServerRequest,
+  RpcServerStatusStreamRequest,
+  RpcServerStatusStreamResponse,
+  RpcServerStatus,
   DiscoverRpcServersRequest
 } from '@/schemas/rpc-server'
+import type { StreamHandlerContext } from '@/handlers/types'
 import { getRequestRegistry } from '@/runtime/request-context'
 import { generateRandomRequestId } from '@/runtime/request-id'
 import { rpcServers } from '@/rpc/instance'
@@ -77,7 +81,13 @@ export async function handleDiscoverRpcServers(request: DiscoverRpcServersReques
   return run('discoverRpcServers', () =>
     withContext('rpcDiscovery', request.requestId ?? generateRandomRequestId(), async (ctx) => ({
       type: 'discoverRpcServers' as const,
-      servers: await discoverRpcEndpoints(request.topic, request.timeoutMs ?? 5000, ctx)
+      servers: await discoverRpcEndpoints(
+        request.topic,
+        request.timeoutMs ?? 5000,
+        ctx,
+        undefined,
+        request.lanAddresses
+      )
     }))
   )
 }
@@ -95,4 +105,52 @@ export function closeRpcResources(): Promise<void> {
   return closing.finally(() => {
     closing = undefined
   })
+}
+
+/** Keep pending status delivery bounded and report subscriber overflow explicitly. */
+export async function* handleRpcServerStatusStream(
+  request: RpcServerStatusStreamRequest,
+  { signal }: StreamHandlerContext = {},
+  manager: Pick<typeof rpcServers, 'subscribe'> = rpcServers
+): AsyncGenerator<RpcServerStatusStreamResponse> {
+  if (signal?.aborted) return
+  const updates: RpcServerStatus[] = []
+  let overflow = false
+  let wake: (() => void) | undefined
+  const notify = () => {
+    wake?.()
+    wake = undefined
+  }
+  const unsubscribe = manager.subscribe((status) => {
+    if (request.serverId && request.serverId !== status.serverId) return
+    if (updates.length >= 256) overflow = true
+    else updates.push(status)
+    notify()
+  })
+  const abort = () => {
+    unsubscribe()
+    updates.length = 0
+    notify()
+  }
+  signal?.addEventListener('abort', abort, { once: true })
+  try {
+    while (!signal?.aborted) {
+      while (updates.length) {
+        if (overflow) {
+          throw new RpcServerOperationError(
+            'rpcServerStatusStream',
+            'Status subscriber exceeded 256 pending updates; subscribe again for current state'
+          )
+        }
+        yield { ...updates.shift()!, type: 'rpcServerStatusStream' }
+      }
+      if (signal?.aborted) return
+      await new Promise<void>((resolve) => {
+        wake = resolve
+      })
+    }
+  } finally {
+    signal?.removeEventListener('abort', abort)
+    unsubscribe()
+  }
 }
