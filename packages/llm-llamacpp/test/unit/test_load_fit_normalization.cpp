@@ -2494,6 +2494,136 @@ TEST_F(LoadFitNormalizationTest, LayerSplitAcceptsXdna) {
   EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
 }
 
+namespace {
+constexpr const char* K_REFUSED_SET =
+    "blk.0: so=q8_0 gate=q4_K up=q4_K down=q6_K";
+
+// Resolves to XDNA0 while the override leads with xdna, else to vulkan0, and
+// records each override it was given.
+lfn::BackendResolver
+recordingResolver(std::vector<std::vector<std::string>>& overrides) {
+  return [&overrides](
+             backend_selection::BackendType,
+             const std::optional<backend_selection::MainGpu>&,
+             const ModelMetaData&,
+             bool,
+             const std::vector<std::string>& backendOverride) {
+    overrides.push_back(backendOverride);
+    const bool xdnaFirst =
+        !backendOverride.empty() && backendOverride.front() == "xdna";
+    return lfn::SelectedBackend{
+        .type = backend_selection::GPU,
+        .name = xdnaFirst ? "XDNA0" : "vulkan0"};
+  };
+}
+} // namespace
+
+TEST_F(LoadFitNormalizationTest, BackendXdnaSkipsNpuThatRefusesModel) {
+  auto config = baseConfig();
+  config["backend"] = "xdna";
+  auto dependencies = backend({.type = backend_selection::GPU, .name = "x"});
+  std::vector<std::vector<std::string>> overrides;
+  dependencies.resolveBackend = recordingResolver(overrides);
+  dependencies.xdnaRefusal = [](const std::string&) {
+    return std::optional<std::string>(K_REFUSED_SET);
+  };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  ASSERT_EQ(overrides.size(), 2U);
+  EXPECT_EQ(overrides[0], std::vector<std::string>{"xdna"});
+  EXPECT_TRUE(overrides[1].empty());
+  EXPECT_EQ(result.params.mmproj_backend, "vulkan0");
+}
+
+TEST_F(LoadFitNormalizationTest, BackendXdnaKeepsNpuThatTakesModel) {
+  auto config = baseConfig();
+  config["backend"] = "xdna";
+  auto dependencies = backend({.type = backend_selection::GPU, .name = "x"});
+  std::vector<std::vector<std::string>> overrides;
+  dependencies.resolveBackend = recordingResolver(overrides);
+  dependencies.xdnaRefusal = [](const std::string&) {
+    return std::optional<std::string>();
+  };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(overrides.size(), 1U);
+  EXPECT_EQ(result.params.mmproj_backend, "XDNA0");
+}
+
+TEST_F(LoadFitNormalizationTest, ExplicitXdnaRejectsModelItRefuses) {
+  auto config = baseConfig();
+  config["devices"] = "XDNA0";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "local"}, {"local"});
+  auto selection = splitSelection({"local", "XDNA0"});
+  selection.optInDevices.push_back(selection.devices[1]);
+  selection.devices.pop_back();
+  dependencies.splitDevices = [selection]() { return selection; };
+  dependencies.xdnaRefusal = [](const std::string&) {
+    return std::optional<std::string>(K_REFUSED_SET);
+  };
+
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies));
+    FAIL() << "an explicit XDNA0 that refuses the model must fail the load";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr(K_REFUSED_SET));
+  }
+}
+
+TEST(XdnaRefusedWeightSetTest, AcceptsFusedLayerTypes) {
+  const std::vector<lfn::XdnaRecurrentLayer> layers{
+      {.layer = 0,
+       .ssmOut = GGML_TYPE_Q5_K,
+       .ffnGate = GGML_TYPE_Q4_K,
+       .ffnUp = GGML_TYPE_Q4_K,
+       .ffnDown = GGML_TYPE_Q6_K},
+      {.layer = 1,
+       .ssmOut = GGML_TYPE_Q4_K,
+       .ffnGate = GGML_TYPE_Q4_K,
+       .ffnUp = GGML_TYPE_Q4_K,
+       .ffnDown = GGML_TYPE_Q4_K}};
+  EXPECT_EQ(lfn::xdnaRefusedWeightSet(1024, layers), std::nullopt);
+}
+
+TEST(XdnaRefusedWeightSetTest, NamesFirstRefusedLayer) {
+  const std::vector<lfn::XdnaRecurrentLayer> layers{
+      {.layer = 0,
+       .ssmOut = GGML_TYPE_Q5_K,
+       .ffnGate = GGML_TYPE_Q4_K,
+       .ffnUp = GGML_TYPE_Q4_K,
+       .ffnDown = GGML_TYPE_Q6_K},
+      {.layer = 1,
+       .ssmOut = GGML_TYPE_Q8_0,
+       .ffnGate = GGML_TYPE_Q4_K,
+       .ffnUp = GGML_TYPE_Q4_K,
+       .ffnDown = GGML_TYPE_Q6_K}};
+  EXPECT_EQ(
+      lfn::xdnaRefusedWeightSet(1024, layers),
+      "blk.1: so=q8_0 gate=q4_K up=q4_K down=q6_K");
+}
+
+// The fused layer only runs on a 1024-wide residual stream.
+TEST(XdnaRefusedWeightSetTest, IgnoresOtherWidths) {
+  const std::vector<lfn::XdnaRecurrentLayer> layers{
+      {.layer = 0,
+       .ssmOut = GGML_TYPE_Q8_0,
+       .ffnGate = GGML_TYPE_Q8_0,
+       .ffnUp = GGML_TYPE_Q8_0,
+       .ffnDown = GGML_TYPE_Q8_0}};
+  EXPECT_EQ(lfn::xdnaRefusedWeightSet(2048, layers), std::nullopt);
+}
+
+TEST(XdnaRefusedWeightSetTest, UnreadableFileIsNotRefused) {
+  EXPECT_EQ(
+      lfn::xdnaRefusedWeightSetInFile("/nonexistent/model.gguf"), std::nullopt);
+}
+
 TEST_F(LoadFitNormalizationTest, AutomaticSplitLeavesOutOptInDevices) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
