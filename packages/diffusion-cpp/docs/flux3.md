@@ -10,11 +10,10 @@ This integration builds on [QVAC #5550](https://github.com/tetherto/qvac/pull/55
 The engine fixes are merged through
 [engine #62](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/62).
 
-Until [registry #475](https://github.com/tetherto/qvac-registry-vcpkg/pull/475)
-merges, the addon resolves ports from `feat/diffusion-2026-11-01`. It retains
+[Registry #475](https://github.com/tetherto/qvac-registry-vcpkg/pull/475) is merged;
+the addon resolves ports from `main`. It retains
 baseline `651be7f3023d30fffbe1593b35ba57b39f2ba78b`; explicit minimum versions
-request `2026-11-01` for both GGML and stable-diffusion-cpp. After #475 merges,
-change the registry reference back to `main` before deleting the branch.
+request `2026-11-01` for both GGML and stable-diffusion-cpp.
 The registry pins engine commit
 `29f8fe63dc44c7bd4353dc0a71b4910e4b33e272`, which contains the integer LoRA
 alpha conversion, latent-unit VAE compatibility (including allocation-failure
