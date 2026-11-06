@@ -166,18 +166,27 @@ struct Checkpoint {
   qvac_lib_inference_addon_llama::utils::SequenceStateSnapshot state;
   Ledger ledger;
   llama_pos cacheTokens = 0;
+  // Its history ends at a user message rather than a tool result, so the
+  // next user turn can resume from it after a tool loop.
+  bool endsAtUserTurn = false;
 };
 using Checkpoints = std::deque<Checkpoint>;
 
-// Appends `checkpoint` and evicts from the oldest end until both limits of
-// `policy` hold: total payload bytes (measured by `bytesOf`) within
-// `maxBytes` when set, then count within `maxCount`. A single checkpoint
-// larger than the whole budget is evicted immediately.
-template <typename T, typename BytesOf>
+// Appends `checkpoint` and evicts until both limits of `policy` hold: total
+// payload bytes (measured by `bytesOf`) within `maxBytes` when set, and count
+// within `maxCount`. The newest checkpoint `isPinned` accepts is kept on top
+// of the newest `maxCount`, and evicted last; every other one goes oldest
+// first. A single checkpoint larger than the whole budget is evicted
+// immediately.
+template <typename T, typename BytesOf, typename IsPinned>
 void appendProcessCheckpoint(
     std::deque<T>& checkpoints, T checkpoint, const CheckpointPolicy& policy,
-    BytesOf bytesOf) {
+    BytesOf bytesOf, IsPinned isPinned) {
   checkpoints.push_back(std::move(checkpoint));
+  if (policy.maxCount == 0) {
+    checkpoints.clear();
+    return;
+  }
   const auto totalBytes = [&]() {
     uint64_t sum = 0;
     for (const T& entry : checkpoints) {
@@ -185,11 +194,34 @@ void appendProcessCheckpoint(
     }
     return sum;
   };
-  while (!checkpoints.empty() &&
-         (checkpoints.size() > policy.maxCount ||
-          (policy.maxBytes > 0 && totalBytes() > policy.maxBytes))) {
-    checkpoints.pop_front();
+  while (!checkpoints.empty()) {
+    size_t pinned = checkpoints.size();
+    for (size_t i = checkpoints.size(); i > 0; --i) {
+      if (isPinned(checkpoints[i - 1])) {
+        pinned = i - 1;
+        break;
+      }
+    }
+    const bool pinnedIsExtra = pinned + policy.maxCount < checkpoints.size();
+    const size_t countLimit = policy.maxCount + (pinnedIsExtra ? 1 : 0);
+    if (checkpoints.size() <= countLimit &&
+        (policy.maxBytes == 0 || totalBytes() <= policy.maxBytes)) {
+      break;
+    }
+    const size_t victim = pinned == 0 && checkpoints.size() > 1 ? 1 : 0;
+    checkpoints.erase(
+        checkpoints.begin() + static_cast<std::ptrdiff_t>(victim));
   }
+}
+
+template <typename T, typename BytesOf>
+void appendProcessCheckpoint(
+    std::deque<T>& checkpoints, T checkpoint, const CheckpointPolicy& policy,
+    BytesOf bytesOf) {
+  appendProcessCheckpoint(
+      checkpoints, std::move(checkpoint), policy, bytesOf, [](const T&) {
+        return false;
+      });
 }
 
 // Checkpoints whose ledger is a prefix of `prompt` spanning at most

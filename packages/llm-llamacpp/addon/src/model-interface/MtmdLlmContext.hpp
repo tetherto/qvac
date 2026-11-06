@@ -618,10 +618,12 @@ private:
   qvac_lib_inference_addon_llama::cache::Checkpoints cacheCheckpoints_;
   // See TextLlmContext: the end-of-history checkpoint of the request in
   // flight, the generation prompt's token count in the last rendered prompt,
-  // and the ledger entries up to the end of the history (0 = none).
+  // the ledger entries up to the end of the history (0 = none), and whether
+  // that history ends at a user message.
   std::optional<CacheCheckpoint> pendingHistoryCheckpoint_;
   size_t generationPromptTokens_ = 0;
   size_t historyCheckpointEntries_ = 0;
+  bool historyEndsAtUserTurn_ = false;
   qvac_lib_inference_addon_llama::cache::CheckpointPolicy
       cacheCheckpointPolicy_;
   size_t pendingReuseEntries_ = 0;

@@ -102,6 +102,32 @@ protected:
 
 } // namespace
 
+TEST_F(CacheCheckpointFileTest, PrefersTheNewestUserTurnCheckpoint) {
+  cache::Checkpoints checkpoints;
+  checkpoints.push_back(checkpoint(3, 'a'));
+  checkpoints.back().endsAtUserTurn = true;
+  checkpoints.push_back(checkpoint(5, 'b'));
+  checkpoints.back().endsAtUserTurn = true;
+  checkpoints.push_back(checkpoint(9, 'c'));
+
+  ASSERT_TRUE(cache::appendCheckpointSection(path_, checkpoints));
+  cache::Checkpoints read =
+      cache::readCheckpointSection(path_, stateEnd(), resident(), policy(1));
+  ASSERT_EQ(read.size(), 1u);
+  EXPECT_EQ(read.front().state.nPast, 5);
+  EXPECT_TRUE(read.front().endsAtUserTurn);
+
+  // Read back, it outlives the tool rounds that follow.
+  cache::appendProcessCheckpoint(
+      read,
+      checkpoint(9, 'c'),
+      policy(1),
+      [](const cache::Checkpoint& kept) { return kept.state.bytes(); },
+      [](const cache::Checkpoint& kept) { return kept.endsAtUserTurn; });
+  ASSERT_EQ(read.size(), 2u);
+  EXPECT_EQ(read.front().state.nPast, 5);
+}
+
 TEST_F(CacheCheckpointFileTest, KeepsTheNewestCheckpointAfterTheState) {
   cache::Checkpoints checkpoints;
   checkpoints.push_back(checkpoint(4, 'a'));

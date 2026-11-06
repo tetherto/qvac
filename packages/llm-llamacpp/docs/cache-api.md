@@ -131,7 +131,10 @@ Templates that drop a previous answer's reasoning change the prompt right
 after that answer's header, so the history before it is the longest part the
 next turn shares. The default single checkpoint serves an ordinary next turn
 and a regenerate; with `cache_checkpoints: 2` the one a turn older also serves
-an edit of the last user message. A diverging history restores the longest
+an edit of the last user message. In a tool loop every round commits its own
+checkpoint, so the newest one that ends at a user message is kept on top of
+`cache_checkpoints`: the next user turn restores it instead of reprocessing
+the whole conversation. A diverging history restores the longest
 checkpoint that is still a prefix of the new prompt and re-prefills from
 there. See [When checkpoints are taken](./cache-lifecycle.md#when-checkpoints-are-taken)
 for the exact points in the pipeline. Checkpoints are pruned as soon as they
@@ -155,7 +158,9 @@ pure-attention models.
 - `cache_checkpoints`: how many to keep per sequence (default 1, maximum
   1024). Each committed request adds one, at the end of its history, before
   the generation prompt. The default keeps the last one, which serves an
-  ordinary next turn and a regenerate. `2` also keeps the one before it, which
+  ordinary next turn and a regenerate. The newest checkpoint whose history
+  ends at a user message (not a tool result) is kept on top of this count,
+  so a turn with tool calls holds at most one more. `2` also keeps the one before it, which
   serves an edit of the last user message; both stop before an answer, so they
   still match when the template rewrites earlier answers (thinking models drop
   the reasoning).
@@ -175,13 +180,14 @@ pure-attention models.
   with the default 1 an edit of the last user message reprocesses the entire
   conversation. That holds only while the turns in between each committed a
   checkpoint and `cache_checkpoints_max_bytes` did not evict it. A
-  conversation loaded from its file brings back only the newest checkpoint,
-  so after a restart the edits that need older ones reprocess the whole
-  conversation. An edit also drops the checkpoints after it, which no longer
+  conversation loaded from its file brings back only one checkpoint (the
+  newest ending at a user message), so after a restart the edits that need
+  older ones reprocess the whole conversation. An edit also drops the checkpoints after it, which no longer
   match. `0` keeps none and takes none, which makes every divergent turn a
   cold prefill.
 - `cache_checkpoints_max_bytes`: total payload budget per sequence, enforced
-  before the count: the oldest checkpoints are dropped until the total fits.
+  before the count: the oldest checkpoints are dropped until the total fits,
+  the newest one ending at a user message last.
   `0` (default) is unlimited. When set, the load fails with `InvalidArgument`
   if the budget cannot hold `cache_checkpoints` checkpoints of the largest size
   the context allows (on a sliding-window model, a full window). The
@@ -210,7 +216,8 @@ memory with unsaved turns. So a chat can run entirely in memory and be
 persisted at any point with `model.saveCache(cacheKey)`; the file then holds
 the full conversation state and a later run, including one after a process
 restart, loads it and continues from there. On a hybrid model the file also
-holds the newest checkpoint, in both modes, so the next turn after a restart
+holds a checkpoint (the newest ending at a user message), in both modes, so
+the next turn after a restart
 restores it rather than reprocessing the whole conversation.
 
 ```js
@@ -304,9 +311,9 @@ models) and the cache ledger, and is written in two ways: on request, with
 `saveCache()`, and automatically, when the conversation would otherwise be
 lost with turns the file does not hold yet ("unsaved turns": a request ran on
 it since its file was last written or loaded). On hybrid and recurrent models
-the file also holds the conversation's newest checkpoint, after the state, so
-a load in a new process continues the next turn from it. Older checkpoints
-are not written. Older addon versions load these files and ignore the
+the file also holds one of the conversation's checkpoints after the state: the
+newest that ends at a user message, else the newest. A load in a new process
+continues the next user turn from it. The others are not written. Older addon versions load these files and ignore the
 checkpoint.
 
 Every write goes to `<cacheKey>.tmp` first and then replaces `<cacheKey>` in

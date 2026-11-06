@@ -7,7 +7,7 @@
 
 namespace qvac_lib_inference_addon_llama::cache {
 
-// A cacheKey file can carry the conversation's newest checkpoint after its
+// A cacheKey file can carry one of the conversation's checkpoints after its
 // sequence state, so a model loaded in a new process restores the
 // end-of-history checkpoint instead of reprocessing the whole conversation on
 // a hybrid or recurrent model. llama.cpp's `llama_state_seq_load_file` stops
@@ -28,12 +28,13 @@ namespace qvac_lib_inference_addon_llama::cache {
 inline constexpr uint32_t CHECKPOINT_SECTION_MAGIC = 0x504b4351; // "QCKP"
 inline constexpr uint32_t CHECKPOINT_SECTION_VERSION = 1;
 
-/// Appends the newest of `checkpoints` (the last partial checkpoint with a
-/// payload) to the cacheKey file at `path`, which already holds the header,
-/// the ledger and the sequence state (a `.tmp` file before its promotion). It
-/// is the one an ordinary next turn and a regenerate restore. With none the
-/// file is left untouched. On a write failure the file is cut back to its
-/// previous size, so the state is still saved, and false is returned.
+/// Appends one of `checkpoints` to the cacheKey file at `path`, which already
+/// holds the header, the ledger and the sequence state (a `.tmp` file before
+/// its promotion): the newest partial checkpoint with a payload that ends at a
+/// user message, else the newest one. It is the one the next user turn
+/// restores, also after a tool loop. With none the file is left untouched. On a
+/// write failure the file is cut back to its previous size, so the state is
+/// still saved, and false is returned.
 bool appendCheckpointSection(
     const std::string& path, const Checkpoints& checkpoints) noexcept;
 

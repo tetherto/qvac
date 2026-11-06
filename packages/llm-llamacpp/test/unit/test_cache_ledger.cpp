@@ -194,6 +194,79 @@ TEST(CacheLedger, ProcessCheckpointByteBudgetTakesPriorityOverCount) {
   EXPECT_EQ(byCount.size(), 2u);
 }
 
+namespace {
+struct TurnCheckpoint {
+  int id = 0;
+  bool endsAtUserTurn = false;
+};
+const auto kOneByte = [](const TurnCheckpoint&) { return uint64_t{1}; };
+const auto kIsUserTurn = [](const TurnCheckpoint& c) {
+  return c.endsAtUserTurn;
+};
+} // namespace
+
+// A tool loop commits a checkpoint per round; the one at the user message must
+// outlive them, since the next user turn re-renders the rounds after it.
+TEST(CacheLedger, ToolLoopKeepsTheUserTurnCheckpoint) {
+  std::deque<TurnCheckpoint> checkpoints;
+  const cache::CheckpointPolicy policy{};
+  cache::appendProcessCheckpoint(
+      checkpoints, TurnCheckpoint{1, true}, policy, kOneByte, kIsUserTurn);
+  for (int id = 2; id <= 5; ++id) {
+    cache::appendProcessCheckpoint(
+        checkpoints, TurnCheckpoint{id, false}, policy, kOneByte, kIsUserTurn);
+  }
+  ASSERT_EQ(checkpoints.size(), 2u);
+  EXPECT_EQ(checkpoints.front().id, 1);
+  EXPECT_EQ(checkpoints.back().id, 5);
+
+  // The next user turn's checkpoint replaces the old one.
+  cache::appendProcessCheckpoint(
+      checkpoints, TurnCheckpoint{6, true}, policy, kOneByte, kIsUserTurn);
+  ASSERT_EQ(checkpoints.size(), 1u);
+  EXPECT_EQ(checkpoints.front().id, 6);
+}
+
+TEST(CacheLedger, UserTurnCheckpointsAloneKeepTheConfiguredCount) {
+  cache::CheckpointPolicy two;
+  two.maxCount = 2;
+  std::deque<TurnCheckpoint> checkpoints;
+  for (int id = 1; id <= 5; ++id) {
+    cache::appendProcessCheckpoint(
+        checkpoints, TurnCheckpoint{id, true}, two, kOneByte, kIsUserTurn);
+  }
+  ASSERT_EQ(checkpoints.size(), 2u);
+  EXPECT_EQ(checkpoints.front().id, 4);
+  EXPECT_EQ(checkpoints.back().id, 5);
+}
+
+TEST(CacheLedger, ByteBudgetEvictsTheUserTurnCheckpointLast) {
+  cache::CheckpointPolicy policy;
+  policy.maxCount = 4;
+  policy.maxBytes = 2;
+  std::deque<TurnCheckpoint> checkpoints;
+  cache::appendProcessCheckpoint(
+      checkpoints, TurnCheckpoint{1, true}, policy, kOneByte, kIsUserTurn);
+  for (int id = 2; id <= 4; ++id) {
+    cache::appendProcessCheckpoint(
+        checkpoints, TurnCheckpoint{id, false}, policy, kOneByte, kIsUserTurn);
+  }
+  ASSERT_EQ(checkpoints.size(), 2u);
+  EXPECT_EQ(checkpoints.front().id, 1);
+  EXPECT_EQ(checkpoints.back().id, 4);
+
+  cache::CheckpointPolicy oneByte;
+  oneByte.maxCount = 4;
+  oneByte.maxBytes = 1;
+  std::deque<TurnCheckpoint> tight;
+  cache::appendProcessCheckpoint(
+      tight, TurnCheckpoint{1, true}, oneByte, kOneByte, kIsUserTurn);
+  cache::appendProcessCheckpoint(
+      tight, TurnCheckpoint{2, false}, oneByte, kOneByte, kIsUserTurn);
+  ASSERT_EQ(tight.size(), 1u);
+  EXPECT_EQ(tight.front().id, 1);
+}
+
 TEST(CacheLedger, ParseCheckpointPolicyDefaultsWhenAbsent) {
   std::unordered_map<std::string, std::string> config{{"ctx_size", "4096"}};
   const cache::CheckpointPolicy policy = cache::parseCheckpointPolicy(config);

@@ -530,6 +530,9 @@ private:
   // Ledger entries up to the end of the history for the request in flight;
   // 0 when this request takes no end-of-history checkpoint.
   size_t historyCheckpointEntries_ = 0;
+  // The last rendered history ends at a user message (not a tool result);
+  // its checkpoint is the one the next user turn resumes from.
+  bool historyEndsAtUserTurn_ = false;
   size_t lastCacheReuse_ = 0;
   size_t donorAdoptions_ = 0;
   qvac_lib_inference_addon_llama::cache::CacheSourceProvider

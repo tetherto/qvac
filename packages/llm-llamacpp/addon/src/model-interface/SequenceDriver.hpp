@@ -303,8 +303,8 @@ public:
     return {};
   }
 
-  /// Appends the driver's newest checkpoint to the cacheKey file being
-  /// written at `path`, after its sequence state
+  /// Appends the driver's checkpoint for the next turn to the cacheKey file
+  /// being written at `path`, after its sequence state
   /// (`cache::appendCheckpointSection`), so a later process can restore it.
   /// Best effort: a failure leaves the file with the state only. Drivers
   /// without checkpoints write nothing.

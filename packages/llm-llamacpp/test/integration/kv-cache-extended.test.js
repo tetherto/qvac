@@ -169,6 +169,56 @@ safeTest(
   }
 )
 
+// J2b: a tool loop commits a checkpoint per round. The next user message
+// re-renders those rounds without their reasoning, so only the checkpoint at
+// the end of the user message that started the loop still matches; the
+// default single checkpoint must not lose it to the rounds.
+safeTest(
+  'kv-ext: hybrid next user turn after a tool loop reuses the cache',
+  { skip: skipExtended, timeout: TIMEOUT },
+  async (t) => {
+    const dir = scratchDir('tool-loop')
+    t.teardown(() => removeDir(dir))
+    const key = path.join(dir, 'chat.bin')
+    const { model, unload } = await loadModel(t, QWEN35, { tools: 'true' })
+
+    const userTurn = [SYSTEM, { role: 'user', content: 'Read the two notes, then sum them.' }]
+    const history = [...userTurn]
+    await run(model, history, { ...NO_THINK, cacheKey: key })
+    for (const [id, value] of [
+      ['call_1', '3'],
+      ['call_2', '4']
+    ]) {
+      history.push(
+        {
+          role: 'assistant',
+          content: '',
+          reasoning_content: `I should read note ${id}.`,
+          tool_calls: [{ id, name: 'read_note', arguments: { id } }]
+        },
+        { role: 'tool', content: value, tool_call_id: id, name: 'read_note' }
+      )
+      await run(model, history, { ...NO_THINK, cacheKey: key })
+    }
+    history.push(
+      { role: 'assistant', content: 'The sum is 7.', reasoning_content: '3 plus 4 is 7.' },
+      { role: 'user', content: 'Double it.' }
+    )
+    const nextTurn = await run(model, history, { ...NO_THINK, cacheKey: key })
+    await unload()
+
+    t.ok(
+      reusedTokens(nextTurn.stats) > 0,
+      `the next user turn reused ${reusedTokens(nextTurn.stats)} tokens`
+    )
+    t.is(
+      nextTurn.output,
+      await coldOutput(t, QWEN35, history, NO_THINK, { tools: 'true' }),
+      'the next user turn answers as a cold run'
+    )
+  }
+)
+
 // J3: two keys alternating keep their own histories, with and without the RAM
 // tier, and never answer from the other key's cache.
 safeTest(
