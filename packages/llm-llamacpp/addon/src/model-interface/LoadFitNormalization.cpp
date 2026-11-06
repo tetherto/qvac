@@ -719,6 +719,19 @@ NormalizedFitSnapshot makeNormalizedFitSnapshot(
   return snapshot;
 }
 
+bool usesBackendFamily(
+    bool isGpu, const std::string& selectedName,
+    const std::vector<backend_selection::SplitDevice>& splitDevices,
+    std::string_view family) {
+  const auto matches = [family](const std::string& name) {
+    return toLowerAscii(name).find(family) != std::string::npos;
+  };
+  return isGpu &&
+         (matches(selectedName) ||
+          std::ranges::any_of(
+              splitDevices, matches, &backend_selection::SplitDevice::name));
+}
+
 void tuneLoadConfigMap(
     std::unordered_map<std::string, std::string>& configFilemap,
     const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
@@ -1874,18 +1887,10 @@ NormalizedLoad normalizeLoadForFit(
     isGpu = useGpu;
     isOpenCl = isGpu && selected.isOpenCl;
     isMetal = isGpu && selected.isMetal;
-    const auto usesFamily = [&](std::string_view family) {
-      return isGpu &&
-             (toLowerAscii(selected.name).find(family) != std::string::npos ||
-              std::ranges::any_of(
-                  splitSelection.devices,
-                  [family](const backend_selection::SplitDevice& device) {
-                    return toLowerAscii(device.name).find(family) !=
-                           std::string::npos;
-                  }));
-    };
-    isCuda = usesFamily("cuda");
-    isXdna = usesFamily("xdna");
+    isCuda =
+        usesBackendFamily(isGpu, selected.name, splitSelection.devices, "cuda");
+    isXdna =
+        usesBackendFamily(isGpu, selected.name, splitSelection.devices, "xdna");
   }
 
   tuneLoadConfigMap(

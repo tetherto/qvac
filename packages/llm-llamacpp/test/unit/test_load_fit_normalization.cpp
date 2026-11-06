@@ -2461,6 +2461,34 @@ TEST_F(LoadFitNormalizationTest, AutomaticSplitLeavesOutOptInDevices) {
   EXPECT_EQ(result.params.mmproj_backend, "local");
 }
 
+// isXdna keeps the KV cache at f16 on the NPU (tuneLoadConfigMap).
+TEST(UsesBackendFamilyTest, MatchesXdnaOverrideName) {
+  EXPECT_TRUE(lfn::usesBackendFamily(true, "xdna0", {}, "xdna"));
+}
+
+TEST(UsesBackendFamilyTest, MatchesExplicitXdnaDevice) {
+  const std::vector<backend_selection::SplitDevice> split{{.name = "XDNA0"}};
+  EXPECT_TRUE(lfn::usesBackendFamily(true, "XDNA0", split, "xdna"));
+}
+
+TEST(UsesBackendFamilyTest, MatchesXdnaInMixedSplit) {
+  const std::vector<backend_selection::SplitDevice> split{
+      {.name = "Vulkan0"}, {.name = "XDNA0"}};
+  EXPECT_TRUE(lfn::usesBackendFamily(true, "Vulkan0", split, "xdna"));
+  EXPECT_FALSE(lfn::usesBackendFamily(true, "Vulkan0", split, "cuda"));
+}
+
+TEST(UsesBackendFamilyTest, FalseOnCpuFallback) {
+  const std::vector<backend_selection::SplitDevice> split{{.name = "XDNA0"}};
+  EXPECT_FALSE(lfn::usesBackendFamily(false, "xdna0", split, "xdna"));
+}
+
+TEST(UsesBackendFamilyTest, FalseWithoutXdnaDevice) {
+  const std::vector<backend_selection::SplitDevice> split{{.name = "Vulkan0"}};
+  EXPECT_FALSE(lfn::usesBackendFamily(true, "vulkan0", split, "xdna"));
+  EXPECT_TRUE(lfn::usesBackendFamily(true, "CUDA0", {}, "cuda"));
+}
+
 TEST_F(LoadFitNormalizationTest, DefaultSplitModeAllowsOneExplicitDevice) {
   auto config = baseConfig();
   config["devices"] = "none";
