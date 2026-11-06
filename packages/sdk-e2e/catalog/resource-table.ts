@@ -14,6 +14,12 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: { verbosity: 0, ctx_size: 2048, cache_share_across_keys: false }
   },
 
+  'llm-shared-cache': {
+    constant: { $const: 'LLAMA_3_2_1B_INST_Q4_0' },
+    type: 'llamacpp-completion',
+    config: { verbosity: 0, ctx_size: 2048, cache_share_across_keys: true }
+  },
+
   'llm-small-ctx': {
     constant: { $const: 'LLAMA_3_2_1B_INST_Q4_0' },
     type: 'llamacpp-completion',
