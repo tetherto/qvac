@@ -30,6 +30,8 @@ import io.tether.qvac.sdk.generated.schema.TextToSpeechRequest
 import io.tether.qvac.sdk.generated.schema.TextToSpeechRequestEmotion
 import io.tether.qvac.sdk.generated.schema.TextToSpeechRequestPace
 import io.tether.qvac.sdk.generated.schema.TextToSpeechResponse
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 import io.tether.qvac.sdk.generated.schema.TextToSpeechStreamRequest
 import io.tether.qvac.sdk.generated.schema.TextToSpeechStreamResponse
 import io.tether.qvac.sdk.generated.schema.TranscribeRequest
@@ -61,6 +63,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -122,11 +125,17 @@ class QvacSpeech internal constructor(private val client: QvacClient) {
         audio: Flow<ByteArray>,
     ): Flow<TranscribeStreamResponse> = client.transcribeStream(request, audio)
 
-    /** Text chunks are UTF-8 bytes. Collect concurrently with producing input. No result aggregation. */
+    /**
+     * Text chunks are UTF-8 bytes. Collect concurrently with producing input. No result aggregation.
+     * Frames arrive with their samples in `buffer`: audio the worker sent as base64 `pcm` is decoded here.
+     */
     fun synthesizeStream(
         request: TextToSpeechStreamRequest,
         text: Flow<ByteArray>,
-    ): Flow<TextToSpeechStreamResponse> = client.textToSpeechStream(request, text)
+    ): Flow<TextToSpeechStreamResponse> =
+        client.textToSpeechStream(request, text).map { frame ->
+            if (frame.pcm.isNullOrEmpty()) frame else frame.copy(buffer = ttsSamples(frame.buffer, frame.pcm), pcm = null)
+        }
 
     suspend fun transcribe(
         modelId: String,
@@ -179,7 +188,7 @@ class QvacSpeech internal constructor(private val client: QvacClient) {
                 voice = voice.voice,
             ),
         ).collect { (response, frame) ->
-            samples += response.buffer
+            samples += ttsSamples(response.buffer, response.pcm)
             response.sentenceChunk?.let(sentences::add)
             frame.rawStats()?.let { stats = it }
         }
@@ -646,3 +655,23 @@ private fun OcrStreamResponseBlocksItem.toOcrBlock() = QvacOcrBlock(
     boundingBox = bbox?.mapNotNull { it.jsonPrimitive.doubleOrNull }.orEmpty(),
     confidence = confidence,
 )
+
+/**
+ * The PCM of a TTS frame. The worker sends it as base64 little-endian signed
+ * 16-bit bytes in `pcm` with `buffer` empty; a frame without `pcm` carries
+ * its samples in `buffer`.
+ */
+@OptIn(ExperimentalEncodingApi::class)
+internal fun ttsSamples(buffer: List<Double>, pcm: String?): List<Double> {
+    if (pcm.isNullOrEmpty()) return buffer
+    val bytes = Base64.Default.decode(pcm)
+    val out = ArrayList<Double>(bytes.size / 2)
+    var i = 0
+    while (i + 1 < bytes.size) {
+        val lo = bytes[i].toInt() and 0xff
+        val hi = bytes[i + 1].toInt()
+        out.add(((hi shl 8) or lo).toShort().toDouble())
+        i += 2
+    }
+    return out
+}
