@@ -760,17 +760,58 @@ async def _completion_stream(
         return {
             "text": await streamed if streamed else await run.text(),
             "toolCalls": [
-                {"name": call.name, "arguments": call.arguments} for call in calls
+                {"id": call.id, "name": call.name, "arguments": call.arguments}
+                for call in calls
             ],
             "stats": _jsonable(final.stats),
             "stopReason": final.stop_reason,
             "fullText": final.raw_full_text,
         }
     if collect == "events":
-        return {"events": [_jsonable(event) async for event in run.events]}
+        # The final's tool calls ride along so a test can check the stream against the
+        # aggregate of the same run.
+        events = [_jsonable(event) async for event in run.events]
+        final = await run.final
+        return {"events": events, "toolCalls": _tool_calls(final.tool_calls)}
     raise StepError(
         f'collect: "{collect}" is not defined for completion', incomplete=True
     )
+
+
+def _tool_calls(calls: list[Any]) -> list[dict[str, Any]]:
+    return [
+        {"id": call.id, "name": call.name, "arguments": call.arguments}
+        for call in calls
+    ]
+
+
+async def _completion_or_error_stream(
+    transport: Any, params: dict[str, Any], collect: str
+) -> Any:
+    """A completion that may legitimately fail: binds the error instead of raising.
+
+    For requests whose contract is "a tool call or an explicit error", where only a
+    prose answer with no call is wrong.
+    """
+    if collect != "text":
+        raise StepError(
+            f'collect: "{collect}" is not defined for completionOrError',
+            incomplete=True,
+        )
+    try:
+        run = completion(
+            transport,
+            model_id=params["modelId"],
+            history=params["history"],
+            stream=params.get("stream", True),
+            generation_params=params.get("generationParams"),
+            tools=params.get("tools"),
+            tool_dialect=params.get("toolDialect"),
+        )
+        final = await run.final
+    except Exception as error:  # noqa: BLE001 -- any rejection is the outcome under test
+        return {"text": "", "toolCalls": [], "error": {"message": str(error)}}
+    return {"text": final.content_text, "toolCalls": _tool_calls(final.tool_calls)}
 
 
 async def _translate_stream(
@@ -1103,6 +1144,7 @@ async def _plugin_stream(transport: Any, params: dict[str, Any], collect: str) -
 # through `collect`, which names the fold it wants.
 STREAMS: dict[str, Callable[[Any, dict[str, Any], str], Any]] = {
     "completion": _completion_stream,
+    "completionOrError": _completion_or_error_stream,
     "translate": _translate_stream,
     "ocr": _ocr_stream,
     "transcribeStream": _transcribe_stream,
