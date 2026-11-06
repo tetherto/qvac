@@ -9,6 +9,7 @@ import {
   createWorkspaceEmbeddingFunction,
   getRagEmbedParent,
   setRagEmbedParent,
+  queryEmbeddingText,
   stashQueryEmbedding,
   takeQueryEmbedding
 } from '@/rag/embedding-scope'
@@ -106,6 +107,21 @@ test('rag embedding: clearing another operation parent is a no-op', (t) => {
   t.is(getRagEmbedParent(WS), second, "the older operation's unwind leaves the newer parent")
   clearRagEmbedParent(WS, second)
   t.is(getRagEmbedParent(WS), undefined)
+})
+
+test('rag embedding: a query is stashed under the text the library asks for', async (t) => {
+  const modelId = 'embed-scope-trim'
+  const model = registerEmbedModel(modelId)
+  model.release()
+  const embedding = createWorkspaceEmbeddingFunction(modelId, WS)
+
+  // @qvac/rag trims a query before it reaches the embedding function.
+  const text = queryEmbeddingText('  hello world ')
+  t.is(text, 'hello world')
+  stashQueryEmbedding(WS, text, [0.25, 0.75])
+  t.alike(await embedding('hello world'), [0.25, 0.75], 'the trimmed query finds its vector')
+  t.is(model.runs(), 0)
+  unregisterModel(modelId)
 })
 
 test('rag embedding: a stashed query vector is handed back once, without a model run', async (t) => {

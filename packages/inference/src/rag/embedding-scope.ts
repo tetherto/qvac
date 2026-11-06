@@ -39,6 +39,15 @@ export function getRagEmbedParent(workspace: string | undefined): PluginHandlerC
   return parentByWorkspace.get(getWorkspaceKey(workspace))
 }
 
+/**
+ * The text the workspace embedding function is asked for when a search runs:
+ * `@qvac/rag` trims a query before it embeds it, so a search embeds and
+ * stashes the trimmed text to be found by the same key.
+ */
+export function queryEmbeddingText(query: string): string {
+  return query.trim()
+}
+
 export function stashQueryEmbedding(
   workspace: string | undefined,
   query: string,

@@ -1,6 +1,7 @@
 import { getRagInstance, hasRagWorkspaceStorage } from '@/rag/rag-workspace-manager'
 import {
   createWorkspaceEmbeddingFunction,
+  queryEmbeddingText,
   stashQueryEmbedding,
   takeQueryEmbedding
 } from '@/rag/embedding-scope'
@@ -29,15 +30,12 @@ export async function search(params: RagSearchParams, identity: SearchIdentity =
     createWorkspaceEmbeddingFunction(modelId, workspace),
     workspace
   )
-  const { embedding } = await embed(
-    { modelId, text: query },
-    identity.requestId,
-    identity.sessionId
-  )
-  stashQueryEmbedding(workspace, query, embedding as number[])
+  const text = queryEmbeddingText(query)
+  const { embedding } = await embed({ modelId, text }, identity.requestId, identity.sessionId)
+  stashQueryEmbedding(workspace, text, embedding as number[])
   try {
     return await rag.search(query, { topK, n })
   } finally {
-    takeQueryEmbedding(workspace, query)
+    takeQueryEmbedding(workspace, text)
   }
 }
