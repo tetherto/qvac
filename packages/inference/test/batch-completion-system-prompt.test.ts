@@ -298,3 +298,68 @@ test('batchCompletionStream: parallel_tool_calls reaches the addon as true unles
   unregisterModel(modelId)
   clearRegistry()
 })
+
+test('batchCompletionStream: a json-dialect tool call surfaces at finish, once per prompt', async (t) => {
+  clearRegistry()
+
+  const modelId = `batch-json-tool-call-${Date.now()}`
+  const output = '{"name":"lookup","arguments":{"title":"x"}}'
+  registerModel(modelId, {
+    model: {
+      run(addonPrompts: unknown) {
+        const ids = (addonPrompts as Array<{ id?: string }>).map(
+          (prompt, index) => prompt.id ?? String(index)
+        )
+        return Promise.resolve({
+          ids,
+          stats: {},
+          iterate: async function* () {
+            for (const id of ids) yield { id, chunk: output }
+          },
+          await: () => Promise.resolve(ids.map((id) => ({ id, output, stopReason: 'stop' }))),
+          cancel: () => Promise.resolve()
+        })
+      }
+    } as unknown as AnyModel,
+    path: `/tmp/${modelId}.gguf`,
+    config: { tools: true },
+    modelType: ModelType.llamacppCompletion
+  })
+
+  const tools = [
+    {
+      type: 'function',
+      name: 'lookup',
+      description: 'Look something up.',
+      parameters: {
+        type: 'object',
+        properties: { title: { type: 'string', description: 'title' } },
+        required: ['title']
+      }
+    }
+  ]
+  const handler = llmPlugin.handlers.batchCompletionStream.handler as unknown as LooseHandler
+  const calls: { id: string; name: string | undefined }[] = []
+  for await (const frame of handler({
+    modelId,
+    requestId: `${modelId}-batch`,
+    stream: true,
+    toolDialect: 'json',
+    prompts: [
+      { id: 'with-tools', history: [user('Look up x')], tools },
+      { id: 'no-tools', history: [user('Look up x')] }
+    ]
+  })) {
+    const events =
+      (frame as { events?: { id: string; event: { type: string; call?: { name: string } } }[] })
+        .events ?? []
+    for (const { id, event } of events) {
+      if (event.type === 'toolCall') calls.push({ id, name: event.call?.name })
+    }
+  }
+
+  t.alike(calls, [{ id: 'with-tools', name: 'lookup' }], 'only the prompt with tools gets the call')
+
+  unregisterModel(modelId)
+  clearRegistry()
+})
