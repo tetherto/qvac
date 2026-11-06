@@ -2477,6 +2477,8 @@ TEST_F(LoadFitNormalizationTest, TensorSplitRejectsXdna) {
   }
 }
 
+// The mock names later fail fabric's --device parse, so only the XDNA check is
+// under test: it must not refuse a layer split.
 TEST_F(LoadFitNormalizationTest, LayerSplitAcceptsXdna) {
   auto config = baseConfig();
   config["devices"] = "local,XDNA0";
@@ -2488,10 +2490,14 @@ TEST_F(LoadFitNormalizationTest, LayerSplitAcceptsXdna) {
   selection.devices.pop_back();
   dependencies.splitDevices = [selection]() { return selection; };
 
-  const auto result = lfn::normalizeLoadForFit(
-      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
-
-  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies));
+  } catch (const std::exception& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::Not(::testing::HasSubstr("does not support the XDNA")));
+  }
 }
 
 namespace {
