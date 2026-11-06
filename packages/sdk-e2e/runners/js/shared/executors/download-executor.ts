@@ -1,4 +1,4 @@
-import { downloadAsset, cancel, WHISPER_TINY_Q8_0, BERGAMOT_ZH_EN } from '@qvac/sdk'
+import { downloadAsset, cancel, WHISPER_TINY_Q8_0, BERGAMOT_KO_EN } from '@qvac/sdk'
 import { BaseExecutor, type TestResult } from '@qvac/test-suite'
 import {
   downloadCancelIsolation,
@@ -13,7 +13,7 @@ const CACHE_HIT_THRESHOLD_MS = 500
 // the cache-hit branch below and the cancel path is never exercised.
 // It also shares a blob core with the survivor, so cancelling with `clearCache`
 // is proven not to disturb a concurrent download from that same core.
-const CANCEL_TARGET = BERGAMOT_ZH_EN
+const CANCEL_TARGET = BERGAMOT_KO_EN
 
 export class DownloadExecutor extends BaseExecutor<typeof downloadTests> {
   pattern = /^download-/
