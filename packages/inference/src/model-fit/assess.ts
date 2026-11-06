@@ -99,9 +99,6 @@ function nativeEvaluation(
   const { weightsBytes, contextBytes, computeBytes, deviceBytes, hostBytes } = projection
   if (weightsBytes === undefined || contextBytes === undefined || computeBytes === undefined) {
     if (fit.engine !== 'llm-llamacpp') return bare
-    const hasPartialBreakdown =
-      weightsBytes !== undefined || contextBytes !== undefined || computeBytes !== undefined
-    if (hasPartialBreakdown) return bare
     if (deviceBytes === undefined && hostBytes === undefined) return bare
 
     return {

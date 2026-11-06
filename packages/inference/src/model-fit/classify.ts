@@ -1,13 +1,8 @@
 import type { NativeProbeFit, NativeProbeProjection, NativeProbeVerdict } from '@/schemas/index'
 import type { FitProbeResult } from '@/model-fit/run/engine'
 
-type CompatibleProbe = FitProbeResult
-type SharedProbe = CompatibleProbe extends infer Probe
-  ? Probe extends { result: { devices: { usedBytes: number }[]; stats: object } }
-    ? Probe
-    : never
-  : never
-type LegacyProbe = Exclude<CompatibleProbe, SharedProbe>
+type LlmProbe = Extract<FitProbeResult, { engine: 'llm-llamacpp' }>
+type LegacyProbe = Exclude<FitProbeResult, LlmProbe>
 type LlamaProbe = Extract<LegacyProbe, { engine: 'embed-llamacpp' }>
 
 /** The llama fitters append a host row after the devices they assigned to. */
@@ -209,12 +204,12 @@ function planFor(probe: LegacyProbe): NativeProbeFit['plan'] {
   }
 }
 
-function isSharedProbe(probe: CompatibleProbe): probe is SharedProbe {
-  return 'stats' in probe.result
+function isLlmProbe(probe: FitProbeResult): probe is LlmProbe {
+  return probe.engine === 'llm-llamacpp'
 }
 
-function classifySharedFit(
-  probe: SharedProbe,
+function classifyLlmFit(
+  probe: LlmProbe,
   provenance: { basis: 'native-probe'; estimatorVersion: string }
 ): NativeProbeFit {
   const verdict = verdictFor(probe.result.status)
@@ -255,10 +250,10 @@ function classifySharedFit(
 }
 
 export function classifyFit(
-  probe: CompatibleProbe,
+  probe: FitProbeResult,
   provenance: { basis: 'native-probe'; estimatorVersion: string }
 ): NativeProbeFit {
-  if (isSharedProbe(probe)) return classifySharedFit(probe, provenance)
+  if (isLlmProbe(probe)) return classifyLlmFit(probe, provenance)
 
   const verdict = verdictFor(probe.result.status)
   const plan = verdict === 'fit' ? planFor(probe) : undefined
