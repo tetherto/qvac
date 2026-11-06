@@ -24,6 +24,7 @@ import { attachModelExecutionMs } from '@/profiling/model-execution'
 import { attachBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import { buildBciWhispercppArgs } from '@/plugins/builtin/bci-whispercpp-transcription/args'
 import { resolveBciConfig } from '@/plugins/builtin/bci-whispercpp-transcription/resolve-config'
+import { bciFitRequest } from '@/plugins/builtin/bci-whispercpp-transcription/fit'
 
 function createBciModel(
   modelId: string,
@@ -46,6 +47,7 @@ export const bciPlugin = definePlugin({
   displayName: 'BCI (whisper.cpp)',
   addonPackage: ADDON_BCI,
   loadConfigSchema: bciConfigSchema,
+  fitRequest: bciFitRequest,
   assessFit: bciAssessFit,
 
   resolveConfig: resolveBciConfig,
