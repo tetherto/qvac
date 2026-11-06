@@ -6034,6 +6034,17 @@ class DeleteCacheKvEntryRequest(GeneratedBaseModel):
     model_id: Annotated[str | None, Field(alias="modelId")] = None
 
 
+class DeleteCacheModelRequest(GeneratedBaseModel):
+    type: Literal["deleteCache"] = "deleteCache"
+    model_src: Annotated[
+        str,
+        Field(
+            alias="modelSrc",
+            description="registry:// source of the model whose cached download to delete",
+        ),
+    ]
+
+
 class DeleteCacheResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -11196,7 +11207,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     cache_share_across_keys: Annotated[
         bool | None,
         Field(
-            description="Whether decoder-only requests may reuse a prompt prefix held by another conversation. Default true. Set false to keep each request to its own `kvCache` state; requests without a key then start cold and reset afterwards."
+            description="Whether decoder-only requests may reuse a prompt prefix held by another conversation. The SDK defaults this to false, keeping each request to its own `kvCache` state; requests without a key start cold and reset afterwards. Set true to opt in to model-wide sharing."
         ),
     ] = None
     cache_type_k: Annotated[
@@ -26682,11 +26693,17 @@ class Request_2(RootModel[DecideSingleRequest | DecideBatchRequest]):
 
 class Request_3(
     RootModel[
-        DeleteCacheAllRequest | DeleteCacheAutoRequest | DeleteCacheKvEntryRequest
+        DeleteCacheAllRequest
+        | DeleteCacheAutoRequest
+        | DeleteCacheKvEntryRequest
+        | DeleteCacheModelRequest
     ]
 ):
     root: Annotated[
-        DeleteCacheAllRequest | DeleteCacheAutoRequest | DeleteCacheKvEntryRequest,
+        DeleteCacheAllRequest
+        | DeleteCacheAutoRequest
+        | DeleteCacheKvEntryRequest
+        | DeleteCacheModelRequest,
         Field(title="DeleteCacheRequest"),
     ]
 
