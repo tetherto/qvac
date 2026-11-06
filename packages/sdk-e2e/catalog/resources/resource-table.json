@@ -110,6 +110,24 @@
     },
     "type": "llamacpp-embedding"
   },
+  "embeddinggemma2": {
+    "constant": {
+      "$const": "EMBEDDINGGEMMA_2_Q8_0"
+    },
+    "type": "llamacpp-embedding",
+    "config": {
+      "projectionModelSrc": {
+        "$const": "MMPROJ_EMBEDDINGGEMMA_2_Q8_0"
+      },
+      "ctxSize": 2048,
+      "batchSize": 2048
+    },
+    "configOn": {
+      "mobile-android": {
+        "flashAttention": "off"
+      }
+    }
+  },
   "rerank": {
     "modelSrc": "https://huggingface.co/ggml-org/models/resolve/499bc8821c6b12b4e53c5bffcb21ec206f212d81/jina-reranker-v1-tiny-en/ggml-model-f16.gguf",
     "type": "llamacpp-rerank"
@@ -191,7 +209,8 @@
   },
   "tools-gemma4": {
     "on": [
-      "desktop"
+      "desktop-linux",
+      "desktop-python"
     ],
     "constant": {
       "$const": "GEMMA4_2B_MULTIMODAL_Q4_K_M"
@@ -290,7 +309,7 @@
       "desktop"
     ],
     "constant": {
-      "$const": "GROOT_Q5_VF16"
+      "$const": "GROOT_MULTI_Q5_VF16"
     },
     "type": "ggml-vla",
     "config": {
@@ -494,7 +513,7 @@
   },
   "tts-moss-sfx": {
     "on": [
-      "desktop"
+      "desktop-linux"
     ],
     "constant": {
       "$const": "AUDIOGEN_MOSS_SFX_V2_Q8_0"
@@ -775,7 +794,8 @@
   },
   "world": {
     "on": [
-      "desktop"
+      "desktop-linux",
+      "desktop-python"
     ],
     "constant": {
       "$const": "ABOT_WORLD_0_5B_Q8_0"
@@ -869,14 +889,19 @@
       "desktop"
     ],
     "constant": {
-      "$const": "SD_V2_1_1B_Q8_0"
+      "$const": "FLUX_2_KLEIN_4B_Q4_0"
     },
     "type": "sdcpp-generation",
     "config": {
       "device": "gpu",
       "threads": 4,
-      "prediction": "v",
-      "params_backend": "vae=cpu",
+      "prediction": "flux2_flow",
+      "llmModelSrc": {
+        "$const": "QWEN3_4B_Q4_K_M"
+      },
+      "vaeModelSrc": {
+        "$const": "FLUX_2_KLEIN_4B_VAE"
+      },
       "upscaler": {
         "type": "esrgan",
         "model_src": {
@@ -891,13 +916,19 @@
       "desktop"
     ],
     "constant": {
-      "$const": "SD_V2_1_1B_Q8_0"
+      "$const": "FLUX_2_KLEIN_4B_Q4_0"
     },
     "type": "sdcpp-generation",
     "config": {
       "device": "gpu",
       "threads": 4,
-      "prediction": "v",
+      "prediction": "flux2_flow",
+      "llmModelSrc": {
+        "$const": "QWEN3_4B_Q4_K_M"
+      },
+      "vaeModelSrc": {
+        "$const": "FLUX_2_KLEIN_4B_VAE"
+      },
       "upscaler": {
         "type": "esrgan",
         "model_src": {
