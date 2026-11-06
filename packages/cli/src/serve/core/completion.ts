@@ -44,7 +44,8 @@ export interface DrainedCompletion {
 export async function drainCompletion(
   result: CompletionRun,
   onToken?: (token: string) => void,
-  onThinking?: (token: string) => void
+  onThinking?: (token: string) => void,
+  onToolCall?: (call: ToolCall) => void
 ): Promise<DrainedCompletion> {
   let text = ''
   let thinking = ''
@@ -63,6 +64,7 @@ export async function drainCompletion(
       onThinking?.(event.text)
     } else if (event.type === 'toolCall') {
       toolCalls.push(event.call)
+      onToolCall?.(event.call)
     } else if (event.type === 'toolError') {
       toolErrors.push(event.error)
     } else if (event.type === 'completionStats') {
