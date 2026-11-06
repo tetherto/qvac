@@ -75,8 +75,9 @@ export function resolvePublishedSource({
   }
 
   const request = requestedVersion || "latest";
+  // An npm alias pins the exact version and is a spec enforce-inference-versions skips, as it skips the branch's file:.
   return {
-    dependencySpec: resolvedVersion,
+    dependencySpec: `npm:${NPM_PACKAGE}@${resolvedVersion}`,
     provenance: `npm:${NPM_PACKAGE}@${resolvedVersion}`,
     requestedVersion: request,
   };
