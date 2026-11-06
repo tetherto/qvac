@@ -140,7 +140,7 @@ jobs:
 
   weekly-select-android:
     needs: weekly
-    if: needs.weekly.outputs.android != ''
+    if: needs.weekly.outputs.android != '' && github.event_name != 'workflow_dispatch'
     permissions:
       contents: read
     uses: ./.github/workflows/_select-projects.yml
