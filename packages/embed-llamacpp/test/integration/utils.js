@@ -411,17 +411,36 @@ const MODEL_CONFIGS = {
     downloadUrl:
       'https://huggingface.co/ggml-org/embeddinggemma-2-GGUF/resolve/main/mmproj-embeddinggemma-2-Q8_0.gguf',
     projector: true
+  },
+  // Upstream decision models for decision-engine.test.js: the tiny fixtures
+  // llama-server's own /v1/systemone tests use. A laya (non-causal, marker
+  // readout) and an openjev (label logits, shared prefixes) with its image
+  // projector. Not embedding models: getModelConfigs() leaves them out.
+  'tinylaya-for-testing-Q8_0.gguf': {
+    downloadUrl:
+      'https://huggingface.co/ggml-org/tinylaya-for-testing-gguf/resolve/main/tinylaya-for-testing-Q8_0.gguf',
+    decision: true
+  },
+  'tinyopenjev-for-testing-Q8_0.gguf': {
+    downloadUrl:
+      'https://huggingface.co/ggml-org/tinyopenjev-for-testing-gguf/resolve/main/tinyopenjev-for-testing-Q8_0.gguf',
+    decision: true
+  },
+  'mmproj-tinyopenjev-for-testing-Q8_0.gguf': {
+    downloadUrl:
+      'https://huggingface.co/ggml-org/tinyopenjev-for-testing-gguf/resolve/main/mmproj-tinyopenjev-for-testing-Q8_0.gguf',
+    projector: true
   }
 }
 
 /**
- * Gets the embedding model configurations (rerankers and projectors are left
- * out)
+ * Gets the embedding model configurations (rerankers, projectors and decision
+ * models are left out)
  * @returns {Array<{modelName: string, config: Object}>}
  */
 function getModelConfigs() {
   return Object.entries(MODEL_CONFIGS)
-    .filter(([, config]) => !config.reranker && !config.projector)
+    .filter(([, config]) => !config.reranker && !config.projector && !config.decision)
     .map(([modelName, config]) => ({
       modelName,
       config

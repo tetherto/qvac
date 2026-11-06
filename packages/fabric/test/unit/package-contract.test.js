@@ -148,6 +148,34 @@ test('fabric exports its own C API on every platform', () => {
   )
 })
 
+test('fabric exports the decision bridge and keeps upstream server internals private', () => {
+  const header = read('include/qvac-fabric.h')
+  for (const symbol of [
+    'qvac_fabric_decision_create',
+    'qvac_fabric_decision_info',
+    'qvac_fabric_decision_cancel_create',
+    'qvac_fabric_decision_cancel_retain',
+    'qvac_fabric_decision_cancel_release',
+    'qvac_fabric_decision_cancel_request',
+    'qvac_fabric_decision_run',
+    'qvac_fabric_decision_destroy',
+    'qvac_fabric_decision_free_string'
+  ]) {
+    assert.match(header, new RegExp(`QVAC_FABRIC_API [^;(]+\\b${symbol}\\(`), symbol)
+  }
+  assert.match(header, /#define QVAC_FABRIC_DECISION_MAX_JSON_DEPTH 128\b/)
+
+  const cmake = read('CMakeLists.txt')
+  assert.match(cmake, /target_sources\(\$\{qvac-fabric\} PRIVATE [^)]*addon\/decision\.cpp/)
+  assert.match(cmake, /target_link_libraries\(\$\{qvac-fabric\} PRIVATE llama::server-context\)/)
+  // The server headers are upstream internals for the bridge; never shipped.
+  assert.match(cmake, /PATTERN "server-context" EXCLUDE/)
+
+  const vcpkg = JSON.parse(read('vcpkg.json'))
+  const fabric = vcpkg.dependencies.find((d) => d.name === 'qvac-fabric')
+  assert.ok(fabric.features.includes('server-context'), 'server-context feature requested')
+})
+
 test('the Mach-O export list does not re-export host symbols', () => {
   const imports = new Set()
   for (const file of fs.readdirSync(path.join(packageRoot, 'addon'))) {

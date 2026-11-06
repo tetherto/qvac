@@ -20,6 +20,12 @@ import {
   type EmbedRunInput,
   type GGMLConfig,
 } from "./addon";
+import {
+  DecisionEngine,
+  DecisionEngineInterface,
+  mapDecisionEngineEvent,
+  DECISION_INVALID_REQUEST,
+} from "./decision";
 import { LayaDecisions, LayaInterface, mapLayaEvent } from "./laya";
 import { Reranker, RerankInterface, mapRerankEvent } from "./rerank";
 
@@ -36,6 +42,22 @@ export type {
   EmbedRunInput,
 } from "./addon";
 export { BertInterface, validateModelPath } from "./addon";
+export {
+  DecisionEngine,
+  DecisionEngineInterface,
+  mapDecisionEngineEvent,
+  DECISION_INVALID_REQUEST,
+} from "./decision";
+export type {
+  DecisionEngineConfig,
+  DecisionEngineRequest,
+  DecisionEngineQuestion,
+  DecisionEngineAnswer,
+  DecisionEngineResult,
+  DecisionEngineInfo,
+  DecisionEngineArgs,
+  DecisionPayload,
+} from "./decision";
 export { LayaDecisions, LayaInterface, mapLayaEvent } from "./laya";
 export type {
   LayaConfig,
@@ -303,6 +325,10 @@ const cjsExports = GGMLBert as typeof GGMLBert & {
   validateModelPath?: typeof validateModelPath;
   GGMLBert?: typeof GGMLBert;
   BertInterface?: typeof BertInterface;
+  DecisionEngine?: typeof DecisionEngine;
+  DecisionEngineInterface?: typeof DecisionEngineInterface;
+  mapDecisionEngineEvent?: typeof mapDecisionEngineEvent;
+  DECISION_INVALID_REQUEST?: typeof DECISION_INVALID_REQUEST;
   LayaDecisions?: typeof LayaDecisions;
   LayaInterface?: typeof LayaInterface;
   mapLayaEvent?: typeof mapLayaEvent;
@@ -315,6 +341,10 @@ cjsExports.default = GGMLBert;
 cjsExports.validateModelPath = validateModelPath;
 cjsExports.GGMLBert = GGMLBert;
 cjsExports.BertInterface = BertInterface;
+cjsExports.DecisionEngine = DecisionEngine;
+cjsExports.DecisionEngineInterface = DecisionEngineInterface;
+cjsExports.mapDecisionEngineEvent = mapDecisionEngineEvent;
+cjsExports.DECISION_INVALID_REQUEST = DECISION_INVALID_REQUEST;
 cjsExports.LayaDecisions = LayaDecisions;
 cjsExports.LayaInterface = LayaInterface;
 cjsExports.mapLayaEvent = mapLayaEvent;

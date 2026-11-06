@@ -41,6 +41,7 @@ target_sources(
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/BertModel.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModelLoader.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LayaModel.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/DecisionEngineModel.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/RerankModel.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/MultimodalEmbedder.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ImagePixelLimit.cpp

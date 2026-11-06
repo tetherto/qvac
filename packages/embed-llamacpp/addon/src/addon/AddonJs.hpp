@@ -34,6 +34,7 @@
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
 #include "model-interface/BertModel.hpp"
+#include "model-interface/DecisionEngineModel.hpp"
 #include "model-interface/LayaModel.hpp"
 #include "model-interface/LlamaLazyInitializeBackend.hpp"
 #include "model-interface/RerankModel.hpp"
@@ -575,6 +576,45 @@ struct JsLayaDecisionOutputHandler
 inline js_value_t*
 createLayaInstance(js_env_t* env, js_callback_info_t* info) try {
   return createModelInstance<LayaModel, JsLayaDecisionOutputHandler>(env, info);
+}
+JSCATCH
+
+/// Delivers an upstream decision response JSON as a JS string; the JS side
+/// parses it.
+struct JsDecisionEngineOutputHandler
+    : qvac_lib_inference_addon_cpp::out_handl::JsBaseOutputHandler<
+          DecisionEngineResult> {
+  JsDecisionEngineOutputHandler()
+      : JsBaseOutputHandler<DecisionEngineResult>(
+            [this](const DecisionEngineResult& out) -> js_value_t* {
+              return qvac_lib_inference_addon_cpp::js::String::create(
+                  this->env_, out.json);
+            }) {}
+};
+
+inline js_value_t*
+createDecisionEngineInstance(js_env_t* env, js_callback_info_t* info) try {
+  return createModelInstance<
+      DecisionEngineModel,
+      JsDecisionEngineOutputHandler>(env, info);
+}
+JSCATCH
+
+/// Args: [instance]. Returns the loaded model's decision capabilities as a
+/// JSON string (see qvac_fabric_decision_info). Blocks until the load ends,
+/// so call it after activate().
+inline js_value_t* decisionInfo(js_env_t* env, js_callback_info_t* info) try {
+  using namespace qvac_lib_inference_addon_cpp;
+  JsArgsParser args(env, info);
+  auto& instance = JsInterface::getInstance(env, args.get(0, "instance"));
+  auto* engine =
+      dynamic_cast<DecisionEngineModel*>(&instance.addonCpp->model.get());
+  if (engine == nullptr) {
+    throw StatusError(
+        general_error::InvalidArgument,
+        "decisionInfo: the instance is not a DecisionEngine");
+  }
+  return js::String::create(env, engine->info());
 }
 JSCATCH
 
