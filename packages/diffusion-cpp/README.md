@@ -198,7 +198,11 @@ compiler version warn and continue; nvcc rejects unsupported architectures.
 which the shared `setup-cuda` action exports.
 
 With automatic backend selection, CUDA devices whose code cannot run are
-skipped, allowing Vulkan or ultimately CPU to be selected. Set
+skipped, allowing Vulkan or ultimately CPU to be selected. Auto-fit prefers
+a dedicated GPU with a positive memory budget, falling back to integrated
+GPUs when none is available. Within each class, the largest available budget
+wins; shared system memory does not make an integrated GPU outrank a dedicated
+GPU. Explicit backend assignments remain unchanged. Set
 `GGML_DISABLE_CUDA=1` before starting the process to disable CUDA, or use
 `backend: 'vulkan0'` to select Vulkan explicitly. An explicit
 `backend: 'cuda0'` requires that CUDA device and fails if it is unavailable.
