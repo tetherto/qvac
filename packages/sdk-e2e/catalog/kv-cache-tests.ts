@@ -874,7 +874,6 @@ export const kvCacheSharedPrefixOptIn: TestDefinition = {
 export const kvCacheTests = [
   ...kvCachePrefillTests,
   kvCacheSharedPrefixDefaultIsolated,
-  kvCacheSharedPrefixOptIn,
   kvCacheCancelKeepsCommittedCache,
   kvCacheConcurrentSameKey,
   kvCacheConcurrentSameKeyAuto,
@@ -897,7 +896,8 @@ export const kvCacheTests = [
   kvCacheToolsSequentialSave,
   kvCacheToolSetChange,
   kvCacheWarmToolChoiceRequired,
-  kvCacheCancelThenNewPrompt
+  kvCacheCancelThenNewPrompt,
+  kvCacheSharedPrefixOptIn
 ]
 
 /**
