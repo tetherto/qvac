@@ -2442,6 +2442,19 @@ TEST_F(LoadFitNormalizationTest, ExplicitDevicesCanNameOptInDevice) {
   EXPECT_EQ(result.params.mmproj_backend, "none");
 }
 
+// Without an NPU, XDNA0 is in no device set: naming it fails the load.
+TEST_F(LoadFitNormalizationTest, ExplicitDevicesRejectAbsentOptInDevice) {
+  auto config = baseConfig();
+  config["devices"] = "XDNA0";
+  const auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "local"}, {"local"});
+
+  EXPECT_THROW(
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies)),
+      qvac_errors::StatusError);
+}
+
 TEST_F(LoadFitNormalizationTest, AutomaticSplitLeavesOutOptInDevices) {
   auto config = baseConfig();
   config["split-mode"] = "layer";
