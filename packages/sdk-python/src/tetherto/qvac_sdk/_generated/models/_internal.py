@@ -6430,6 +6430,33 @@ class DiffusionStreamRequestScheduler(Enum):
     bong_tangent = "bong_tangent"
 
 
+class CustomSigma(RootModel[float]):
+    root: Annotated[float, Field(ge=0.0, le=3.4028234663852886e38)]
+
+
+class DiffusionVaeTileSize(RootModel[int]):
+    root: Annotated[
+        int,
+        Field(
+            description="VAE tile size in latent units, as a positive integer or a WxH string such as 64x32. Each dimension must be between 1 and 2147483647. For Qwen-Image-2.1 outputs at 2048x2048 or larger, use vae_tiling: true with vae_tile_size: 64 to bound decode memory.",
+            gt=0,
+            le=2147483647,
+            title="DiffusionVaeTileSize",
+        ),
+    ]
+
+
+class DiffusionVaeTileSizeSpec(RootModel[str]):
+    root: Annotated[
+        str,
+        Field(
+            description="VAE tile size in latent units, as a positive integer or a WxH string such as 64x32. Each dimension must be between 1 and 2147483647. For Qwen-Image-2.1 outputs at 2048x2048 or larger, use vae_tiling: true with vae_tile_size: 64 to bound decode memory.",
+            pattern="^[0-9]+x[0-9]+$",
+            title="DiffusionVaeTileSizeSpec",
+        ),
+    ]
+
+
 class InitImage(RootModel[str]):
     root: Annotated[
         str,
@@ -6483,7 +6510,9 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     steps: Annotated[
         int | None,
         Field(
-            description="Number of sampling steps to run.", gt=0, le=9007199254740991
+            description="Number of sampling steps. Overridden by custom_sigmas.length - 1 when supplied.",
+            gt=0,
+            le=9007199254740991,
         ),
     ] = None
     cfg_scale: Annotated[
@@ -6514,8 +6543,16 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     scheduler: Annotated[
         DiffusionStreamRequestScheduler | None,
         Field(
-            description="Noise schedule to apply when sampling.",
+            description="Noise schedule to apply when sampling. Overridden by custom_sigmas when supplied.",
             title="DiffusionStreamRequestScheduler",
+        ),
+    ] = None
+    custom_sigmas: Annotated[
+        list[CustomSigma] | None,
+        Field(
+            description="Explicit noise schedule, including terminal zero. At least two finite, non-negative float values, strictly decreasing after conversion to float precision. Overrides scheduler and steps; the effective step count is length minus one. Qwen-Image-2.1-Turbo uses its fixed eight-step schedule with Euler and cfg_scale: 1.",
+            max_length=2147483647,
+            min_length=2,
         ),
     ] = None
     seed: Annotated[
@@ -6537,7 +6574,13 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     vae_tiling: Annotated[
         bool | None,
         Field(
-            description="Enable VAE tiling for large images on constrained VRAM (overrides model config)."
+            description="Enable VAE tiling for large images on constrained VRAM, overriding model config."
+        ),
+    ] = None
+    vae_tile_size: Annotated[
+        DiffusionVaeTileSize | DiffusionVaeTileSizeSpec | None,
+        Field(
+            description="VAE tile size in latent units, as a positive integer or a WxH string such as 64x32. Each dimension must be between 1 and 2147483647. For Qwen-Image-2.1 outputs at 2048x2048 or larger, use vae_tiling: true with vae_tile_size: 64 to bound decode memory."
         ),
     ] = None
     cache_preset: Annotated[

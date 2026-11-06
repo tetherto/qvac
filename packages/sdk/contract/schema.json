@@ -7515,7 +7515,7 @@
           "multipleOf": 8
         },
         "steps": {
-          "description": "Number of sampling steps to run.",
+          "description": "Number of sampling steps. Overridden by custom_sigmas.length - 1 when supplied.",
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
@@ -7555,7 +7555,7 @@
           "title": "DiffusionStreamRequestSamplingMethod"
         },
         "scheduler": {
-          "description": "Noise schedule to apply when sampling.",
+          "description": "Noise schedule to apply when sampling. Overridden by custom_sigmas when supplied.",
           "type": "string",
           "enum": [
             "discrete",
@@ -7572,6 +7572,17 @@
           ],
           "title": "DiffusionStreamRequestScheduler"
         },
+        "custom_sigmas": {
+          "description": "Explicit noise schedule, including terminal zero. At least two finite, non-negative float values, strictly decreasing after conversion to float precision. Overrides scheduler and steps; the effective step count is length minus one. Qwen-Image-2.1-Turbo uses its fixed eight-step schedule with Euler and cfg_scale: 1.",
+          "minItems": 2,
+          "maxItems": 2147483647,
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 3.4028234663852886e38
+          }
+        },
         "seed": {
           "description": "Random seed; when omitted we pick one and return it in stats.",
           "type": "integer",
@@ -7585,8 +7596,24 @@
           "maximum": 9007199254740991
         },
         "vae_tiling": {
-          "description": "Enable VAE tiling for large images on constrained VRAM (overrides model config).",
+          "description": "Enable VAE tiling for large images on constrained VRAM, overriding model config.",
           "type": "boolean"
+        },
+        "vae_tile_size": {
+          "description": "VAE tile size in latent units, as a positive integer or a WxH string such as 64x32. Each dimension must be between 1 and 2147483647. For Qwen-Image-2.1 outputs at 2048x2048 or larger, use vae_tiling: true with vae_tile_size: 64 to bound decode memory.",
+          "anyOf": [
+            {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 2147483647,
+              "title": "DiffusionVaeTileSize"
+            },
+            {
+              "type": "string",
+              "pattern": "^[0-9]+x[0-9]+$",
+              "title": "DiffusionVaeTileSizeSpec"
+            }
+          ]
         },
         "cache_preset": {
           "description": "Optional name of a cached sampler preset to reuse.",
