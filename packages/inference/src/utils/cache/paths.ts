@@ -114,6 +114,13 @@ export function getShardPath(hyperdriveKey: string, shardFilename: string): stri
 }
 
 /**
+ * Marker written next to a verified HTTP download, holding its size.
+ */
+export function completeMarkerPath(modelPath: string): string {
+  return `${modelPath}.complete`
+}
+
+/**
  * Returns the deletion target for `clearStorage`. Scoped to the QVAC cache
  * directory — companion set and legacy ONNX paths delete the parent directory.
  */
