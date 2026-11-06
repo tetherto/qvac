@@ -38,9 +38,17 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 - Parakeet streaming token IDs, finality, chunk indices and native end-of-turn
   timing and confidence, including empty final markers. Transcript chunks are
   delivered before their end-of-turn event in framework and duplex streaming.
+- `RuntimeStats.encoderUsedCoreml` after batch Nemotron 3 Diarization and
+  Sortformer jobs: `1` when every diarization ran on the Core ML diarizers, `0`
+  when any ran on ggml, for example a call longer than every staged bundle.
+  Streaming jobs still omit it.
 
 ### Changed
 
+- Update the shared `speech-cpp` native dependency to `2026-11-05`, which
+  reports per-call Core ML routing for diarization
+  ([Fabric #415](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/415),
+  [registry #480](https://github.com/tetherto/qvac-registry-vcpkg/pull/480)).
 - Update the shared `speech-cpp` native dependency to `2026-11-04#1` for full
   TranscribePsy EU support ([#5590](https://github.com/tetherto/qvac/pull/5590)).
 - Update `@qvac/decoder-audio` to `^0.9.0` to include the FFmpeg resource cleanup fix.
