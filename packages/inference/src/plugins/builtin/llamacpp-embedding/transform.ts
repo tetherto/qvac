@@ -14,6 +14,10 @@ export function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {
     batch_size: `${embedConfig.batchSize}` as `${number}`
   }
 
+  if (embedConfig.ctxSize !== undefined) {
+    config.ctx_size = `${embedConfig.ctxSize}`
+  }
+
   if (embedConfig.poll !== undefined) {
     config.poll = `${embedConfig.poll}`
   }
@@ -61,6 +65,30 @@ export function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {
 
   if (embedConfig.openclCacheDir) {
     config.openclCacheDir = embedConfig.openclCacheDir
+  }
+
+  if (embedConfig.imageMaxTokens !== undefined) {
+    config['image-max-tokens'] = `${embedConfig.imageMaxTokens}`
+  }
+
+  if (embedConfig.imageMinTokens !== undefined) {
+    config['image-min-tokens'] = `${embedConfig.imageMinTokens}`
+  }
+
+  if (embedConfig.imageMaxMegapixels !== undefined) {
+    config['image-max-megapixels'] = `${embedConfig.imageMaxMegapixels}`
+  }
+
+  if (embedConfig.audioMaxSeconds !== undefined) {
+    config['audio-max-seconds'] = `${embedConfig.audioMaxSeconds}`
+  }
+
+  if (embedConfig.mmprojNoAudio !== undefined) {
+    config['mmproj-no-audio'] = embedConfig.mmprojNoAudio ? '1' : '0'
+  }
+
+  if (embedConfig.mmprojUseGpu !== undefined) {
+    config['mmproj-use-gpu'] = embedConfig.mmprojUseGpu ? '1' : '0'
   }
 
   return config

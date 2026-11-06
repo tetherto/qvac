@@ -71,6 +71,17 @@ export const RESOURCE_TABLE: ResourceTable = {
     type: 'llamacpp-embedding'
   },
 
+  embeddinggemma2: {
+    constant: { $const: 'EMBEDDINGGEMMA_2_Q8_0' },
+    type: 'llamacpp-embedding',
+    config: {
+      projectionModelSrc: { $const: 'MMPROJ_EMBEDDINGGEMMA_2_Q8_0' },
+      ctxSize: 2048,
+      batchSize: 2048
+    },
+    configOn: { 'mobile-android': { flashAttention: 'off' } }
+  },
+
   // The reranker the addon's own tests use, pinned until a reranker is in the registry.
   rerank: {
     modelSrc:
