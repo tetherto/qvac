@@ -37,12 +37,26 @@ TEST_F(WorldSessionModelTest, StreamingPlacementWarningIsVisibleByDefault) {
   testing::internal::CaptureStdout();
   sdLogCallback(SD_LOG_WARN, "ordinary warning", nullptr);
   sdLogCallback(SD_LOG_INFO, "ordinary info", nullptr);
+  sdLogCallback(SD_LOG_VERBOSE, "ordinary verbose", nullptr);
   sdLogCallback(SD_LOG_WARN, nullptr, nullptr);
   const auto filtered = testing::internal::GetCapturedStdout();
   logging::g_verbosityLevel = previousVerbosity;
   EXPECT_NE(output.find("[ERROR]"), std::string::npos);
   EXPECT_NE(output.find("diffusion params backend is cpu"), std::string::npos);
   EXPECT_TRUE(filtered.empty());
+}
+
+TEST_F(WorldSessionModelTest, VerboseEngineMessagesUseDebugPriority) {
+  const auto previousVerbosity = logging::g_verbosityLevel.load();
+  logging::g_verbosityLevel =
+      qvac_lib_inference_addon_cpp::logger::Priority::DEBUG;
+  testing::internal::CaptureStdout();
+  sdLogCallback(SD_LOG_VERBOSE, "engine verbose", nullptr);
+  const auto output = testing::internal::GetCapturedStdout();
+  logging::g_verbosityLevel = previousVerbosity;
+  EXPECT_NE(output.find("[DEBUG]"), std::string::npos);
+  EXPECT_NE(output.find("engine verbose"), std::string::npos);
+  EXPECT_EQ(output.find("[ERROR]"), std::string::npos);
 }
 
 TEST_F(WorldSessionModelTest, ConstructWithEmptyConfigDoesNotThrow) {
