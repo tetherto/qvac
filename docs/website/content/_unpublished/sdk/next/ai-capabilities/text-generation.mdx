@@ -265,28 +265,26 @@ Notes:
 A search scores each deferred tool against the query: 1000 for its exact name;
 otherwise 100 when the whole query (three or more characters) appears inside
 the name, plus 50 for each query word in its name, 10 in its description and 5
-in its group. It loads every tool scoring above 0, best first, up to the model's `limit`
-(default 3, at most 8), and stops adding past 8 KiB of schemas once the top
-match is in. A query word that only happens to appear in another tool's
-description or group is enough to load that tool too.
+in its group. An exact name loads that tool alone. Any other query loads every
+tool scoring above 0, best first, up to the model's `limit` (default 3, at most
+8), and stops adding past 8 KiB of schemas once the top match is in. A query
+word that only happens to appear in another tool's description or group is
+enough to load that tool too.
 
 When you run the search yourself, the last argument of `executeToolSearch`
 takes options that change this; each one defaults to the behaviour above:
 
-* `defaultLimit` and `maxLimit`: the limit when the model passes none, and the
-  ceiling on one it does pass.
-* `maxDefinitionBytes`: the schema budget past the top match.
-* `minScore`: the lowest score that counts as a match.
 * `select(ranked, { query, limit })`: receives every match with its score, best
-  first, and returns the ones to load; the limit and size budget still apply.
+  first, and returns the ones to load. It can only narrow the ranking: a tool
+  not in it, or one returned twice, is skipped, and the limit and size budget
+  still apply.
+* `maxDefinitionBytes`: the schema budget past the top match.
 
 `rankDeferredTools(tools, query)` returns the same scored ranking for
-inspection. `minScore` and `select` change nothing the model is told. The
-`tool_search` in a `completion()` prompt is built with the defaults, so it
-still advertises a default of 3 and a maximum of 8 when you change
-`defaultLimit` or `maxLimit`; `buildToolSearchTool(deferred, options)` renders
-the matching definition for a prompt you build yourself. The following example
-keeps only the matches that score at least half of the best one:
+inspection. Scores order the tools of one search; compare them to each other,
+not to a fixed number, since the weights behind them may change. Neither option
+changes what the model is told. The following example keeps only the matches
+that score at least half of the best one:
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>

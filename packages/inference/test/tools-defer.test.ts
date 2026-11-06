@@ -182,7 +182,20 @@ test('without options a search loads every match up to the default limit', (t) =
     searchDeferredTools(CATALOG, HTTP_QUERY, undefined, {}),
     searchDeferredTools(CATALOG, HTTP_QUERY)
   )
-  t.alike(buildToolSearchTool(CATALOG, {}), buildToolSearchTool(CATALOG))
+})
+
+test('an exact name loads that tool alone, even when others share its words', (t) => {
+  t.alike(names(searchDeferredTools(CATALOG, 'http_request', 3)), ['http_request'])
+
+  const seen: string[][] = []
+  const loaded = searchDeferredTools(CATALOG, 'http_request', 3, {
+    select: (ranked) => {
+      seen.push(ranked.map(({ tool: each }) => each.name))
+      return ranked
+    }
+  })
+  t.alike(seen, [['http_request']], 'select sees only the named tool')
+  t.alike(names(loaded), ['http_request'])
 })
 
 test('select narrows the ranking it is given', (t) => {
@@ -218,43 +231,20 @@ test('the limit and size caps apply to what select returns', (t) => {
   )
 })
 
-test('minScore drops weak matches before select sees them', (t) => {
-  t.alike(names(searchDeferredTools(CATALOG, HTTP_QUERY, undefined, { minScore: 11 })), [
-    'http_request'
-  ])
+test('select can only narrow: an outside tool or a repeat is skipped', (t) => {
+  const outside = tool('delete_everything', 'Not part of this search', { deferLoading: true })
+  const [top, second] = rankDeferredTools(CATALOG, HTTP_QUERY)
+  const loaded = searchDeferredTools(CATALOG, HTTP_QUERY, 2, {
+    select: () => [{ tool: outside, score: 2000 }, top!, top!, second!]
+  })
+  t.alike(names(loaded), ['http_request', 'weather_lookup'])
 })
 
-test('defaultLimit and maxLimit set the limit and the one tool_search advertises', (t) => {
-  t.is(searchDeferredTools(CATALOG, HTTP_QUERY, undefined, { defaultLimit: 1 }).length, 1)
-  t.is(searchDeferredTools(CATALOG, HTTP_QUERY, 2, { defaultLimit: 1 }).length, 2)
-  t.is(searchDeferredTools(CATALOG, HTTP_QUERY, 8, { maxLimit: 2 }).length, 2)
-
-  const limitText = (options = {}) =>
-    buildToolSearchTool(CATALOG, options).parameters.properties['limit']?.description
-  t.is(limitText(), 'Maximum definitions to load (default 3, max 8).')
-  t.is(
-    limitText({ defaultLimit: 1, maxLimit: 2 }),
-    'Maximum definitions to load (default 1, max 2).'
-  )
-  t.is(
-    limitText({ defaultLimit: 5, maxLimit: 2 }),
-    'Maximum definitions to load (default 2, max 2).',
-    'a default above the ceiling is clamped to it'
-  )
-})
-
-test('executeToolSearch and resolveDeferredTools take the same options', (t) => {
+test('executeToolSearch passes its options to the search', (t) => {
   const result = JSON.parse(
     executeToolSearch(CATALOG, { query: HTTP_QUERY }, [], { select: halfOfBest })
   ) as { tool_search: { loaded: string[] } }
   t.alike(result.tool_search.loaded, ['http_request'])
-
-  const rendered = resolveDeferredTools(CATALOG, [], { defaultLimit: 1 })?.toolsToRender ?? []
-  const search = rendered.find((each) => each.name === TOOL_SEARCH_NAME)
-  t.is(
-    search?.parameters.properties['limit']?.description,
-    'Maximum definitions to load (default 1, max 8).'
-  )
 })
 
 test('a no-match search tells the model what to do instead of going quiet', (t) => {

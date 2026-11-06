@@ -10,21 +10,26 @@ export const TOOL_SEARCH_NAME = 'tool_search'
 
 const DEFAULT_SEARCH_LIMIT = 3
 const MAX_SEARCH_LIMIT = 8
+const EXACT_NAME_SCORE = 1000
 
 // Ceiling on the definitions one search may declare. A query matching a dozen
 // large schemas would otherwise undo the saving the catalog just made.
 const MAX_DEFINITION_BYTES = 8 * 1024
 
-/** A deferred tool and how well it matched a `tool_search` query. */
+/**
+ * A deferred tool and how well it matched a `tool_search` query. Scores order
+ * the tools of one search; compare them to each other, not to a fixed number,
+ * since the weights behind them may change.
+ */
 export type RankedTool = {
   tool: Tool
   score: number
 }
 
 /**
- * Picks which ranked matches a search loads, best first. It receives every
- * match at or above `minScore` and the limit this search resolved to; the
- * limit and size caps still apply to what it returns.
+ * Picks which ranked matches a search loads, best first, given the limit this
+ * search resolved to. It can only narrow: a tool missing from `ranked` or
+ * returned twice is skipped, and the limit and size caps still apply.
  */
 export type ToolSearchSelect = (
   ranked: readonly RankedTool[],
@@ -33,21 +38,14 @@ export type ToolSearchSelect = (
 
 /**
  * How `tool_search` turns a ranking into the definitions it loads. Every field
- * is optional and defaults to the built-in behaviour, so a caller tunes only
- * what its tool set needs.
+ * is optional and defaults to the built-in behaviour.
  */
 export type ToolSearchOptions = {
-  /** Definitions a search loads when the model passes no `limit`. Defaults to 3. */
-  defaultLimit?: number
-  /** The most definitions one search may load, whatever `limit` the model asks for. Defaults to 8. */
-  maxLimit?: number
   /**
    * Ceiling on the schema bytes one search declares. The top match always
    * loads, however large. Defaults to 8 KiB.
    */
   maxDefinitionBytes?: number
-  /** The lowest score that counts as a match. Defaults to 0: any word in common. */
-  minScore?: number
   /** Narrows the ranked matches before the limit and size caps apply. */
   select?: ToolSearchSelect
 }
@@ -144,11 +142,7 @@ export function buildCatalog(deferred: readonly Tool[]): string {
  * tool whose schema the model has never seen. Description text cannot be
  * called, which is the whole point.
  */
-export function buildToolSearchTool(
-  deferred: readonly Tool[],
-  options: ToolSearchOptions = {}
-): Tool {
-  const { defaultLimit = DEFAULT_SEARCH_LIMIT, maxLimit = MAX_SEARCH_LIMIT } = options
+export function buildToolSearchTool(deferred: readonly Tool[]): Tool {
   return {
     type: 'function',
     name: TOOL_SEARCH_NAME,
@@ -166,7 +160,7 @@ export function buildToolSearchTool(
         },
         limit: {
           type: 'integer',
-          description: `Maximum definitions to load (default ${resolveLimit(undefined, defaultLimit, maxLimit)}, max ${maxLimit}).`
+          description: `Maximum definitions to load (default ${DEFAULT_SEARCH_LIMIT}, max ${MAX_SEARCH_LIMIT}).`
         }
       },
       required: ['query']
@@ -196,7 +190,7 @@ function scoreTool(tool: Tool, query: string, tokens: readonly string[]): number
 
   // Exact name wins outright: the model asking for a tool by name is not a
   // capability search and must not be outranked by a wordier description.
-  if (name === normalizedQuery) return 1000
+  if (name === normalizedQuery) return EXACT_NAME_SCORE
 
   let score = 0
   if (normalizedQuery.length > 2 && name.includes(normalizedQuery)) score += 100
@@ -210,10 +204,6 @@ function scoreTool(tool: Tool, query: string, tokens: readonly string[]): number
     if (matchesWord(groupWords, token)) score += 5
   }
   return score
-}
-
-function resolveLimit(limit: number | undefined, defaultLimit: number, maxLimit: number): number {
-  return Math.min(Math.max(Math.trunc(limit ?? defaultLimit), 1), maxLimit)
 }
 
 /**
@@ -232,27 +222,30 @@ export function rankDeferredTools(deferred: readonly Tool[], query: string): Ran
     .map(({ tool, score }) => ({ tool, score }))
 }
 
-/** The deferred tools a search loads: the ranking, narrowed by `options`, then capped. */
+/**
+ * The deferred tools a search loads: the ranking, narrowed by `options`, then
+ * capped. An exact name loads that tool alone.
+ */
 export function searchDeferredTools(
   deferred: readonly Tool[],
   query: string,
   limit?: number,
   options: ToolSearchOptions = {}
 ): Tool[] {
-  const {
-    defaultLimit = DEFAULT_SEARCH_LIMIT,
-    maxLimit = MAX_SEARCH_LIMIT,
-    maxDefinitionBytes = MAX_DEFINITION_BYTES,
-    minScore = 0,
-    select
-  } = options
-  const cap = resolveLimit(limit, defaultLimit, maxLimit)
-  const ranked = rankDeferredTools(deferred, query).filter((entry) => entry.score >= minScore)
-  const selected = select ? select(ranked, { query, limit: cap }) : ranked
+  const { maxDefinitionBytes = MAX_DEFINITION_BYTES, select } = options
+  const cap = Math.min(Math.max(Math.trunc(limit ?? DEFAULT_SEARCH_LIMIT), 1), MAX_SEARCH_LIMIT)
+  const ranked = rankDeferredTools(deferred, query)
+  const candidates = ranked[0]?.score === EXACT_NAME_SCORE ? ranked.slice(0, 1) : ranked
+  const selected = select ? select(candidates, { query, limit: cap }) : candidates
 
+  // A tool outside the ranking would be reported loaded but never declared.
+  const offered = new Map(candidates.map(({ tool }) => [tool.name, tool]))
   const picked: Tool[] = []
   let bytes = 0
-  for (const { tool } of selected) {
+  for (const entry of selected) {
+    const tool = offered.get(entry.tool.name)
+    if (!tool) continue
+    offered.delete(tool.name)
     if (picked.length >= cap) break
     const size = JSON.stringify(toWireTool(tool)).length
     // Always let the top match through, however large; past that, stop rather
@@ -375,8 +368,7 @@ export type DeferredResolution = {
  */
 export function resolveDeferredTools(
   tools: readonly Tool[] | undefined,
-  history: readonly HistoryMessage[],
-  options: ToolSearchOptions = {}
+  history: readonly HistoryMessage[]
 ): DeferredResolution | null {
   if (!tools || tools.length === 0) return null
   const partitioned = partitionTools(tools)
@@ -388,7 +380,7 @@ export function resolveDeferredTools(
   return {
     toolsToRender: [
       ...alwaysLoaded.map(toWireTool),
-      buildToolSearchTool(deferred, options),
+      buildToolSearchTool(deferred),
       ...deferred.filter((tool) => loaded.has(tool.name)).map(toWireTool)
     ],
     deferred
@@ -402,8 +394,7 @@ export function resolveDeferredTools(
  * Takes either wire `Tool`s or the Zod-schema `ToolInput` form, because what a
  * caller holds is whatever they passed to `completion()`. Both are converted
  * to wire form first, so the size cap measures the JSON schemas the prompt
- * will declare, not Zod objects. Pass the same `options` the prompt's
- * `tool_search` was built with, so the limit it advertises is the one applied.
+ * will declare, not Zod objects.
  */
 export function executeToolSearch(
   tools: readonly Tool[] | readonly ToolInput[],
