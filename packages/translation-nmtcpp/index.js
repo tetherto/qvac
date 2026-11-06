@@ -365,18 +365,19 @@ const TranslationNmtcpp = class TranslationNmtcpp {
         return targetToken ? `${targetToken} ${input}` : input;
     }
     /**
-     * Creates a response with output post-processing for language prefixes
+     * Creates a response that strips an echoed `>>xxx<<` target-language token
+     * as output arrives, so onUpdate(), iterate(), getLatest() and await() all
+     * see the same text.
      */
     _createStandardResponse() {
         const response = new infer_base_1.QvacResponse({
             cancelHandler: () => this.addon.cancel(),
         });
-        const originalOnUpdate = response.onUpdate.bind(response);
-        response.onUpdate = function (callback) {
-            return originalOnUpdate((data) => {
-                const cleanedData = data.replace(/^>>[a-z]+\s*<<\s*/i, "");
-                return callback(cleanedData);
-            });
+        const originalUpdateOutput = response.updateOutput.bind(response);
+        response.updateOutput = function (output) {
+            originalUpdateOutput(typeof output === "string"
+                ? output.replace(/^>>[a-z]+\s*<<\s*/i, "")
+                : output);
         };
         return response;
     }
