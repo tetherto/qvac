@@ -12,6 +12,8 @@ on:
       - packages/sdk-e2e/**
       - packages/inference/**
       - packages/test-suite/**
+      - packages/sdk-python/**
+      - packages/sdk-kotlin/**
   workflow_dispatch:
     inputs:
       packages:
