@@ -125,35 +125,37 @@ npm install
 npm run build
 ```
 
-CUDA is opt-in for source builds. Ordinary Linux builds use Vulkan and CPU
+CUDA is opt-in for source builds. Ordinary Linux and Windows builds use Vulkan and CPU
 without requiring a CUDA toolkit. To include CUDA, install the toolkit and run
-the explicit build command below. Linux release prebuilds enable `SD_CUDA`
+the explicit build command below. Linux and Windows release prebuilds enable `SD_CUDA`
 through `platformCmakeDefines`. The `QVAC_CUDA_TOOLKIT` marker exported by CI
 setup also enables CUDA for Linux builds without tests or fuzzing, so automatic
 PR builds work before the updated build metadata reaches `main`. An explicit
 `-D SD_CUDA=OFF` overrides this default. CI provisions the toolkit with
-`includeCuda` and `includeCudaArm64`.
+`includeCuda`, `includeCudaArm64`, and `includeCudaWin32`.
 
 ```bash
 npm run build:cuda
 ```
 
-Linux ARM64 and x64 platform packages include dynamically loaded CUDA modules.
+Linux ARM64/x64 and Windows x64 platform packages include dynamically loaded CUDA modules.
 Installing `@qvac/diffusion-cpp` selects `@qvac/diffusion-cpp-linux-arm64`
 on DGX Spark or `@qvac/diffusion-cpp-linux-x64` on an x64 PC. Each platform
 package carries its host addon and the CUDA and Vulkan backend modules.
 CUDA execution requires the NVIDIA driver and CUDA 13 runtime/cuBLAS
 libraries on the host; the addon itself retains CPU-only load compatibility.
-Windows CUDA remains an explicit source-build option and ships runtime-loaded
-backend DLLs alongside the addon.
+Windows uses `@qvac/diffusion-cpp-win32-x64`, with
+`qvac-diffusion-ggml-cuda.dll` alongside the Vulkan DLL. CUDA 13 runtime
+and cuBLAS DLLs must be discoverable on `PATH` (for example, from the CUDA
+toolkit installation); they are not bundled in the platform package.
 
 The server CUDA build uses CUDA 13.0.3 (nvcc 13.0.88) and matches
-qvac-fabric's packaged architectures for each Linux platform:
+qvac-fabric's packaged architectures for each platform:
 
-| Linux package | CUDA architectures |
+| Platform package | CUDA architectures |
 | --- | --- |
-| x64 | `75-virtual;80-real;86-real;89-real;90-virtual;120a-real` |
-| ARM64 | `121a-real` |
+| Linux/Windows x64 | `75-virtual;80-real;86-real;89-real;90-virtual;120a-real` |
+| Linux ARM64 | `121a-real` |
 
 `virtual` targets carry PTX that the driver compiles on first use; `real`
 targets carry native GPU code. The x64 module includes T4 PTX, native A100
