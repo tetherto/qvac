@@ -78,7 +78,7 @@ interface UpstreamEngine {
   info(): UpstreamDecisionInfo
 }
 
-type UpstreamEngineConstructor = new (args: {
+export type UpstreamEngineConstructor = new (args: {
   files: { model: string[] }
   config: Record<string, unknown>
   logger?: unknown
@@ -94,7 +94,14 @@ function decisionEngineClass(): UpstreamEngineConstructor | undefined {
 }
 
 /** Load options the upstream engine accepts, from the plugin's decision config. */
-const UPSTREAM_CONFIG_KEYS = new Set(['device', 'gpu_layers', 'batch_size', 'threads', 'verbosity'])
+const UPSTREAM_CONFIG_KEYS = new Set([
+  'device',
+  'gpu_layers',
+  'batch_size',
+  'threads',
+  'verbosity',
+  'openclCacheDir'
+])
 
 export function toUpstreamConfig(config: Record<string, unknown>): Record<string, unknown> {
   const unsupported = Object.keys(config).filter(
@@ -120,6 +127,8 @@ interface DecisionModelOptions {
   /** The validated plugin config, for the upstream engine. */
   config: Record<string, unknown>
   logger?: unknown
+  /** The upstream engine class; the addon's DecisionEngine by default. */
+  engineClass?: UpstreamEngineConstructor | undefined
 }
 
 /**
@@ -151,7 +160,7 @@ export class DecisionModel {
       this.kind = 'laya'
       return
     }
-    const Engine = decisionEngineClass()
+    const Engine = this.options.engineClass ?? decisionEngineClass()
     if (!Engine) {
       throw new ModelLoadFailedError(
         `this decision model (architecture '${arch ?? 'unknown'}') needs @qvac/embed-llamacpp with DecisionEngine, for upstream llama.cpp decision models; the installed addon only runs fabric-format Laya`
@@ -201,8 +210,11 @@ export class DecisionModel {
 // Request and result conversion.
 // ---------------------------------------------------------------------------
 
-/** Per choice-array question: upstream option key → the caller's value. */
-export type ChoiceKeyMaps = Record<string, Map<string, string | number | boolean>>
+/**
+ * Per choice-array question: upstream option key → the caller's value. A Map,
+ * not an object: question names are caller-chosen (`toString`, `constructor`).
+ */
+export type ChoiceKeyMaps = Map<string, Map<string, string | number | boolean>>
 
 function reject(message: string): never {
   throw new RequestValidationFailedError(message)
@@ -232,7 +244,7 @@ function convertQuestion(
         }
         keys.set(key, value)
       }
-      keyMaps[id] = keys
+      keyMaps.set(id, keys)
       return {
         type: 'choice',
         instructions: question.instructions,
@@ -286,7 +298,7 @@ export function toUpstreamRequest(
   if (request.maxLen !== undefined || request.headMaxLen !== undefined) {
     reject('maxLen and headMaxLen are not supported by upstream decision models')
   }
-  const keyMaps: ChoiceKeyMaps = {}
+  const keyMaps: ChoiceKeyMaps = new Map()
   const questions = Object.fromEntries(
     Object.entries(request.questions).map(([id, question]) => [
       id,
@@ -313,7 +325,7 @@ function canonicalJson(value: unknown): string {
 
 function convertAnswer(id: string, answer: UpstreamAnswer, keyMaps: ChoiceKeyMaps): DecisionAnswer {
   if (answer.type === 'choice') {
-    const keys = keyMaps[id]
+    const keys = keyMaps.get(id)
     let choice: string | number | boolean = answer.choice
     if (keys) {
       const value = keys.get(answer.choice)
