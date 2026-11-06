@@ -7,8 +7,8 @@ import { clearFinetuneRuntimeState } from '@/plugins/builtin/llamacpp-completion
 import { unregisterAddonLogger, getEngineLogger } from '@/logging/index'
 import { type UnloadModelParams, unloadModelParamsSchema } from '@/schemas/index'
 import { ModelNotLoadedError } from '@/errors/index'
-import { detectShardedModel } from '@/utils/index'
-import { getClearStorageTarget } from '@/utils/cache/paths'
+import { detectShardedModel, generateShardFilenames } from '@/utils/index'
+import { getClearStorageTarget, getShardedClearStorageTargets } from '@/utils/cache/paths'
 
 const logger = getEngineLogger()
 
@@ -36,9 +36,19 @@ export async function unloadModel(params: UnloadModelParams) {
       const shardInfo = detectShardedModel(modelFileName)
 
       if (shardInfo.isSharded) {
-        const shardDir = path.dirname(modelPath)
-        await fsPromises.rm(shardDir, { recursive: true, force: true })
-        logger.info(`Sharded model storage cleared: ${shardDir}`)
+        // A local sharded model may sit in a folder with other files, so only
+        // its shards and tensors.txt go; a QVAC cache shard folder goes whole.
+        const modelFiles = [
+          ...generateShardFilenames(modelFileName),
+          `${shardInfo.baseFilename}.tensors.txt`
+        ]
+        for (const target of getShardedClearStorageTargets(modelPath, modelFiles)) {
+          await fsPromises.rm(target.path, {
+            recursive: target.kind === 'directory',
+            force: true
+          })
+          logger.info(`Sharded model storage cleared (${target.kind}): ${target.path}`)
+        }
       } else {
         const target = getClearStorageTarget(modelPath)
         await fsPromises.rm(target.path, {
