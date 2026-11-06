@@ -218,9 +218,10 @@ function resolveLimit(limit: number | undefined, defaultLimit: number, maxLimit:
 
 /**
  * Score the deferred inventory against a query, best first, leaving out what
- * shares nothing with it. An exact name scores 1000, a word of the name 50, of
- * the description 10, of the group 5. Ties keep registration order so repeated
- * searches are deterministic.
+ * shares nothing with it. An exact name scores 1000. Otherwise a query of three
+ * or more characters inside the name adds 100, and each query word adds 50 in
+ * the name, 10 in the description and 5 in the group. Ties keep registration
+ * order so repeated searches are deterministic.
  */
 export function rankDeferredTools(deferred: readonly Tool[], query: string): RankedTool[] {
   const tokens = tokenize(query)

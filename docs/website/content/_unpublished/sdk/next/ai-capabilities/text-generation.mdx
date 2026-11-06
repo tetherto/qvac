@@ -262,9 +262,10 @@ Notes:
 
 #### Choosing what a search loads
 
-A search scores each deferred tool against the query: 1000 for its exact name,
-50 for each query word in its name, 10 in its description and 5 in its group.
-It loads every tool scoring above 0, best first, up to the model's `limit`
+A search scores each deferred tool against the query: 1000 for its exact name;
+otherwise 100 when the whole query (three or more characters) appears inside
+the name, plus 50 for each query word in its name, 10 in its description and 5
+in its group. It loads every tool scoring above 0, best first, up to the model's `limit`
 (default 3, at most 8), and stops adding past 8 KiB of schemas once the top
 match is in. A query word that only happens to appear in another tool's
 description or group is enough to load that tool too.
