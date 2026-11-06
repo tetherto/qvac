@@ -2504,8 +2504,8 @@ namespace {
 constexpr const char* K_REFUSED_SET =
     "blk.0: so=q8_0 gate=q4_K up=q4_K down=q6_K";
 
-// Resolves to XDNA0 while the override leads with xdna, else to vulkan0, and
-// records each override it was given.
+// Resolves to XDNA0 while the override leads with xdna, else to "none" (the one
+// GPU name fabric's --device parse accepts here), and records each override.
 lfn::BackendResolver
 recordingResolver(std::vector<std::vector<std::string>>& overrides) {
   return [&overrides](
@@ -2518,8 +2518,7 @@ recordingResolver(std::vector<std::vector<std::string>>& overrides) {
     const bool xdnaFirst =
         !backendOverride.empty() && backendOverride.front() == "xdna";
     return lfn::SelectedBackend{
-        .type = backend_selection::GPU,
-        .name = xdnaFirst ? "XDNA0" : "vulkan0"};
+        .type = backend_selection::GPU, .name = xdnaFirst ? "XDNA0" : "none"};
   };
 }
 } // namespace
@@ -2540,7 +2539,7 @@ TEST_F(LoadFitNormalizationTest, BackendXdnaSkipsNpuThatRefusesModel) {
   ASSERT_EQ(overrides.size(), 2U);
   EXPECT_EQ(overrides[0], std::vector<std::string>{"xdna"});
   EXPECT_TRUE(overrides[1].empty());
-  EXPECT_EQ(result.params.mmproj_backend, "vulkan0");
+  EXPECT_EQ(result.params.mmproj_backend, "none");
 }
 
 TEST_F(LoadFitNormalizationTest, BackendXdnaKeepsNpuThatTakesModel) {
@@ -2553,11 +2552,16 @@ TEST_F(LoadFitNormalizationTest, BackendXdnaKeepsNpuThatTakesModel) {
     return std::optional<std::string>();
   };
 
-  const auto result = lfn::normalizeLoadForFit(
-      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
-
+  // XDNA0 is kept, so the load goes on to fabric's --device parse, which has
+  // no such device here.
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies));
+    FAIL() << "--device XDNA0 should reach fabric's parse";
+  } catch (const std::exception& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("invalid device: XDNA0"));
+  }
   EXPECT_EQ(overrides.size(), 1U);
-  EXPECT_EQ(result.params.mmproj_backend, "XDNA0");
 }
 
 TEST_F(LoadFitNormalizationTest, ExplicitXdnaRejectsModelItRefuses) {
