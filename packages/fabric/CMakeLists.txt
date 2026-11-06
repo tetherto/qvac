@@ -152,7 +152,7 @@ if(GGML_XDNA_KERNEL_FILES)
   install(FILES ${GGML_XDNA_KERNEL_FILES} DESTINATION ${_fabric_host}/${_fabric_module_name})
 endif()
 
-target_sources(${qvac-fabric} PRIVATE addon/binding.cpp addon/backends.cpp)
+target_sources(${qvac-fabric} PRIVATE addon/binding.cpp addon/backends.cpp addon/decision.cpp)
 target_include_directories(${qvac-fabric} PRIVATE include)
 target_compile_definitions(${qvac-fabric} PRIVATE
   QVAC_FABRIC_BUILD
@@ -180,6 +180,20 @@ if(TARGET llama::llama-common-base)
   target_link_libraries(${qvac-fabric}
     PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,llama::llama-common-base>")
 endif()
+
+# Upstream's server-context (decision execution without the HTTP server), built
+# by the qvac-fabric[server-context] feature, backs the qvac_fabric_decision_*
+# bridge in addon/decision.cpp. Linked normally, not whole-archived: only what
+# the bridge references is pulled in, and none of its symbols match the export
+# lists (symbols.map, exports.txt, the Windows .def scan), so the server classes
+# stay internal to the runtime. Its INTERFACE include directories bring the
+# internal server headers to decision.cpp only.
+if(NOT TARGET llama::server-context)
+  message(FATAL_ERROR
+    "qvac-fabric did not export llama::server-context despite the "
+    "server-context feature being requested in vcpkg.json")
+endif()
+target_link_libraries(${qvac-fabric} PRIVATE llama::server-context)
 
 # Force-include the full ggml core (ggml + ggml-base) object code on every Unix
 # target (Linux, Android and macOS) so the entire ggml_* / gguf_* surface
@@ -417,10 +431,13 @@ target_include_directories(qvac-fabric-headers INTERFACE
 # --- Installs ----------------------------------------------------------------
 # Ship the llama / ggml / common / mtmd / gguf public headers from the vcpkg
 # install tree. Exclude tooling headers that are not part of the runtime API.
+# include/llama/server-context holds upstream server internals for the decision
+# bridge only; they are not part of the runtime API, so they never ship.
 install(DIRECTORY ${VCPKG_INSTALLED_PATH}/include/ DESTINATION include
   PATTERN "lint-cpp" EXCLUDE
   PATTERN "gtest" EXCLUDE
-  PATTERN "gmock" EXCLUDE)
+  PATTERN "gmock" EXCLUDE
+  PATTERN "server-context" EXCLUDE)
 install(FILES include/qvac-fabric.h DESTINATION include)
 
 # --- qvac-fabric cmake package config ----------------------------------------

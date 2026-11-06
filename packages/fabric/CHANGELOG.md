@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Decision bridge (`qvac_fabric_decision_*` in `qvac-fabric.h`): runs upstream
+  llama.cpp's decision models (openjev, lev, kev, clef, laya and the other
+  `/v1/systemone` types) in-process through upstream's `server-context`,
+  without an HTTP server. The bridge owns the engine lifecycle, a thread-safe
+  cancellation token, a 128-level JSON nesting guard checked before any
+  recursive parsing, and explicit statuses (a cancelled run is never reported
+  as a success). Built from the `qvac-fabric[server-context]` port feature;
+  the server classes are compiled with hidden visibility and are not
+  exported, and their headers are not shipped (QVAC-26667).
+
 ## [0.27.0] - 2026-11-05
 
 ### Fixed
