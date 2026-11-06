@@ -42,6 +42,7 @@ test('contract backend config: ordered arrays and addon allow-lists', (t) => {
     for (const name of ['cpu', 'hip', 'rocm', 'sycl']) {
       t.is(validate({ backend: [name] }), modelType === 'GgmlVla')
     }
+    t.is(validate({ backend: ['xdna'] }), modelType === 'LlamacppCompletion')
   }
 })
 
