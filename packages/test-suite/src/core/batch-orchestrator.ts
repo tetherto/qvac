@@ -23,6 +23,7 @@ import {
 import { getMetricCount } from '../utils/profiler-adapter.js'
 import { aggregateMemory, type MemorySummary } from '../utils/memory-aggregator.js'
 import { buildMqttSessionEndOptions } from '../utils/mqtt-session.js'
+import { isSkippedEverywhere } from '../utils/platform-match.js'
 
 interface TestCase {
   id: string // Unique test ID
@@ -1014,7 +1015,7 @@ export class BatchOrchestrator {
     let skippedCount = 0
 
     for (const test of tests) {
-      if (test.skip && !test.skip.platforms) {
+      if (test.skip && isSkippedEverywhere(test)) {
         skippedCount++
         console.log(
           `⏭️  Skipping ${test.testId}: ${test.skip.reason}${test.skip.issue ? ` (${test.skip.issue})` : ''}`
