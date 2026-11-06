@@ -64,6 +64,11 @@ On an XDNA2 NPU (Strix Point, Strix Halo, Krackan) with XRT 2.25 or newer instal
   Without an NPU or XRT, `backend: "xdna"` is skipped like any other absent backend.
 - Selection is opt-in, initialisation is not: on a host with an NPU, fabric opens it and
   registers its kernels when the backends load, and each process holds an NPU context.
+- The NPU kernels (`.xclbin` and `.insts.bin` files) are prebuilt and ship in
+  `@qvac/fabric-linux-x64` next to `libqvac-ggml-xdna.so`; nothing is compiled at install or
+  load time. Fabric looks for them in `GGML_XDNA_KERNEL_DIR` when set, then next to that
+  library. If they are missing, fabric logs `no GEMM kernels found` and the matrix
+  multiplications run on the CPU.
 - On an XDNA load the NPU runs the ops it supports and the CPU runs the rest. The GPU is not
   used, so another model can run on it at the same time. All loads in a process share one NPU
   context and take turns on it.
