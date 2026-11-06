@@ -22,19 +22,17 @@ description: One-page reference of all public functions and objects exported by 
 
 ### `assessModelFit`
 
-Assesses, before anything is downloaded, whether the given models are likely
-to fit in this device's memory.
+Whether a set of models fits in this device's memory when loaded together,
+without downloading them.
 
-Advisory only: it does not download weights, block `loadModel`, reserve
-memory, or make a performance claim. `unknown` is a real answer — it means
-the available evidence does not support a verdict either way, and callers
-should treat it as "cannot say", not "no".
+Each model's engine fitter runs against the registry's weightless description
+of the model, or the model itself when it is on disk. The memory each load
+takes is summed per device and compared against what is free.
 
-For each candidate it fetches the registry's weightless description of every
-source that load names — tens of KB each, never the weights — and runs the
-engine's own fitter against them, reported as `native-fit` evidence. Where
-that is unavailable the computed floor stands, which can refuse a model but
-never confirm one.
+`unknown` is the answer for a load that would start but cannot be sized: an
+engine with no fitter, a load the fitter cannot project, a model with no
+registry description that is not on disk, or a device that reported no free
+memory. A load that `loadModel` would refuse throws the same error.
 
 **Signature**:
 
