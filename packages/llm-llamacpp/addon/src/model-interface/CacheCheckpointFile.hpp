@@ -15,7 +15,8 @@ namespace qvac_lib_inference_addon_llama::cache {
 // with the section load unchanged in older addon versions, which ignore it.
 //
 // Layout, host byte order like the rest of the file:
-//   u32 magic "QCKP" · u32 version · u32 count (up to the checkpoint limit)
+//   u32 magic "QCKP" · u32 version · u32 count (up to the checkpoint limit,
+//   plus one pinned user-turn checkpoint)
 //   per checkpoint, oldest first:
 //     i32 nPast
 //     u32 flags (version 2+; bit 0: the history ends at a user message)

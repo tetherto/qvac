@@ -118,6 +118,28 @@ TEST_F(CacheCheckpointFileTest, MidLoopFileReloadsBothCheckpoints) {
   EXPECT_FALSE(read.back().endsAtUserTurn);
 }
 
+TEST_F(CacheCheckpointFileTest, ReadsTheLimitPlusThePinnedCheckpoint) {
+  const size_t limit = cache::MAX_CONFIGURABLE_PROCESS_CHECKPOINTS;
+  cache::Checkpoints checkpoints;
+  checkpoints.push_back(checkpoint(3, 'a'));
+  checkpoints.back().endsAtUserTurn = true;
+  for (size_t i = 0; i < limit; ++i) {
+    checkpoints.push_back(checkpoint(5, 'b'));
+  }
+  ASSERT_TRUE(cache::appendCheckpointSection(path_, checkpoints));
+  const cache::Checkpoints read = cache::readCheckpointSection(
+      path_, stateEnd(), resident(), policy(limit));
+  ASSERT_EQ(read.size(), limit + 1);
+  EXPECT_TRUE(read.front().endsAtUserTurn);
+
+  fs::resize_file(path_, stateEnd());
+  checkpoints.push_back(checkpoint(5, 'c'));
+  ASSERT_TRUE(cache::appendCheckpointSection(path_, checkpoints));
+  EXPECT_TRUE(
+      cache::readCheckpointSection(path_, stateEnd(), resident(), policy(limit))
+          .empty());
+}
+
 TEST_F(CacheCheckpointFileTest, ToolResultFallbackIsNotPinnedOnReload) {
   cache::Checkpoints checkpoints;
   checkpoints.push_back(checkpoint(5, 'a'));

@@ -291,7 +291,9 @@ Checkpoints readCheckpointSection(
         version > CHECKPOINT_SECTION_VERSION) {
       return reject("written by a newer version");
     }
-    if (!reader.value(count) || count > MAX_CONFIGURABLE_PROCESS_CHECKPOINTS) {
+    // One more than the limit: the pinned user-turn checkpoint.
+    if (!reader.value(count) ||
+        count > MAX_CONFIGURABLE_PROCESS_CHECKPOINTS + 1) {
       return reject("invalid checkpoint count");
     }
 
