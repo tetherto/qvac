@@ -261,6 +261,40 @@ test('findBy({ engine, name }) - engine index + name in-memory filter', async (t
   }
 })
 
+test('findBy({ name }) - partial, case-insensitive match anywhere in the filename', async (t) => {
+  const ctx = await createDB(t)
+
+  try {
+    const models = await ctx.db.findBy({ name: 'Q8' })
+    t.is(models.length, 1, 'matches a substring that is not a filename prefix')
+    t.is(models[0]?.quantization, 'q8_0', 'correct model found')
+
+    const sameAsEngine = await ctx.db.findBy({ engine: '@qvac/llm-llamacpp', name: 'Q8' })
+    t.alike(
+      models.map((m) => m.path),
+      sameAsEngine.map((m) => m.path),
+      'name matches the same way with or without engine'
+    )
+  } finally {
+    await cleanup(ctx)
+  }
+})
+
+test('findBy({ name, quantization }) - applies both filters', async (t) => {
+  const ctx = await createDB(t)
+
+  try {
+    const models = await ctx.db.findBy({ name: 'salamandrata', quantization: 'q4_k_m' })
+    t.is(models.length, 1, 'returns only the q4_k_m model whose name matches')
+    t.is(models[0]?.path, 'models/salamandrata-2b-q4_k_m.gguf', 'correct model found')
+
+    const noModels = await ctx.db.findBy({ name: 'whisper', quantization: 'q4_k_m' })
+    t.is(noModels.length, 0, 'returns empty when no q4_k_m model matches the name')
+  } finally {
+    await cleanup(ctx)
+  }
+})
+
 test('findModelsByEngineQuantization() - direct compound index access', async (t) => {
   const ctx = await createDB(t)
 
