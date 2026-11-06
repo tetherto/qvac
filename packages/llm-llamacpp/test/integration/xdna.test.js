@@ -48,6 +48,9 @@ function hasAmdXdnaNpu() {
 
 const hasNpu = hasAmdXdnaNpu()
 
+// prestage-ignore: Llama-3.2-1B-Instruct-Q4_0.gguf — desktop-only; the test skips on mobile
+// prestage-ignore: Qwen3.5-0.8B-Q4_K_M.gguf — desktop-only (Linux x64 XDNA NPU)
+
 // Fallback smoke test model: small, cached on CI, no NPU needed.
 const FALLBACK_MODEL = 'Llama-3.2-1B-Instruct-Q4_0.gguf'
 
