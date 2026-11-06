@@ -110,6 +110,58 @@ test('downloadModelFromHttp: resumes a partial download via a Range/206 request'
   )
 })
 
+test('downloadModelFromHttp: a failed shard stops the other shard transfers before rejecting', async (t) => {
+  const cacheDir = useTestCacheDir()
+  fs.rmSync(cacheDir, { recursive: true, force: true })
+  // Shard 1 streams slowly; shard 2 is missing, so the sharded download fails
+  // while shard 1 is still mid-transfer.
+  const chunk = Buffer.alloc(16 * 1024, 3)
+  const chunks = 80
+  let siblingClosed = false
+  const server = http.createServer((req, res) => {
+    if ((req.url ?? '').includes('-00002-of-00002')) {
+      res.writeHead(404, { 'content-length': '0' })
+      res.end()
+      return
+    }
+    res.writeHead(200, { 'content-length': String(chunk.length * chunks) })
+    if (req.method === 'HEAD') {
+      res.end()
+      return
+    }
+    res.on('close', () => {
+      siblingClosed = true
+    })
+    let sent = 0
+    const tick = () => {
+      if (siblingClosed || res.destroyed) return
+      res.write(chunk)
+      if (++sent >= chunks) res.end()
+      else setTimeout(tick, 25)
+    }
+    tick()
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()))
+  const { port } = server.address() as { port: number }
+  t.teardown(async () => {
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    fs.rmSync(cacheDir, { recursive: true, force: true })
+  })
+
+  let error: unknown
+  try {
+    await downloadModelFromHttp(`http://127.0.0.1:${port}/split-00001-of-00002.gguf`)
+  } catch (e) {
+    error = e
+  }
+  t.ok(error instanceof HTTPError, 'the download rejects with the missing shard')
+
+  for (let i = 0; i < 20 && !siblingClosed; i++) {
+    await new Promise<void>((resolve) => setTimeout(() => resolve(), 25))
+  }
+  t.ok(siblingClosed, 'the in-flight sibling shard request was aborted')
+})
+
 test('isResumableTransferError: integrity and insecure failures are terminal, transient network errors resume', (t) => {
   // A verification failure must never resume — resuming would range-append onto
   // already-rejected bytes.
