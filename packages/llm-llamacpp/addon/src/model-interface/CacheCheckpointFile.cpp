@@ -169,15 +169,9 @@ struct SectionEntry {
 
 bool appendCheckpointSection(
     const std::string& path, const Checkpoints& checkpoints) noexcept {
-  // Oldest first, as `appendProcessCheckpoint` keeps them, so the reader
-  // trims them with the same policy.
-  std::vector<const Checkpoint*> kept;
-  for (const Checkpoint& checkpoint : checkpoints) {
-    if (keepable(checkpoint)) {
-      kept.push_back(&checkpoint);
-    }
-  }
-  if (kept.empty()) {
+  const auto kept = static_cast<uint32_t>(
+      std::count_if(checkpoints.begin(), checkpoints.end(), keepable));
+  if (kept == 0) {
     return true;
   }
   std::optional<uintmax_t> baseSize;
@@ -209,8 +203,14 @@ bool appendCheckpointSection(
     SectionWriter writer(out);
     writer.value(CHECKPOINT_SECTION_MAGIC);
     writer.value(CHECKPOINT_SECTION_VERSION);
-    writer.value(static_cast<uint32_t>(kept.size()));
-    for (const Checkpoint* checkpoint : kept) {
+    writer.value(kept);
+    // Oldest first, as `appendProcessCheckpoint` keeps them, so the reader
+    // trims them with the same policy.
+    for (const Checkpoint& entry : checkpoints) {
+      if (!keepable(entry)) {
+        continue;
+      }
+      const Checkpoint* checkpoint = &entry;
       const utils::SequenceStateSnapshot& state = checkpoint->state;
       const uint64_t payloadSize = state.targetBytes();
       if (payloadSize == 0) {
