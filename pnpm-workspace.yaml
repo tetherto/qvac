@@ -40,6 +40,13 @@ fetchRetryMaxtimeout: 120000
 # doesn't exist in this workspace; pin it to a real registry version instead.
 overrides:
   hyper-instrument>bare-v8: "^1.0.1"
+  # QVAC-26667 PROTOTYPE ONLY, never merged: the committed ranges do not link
+  # the decision stack to the workspace (inference's ^0.53.0 excludes embed
+  # 0.55.0, embed's ^0.26.0 excludes fabric 0.27.0), so the end-to-end run
+  # would test published packages. Scoped so other fabric consumers keep their
+  # resolution.
+  "@qvac/embed-llamacpp": "workspace:*"
+  "@qvac/embed-llamacpp>@qvac/fabric": "workspace:*"
   # @electron/rebuild pins @electron/node-gyp to a git URL (exotic subdep);
   # pin it to the electron fork's published registry build so blockExoticSubdeps
   # stays on. Introduced when main's @electron-forge deps (sdk) merged in.
