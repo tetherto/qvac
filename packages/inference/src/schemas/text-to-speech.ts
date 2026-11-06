@@ -183,6 +183,8 @@ const TTS_STREAM_CHUNK_TOKENS_DESC =
   'Speech tokens per native streaming chunk; 0 disables native chunk streaming.'
 const TTS_STREAM_FIRST_CHUNK_TOKENS_DESC =
   'Smaller first streaming chunk for lower first-audio latency.'
+const TTS_VULKAN_DEVICE_DESC =
+  'Vulkan adapter index, also used by the LavaSR enhancer: 0 = the first adapter, N = the Nth, -1 = auto-pick by free VRAM preferring a discrete adapter. Only consulted on Vulkan.'
 const TTS_TEMPERATURE_DESC =
   'Sampling temperature; unset defers to the engine default (Parler 1.0, Audio8 0.7).'
 const TTS_TOP_K_DESC = 'Top-k sampling cutoff; unset defers to the engine default (50).'
@@ -416,6 +418,78 @@ export const ttsChatterboxRuntimeConfigSchema = z
       .describe(
         'Chatterbox S3Gen classifier-free-guidance rate; `0` skips the unconditioned pass, a positive value overrides the model’s baked rate. Omit to keep the baked rate.'
       ),
+    streamLeftContextTokens: ttsNonNegativeInt32Schema
+      .optional()
+      .describe(
+        'Already-emitted speech tokens S3Gen keeps as left context per native streaming chunk (typically 25–50), bounding the per-chunk cost on long utterances; 0 = the whole emitted prefix.'
+      ),
+    batchCfmSteps: ttsNonNegativeInt32Schema
+      .optional()
+      .describe(
+        'CFM Euler step count for batch synthesis; 0 = the library default (2-step meanflow on Turbo, the model’s full schedule on multilingual). The multilingual engine does not floor it, so values well below its schedule under-integrate. `cfmSteps` keeps driving native streaming.'
+      ),
+    nPredict: ttsPositiveInt32Schema
+      .optional()
+      .describe(
+        'Cap on speech tokens T3 decodes per synthesis (~25 tokens ≈ 1 s); engine default 1000 (~40 s). Longer single calls also need `nCtx` to cover prompt plus generated tokens, or use `maxSentenceChars`.'
+      ),
+    maxSentenceChars: ttsNonNegativeInt32Schema
+      .optional()
+      .describe(
+        'Sentence auto-split: T3 + S3Gen run per segment of at most this many bytes (the reference CLI uses 180); 0 = off. `nPredict` then applies per segment.'
+      ),
+    crossfadeMs: ttsNonNegativeInt32Schema
+      .optional()
+      .describe(
+        'Raised-cosine crossfade between auto-split batch segments, in milliseconds (engine default 30). Native streaming stays gapless.'
+      ),
+    // T3 samples its speech tokens; the defaults are the addon's, not Parler's
+    // or Audio8's, so these do not share TTS_TEMPERATURE_DESC and friends.
+    temperature: z
+      .number()
+      .nonnegative()
+      .optional()
+      .describe('T3 sampling temperature (engine default 0.8); 0 decodes greedily.'),
+    topK: ttsNonNegativeInt32Schema
+      .optional()
+      .describe('T3 top-k sampling cutoff (engine default 1000); 0 disables the cutoff.'),
+    topP: z
+      .number()
+      .positive()
+      .max(1)
+      .optional()
+      .describe('T3 top-p (nucleus) sampling cutoff, 0 < p ≤ 1 (engine default 0.95).'),
+    repeatPenalty: z
+      .number()
+      .positive()
+      .optional()
+      .describe('T3 repetition penalty (engine default 1.2); 1 = off.'),
+    exaggeration: z
+      .number()
+      .optional()
+      .describe(
+        'Multilingual only: prosody intensity, above 0 more expressive, below 0 flatter (engine default 0.5). The Turbo variant ignores it.'
+      ),
+    cfgWeight: z
+      .number()
+      .nonnegative()
+      .optional()
+      .describe(
+        'Multilingual only: T3 classifier-free-guidance scale (engine default 0.5); 0 disables it. Separate from `cfgRate`, which steers S3Gen.'
+      ),
+    minP: z
+      .number()
+      .min(0)
+      .max(1)
+      .optional()
+      .describe('Multilingual only: min-p sampling threshold (engine default 0); 0 = off.'),
+    voiceDir: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'Directory of pre-baked voice-conditioning tensors (the upstream CLI’s `--save-voice` output), loaded instead of preprocessing a reference recording. With `referenceAudioSrc` too, tensors missing from the directory are backfilled from the recording.'
+      ),
     // Int32 like the other engines: the addon narrows with `| 0`, so a wider
     // value would wrap silently rather than fail.
     threads: ttsPositiveInt32Schema.optional().describe(TTS_THREADS_DESC),
@@ -449,46 +523,77 @@ function refineSupertonicRateControls(
   }
 }
 
+const ttsSupertonicRuntimeConfigShape = {
+  ttsEngine: z.literal('supertonic').describe('TTS engine: Supertonic.'),
+  language: ttsSupertonicLanguageSchema.describe('Language code. Default `en`.'),
+  voice: z.string().optional().describe('Supertonic baked voice id, e.g. `F1` or `M1`.'),
+  ttsSpeed: z
+    .number()
+    .nonnegative()
+    .optional()
+    .describe(
+      'Speech-rate / duration multiplier (1.0 = unchanged, <1 slower, >1 faster). Supertonic scales its native duration predictor. Mutually exclusive with `pace`.'
+    ),
+  // Supertonic maps the pace step onto a multiplier relative to the GGUF's
+  // own default_speed. It conditions the engine at construction, so unlike
+  // Parler and CosyVoice3 it cannot take a per-request pace.
+  pace: ttsPaceSchema
+    .optional()
+    .describe(
+      "Speaking rate: `'slow'`, `'moderate'`, or `'fast'`, applied when the engine is built. Mutually exclusive with `ttsSpeed`; cannot be changed per request."
+    ),
+  // SupertonicModel::validateConfig rejects negatives ('steps must be >= 0')
+  // and the addon narrows with `| 0`, so bound it like its sibling ttsSpeed.
+  ttsNumInferenceSteps: ttsNonNegativeInt32Schema
+    .optional()
+    .describe('Supertonic vector-estimator CFM steps; 0 uses the GGUF default.'),
+  useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
+  outputSampleRate: ttsOutputSampleRateSchema.optional(),
+  threads: ttsPositiveInt32Schema.optional().describe(TTS_THREADS_DESC),
+  nGpuLayers: ttsInt32Schema.optional().describe(TTS_NGPU_LAYERS_DESC),
+  seed: ttsInt32Schema.optional().describe(TTS_SEED_DESC),
+  vulkanCacheDir: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Supertonic + `useGPU` only: directory where the Vulkan backend persists its compiled pipeline cache.'
+    ),
+  vulkanDevice: ttsInt32Schema.min(-1).optional().describe(TTS_VULKAN_DEVICE_DESC),
+  prewarmText: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe(
+      'Text synthesized once at load so GPU pipelines (and a Core ML vocoder sidecar) are ready before the first request; skipped on a plain CPU run. Use a sentence of representative length. Wins over the `vulkanCacheDir` default pre-warm.'
+    ),
+  // Supertonic chunks on text tokens, not speech tokens, so its native
+  // streaming controls carry their own wording.
+  streamChunkTokens: ttsNonNegativeInt32Schema
+    .optional()
+    .describe(
+      'Text tokens (Unicode code points) per native streaming chunk, about 50 for English and 25–30 for CJK; 0 disables native chunk streaming. Cannot be combined with the LavaSR enhancer or denoiser.'
+    ),
+  streamFirstChunkTokens: ttsNonNegativeInt32Schema
+    .optional()
+    .describe(TTS_STREAM_FIRST_CHUNK_TOKENS_DESC),
+  streamChunkTolerancePct: ttsNonNegativeInt32Schema
+    .optional()
+    .describe(
+      'Boundary-snap window for clause and whitespace chunk boundaries, as a percentage of the chunk target (engine default 20).'
+    ),
+  streamMinChunkTokens: ttsNonNegativeInt32Schema
+    .optional()
+    .describe(
+      'Floor on every streamed chunk’s size in text tokens (engine default 30); shorter trailing chunks merge into the previous one.'
+    ),
+  ...ttsBackendDirFieldsShape,
+  ...ttsOpenclCacheFieldShape
+}
+
 export const ttsSupertonicRuntimeConfigSchema = z
-  .object({
-    ttsEngine: z.literal('supertonic').describe('TTS engine: Supertonic.'),
-    language: ttsSupertonicLanguageSchema.describe('Language code. Default `en`.'),
-    voice: z.string().optional().describe('Supertonic baked voice id, e.g. `F1` or `M1`.'),
-    ttsSpeed: z
-      .number()
-      .nonnegative()
-      .optional()
-      .describe(
-        'Speech-rate / duration multiplier (1.0 = unchanged, <1 slower, >1 faster). Supertonic scales its native duration predictor. Mutually exclusive with `pace`.'
-      ),
-    // Supertonic maps the pace step onto a multiplier relative to the GGUF's
-    // own default_speed. It conditions the engine at construction, so unlike
-    // Parler and CosyVoice3 it cannot take a per-request pace.
-    pace: ttsPaceSchema
-      .optional()
-      .describe(
-        "Speaking rate: `'slow'`, `'moderate'`, or `'fast'`, applied when the engine is built. Mutually exclusive with `ttsSpeed`; cannot be changed per request."
-      ),
-    // SupertonicModel::validateConfig rejects negatives ('steps must be >= 0')
-    // and the addon narrows with `| 0`, so bound it like its sibling ttsSpeed.
-    ttsNumInferenceSteps: ttsNonNegativeInt32Schema
-      .optional()
-      .describe('Supertonic vector-estimator CFM steps; 0 uses the GGUF default.'),
-    useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
-    outputSampleRate: ttsOutputSampleRateSchema.optional(),
-    threads: ttsPositiveInt32Schema.optional().describe(TTS_THREADS_DESC),
-    nGpuLayers: ttsInt32Schema.optional().describe(TTS_NGPU_LAYERS_DESC),
-    seed: ttsInt32Schema.optional().describe(TTS_SEED_DESC),
-    vulkanCacheDir: z
-      .string()
-      .min(1)
-      .optional()
-      .describe(
-        'Supertonic + `useGPU` only: directory where the Vulkan backend persists its compiled pipeline cache.'
-      ),
-    ...ttsBackendDirFieldsShape,
-    ...ttsOpenclCacheFieldShape
-  })
+  .object(ttsSupertonicRuntimeConfigShape)
   .superRefine(refineSupertonicRateControls)
 
 // A shape rather than a schema so the load schema below can be built from it
@@ -632,7 +737,7 @@ const ttsCosyvoice3RuntimeConfigShape = {
   instruct: ttsCosyvoice3InstructSchema
     .optional()
     .describe(
-      'Natural-language control: a structured object (one of dialect / volume / style) or a raw instruction string. One conditioning control per synthesis.'
+      'Natural-language control: a structured object (one of dialect / volume / style) or a raw instruction string. One conditioning control per synthesis; a request-level `instruct` replaces it for that synthesis.'
     ),
   // Trimmed for the same reason as the instruct string: a whitespace-only
   // transcript would reach the engine as a non-empty prompt.
@@ -644,6 +749,13 @@ const ttsCosyvoice3RuntimeConfigShape = {
     .describe(
       'Verbatim transcript of `referenceAudioSrc`. Setting it selects zero-shot cloning (best fidelity in the reference’s own language); omitting it selects cross-lingual cloning (timbre only). Without a reference it overrides the baked voice’s transcript metadata.'
     ),
+  flowCutPrompt: z
+    .boolean()
+    .optional()
+    .describe(
+      'Treat the baked-voice prompt frames as attention-only conditioning in the flow: a faster flow whose output deviates slightly from the reference (engine default off).'
+    ),
+  vulkanDevice: ttsInt32Schema.min(-1).optional().describe(TTS_VULKAN_DEVICE_DESC),
   useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
   outputSampleRate: ttsOutputSampleRateSchema.optional(),
   streamChunkTokens: ttsNonNegativeInt32Schema.optional().describe(TTS_STREAM_CHUNK_TOKENS_DESC),
@@ -930,10 +1042,55 @@ export const ttsChatterboxLoadConfigSchema = ttsChatterboxRuntimeConfigSchema
   })
   .superRefine(refineLavasrDenoiserStreaming)
 
-// Supertonic has no native chunk streaming, so the denoiser is always reachable.
-export const ttsSupertonicLoadConfigSchema = ttsSupertonicRuntimeConfigSchema.extend({
-  ...ttsLavasrLoadFieldsShape
-})
+type TtsSupertonicLoadRefinementInput = {
+  ttsSpeed?: number | undefined
+  pace?: string | undefined
+  useGPU?: boolean | undefined
+  nGpuLayers?: number | undefined
+  streamChunkTokens?: number | undefined
+  lavasrEnhancerModelSrc?: ModelSrcInput | undefined
+  lavasrDenoiserModelSrc?: ModelSrcInput | undefined
+}
+
+// Supertonic native chunk streaming rejects BOTH LavaSR stages, not just the
+// denoiser: tts-cpp only has one-shot enhance / denoise for this engine, and
+// it reports no native rate before synthesis. Sentence streaming still works
+// with either stage loaded.
+function refineSupertonicLoadConfig(
+  config: TtsSupertonicLoadRefinementInput,
+  ctx: z.RefinementCtx
+) {
+  refineSupertonicRateControls(config, ctx)
+  if ((config.streamChunkTokens ?? 0) <= 0) return
+  for (const field of ['lavasrEnhancerModelSrc', 'lavasrDenoiserModelSrc'] as const) {
+    if (config[field] === undefined) continue
+    ctx.addIssue({
+      code: 'custom',
+      path: [field],
+      message:
+        'Supertonic native chunk streaming (streamChunkTokens > 0) cannot be combined with the LavaSR enhancer or denoiser; ' +
+        'use sentence streaming (stream: true without streamChunkTokens, sentenceStream, or textToSpeechStream) for enhanced output.'
+    })
+  }
+}
+
+// Supertonic's external voice JSON and fixed CFM noise tensor are single files,
+// so they ride the same source resolution as the LavaSR GGUFs and reach the
+// addon as `voiceJsonPath` / `noiseNpyPath`.
+export const ttsSupertonicLoadConfigSchema = z
+  .object({
+    ...ttsSupertonicRuntimeConfigShape,
+    ...ttsLavasrLoadFieldsShape,
+    voiceJsonSrc: modelSrcInputSchema
+      .optional()
+      .describe(
+        'External voice JSON source (`{ style_ttl, style_dp }`, e.g. a cloned voice) that overrides the baked `voice` preset; the engine checks the tensor sizes against the loaded model.'
+      ),
+    noiseNpySrc: modelSrcInputSchema
+      .optional()
+      .describe('Fixed CFM initial-noise `.npy` tensor source, for reproducible output.')
+  })
+  .superRefine(refineSupertonicLoadConfig)
 
 type TtsParlerLoadRefinementInput = TtsParlerRuntimeRefinementInput & {
   lavasrEnhancerModelSrc?: ModelSrcInput | undefined
@@ -1289,6 +1446,72 @@ const ttsRequestIdSchema = z
   .optional()
   .describe('Client-generated id for targeting this run with `cancel({ requestId })`.')
 
+// Per-request voice controls the addon takes on `run()`, `runStream()` and
+// `runStreaming()` alike. A request carries only an opaque modelId, so the
+// engine check (CosyVoice3 for `instruct`, Audio8 for the reference pair)
+// happens in the op once the model is known; the shape rules below hold on
+// every engine.
+const ttsRequestVoiceFieldsShape = {
+  instruct: ttsCosyvoice3InstructSchema
+    .optional()
+    .describe(
+      'CosyVoice3 only: natural-language control for this synthesis (a structured object with one of dialect / volume / style, or a raw instruction string), replacing the loaded `instruct`, `emotion` or `pace`. One conditioning control per synthesis.'
+    ),
+  referenceAudioSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'Audio8 only: reference recording to clone for this request, replacing the loaded voice; requires `referenceText` and a loaded codec encoder (`audio8CodecEncoderModelSrc`).'
+    ),
+  // Trimmed like the load-time referenceText: a whitespace-only transcript
+  // would reach the engine as a non-empty value.
+  referenceText: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe(
+      'Audio8 only: transcript of the reference recording. With `referenceAudioSrc`, what that recording says; alone, it corrects the transcript of the loaded recording.'
+    )
+}
+
+type TtsRequestVoiceRefinementInput = {
+  instruct?: unknown
+  referenceAudioSrc?: ModelSrcInput | undefined
+  referenceText?: string | undefined
+  emotion?: string | undefined
+  pace?: string | undefined
+}
+
+// Mirrors the addon's per-call rules that hold regardless of the loaded
+// engine: a per-call recording must bring its own transcript (the configured
+// one describes a different recording), and `instruct` is a CosyVoice3
+// control, so pairing it with an emotion or a non-moderate pace always breaks
+// the one-instruction rule.
+function refineTtsRequestVoiceFields(value: TtsRequestVoiceRefinementInput, ctx: z.RefinementCtx) {
+  if (value.referenceAudioSrc !== undefined && value.referenceText === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['referenceText'],
+      message:
+        'referenceText (the transcript of the reference recording) is required with referenceAudioSrc.'
+    })
+  }
+  if (value.instruct === undefined) return
+  const conflicting =
+    value.emotion !== undefined
+      ? 'emotion'
+      : value.pace !== undefined && value.pace !== 'moderate'
+        ? 'pace'
+        : undefined
+  if (conflicting !== undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: [conflicting],
+      message: `CosyVoice3 accepts one conditioning control per synthesis; got instruct and ${conflicting}. Set exactly one (pace "moderate" disengages the pace channel).`
+    })
+  }
+}
+
 const ttsClientParamsShape = {
   modelId: z.string(),
   requestId: ttsRequestIdSchema,
@@ -1299,6 +1522,7 @@ const ttsClientParamsShape = {
   sentenceStreamLocale: z.string().optional(),
   sentenceStreamMaxChunkScalars: z.number().positive().optional(),
   ...ttsParlerDescriptionFieldsShape,
+  ...ttsRequestVoiceFieldsShape,
   ...ttsSoundEffectFieldsShape,
   ...ttsSpeechFieldsShape
 }
@@ -1308,6 +1532,7 @@ function refineTtsRequest(
   ctx: z.RefinementCtx
 ) {
   refineParlerDescriptionFields(value, ctx)
+  refineTtsRequestVoiceFields(value, ctx)
   refineSpeechAudio(value, ctx)
   if ((value.replyVoice !== undefined) !== (value.replyVoiceSampleRate !== undefined)) {
     ctx.addIssue({
@@ -1344,10 +1569,20 @@ export const ttsRequestSchema = z
 // last sentence that reported them, so a chunked run reports where it ran
 // just as batch synthesis (`stream: false`) does. A field no sentence
 // reported stays absent.
+// Milliseconds, like every other `*Ms` field below.
+const ttsStageMsSchema = (stage: string) =>
+  z.number().optional().describe(`${stage} wall time of the last synthesis, in milliseconds.`)
+
 export const ttsStatsSchema = z.object({
   audioDuration: z.number().optional(),
   totalTime: z.number().optional(),
   realTimeFactor: z.number().optional(),
+  firstAudioMs: z
+    .number()
+    .optional()
+    .describe(
+      'Milliseconds from the start of the run to the first audio, where the engine reports it; a chunked run keeps the first sentence’s value.'
+    ),
   tokensPerSecond: z.number().optional(),
   totalSamples: z.number().optional(),
   // Audio8 (on a fixed 46 ms grid) and MOSS (12.5 per second) count codec
@@ -1382,7 +1617,59 @@ export const ttsStatsSchema = z.object({
     .optional()
     .describe(
       'Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports.'
-    )
+    ),
+  // Chatterbox stage timings and counters.
+  t3Ms: ttsStageMsSchema('Chatterbox T3 decode'),
+  s3genMs: ttsStageMsSchema('Chatterbox S3Gen + HiFT'),
+  t3Tokens: z
+    .number()
+    .optional()
+    .describe('Chatterbox: speech tokens T3 emitted in the last synthesis.'),
+  // CosyVoice3 and Audio8: the engine's own wall time, the sum of its stages.
+  stageTotalMs: z
+    .number()
+    .optional()
+    .describe(
+      'CosyVoice3 / Audio8: the engine’s own wall time for the last synthesis in milliseconds (the sum of its stages), excluding the addon’s post-processing.'
+    ),
+  // CosyVoice3 stage timings.
+  lmPrefillMs: ttsStageMsSchema('CosyVoice3 LM prefill'),
+  lmDecodeMs: ttsStageMsSchema('CosyVoice3 LM decode'),
+  flowFrontendMs: ttsStageMsSchema('CosyVoice3 flow front-end'),
+  ditEulerMs: ttsStageMsSchema('CosyVoice3 DiT Euler'),
+  hiftF0Ms: ttsStageMsSchema('CosyVoice3 HiFT F0'),
+  hiftSourceMs: ttsStageMsSchema('CosyVoice3 HiFT source'),
+  hiftStftMs: ttsStageMsSchema('CosyVoice3 HiFT STFT'),
+  hiftDecodeMs: ttsStageMsSchema('CosyVoice3 HiFT decode'),
+  // CosyVoice3 work counters.
+  decodeSteps: z.number().optional().describe('CosyVoice3: LM decode steps of the last synthesis.'),
+  speechTokens: z
+    .number()
+    .optional()
+    .describe('CosyVoice3: speech tokens generated in the last synthesis.'),
+  flowFrames: z
+    .number()
+    .optional()
+    .describe('CosyVoice3: flow frames in (prompt + generated) of the last synthesis.'),
+  melFrames: z.number().optional().describe('CosyVoice3: mel frames out of the last synthesis.'),
+  textIds: z
+    .number()
+    .optional()
+    .describe('CosyVoice3: text ids in the LM prefill of the last synthesis.'),
+  promptSpeechTokens: z
+    .number()
+    .optional()
+    .describe('CosyVoice3: prompt speech tokens the LM continued from.'),
+  // Audio8 stage timings.
+  voiceEncodeMs: ttsStageMsSchema('Audio8 reference-voice encode'),
+  promptMs: ttsStageMsSchema('Audio8 prompt build'),
+  prefillMs: ttsStageMsSchema('Audio8 prefill'),
+  sampleMs: ttsStageMsSchema('Audio8 sampling'),
+  fastDecodeMs: ttsStageMsSchema('Audio8 fast (local) decoder'),
+  slowDecodeMs: ttsStageMsSchema('Audio8 slow (global) decoder'),
+  codecLatentMs: ttsStageMsSchema('Audio8 codec latent'),
+  codecSynthMs: ttsStageMsSchema('Audio8 codec synthesis'),
+  resampleMs: ttsStageMsSchema('Audio8 resample')
 })
 
 // The rate of `buffer`. It is not a constant of the engine: `outputSampleRate`
@@ -1426,7 +1713,16 @@ const textToSpeechStreamRequestBaseShape = {
   sentenceDelimiterPreset: z.enum(TTS_SENTENCE_DELIMITER_PRESETS).optional(),
   maxBufferScalars: z.number().positive().optional(),
   flushAfterMs: z.number().positive().optional(),
-  ...ttsParlerDescriptionFieldsShape
+  ...ttsParlerDescriptionFieldsShape,
+  ...ttsRequestVoiceFieldsShape
+}
+
+function refineTextToSpeechStreamRequest(
+  value: z.infer<z.ZodObject<typeof textToSpeechStreamRequestBaseShape>>,
+  ctx: z.RefinementCtx
+) {
+  refineParlerDescriptionFields(value, ctx)
+  refineTtsRequestVoiceFields(value, ctx)
 }
 
 export const textToSpeechStreamRequestSchema = z
@@ -1434,7 +1730,7 @@ export const textToSpeechStreamRequestSchema = z
     ...textToSpeechStreamRequestBaseShape,
     type: z.literal('textToSpeechStream')
   })
-  .superRefine(refineParlerDescriptionFields)
+  .superRefine(refineTextToSpeechStreamRequest)
 
 export const textToSpeechStreamResponseSchema = z.object({
   type: z.literal('textToSpeechStream'),

@@ -19,6 +19,11 @@ import {
 } from '@/plugins/builtin/tts-ggml/ops/parler-options'
 import { bindTtsCancel, cancelIfAborted } from '@/plugins/builtin/tts-ggml/ops/cancel-binding'
 import type { TtsOpResult } from '@/plugins/builtin/tts-ggml/ops/text-to-speech'
+import {
+  assertVoiceJobOptionsSupported,
+  resolveVoiceJobOptions,
+  type VoiceJobOptions
+} from '@/plugins/builtin/tts-ggml/ops/voice-options'
 
 // Ends the text source the moment the run is cancelled. Without this an idle
 // duplex session — cancelled while the accumulator is waiting for the next
@@ -123,7 +128,8 @@ async function* buffersToUtf8Fragments(
 
 function buildRunStreamingOptions(
   request: TextToSpeechStreamRequest,
-  parlerJobOptions: ReturnType<typeof getParlerJobOptions>
+  parlerJobOptions: ReturnType<typeof getParlerJobOptions>,
+  voiceJobOptions: VoiceJobOptions
 ) {
   const o: Record<string, unknown> = {}
   if (request.accumulateSentences !== undefined) {
@@ -138,7 +144,7 @@ function buildRunStreamingOptions(
   if (request.flushAfterMs !== undefined) {
     o['flushAfterMs'] = request.flushAfterMs
   }
-  return { ...o, ...parlerJobOptions }
+  return { ...o, ...parlerJobOptions, ...voiceJobOptions }
 }
 
 export async function* textToSpeechStream(
@@ -153,9 +159,19 @@ export async function* textToSpeechStream(
   }
   const parlerJobOptions = getParlerJobOptions(request)
   assertParlerJobOptionsSupported(model, parlerJobOptions, 'textToSpeechStream')
+  assertVoiceJobOptionsSupported(model, request, 'textToSpeechStream')
 
   await using ctx = await bindTtsCancel(model, request.modelId, request.requestId)
   if (ctx.signal.aborted) return { ...buildStreamResult(0), cancelled: true }
+
+  // Resolved inside the request context: an uncached remote reference
+  // recording downloads here, and a cancel has to be able to stop that.
+  const voiceJobOptions = await resolveVoiceJobOptions(request, {
+    signal: ctx.signal,
+    scope: ctx.scope,
+    requestId: ctx.requestId
+  })
+  if (voiceJobOptions === null) return { ...buildStreamResult(0), cancelled: true }
 
   const modelStart = nowMs()
 
@@ -166,7 +182,7 @@ export async function* textToSpeechStream(
   }
 
   const textSource = untilAborted(buffersToUtf8Fragments(inputStream), ctx.signal)
-  const streamOpts = buildRunStreamingOptions(request, parlerJobOptions)
+  const streamOpts = buildRunStreamingOptions(request, parlerJobOptions, voiceJobOptions)
   const response = await model.runStreaming(
     textSource,
     Object.keys(streamOpts).length > 0 ? streamOpts : undefined

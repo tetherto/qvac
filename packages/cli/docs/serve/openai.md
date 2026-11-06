@@ -901,7 +901,8 @@ When `voice` is omitted, the configured **`serve.openai.audio.speech.defaultVoic
   - `voice` (optional, defaults to `defaultVoice`) — an OpenAI built-in voice name (`alloy`, `ash`, `ballad`, `coral`, `echo`, `fable`, `onyx`, `nova`, `sage`, `shimmer`, `verse`, `marin`, `cedar`), any other string, or a custom voice reference `{ "id": "voice_1234" }`. The object form routes the same way as its `id` string.
   - `response_format` (optional) — `wav` (default), `pcm` (raw 16-bit signed little-endian PCM, mono), or `mp3` / `opus` / `aac` / `flac`. The encoded formats are produced by transcoding the synthesized audio through **`ffmpeg`**, which must be on the server's `PATH`; when ffmpeg is absent they return `503 transcode_unavailable` (use `wav`/`pcm` or install ffmpeg — see `qvac doctor`). The default stays `wav` so synthesis works on hosts without ffmpeg.
   - `stream_format` (optional) — `audio` (default, one audio body) or `sse` (see [Streaming](#streaming-stream_format-sse)). Other values return `400 invalid_stream_format`.
-- **Accepted but ignored:** `speed`, `instructions` (a warning is logged; ignored keys are echoed in the success response via the `X-QVAC-Ignored-Params` header).
+  - `instructions` (optional) — forwarded to CosyVoice3 aliases (`ttsEngine: "cosyvoice3"`) as the engine's per-request `instruct` control: a raw natural-language instruction such as a Chinese dialect, emotion or speaking style, applied to this synthesis only. Other engines have no free-text voice control, so there it is an ignored param.
+- **Accepted but ignored:** `speed`, and `instructions` on every engine but CosyVoice3 (a warning is logged; ignored keys are echoed in the success response via the `X-QVAC-Ignored-Params` header).
 
 ### Response
 

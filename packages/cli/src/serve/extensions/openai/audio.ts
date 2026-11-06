@@ -185,6 +185,16 @@ export function buildWavBuffer(samples: number[], sampleRate: number): Buffer {
   return Buffer.concat([header, data])
 }
 
+// OpenAI's `instructions` steers the voice in natural language, which is what
+// CosyVoice3's per-request `instruct` control does, so it is forwarded there
+// verbatim (a raw instruction string). No other engine takes a free-text
+// control, so elsewhere the route keeps treating it as an ignored param.
+export function speechInstructFor(ttsEngine: unknown, instructions: unknown): string | undefined {
+  if (ttsEngine !== 'cosyvoice3' || typeof instructions !== 'string') return undefined
+  const trimmed = instructions.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
 // Voice + model → alias lookup key. The route tries this first and falls
 // back to the bare model name when no <model>-<voice> alias exists, so
 // existing single-alias TTS configs continue to work even when callers omit

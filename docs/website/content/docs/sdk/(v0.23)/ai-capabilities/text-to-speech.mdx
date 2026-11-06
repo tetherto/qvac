@@ -97,14 +97,14 @@ A cancelled run ends cleanly rather than as an error: `done` resolves `true`,
 statistics from the final frame (`undefined` if the run reported none).
 
 <Callout type="info">
-  The five backend fields (`backendDevice`, `backendId`, `gpuUnsupported`,
-  `enhancerBackendDevice`, `enhancerBackendId`) are reported by batch
-  synthesis (`stream: false`) only. The chunked paths — `stream: true` (the
-  default), `sentenceStream: true`, and `textToSpeechStream()` — run one
-  native job per sentence and aggregate only the timing and sample counts,
-  plus Audio8's two Core ML fields, which keep the last sentence's value.
-  MOSS is the exception for `stream: true`: it runs the whole text as one
-  native job, so it reports them there too.
+  The chunked paths — `stream: true` (the default), `sentenceStream: true`,
+  and `textToSpeechStream()` — run one native job per sentence. Their
+  aggregate sums the timing and sample counts, keeps `firstAudioMs` from the
+  first sentence and the backend and Core ML fields from the last sentence
+  that reported them, and carries no per-stage timings or counters: those
+  describe one native synthesis, so they are reported by batch synthesis
+  (`stream: false`) only. MOSS is the exception for `stream: true`: it runs
+  the whole text as one native job, so it reports everything there too.
 </Callout>
 
 | Field | Meaning |
@@ -122,6 +122,12 @@ statistics from the final frame (`undefined` if the run reported none).
 | `enhancerBackendId` | LavaSR enhancer backend family, same codes as `backendId`. |
 | `codecSidecarLoaded` | Audio8 on macOS/iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired. |
 | `codecOnCoreml` | Audio8: `1` when the synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` names. |
+| `firstAudioMs` | Milliseconds from the start of the run to the first audio, where the engine reports it. |
+| `t3Ms`, `s3genMs`, `t3Tokens` | Chatterbox: T3 decode and S3Gen + HiFT wall times in milliseconds, and the speech tokens T3 emitted. |
+| `stageTotalMs` | CosyVoice3 and Audio8: the engine's own wall time in milliseconds, the sum of its stages, excluding the addon's post-processing. |
+| `lmPrefillMs`, `lmDecodeMs`, `flowFrontendMs`, `ditEulerMs`, `hiftF0Ms`, `hiftSourceMs`, `hiftStftMs`, `hiftDecodeMs` | CosyVoice3 stage wall times, in milliseconds. |
+| `decodeSteps`, `speechTokens`, `flowFrames`, `melFrames`, `textIds`, `promptSpeechTokens` | CosyVoice3 work counters: LM decode steps, speech tokens generated, flow frames in (prompt + generated), mel frames out, text ids in the LM prefill, and the prompt speech tokens the LM continued from. |
+| `voiceEncodeMs`, `promptMs`, `prefillMs`, `sampleMs`, `fastDecodeMs`, `slowDecodeMs`, `codecLatentMs`, `codecSynthMs`, `resampleMs` | Audio8 stage wall times, in milliseconds. |
 
 ```ts
 const stats = await result.stats;
@@ -163,6 +169,31 @@ as on the other engines; `openclCacheDir` (the Android OpenCL program cache)
 is accepted by Chatterbox, Supertonic and CosyVoice3 only. Chatterbox supports
 [LavaSR](#lavasr) post-processing.
 
+Instead of (or alongside) `referenceAudioSrc`, `voiceDir` points at a
+directory of pre-baked voice-conditioning tensors — the upstream CLI's
+`--save-voice` output — which skips the reference preprocessing; when both are
+set, tensors missing from the directory are backfilled from the recording.
+
+T3 sampling is tunable: `temperature` (engine default `0.8`; `0` decodes
+greedily), `topK` (`1000`; `0` disables the cutoff), `topP` (`0.95`) and
+`repeatPenalty` (`1.2`; `1` turns it off). The multilingual GGUFs also take
+`exaggeration` (prosody intensity, default `0.5`; above `0` more expressive,
+below `0` flatter), `cfgWeight` (T3 classifier-free-guidance scale, default
+`0.5`; `0` disables it, and it is separate from `cfgRate`, which steers S3Gen)
+and `minP` (min-p threshold, `0` = off); the Turbo variant ignores the three.
+
+Length and streaming cost: `nPredict` caps the speech tokens T3 decodes per
+synthesis (default `1000`, about 40 s); longer single calls also need `nCtx`
+to cover the prompt plus the generated tokens, or set `maxSentenceChars` so
+T3 + S3Gen run per segment of at most that many bytes (the reference CLI uses
+`180`), with `crossfadeMs` (default `30`) blending the segments in batch
+synthesis. `batchCfmSteps` sets the CFM Euler steps for batch synthesis (`0`
+= the library default: 2-step meanflow on Turbo, the model's full schedule on
+multilingual) while `cfmSteps` keeps driving native streaming, and
+`streamLeftContextTokens` bounds the per-chunk cost of long native streams by
+keeping only that many already-emitted speech tokens as S3Gen left context
+(typically 25–50; `0` = the whole emitted prefix).
+
 ### Supertonic
 
 Supertonic uses a **single GGUF** via top-level `modelSrc`. Set `voice`, `ttsSpeed`, and `ttsNumInferenceSteps` in `modelConfig` as needed. Multilingual output is selected by the GGUF (e.g. `TTS_MULTILINGUAL_SUPERTONIC2_Q8_0`) plus `language`.
@@ -189,7 +220,32 @@ per request — set it in `modelConfig`.
 `seed`, `threads`, `nGpuLayers`, `outputSampleRate` and `backendsDir` work
 as on the other engines; `openclCacheDir` is accepted by Chatterbox,
 Supertonic and CosyVoice3 only, and `vulkanCacheDir` additionally persists
-the compiled Vulkan pipeline cache when `useGPU` is set.
+the compiled Vulkan pipeline cache when `useGPU` is set. `vulkanDevice` picks
+the Vulkan adapter (`0` = the first, `N` = the Nth, `-1` = auto-pick by free
+VRAM preferring a discrete GPU) and is also used by the LavaSR enhancer;
+`prewarmText` is synthesized once at load so GPU pipelines (and a Core ML
+vocoder sidecar) are ready before the first request.
+
+Voices: `voice` selects a preset baked into the GGUF (`F1`, `M1`, …), and
+`voiceJsonSrc` loads an external voice JSON (`{ style_ttl, style_dp }`, e.g.
+a cloned voice) that overrides it; the engine checks the tensor sizes against
+the loaded model. `noiseNpySrc` supplies a fixed CFM initial-noise `.npy`
+tensor for reproducible output.
+
+Supertonic also streams natively: set `streamChunkTokens` above zero to emit
+audio per chunk of that many text tokens (Unicode code points — about 50 for
+English, 25–30 for CJK). `streamFirstChunkTokens` shrinks the first chunk for
+lower first-audio latency, `streamChunkTolerancePct` (default `20`) is the
+window, as a percentage of the chunk target, within which a boundary snaps to
+a sentence end, clause or space, and `streamMinChunkTokens` (default `30`)
+merges a shorter trailing chunk into the previous one.
+
+<Callout type="warn">
+  Supertonic native chunk streaming cannot be combined with the LavaSR
+  enhancer or denoiser; the pair is rejected at load. Sentence streaming
+  (`stream: true` without `streamChunkTokens`, `sentenceStream: true`, or
+  `textToSpeechStream()`) works with either stage loaded.
+</Callout>
 
 ### Parler-TTS
 
@@ -334,18 +390,34 @@ Conditioning uses one of three controls:
 <Callout type="warn">
   CosyVoice3 accepts **one conditioning control per synthesis** — an
   `emotion`, a non-`moderate` `pace`, or an `instruct`. Combining them is
-  rejected at load and request validation. `emotion` and `pace` can also be
-  set per request on `textToSpeech()`; `instruct` is load-time only.
+  rejected at load and request validation. All three can also be set per
+  request on `textToSpeech()` and `textToSpeechStream()`, where the request's
+  control replaces the loaded one for that synthesis.
 </Callout>
+
+```ts
+const result = textToSpeech({
+  modelId,
+  text: "今天天气真好。",
+  stream: false,
+  // Per-request control; a raw string is passed to the engine verbatim.
+  instruct: { dialect: "cantonese" },
+});
+```
 
 Set `streamChunkTokens` above zero for native chunk streaming
 (`streamFirstChunkTokens` tunes the first chunk only). Native streaming emits
 at 24 kHz, so omit `outputSampleRate` or set it to `24000` unless the LavaSR
 enhancer is loaded. `useGPU` offloads to Metal on macOS/iOS, Vulkan on
-desktop Linux/Windows, and OpenCL on Adreno Android devices; `threads`,
-`nGpuLayers`, `seed`, and `outputSampleRate` (8,000–192,000 Hz) work as on
-the other engines. CosyVoice3 also supports [LavaSR](#lavasr)
-post-processing via `lavasrEnhancerModelSrc` (48 kHz bandwidth extension) and
+desktop Linux/Windows, and OpenCL on Adreno Android devices; `vulkanDevice`
+picks the Vulkan adapter (`0` = the first, `N` = the Nth, `-1` = auto-pick by
+free VRAM preferring a discrete GPU) and is also used by the LavaSR enhancer.
+`flowCutPrompt` treats the baked-voice prompt frames as attention-only
+conditioning in the flow — a faster flow whose output deviates slightly from
+the reference (off by default). `threads`, `nGpuLayers`, `seed`, and
+`outputSampleRate` (8,000–192,000 Hz) work as on the other engines.
+CosyVoice3 also supports [LavaSR](#lavasr) post-processing via
+`lavasrEnhancerModelSrc` (48 kHz bandwidth extension) and
 `lavasrDenoiserModelSrc` (batch-only; runs before the enhancer).
 
 #### CosyVoice3 voice cloning
@@ -428,6 +500,25 @@ supply `referenceAudioSrc` (a reference recording) together with
 together — a reference without its transcript or without the encoder is
 rejected at load.
 
+With the encoder loaded, the voice can also change per request:
+`textToSpeech()` and `textToSpeechStream()` take `referenceAudioSrc` and
+`referenceText` too. A request-level recording replaces the loaded voice for
+that synthesis and must bring its own `referenceText` (the loaded transcript
+describes a different recording, so it is not inherited); a request-level
+`referenceText` on its own corrects the transcript of the loaded recording.
+The engine caches the codes of the most recent reference, so repeating one
+across requests skips the encoder.
+
+```ts
+const result = textToSpeech({
+  modelId,
+  text: "Spoken in another voice.",
+  stream: false,
+  referenceAudioSrc: "/path/to/someone-else.wav",
+  referenceText: "Exactly what that recording says.",
+});
+```
+
 Generation is sampled by default: `temperature` (default `0.7`), `topK`
 (`50`), and `topP` (`0.9`) tune it, `greedy: true` takes the argmax instead
 and ignores all three, and `maxFrames` caps generation in codec frames
@@ -451,7 +542,9 @@ synthesis fails on it, Audio8 runs the codec on ggml instead; the
   Audio8 has no `emotion`, `pace`, or description fields (at load or per
   request), no LavaSR post-processing, and no native chunk streaming.
   Sentence streaming (`sentenceStream: true`) and duplex
-  `textToSpeechStream()` work as with every engine.
+  `textToSpeechStream()` work as with every engine. The request-level
+  `referenceAudioSrc` / `referenceText` pair is Audio8-only; other engines
+  reject it.
 </Callout>
 
 For model constants, see [SDK — Models](/sdk#models).
@@ -635,7 +728,9 @@ With Chatterbox, Supertonic, Parler, or CosyVoice3, you can choose to perform po
   The denoiser needs the whole utterance, so it cannot be combined with native
   chunk streaming (`streamChunkTokens > 0`) on Chatterbox, Parler, or
   CosyVoice3. The combination is rejected at load. The enhancer has no such
-  restriction — it resamples seam-free across chunk boundaries.
+  restriction there — it resamples seam-free across chunk boundaries.
+  Supertonic native chunk streaming rejects both stages; use sentence
+  streaming for enhanced or denoised Supertonic output.
 </Callout>
 
 ```ts
