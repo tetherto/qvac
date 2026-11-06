@@ -50,6 +50,7 @@ The package exposes four JS entry points:
 | SDXL                         | image                                  | All-in-one checkpoints or split encoders when required                            |
 | SD3                          | image                                  | Supports split CLIP-L / CLIP-G / T5-XXL inputs                                    |
 | FLUX.2 [klein]               | image, img2img, multi-reference fusion | Split diffusion + Qwen3 LLM + VAE                                                 |
+| FLUX.3 Image Klein          | image, reference editing              | Split diffusion + Qwen3-VL 4B + FLUX.2 VAE; see [FLUX.3 setup](docs/flux3.md) |
 | Wan 2.1                      | text-to-video, image-to-video          | Single diffusion expert; I2V requires CLIP vision                                 |
 | Wan 2.2 TI2V-5B Turbo Q5_K_S | text-to-video                          | Community-distilled GGUF with Wan 2.2 VAE; use `scripts/download-model-wan2.2.sh` |
 | LTX-2 / LTXAV                | text-to-video + audio                  | Gemma text encoder, video VAE, audio VAE, embedding connectors                    |
@@ -61,6 +62,11 @@ The package exposes four JS entry points:
 
 See [Qwen-Image-2.1](docs/qwen-image-21.md) for the native registry port,
 pinned downloads, text-to-image, ordered reference editing, and RGBA handling.
+
+## FLUX.3 setup
+
+See [FLUX.3 Image Klein](docs/flux3.md) for pinned, checksum-verified downloads,
+the shared MOSS registry baseline, and text-to-image and reference-editing examples.
 
 ## MOSS-Image setup
 
