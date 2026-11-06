@@ -396,11 +396,11 @@ runs:
         ls /Applications | grep Xcode || echo "No Xcode apps found"
         # ibtool needs the iOS runtime matching the Xcode SDK. macos-15 only
         # ships iOS 18.5+ runtimes, so older 16.x fails on the storyboard.
-        if [ -d "/Applications/Xcode_16.4.app" ]; then
-          echo "Switching to Xcode 16.4..."
-          sudo xcode-select -s /Applications/Xcode_16.4.app
+        if [ -d "/Applications/Xcode_26.3.app" ]; then
+          echo "Switching to Xcode 26.3..."
+          sudo xcode-select -s /Applications/Xcode_26.3.app
         else
-          echo "ERROR: Xcode 16.4 not found"
+          echo "ERROR: Xcode 26.3 not found"
           exit 1
         fi
         xcodebuild -version
