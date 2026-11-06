@@ -1,6 +1,7 @@
 [
   {
     "name": "ticket: choice, score, noul",
+    "expect": "answer",
     "body": {
       "state": "My payment failed twice and I was charged both times. Please refund the duplicate.",
       "questions": {
@@ -20,6 +21,7 @@
   },
   {
     "name": "crash report: three-way choice",
+    "expect": "answer",
     "body": {
       "state": "The app crashes every time I open the settings page.",
       "questions": {
@@ -33,6 +35,7 @@
   },
   {
     "name": "structured state and noul criteria",
+    "expect": "answer",
     "body": {
       "state": { "order": 1234, "status": "delayed", "messages": ["Where is my parcel?", "It is two weeks late."] },
       "questions": {
@@ -51,6 +54,7 @@
   },
   {
     "name": "structured score legend",
+    "expect": "answer",
     "body": {
       "state": "Please cancel my subscription.",
       "questions": {
@@ -64,6 +68,7 @@
   },
   {
     "name": "rejected: 11 score levels",
+    "expect": { "status": 400, "code": "DECISION_INVALID_REQUEST", "message": "\"criteria\" must be an array of 2 to 10 levels" },
     "body": {
       "state": "x",
       "questions": {
