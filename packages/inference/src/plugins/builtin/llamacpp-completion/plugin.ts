@@ -364,9 +364,17 @@ export const llmPlugin = definePlugin({
         // stripping is needed even on plain completions.
         const dialect = request.toolDialect ?? detectToolDialect(request.modelId)
 
+        // Parse against what the prompt renders, as the final parse does: with
+        // deferred tools that includes `tool_search` and whatever an earlier
+        // search loaded.
+        const renderedTools =
+          resolveDeferredTools(request.tools, request.history)?.toolsToRender ??
+          request.tools?.map(toWireTool) ??
+          []
+
         const normalizer = createCompletionNormalizer({
           capabilities,
-          tools: request.tools ?? [],
+          tools: renderedTools,
           captureThinking: request.captureThinking ?? false,
           emitRawDeltas: request.emitRawDeltas ?? false,
           toolDialect: dialect
