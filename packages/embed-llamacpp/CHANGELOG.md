@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- `./binding.js` is now in the package `exports`, so mobile test apps can bundle
+  the integration tests that require it (`model-loading.test.js`). Without it,
+  the mobile test-app bundle failed with `PACKAGE_PATH_NOT_EXPORTED`.
+
 ## [0.55.0] - 2026-11-04
 
 ### Breaking
