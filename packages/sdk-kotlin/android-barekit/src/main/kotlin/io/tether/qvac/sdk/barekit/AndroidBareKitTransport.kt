@@ -16,6 +16,10 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -77,6 +81,16 @@ class AndroidBareKitTransport private constructor(
         @Volatile
         private var uncleanStop = false
 
+        private val exitWatch = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+        // A worker that ends without reporting its exit was killed or died before its
+        // cleanup finished, whether or not its transport was closed.
+        private fun watchExit(ipc: Ipc) {
+            exitWatch.launch {
+                if (ipc.wait() == null) uncleanStop = true
+            }
+        }
+
         /**
          * Starts the worker in this process. Refused once a worker in this process was
          * killed or died before its cleanup finished, since a new worker could crash
@@ -109,6 +123,7 @@ class AndroidBareKitTransport private constructor(
                 if (error is CancellationException) throw error
                 throw QvacWorkerStartException("Failed to start QVAC BareKit worker", error)
             }
+            watchExit(started.ipc)
             val rpc = WorkerRpc(data = started.ipc.data, send = started.ipc::write, limits = rpcLimits)
             val transport = AndroidBareKitTransport(rpc, started.ipc, started.worklet, profile)
             try {

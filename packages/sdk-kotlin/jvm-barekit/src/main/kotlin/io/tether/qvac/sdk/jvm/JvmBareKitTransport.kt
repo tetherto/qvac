@@ -10,8 +10,13 @@ import io.tether.qvac.sdk.requireSuccessfulWorkerControlResponse
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -59,6 +64,18 @@ class JvmBareKitTransport private constructor(
         @Volatile
         private var uncleanStop = false
 
+        private val exitWatch = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+        /**
+         * Watches a started worker until its transport ends. One that ends without
+         * reporting its exit was killed or died before its cleanup finished, whether
+         * or not its transport was closed.
+         */
+        internal fun watchExit(ipc: Ipc, onUncleanStop: () -> Unit = { uncleanStop = true }): Job =
+            exitWatch.launch {
+                if (ipc.wait() == null) onUncleanStop()
+            }
+
         /**
          * Starts the worker in this JVM. Refused once a worker in this process was
          * killed or died before its cleanup finished, since a new worker could crash
@@ -89,6 +106,7 @@ class JvmBareKitTransport private constructor(
                 if (error is CancellationException) throw error
                 throw QvacWorkerStartException("Failed to start QVAC BareKit worker", error)
             }
+            watchExit(started.ipc)
             val rpc = WorkerRpc(data = started.ipc.data, send = started.ipc::write, limits = rpcLimits)
             val transport = JvmBareKitTransport(rpc, started.ipc, started.worklet, profile)
             try {
