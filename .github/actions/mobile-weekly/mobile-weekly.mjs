@@ -18,36 +18,51 @@ export function find(root) {
   return out
 }
 
-// Total, passed and failed test cases on one platform, from devicefarm-summarize-results' test-case-details.json.
+// Total, passed, failed and skipped test cases on one platform, from devicefarm-summarize-results' test-case-details.json.
+// A case that neither passed on every device nor failed on one counts as skipped.
 export function counts(file) {
   if (!existsSync(file)) return null
   const { testCases = [] } = JSON.parse(readFileSync(file, 'utf8'))
-  const statuses = testCases.map((t) => Object.values(t.results).map((r) => r.status))
+  const status = (t) => {
+    const s = Object.values(t.results).map((r) => r.status)
+    return s.includes('failed') ? 'failed' : s.length && s.every((x) => x === 'passed') ? 'passed' : 'skipped'
+  }
+  const named = (want) => testCases.filter((t) => status(t) === want).map((t) => t.test)
+  const skipped = named('skipped')
   return {
     total: testCases.length,
-    passed: statuses.filter((s) => s.length && s.every((x) => x === 'passed')).length,
-    failed: statuses.filter((s) => s.includes('failed')).length
+    passed: named('passed').length,
+    failed: named('failed').length,
+    skipped: skipped.length,
+    skippedNames: skipped
   }
 }
 
 export function body(npm, rows, runUrl) {
-  const result = (c) => (!c ? '⚠️ no run' : c.failed ? '❌ failed' : '✅ passed')
+  const result = (c) =>
+    !c ? '⚠️ no run' : c.failed ? '❌ failed' : c.skipped ? '⚠️ skipped tests' : '✅ passed'
   const ran = rows.filter(([, c]) => c)
   const overall = !ran.length
     ? '⚠️ no results (jobs skipped or errored)'
     : ran.some(([, c]) => c.failed)
       ? '❌ failures detected'
-      : '✅ all passed'
+      : ran.some(([, c]) => c.skipped)
+        ? '⚠️ passed with skipped tests'
+        : '✅ all passed'
   return [
     `Automated weekend mobile run for **${npm}**.`,
     '',
     `**Overall: ${overall}**`,
     '',
-    '| Platform | Result | Total | Passed | Failed |',
-    '| --- | --- | --- | --- | --- |',
+    '| Platform | Result | Total | Passed | Failed | Skipped |',
+    '| --- | --- | --- | --- | --- | --- |',
     ...rows.map(
-      ([p, c]) => `| ${p} | ${result(c)} | ${c?.total ?? '–'} | ${c?.passed ?? '–'} | ${c?.failed ?? '–'} |`
+      ([p, c]) =>
+        `| ${p} | ${result(c)} | ${c?.total ?? '–'} | ${c?.passed ?? '–'} | ${c?.failed ?? '–'} | ${c?.skipped ?? '–'} |`
     ),
+    ...ran
+      .filter(([, c]) => c.skipped)
+      .flatMap(([p, c]) => ['', `Skipped on ${p}: ${c.skippedNames.map((n) => `\`${n}\``).join(', ')}`]),
     '',
     `Full per-test tables and Device Farm run links are on the [workflow run summary](${runUrl}).`,
     '',

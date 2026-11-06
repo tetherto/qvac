@@ -3,12 +3,12 @@
 
 import {
   appendFileSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
-  readFileSync,
-  symlinkSync
+  readFileSync
 } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
@@ -39,7 +39,7 @@ const platforms = new Set()
 for (const host of readdirSync(results))
   for (const dir of existsSync(join(results, host)) ? readdirSync(join(results, host)) : [])
     if (dir.startsWith('results-')) {
-      symlinkSync(join(results, host, dir), join(staged, dir))
+      cpSync(join(results, host, dir), join(staged, dir), { recursive: true, errorOnExist: true, force: false })
       platforms.add(dir.split('-').slice(-2).join('-'))
     }
 
