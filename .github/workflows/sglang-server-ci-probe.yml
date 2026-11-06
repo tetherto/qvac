@@ -1,0 +1,96 @@
+name: SGLang server CI probe
+
+on:
+  push:
+    branches: [ci/sglang-server-build-probe]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            kind: github-hosted
+          - runner: qvac-ubuntu2204-x64
+            kind: self-hosted
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+      - name: Record initial host dependencies
+        shell: bash
+        run: |
+          set +e
+          uname -a
+          cat /etc/os-release
+          for tool in cmake ninja c++ nvcc python3; do
+            command -v "$tool" && "$tool" --version | head -n 1
+          done
+          for pkg in libzmq3-dev cppzmq-dev libmsgpack-cxx-dev libunistring-dev; do
+            dpkg-query -W -f='${Package} ${Version}\n' "$pkg"
+          done
+          echo "VCPKG_INSTALLATION_ROOT=${VCPKG_INSTALLATION_ROOT:-unset}"
+          echo "VCPKG_ROOT=${VCPKG_ROOT:-unset}"
+          true
+      - name: Install Linux development packages on GitHub runner
+        if: matrix.kind == 'github-hosted'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libzmq3-dev cppzmq-dev libmsgpack-cxx-dev libunistring-dev
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: '24'
+      - name: Setup Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - name: Setup CUDA
+        uses: ./.github/actions/setup-cuda
+      - name: Install CUDA PyTorch and TVM FFI
+        run: |
+          python -m venv "$RUNNER_TEMP/sglang-python"
+          "$RUNNER_TEMP/sglang-python/bin/pip" install 'torch==2.13.0+cu130' --index-url https://download.pytorch.org/whl/cu130
+          "$RUNNER_TEMP/sglang-python/bin/pip" install 'apache-tvm-ffi==0.1.11'
+      - name: Fetch pinned upstream kernel headers
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          repository: sgl-project/sglang
+          ref: 887c401e151e2d1b082d74ef8769a23eef5c465c
+          path: .sglang-upstream
+          persist-credentials: false
+      - name: Configure build environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          site_dir=$("$RUNNER_TEMP/sglang-python/bin/python" -c 'import site; print(site.getsitepackages()[0])')
+          echo "CMAKE_PREFIX_PATH=$site_dir/torch/share/cmake" >> "$GITHUB_ENV"
+          echo "SGL_TVM_FFI_ROOT=$site_dir/tvm_ffi" >> "$GITHUB_ENV"
+          echo "SGL_NCCL_ROOT=$site_dir/nvidia/nccl" >> "$GITHUB_ENV"
+          echo "SGL_SGLANG_KERNEL_ROOT=$GITHUB_WORKSPACE/.sglang-upstream/python/sglang/kernels/jit" >> "$GITHUB_ENV"
+          echo "SGL_CUDA_ROOT=$CUDA_PATH" >> "$GITHUB_ENV"
+          echo "VCPKG_ROOT=${VCPKG_INSTALLATION_ROOT:-${VCPKG_ROOT:-}}" >> "$GITHUB_ENV"
+          echo 'VCPKG_BINARY_SOURCES=clear' >> "$GITHUB_ENV"
+          echo "VCPKG_KEEP_ENV_VARS=${VCPKG_KEEP_ENV_VARS:+$VCPKG_KEEP_ENV_VARS;}GITHUB_TOKEN;CMAKE_PREFIX_PATH;SGL_TVM_FFI_ROOT;SGL_NCCL_ROOT;SGL_SGLANG_KERNEL_ROOT;SGL_CUDA_ROOT" >> "$GITHUB_ENV"
+      - name: Install package dependencies
+        working-directory: packages/sglang
+        run: npm install
+      - name: Build server package
+        working-directory: packages/sglang
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: npm run build
+      - name: Collect vcpkg logs
+        if: failure()
+        shell: bash
+        run: |
+          for f in "${VCPKG_ROOT:-/nonexistent}"/buildtrees/sglang-cpp/*-*.log; do
+            [ -f "$f" ] || continue
+            echo "===== $f ====="
+            tail -150 "$f"
+          done
