@@ -35,6 +35,7 @@ import { finetune } from '@/plugins/builtin/llamacpp-completion/ops/finetune'
 import { calcTokens } from '@/plugins/builtin/llamacpp-completion/ops/calc-tokens'
 import { translate } from '@/plugins/ops/translate'
 import { transformLlmConfig } from '@/plugins/builtin/llamacpp-completion/transform'
+import { llmFitRequest } from '@/plugins/builtin/llamacpp-completion/fit'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
 import { getModelConfig } from '@/runtime/model-registry'
 import { createCompletionNormalizer } from '@/utils/completion-normalizer'
@@ -61,7 +62,6 @@ function createLlmModel(
   const logger = createStreamLogger(modelId, ModelType.llamacppCompletion)
   registerAddonLogger(modelId, ModelType.llamacppCompletion, logger)
   const llmConfigStrings = transformLlmConfig(llmConfig)
-  llmConfigStrings['cache_share_across_keys'] ??= 'false'
   if (draftModelPath) llmConfigStrings['spec_draft_model'] = draftModelPath
 
   if (isMobile()) {
@@ -123,6 +123,7 @@ export const llmPlugin = definePlugin({
   displayName: 'LLM (llama.cpp)',
   addonPackage: ADDON_LLM,
   loadConfigSchema: llmConfigBaseSchema,
+  fitRequest: llmFitRequest,
   assessFit: LlmLlamacpp.assessFit,
 
   async resolveConfig(cfg: LlmConfigInput, ctx: ResolveContext) {

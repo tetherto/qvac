@@ -332,7 +332,7 @@
             "type": "object",
             "properties": {
               "transcriptionWorkload": {
-                "description": "MOSS fit-only workload. Required for a native MOSS projection; does not configure loading.",
+                "description": "MOSS fit-only workload. Required for a MOSS verdict; does not configure loading.",
                 "type": "object",
                 "properties": {
                   "prompt": {
@@ -556,20 +556,7 @@
             },
             "title": "AssessModelFitRequestModelsItem"
           },
-          "description": "Models to assess together under one memory budget."
-        },
-        "execution": {
-          "default": "sequential",
-          "description": "Declared co-residency assumption for aggregation. Not a scheduling instruction: the SDK does not serialize, reserve, or enforce anything.",
-          "type": "string",
-          "enum": ["sequential", "concurrent"],
-          "title": "AssessModelFitRequestExecution"
-        },
-        "policy": {
-          "default": "interactive-v1",
-          "description": "Headroom policy. `interactive-v1` withholds 20% of the memory available right now, capped at 2 GiB on desktop and 1 GiB on mobile.",
-          "type": "string",
-          "const": "interactive-v1"
+          "description": "Models to assess as if loaded at the same time."
         },
         "type": {
           "type": "string",
@@ -584,133 +571,133 @@
       "properties": {
         "verdict": {
           "type": "string",
-          "enum": ["likely-fits", "likely-too-large", "unknown"],
-          "description": "Combined verdict across every candidate.",
+          "enum": ["fits", "does-not-fit", "unknown"],
+          "description": "The verdict for every model loaded together.",
           "title": "AssessModelFitResponseVerdict"
         },
-        "basis": {
-          "type": "string",
-          "enum": ["system-memory", "process-memory", "device-memory", "device-budget"],
-          "description": "The evidence the budget was derived from — system RAM, the per-process ceiling on iOS, a discrete GPU’s own memory, or on Windows the GPU memory budget the OS grants this process. The two device bases also require the system-memory budget to hold.",
-          "title": "AssessModelFitResponseBasis"
-        },
-        "execution": {
-          "type": "string",
-          "enum": ["sequential", "concurrent"],
-          "description": "The declared execution mode this result assumed.",
-          "title": "AssessModelFitResponseExecution"
-        },
-        "evidence": {
-          "description": "The weakest evidence among the candidates: `computed-only` as soon as one model has only a floor, since the combined verdict can then never be `likely-fits`. Absent whenever any candidate could not be assessed at all, so an `unknown` that carries `evidence` is a near-miss or a floor, never a missing model.",
-          "type": "string",
-          "enum": ["computed-only", "native-fit"],
-          "title": "AssessModelFitResponseEvidence"
-        },
-        "budget": {
-          "description": "Absent when memory evidence was unusable.",
-          "type": "object",
-          "properties": {
-            "totalBytes": {
-              "type": "number",
-              "description": "Total budgetable memory under the result’s basis: system RAM, or the process ceiling (allowance plus current footprint) under process-memory."
+        "pools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "`host` for the host's memory, the device's `id` for a GPU with its own memory."
+              },
+              "unified": {
+                "type": "boolean",
+                "description": "Whether this is the host pool."
+              },
+              "usedBytes": {
+                "type": "number",
+                "description": "The sum of every model's rows in this pool."
+              },
+              "freeBytes": {
+                "description": "The lowest free figure reported for the pool.",
+                "type": "number"
+              },
+              "totalBytes": {
+                "description": "The lowest total figure reported for the pool.",
+                "type": "number"
+              }
             },
-            "usedBytes": {
-              "type": "number",
-              "description": "Memory in use at sample time under the same basis (system-wide, or this process)."
-            },
-            "availableBytes": {
-              "type": "number",
-              "description": "Headroom before the policy applies: total − used, or the process allowance under process-memory. The reserve is a share of this."
-            },
-            "reservedBytes": {
-              "type": "number",
-              "description": "Headroom withheld by the policy."
-            },
-            "availableAfterReserveBytes": {
-              "type": "number",
-              "description": "Budget the estimate is compared against: available − reserved."
-            }
+            "required": ["id", "unified", "usedBytes"],
+            "additionalProperties": false,
+            "title": "ModelFitPool"
           },
-          "required": [
-            "totalBytes",
-            "usedBytes",
-            "availableBytes",
-            "reservedBytes",
-            "availableAfterReserveBytes"
-          ],
-          "additionalProperties": false,
-          "title": "AssessModelFitResponseBudget"
-        },
-        "floorBytes": {
-          "description": "Under computed-only evidence: the combined floor across every candidate, aggregated under `execution`. Compared against the budget for `likely-too-large`; never enough for `likely-fits`.",
-          "type": "number"
+          "description": "The memory pools the verdict was judged on, with what the set takes from each."
         },
         "models": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "name": {
+              "status": {
                 "type": "string",
-                "description": "Catalog name of the assessed model."
+                "enum": ["fits", "does-not-fit", "unknown"],
+                "description": "The engine fitter's verdict for this model alone.",
+                "title": "ModelFitModelResultStatus"
               },
-              "verdict": {
-                "type": "string",
-                "enum": ["likely-fits", "likely-too-large", "unknown"],
-                "title": "AssessModelFitResponseModelsItemVerdict"
-              },
-              "evidence": {
-                "description": "What the verdict rests on. Absent when nothing could be computed for this model, e.g. no catalog profile.",
-                "type": "string",
-                "enum": ["computed-only", "native-fit"],
-                "title": "AssessModelFitResponseModelsItemEvidence"
-              },
-              "floorBytes": {
-                "description": "Under computed-only evidence: the smallest resident footprint the catalog facts prove — artifact bytes, plus the KV cache for llama.cpp. A floor only; the true cost is above it by an unmeasured amount.",
-                "type": "number"
-              },
-              "estimatorVersion": {
-                "description": "Estimator that produced the bounds, e.g. `llm-v1`, or `floor-v1` for a computed floor.",
-                "type": "string"
-              },
-              "device": {
-                "description": "Where this load resolved to execute, after the host’s own device defaults: `gpu` or `cpu`. The llama fitters read device memory alone and decline a `cpu` load, which then carries no `native-fit` evidence; the speech and voice fitters answer for one like any other. Absent for an engine that expresses no placement.",
-                "type": "string"
-              },
-              "reasons": {
+              "devices": {
                 "type": "array",
                 "items": {
-                  "type": "string"
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "description": "The device's PCI bus ID when the backend reports one, its name otherwise."
+                    },
+                    "name": {
+                      "type": "string",
+                      "description": "The backend's device name, such as `CPU`, `CUDA0` or `MTL0`."
+                    },
+                    "unified": {
+                      "type": "boolean",
+                      "description": "Memory the host owns: the CPU, and a GPU that shares the host's memory."
+                    },
+                    "usedBytes": {
+                      "type": "number",
+                      "description": "The memory the load takes on this device."
+                    },
+                    "freeBytes": {
+                      "description": "The free memory the device reported.",
+                      "type": "number"
+                    },
+                    "totalBytes": {
+                      "description": "The total memory the device reported.",
+                      "type": "number"
+                    }
+                  },
+                  "required": ["id", "name", "unified", "usedBytes"],
+                  "additionalProperties": false,
+                  "title": "ModelFitDevice"
                 },
-                "description": "Why this model got this verdict."
+                "description": "One row per device the load uses, the host last. Empty when unknown."
+              },
+              "stats": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "ctxSize": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "The context size the load resolves to."
+                      },
+                      "gpuLayers": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "The number of layers the load offloads to the GPU."
+                      }
+                    },
+                    "required": ["ctxSize", "gpuLayers"],
+                    "additionalProperties": false,
+                    "title": "LlamaFitStats"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": false,
+                    "title": "EmptyFitStats"
+                  }
+                ],
+                "description": "The resolved load of a llama.cpp verdict. Empty otherwise."
               }
             },
-            "required": ["name", "verdict", "reasons"],
+            "required": ["status", "devices", "stats"],
             "additionalProperties": false,
-            "title": "AssessModelFitResponseModelsItem"
+            "title": "ModelFitModelResult"
           },
-          "description": "Per-candidate verdicts, in input order."
-        },
-        "reasons": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Why the combined verdict came out this way."
-        },
-        "assumptions": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Everything the result took for granted, including estimator defaults."
+          "description": "One entry per model, in input order."
         },
         "type": {
           "type": "string",
           "const": "assessModelFit"
         }
       },
-      "required": ["verdict", "basis", "execution", "models", "reasons", "assumptions", "type"],
+      "required": ["verdict", "pools", "models", "type"],
       "additionalProperties": false
     },
     "audioEditStream.request": {
@@ -8833,149 +8820,131 @@
               "properties": {
                 "verdict": {
                   "type": "string",
-                  "enum": ["fit", "does-not-fit", "unknown"],
-                  "description": "Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the fitter produced no usable answer.",
-                  "title": "NativeProbeFitVerdict"
+                  "enum": ["fits", "does-not-fit", "unknown"],
+                  "description": "The verdict for this load against free memory.",
+                  "title": "ModelFitProbeVerdict"
                 },
-                "basis": {
-                  "type": "string",
-                  "const": "native-probe",
-                  "description": "Evidence class: the engine's own fitter, run against the model file and the resolved load settings."
-                },
-                "engine": {
-                  "description": "Engine package whose fitter produced this outcome. Absent when none ran.",
-                  "type": "string"
-                },
-                "estimatorVersion": {
-                  "type": "string",
-                  "description": "Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy. Under `native-probe-v2` the engine withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker, and a `fit` is then judged against the same budget `assessModelFit` reports, under the basis that platform uses and less the `interactive-v1` reserve, counting device memory only where it comes out of system RAM."
-                },
-                "reason": {
-                  "type": "string",
-                  "description": "Machine-readable reason for the verdict. Never parsed out of log text."
-                },
-                "message": {
-                  "description": "Human-readable detail, when the reason has any.",
-                  "type": "string"
-                },
-                "plan": {
-                  "description": "Placement the probe projected. Present wherever the fitter resolved one.",
-                  "type": "object",
-                  "properties": {
-                    "nCtx": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991,
-                      "description": "Context the probe resolved for this load, in tokens."
-                    },
-                    "nGpuLayers": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991,
-                      "description": "Layers the probe would offload."
-                    },
-                    "nGpuDevices": {
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991,
-                      "description": "GPU devices the offload would span."
-                    }
-                  },
-                  "required": ["nCtx", "nGpuLayers", "nGpuDevices"],
-                  "additionalProperties": false,
-                  "title": "NativeProbeFitPlan"
-                },
-                "projection": {
-                  "description": "What the fitter measured. Present on `fit` and `does-not-fit` alike, since a load that does not fit is where the figures matter most.",
-                  "type": "object",
-                  "properties": {
-                    "deviceName": {
-                      "description": "Device the projection was made against.",
-                      "type": "string"
-                    },
-                    "deviceBytes": {
-                      "description": "Peak the load would place on the device, under the workload the probe assumed.",
-                      "type": "number"
-                    },
-                    "hostBytes": {
-                      "description": "Peak the load would place in host RAM.",
-                      "type": "number"
-                    },
-                    "weightsBytes": {
-                      "description": "Model weights, within `deviceBytes`.",
-                      "type": "number"
-                    },
-                    "contextBytes": {
-                      "description": "Context, KV cache and decoder state, within `deviceBytes`.",
-                      "type": "number"
-                    },
-                    "computeBytes": {
-                      "description": "Compute buffers and graph arenas, within `deviceBytes`.",
-                      "type": "number"
-                    },
-                    "deviceFreeBytes": {
-                      "description": "Device memory free when the probe ran.",
-                      "type": "number"
-                    },
-                    "deviceTotalBytes": {
-                      "description": "Device memory installed.",
-                      "type": "number"
-                    },
-                    "devices": {
-                      "description": "One row per device the load was placed on, including the CPU backend, host excluded — `hostBytes` carries that. The flattened totals sum these rows, and `deviceName` names the first non-CPU row.",
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "name": {
-                            "type": "string",
-                            "description": "Device name as the engine registered it."
-                          },
-                          "totalBytes": {
-                            "type": "number",
-                            "description": "Device memory installed."
-                          },
-                          "freeBytes": {
-                            "type": "number",
-                            "description": "Device memory free when the probe ran."
-                          },
-                          "weightsBytes": {
-                            "type": "number",
-                            "description": "Model weights placed on this device."
-                          },
-                          "contextBytes": {
-                            "type": "number",
-                            "description": "Context and KV cache placed on this device."
-                          },
-                          "computeBytes": {
-                            "type": "number",
-                            "description": "Compute buffers placed on this device."
-                          }
-                        },
-                        "required": [
-                          "name",
-                          "totalBytes",
-                          "freeBytes",
-                          "weightsBytes",
-                          "contextBytes",
-                          "computeBytes"
-                        ],
-                        "additionalProperties": false,
-                        "title": "NativeProbeFitProjectionDevicesItem"
+                "pools": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "description": "`host` for the host's memory, the device's `id` for a GPU with its own memory."
+                      },
+                      "unified": {
+                        "type": "boolean",
+                        "description": "Whether this is the host pool."
+                      },
+                      "usedBytes": {
+                        "type": "number",
+                        "description": "The sum of every model's rows in this pool."
+                      },
+                      "freeBytes": {
+                        "description": "The lowest free figure reported for the pool.",
+                        "type": "number"
+                      },
+                      "totalBytes": {
+                        "description": "The lowest total figure reported for the pool.",
+                        "type": "number"
                       }
                     },
-                    "report": {
-                      "description": "The engine's own per-module memory table, suitable for a log line.",
-                      "type": "string"
-                    }
+                    "required": ["id", "unified", "usedBytes"],
+                    "additionalProperties": false,
+                    "title": "ModelFitProbePool"
                   },
-                  "additionalProperties": false,
-                  "title": "NativeProbeFitProjection"
+                  "description": "The memory pools the verdict was judged on, with what the load takes from each."
+                },
+                "models": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "status": {
+                        "type": "string",
+                        "enum": ["fits", "does-not-fit", "unknown"],
+                        "description": "The engine fitter's verdict for this model alone.",
+                        "title": "ModelFitProbeModelStatus"
+                      },
+                      "devices": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "description": "The device's PCI bus ID when the backend reports one, its name otherwise."
+                            },
+                            "name": {
+                              "type": "string",
+                              "description": "The backend's device name, such as `CPU`, `CUDA0` or `MTL0`."
+                            },
+                            "unified": {
+                              "type": "boolean",
+                              "description": "Memory the host owns: the CPU, and a GPU that shares the host's memory."
+                            },
+                            "usedBytes": {
+                              "type": "number",
+                              "description": "The memory the load takes on this device."
+                            },
+                            "freeBytes": {
+                              "description": "The free memory the device reported.",
+                              "type": "number"
+                            },
+                            "totalBytes": {
+                              "description": "The total memory the device reported.",
+                              "type": "number"
+                            }
+                          },
+                          "required": ["id", "name", "unified", "usedBytes"],
+                          "additionalProperties": false,
+                          "title": "ModelFitProbeDevice"
+                        },
+                        "description": "One row per device the load uses, the host last. Empty when unknown."
+                      },
+                      "stats": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "ctxSize": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991,
+                                "description": "The context size the load resolves to."
+                              },
+                              "gpuLayers": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991,
+                                "description": "The number of layers the load offloads to the GPU."
+                              }
+                            },
+                            "required": ["ctxSize", "gpuLayers"],
+                            "additionalProperties": false,
+                            "title": "ModelFitProbeLlamaStats"
+                          },
+                          {
+                            "type": "object",
+                            "properties": {},
+                            "additionalProperties": false,
+                            "title": "ModelFitProbeEmptyStats"
+                          }
+                        ],
+                        "description": "The resolved load of a llama.cpp verdict. Empty otherwise."
+                      }
+                    },
+                    "required": ["status", "devices", "stats"],
+                    "additionalProperties": false,
+                    "title": "ModelFitProbeModel"
+                  },
+                  "description": "The load's own entry: the engine addon's `assessFit` result."
                 }
               },
-              "required": ["verdict", "basis", "estimatorVersion", "reason"],
+              "required": ["verdict", "pools", "models"],
               "additionalProperties": false,
-              "title": "NativeProbeFit"
+              "title": "ModelFitProbe"
             }
           },
           "required": ["modelId", "modelType", "handlers", "loadedAt"],
@@ -13125,15 +13094,15 @@
                       "type": "string",
                       "minLength": 1
                     },
+                    "cache_share_across_keys": {
+                      "description": "Let a request reuse the longest prompt prefix another conversation on this model holds. Default false: each request keeps to its own `kvCache` key, and a request without one starts cold. With `true`, callers can tell from prompt-token counts and timing whether another conversation shares their prompt.",
+                      "type": "boolean"
+                    },
                     "cache_ram_mib": {
                       "description": "Host-RAM budget, in MiB, for cached conversations that are not running (0–1048576). Default 0 (off). A conversation the model switches away from (another `kvCache` key, or a slot eviction with `parallel >= 2`) is kept in RAM, so returning to its caller-managed string `kvCache` key skips reading its `cacheKey` file. Model fit checks do not count this memory.",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 1048576
-                    },
-                    "cache_share_across_keys": {
-                      "description": "Whether decoder-only requests may reuse a prompt prefix held by another conversation. The SDK defaults this to false, keeping each request to its own `kvCache` state; requests without a key start cold and reset afterwards. Set true to opt in to model-wide sharing.",
-                      "type": "boolean"
                     },
                     "cache-type-k": {
                       "description": "KV-cache key quantization type (`f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …). Unset selects a backend-safe default.",
