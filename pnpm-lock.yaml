@@ -32,6 +32,8 @@ overrides:
   llvm-runtime-resources-win32>require-asset: ^1.2.4
   require-asset>bare-module-resolve: ^1.12.6
 
+packageExtensionsChecksum: sha256-dCTVbOWqyNz63tMiV33TOnnwFmvZEklDM7YTCXSdmd0=
+
 importers:
 
   .:
@@ -21362,6 +21364,8 @@ snapshots:
 
   llvm-runtime-clang-darwin-arm64@23.1.3(bare-url@2.4.6):
     dependencies:
+      llvm-runtime-lld-darwin-arm64: 23.1.3(bare-url@2.4.6)
+      llvm-runtime-resources-darwin: 23.1.3(bare-url@2.4.6)
       require-asset: 1.2.4(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
@@ -21369,6 +21373,8 @@ snapshots:
 
   llvm-runtime-clang-darwin-arm64@23.1.3(bare-url@2.5.4):
     dependencies:
+      llvm-runtime-lld-darwin-arm64: 23.1.3(bare-url@2.5.4)
+      llvm-runtime-resources-darwin: 23.1.3(bare-url@2.5.4)
       require-asset: 1.2.4(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
@@ -21376,6 +21382,8 @@ snapshots:
 
   llvm-runtime-clang-darwin-x64@23.1.3(bare-url@2.4.6):
     dependencies:
+      llvm-runtime-lld-darwin-x64: 23.1.3(bare-url@2.4.6)
+      llvm-runtime-resources-darwin: 23.1.3(bare-url@2.4.6)
       require-asset: 1.2.4(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
@@ -21383,6 +21391,8 @@ snapshots:
 
   llvm-runtime-clang-darwin-x64@23.1.3(bare-url@2.5.4):
     dependencies:
+      llvm-runtime-lld-darwin-x64: 23.1.3(bare-url@2.5.4)
+      llvm-runtime-resources-darwin: 23.1.3(bare-url@2.5.4)
       require-asset: 1.2.4(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
@@ -21390,6 +21400,8 @@ snapshots:
 
   llvm-runtime-clang-linux-arm64@23.1.3(bare-url@2.4.6):
     dependencies:
+      llvm-runtime-lld-linux-arm64: 23.1.3(bare-url@2.4.6)
+      llvm-runtime-resources-linux: 23.1.3(bare-url@2.4.6)
       require-asset: 1.2.4(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
@@ -21397,6 +21409,8 @@ snapshots:
 
   llvm-runtime-clang-linux-arm64@23.1.3(bare-url@2.5.4):
     dependencies:
+      llvm-runtime-lld-linux-arm64: 23.1.3(bare-url@2.5.4)
+      llvm-runtime-resources-linux: 23.1.3(bare-url@2.5.4)
       require-asset: 1.2.4(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
@@ -21404,6 +21418,8 @@ snapshots:
 
   llvm-runtime-clang-linux-x64@23.1.3(bare-url@2.4.6):
     dependencies:
+      llvm-runtime-lld-linux-x64: 23.1.3(bare-url@2.4.6)
+      llvm-runtime-resources-linux: 23.1.3(bare-url@2.4.6)
       require-asset: 1.2.4(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
@@ -21411,6 +21427,8 @@ snapshots:
 
   llvm-runtime-clang-linux-x64@23.1.3(bare-url@2.5.4):
     dependencies:
+      llvm-runtime-lld-linux-x64: 23.1.3(bare-url@2.5.4)
+      llvm-runtime-resources-linux: 23.1.3(bare-url@2.5.4)
       require-asset: 1.2.4(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
@@ -21418,6 +21436,8 @@ snapshots:
 
   llvm-runtime-clang-win32-arm64@23.1.3(bare-url@2.4.6):
     dependencies:
+      llvm-runtime-lld-win32-arm64: 23.1.3(bare-url@2.4.6)
+      llvm-runtime-resources-win32: 23.1.3(bare-url@2.4.6)
       require-asset: 1.2.4(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
@@ -21425,6 +21445,8 @@ snapshots:
 
   llvm-runtime-clang-win32-arm64@23.1.3(bare-url@2.5.4):
     dependencies:
+      llvm-runtime-lld-win32-arm64: 23.1.3(bare-url@2.5.4)
+      llvm-runtime-resources-win32: 23.1.3(bare-url@2.5.4)
       require-asset: 1.2.4(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
@@ -21432,6 +21454,8 @@ snapshots:
 
   llvm-runtime-clang-win32-x64@23.1.3(bare-url@2.4.6):
     dependencies:
+      llvm-runtime-lld-win32-x64: 23.1.3(bare-url@2.4.6)
+      llvm-runtime-resources-win32: 23.1.3(bare-url@2.4.6)
       require-asset: 1.2.4(bare-url@2.4.6)
     transitivePeerDependencies:
       - bare-url
@@ -21439,6 +21463,8 @@ snapshots:
 
   llvm-runtime-clang-win32-x64@23.1.3(bare-url@2.5.4):
     dependencies:
+      llvm-runtime-lld-win32-x64: 23.1.3(bare-url@2.5.4)
+      llvm-runtime-resources-win32: 23.1.3(bare-url@2.5.4)
       require-asset: 1.2.4(bare-url@2.5.4)
     transitivePeerDependencies:
       - bare-url
