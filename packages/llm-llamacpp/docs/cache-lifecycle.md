@@ -494,7 +494,7 @@ The file is a standard llama.cpp sequence-state file
 | llama.cpp header | magic, format version, number of tokens that follow |
 | ledger, stored as the token list | `QLDG` marker, ledger version, `nPast`, KV-cell count, entry count, a checksum over the entries, one reserved word; then five words per entry: kind (text token or media span), identity (the token id, or a hash of the media) in two words, positions, KV cells |
 | sequence state | the sequence's complete memory: every KV cell, and the recurrent state on hybrid and recurrent models (on DeepSeek V4: the sliding window, the compressed rows and the compressor states) |
-| checkpoint section (full-state models with a checkpoint) | `QCKP` marker, section version, checkpoint count (1); the checkpoint's `nPast` (the newest ending at a user message, else the newest), its ledger in the format above (which gives its KV-cell count), its partial state and a hash of that state; a checksum over everything but the state bytes |
+| checkpoint section (full-state models with a checkpoint) | `QCKP` marker, section version, checkpoint count (1); the checkpoint's `nPast` (the newest ending at a user message, else the newest), a flags word (version 2: whether it ends at a user message), its ledger in the format above (which gives its KV-cell count), its partial state and a hash of that state; a checksum over everything but the state bytes |
 
 The state is always written in full; the checkpoint after it holds only the
 partial state, as in memory. `llama_state_seq_load_file` stops reading at the

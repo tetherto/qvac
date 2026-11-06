@@ -158,6 +158,7 @@ void cutBackQuietly(const std::string& path, uintmax_t size) noexcept {
 
 struct SectionEntry {
   int32_t nPast = 0;
+  uint32_t flags = 0;
   std::vector<llama_token> ledgerWords;
   uint64_t payloadOffset = 0;
   uint64_t payloadSize = 0;
@@ -216,6 +217,7 @@ bool appendCheckpointSection(
     writer.value(CHECKPOINT_SECTION_VERSION);
     writer.value(static_cast<uint32_t>(1));
     writer.value(static_cast<int32_t>(state.nPast));
+    writer.value(checkpoint.endsAtUserTurn ? CHECKPOINT_ENDS_AT_USER_TURN : 0U);
     const std::vector<llama_token> words = serialize(
         checkpoint.ledger,
         checkpoint.ledger.positions(),
@@ -283,7 +285,8 @@ Checkpoints readCheckpointSection(
     if (!reader.value(magic) || magic != CHECKPOINT_SECTION_MAGIC) {
       return reject("unrecognized data after the conversation state");
     }
-    if (!reader.value(version) || version != CHECKPOINT_SECTION_VERSION) {
+    if (!reader.value(version) || version == 0 ||
+        version > CHECKPOINT_SECTION_VERSION) {
       return reject("written by a newer version");
     }
     if (!reader.value(count) || count > MAX_CONFIGURABLE_PROCESS_CHECKPOINTS) {
@@ -294,7 +297,9 @@ Checkpoints readCheckpointSection(
     std::vector<SectionEntry> entries(count);
     for (SectionEntry& entry : entries) {
       uint32_t wordCount = 0;
-      if (!reader.value(entry.nPast) || !reader.value(wordCount) ||
+      if (!reader.value(entry.nPast) ||
+          (version >= 2 && !reader.value(entry.flags)) ||
+          !reader.value(wordCount) ||
           !reader.words(entry.ledgerWords, wordCount) ||
           !reader.value(entry.payloadSize)) {
         return reject("truncated");
@@ -342,8 +347,8 @@ Checkpoints readCheckpointSection(
       // From the ledger, which `deserialize` checked against its header:
       // the same value every writer means, whatever it kept in memory.
       checkpoint.cacheTokens = checkpoint.ledger.cacheTokens();
-      // The writer stores the user-turn checkpoint when there is one.
-      checkpoint.endsAtUserTurn = true;
+      checkpoint.endsAtUserTurn =
+          (entry.flags & CHECKPOINT_ENDS_AT_USER_TURN) != 0;
       SectionHash payloadHash;
       if (!utils::partialSnapshotFromStream(
               in,

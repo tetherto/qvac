@@ -127,6 +127,16 @@ TEST_F(CacheCheckpointFileTest, PrefersTheNewestUserTurnCheckpoint) {
   EXPECT_EQ(read.front().state.nPast, 5);
 }
 
+TEST_F(CacheCheckpointFileTest, ToolResultFallbackIsNotPinnedOnReload) {
+  cache::Checkpoints checkpoints;
+  checkpoints.push_back(checkpoint(5, 'a'));
+  ASSERT_TRUE(cache::appendCheckpointSection(path_, checkpoints));
+  const cache::Checkpoints read =
+      cache::readCheckpointSection(path_, stateEnd(), resident(), policy(1));
+  ASSERT_EQ(read.size(), 1u);
+  EXPECT_FALSE(read.front().endsAtUserTurn);
+}
+
 TEST_F(CacheCheckpointFileTest, KeepsTheNewestCheckpointAfterTheState) {
   cache::Checkpoints checkpoints;
   checkpoints.push_back(checkpoint(4, 'a'));

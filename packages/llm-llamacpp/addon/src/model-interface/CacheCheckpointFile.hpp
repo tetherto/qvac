@@ -19,6 +19,7 @@ namespace qvac_lib_inference_addon_llama::cache {
 //   version; readers accept any count up to the checkpoint limit)
 //   per checkpoint, oldest first:
 //     i32 nPast
+//     u32 flags (version 2+; bit 0: the history ends at a user message)
 //     u32 word count · the checkpoint's ledger (`serialize`)
 //     u64 payload size · the partial state (`llama_state_seq_get_data_ext`)
 //     u64 payload hash (FNV-1a over the partial state)
@@ -26,7 +27,8 @@ namespace qvac_lib_inference_addon_llama::cache {
 // The checkpoint's KV-cell count is its ledger's. The section ends the file;
 // a file without checkpoints has none.
 inline constexpr uint32_t CHECKPOINT_SECTION_MAGIC = 0x504b4351; // "QCKP"
-inline constexpr uint32_t CHECKPOINT_SECTION_VERSION = 1;
+inline constexpr uint32_t CHECKPOINT_SECTION_VERSION = 2;
+inline constexpr uint32_t CHECKPOINT_ENDS_AT_USER_TURN = 1U << 0;
 
 /// Appends one of `checkpoints` (the newest partial checkpoint with a payload
 /// that ends at a user message, else the newest) to the cacheKey file at
