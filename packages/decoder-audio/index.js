@@ -437,14 +437,31 @@ class FFmpegDecoder {
     async _collectStreamData(audioStream, run) {
         const chunks = [];
         let totalBytes = 0;
-        for await (const chunk of audioStream) {
-            if (run.cancelled) {
-                this.logger.info("[FFmpegDecoder] Job cancelled, stopping stream collection");
-                throw new error_1.QvacErrorDecoderAudio({ code: error_1.ERR_CODES.JOB_CANCELLED });
+        // Race each read against the run's cancellation, so a cancel settles the
+        // run even while the input stream is stalled.
+        const iterator = audioStream[Symbol.asyncIterator]();
+        let done = false;
+        try {
+            while (true) {
+                const step = await Promise.race([iterator.next(), run.cancellation]);
+                if (step.done) {
+                    done = true;
+                    break;
+                }
+                if (run.cancelled) {
+                    this.logger.info("[FFmpegDecoder] Job cancelled, stopping stream collection");
+                    throw new error_1.QvacErrorDecoderAudio({ code: error_1.ERR_CODES.JOB_CANCELLED });
+                }
+                chunks.push(step.value);
+                totalBytes += step.value.length;
+                this.logger.debug(`[FFmpegDecoder] Collected chunk, total bytes: ${totalBytes}`);
             }
-            chunks.push(chunk);
-            totalBytes += chunk.length;
-            this.logger.debug(`[FFmpegDecoder] Collected chunk, total bytes: ${totalBytes}`);
+        }
+        finally {
+            // Close the input on cancel or error. Not awaited: a stalled next() may
+            // never settle, and the run must not wait for it.
+            if (!done)
+                void Promise.resolve(iterator.return?.()).catch(() => { });
         }
         return Buffer.concat(chunks);
     }
