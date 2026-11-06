@@ -6,6 +6,7 @@ import {
 } from '@/schemas/llamacpp-config'
 import { loadModelOptionsToRequestSchema, loadModelSrcRequestSchema } from '@/schemas/load-model'
 import { ModelType, deviceConfigDefaultsSchema } from '@/schemas'
+import { transformLlmConfig } from '@/plugins/builtin/llamacpp-completion/transform'
 
 const LLM_BASE = {
   modelType: ModelType.llamacppCompletion,
@@ -293,13 +294,6 @@ test('llmConfigBaseSchema: rejects cache_ram_mib the addon refuses', (t) => {
   t.is(llmConfigBaseSchema.safeParse({ cache_ram_mib: '2048' }).success, false)
 })
 
-test('llmConfigBaseSchema: accepts only booleans for cache_share_across_keys', (t) => {
-  t.is(llmConfigBaseSchema.safeParse({ cache_share_across_keys: true }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ cache_share_across_keys: false }).success, true)
-  t.is(llmConfigBaseSchema.safeParse({ cache_share_across_keys: 'false' }).success, false)
-  t.is(llmConfigBaseSchema.safeParse({ cache_share_across_keys: 0 }).success, false)
-})
-
 test('llmConfigSchema: does not inject a default for the other prompt-cache keys', (t) => {
   const result = llmConfigSchema.safeParse({})
   t.is(result.success, true)
@@ -308,8 +302,23 @@ test('llmConfigSchema: does not inject a default for the other prompt-cache keys
     t.absent('cache_checkpoint_storage' in result.data)
     t.absent('cache_checkpoint_dir' in result.data)
     t.absent('cache_ram_mib' in result.data)
-    t.absent('cache_share_across_keys' in result.data)
   }
+})
+
+test('llmConfigSchema: keeps each conversation to its own cache unless sharing is asked for', (t) => {
+  t.is(llmConfigSchema.parse({}).cache_share_across_keys, false)
+  t.is(llmConfigSchema.parse({ cache_share_across_keys: true }).cache_share_across_keys, true)
+  t.is(llmConfigBaseSchema.safeParse({ cache_share_across_keys: 'false' }).success, false)
+})
+
+test('transformLlmConfig: passes the cache sharing choice to the addon as a string', (t) => {
+  t.is(transformLlmConfig(llmConfigSchema.parse({}))['cache_share_across_keys'], 'false')
+  t.is(
+    transformLlmConfig(llmConfigSchema.parse({ cache_share_across_keys: true }))[
+      'cache_share_across_keys'
+    ],
+    'true'
+  )
 })
 
 test('loadModelOptionsToRequestSchema: keeps the other prompt-cache keys for LLM', (t) => {
@@ -317,8 +326,7 @@ test('loadModelOptionsToRequestSchema: keeps the other prompt-cache keys for LLM
     cache_checkpoints_max_bytes: 1073741824,
     cache_checkpoint_storage: 'disk',
     cache_checkpoint_dir: '/data/cache',
-    cache_ram_mib: 512,
-    cache_share_across_keys: false
+    cache_ram_mib: 512
   }
   const result = loadModelOptionsToRequestSchema.safeParse({ ...LLM_BASE, modelConfig })
   t.is(result.success, true)

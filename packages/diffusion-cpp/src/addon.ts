@@ -11,6 +11,7 @@ export interface SdConfigurationParams {
   t5XxlPath?: string
   llmPath?: string
   llmVisionPath?: string
+  tokenizerPath?: string
   vaePath?: string
   clipVisionPath?: string
   esrganPath?: string

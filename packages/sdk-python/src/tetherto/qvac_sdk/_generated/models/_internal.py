@@ -249,7 +249,7 @@ class AssessModelFitRequestModelsItem(GeneratedBaseModel):
         AssessModelFitRequestModelsItemTranscriptionWorkload | None,
         Field(
             alias="transcriptionWorkload",
-            description="MOSS fit-only workload. Required for a native MOSS projection; does not configure loading.",
+            description="MOSS fit-only workload. Required for a MOSS verdict; does not configure loading.",
             title="AssessModelFitRequestModelsItemTranscriptionWorkload",
         ),
     ] = None
@@ -285,144 +285,144 @@ class AssessModelFitRequestModelsItem(GeneratedBaseModel):
     ] = None
 
 
-class AssessModelFitRequestExecution(Enum):
-    sequential = "sequential"
-    concurrent = "concurrent"
-
-
 class AssessModelFitRequest(GeneratedBaseModel):
     models: Annotated[
         list[AssessModelFitRequestModelsItem],
         Field(
-            description="Models to assess together under one memory budget.",
-            min_length=1,
+            description="Models to assess as if loaded at the same time.", min_length=1
         ),
     ]
-    execution: Annotated[
-        AssessModelFitRequestExecution | None,
-        Field(
-            description="Declared co-residency assumption for aggregation. Not a scheduling instruction: the SDK does not serialize, reserve, or enforce anything.",
-            title="AssessModelFitRequestExecution",
-        ),
-    ] = "sequential"
-    policy: Annotated[
-        Literal["interactive-v1"],
-        Field(
-            description="Headroom policy. `interactive-v1` withholds 20% of the memory available right now, capped at 2 GiB on desktop and 1 GiB on mobile."
-        ),
-    ] = "interactive-v1"
     type: Literal["assessModelFit"] = "assessModelFit"
 
 
 class AssessModelFitResponseVerdict(Enum):
-    likely_fits = "likely-fits"
-    likely_too_large = "likely-too-large"
+    fits = "fits"
+    does_not_fit = "does-not-fit"
     unknown = "unknown"
 
 
-class AssessModelFitResponseBasis(Enum):
-    system_memory = "system-memory"
-    process_memory = "process-memory"
-    device_memory = "device-memory"
-    device_budget = "device-budget"
-
-
-class AssessModelFitResponseExecution(Enum):
-    sequential = "sequential"
-    concurrent = "concurrent"
-
-
-class AssessModelFitResponseEvidence(Enum):
-    computed_only = "computed-only"
-    native_fit = "native-fit"
-
-
-class AssessModelFitResponseBudget(GeneratedBaseModel):
+class ModelFitPool(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    total_bytes: Annotated[
+    id: Annotated[
+        str,
+        Field(
+            description="`host` for the host's memory, the device's `id` for a GPU with its own memory."
+        ),
+    ]
+    unified: Annotated[bool, Field(description="Whether this is the host pool.")]
+    used_bytes: Annotated[
         float,
         Field(
+            alias="usedBytes", description="The sum of every model's rows in this pool."
+        ),
+    ]
+    free_bytes: Annotated[
+        float | None,
+        Field(
+            alias="freeBytes",
+            description="The lowest free figure reported for the pool.",
+        ),
+    ] = None
+    total_bytes: Annotated[
+        float | None,
+        Field(
             alias="totalBytes",
-            description="Total budgetable memory under the result’s basis: system RAM, or the process ceiling (allowance plus current footprint) under process-memory.",
+            description="The lowest total figure reported for the pool.",
+        ),
+    ] = None
+
+
+class ModelFitModelResultStatus(Enum):
+    fits = "fits"
+    does_not_fit = "does-not-fit"
+    unknown = "unknown"
+
+
+class ModelFitDevice(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: Annotated[
+        str,
+        Field(
+            description="The device's PCI bus ID when the backend reports one, its name otherwise."
+        ),
+    ]
+    name: Annotated[
+        str,
+        Field(
+            description="The backend's device name, such as `CPU`, `CUDA0` or `MTL0`."
+        ),
+    ]
+    unified: Annotated[
+        bool,
+        Field(
+            description="Memory the host owns: the CPU, and a GPU that shares the host's memory."
         ),
     ]
     used_bytes: Annotated[
         float,
         Field(
-            alias="usedBytes",
-            description="Memory in use at sample time under the same basis (system-wide, or this process).",
+            alias="usedBytes", description="The memory the load takes on this device."
         ),
     ]
-    available_bytes: Annotated[
-        float,
-        Field(
-            alias="availableBytes",
-            description="Headroom before the policy applies: total − used, or the process allowance under process-memory. The reserve is a share of this.",
-        ),
-    ]
-    reserved_bytes: Annotated[
-        float,
-        Field(alias="reservedBytes", description="Headroom withheld by the policy."),
-    ]
-    available_after_reserve_bytes: Annotated[
-        float,
-        Field(
-            alias="availableAfterReserveBytes",
-            description="Budget the estimate is compared against: available − reserved.",
-        ),
-    ]
+    free_bytes: Annotated[
+        float | None,
+        Field(alias="freeBytes", description="The free memory the device reported."),
+    ] = None
+    total_bytes: Annotated[
+        float | None,
+        Field(alias="totalBytes", description="The total memory the device reported."),
+    ] = None
 
 
-class AssessModelFitResponseModelsItemVerdict(Enum):
-    likely_fits = "likely-fits"
-    likely_too_large = "likely-too-large"
-    unknown = "unknown"
-
-
-class AssessModelFitResponseModelsItemEvidence(Enum):
-    computed_only = "computed-only"
-    native_fit = "native-fit"
-
-
-class AssessModelFitResponseModelsItem(GeneratedBaseModel):
+class LlamaFitStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    name: Annotated[str, Field(description="Catalog name of the assessed model.")]
-    verdict: Annotated[
-        AssessModelFitResponseModelsItemVerdict,
-        Field(title="AssessModelFitResponseModelsItemVerdict"),
+    ctx_size: Annotated[
+        int,
+        Field(
+            alias="ctxSize",
+            description="The context size the load resolves to.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ]
-    evidence: Annotated[
-        AssessModelFitResponseModelsItemEvidence | None,
+    gpu_layers: Annotated[
+        int,
         Field(
-            description="What the verdict rests on. Absent when nothing could be computed for this model, e.g. no catalog profile.",
-            title="AssessModelFitResponseModelsItemEvidence",
+            alias="gpuLayers",
+            description="The number of layers the load offloads to the GPU.",
+            ge=-9007199254740991,
+            le=9007199254740991,
         ),
-    ] = None
-    floor_bytes: Annotated[
-        float | None,
+    ]
+
+
+class ModelFitModelResult(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Annotated[
+        ModelFitModelResultStatus,
         Field(
-            alias="floorBytes",
-            description="Under computed-only evidence: the smallest resident footprint the catalog facts prove — artifact bytes, plus the KV cache for llama.cpp. A floor only; the true cost is above it by an unmeasured amount.",
+            description="The engine fitter's verdict for this model alone.",
+            title="ModelFitModelResultStatus",
         ),
-    ] = None
-    estimator_version: Annotated[
-        str | None,
+    ]
+    devices: Annotated[
+        list[ModelFitDevice],
         Field(
-            alias="estimatorVersion",
-            description="Estimator that produced the bounds, e.g. `llm-v1`, or `floor-v1` for a computed floor.",
+            description="One row per device the load uses, the host last. Empty when unknown."
         ),
-    ] = None
-    device: Annotated[
-        str | None,
-        Field(
-            description="Where this load resolved to execute, after the host’s own device defaults: `gpu` or `cpu`. The llama fitters read device memory alone and decline a `cpu` load, which then carries no `native-fit` evidence; the speech and voice fitters answer for one like any other. Absent for an engine that expresses no placement."
-        ),
-    ] = None
-    reasons: Annotated[list[str], Field(description="Why this model got this verdict.")]
+    ]
+    stats: Annotated[
+        LlamaFitStats | dict[str, Any],
+        Field(description="The resolved load of a llama.cpp verdict. Empty otherwise."),
+    ]
 
 
 class AssessModelFitResponse(GeneratedBaseModel):
@@ -432,57 +432,19 @@ class AssessModelFitResponse(GeneratedBaseModel):
     verdict: Annotated[
         AssessModelFitResponseVerdict,
         Field(
-            description="Combined verdict across every candidate.",
+            description="The verdict for every model loaded together.",
             title="AssessModelFitResponseVerdict",
         ),
     ]
-    basis: Annotated[
-        AssessModelFitResponseBasis,
+    pools: Annotated[
+        list[ModelFitPool],
         Field(
-            description="The evidence the budget was derived from — system RAM, the per-process ceiling on iOS, a discrete GPU’s own memory, or on Windows the GPU memory budget the OS grants this process. The two device bases also require the system-memory budget to hold.",
-            title="AssessModelFitResponseBasis",
+            description="The memory pools the verdict was judged on, with what the set takes from each."
         ),
     ]
-    execution: Annotated[
-        AssessModelFitResponseExecution,
-        Field(
-            description="The declared execution mode this result assumed.",
-            title="AssessModelFitResponseExecution",
-        ),
-    ]
-    evidence: Annotated[
-        AssessModelFitResponseEvidence | None,
-        Field(
-            description="The weakest evidence among the candidates: `computed-only` as soon as one model has only a floor, since the combined verdict can then never be `likely-fits`. Absent whenever any candidate could not be assessed at all, so an `unknown` that carries `evidence` is a near-miss or a floor, never a missing model.",
-            title="AssessModelFitResponseEvidence",
-        ),
-    ] = None
-    budget: Annotated[
-        AssessModelFitResponseBudget | None,
-        Field(
-            description="Absent when memory evidence was unusable.",
-            title="AssessModelFitResponseBudget",
-        ),
-    ] = None
-    floor_bytes: Annotated[
-        float | None,
-        Field(
-            alias="floorBytes",
-            description="Under computed-only evidence: the combined floor across every candidate, aggregated under `execution`. Compared against the budget for `likely-too-large`; never enough for `likely-fits`.",
-        ),
-    ] = None
     models: Annotated[
-        list[AssessModelFitResponseModelsItem],
-        Field(description="Per-candidate verdicts, in input order."),
-    ]
-    reasons: Annotated[
-        list[str], Field(description="Why the combined verdict came out this way.")
-    ]
-    assumptions: Annotated[
-        list[str],
-        Field(
-            description="Everything the result took for granted, including estimator defaults."
-        ),
+        list[ModelFitModelResult],
+        Field(description="One entry per model, in input order."),
     ]
     type: Literal["assessModelFit"] = "assessModelFit"
 
@@ -7018,193 +6980,159 @@ class LoadedModelInfoToolDialect(Enum):
     dsml = "dsml"
 
 
-class NativeProbeFitVerdict(Enum):
-    fit = "fit"
+class ModelFitProbeVerdict(Enum):
+    fits = "fits"
     does_not_fit = "does-not-fit"
     unknown = "unknown"
 
 
-class NativeProbeFitPlan(GeneratedBaseModel):
+class ModelFitProbePool(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    n_ctx: Annotated[
-        int,
+    id: Annotated[
+        str,
         Field(
-            alias="nCtx",
-            description="Context the probe resolved for this load, in tokens.",
-            ge=-9007199254740991,
-            le=9007199254740991,
+            description="`host` for the host's memory, the device's `id` for a GPU with its own memory."
         ),
     ]
-    n_gpu_layers: Annotated[
-        int,
+    unified: Annotated[bool, Field(description="Whether this is the host pool.")]
+    used_bytes: Annotated[
+        float,
         Field(
-            alias="nGpuLayers",
-            description="Layers the probe would offload.",
-            ge=-9007199254740991,
-            le=9007199254740991,
+            alias="usedBytes", description="The sum of every model's rows in this pool."
         ),
-    ]
-    n_gpu_devices: Annotated[
-        int,
-        Field(
-            alias="nGpuDevices",
-            description="GPU devices the offload would span.",
-            ge=-9007199254740991,
-            le=9007199254740991,
-        ),
-    ]
-
-
-class NativeProbeFitProjectionDevicesItem(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    name: Annotated[str, Field(description="Device name as the engine registered it.")]
-    total_bytes: Annotated[
-        float, Field(alias="totalBytes", description="Device memory installed.")
     ]
     free_bytes: Annotated[
-        float,
-        Field(alias="freeBytes", description="Device memory free when the probe ran."),
-    ]
-    weights_bytes: Annotated[
-        float,
-        Field(alias="weightsBytes", description="Model weights placed on this device."),
-    ]
-    context_bytes: Annotated[
-        float,
+        float | None,
         Field(
-            alias="contextBytes",
-            description="Context and KV cache placed on this device.",
+            alias="freeBytes",
+            description="The lowest free figure reported for the pool.",
         ),
-    ]
-    compute_bytes: Annotated[
-        float,
+    ] = None
+    total_bytes: Annotated[
+        float | None,
         Field(
-            alias="computeBytes", description="Compute buffers placed on this device."
+            alias="totalBytes",
+            description="The lowest total figure reported for the pool.",
         ),
-    ]
+    ] = None
 
 
-class NativeProbeFitProjection(GeneratedBaseModel):
+class ModelFitProbeModelStatus(Enum):
+    fits = "fits"
+    does_not_fit = "does-not-fit"
+    unknown = "unknown"
+
+
+class ModelFitProbeDevice(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    device_name: Annotated[
-        str | None,
+    id: Annotated[
+        str,
         Field(
-            alias="deviceName", description="Device the projection was made against."
+            description="The device's PCI bus ID when the backend reports one, its name otherwise."
         ),
-    ] = None
-    device_bytes: Annotated[
-        float | None,
+    ]
+    name: Annotated[
+        str,
         Field(
-            alias="deviceBytes",
-            description="Peak the load would place on the device, under the workload the probe assumed.",
+            description="The backend's device name, such as `CPU`, `CUDA0` or `MTL0`."
         ),
-    ] = None
-    host_bytes: Annotated[
-        float | None,
-        Field(alias="hostBytes", description="Peak the load would place in host RAM."),
-    ] = None
-    weights_bytes: Annotated[
-        float | None,
-        Field(alias="weightsBytes", description="Model weights, within `deviceBytes`."),
-    ] = None
-    context_bytes: Annotated[
-        float | None,
+    ]
+    unified: Annotated[
+        bool,
         Field(
-            alias="contextBytes",
-            description="Context, KV cache and decoder state, within `deviceBytes`.",
+            description="Memory the host owns: the CPU, and a GPU that shares the host's memory."
         ),
-    ] = None
-    compute_bytes: Annotated[
-        float | None,
+    ]
+    used_bytes: Annotated[
+        float,
         Field(
-            alias="computeBytes",
-            description="Compute buffers and graph arenas, within `deviceBytes`.",
+            alias="usedBytes", description="The memory the load takes on this device."
         ),
-    ] = None
-    device_free_bytes: Annotated[
+    ]
+    free_bytes: Annotated[
         float | None,
+        Field(alias="freeBytes", description="The free memory the device reported."),
+    ] = None
+    total_bytes: Annotated[
+        float | None,
+        Field(alias="totalBytes", description="The total memory the device reported."),
+    ] = None
+
+
+class ModelFitProbeLlamaStats(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    ctx_size: Annotated[
+        int,
         Field(
-            alias="deviceFreeBytes",
-            description="Device memory free when the probe ran.",
+            alias="ctxSize",
+            description="The context size the load resolves to.",
+            ge=-9007199254740991,
+            le=9007199254740991,
         ),
-    ] = None
-    device_total_bytes: Annotated[
-        float | None,
-        Field(alias="deviceTotalBytes", description="Device memory installed."),
-    ] = None
+    ]
+    gpu_layers: Annotated[
+        int,
+        Field(
+            alias="gpuLayers",
+            description="The number of layers the load offloads to the GPU.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
+
+
+class ModelFitProbeModel(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Annotated[
+        ModelFitProbeModelStatus,
+        Field(
+            description="The engine fitter's verdict for this model alone.",
+            title="ModelFitProbeModelStatus",
+        ),
+    ]
     devices: Annotated[
-        list[NativeProbeFitProjectionDevicesItem] | None,
+        list[ModelFitProbeDevice],
         Field(
-            description="One row per device the load was placed on, including the CPU backend, host excluded — `hostBytes` carries that. The flattened totals sum these rows, and `deviceName` names the first non-CPU row."
+            description="One row per device the load uses, the host last. Empty when unknown."
         ),
-    ] = None
-    report: Annotated[
-        str | None,
-        Field(
-            description="The engine's own per-module memory table, suitable for a log line."
-        ),
-    ] = None
+    ]
+    stats: Annotated[
+        ModelFitProbeLlamaStats | dict[str, Any],
+        Field(description="The resolved load of a llama.cpp verdict. Empty otherwise."),
+    ]
 
 
-class NativeProbeFit(GeneratedBaseModel):
+class ModelFitProbe(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     verdict: Annotated[
-        NativeProbeFitVerdict,
+        ModelFitProbeVerdict,
         Field(
-            description="Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the fitter produced no usable answer.",
-            title="NativeProbeFitVerdict",
+            description="The verdict for this load against free memory.",
+            title="ModelFitProbeVerdict",
         ),
     ]
-    basis: Annotated[
-        Literal["native-probe"],
+    pools: Annotated[
+        list[ModelFitProbePool],
         Field(
-            description="Evidence class: the engine's own fitter, run against the model file and the resolved load settings."
-        ),
-    ] = "native-probe"
-    engine: Annotated[
-        str | None,
-        Field(
-            description="Engine package whose fitter produced this outcome. Absent when none ran."
-        ),
-    ] = None
-    estimator_version: Annotated[
-        str,
-        Field(
-            alias="estimatorVersion",
-            description="Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy. Under `native-probe-v2` the engine withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker, and a `fit` is then judged against the same budget `assessModelFit` reports, under the basis that platform uses and less the `interactive-v1` reserve, counting device memory only where it comes out of system RAM.",
+            description="The memory pools the verdict was judged on, with what the load takes from each."
         ),
     ]
-    reason: Annotated[
-        str,
+    models: Annotated[
+        list[ModelFitProbeModel],
         Field(
-            description="Machine-readable reason for the verdict. Never parsed out of log text."
+            description="The load's own entry: the engine addon's `assessFit` result."
         ),
     ]
-    message: Annotated[
-        str | None, Field(description="Human-readable detail, when the reason has any.")
-    ] = None
-    plan: Annotated[
-        NativeProbeFitPlan | None,
-        Field(
-            description="Placement the probe projected. Present wherever the fitter resolved one.",
-            title="NativeProbeFitPlan",
-        ),
-    ] = None
-    projection: Annotated[
-        NativeProbeFitProjection | None,
-        Field(
-            description="What the fitter measured. Present on `fit` and `does-not-fit` alike, since a load that does not fit is where the figures matter most.",
-            title="NativeProbeFitProjection",
-        ),
-    ] = None
 
 
 class LoadedModelInfo(GeneratedBaseModel):
@@ -7224,11 +7152,11 @@ class LoadedModelInfo(GeneratedBaseModel):
         Field(alias="toolDialect", title="LoadedModelInfoToolDialect"),
     ] = None
     fit_probe: Annotated[
-        NativeProbeFit | None,
+        ModelFitProbe | None,
         Field(
             alias="fitProbe",
             description="Outcome of the engine fitter's check that ran ahead of this load. Absent when the load set `modelFitPolicy: 'off'`.",
-            title="NativeProbeFit",
+            title="ModelFitProbe",
         ),
     ] = None
 
@@ -11282,18 +11210,18 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
             min_length=1,
         ),
     ] = None
+    cache_share_across_keys: Annotated[
+        bool | None,
+        Field(
+            description="Let a request reuse the longest prompt prefix another conversation on this model holds. Default false: each request keeps to its own `kvCache` key, and a request without one starts cold. With `true`, callers can tell from prompt-token counts and timing whether another conversation shares their prompt."
+        ),
+    ] = None
     cache_ram_mib: Annotated[
         int | None,
         Field(
             description="Host-RAM budget, in MiB, for cached conversations that are not running (0–1048576). Default 0 (off). A conversation the model switches away from (another `kvCache` key, or a slot eviction with `parallel >= 2`) is kept in RAM, so returning to its caller-managed string `kvCache` key skips reading its `cacheKey` file. Model fit checks do not count this memory.",
             ge=0,
             le=1048576,
-        ),
-    ] = None
-    cache_share_across_keys: Annotated[
-        bool | None,
-        Field(
-            description="Whether decoder-only requests may reuse a prompt prefix held by another conversation. The SDK defaults this to false, keeping each request to its own `kvCache` state; requests without a key start cold and reset afterwards. Set true to opt in to model-wide sharing."
         ),
     ] = None
     cache_type_k: Annotated[

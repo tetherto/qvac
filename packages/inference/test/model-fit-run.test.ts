@@ -4,7 +4,7 @@ import os from 'bare-os'
 import path from 'bare-path'
 import { AbortController } from 'bare-abort-controller'
 
-import type { FitProbeRequest, FitProbeResult } from '@/model-fit/run/engine'
+import type { AddonFit, FitProbeRequest } from '@/model-fit/run/engine'
 import {
   crashedMarkerPath,
   runFit,
@@ -12,23 +12,17 @@ import {
   suspectMarkerPath
 } from '@/model-fit/run/run'
 
-const PROBE: FitProbeRequest = {
-  engine: 'llm-llamacpp',
-  request: {
-    modelPath: '/models/model.gguf',
-    config: { 'ctx-size': '4096', 'gpu-layers': '99' },
-    minCtxSize: 4096,
-    marginBytes: 1024 * 1024 * 1024
-  }
+const REQUEST = {
+  modelPath: '/models/model.gguf',
+  config: { 'ctx-size': '4096', 'gpu-layers': '99' }
 }
 
-const FIT_RESULT: FitProbeResult = {
-  engine: 'llm-llamacpp',
-  result: {
-    status: 'fits',
-    devices: [],
-    stats: { gpuLayers: 32, ctxSize: 4096 }
-  }
+const PROBE: FitProbeRequest = { addonPackage: '@qvac/llm-llamacpp', request: REQUEST }
+
+const FIT_RESULT: AddonFit = {
+  status: 'fits',
+  devices: [{ id: 'CPU', name: 'CPU', unified: true, usedBytes: 5 * 1024 ** 3 }],
+  stats: {}
 }
 
 /** Above every platform's pid limit, so no process holds it. */
@@ -70,7 +64,7 @@ test('runFit: returns the engine projection and clears its markers', async (t) =
     }
   })
 
-  t.alike(result, { status: 'completed', probe: FIT_RESULT })
+  t.alike(result, { status: 'completed', fit: FIT_RESULT })
   t.alike(calls, [PROBE])
   t.ok(markedWhileRunning, 'the fit runs under a marker named by this pid')
   t.absent(exists(runningMarkerPath(stateDir, PROBE)))
@@ -85,7 +79,7 @@ test('runFit: a fit another live process is running is not a crash', async (t) =
 
   const result = await runFit(PROBE, { stateDir, callFit })
 
-  t.alike(result, { status: 'completed', probe: FIT_RESULT })
+  t.alike(result, { status: 'completed', fit: FIT_RESULT })
   t.is(state.calls, 1)
   t.ok(exists(elsewhere), 'the live process keeps its marker')
   t.absent(exists(suspectMarkerPath(stateDir, PROBE)))
@@ -106,14 +100,14 @@ test('runFit: the first unfinished fit is retried under a suspect marker', async
     }
   })
 
-  t.alike(result, { status: 'completed', probe: FIT_RESULT })
+  t.alike(result, { status: 'completed', fit: FIT_RESULT })
   t.ok(suspectWhileRunning, 'the retry runs as a suspect')
   t.absent(exists(leftover))
   t.absent(exists(suspectMarkerPath(stateDir, PROBE)), 'a finished retry clears the suspicion')
   t.absent(exists(crashedMarkerPath(stateDir, PROBE)))
 })
 
-test('runFit: a second unfinished fit in a row skips the native call', async (t) => {
+test('runFit: a second unfinished fit in a row skips the fitter', async (t) => {
   const stateDir = tempDir()
   const leftover = runningMarkerPath(stateDir, PROBE, GONE_PID)
   fs.writeFileSync(leftover, '')
@@ -131,7 +125,7 @@ test('runFit: a second unfinished fit in a row skips the native call', async (t)
   t.ok(exists(crashedMarkerPath(stateDir, PROBE)))
 })
 
-test('runFit: a crashed marker keeps skipping native', async (t) => {
+test('runFit: a crashed marker keeps skipping the fitter', async (t) => {
   const stateDir = tempDir()
   fs.writeFileSync(crashedMarkerPath(stateDir, PROBE), '')
   const { state, callFit } = countingFit()
@@ -178,21 +172,18 @@ test('runFit: an expired crashed marker returns the request to native', async (t
   t.absent(exists(crashed))
 })
 
-test('runFit: a thrown fit is invocation-error and clears the marker', async (t) => {
+test('runFit: a fitter that rejects rejects the run and clears the marker', async (t) => {
   const stateDir = tempDir()
 
-  const result = await runFit(PROBE, {
-    stateDir,
-    callFit: async () => {
-      throw new TypeError('native exploded')
-    }
-  })
-
-  t.alike(result, {
-    status: 'unknown',
-    reason: 'invocation-error',
-    message: 'TypeError: native exploded'
-  })
+  await t.exception(
+    runFit(PROBE, {
+      stateDir,
+      callFit: async () => {
+        throw new Error('the model cannot be read')
+      }
+    }),
+    /the model cannot be read/
+  )
   t.absent(exists(runningMarkerPath(stateDir, PROBE)))
   t.absent(exists(crashedMarkerPath(stateDir, PROBE)))
 })
@@ -210,10 +201,7 @@ test('runFit: concurrent fits of one request share the running marker', async (t
   }
 
   const first = runFit(PROBE, { stateDir, callFit })
-  const second = runFit(
-    { ...PROBE, request: { ...PROBE.request, marginBytes: 0 } },
-    { stateDir, callFit }
-  )
+  const second = runFit({ ...PROBE }, { stateDir, callFit })
   while (release.length < 2) await new Promise<void>((resolve) => setImmediate(() => resolve()))
 
   release[0]?.()
@@ -223,8 +211,8 @@ test('runFit: concurrent fits of one request share the running marker', async (t
   release[1]?.()
   const secondResult = await second
 
-  t.alike(firstResult, { status: 'completed', probe: FIT_RESULT })
-  t.alike(secondResult, { status: 'completed', probe: FIT_RESULT })
+  t.alike(firstResult, { status: 'completed', fit: FIT_RESULT })
+  t.alike(secondResult, { status: 'completed', fit: FIT_RESULT })
   t.is(markerHeld, 2, 'both fits ran under the marker')
   t.absent(exists(running), 'the last fit removes the marker')
   t.absent(exists(crashedMarkerPath(stateDir, PROBE)), 'an in-flight fit is not a crash')
@@ -279,7 +267,7 @@ test('runFit: a fitter that does not return times out and is not called again', 
   const stateDir = tempDir()
   const probe: FitProbeRequest = {
     ...PROBE,
-    request: { ...PROBE.request, modelPath: '/models/hung.gguf' }
+    request: { ...REQUEST, modelPath: '/models/hung.gguf' }
   }
   let release: () => void = () => {}
   let calls = 0
@@ -307,5 +295,5 @@ test('runFit: a fitter that does not return times out and is not called again', 
   }
 
   const after = await runFit(probe, { stateDir, callFit: async () => FIT_RESULT })
-  t.alike(after, { status: 'completed', probe: FIT_RESULT }, 'fits resume once it returns')
+  t.alike(after, { status: 'completed', fit: FIT_RESULT }, 'fits resume once it returns')
 })

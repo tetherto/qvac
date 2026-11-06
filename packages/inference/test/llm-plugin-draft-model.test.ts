@@ -113,25 +113,3 @@ test('llm plugin createModel: no draft model path sends no spec_draft_model', as
   t.absent('spec_draft_model' in model._config)
   t.is(model._config['spec_type'], 'draft-mtp')
 })
-
-test('llm plugin createModel: prompt-prefix sharing is opt-in', async (t) => {
-  const { llmPlugin } = await import('@/plugins/builtin/llamacpp-completion/plugin')
-
-  for (const [value, expected] of [
-    [undefined, 'false'],
-    [true, 'true'],
-    [false, 'false']
-  ] as const) {
-    const modelId = `llm-plugin-cache-sharing-${String(value)}`
-    t.teardown(() => unregisterAddonLogger(modelId))
-
-    const result = llmPlugin.createModel({
-      modelId,
-      modelPath: '/models/model.gguf',
-      modelConfig: value === undefined ? {} : { cache_share_across_keys: value }
-    })
-    const model = result.model as unknown as LlamacppDebugModel
-
-    t.is(model._config['cache_share_across_keys'], expected)
-  }
-})
