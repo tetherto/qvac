@@ -30,9 +30,6 @@ export const PREBUILD_KEYS = [
 // Merge Guard keys for C++/fuzz suites. `vla` matches pr-gate-merge.yml's
 // paths-filter key (packages/vla-ggml). audiogen-ggml is here even though it is
 // not in PREBUILD_KEYS; its suite is the bounded config-parse fuzz target.
-// Left out on purpose, because a key without a producer that can fail either
-// times out or passes vacuously:
-//   - ocr-ggml: test:cpp has no options.ci, so nothing posts its status.
 export const CPP_TEST_KEYS = [
   'asr-ggml',
   'audiogen-ggml',
@@ -43,6 +40,7 @@ export const CPP_TEST_KEYS = [
   'ggml-rpc-server',
   'llm-llamacpp',
   'model-fit',
+  'ocr-ggml',
   'translation-nmtcpp',
   'tts-ggml',
   'turbovec-ggml',

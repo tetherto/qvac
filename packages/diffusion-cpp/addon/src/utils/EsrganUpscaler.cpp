@@ -101,6 +101,7 @@ void sdLogCallback(sd_log_level_t level, const char* text, void* /*userData*/) {
   namespace lg = qvac_lib_inference_addon_cpp::logger;
   auto priority = lg::Priority::ERROR;
   switch (level) {
+  case SD_LOG_VERBOSE:
   case SD_LOG_DEBUG:
     priority = lg::Priority::DEBUG;
     break;
