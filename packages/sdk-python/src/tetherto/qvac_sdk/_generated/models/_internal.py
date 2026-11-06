@@ -5351,6 +5351,13 @@ class DecideSingleRequestQuestionsValueNoul(GeneratedBaseModel):
         DecideSingleRequestQuestionsValueNoulLabels | None,
         Field(title="DecideSingleRequestQuestionsValueNoulLabels"),
     ] = None
+    require_probability: Annotated[
+        bool | None,
+        Field(
+            alias="requireProbability",
+            description="Require the answer to be the probability that the statement holds. A model whose noul answer means something else (for example an expected rating) rejects the request.",
+        ),
+    ] = None
 
 
 class DecideSingleRequestQuestions(
@@ -5579,6 +5586,13 @@ class DecideBatchRequestQuestionsValueNoul(GeneratedBaseModel):
         DecideBatchRequestQuestionsValueNoulLabels | None,
         Field(title="DecideBatchRequestQuestionsValueNoulLabels"),
     ] = None
+    require_probability: Annotated[
+        bool | None,
+        Field(
+            alias="requireProbability",
+            description="Require the answer to be the probability that the statement holds. A model whose noul answer means something else (for example an expected rating) rejects the request.",
+        ),
+    ] = None
 
 
 class DecideBatchRequestQuestions(
@@ -5668,12 +5682,21 @@ class DecideResponseResultAnswersValueChoice(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
-    confidence: float
+    answer_confidence: Annotated[
+        float | None,
+        Field(
+            alias="answerConfidence",
+            description="Deprecated. Probability of the reported answer; only some models report it.",
+        ),
+    ] = None
     action: Annotated[
-        DecideResponseResultAnswersValueChoiceAction,
-        Field(title="DecideResponseResultAnswersValueChoiceAction"),
-    ]
+        DecideResponseResultAnswersValueChoiceAction | None,
+        Field(
+            description="Deprecated. Only some models report it.",
+            title="DecideResponseResultAnswersValueChoiceAction",
+        ),
+    ] = None
+    confidence: float
     type: Literal["choice"] = "choice"
     choice: str | float | bool
     probabilities: Annotated[
@@ -5712,12 +5735,21 @@ class DecideResponseResultAnswersValueScore(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
-    confidence: float
+    answer_confidence: Annotated[
+        float | None,
+        Field(
+            alias="answerConfidence",
+            description="Deprecated. Probability of the reported answer; only some models report it.",
+        ),
+    ] = None
     action: Annotated[
-        DecideResponseResultAnswersValueScoreAction,
-        Field(title="DecideResponseResultAnswersValueScoreAction"),
-    ]
+        DecideResponseResultAnswersValueScoreAction | None,
+        Field(
+            description="Deprecated. Only some models report it.",
+            title="DecideResponseResultAnswersValueScoreAction",
+        ),
+    ] = None
+    confidence: float
     type: Literal["score"] = "score"
     score: float
     legend: Annotated[
@@ -5747,12 +5779,26 @@ class DecideResponseResultAnswersValueNoul(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
-    confidence: float
+    answer_confidence: Annotated[
+        float | None,
+        Field(
+            alias="answerConfidence",
+            description="Deprecated. Probability of the reported answer; only some models report it.",
+        ),
+    ] = None
     action: Annotated[
-        DecideResponseResultAnswersValueNoulAction,
-        Field(title="DecideResponseResultAnswersValueNoulAction"),
-    ]
+        DecideResponseResultAnswersValueNoulAction | None,
+        Field(
+            description="Deprecated. Only some models report it.",
+            title="DecideResponseResultAnswersValueNoulAction",
+        ),
+    ] = None
+    confidence: Annotated[
+        float | None,
+        Field(
+            description="Only some models report a confidence for noul answers; none is derived."
+        ),
+    ] = None
     type: Literal["noul"] = "noul"
     noul: float
 
@@ -5802,10 +5848,14 @@ class DecideResponseResultUsage(GeneratedBaseModel):
     )
     input_tokens: Annotated[float, Field(alias="inputTokens")]
     output_tokens: Annotated[float, Field(alias="outputTokens")]
-    state_tokens: Annotated[float, Field(alias="stateTokens")]
-    state_tokens_dropped: Annotated[float, Field(alias="stateTokensDropped")]
-    truncated: bool
-    truncated_questions: Annotated[list[str], Field(alias="truncatedQuestions")]
+    state_tokens: Annotated[float | None, Field(alias="stateTokens")] = None
+    state_tokens_dropped: Annotated[float | None, Field(alias="stateTokensDropped")] = (
+        None
+    )
+    truncated: bool | None = None
+    truncated_questions: Annotated[
+        list[str] | None, Field(alias="truncatedQuestions")
+    ] = None
     options: Annotated[
         DecideResponseResultUsageOptions | None,
         Field(title="DecideResponseResultUsageOptions"),
@@ -5851,12 +5901,21 @@ class DecideResponseResultItemAnswersValueChoice(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
-    confidence: float
+    answer_confidence: Annotated[
+        float | None,
+        Field(
+            alias="answerConfidence",
+            description="Deprecated. Probability of the reported answer; only some models report it.",
+        ),
+    ] = None
     action: Annotated[
-        DecideResponseResultItemAnswersValueChoiceAction,
-        Field(title="DecideResponseResultItemAnswersValueChoiceAction"),
-    ]
+        DecideResponseResultItemAnswersValueChoiceAction | None,
+        Field(
+            description="Deprecated. Only some models report it.",
+            title="DecideResponseResultItemAnswersValueChoiceAction",
+        ),
+    ] = None
+    confidence: float
     type: Literal["choice"] = "choice"
     choice: str | float | bool
     probabilities: Annotated[
@@ -5897,12 +5956,21 @@ class DecideResponseResultItemAnswersValueScore(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
-    confidence: float
+    answer_confidence: Annotated[
+        float | None,
+        Field(
+            alias="answerConfidence",
+            description="Deprecated. Probability of the reported answer; only some models report it.",
+        ),
+    ] = None
     action: Annotated[
-        DecideResponseResultItemAnswersValueScoreAction,
-        Field(title="DecideResponseResultItemAnswersValueScoreAction"),
-    ]
+        DecideResponseResultItemAnswersValueScoreAction | None,
+        Field(
+            description="Deprecated. Only some models report it.",
+            title="DecideResponseResultItemAnswersValueScoreAction",
+        ),
+    ] = None
+    confidence: float
     type: Literal["score"] = "score"
     score: float
     legend: Annotated[
@@ -5932,12 +6000,26 @@ class DecideResponseResultItemAnswersValueNoul(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
-    confidence: float
+    answer_confidence: Annotated[
+        float | None,
+        Field(
+            alias="answerConfidence",
+            description="Deprecated. Probability of the reported answer; only some models report it.",
+        ),
+    ] = None
     action: Annotated[
-        DecideResponseResultItemAnswersValueNoulAction,
-        Field(title="DecideResponseResultItemAnswersValueNoulAction"),
-    ]
+        DecideResponseResultItemAnswersValueNoulAction | None,
+        Field(
+            description="Deprecated. Only some models report it.",
+            title="DecideResponseResultItemAnswersValueNoulAction",
+        ),
+    ] = None
+    confidence: Annotated[
+        float | None,
+        Field(
+            description="Only some models report a confidence for noul answers; none is derived."
+        ),
+    ] = None
     type: Literal["noul"] = "noul"
     noul: float
 
@@ -5987,10 +6069,14 @@ class DecideResponseResultItemUsage(GeneratedBaseModel):
     )
     input_tokens: Annotated[float, Field(alias="inputTokens")]
     output_tokens: Annotated[float, Field(alias="outputTokens")]
-    state_tokens: Annotated[float, Field(alias="stateTokens")]
-    state_tokens_dropped: Annotated[float, Field(alias="stateTokensDropped")]
-    truncated: bool
-    truncated_questions: Annotated[list[str], Field(alias="truncatedQuestions")]
+    state_tokens: Annotated[float | None, Field(alias="stateTokens")] = None
+    state_tokens_dropped: Annotated[float | None, Field(alias="stateTokensDropped")] = (
+        None
+    )
+    truncated: bool | None = None
+    truncated_questions: Annotated[
+        list[str] | None, Field(alias="truncatedQuestions")
+    ] = None
     options: Annotated[
         DecideResponseResultItemUsageOptions | None,
         Field(title="DecideResponseResultItemUsageOptions"),
