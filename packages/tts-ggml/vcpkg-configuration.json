@@ -3,7 +3,7 @@
     "kind": "git",
     "baseline": "e31be272ecdf9f20970302ebf8a2943d47803001",
     "repository": "https://github.com/tetherto/qvac-registry-vcpkg.git",
-    "reference": "QVAC-27961/openmoss-tts-ci-registry"
+    "reference": "QVAC-27961/publish-openmoss-tts-xdna"
   },
   "registries": [
     {
