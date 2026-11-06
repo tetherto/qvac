@@ -47,6 +47,22 @@ Each entry in `questions` has a `type` and `instructions`:
 
 The load-time `batch_size` controls tokens per forward pass; each sequence must fit within it. `threads`, `threads-batch`, `gpu_layers`, and `flash_attn` control execution. The decision backend fixes context size, pooling, and parallelism; these settings cannot be configured through the SDK.
 
+## Upstream decision models (prototype)
+
+A `llamacpp-decision` model loads one of two engines, chosen from the GGUF:
+
+- **Laya checkpoints in Fabric's format** (`general.architecture` `laya`), including the registry constants above, use the Laya engine. Everything on this page applies to them unchanged.
+- **Upstream llama.cpp decision models** (openjev, lev, kev, clef, Laya in upstream format and other types with `<arch>.decision.type` metadata) use the upstream engine. It needs an `@qvac/embed-llamacpp` that ships `DecisionEngine`; with an older addon these models fail to load with an error that says so.
+
+On the upstream engine:
+
+- Load options are limited to `device`, `gpu_layers`, `batch_size`, `threads` and `verbosity`.
+- `choice` array values must stay distinct as text: `[true, 'true']` or `[1, '1']` is rejected; use an object with distinct keys. Answers return the original value.
+- `score` takes 2 to 10 levels. `optionOrder`, `labels`, `maxLen` and `headMaxLen` are rejected.
+- A model may answer `noul` with something other than a probability: lev returns an expected rating from 0 to 1. Set `requireProbability: true` on a `noul` question to have such a model reject the request instead.
+- States, instructions and descriptions may nest at most 128 levels deep.
+- Results omit what the engine does not report, rather than inventing it: `noul` answers carry no `confidence`, no answer carries `answerConfidence` or `action`, and `usage` has `inputTokens` and `outputTokens` only. These fields are now optional in the result type; Laya results still include them. `answerConfidence` and `action` are deprecated.
+
 ## Cancellation and concurrency
 
 The promise returned by [`decide()`](/sdk/reference/api#decide) exposes `requestId` before you await it. Pass that ID to [`cancel()`](/sdk/reference/api#cancel) to interrupt the request. Its promise rejects with `InferenceCancelledError` after the native response settles.
