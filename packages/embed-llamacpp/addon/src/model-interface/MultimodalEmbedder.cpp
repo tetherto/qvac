@@ -333,6 +333,15 @@ takeMultimodalOptions(ConfigMap& config, bool hasProjectionModel) {
   return options;
 }
 
+std::optional<int> imageTokenCap(int budget, int nUbatch) {
+  // At least one token: clip reads 0 as "keep the projector's default".
+  const int cap = std::max(nUbatch / 2, 1);
+  if (budget <= cap) {
+    return std::nullopt;
+  }
+  return cap;
+}
+
 MultimodalEmbedder::MultimodalEmbedder(
     const std::string& projectionPath, llama_model* model, llama_context* ctx,
     const common_params& params, bool modelOnGpu,
@@ -358,14 +367,45 @@ MultimodalEmbedder::MultimodalEmbedder(
   mparams.image_max_tokens = options.imageMaxTokens;
   mparams.skip_audio = options.noAudio;
 
+  // An input is decoded in one ubatch, so an image larger than the batch could
+  // never embed. As llama-server does for a mixed batch, the image budget is
+  // capped to half of it before the projector loads, the rest left for text.
+  const int nUbatch = static_cast<int>(llama_n_ubatch(ctx_));
+  const std::optional<int> cap = imageTokenCap(
+      mtmd_get_memory_usage(projectionPath.c_str(), mparams).image_max_tokens,
+      nUbatch);
+  if (cap) {
+    llamaLogCallback(
+        GGML_LOG_LEVEL_WARN,
+        string_format(
+            "[BertModel] image-max-tokens capped to %d (half of batch_size "
+            "%d) so an image fits in one batch; raise batch_size for a "
+            "larger image budget\n",
+            *cap,
+            nUbatch)
+            .c_str(),
+        nullptr);
+    mparams.image_max_tokens = *cap;
+    mparams.image_min_tokens = std::min(mparams.image_min_tokens, *cap);
+  }
+
   mctx_.reset(mtmd_init_from_file(projectionPath.c_str(), model_, mparams));
   if (!mctx_) {
+    // A cap below the projector's minimum budget fails the load.
+    const std::string hint =
+        cap ? string_format(
+                  " with image-max-tokens capped to %d for batch_size %d; "
+                  "raise batch_size or lower image-min-tokens",
+                  *cap,
+                  nUbatch)
+            : "";
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(UnableToLoadProjectionModel),
         string_format(
-            "failed to load the projection model '%s'",
-            projectionPath.c_str()));
+            "failed to load the projection model '%s'%s",
+            projectionPath.c_str(),
+            hint.c_str()));
   }
   batch_.reset(llama_batch_ext_init(ctx_));
 }

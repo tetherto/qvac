@@ -25,7 +25,7 @@ export interface GGMLConfig {
   verbosity?: NumericLike;
   /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */
   openclCacheDir?: string;
-  /** With `files.projectionModel`: largest per-image token budget of a dynamic-resolution vision encoder. Unset keeps the projector's default (1120 for EmbeddingGemma 2). Alias: `image_max_tokens`. */
+  /** With `files.projectionModel`: largest per-image token budget of a dynamic-resolution vision encoder. Unset keeps the projector's default (1120 for EmbeddingGemma 2). Either is capped to half of `batch_size` at load, so one image fits a batch. Alias: `image_max_tokens`. */
   "image-max-tokens"?: NumericLike;
   /** With `files.projectionModel`: smallest per-image token budget. Unset keeps the projector's default. Alias: `image_min_tokens`. */
   "image-min-tokens"?: NumericLike;

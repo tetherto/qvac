@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- With `files.projectionModel`, the load caps the per-image token budget
+  (`image-max-tokens`, or the projector's default) to half of `batch_size`,
+  with a warning, as llama-server does. A large image now embeds with a small
+  `batch_size` instead of failing with `InputTokensExceedBatchSize`. At the
+  default `batch_size` of 2048, EmbeddingGemma 2's budget goes from 1120 to
+  1024 tokens, so the embeddings of the largest images change slightly.
+
 ## [0.55.0] - 2026-11-04
 
 ### Breaking
