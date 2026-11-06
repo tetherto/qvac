@@ -249,7 +249,7 @@ data class AssessModelFitRequestModelsItemTranscriptionWorkload(
 @Serializable(with = AssessModelFitRequestModelsItemModelSrcSerializer::class)
 sealed class AssessModelFitRequestModelsItemModelSrc {
     data class Variant1(val value: String) : AssessModelFitRequestModelsItemModelSrc()
-    data class Value28FC01F6(val value: io.tether.qvac.sdk.generated.schema.AssessModelFitRequestModelsItemModelSrc28FC01F6) : AssessModelFitRequestModelsItemModelSrc()
+    data class Value1E6973DC(val value: io.tether.qvac.sdk.generated.schema.AssessModelFitRequestModelsItemModelSrc1E6973DC) : AssessModelFitRequestModelsItemModelSrc()
 }
 internal object AssessModelFitRequestModelsItemModelSrcSerializer : KSerializer<AssessModelFitRequestModelsItemModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("AssessModelFitRequestModelsItemModelSrc")
@@ -262,20 +262,20 @@ internal object AssessModelFitRequestModelsItemModelSrcSerializer : KSerializer<
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> AssessModelFitRequestModelsItemModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> AssessModelFitRequestModelsItemModelSrc.Value28FC01F6(input.json.decodeFromJsonElement(serializer<AssessModelFitRequestModelsItemModelSrc28FC01F6>(), element))
+            1 -> AssessModelFitRequestModelsItemModelSrc.Value1E6973DC(input.json.decodeFromJsonElement(serializer<AssessModelFitRequestModelsItemModelSrc1E6973DC>(), element))
             else -> throw SerializationException("No matching AssessModelFitRequestModelsItemModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: AssessModelFitRequestModelsItemModelSrc) {
         when (value) {
             is AssessModelFitRequestModelsItemModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is AssessModelFitRequestModelsItemModelSrc.Value28FC01F6 -> encoder.encodeSerializableValue(serializer<AssessModelFitRequestModelsItemModelSrc28FC01F6>(), value.value)
+            is AssessModelFitRequestModelsItemModelSrc.Value1E6973DC -> encoder.encodeSerializableValue(serializer<AssessModelFitRequestModelsItemModelSrc1E6973DC>(), value.value)
         }
     }
 }
 
 @Serializable
-data class AssessModelFitRequestModelsItemModelSrc28FC01F6(
+data class AssessModelFitRequestModelsItemModelSrc1E6973DC(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -286,33 +286,33 @@ data class AssessModelFitRequestModelsItemModelSrc28FC01F6(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: AssessModelFitRequestModelsItemModelSrc28FC01F6Addon? = null,
+    @SerialName("addon") val `addon`: AssessModelFitRequestModelsItemModelSrc1E6973DCAddon? = null,
 )
 
-@Serializable(with = AssessModelFitRequestModelsItemModelSrc28FC01F6AddonSerializer::class)
-sealed class AssessModelFitRequestModelsItemModelSrc28FC01F6Addon {
-    data class AssessModelFitRequestModelsItemModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.AssessModelFitRequestModelsItemModelSrcAddon) : AssessModelFitRequestModelsItemModelSrc28FC01F6Addon()
-    data class Variant2(val value: String) : AssessModelFitRequestModelsItemModelSrc28FC01F6Addon()
+@Serializable(with = AssessModelFitRequestModelsItemModelSrc1E6973DCAddonSerializer::class)
+sealed class AssessModelFitRequestModelsItemModelSrc1E6973DCAddon {
+    data class AssessModelFitRequestModelsItemModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.AssessModelFitRequestModelsItemModelSrcAddon) : AssessModelFitRequestModelsItemModelSrc1E6973DCAddon()
+    data class Variant2(val value: String) : AssessModelFitRequestModelsItemModelSrc1E6973DCAddon()
 }
-internal object AssessModelFitRequestModelsItemModelSrc28FC01F6AddonSerializer : KSerializer<AssessModelFitRequestModelsItemModelSrc28FC01F6Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("AssessModelFitRequestModelsItemModelSrc28FC01F6Addon")
+internal object AssessModelFitRequestModelsItemModelSrc1E6973DCAddonSerializer : KSerializer<AssessModelFitRequestModelsItemModelSrc1E6973DCAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("AssessModelFitRequestModelsItemModelSrc1E6973DCAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): AssessModelFitRequestModelsItemModelSrc28FC01F6Addon {
+    override fun deserialize(decoder: Decoder): AssessModelFitRequestModelsItemModelSrc1E6973DCAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> AssessModelFitRequestModelsItemModelSrc28FC01F6Addon.AssessModelFitRequestModelsItemModelSrcAddon(input.json.decodeFromJsonElement(serializer<AssessModelFitRequestModelsItemModelSrcAddon>(), element))
-            1 -> AssessModelFitRequestModelsItemModelSrc28FC01F6Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching AssessModelFitRequestModelsItemModelSrc28FC01F6Addon variant")
+            0 -> AssessModelFitRequestModelsItemModelSrc1E6973DCAddon.AssessModelFitRequestModelsItemModelSrcAddon(input.json.decodeFromJsonElement(serializer<AssessModelFitRequestModelsItemModelSrcAddon>(), element))
+            1 -> AssessModelFitRequestModelsItemModelSrc1E6973DCAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching AssessModelFitRequestModelsItemModelSrc1E6973DCAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: AssessModelFitRequestModelsItemModelSrc28FC01F6Addon) {
+    override fun serialize(encoder: Encoder, value: AssessModelFitRequestModelsItemModelSrc1E6973DCAddon) {
         when (value) {
-            is AssessModelFitRequestModelsItemModelSrc28FC01F6Addon.AssessModelFitRequestModelsItemModelSrcAddon -> encoder.encodeSerializableValue(serializer<AssessModelFitRequestModelsItemModelSrcAddon>(), value.value)
-            is AssessModelFitRequestModelsItemModelSrc28FC01F6Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is AssessModelFitRequestModelsItemModelSrc1E6973DCAddon.AssessModelFitRequestModelsItemModelSrcAddon -> encoder.encodeSerializableValue(serializer<AssessModelFitRequestModelsItemModelSrcAddon>(), value.value)
+            is AssessModelFitRequestModelsItemModelSrc1E6973DCAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -3292,7 +3292,7 @@ enum class LoadModelSrcRequestLlamacppCompletionModelConfigSpecType {
 @Serializable(with = LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcSerializer::class)
 sealed class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc()
-    data class EBFBF53C(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcEBFBF53C) : LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc()
+    data class CD4A98FB(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcCD4A98FB) : LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc()
 }
 internal object LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcSerializer : KSerializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc")
@@ -3305,20 +3305,20 @@ internal object LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelS
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc.EBFBF53C(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcEBFBF53C>(), element))
+            1 -> LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc.CD4A98FB(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcCD4A98FB>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc) {
         when (value) {
             is LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc.EBFBF53C -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcEBFBF53C>(), value.value)
+            is LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc.CD4A98FB -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcCD4A98FB>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcEBFBF53C(
+data class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcCD4A98FB(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -3329,33 +3329,33 @@ data class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcEBF
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcEBFBF53CAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcCD4A98FBAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcEBFBF53CAddonSerializer::class)
-sealed class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcEBFBF53CAddon {
-    data class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon) : LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcEBFBF53CAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcEBFBF53CAddon()
+@Serializable(with = LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcCD4A98FBAddonSerializer::class)
+sealed class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcCD4A98FBAddon {
+    data class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon) : LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcCD4A98FBAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcCD4A98FBAddon()
 }
-internal object LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcEBFBF53CAddonSerializer : KSerializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcEBFBF53CAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcEBFBF53CAddon")
+internal object LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcCD4A98FBAddonSerializer : KSerializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcCD4A98FBAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcCD4A98FBAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcEBFBF53CAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcCD4A98FBAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcEBFBF53CAddon.LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcEBFBF53CAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcEBFBF53CAddon variant")
+            0 -> LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcCD4A98FBAddon.LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcCD4A98FBAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcCD4A98FBAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcEBFBF53CAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcCD4A98FBAddon) {
         when (value) {
-            is LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcEBFBF53CAddon.LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcEBFBF53CAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcCD4A98FBAddon.LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcCD4A98FBAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -3396,7 +3396,7 @@ enum class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAdd
 @Serializable(with = LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrcSerializer::class)
 sealed class LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc()
-    data class Value55460CE9(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc55460CE9) : LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc()
+    data class Value2B40BA43(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc2B40BA43) : LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc()
 }
 internal object LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrcSerializer : KSerializer<LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc")
@@ -3409,20 +3409,20 @@ internal object LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrcSer
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc.Value55460CE9(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc55460CE9>(), element))
+            1 -> LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc.Value2B40BA43(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc2B40BA43>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc) {
         when (value) {
             is LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc.Value55460CE9 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc55460CE9>(), value.value)
+            is LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc.Value2B40BA43 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc2B40BA43>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc55460CE9(
+data class LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc2B40BA43(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -3433,33 +3433,33 @@ data class LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc55460CE9
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc55460CE9Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc2B40BA43Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc55460CE9AddonSerializer::class)
-sealed class LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc55460CE9Addon {
-    data class LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrcAddon) : LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc55460CE9Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc55460CE9Addon()
+@Serializable(with = LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc2B40BA43AddonSerializer::class)
+sealed class LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc2B40BA43Addon {
+    data class LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrcAddon) : LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc2B40BA43Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc2B40BA43Addon()
 }
-internal object LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc55460CE9AddonSerializer : KSerializer<LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc55460CE9Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc55460CE9Addon")
+internal object LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc2B40BA43AddonSerializer : KSerializer<LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc2B40BA43Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc2B40BA43Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc55460CE9Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc2B40BA43Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc55460CE9Addon.LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc55460CE9Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc55460CE9Addon variant")
+            0 -> LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc2B40BA43Addon.LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc2B40BA43Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc2B40BA43Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc55460CE9Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc2B40BA43Addon) {
         when (value) {
-            is LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc55460CE9Addon.LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc55460CE9Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc2B40BA43Addon.LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc2B40BA43Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -3662,7 +3662,7 @@ data class LoadModelSrcRequestWhispercppTranscriptionModelConfigMiscConfig(
 @Serializable(with = LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcSerializer::class)
 sealed class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc()
-    data class Value13B4559C(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc13B4559C) : LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc()
+    data class B5F428DE(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcB5F428DE) : LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc()
 }
 internal object LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcSerializer : KSerializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc")
@@ -3675,20 +3675,20 @@ internal object LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc.Value13B4559C(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc13B4559C>(), element))
+            1 -> LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc.B5F428DE(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcB5F428DE>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc) {
         when (value) {
             is LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc.Value13B4559C -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc13B4559C>(), value.value)
+            is LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc.B5F428DE -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcB5F428DE>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc13B4559C(
+data class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcB5F428DE(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -3699,33 +3699,33 @@ data class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc13B45
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc13B4559CAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcB5F428DEAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc13B4559CAddonSerializer::class)
-sealed class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc13B4559CAddon {
-    data class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon) : LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc13B4559CAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc13B4559CAddon()
+@Serializable(with = LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcB5F428DEAddonSerializer::class)
+sealed class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcB5F428DEAddon {
+    data class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon) : LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcB5F428DEAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcB5F428DEAddon()
 }
-internal object LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc13B4559CAddonSerializer : KSerializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc13B4559CAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc13B4559CAddon")
+internal object LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcB5F428DEAddonSerializer : KSerializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcB5F428DEAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcB5F428DEAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc13B4559CAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcB5F428DEAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc13B4559CAddon.LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc13B4559CAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc13B4559CAddon variant")
+            0 -> LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcB5F428DEAddon.LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcB5F428DEAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcB5F428DEAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc13B4559CAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcB5F428DEAddon) {
         when (value) {
-            is LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc13B4559CAddon.LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc13B4559CAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcB5F428DEAddon.LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcB5F428DEAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -3839,7 +3839,7 @@ data class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigMiscConfig(
 @Serializable(with = LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcSerializer::class)
 sealed class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc()
-    data class E90B3F9B(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcE90B3F9B) : LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc()
+    data class C80E33ED(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcC80E33ED) : LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc()
 }
 internal object LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcSerializer : KSerializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc")
@@ -3852,20 +3852,20 @@ internal object LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedder
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc.E90B3F9B(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcE90B3F9B>(), element))
+            1 -> LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc.C80E33ED(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcC80E33ED>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc) {
         when (value) {
             is LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc.E90B3F9B -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcE90B3F9B>(), value.value)
+            is LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc.C80E33ED -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcC80E33ED>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcE90B3F9B(
+data class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcC80E33ED(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -3876,33 +3876,33 @@ data class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModel
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcE90B3F9BAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcC80E33EDAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcE90B3F9BAddonSerializer::class)
-sealed class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcE90B3F9BAddon {
-    data class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon) : LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcE90B3F9BAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcE90B3F9BAddon()
+@Serializable(with = LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcC80E33EDAddonSerializer::class)
+sealed class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcC80E33EDAddon {
+    data class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon) : LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcC80E33EDAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcC80E33EDAddon()
 }
-internal object LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcE90B3F9BAddonSerializer : KSerializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcE90B3F9BAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcE90B3F9BAddon")
+internal object LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcC80E33EDAddonSerializer : KSerializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcC80E33EDAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcC80E33EDAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcE90B3F9BAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcC80E33EDAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcE90B3F9BAddon.LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcE90B3F9BAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcE90B3F9BAddon variant")
+            0 -> LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcC80E33EDAddon.LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcC80E33EDAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcC80E33EDAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcE90B3F9BAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcC80E33EDAddon) {
         when (value) {
-            is LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcE90B3F9BAddon.LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcE90B3F9BAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcC80E33EDAddon.LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcC80E33EDAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -4099,7 +4099,7 @@ data class LoadModelSrcRequestLlamacppEmbeddingModelConfig(
 @Serializable(with = LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcSerializer::class)
 sealed class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc()
-    data class Value66F25F8A(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8A) : LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc()
+    data class C0DF4256(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256) : LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc()
 }
 internal object LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcSerializer : KSerializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc")
@@ -4112,20 +4112,20 @@ internal object LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSr
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc.Value66F25F8A(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8A>(), element))
+            1 -> LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc.C0DF4256(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc) {
         when (value) {
             is LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc.Value66F25F8A -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8A>(), value.value)
+            is LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc.C0DF4256 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8A(
+data class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -4136,33 +4136,33 @@ data class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F2
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddonSerializer::class)
-sealed class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon {
-    data class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon) : LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon()
+@Serializable(with = LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256AddonSerializer::class)
+sealed class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon {
+    data class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon) : LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon()
 }
-internal object LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddonSerializer : KSerializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon")
+internal object LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256AddonSerializer : KSerializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon.LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon variant")
+            0 -> LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon.LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon) {
         when (value) {
-            is LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon.LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon.LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -4706,7 +4706,7 @@ enum class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotTo {
 @Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcSerializer::class)
 sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc()
-    data class Value0C57821B(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc0C57821B) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc()
+    data class Value52395DF4(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc52395DF4) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc()
 }
 internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc")
@@ -4719,20 +4719,20 @@ internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabS
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc.Value0C57821B(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc0C57821B>(), element))
+            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc.Value52395DF4(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc52395DF4>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc) {
         when (value) {
             is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc.Value0C57821B -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc0C57821B>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc.Value52395DF4 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc52395DF4>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc0C57821B(
+data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc52395DF4(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -4743,33 +4743,33 @@ data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc0C5
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc0C57821BAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc52395DF4Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc0C57821BAddonSerializer::class)
-sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc0C57821BAddon {
-    data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc0C57821BAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc0C57821BAddon()
+@Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc52395DF4AddonSerializer::class)
+sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc52395DF4Addon {
+    data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc52395DF4Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc52395DF4Addon()
 }
-internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc0C57821BAddonSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc0C57821BAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc0C57821BAddon")
+internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc52395DF4AddonSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc52395DF4Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc52395DF4Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc0C57821BAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc52395DF4Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc0C57821BAddon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon>(), element))
-            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc0C57821BAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc0C57821BAddon variant")
+            0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc52395DF4Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon>(), element))
+            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc52395DF4Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc52395DF4Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc0C57821BAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc52395DF4Addon) {
         when (value) {
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc0C57821BAddon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon>(), value.value)
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc0C57821BAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc52395DF4Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc52395DF4Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -4810,7 +4810,7 @@ enum class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAdd
 @Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcSerializer::class)
 sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc()
-    data class Value5244D714(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc5244D714) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc()
+    data class Value508D4481(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc508D4481) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc()
 }
 internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc")
@@ -4823,20 +4823,20 @@ internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabS
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc.Value5244D714(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc5244D714>(), element))
+            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc.Value508D4481(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc508D4481>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc) {
         when (value) {
             is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc.Value5244D714 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc5244D714>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc.Value508D4481 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc508D4481>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc5244D714(
+data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc508D4481(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -4847,33 +4847,33 @@ data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc524
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc5244D714Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc508D4481Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc5244D714AddonSerializer::class)
-sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc5244D714Addon {
-    data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc5244D714Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc5244D714Addon()
+@Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc508D4481AddonSerializer::class)
+sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc508D4481Addon {
+    data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc508D4481Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc508D4481Addon()
 }
-internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc5244D714AddonSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc5244D714Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc5244D714Addon")
+internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc508D4481AddonSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc508D4481Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc508D4481Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc5244D714Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc508D4481Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc5244D714Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon>(), element))
-            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc5244D714Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc5244D714Addon variant")
+            0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc508D4481Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon>(), element))
+            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc508D4481Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc508D4481Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc5244D714Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc508D4481Addon) {
         when (value) {
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc5244D714Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon>(), value.value)
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc5244D714Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc508D4481Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc508D4481Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -4936,7 +4936,7 @@ enum class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode
 @Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcSerializer::class)
 sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc()
-    data class Value728FAA10(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc728FAA10) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc()
+    data class Value93B85F3A(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc93B85F3A) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc()
 }
 internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc")
@@ -4949,20 +4949,20 @@ internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotMode
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc.Value728FAA10(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc728FAA10>(), element))
+            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc.Value93B85F3A(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc93B85F3A>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc) {
         when (value) {
             is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc.Value728FAA10 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc728FAA10>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc.Value93B85F3A -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc93B85F3A>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc728FAA10(
+data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc93B85F3A(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -4973,33 +4973,33 @@ data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc728FAA10Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc93B85F3AAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc728FAA10AddonSerializer::class)
-sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc728FAA10Addon {
-    data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc728FAA10Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc728FAA10Addon()
+@Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc93B85F3AAddonSerializer::class)
+sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc93B85F3AAddon {
+    data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc93B85F3AAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc93B85F3AAddon()
 }
-internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc728FAA10AddonSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc728FAA10Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc728FAA10Addon")
+internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc93B85F3AAddonSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc93B85F3AAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc93B85F3AAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc728FAA10Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc93B85F3AAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc728FAA10Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc728FAA10Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc728FAA10Addon variant")
+            0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc93B85F3AAddon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc93B85F3AAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc93B85F3AAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc728FAA10Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc93B85F3AAddon) {
         when (value) {
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc728FAA10Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc728FAA10Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc93B85F3AAddon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc93B85F3AAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -5040,7 +5040,7 @@ enum class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelMode
 @Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcSerializer::class)
 sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc()
-    data class Value3B92FC51(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc3B92FC51) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc()
+    data class Value847F037A(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc847F037A) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc()
 }
 internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc")
@@ -5053,20 +5053,20 @@ internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotMode
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc.Value3B92FC51(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc3B92FC51>(), element))
+            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc.Value847F037A(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc847F037A>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc) {
         when (value) {
             is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc.Value3B92FC51 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc3B92FC51>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc.Value847F037A -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc847F037A>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc3B92FC51(
+data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc847F037A(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -5077,33 +5077,33 @@ data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcV
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc3B92FC51Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc847F037AAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc3B92FC51AddonSerializer::class)
-sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc3B92FC51Addon {
-    data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc3B92FC51Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc3B92FC51Addon()
+@Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc847F037AAddonSerializer::class)
+sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc847F037AAddon {
+    data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc847F037AAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc847F037AAddon()
 }
-internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc3B92FC51AddonSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc3B92FC51Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc3B92FC51Addon")
+internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc847F037AAddonSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc847F037AAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc847F037AAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc3B92FC51Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc847F037AAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc3B92FC51Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon>(), element))
-            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc3B92FC51Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc3B92FC51Addon variant")
+            0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc847F037AAddon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon>(), element))
+            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc847F037AAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc847F037AAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc3B92FC51Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc847F037AAddon) {
         when (value) {
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc3B92FC51Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon>(), value.value)
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc3B92FC51Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc847F037AAddon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrcAddon>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc847F037AAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -5144,7 +5144,7 @@ enum class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcV
 @Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcSerializer::class)
 sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc()
-    data class D7006D5B(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcD7006D5B) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc()
+    data class Value3E03E327(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc3E03E327) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc()
 }
 internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc")
@@ -5157,20 +5157,20 @@ internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotMode
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc.D7006D5B(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcD7006D5B>(), element))
+            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc.Value3E03E327(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc3E03E327>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc) {
         when (value) {
             is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc.D7006D5B -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcD7006D5B>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc.Value3E03E327 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc3E03E327>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcD7006D5B(
+data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc3E03E327(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -5181,33 +5181,33 @@ data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstV
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcD7006D5BAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc3E03E327Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcD7006D5BAddonSerializer::class)
-sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcD7006D5BAddon {
-    data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcD7006D5BAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcD7006D5BAddon()
+@Serializable(with = LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc3E03E327AddonSerializer::class)
+sealed class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc3E03E327Addon {
+    data class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc3E03E327Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc3E03E327Addon()
 }
-internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcD7006D5BAddonSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcD7006D5BAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcD7006D5BAddon")
+internal object LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc3E03E327AddonSerializer : KSerializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc3E03E327Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc3E03E327Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcD7006D5BAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc3E03E327Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcD7006D5BAddon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon>(), element))
-            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcD7006D5BAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcD7006D5BAddon variant")
+            0 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc3E03E327Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon>(), element))
+            1 -> LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc3E03E327Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc3E03E327Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcD7006D5BAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc3E03E327Addon) {
         when (value) {
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcD7006D5BAddon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon>(), value.value)
-            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcD7006D5BAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc3E03E327Addon.LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrcAddon>(), value.value)
+            is LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc3E03E327Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -5482,7 +5482,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigChatterboxKvCacheType {
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc()
-    data class B4CF52D7(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcB4CF52D7) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc()
+    data class Value297C03D6(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc297C03D6) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc")
@@ -5495,20 +5495,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcSeri
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc.B4CF52D7(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcB4CF52D7>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc.Value297C03D6(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc297C03D6>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc.B4CF52D7 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcB4CF52D7>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc.Value297C03D6 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc297C03D6>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcB4CF52D7(
+data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc297C03D6(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -5519,33 +5519,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcB4CF52D7(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcB4CF52D7Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc297C03D6Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcB4CF52D7AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcB4CF52D7Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcB4CF52D7Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcB4CF52D7Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc297C03D6AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc297C03D6Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc297C03D6Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc297C03D6Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcB4CF52D7AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcB4CF52D7Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcB4CF52D7Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc297C03D6AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc297C03D6Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc297C03D6Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcB4CF52D7Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc297C03D6Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcB4CF52D7Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcB4CF52D7Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcB4CF52D7Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc297C03D6Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc297C03D6Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc297C03D6Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcB4CF52D7Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc297C03D6Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcB4CF52D7Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcB4CF52D7Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc297C03D6Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc297C03D6Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -5586,7 +5586,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc()
-    data class Value0743DCD0(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc0743DCD0) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc()
+    data class Value9AFBDF4B(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc9AFBDF4B) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc")
@@ -5599,20 +5599,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc.Value0743DCD0(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc0743DCD0>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc.Value9AFBDF4B(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc9AFBDF4B>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc.Value0743DCD0 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc0743DCD0>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc.Value9AFBDF4B -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc9AFBDF4B>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc0743DCD0(
+data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc9AFBDF4B(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -5623,33 +5623,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc0743D
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc0743DCD0Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc9AFBDF4BAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc0743DCD0AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc0743DCD0Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc0743DCD0Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc0743DCD0Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc9AFBDF4BAddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc9AFBDF4BAddon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc9AFBDF4BAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc9AFBDF4BAddon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc0743DCD0AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc0743DCD0Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc0743DCD0Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc9AFBDF4BAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc9AFBDF4BAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc9AFBDF4BAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc0743DCD0Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc9AFBDF4BAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc0743DCD0Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc0743DCD0Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc0743DCD0Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc9AFBDF4BAddon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc9AFBDF4BAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc9AFBDF4BAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc0743DCD0Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc9AFBDF4BAddon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc0743DCD0Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc0743DCD0Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc9AFBDF4BAddon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc9AFBDF4BAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -5690,7 +5690,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc()
-    data class F0136F05(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcF0136F05) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc()
+    data class Value09CC6F0C(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc09CC6F0C) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc")
@@ -5703,20 +5703,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcSeria
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc.F0136F05(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcF0136F05>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc.Value09CC6F0C(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc09CC6F0C>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc.F0136F05 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcF0136F05>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc.Value09CC6F0C -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc09CC6F0C>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcF0136F05(
+data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc09CC6F0C(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -5727,33 +5727,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcF0136F05(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcF0136F05Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc09CC6F0CAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcF0136F05AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcF0136F05Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcF0136F05Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcF0136F05Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc09CC6F0CAddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc09CC6F0CAddon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc09CC6F0CAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc09CC6F0CAddon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcF0136F05AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcF0136F05Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcF0136F05Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc09CC6F0CAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc09CC6F0CAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc09CC6F0CAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcF0136F05Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc09CC6F0CAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcF0136F05Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcF0136F05Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcF0136F05Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc09CC6F0CAddon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc09CC6F0CAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc09CC6F0CAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcF0136F05Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc09CC6F0CAddon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcF0136F05Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcF0136F05Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc09CC6F0CAddon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc09CC6F0CAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -5794,7 +5794,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon {
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc()
-    data class Value93E5BCD6(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc93E5BCD6) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc()
+    data class Value5766504E(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5766504E) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc")
@@ -5807,20 +5807,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcSeri
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc.Value93E5BCD6(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc93E5BCD6>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc.Value5766504E(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5766504E>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc.Value93E5BCD6 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc93E5BCD6>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc.Value5766504E -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5766504E>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc93E5BCD6(
+data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5766504E(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -5831,33 +5831,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc93E5BCD6(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc93E5BCD6Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5766504EAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc93E5BCD6AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc93E5BCD6Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc93E5BCD6Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc93E5BCD6Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5766504EAddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5766504EAddon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5766504EAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5766504EAddon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc93E5BCD6AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc93E5BCD6Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc93E5BCD6Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5766504EAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5766504EAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5766504EAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc93E5BCD6Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5766504EAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc93E5BCD6Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc93E5BCD6Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc93E5BCD6Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5766504EAddon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5766504EAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5766504EAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc93E5BCD6Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5766504EAddon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc93E5BCD6Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc93E5BCD6Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5766504EAddon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc5766504EAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -5898,7 +5898,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon {
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc()
-    data class Value0A8F1DCA(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc0A8F1DCA) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc()
+    data class Value8B8E5D5D(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc8B8E5D5D) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc")
@@ -5911,20 +5911,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerMod
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc.Value0A8F1DCA(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc0A8F1DCA>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc.Value8B8E5D5D(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc8B8E5D5D>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc.Value0A8F1DCA -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc0A8F1DCA>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc.Value8B8E5D5D -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc8B8E5D5D>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc0A8F1DCA(
+data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc8B8E5D5D(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -5935,33 +5935,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc0A8F1DCAAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc8B8E5D5DAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc0A8F1DCAAddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc0A8F1DCAAddon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc0A8F1DCAAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc0A8F1DCAAddon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc8B8E5D5DAddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc8B8E5D5DAddon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc8B8E5D5DAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc8B8E5D5DAddon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc0A8F1DCAAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc0A8F1DCAAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc0A8F1DCAAddon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc8B8E5D5DAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc8B8E5D5DAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc8B8E5D5DAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc0A8F1DCAAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc8B8E5D5DAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc0A8F1DCAAddon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc0A8F1DCAAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc0A8F1DCAAddon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc8B8E5D5DAddon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc8B8E5D5DAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc8B8E5D5DAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc0A8F1DCAAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc8B8E5D5DAddon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc0A8F1DCAAddon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc0A8F1DCAAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc8B8E5D5DAddon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc8B8E5D5DAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -6002,7 +6002,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc()
-    data class DE741266(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcDE741266) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc()
+    data class Value313E6C7C(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc313E6C7C) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc")
@@ -6015,20 +6015,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserMod
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc.DE741266(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcDE741266>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc.Value313E6C7C(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc313E6C7C>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc.DE741266 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcDE741266>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc.Value313E6C7C -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc313E6C7C>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcDE741266(
+data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc313E6C7C(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -6039,33 +6039,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcDE741266Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc313E6C7CAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcDE741266AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcDE741266Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcDE741266Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcDE741266Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc313E6C7CAddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc313E6C7CAddon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc313E6C7CAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc313E6C7CAddon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcDE741266AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcDE741266Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcDE741266Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc313E6C7CAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc313E6C7CAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc313E6C7CAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcDE741266Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc313E6C7CAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcDE741266Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcDE741266Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcDE741266Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc313E6C7CAddon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc313E6C7CAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc313E6C7CAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcDE741266Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc313E6C7CAddon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcDE741266Addon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcDE741266Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc313E6C7CAddon.LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc313E6C7CAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -6182,7 +6182,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigSupertonicPace {
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc()
-    data class Value0546AEE8(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc0546AEE8) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc()
+    data class Value8356BA1E(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc8356BA1E) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc")
@@ -6195,20 +6195,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerMod
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc.Value0546AEE8(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc0546AEE8>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc.Value8356BA1E(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc8356BA1E>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc.Value0546AEE8 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc0546AEE8>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc.Value8356BA1E -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc8356BA1E>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc0546AEE8(
+data class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc8356BA1E(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -6219,33 +6219,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc0546AEE8Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc8356BA1EAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc0546AEE8AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc0546AEE8Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc0546AEE8Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc0546AEE8Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc8356BA1EAddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc8356BA1EAddon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc8356BA1EAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc8356BA1EAddon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc0546AEE8AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc0546AEE8Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc0546AEE8Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc8356BA1EAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc8356BA1EAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc8356BA1EAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc0546AEE8Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc8356BA1EAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc0546AEE8Addon.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc0546AEE8Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc0546AEE8Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc8356BA1EAddon.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc8356BA1EAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc8356BA1EAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc0546AEE8Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc8356BA1EAddon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc0546AEE8Addon.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc0546AEE8Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc8356BA1EAddon.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc8356BA1EAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -6286,7 +6286,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc()
-    data class Value912FB8CD(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc912FB8CD) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc()
+    data class D23A51B4(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcD23A51B4) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc")
@@ -6299,20 +6299,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserMod
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc.Value912FB8CD(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc912FB8CD>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc.D23A51B4(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcD23A51B4>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc.Value912FB8CD -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc912FB8CD>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc.D23A51B4 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcD23A51B4>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc912FB8CD(
+data class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcD23A51B4(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -6323,33 +6323,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc912FB8CDAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcD23A51B4Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc912FB8CDAddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc912FB8CDAddon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc912FB8CDAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc912FB8CDAddon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcD23A51B4AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcD23A51B4Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcD23A51B4Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcD23A51B4Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc912FB8CDAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc912FB8CDAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc912FB8CDAddon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcD23A51B4AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcD23A51B4Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcD23A51B4Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc912FB8CDAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcD23A51B4Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc912FB8CDAddon.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc912FB8CDAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc912FB8CDAddon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcD23A51B4Addon.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcD23A51B4Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcD23A51B4Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc912FB8CDAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcD23A51B4Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc912FB8CDAddon.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc912FB8CDAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcD23A51B4Addon.LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcD23A51B4Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -6473,7 +6473,7 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigParlerMaxFramesSerializer :
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc()
-    data class CE0A643A(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcCE0A643A) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc()
+    data class Value2197A666(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc2197A666) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc")
@@ -6486,20 +6486,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSr
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc.CE0A643A(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcCE0A643A>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc.Value2197A666(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc2197A666>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc.CE0A643A -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcCE0A643A>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc.Value2197A666 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc2197A666>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcCE0A643A(
+data class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc2197A666(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -6510,33 +6510,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcCE0A
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcCE0A643AAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc2197A666Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcCE0A643AAddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcCE0A643AAddon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcCE0A643AAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcCE0A643AAddon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc2197A666AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc2197A666Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc2197A666Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc2197A666Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcCE0A643AAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcCE0A643AAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcCE0A643AAddon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc2197A666AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc2197A666Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc2197A666Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcCE0A643AAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc2197A666Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcCE0A643AAddon.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcCE0A643AAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcCE0A643AAddon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc2197A666Addon.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc2197A666Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc2197A666Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcCE0A643AAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc2197A666Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcCE0A643AAddon.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcCE0A643AAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc2197A666Addon.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc2197A666Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -6577,7 +6577,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddo
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc()
-    data class Value9AB0CC26(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc9AB0CC26) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc()
+    data class D3AB601B(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcD3AB601B) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc")
@@ -6590,20 +6590,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSr
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc.Value9AB0CC26(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc9AB0CC26>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc.D3AB601B(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcD3AB601B>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc.Value9AB0CC26 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc9AB0CC26>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc.D3AB601B -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcD3AB601B>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc9AB0CC26(
+data class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcD3AB601B(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -6614,33 +6614,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc9AB0
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc9AB0CC26Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcD3AB601BAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc9AB0CC26AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc9AB0CC26Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc9AB0CC26Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc9AB0CC26Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcD3AB601BAddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcD3AB601BAddon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcD3AB601BAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcD3AB601BAddon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc9AB0CC26AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc9AB0CC26Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc9AB0CC26Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcD3AB601BAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcD3AB601BAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcD3AB601BAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc9AB0CC26Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcD3AB601BAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc9AB0CC26Addon.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc9AB0CC26Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc9AB0CC26Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcD3AB601BAddon.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcD3AB601BAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcD3AB601BAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc9AB0CC26Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcD3AB601BAddon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc9AB0CC26Addon.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc9AB0CC26Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcD3AB601BAddon.LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcD3AB601BAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -6788,7 +6788,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructStyle {
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc()
-    data class D017554E(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD017554E) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc()
+    data class D45ACF6C(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD45ACF6C) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc")
@@ -6801,20 +6801,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerMod
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc.D017554E(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD017554E>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc.D45ACF6C(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD45ACF6C>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc.D017554E -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD017554E>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc.D45ACF6C -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD45ACF6C>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD017554E(
+data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD45ACF6C(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -6825,33 +6825,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD017554EAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD45ACF6CAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD017554EAddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD017554EAddon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD017554EAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD017554EAddon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD45ACF6CAddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD45ACF6CAddon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD45ACF6CAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD45ACF6CAddon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD017554EAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD017554EAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD017554EAddon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD45ACF6CAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD45ACF6CAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD45ACF6CAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD017554EAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD45ACF6CAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD017554EAddon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD017554EAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD017554EAddon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD45ACF6CAddon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD45ACF6CAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD45ACF6CAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD017554EAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD45ACF6CAddon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD017554EAddon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD017554EAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD45ACF6CAddon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcD45ACF6CAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -6892,7 +6892,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc()
-    data class Value755B3103(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc755B3103) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc()
+    data class Value0384FF13(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc0384FF13) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc")
@@ -6905,20 +6905,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserMod
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc.Value755B3103(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc755B3103>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc.Value0384FF13(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc0384FF13>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc.Value755B3103 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc755B3103>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc.Value0384FF13 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc0384FF13>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc755B3103(
+data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc0384FF13(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -6929,33 +6929,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc755B3103Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc0384FF13Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc755B3103AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc755B3103Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc755B3103Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc755B3103Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc0384FF13AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc0384FF13Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc0384FF13Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc0384FF13Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc755B3103AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc755B3103Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc755B3103Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc0384FF13AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc0384FF13Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc0384FF13Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc755B3103Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc0384FF13Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc755B3103Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc755B3103Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc755B3103Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc0384FF13Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc0384FF13Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc0384FF13Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc755B3103Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc0384FF13Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc755B3103Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc755B3103Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc0384FF13Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc0384FF13Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -6996,7 +6996,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc()
-    data class AA668E5D(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAA668E5D) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc()
+    data class Value10E258CA(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc10E258CA) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc")
@@ -7009,20 +7009,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc.AA668E5D(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAA668E5D>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc.Value10E258CA(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc10E258CA>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc.AA668E5D -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAA668E5D>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc.Value10E258CA -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc10E258CA>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAA668E5D(
+data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc10E258CA(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -7033,33 +7033,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAA668
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAA668E5DAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc10E258CAAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAA668E5DAddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAA668E5DAddon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAA668E5DAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAA668E5DAddon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc10E258CAAddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc10E258CAAddon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc10E258CAAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc10E258CAAddon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAA668E5DAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAA668E5DAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAA668E5DAddon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc10E258CAAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc10E258CAAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc10E258CAAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAA668E5DAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc10E258CAAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAA668E5DAddon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAA668E5DAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAA668E5DAddon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc10E258CAAddon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc10E258CAAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc10E258CAAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAA668E5DAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc10E258CAAddon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAA668E5DAddon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAA668E5DAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc10E258CAAddon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc10E258CAAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -7100,7 +7100,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc()
-    data class EFCA7638(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcEFCA7638) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc()
+    data class Value7B67EB4F(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc7B67EB4F) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc")
@@ -7113,20 +7113,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokMo
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc.EFCA7638(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcEFCA7638>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc.Value7B67EB4F(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc7B67EB4F>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc.EFCA7638 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcEFCA7638>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc.Value7B67EB4F -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc7B67EB4F>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcEFCA7638(
+data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc7B67EB4F(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -7137,33 +7137,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSr
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcEFCA7638Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc7B67EB4FAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcEFCA7638AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcEFCA7638Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcEFCA7638Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcEFCA7638Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc7B67EB4FAddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc7B67EB4FAddon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc7B67EB4FAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc7B67EB4FAddon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcEFCA7638AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcEFCA7638Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcEFCA7638Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc7B67EB4FAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc7B67EB4FAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc7B67EB4FAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcEFCA7638Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc7B67EB4FAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcEFCA7638Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcEFCA7638Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcEFCA7638Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc7B67EB4FAddon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc7B67EB4FAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc7B67EB4FAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcEFCA7638Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc7B67EB4FAddon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcEFCA7638Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcEFCA7638Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc7B67EB4FAddon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc7B67EB4FAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -7204,7 +7204,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSr
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc()
-    data class D8856895(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcD8856895) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc()
+    data class Value833D0CB3(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc833D0CB3) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc")
@@ -7217,20 +7217,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3Campplu
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc.D8856895(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcD8856895>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc.Value833D0CB3(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc833D0CB3>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc.D8856895 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcD8856895>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc.Value833D0CB3 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc833D0CB3>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcD8856895(
+data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc833D0CB3(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -7241,33 +7241,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusMode
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcD8856895Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc833D0CB3Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcD8856895AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcD8856895Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcD8856895Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcD8856895Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc833D0CB3AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc833D0CB3Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc833D0CB3Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc833D0CB3Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcD8856895AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcD8856895Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcD8856895Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc833D0CB3AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc833D0CB3Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc833D0CB3Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcD8856895Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc833D0CB3Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcD8856895Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcD8856895Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcD8856895Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc833D0CB3Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc833D0CB3Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc833D0CB3Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcD8856895Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc833D0CB3Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcD8856895Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcD8856895Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc833D0CB3Addon.LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc833D0CB3Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -7329,7 +7329,7 @@ data class LoadModelSrcRequestTtsGgmlModelConfigAudio8(
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc()
-    data class Value26A05528(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc26A05528) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc()
+    data class Value388A5D84(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc388A5D84) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc")
@@ -7342,20 +7342,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderMod
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc.Value26A05528(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc26A05528>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc.Value388A5D84(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc388A5D84>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc.Value26A05528 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc26A05528>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc.Value388A5D84 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc388A5D84>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc26A05528(
+data class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc388A5D84(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -7366,33 +7366,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc26A05528Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc388A5D84Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc26A05528AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc26A05528Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc26A05528Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc26A05528Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc388A5D84AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc388A5D84Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc388A5D84Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc388A5D84Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc26A05528AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc26A05528Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc26A05528Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc388A5D84AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc388A5D84Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc388A5D84Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc26A05528Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc388A5D84Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc26A05528Addon.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc26A05528Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc26A05528Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc388A5D84Addon.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc388A5D84Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc388A5D84Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc26A05528Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc388A5D84Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc26A05528Addon.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc26A05528Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc388A5D84Addon.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc388A5D84Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -7433,7 +7433,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc()
-    data class EE2CB3D5(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcEE2CB3D5) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc()
+    data class F92ADE43(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcF92ADE43) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc")
@@ -7446,20 +7446,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderMod
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc.EE2CB3D5(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcEE2CB3D5>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc.F92ADE43(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcF92ADE43>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc.EE2CB3D5 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcEE2CB3D5>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc.F92ADE43 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcF92ADE43>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcEE2CB3D5(
+data class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcF92ADE43(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -7470,33 +7470,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcEE2CB3D5Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcF92ADE43Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcEE2CB3D5AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcEE2CB3D5Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcEE2CB3D5Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcEE2CB3D5Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcF92ADE43AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcF92ADE43Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcF92ADE43Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcF92ADE43Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcEE2CB3D5AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcEE2CB3D5Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcEE2CB3D5Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcF92ADE43AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcF92ADE43Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcF92ADE43Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcEE2CB3D5Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcF92ADE43Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcEE2CB3D5Addon.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcEE2CB3D5Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcEE2CB3D5Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcF92ADE43Addon.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcF92ADE43Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcF92ADE43Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcEE2CB3D5Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcF92ADE43Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcEE2CB3D5Addon.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcEE2CB3D5Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcF92ADE43Addon.LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcF92ADE43Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -7537,7 +7537,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc()
-    data class Value59C7660A(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc59C7660A) : LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc()
+    data class B298E310(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcB298E310) : LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc")
@@ -7550,20 +7550,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcSeri
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc.Value59C7660A(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc59C7660A>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc.B298E310(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcB298E310>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc.Value59C7660A -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc59C7660A>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc.B298E310 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcB298E310>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc59C7660A(
+data class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcB298E310(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -7574,33 +7574,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc59C7660A(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc59C7660AAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcB298E310Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc59C7660AAddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc59C7660AAddon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc59C7660AAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc59C7660AAddon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcB298E310AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcB298E310Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcB298E310Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcB298E310Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc59C7660AAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc59C7660AAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc59C7660AAddon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcB298E310AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcB298E310Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcB298E310Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc59C7660AAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcB298E310Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc59C7660AAddon.LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc59C7660AAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc59C7660AAddon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcB298E310Addon.LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcB298E310Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcB298E310Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc59C7660AAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcB298E310Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc59C7660AAddon.LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc59C7660AAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcB298E310Addon.LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcB298E310Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -7659,7 +7659,7 @@ data class LoadModelSrcRequestTtsGgmlModelConfigMoss(
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc()
-    data class Value609F3390(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc609F3390) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc()
+    data class Value52AA24F7(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc52AA24F7) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc")
@@ -7672,20 +7672,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSr
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc.Value609F3390(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc609F3390>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc.Value52AA24F7(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc52AA24F7>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc.Value609F3390 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc609F3390>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc.Value52AA24F7 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc52AA24F7>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc609F3390(
+data class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc52AA24F7(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -7696,33 +7696,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc609F
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc609F3390Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc52AA24F7Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc609F3390AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc609F3390Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc609F3390Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc609F3390Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc52AA24F7AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc52AA24F7Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc52AA24F7Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc52AA24F7Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc609F3390AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc609F3390Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc609F3390Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc52AA24F7AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc52AA24F7Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc52AA24F7Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc609F3390Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc52AA24F7Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc609F3390Addon.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc609F3390Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc609F3390Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc52AA24F7Addon.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc52AA24F7Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc52AA24F7Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc609F3390Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc52AA24F7Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc609F3390Addon.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc609F3390Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc52AA24F7Addon.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc52AA24F7Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -7763,7 +7763,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddo
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc()
-    data class Value3BE8E52A(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc3BE8E52A) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc()
+    data class Value12FD09A7(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc12FD09A7) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc")
@@ -7776,20 +7776,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSr
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc.Value3BE8E52A(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc3BE8E52A>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc.Value12FD09A7(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc12FD09A7>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc.Value3BE8E52A -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc3BE8E52A>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc.Value12FD09A7 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc12FD09A7>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc3BE8E52A(
+data class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc12FD09A7(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -7800,33 +7800,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc3BE8
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc3BE8E52AAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc12FD09A7Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc3BE8E52AAddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc3BE8E52AAddon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc3BE8E52AAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc3BE8E52AAddon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc12FD09A7AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc12FD09A7Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc12FD09A7Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc12FD09A7Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc3BE8E52AAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc3BE8E52AAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc3BE8E52AAddon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc12FD09A7AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc12FD09A7Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc12FD09A7Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc3BE8E52AAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc12FD09A7Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc3BE8E52AAddon.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc3BE8E52AAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc3BE8E52AAddon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc12FD09A7Addon.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc12FD09A7Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc12FD09A7Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc3BE8E52AAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc12FD09A7Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc3BE8E52AAddon.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc3BE8E52AAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc12FD09A7Addon.LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc12FD09A7Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -7867,7 +7867,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddo
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc()
-    data class EC073BA7(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcEC073BA7) : LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc()
+    data class Value94F6B90A(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc94F6B90A) : LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc")
@@ -7880,20 +7880,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcSerial
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc.EC073BA7(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcEC073BA7>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc.Value94F6B90A(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc94F6B90A>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc.EC073BA7 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcEC073BA7>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc.Value94F6B90A -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc94F6B90A>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcEC073BA7(
+data class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc94F6B90A(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -7904,33 +7904,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcEC073BA7(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcEC073BA7Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc94F6B90AAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcEC073BA7AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcEC073BA7Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcEC073BA7Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcEC073BA7Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc94F6B90AAddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc94F6B90AAddon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc94F6B90AAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc94F6B90AAddon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcEC073BA7AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcEC073BA7Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcEC073BA7Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc94F6B90AAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc94F6B90AAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc94F6B90AAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcEC073BA7Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc94F6B90AAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcEC073BA7Addon.LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcEC073BA7Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcEC073BA7Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc94F6B90AAddon.LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc94F6B90AAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc94F6B90AAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcEC073BA7Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc94F6B90AAddon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcEC073BA7Addon.LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcEC073BA7Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc94F6B90AAddon.LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc94F6B90AAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -7971,7 +7971,7 @@ enum class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon {
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem()
-    data class DED3EA96(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemDED3EA96) : LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem()
+    data class Value516255C5(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem516255C5) : LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem")
@@ -7984,20 +7984,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsIt
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem.DED3EA96(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemDED3EA96>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem.Value516255C5(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem516255C5>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem.DED3EA96 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemDED3EA96>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem.Value516255C5 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem516255C5>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemDED3EA96(
+data class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem516255C5(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -8008,33 +8008,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemDED
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemDED3EA96Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem516255C5Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemDED3EA96AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemDED3EA96Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon) : LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemDED3EA96Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemDED3EA96Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem516255C5AddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem516255C5Addon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon) : LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem516255C5Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem516255C5Addon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemDED3EA96AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemDED3EA96Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemDED3EA96Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem516255C5AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem516255C5Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem516255C5Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemDED3EA96Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem516255C5Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemDED3EA96Addon.LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemDED3EA96Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemDED3EA96Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem516255C5Addon.LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem516255C5Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem516255C5Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemDED3EA96Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem516255C5Addon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemDED3EA96Addon.LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemDED3EA96Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem516255C5Addon.LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem516255C5Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -8103,7 +8103,7 @@ data class LoadModelSrcRequestTtsGgmlModelConfigMossSpeech(
 @Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcSerializer::class)
 sealed class LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc()
-    data class Value11EAF133(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc11EAF133) : LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc()
+    data class AE27751D(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAE27751D) : LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc()
 }
 internal object LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc")
@@ -8116,20 +8116,20 @@ internal object LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecMo
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc.Value11EAF133(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc11EAF133>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc.AE27751D(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAE27751D>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc) {
         when (value) {
             is LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc.Value11EAF133 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc11EAF133>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc.AE27751D -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAE27751D>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc11EAF133(
+data class LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAE27751D(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -8140,33 +8140,33 @@ data class LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSr
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc11EAF133Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAE27751DAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc11EAF133AddonSerializer::class)
-sealed class LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc11EAF133Addon {
-    data class LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc11EAF133Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc11EAF133Addon()
+@Serializable(with = LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAE27751DAddonSerializer::class)
+sealed class LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAE27751DAddon {
+    data class LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAddon) : LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAE27751DAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAE27751DAddon()
 }
-internal object LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc11EAF133AddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc11EAF133Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc11EAF133Addon")
+internal object LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAE27751DAddonSerializer : KSerializer<LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAE27751DAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAE27751DAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc11EAF133Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAE27751DAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc11EAF133Addon.LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc11EAF133Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc11EAF133Addon variant")
+            0 -> LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAE27751DAddon.LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAE27751DAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAE27751DAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc11EAF133Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAE27751DAddon) {
         when (value) {
-            is LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc11EAF133Addon.LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc11EAF133Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAE27751DAddon.LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAE27751DAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -8297,7 +8297,7 @@ enum class LoadModelSrcRequestGgmlOcrModelConfigMainGpu9B888276 {
 @Serializable(with = LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcSerializer::class)
 sealed class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc()
-    data class AE8555AB(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAE8555AB) : LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc()
+    data class Value9A47EDB7(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc9A47EDB7) : LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc()
 }
 internal object LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcSerializer : KSerializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc")
@@ -8310,20 +8310,20 @@ internal object LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcSerializer 
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc.AE8555AB(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAE8555AB>(), element))
+            1 -> LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc.Value9A47EDB7(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc9A47EDB7>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc) {
         when (value) {
             is LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc.AE8555AB -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAE8555AB>(), value.value)
+            is LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc.Value9A47EDB7 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc9A47EDB7>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAE8555AB(
+data class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc9A47EDB7(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -8334,33 +8334,33 @@ data class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAE8555AB(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAE8555ABAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc9A47EDB7Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAE8555ABAddonSerializer::class)
-sealed class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAE8555ABAddon {
-    data class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon) : LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAE8555ABAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAE8555ABAddon()
+@Serializable(with = LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc9A47EDB7AddonSerializer::class)
+sealed class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc9A47EDB7Addon {
+    data class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon) : LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc9A47EDB7Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc9A47EDB7Addon()
 }
-internal object LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAE8555ABAddonSerializer : KSerializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAE8555ABAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAE8555ABAddon")
+internal object LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc9A47EDB7AddonSerializer : KSerializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc9A47EDB7Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc9A47EDB7Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAE8555ABAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc9A47EDB7Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAE8555ABAddon.LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAE8555ABAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAE8555ABAddon variant")
+            0 -> LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc9A47EDB7Addon.LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc9A47EDB7Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc9A47EDB7Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAE8555ABAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc9A47EDB7Addon) {
         when (value) {
-            is LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAE8555ABAddon.LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAE8555ABAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc9A47EDB7Addon.LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc9A47EDB7Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -8590,7 +8590,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigLoraApplyMode {
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc()
-    data class Value399B391A(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc399B391A) : LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc()
+    data class Value1382CFE8(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc1382CFE8) : LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc")
@@ -8603,20 +8603,20 @@ internal object LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcSerial
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc.Value399B391A(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc399B391A>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc.Value1382CFE8(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc1382CFE8>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc.Value399B391A -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc399B391A>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc.Value1382CFE8 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc1382CFE8>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc399B391A(
+data class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc1382CFE8(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -8627,33 +8627,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc399B391A(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc399B391AAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc1382CFE8Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc399B391AAddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc399B391AAddon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc399B391AAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc399B391AAddon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc1382CFE8AddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc1382CFE8Addon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc1382CFE8Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc1382CFE8Addon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc399B391AAddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc399B391AAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc399B391AAddon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc1382CFE8AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc1382CFE8Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc1382CFE8Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc399B391AAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc1382CFE8Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc399B391AAddon.LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc399B391AAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc399B391AAddon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc1382CFE8Addon.LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc1382CFE8Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc1382CFE8Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc399B391AAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc1382CFE8Addon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc399B391AAddon.LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc399B391AAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc1382CFE8Addon.LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc1382CFE8Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -8694,7 +8694,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc()
-    data class Value2D27951C(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc2D27951C) : LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc()
+    data class Value9026D213(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc9026D213) : LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc")
@@ -8707,20 +8707,20 @@ internal object LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcSerial
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc.Value2D27951C(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc2D27951C>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc.Value9026D213(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc9026D213>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc.Value2D27951C -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc2D27951C>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc.Value9026D213 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc9026D213>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc2D27951C(
+data class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc9026D213(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -8731,33 +8731,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc2D27951C(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc2D27951CAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc9026D213Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc2D27951CAddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc2D27951CAddon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc2D27951CAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc2D27951CAddon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc9026D213AddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc9026D213Addon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc9026D213Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc9026D213Addon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc2D27951CAddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc2D27951CAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc2D27951CAddon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc9026D213AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc9026D213Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc9026D213Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc2D27951CAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc9026D213Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc2D27951CAddon.LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc2D27951CAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc2D27951CAddon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc9026D213Addon.LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc9026D213Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc9026D213Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc2D27951CAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc9026D213Addon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc2D27951CAddon.LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc2D27951CAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc9026D213Addon.LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc9026D213Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -8798,7 +8798,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc()
-    data class Value7C7134F4(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc7C7134F4) : LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc()
+    data class DC4D2A7E(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcDC4D2A7E) : LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc")
@@ -8811,20 +8811,20 @@ internal object LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcSerial
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc.Value7C7134F4(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc7C7134F4>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc.DC4D2A7E(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcDC4D2A7E>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc.Value7C7134F4 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc7C7134F4>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc.DC4D2A7E -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcDC4D2A7E>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc7C7134F4(
+data class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcDC4D2A7E(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -8835,33 +8835,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc7C7134F4(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc7C7134F4Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcDC4D2A7EAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc7C7134F4AddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc7C7134F4Addon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc7C7134F4Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc7C7134F4Addon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcDC4D2A7EAddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcDC4D2A7EAddon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcDC4D2A7EAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcDC4D2A7EAddon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc7C7134F4AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc7C7134F4Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc7C7134F4Addon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcDC4D2A7EAddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcDC4D2A7EAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcDC4D2A7EAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc7C7134F4Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcDC4D2A7EAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc7C7134F4Addon.LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc7C7134F4Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc7C7134F4Addon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcDC4D2A7EAddon.LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcDC4D2A7EAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcDC4D2A7EAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc7C7134F4Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcDC4D2A7EAddon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc7C7134F4Addon.LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc7C7134F4Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcDC4D2A7EAddon.LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcDC4D2A7EAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -8902,7 +8902,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc()
-    data class Value3F4149C9(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc3F4149C9) : LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc()
+    data class Value2AEA9DA6(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc2AEA9DA6) : LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc")
@@ -8915,20 +8915,20 @@ internal object LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcSerializ
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc.Value3F4149C9(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc3F4149C9>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc.Value2AEA9DA6(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc2AEA9DA6>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc.Value3F4149C9 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc3F4149C9>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc.Value2AEA9DA6 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc2AEA9DA6>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc3F4149C9(
+data class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc2AEA9DA6(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -8939,33 +8939,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc3F4149C9(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc3F4149C9Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc2AEA9DA6Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc3F4149C9AddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc3F4149C9Addon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc3F4149C9Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc3F4149C9Addon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc2AEA9DA6AddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc2AEA9DA6Addon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc2AEA9DA6Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc2AEA9DA6Addon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc3F4149C9AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc3F4149C9Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc3F4149C9Addon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc2AEA9DA6AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc2AEA9DA6Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc2AEA9DA6Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc3F4149C9Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc2AEA9DA6Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc3F4149C9Addon.LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc3F4149C9Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc3F4149C9Addon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc2AEA9DA6Addon.LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc2AEA9DA6Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc2AEA9DA6Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc3F4149C9Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc2AEA9DA6Addon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc3F4149C9Addon.LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc3F4149C9Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc2AEA9DA6Addon.LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc2AEA9DA6Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -9006,7 +9006,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc()
-    data class Value691B530E(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc691B530E) : LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc()
+    data class Value7C1F454E(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454E) : LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc")
@@ -9019,20 +9019,20 @@ internal object LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcS
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc.Value691B530E(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc691B530E>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc.Value7C1F454E(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454E>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc.Value691B530E -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc691B530E>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc.Value7C1F454E -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454E>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc691B530E(
+data class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454E(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -9043,33 +9043,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc691B53
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc691B530EAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc691B530EAddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc691B530EAddon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc691B530EAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc691B530EAddon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc691B530EAddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc691B530EAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc691B530EAddon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc691B530EAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc691B530EAddon.LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc691B530EAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc691B530EAddon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon.LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc691B530EAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc691B530EAddon.LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc691B530EAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon.LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc7C1F454EAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -9110,7 +9110,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon 
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc()
-    data class FE576C05(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcFE576C05) : LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc()
+    data class Value68039ABB(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc68039ABB) : LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc")
@@ -9123,20 +9123,20 @@ internal object LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcSerializ
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc.FE576C05(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcFE576C05>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc.Value68039ABB(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc68039ABB>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc.FE576C05 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcFE576C05>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc.Value68039ABB -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc68039ABB>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcFE576C05(
+data class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc68039ABB(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -9147,33 +9147,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcFE576C05(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcFE576C05Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc68039ABBAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcFE576C05AddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcFE576C05Addon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcFE576C05Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcFE576C05Addon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc68039ABBAddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc68039ABBAddon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc68039ABBAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc68039ABBAddon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcFE576C05AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcFE576C05Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcFE576C05Addon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc68039ABBAddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc68039ABBAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc68039ABBAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcFE576C05Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc68039ABBAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcFE576C05Addon.LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcFE576C05Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcFE576C05Addon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc68039ABBAddon.LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc68039ABBAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc68039ABBAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcFE576C05Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc68039ABBAddon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcFE576C05Addon.LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcFE576C05Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc68039ABBAddon.LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc68039ABBAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -9214,7 +9214,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc()
-    data class B1802981(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcB1802981) : LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc()
+    data class Value78D726D0(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc78D726D0) : LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc")
@@ -9227,20 +9227,20 @@ internal object LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionM
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc.B1802981(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcB1802981>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc.Value78D726D0(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc78D726D0>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc.B1802981 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcB1802981>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc.Value78D726D0 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc78D726D0>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcB1802981(
+data class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc78D726D0(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -9251,33 +9251,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelS
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcB1802981Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc78D726D0Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcB1802981AddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcB1802981Addon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcB1802981Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcB1802981Addon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc78D726D0AddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc78D726D0Addon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc78D726D0Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc78D726D0Addon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcB1802981AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcB1802981Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcB1802981Addon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc78D726D0AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc78D726D0Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc78D726D0Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcB1802981Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc78D726D0Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcB1802981Addon.LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcB1802981Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcB1802981Addon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc78D726D0Addon.LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc78D726D0Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc78D726D0Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcB1802981Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc78D726D0Addon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcB1802981Addon.LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcB1802981Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc78D726D0Addon.LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc78D726D0Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -9318,7 +9318,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelS
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc()
-    data class Value4594B582(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc4594B582) : LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc()
+    data class Value94DF82BB(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc94DF82BB) : LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc")
@@ -9331,20 +9331,20 @@ internal object LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcSeria
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc.Value4594B582(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc4594B582>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc.Value94DF82BB(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc94DF82BB>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc.Value4594B582 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc4594B582>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc.Value94DF82BB -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc94DF82BB>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc4594B582(
+data class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc94DF82BB(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -9355,33 +9355,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc4594B582(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc4594B582Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc94DF82BBAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc4594B582AddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc4594B582Addon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc4594B582Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc4594B582Addon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc94DF82BBAddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc94DF82BBAddon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc94DF82BBAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc94DF82BBAddon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc4594B582AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc4594B582Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc4594B582Addon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc94DF82BBAddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc94DF82BBAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc94DF82BBAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc4594B582Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc94DF82BBAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc4594B582Addon.LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc4594B582Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc4594B582Addon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc94DF82BBAddon.LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc94DF82BBAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc94DF82BBAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc4594B582Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc94DF82BBAddon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc4594B582Addon.LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc4594B582Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc94DF82BBAddon.LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc94DF82BBAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -9422,7 +9422,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc()
-    data class Value599772F6(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc599772F6) : LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc()
+    data class Value59211E8A(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc59211E8A) : LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc")
@@ -9435,20 +9435,20 @@ internal object LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcS
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc.Value599772F6(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc599772F6>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc.Value59211E8A(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc59211E8A>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc.Value599772F6 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc599772F6>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc.Value59211E8A -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc59211E8A>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc599772F6(
+data class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc59211E8A(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -9459,33 +9459,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc599772
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc599772F6Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc59211E8AAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc599772F6AddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc599772F6Addon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc599772F6Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc599772F6Addon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc59211E8AAddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc59211E8AAddon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc59211E8AAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc59211E8AAddon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc599772F6AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc599772F6Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc599772F6Addon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc59211E8AAddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc59211E8AAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc59211E8AAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc599772F6Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc59211E8AAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc599772F6Addon.LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc599772F6Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc599772F6Addon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc59211E8AAddon.LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc59211E8AAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc59211E8AAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc599772F6Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc59211E8AAddon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc599772F6Addon.LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc599772F6Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc59211E8AAddon.LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc59211E8AAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -9526,7 +9526,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon 
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc()
-    data class D19D6BAA(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcD19D6BAA) : LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc()
+    data class Value878E8259(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc878E8259) : LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc")
@@ -9539,20 +9539,20 @@ internal object LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcSer
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc.D19D6BAA(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcD19D6BAA>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc.Value878E8259(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc878E8259>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc.D19D6BAA -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcD19D6BAA>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc.Value878E8259 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc878E8259>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcD19D6BAA(
+data class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc878E8259(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -9563,33 +9563,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcD19D6BAA
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcD19D6BAAAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc878E8259Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcD19D6BAAAddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcD19D6BAAAddon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcD19D6BAAAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcD19D6BAAAddon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc878E8259AddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc878E8259Addon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc878E8259Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc878E8259Addon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcD19D6BAAAddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcD19D6BAAAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcD19D6BAAAddon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc878E8259AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc878E8259Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc878E8259Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcD19D6BAAAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc878E8259Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcD19D6BAAAddon.LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcD19D6BAAAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcD19D6BAAAddon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc878E8259Addon.LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc878E8259Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc878E8259Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcD19D6BAAAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc878E8259Addon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcD19D6BAAAddon.LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcD19D6BAAAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc878E8259Addon.LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc878E8259Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -9630,7 +9630,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc()
-    data class Value32A606E6(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc32A606E6) : LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc()
+    data class BF763F74(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcBF763F74) : LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc")
@@ -9643,20 +9643,20 @@ internal object LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnector
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc.Value32A606E6(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc32A606E6>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc.BF763F74(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcBF763F74>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc.Value32A606E6 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc32A606E6>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc.BF763F74 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcBF763F74>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc32A606E6(
+data class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcBF763F74(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -9667,33 +9667,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsMode
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc32A606E6Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcBF763F74Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc32A606E6AddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc32A606E6Addon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc32A606E6Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc32A606E6Addon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcBF763F74AddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcBF763F74Addon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcBF763F74Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcBF763F74Addon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc32A606E6AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc32A606E6Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc32A606E6Addon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcBF763F74AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcBF763F74Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcBF763F74Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc32A606E6Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcBF763F74Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc32A606E6Addon.LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc32A606E6Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc32A606E6Addon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcBF763F74Addon.LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcBF763F74Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcBF763F74Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc32A606E6Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcBF763F74Addon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc32A606E6Addon.LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc32A606E6Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcBF763F74Addon.LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcBF763F74Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -9734,7 +9734,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsMode
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc()
-    data class Value79596283(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc79596283) : LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc()
+    data class Value202E19EC(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc202E19EC) : LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc")
@@ -9747,20 +9747,20 @@ internal object LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcSerial
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc.Value79596283(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc79596283>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc.Value202E19EC(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc202E19EC>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc.Value79596283 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc79596283>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc.Value202E19EC -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc202E19EC>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc79596283(
+data class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc202E19EC(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -9771,33 +9771,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc79596283(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc79596283Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc202E19ECAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc79596283AddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc79596283Addon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc79596283Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc79596283Addon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc202E19ECAddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc202E19ECAddon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc202E19ECAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc202E19ECAddon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc79596283AddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc79596283Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc79596283Addon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc202E19ECAddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc202E19ECAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc202E19ECAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc79596283Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc202E19ECAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc79596283Addon.LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc79596283Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc79596283Addon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc202E19ECAddon.LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc202E19ECAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc202E19ECAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc79596283Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc202E19ECAddon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc79596283Addon.LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc79596283Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc202E19ECAddon.LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc202E19ECAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -9838,7 +9838,7 @@ enum class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc()
-    data class Value3B43185A(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc3B43185A) : LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc()
+    data class AD38568F(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAD38568F) : LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc")
@@ -9851,20 +9851,20 @@ internal object LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcSerializer 
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc.Value3B43185A(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc3B43185A>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc.AD38568F(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAD38568F>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc) {
         when (value) {
             is LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc.Value3B43185A -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc3B43185A>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc.AD38568F -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAD38568F>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc3B43185A(
+data class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAD38568F(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -9875,33 +9875,33 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc3B43185A(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc3B43185AAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAD38568FAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc3B43185AAddonSerializer::class)
-sealed class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc3B43185AAddon {
-    data class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc3B43185AAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc3B43185AAddon()
+@Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAD38568FAddonSerializer::class)
+sealed class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAD38568FAddon {
+    data class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon) : LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAD38568FAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAD38568FAddon()
 }
-internal object LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc3B43185AAddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc3B43185AAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc3B43185AAddon")
+internal object LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAD38568FAddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAD38568FAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAD38568FAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc3B43185AAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAD38568FAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc3B43185AAddon.LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon>(), element))
-            1 -> LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc3B43185AAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc3B43185AAddon variant")
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAD38568FAddon.LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon>(), element))
+            1 -> LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAD38568FAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAD38568FAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc3B43185AAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAD38568FAddon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc3B43185AAddon.LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon>(), value.value)
-            is LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc3B43185AAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAD38568FAddon.LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAD38568FAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -10104,7 +10104,7 @@ data class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrc(
 
 @Serializable(with = LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddonSerializer::class)
 sealed class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon {
-    data class F1EE9202(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddonF1EE9202) : LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon()
+    data class BC4B465C(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddonBC4B465C) : LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon()
     data class Variant2(val value: String) : LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon()
 }
 internal object LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddonSerializer : KSerializer<LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon> {
@@ -10117,21 +10117,21 @@ internal object LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAdd
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon.F1EE9202(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddonF1EE9202>(), element))
+            0 -> LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon.BC4B465C(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddonBC4B465C>(), element))
             1 -> LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon) {
         when (value) {
-            is LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon.F1EE9202 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddonF1EE9202>(), value.value)
+            is LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon.BC4B465C -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddonBC4B465C>(), value.value)
             is LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
 
 @Serializable
-enum class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddonF1EE9202 {
+enum class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddonBC4B465C {
     @SerialName("llamacpp-completion") `LLAMACPPCOMPLETION`,
     @SerialName("whispercpp-transcription") `WHISPERCPPTRANSCRIPTION`,
     @SerialName("bci-whispercpp-transcription") `BCIWHISPERCPPTRANSCRIPTION`,
@@ -10262,7 +10262,7 @@ data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestep(
 @Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcSerializer::class)
 sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc()
-    data class Value68DCC941(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc68DCC941) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc()
+    data class Value23410C14(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc23410C14) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc()
 }
 internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc")
@@ -10275,20 +10275,20 @@ internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc.Value68DCC941(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc68DCC941>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc.Value23410C14(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc23410C14>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc) {
         when (value) {
             is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc.Value68DCC941 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc68DCC941>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc.Value23410C14 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc23410C14>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc68DCC941(
+data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc23410C14(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -10299,33 +10299,33 @@ data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc68DCC
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc68DCC941Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc23410C14Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc68DCC941AddonSerializer::class)
-sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc68DCC941Addon {
-    data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc68DCC941Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc68DCC941Addon()
+@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc23410C14AddonSerializer::class)
+sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc23410C14Addon {
+    data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc23410C14Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc23410C14Addon()
 }
-internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc68DCC941AddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc68DCC941Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc68DCC941Addon")
+internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc23410C14AddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc23410C14Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc23410C14Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc68DCC941Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc23410C14Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc68DCC941Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc68DCC941Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc68DCC941Addon variant")
+            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc23410C14Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc23410C14Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc23410C14Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc68DCC941Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc23410C14Addon) {
         when (value) {
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc68DCC941Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc68DCC941Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc23410C14Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc23410C14Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -10366,7 +10366,7 @@ enum class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon
 @Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcSerializer::class)
 sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc()
-    data class Value52274285(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc52274285) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc()
+    data class Value7A1E9231(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc7A1E9231) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc()
 }
 internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc")
@@ -10379,20 +10379,20 @@ internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcSeria
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc.Value52274285(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc52274285>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc.Value7A1E9231(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc7A1E9231>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc) {
         when (value) {
             is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc.Value52274285 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc52274285>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc.Value7A1E9231 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc7A1E9231>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc52274285(
+data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc7A1E9231(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -10403,33 +10403,33 @@ data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc52274285(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc52274285Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc7A1E9231Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc52274285AddonSerializer::class)
-sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc52274285Addon {
-    data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc52274285Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc52274285Addon()
+@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc7A1E9231AddonSerializer::class)
+sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc7A1E9231Addon {
+    data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc7A1E9231Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc7A1E9231Addon()
 }
-internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc52274285AddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc52274285Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc52274285Addon")
+internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc7A1E9231AddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc7A1E9231Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc7A1E9231Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc52274285Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc7A1E9231Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc52274285Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc52274285Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc52274285Addon variant")
+            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc7A1E9231Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc7A1E9231Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc7A1E9231Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc52274285Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc7A1E9231Addon) {
         when (value) {
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc52274285Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc52274285Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc7A1E9231Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc7A1E9231Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -10470,7 +10470,7 @@ enum class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcSerializer::class)
 sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc()
-    data class Value080D1744(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc080D1744) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc()
+    data class Value88E76A35(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc88E76A35) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc()
 }
 internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc")
@@ -10483,20 +10483,20 @@ internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcSeri
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc.Value080D1744(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc080D1744>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc.Value88E76A35(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc88E76A35>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc) {
         when (value) {
             is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc.Value080D1744 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc080D1744>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc.Value88E76A35 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc88E76A35>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc080D1744(
+data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc88E76A35(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -10507,33 +10507,33 @@ data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc080D1744(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc080D1744Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc88E76A35Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc080D1744AddonSerializer::class)
-sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc080D1744Addon {
-    data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc080D1744Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc080D1744Addon()
+@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc88E76A35AddonSerializer::class)
+sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc88E76A35Addon {
+    data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc88E76A35Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc88E76A35Addon()
 }
-internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc080D1744AddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc080D1744Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc080D1744Addon")
+internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc88E76A35AddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc88E76A35Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc88E76A35Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc080D1744Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc88E76A35Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc080D1744Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc080D1744Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc080D1744Addon variant")
+            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc88E76A35Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc88E76A35Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc88E76A35Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc080D1744Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc88E76A35Addon) {
         when (value) {
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc080D1744Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc080D1744Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc88E76A35Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc88E76A35Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -10574,7 +10574,7 @@ enum class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcSerializer::class)
 sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc()
-    data class Value9B9DA17B(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc9B9DA17B) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc()
+    data class Value5D00E0E3(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc5D00E0E3) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc()
 }
 internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc")
@@ -10587,20 +10587,20 @@ internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcSeri
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc.Value9B9DA17B(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc9B9DA17B>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc.Value5D00E0E3(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc5D00E0E3>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc) {
         when (value) {
             is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc.Value9B9DA17B -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc9B9DA17B>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc.Value5D00E0E3 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc5D00E0E3>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc9B9DA17B(
+data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc5D00E0E3(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -10611,33 +10611,33 @@ data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc9B9DA17B(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc9B9DA17BAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc5D00E0E3Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc9B9DA17BAddonSerializer::class)
-sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc9B9DA17BAddon {
-    data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc9B9DA17BAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc9B9DA17BAddon()
+@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc5D00E0E3AddonSerializer::class)
+sealed class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc5D00E0E3Addon {
+    data class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc5D00E0E3Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc5D00E0E3Addon()
 }
-internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc9B9DA17BAddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc9B9DA17BAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc9B9DA17BAddon")
+internal object LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc5D00E0E3AddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc5D00E0E3Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc5D00E0E3Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc9B9DA17BAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc5D00E0E3Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc9B9DA17BAddon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc9B9DA17BAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc9B9DA17BAddon variant")
+            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc5D00E0E3Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc5D00E0E3Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc5D00E0E3Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc9B9DA17BAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc5D00E0E3Addon) {
         when (value) {
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc9B9DA17BAddon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc9B9DA17BAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc5D00E0E3Addon.LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc5D00E0E3Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -10699,7 +10699,7 @@ enum class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxDevice {
 @Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcSerializer::class)
 sealed class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc()
-    data class Value3ACA1AEB(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc3ACA1AEB) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc()
+    data class Value0BAC27F4(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc0BAC27F4) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc()
 }
 internal object LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc")
@@ -10712,20 +10712,20 @@ internal object LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcSeria
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc.Value3ACA1AEB(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc3ACA1AEB>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc.Value0BAC27F4(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc0BAC27F4>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc) {
         when (value) {
             is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc.Value3ACA1AEB -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc3ACA1AEB>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc.Value0BAC27F4 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc0BAC27F4>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc3ACA1AEB(
+data class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc0BAC27F4(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -10736,33 +10736,33 @@ data class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc3ACA1AEB(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc3ACA1AEBAddon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc0BAC27F4Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc3ACA1AEBAddonSerializer::class)
-sealed class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc3ACA1AEBAddon {
-    data class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc3ACA1AEBAddon()
-    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc3ACA1AEBAddon()
+@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc0BAC27F4AddonSerializer::class)
+sealed class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc0BAC27F4Addon {
+    data class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc0BAC27F4Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc0BAC27F4Addon()
 }
-internal object LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc3ACA1AEBAddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc3ACA1AEBAddon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc3ACA1AEBAddon")
+internal object LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc0BAC27F4AddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc0BAC27F4Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc0BAC27F4Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc3ACA1AEBAddon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc0BAC27F4Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc3ACA1AEBAddon.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc3ACA1AEBAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc3ACA1AEBAddon variant")
+            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc0BAC27F4Addon.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc0BAC27F4Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc0BAC27F4Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc3ACA1AEBAddon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc0BAC27F4Addon) {
         when (value) {
-            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc3ACA1AEBAddon.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc3ACA1AEBAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc0BAC27F4Addon.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc0BAC27F4Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -10803,7 +10803,7 @@ enum class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon {
 @Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcSerializer::class)
 sealed class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc()
-    data class Value0CBCBE39(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc0CBCBE39) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc()
+    data class A2A56078(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcA2A56078) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc()
 }
 internal object LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc")
@@ -10816,20 +10816,20 @@ internal object LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcSe
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc.Value0CBCBE39(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc0CBCBE39>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc.A2A56078(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcA2A56078>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc) {
         when (value) {
             is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc.Value0CBCBE39 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc0CBCBE39>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc.A2A56078 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcA2A56078>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc0CBCBE39(
+data class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcA2A56078(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -10840,33 +10840,33 @@ data class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc0CBCBE3
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc0CBCBE39Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcA2A56078Addon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc0CBCBE39AddonSerializer::class)
-sealed class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc0CBCBE39Addon {
-    data class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc0CBCBE39Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc0CBCBE39Addon()
+@Serializable(with = LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcA2A56078AddonSerializer::class)
+sealed class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcA2A56078Addon {
+    data class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcA2A56078Addon()
+    data class Variant2(val value: String) : LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcA2A56078Addon()
 }
-internal object LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc0CBCBE39AddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc0CBCBE39Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc0CBCBE39Addon")
+internal object LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcA2A56078AddonSerializer : KSerializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcA2A56078Addon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcA2A56078Addon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc0CBCBE39Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcA2A56078Addon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc0CBCBE39Addon.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc0CBCBE39Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc0CBCBE39Addon variant")
+            0 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcA2A56078Addon.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcA2A56078Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcA2A56078Addon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc0CBCBE39Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcA2A56078Addon) {
         when (value) {
-            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc0CBCBE39Addon.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc0CBCBE39Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcA2A56078Addon.LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcA2A56078Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -11186,7 +11186,7 @@ data class ReloadConfigRequestModelConfigMiscConfig(
 @Serializable(with = ReloadConfigRequestModelConfigVadModelSrcSerializer::class)
 sealed class ReloadConfigRequestModelConfigVadModelSrc {
     data class Variant1(val value: String) : ReloadConfigRequestModelConfigVadModelSrc()
-    data class C1826A54(val value: io.tether.qvac.sdk.generated.schema.ReloadConfigRequestModelConfigVadModelSrcC1826A54) : ReloadConfigRequestModelConfigVadModelSrc()
+    data class A6A6433A(val value: io.tether.qvac.sdk.generated.schema.ReloadConfigRequestModelConfigVadModelSrcA6A6433A) : ReloadConfigRequestModelConfigVadModelSrc()
 }
 internal object ReloadConfigRequestModelConfigVadModelSrcSerializer : KSerializer<ReloadConfigRequestModelConfigVadModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("ReloadConfigRequestModelConfigVadModelSrc")
@@ -11199,20 +11199,20 @@ internal object ReloadConfigRequestModelConfigVadModelSrcSerializer : KSerialize
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> ReloadConfigRequestModelConfigVadModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> ReloadConfigRequestModelConfigVadModelSrc.C1826A54(input.json.decodeFromJsonElement(serializer<ReloadConfigRequestModelConfigVadModelSrcC1826A54>(), element))
+            1 -> ReloadConfigRequestModelConfigVadModelSrc.A6A6433A(input.json.decodeFromJsonElement(serializer<ReloadConfigRequestModelConfigVadModelSrcA6A6433A>(), element))
             else -> throw SerializationException("No matching ReloadConfigRequestModelConfigVadModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: ReloadConfigRequestModelConfigVadModelSrc) {
         when (value) {
             is ReloadConfigRequestModelConfigVadModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is ReloadConfigRequestModelConfigVadModelSrc.C1826A54 -> encoder.encodeSerializableValue(serializer<ReloadConfigRequestModelConfigVadModelSrcC1826A54>(), value.value)
+            is ReloadConfigRequestModelConfigVadModelSrc.A6A6433A -> encoder.encodeSerializableValue(serializer<ReloadConfigRequestModelConfigVadModelSrcA6A6433A>(), value.value)
         }
     }
 }
 
 @Serializable
-data class ReloadConfigRequestModelConfigVadModelSrcC1826A54(
+data class ReloadConfigRequestModelConfigVadModelSrcA6A6433A(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -11223,33 +11223,33 @@ data class ReloadConfigRequestModelConfigVadModelSrcC1826A54(
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: ReloadConfigRequestModelConfigVadModelSrcC1826A54Addon? = null,
+    @SerialName("addon") val `addon`: ReloadConfigRequestModelConfigVadModelSrcA6A6433AAddon? = null,
 )
 
-@Serializable(with = ReloadConfigRequestModelConfigVadModelSrcC1826A54AddonSerializer::class)
-sealed class ReloadConfigRequestModelConfigVadModelSrcC1826A54Addon {
-    data class ReloadConfigRequestModelConfigVadModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.ReloadConfigRequestModelConfigVadModelSrcAddon) : ReloadConfigRequestModelConfigVadModelSrcC1826A54Addon()
-    data class Variant2(val value: String) : ReloadConfigRequestModelConfigVadModelSrcC1826A54Addon()
+@Serializable(with = ReloadConfigRequestModelConfigVadModelSrcA6A6433AAddonSerializer::class)
+sealed class ReloadConfigRequestModelConfigVadModelSrcA6A6433AAddon {
+    data class ReloadConfigRequestModelConfigVadModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.ReloadConfigRequestModelConfigVadModelSrcAddon) : ReloadConfigRequestModelConfigVadModelSrcA6A6433AAddon()
+    data class Variant2(val value: String) : ReloadConfigRequestModelConfigVadModelSrcA6A6433AAddon()
 }
-internal object ReloadConfigRequestModelConfigVadModelSrcC1826A54AddonSerializer : KSerializer<ReloadConfigRequestModelConfigVadModelSrcC1826A54Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("ReloadConfigRequestModelConfigVadModelSrcC1826A54Addon")
+internal object ReloadConfigRequestModelConfigVadModelSrcA6A6433AAddonSerializer : KSerializer<ReloadConfigRequestModelConfigVadModelSrcA6A6433AAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("ReloadConfigRequestModelConfigVadModelSrcA6A6433AAddon")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): ReloadConfigRequestModelConfigVadModelSrcC1826A54Addon {
+    override fun deserialize(decoder: Decoder): ReloadConfigRequestModelConfigVadModelSrcA6A6433AAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> ReloadConfigRequestModelConfigVadModelSrcC1826A54Addon.ReloadConfigRequestModelConfigVadModelSrcAddon(input.json.decodeFromJsonElement(serializer<ReloadConfigRequestModelConfigVadModelSrcAddon>(), element))
-            1 -> ReloadConfigRequestModelConfigVadModelSrcC1826A54Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching ReloadConfigRequestModelConfigVadModelSrcC1826A54Addon variant")
+            0 -> ReloadConfigRequestModelConfigVadModelSrcA6A6433AAddon.ReloadConfigRequestModelConfigVadModelSrcAddon(input.json.decodeFromJsonElement(serializer<ReloadConfigRequestModelConfigVadModelSrcAddon>(), element))
+            1 -> ReloadConfigRequestModelConfigVadModelSrcA6A6433AAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching ReloadConfigRequestModelConfigVadModelSrcA6A6433AAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: ReloadConfigRequestModelConfigVadModelSrcC1826A54Addon) {
+    override fun serialize(encoder: Encoder, value: ReloadConfigRequestModelConfigVadModelSrcA6A6433AAddon) {
         when (value) {
-            is ReloadConfigRequestModelConfigVadModelSrcC1826A54Addon.ReloadConfigRequestModelConfigVadModelSrcAddon -> encoder.encodeSerializableValue(serializer<ReloadConfigRequestModelConfigVadModelSrcAddon>(), value.value)
-            is ReloadConfigRequestModelConfigVadModelSrcC1826A54Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is ReloadConfigRequestModelConfigVadModelSrcA6A6433AAddon.ReloadConfigRequestModelConfigVadModelSrcAddon -> encoder.encodeSerializableValue(serializer<ReloadConfigRequestModelConfigVadModelSrcAddon>(), value.value)
+            is ReloadConfigRequestModelConfigVadModelSrcA6A6433AAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }

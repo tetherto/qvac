@@ -1,0 +1,188 @@
+{
+  "AssessModelFitRequestModelsItemModelSrc": {
+    "object": "1E6973DC"
+  },
+  "DecideResponseResult": {
+    "object": "6E8073E7"
+  },
+  "DiffusionStreamRequestUpscale": {
+    "object": "9B8B4FE2"
+  },
+  "LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrc": {
+    "object": "88E76A35"
+  },
+  "LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrc": {
+    "object": "7A1E9231"
+  },
+  "LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc": {
+    "object": "23410C14"
+  },
+  "LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrc": {
+    "object": "5D00E0E3"
+  },
+  "LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrc": {
+    "object": "0BAC27F4"
+  },
+  "LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrc": {
+    "object": "A2A56078"
+  },
+  "LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrc": {
+    "object": "C80E33ED"
+  },
+  "LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrc": {
+    "object": "9A47EDB7"
+  },
+  "LoadModelSrcRequestGgmlOcrModelConfigMainGpu": {
+    "enum": "9B888276"
+  },
+  "LoadModelSrcRequestGgmlVlaModelConfigEmbodiment": {
+    "object": "3A6AD426"
+  },
+  "LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrc": {
+    "object": "2B40BA43"
+  },
+  "LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrc": {
+    "object": "CD4A98FB"
+  },
+  "LoadModelSrcRequestLlamacppEmbeddingModelConfigMainGpu": {
+    "enum": "37CB1C95"
+  },
+  "LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc": {
+    "object": "C0DF4256"
+  },
+  "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrc": {
+    "object": "508D4481"
+  },
+  "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabSrc": {
+    "object": "3E03E327"
+  },
+  "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrc": {
+    "object": "93B85F3A"
+  },
+  "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabSrc": {
+    "object": "847F037A"
+  },
+  "LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrc": {
+    "object": "52395DF4"
+  },
+  "LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrc": {
+    "object": "878E8259"
+  },
+  "LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrc": {
+    "object": "9026D213"
+  },
+  "LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrc": {
+    "object": "1382CFE8"
+  },
+  "LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrc": {
+    "object": "59211E8A"
+  },
+  "LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrc": {
+    "object": "BF763F74"
+  },
+  "LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrc": {
+    "object": "78D726D0"
+  },
+  "LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc": {
+    "object": "2AEA9DA6"
+  },
+  "LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrc": {
+    "object": "7C1F454E"
+  },
+  "LoadModelSrcRequestSdcppGenerationModelConfigSceneSrc": {
+    "object": "AD38568F"
+  },
+  "LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrc": {
+    "object": "DC4D2A7E"
+  },
+  "LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrc": {
+    "object": "202E19EC"
+  },
+  "LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrc": {
+    "object": "94DF82BB"
+  },
+  "LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon": {
+    "enum": "BC4B465C"
+  },
+  "LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc": {
+    "object": "68039ABB"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrc": {
+    "object": "388A5D84"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrc": {
+    "object": "F92ADE43"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrc": {
+    "object": "B298E310"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrc": {
+    "object": "5766504E"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc": {
+    "object": "313E6C7C"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrc": {
+    "object": "8B8E5D5D"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrc": {
+    "object": "09CC6F0C"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrc": {
+    "object": "9AFBDF4B"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrc": {
+    "object": "297C03D6"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrc": {
+    "object": "833D0CB3"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrc": {
+    "object": "7B67EB4F"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Instruct": {
+    "object": "20A3BBD7"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc": {
+    "object": "0384FF13"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrc": {
+    "object": "D45ACF6C"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrc": {
+    "object": "10E258CA"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItem": {
+    "object": "516255C5"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrc": {
+    "object": "52AA24F7"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrc": {
+    "object": "12FD09A7"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrc": {
+    "object": "94F6B90A"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrc": {
+    "object": "AE27751D"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc": {
+    "object": "D3AB601B"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrc": {
+    "object": "2197A666"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc": {
+    "object": "D23A51B4"
+  },
+  "LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrc": {
+    "object": "8356BA1E"
+  },
+  "LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrc": {
+    "object": "B5F428DE"
+  },
+  "ReloadConfigRequestModelConfigVadModelSrc": {
+    "object": "A6A6433A"
+  }
+}

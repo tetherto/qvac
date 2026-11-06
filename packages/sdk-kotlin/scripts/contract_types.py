@@ -64,8 +64,9 @@ class Definition:
 
 
 class TypeGraph:
-    def __init__(self, schema):
+    def __init__(self, schema, type_names=None):
         self.defs = schema["$defs"]
+        self.type_names = type_names or {}
         self.def_ids = {id(value) for value in self.defs.values()}
         self.types = {}
         self.by_shape = {}
@@ -171,11 +172,13 @@ class TypeGraph:
             self.visited.add((shape, candidate))
             typename = self.preferred.get(shape, candidate)
             if typename in self.types:
-                # Inline schemas can share a human title but differ in constraints.
-                # Stable structural suffixes avoid order-dependent name collisions.
+                # Keep existing collision suffixes when fields or enum members change.
                 if root:
                     raise ValueError(f"Duplicate root type name: {typename}")
-                typename += hashlib.sha256(shape.encode()).hexdigest()[:8].upper()
+                suffix = self.type_names.get(typename, {}).get(kind)
+                typename += suffix or hashlib.sha256(shape.encode()).hexdigest()[:8].upper()
+                if typename in self.types:
+                    raise ValueError(f"Duplicate inline type name: {typename}")
             definition = Definition(typename, schema, kind)
             self.types[typename] = definition
             self.by_shape[shape] = typename
