@@ -44,6 +44,11 @@ on:
         type: string
         required: false
         default: default
+      install-with-pnpm:
+        description: Install workspace dependencies with pnpm instead of npm
+        type: boolean
+        required: false
+        default: false
       desktop-smoke-command:
         description: Command to run against built prebuilds on desktop targets
         type: string
@@ -486,9 +491,21 @@ jobs:
           brew install --quiet $BREW_PACKAGES
 
       - name: Install npm dependencies
+        if: ${{ !inputs.install-with-pnpm }}
         working-directory: ${{ env.WORKDIR }}
         shell: bash
         run: npm install
+
+      - name: Set up pnpm
+        if: ${{ inputs.install-with-pnpm }}
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+
+      - name: Install workspace dependencies
+        if: ${{ inputs.install-with-pnpm }}
+        shell: bash
+        env:
+          PACKAGE_NAME: ${{ steps.pkg.outputs.name }}
+        run: pnpm install --frozen-lockfile --filter "@qvac/${PACKAGE_NAME}..."
 
       # After the SDK setup steps, so nothing they add to PATH shadows the locked
       # toolchain that generate and the vcpkg toolchain's find_program(bare-make)

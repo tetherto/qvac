@@ -33,15 +33,27 @@ const valueFlags = [
 ]
 
 export function serverBinary() {
-  return path.join(packageRoot, 'dist', 'bin', 'sglang_cpp_server')
+  return path.join(packageRoot, 'dist', 'bin', 'qvac_grid_server')
 }
 
 export function rankWorkerBinary() {
-  return path.join(packageRoot, 'dist', 'bin', 'sgl_qwen_rank_worker')
+  return path.join(packageRoot, 'dist', 'bin', 'qvac_grid_rank_worker')
 }
 
 export function artifactRoot() {
-  return path.join(packageRoot, 'dist', 'lib', 'sglang-cpp')
+  return path.join(packageRoot, 'dist', 'lib', 'qvac-grid')
+}
+
+export function compileSidecar() {
+  return path.join(
+    packageRoot,
+    'dist',
+    'share',
+    'qvac-grid',
+    'tools',
+    'aot',
+    'triton_compile_sidecar.py'
+  )
 }
 
 export function serverArgs(options = {}) {
@@ -52,7 +64,6 @@ export function serverArgs(options = {}) {
     if (value == null || value === '') continue
     args.push(flag, String(value))
   }
-  if (options.cudaGraph === true) args.push('--cuda-graph')
   if (options.cudaGraph === false) args.push('--disable-cuda-graph')
   if (options.extraArgs?.length) args.push(...options.extraArgs)
   return args
@@ -71,7 +82,8 @@ export function startServer(options = {}) {
     throw new Error(`SGLang artifact package is not staged at ${artifacts}.`)
   }
   const env = { ...process.env }
-  if (!env.SGL_CPP_RANK_WORKER) env.SGL_CPP_RANK_WORKER = rankWorkerBinary()
+  if (!env.QVAC_GRID_RANK_WORKER) env.QVAC_GRID_RANK_WORKER = rankWorkerBinary()
+  if (!env.QVAC_GRID_TRITON_COMPILE_SCRIPT) env.QVAC_GRID_TRITON_COMPILE_SCRIPT = compileSidecar()
   return spawn(binary, serverArgs({ ...options, artifacts }), {
     stdio: options.stdio ?? 'inherit',
     env

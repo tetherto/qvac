@@ -5,15 +5,17 @@ SDK release flow.
 
 The vcpkg overlay port at `vcpkg/ports/sglang-cpp` builds
 [jpgaribotti/sglang-cpp](https://github.com/jpgaribotti/sglang-cpp)
-`9901aa955e1eadf1ee96416b28e718859e7a7c2f` and installs:
+`de1d78416f47a4fc541ca96af582b2f63429be2f` and installs:
 
-- `sglang_cpp_server`
-- `sgl_qwen_rank_worker`
-- the packaged AOT kernels plus `registry/models-887c401e1.json`
+- `qvac_grid_server` and `qvac_grid_rank_worker`
+- the model registry, runtime compile sidecar, and any selected kernel packages
 
 `pnpm build` copies that install into `dist/` so the package can launch the
-server. The rank worker is placed next to the server. `dist/lib/sglang-cpp`
-is the `--artifacts` package root.
+server. The rank worker is placed next to the server. `dist/lib/qvac-grid`
+is the `--artifacts` package root. By default the build does not include model
+kernel packages. `QVAC_GRID_PACKAGE_DIR` can point at prebuilt packages; the
+port's AOT kernel build path has not yet been validated. A server built without
+kernel packages cannot run inference.
 
 ## Host toolchain
 
@@ -25,24 +27,25 @@ triplets force libc++, which does not match official LibTorch.
 | ---------------------------------- | --------------------------------------- | ------------------------------------------- |
 | `GITHUB_TOKEN` or `GH_TOKEN`       | yes                                     | read access to the private repository       |
 | `Torch_DIR` or `CMAKE_PREFIX_PATH` | yes                                     | LibTorch CMake package                      |
-| `SGL_TVM_FFI_ROOT`                 | yes                                     | TVM-FFI used by the AOT modules             |
-| `SGL_SGLANG_KERNEL_ROOT`           | yes                                     | pinned SGLang kernel sources                |
-| `SGL_CUDA_ROOT`                    | when CUDA is not on the default path    | CUDA toolkit matching LibTorch              |
-| `SGL_NCCL_ROOT`                    | when NCCL is not on the default path    | NCCL matching LibTorch                      |
-| `SGL_ZMQ_ROOT`                     | when ZeroMQ is not on the default path  | libzmq and cppzmq                           |
-| `SGL_MSGPACK_ROOT`                 | when msgpack is not on the default path | msgpack-c headers                           |
-| `SGL_XGRAMMAR_ROOT`                | for constrained decoding                | XGrammar C++ package                        |
-| `SGL_CUDA_ARCH`                    | no                                      | `90a` (H100, default) or `121a` (DGX Spark) |
+| `QVAC_GRID_TVM_FFI_ROOT`           | yes                                     | TVM-FFI library and headers                 |
+| `QVAC_GRID_FLASHINFER_ROOT`        | yes                                     | FlashInfer headers for CUDA modules         |
+| `QVAC_GRID_CUDA_ROOT`              | when CUDA is not on the default path    | CUDA toolkit matching LibTorch              |
+| `QVAC_GRID_NCCL_ROOT`              | when NCCL is not on the default path    | NCCL matching LibTorch                      |
+| `QVAC_GRID_ZMQ_ROOT`               | when ZeroMQ is not on the default path  | libzmq and cppzmq                           |
+| `QVAC_GRID_MSGPACK_ROOT`           | when msgpack is not on the default path | msgpack-c headers                           |
+| `QVAC_GRID_XGRAMMAR_ROOT`          | for constrained decoding                | XGrammar C++ package                        |
+| `QVAC_GRID_CUDA_ARCH`              | no                                      | e.g. `90a`, `120a`, or `121a`               |
+| `QVAC_GRID_PACKAGE_DIR`            | for prebuilt kernels                    | directory of kernel packages for the target |
+| `QVAC_GRID_BUILD_AOT_KERNELS`      | to compile kernel packages              | set to `ON` with the required build tools   |
 
-ZeroMQ, msgpack, libunistring, CUDA, NCCL, LibTorch, TVM-FFI, the SGLang
-kernel tree, and XGrammar are host packages. The port does not build them.
-
-A local toolchain for this machine is installed under `.toolchain/` (gitignored).
-It provides LibTorch 2.13.0+cu130, NCCL 2.29.7, CUDA nvcc 13.0.88, TVM-FFI
-0.1.11, XGrammar 0.2.1, cppzmq 4.10.0, and SGLang kernels at `887c401e1`.
+The reference toolchain and runtime requirements are documented in the pinned
+QVAC Grid source's `README.md` and `docker/build.Dockerfile`. In particular,
+serving requires the pinned Python compile-sidecar environment, CUDA toolkit,
+and external libraries in addition to a compatible kernel package. The port
+downloads and patches the pinned upstream SGLang source during its download
+phase; it does not install the remaining host dependencies.
 
 ```sh
-source packages/sglang/.toolchain/env.sh
 corepack pnpm --filter @qvac/sglang build
 ```
 

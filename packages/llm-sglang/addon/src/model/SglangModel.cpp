@@ -6,8 +6,13 @@
 
 namespace qvac_llm_sglang {
 
-SglangModel::SglangModel(std::string baseUrl)
-    : endpoint_(parseHttpEndpoint(std::move(baseUrl))) {}
+SglangModel::SglangModel(std::string baseUrl, std::string apiKey)
+    : endpoint_(parseHttpEndpoint(std::move(baseUrl))),
+      apiKey_(std::move(apiKey)) {
+  if (apiKey_.find_first_of("\r\n") != std::string::npos) {
+    throw std::invalid_argument("apiKey must not contain CR or LF");
+  }
+}
 
 std::string SglangModel::getName() const { return "sglang"; }
 
@@ -39,12 +44,15 @@ std::any SglangModel::process(const std::any& input) {
             prompt->outputCallback(delta);
           }
         }
-      });
+      }, apiKey_);
   if (completed && !cancel_.stopped(seen)) {
     for (const std::string& delta : parser.feed("\n")) {
       if (prompt->outputCallback) {
         prompt->outputCallback(delta);
       }
+    }
+    if (!parser.done()) {
+      throw std::runtime_error("SGLang SSE stream ended without [DONE]");
     }
   }
   return std::string{};

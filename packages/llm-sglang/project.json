@@ -1,0 +1,20 @@
+{
+  "name": "@qvac/llm-sglang",
+  "root": "packages/llm-sglang",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "pnpm run build",
+        "cwd": "packages/llm-sglang",
+        "ci": {
+          "installWithPnpm": true,
+          "desktopSmokeCommand": "test -s prebuilds/linux-arm64/qvac__llm-sglang.bare",
+          "matrixInclude": "[{\"os\":\"ubuntu-22.04-arm\",\"runner_key\":\"ubuntu_2204_arm\",\"platform\":\"linux\",\"arch\":\"arm64\"}]"
+        }
+      },
+      "inputs": ["default", "!{projectRoot}/prebuilds/**"],
+      "outputs": ["{projectRoot}/prebuilds"]
+    }
+  }
+}

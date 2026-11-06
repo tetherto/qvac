@@ -1,13 +1,13 @@
-sglang-cpp installs the native server next to its rank worker:
+qvac-grid installs the native server next to its rank worker:
 
-    bin/sglang_cpp_server
-    bin/sgl_qwen_rank_worker
+    bin/qvac_grid_server
+    bin/qvac_grid_rank_worker
 
 Pass --artifacts the package root, which contains the architecture
-directory (sm90/ or sm121/) and registry/models-887c401e1.json:
+directory and registry/models-390acf84e.json:
 
-    lib/sglang-cpp/
+    lib/qvac-grid/
 
-The server looks for sgl_qwen_rank_worker beside its own executable, or at
-SGL_CPP_RANK_WORKER. CUDA, LibTorch, and NCCL are host libraries and are not
+The server looks for qvac_grid_rank_worker beside its own executable, or at
+QVAC_GRID_RANK_WORKER. CUDA, LibTorch, and NCCL are host libraries and are not
 bundled in this port.

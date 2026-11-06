@@ -21,7 +21,7 @@ struct Prompt {
 class SglangModel : public qvac_lib_inference_addon_cpp::model::IModel,
                     public qvac_lib_inference_addon_cpp::model::IModelCancel {
  public:
-  explicit SglangModel(std::string baseUrl);
+  explicit SglangModel(std::string baseUrl, std::string apiKey = {});
 
   [[nodiscard]] std::string getName() const override;
   [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats runtimeStats()
@@ -31,6 +31,7 @@ class SglangModel : public qvac_lib_inference_addon_cpp::model::IModel,
 
  private:
   Endpoint endpoint_;
+  std::string apiKey_;
   CancelState cancel_;
 };
 

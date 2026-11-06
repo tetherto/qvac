@@ -270,7 +270,11 @@ export class LlmSglang {
         // The native module is resolved only after the server URL is known.
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const binding = require('./binding') as LlmSglangBinding
-        this.addon = new LlmSglangInterface(binding, { baseUrl }, this.onOutput.bind(this))
+        this.addon = new LlmSglangInterface(
+          binding,
+          { baseUrl, apiKey: this.config.apiKey },
+          this.onOutput.bind(this)
+        )
         await this.addon.activate()
         this.loaded = true
         this.logger?.info?.('SGLang addon loaded')

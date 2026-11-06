@@ -10,6 +10,7 @@
     "build:ts": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "npm run build:ts && node --test test/*.test.js",
+    "test:integration": "npm run build && node --test test/integration/http.test.cjs",
     "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
     "test:cpp:run": "node scripts/run-cpp-tests.js",
     "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",

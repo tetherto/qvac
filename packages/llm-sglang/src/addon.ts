@@ -7,7 +7,7 @@ export interface AddonLogger {
 export interface LlmSglangBinding {
   createInstance(
     owner: LlmSglangInterface,
-    configurationParams: { baseUrl: string },
+    configurationParams: { baseUrl: string; apiKey?: string },
     outputCallback: LlmSglangOutputCallback
   ): object
   activate(handle: unknown): void
@@ -67,7 +67,7 @@ export class LlmSglangInterface {
 
   constructor(
     binding: LlmSglangBinding,
-    configurationParams: { baseUrl: string },
+    configurationParams: { baseUrl: string; apiKey?: string },
     outputCallback: LlmSglangOutputCallback
   ) {
     this.binding = binding

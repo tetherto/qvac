@@ -227,7 +227,8 @@ void ChunkedDecoder::feed(std::string_view raw, std::string& out) {
 bool httpPost(
     const Endpoint& endpoint, const std::string& path, const std::string& body,
     const CancelState& cancel, std::uint64_t seen,
-    const std::function<void(std::string_view)>& onBody) {
+    const std::function<void(std::string_view)>& onBody,
+    const std::string& apiKey) {
 #if defined(_WIN32)
   (void)endpoint;
   (void)path;
@@ -235,6 +236,7 @@ bool httpPost(
   (void)cancel;
   (void)seen;
   (void)onBody;
+  (void)apiKey;
   throw std::runtime_error("the sglang HTTP client supports POSIX hosts");
 #else
   if (cancel.stopped(seen)) {
@@ -279,8 +281,11 @@ bool httpPost(
   std::string request = "POST " + path +
                         " HTTP/1.1\r\nHost: " + endpoint.host + ":" + port +
                         "\r\nContent-Type: application/json\r\nContent-Length: " +
-                        std::to_string(body.size()) +
-                        "\r\nConnection: close\r\n\r\n" + body;
+                        std::to_string(body.size());
+  if (!apiKey.empty()) {
+    request += "\r\nAuthorization: Bearer " + apiKey;
+  }
+  request += "\r\nConnection: close\r\n\r\n" + body;
   if (!sendAll(socket.get(), request)) {
     if (cancel.stopped(seen)) {
       return false;

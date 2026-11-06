@@ -6,6 +6,7 @@ export interface AddonLogger {
 export interface LlmSglangBinding {
     createInstance(owner: LlmSglangInterface, configurationParams: {
         baseUrl: string;
+        apiKey?: string;
     }, outputCallback: LlmSglangOutputCallback): object;
     activate(handle: unknown): void;
     runJob(handle: unknown, input: SglangJob): Promise<boolean> | boolean;
@@ -32,6 +33,7 @@ export declare class LlmSglangInterface {
     private handle;
     constructor(binding: LlmSglangBinding, configurationParams: {
         baseUrl: string;
+        apiKey?: string;
     }, outputCallback: LlmSglangOutputCallback);
     activate(): Promise<void>;
     runJob(input: SglangJob): Promise<boolean>;

@@ -62,6 +62,7 @@ class ChunkedDecoder {
 bool httpPost(
     const Endpoint& endpoint, const std::string& path, const std::string& body,
     const CancelState& cancel, std::uint64_t seen,
-    const std::function<void(std::string_view)>& onBody);
+    const std::function<void(std::string_view)>& onBody,
+    const std::string& apiKey = {});
 
 } // namespace qvac_llm_sglang

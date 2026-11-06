@@ -185,7 +185,10 @@ js_value_t* createInstance(js_env_t* env, js_callback_info_t* info) try {
   auto callback = std::make_unique<addon_cpp::OutputCallBackJs>(
       env, args.get(0, "jsHandle"), args.getFunction(2, "outputCallback"),
       std::move(outHandlers));
-  auto model = std::make_unique<SglangModel>(baseUrl);
+  const std::string apiKey =
+      config.getOptionalPropertyAs<jsu::String, std::string>(env, "apiKey")
+          .value_or("");
+  auto model = std::make_unique<SglangModel>(baseUrl, apiKey);
   auto addon = std::make_unique<addon_cpp::AddonJs>(
       env, std::move(callback),
       std::unique_ptr<addon_cpp::model::IModel>(std::move(model)));
