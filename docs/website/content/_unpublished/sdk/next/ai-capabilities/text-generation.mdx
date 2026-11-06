@@ -260,6 +260,51 @@ Notes:
 * On the worker-orchestrated loop the SDK runs `tool_search` itself; your
   handlers are never called for it.
 
+#### Choosing what a search loads
+
+A search scores each deferred tool against the query: 1000 for its exact name,
+50 for each query word in its name, 10 in its description and 5 in its group.
+It loads every tool scoring above 0, best first, up to the model's `limit`
+(default 3, at most 8), and stops adding past 8 KiB of schemas once the top
+match is in. A query word that only happens to appear in another tool's
+description or group is enough to load that tool too.
+
+When you run the search yourself, the last argument of `executeToolSearch`
+takes options that change this; each one defaults to the behaviour above:
+
+* `defaultLimit` and `maxLimit`: the limit when the model passes none, and the
+  ceiling on one it does pass.
+* `maxDefinitionBytes`: the schema budget past the top match.
+* `minScore`: the lowest score that counts as a match.
+* `select(ranked, { query, limit })`: receives every match with its score, best
+  first, and returns the ones to load; the limit and size budget still apply.
+
+`rankDeferredTools(tools, query)` returns the same scored ranking for
+inspection. `minScore` and `select` change nothing the model is told. The
+`tool_search` in a `completion()` prompt is built with the defaults, so it
+still advertises a default of 3 and a maximum of 8 when you change
+`defaultLimit` or `maxLimit`; `buildToolSearchTool(deferred, options)` renders
+the matching definition for a prompt you build yourself. The following example
+keeps only the matches that score at least half of the best one:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/tools/llamacpp-deferred-tools-select.js title="completion-deferred-tools-select.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/tools/llamacpp-deferred-tools-select.ts title="completion-deferred-tools-select.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
 ### MCP
 
 You create and manage the MCP client, connect it to one or more MCP servers, and pass it to `completion()`. The following script shows how to attach an MCP client to `completion()` so the model can call a web search tool and then continue with the results:

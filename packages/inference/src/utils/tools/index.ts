@@ -11,6 +11,10 @@ export {
   executeToolSearch,
   loadedToolNames,
   partitionTools,
+  rankDeferredTools,
   resolveDeferredTools,
-  searchDeferredTools
+  searchDeferredTools,
+  type RankedTool,
+  type ToolSearchOptions,
+  type ToolSearchSelect
 } from '@/utils/tools/defer'
