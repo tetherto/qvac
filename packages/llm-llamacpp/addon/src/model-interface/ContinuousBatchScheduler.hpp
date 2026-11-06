@@ -756,7 +756,7 @@ private:
       llama_seq_id seqId, const cache::Ledger& prompt, bool trimmable,
       size_t minimum, const cache::DonorAdopter& adopt);
   /// Writes the live state of `seqId`, described by `ledgerWords`, to
-  /// `cacheKey` through a temp file, followed by the conversation's checkpoint
+  /// `cacheKey` through a temp file, followed by the conversation's checkpoints
   /// for the next turn (see `cache::appendCheckpointSection`).
   /// Returns false (logged) on failure.
   bool writeStateToFileLocked(

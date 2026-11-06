@@ -1,6 +1,6 @@
 #include "CacheCheckpointFile.hpp"
 
-#include <algorithm>
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <optional>
@@ -169,10 +169,27 @@ struct SectionEntry {
 
 bool appendCheckpointSection(
     const std::string& path, const Checkpoints& checkpoints) noexcept {
-  const auto kept = static_cast<uint32_t>(
-      std::count_if(checkpoints.begin(), checkpoints.end(), keepable));
-  if (kept == 0) {
+  // The newest checkpoint serves the next tool round; the newest user-turn
+  // one, when older, serves the next user turn.
+  const Checkpoint* newest = nullptr;
+  const Checkpoint* userTurn = nullptr;
+  for (const Checkpoint& entry : checkpoints) {
+    if (!keepable(entry)) {
+      continue;
+    }
+    newest = &entry;
+    if (entry.endsAtUserTurn) {
+      userTurn = &entry;
+    }
+  }
+  if (newest == nullptr) {
     return true;
+  }
+  std::array<const Checkpoint*, 2> selected{newest, nullptr};
+  uint32_t kept = 1;
+  if (userTurn != nullptr && userTurn != newest) {
+    selected = {userTurn, newest};
+    kept = 2;
   }
   std::optional<uintmax_t> baseSize;
   // Cuts the file back to the state and logs why; never throws.
@@ -206,11 +223,8 @@ bool appendCheckpointSection(
     writer.value(kept);
     // Oldest first, as `appendProcessCheckpoint` keeps them, so the reader
     // trims them with the same policy.
-    for (const Checkpoint& entry : checkpoints) {
-      if (!keepable(entry)) {
-        continue;
-      }
-      const Checkpoint* checkpoint = &entry;
+    for (uint32_t i = 0; i < kept; ++i) {
+      const Checkpoint* checkpoint = selected[i];
       const utils::SequenceStateSnapshot& state = checkpoint->state;
       const uint64_t payloadSize = state.targetBytes();
       if (payloadSize == 0) {
@@ -291,7 +305,7 @@ Checkpoints readCheckpointSection(
         version > CHECKPOINT_SECTION_VERSION) {
       return reject("written by a newer version");
     }
-    // One more than the limit: the pinned user-turn checkpoint.
+    // Writers store at most two; this is the most the policy could keep.
     if (!reader.value(count) ||
         count > MAX_CONFIGURABLE_PROCESS_CHECKPOINTS + 1) {
       return reject("invalid checkpoint count");

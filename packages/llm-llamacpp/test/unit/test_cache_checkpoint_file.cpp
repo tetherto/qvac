@@ -118,26 +118,30 @@ TEST_F(CacheCheckpointFileTest, MidLoopFileReloadsBothCheckpoints) {
   EXPECT_FALSE(read.back().endsAtUserTurn);
 }
 
-TEST_F(CacheCheckpointFileTest, ReadsTheLimitPlusThePinnedCheckpoint) {
-  const size_t limit = cache::MAX_CONFIGURABLE_PROCESS_CHECKPOINTS;
+TEST_F(CacheCheckpointFileTest, WritesTheNewestAndTheNewestUserTurnOnly) {
   cache::Checkpoints checkpoints;
   checkpoints.push_back(checkpoint(3, 'a'));
   checkpoints.back().endsAtUserTurn = true;
-  for (size_t i = 0; i < limit; ++i) {
-    checkpoints.push_back(checkpoint(5, 'b'));
-  }
+  checkpoints.push_back(checkpoint(4, 'b'));
+  checkpoints.back().endsAtUserTurn = true;
+  checkpoints.push_back(checkpoint(5, 'c'));
+  checkpoints.push_back(checkpoint(7, 'd'));
+
   ASSERT_TRUE(cache::appendCheckpointSection(path_, checkpoints));
-  const cache::Checkpoints read = cache::readCheckpointSection(
-      path_, stateEnd(), resident(), policy(limit));
-  ASSERT_EQ(read.size(), limit + 1);
+  const cache::Checkpoints read =
+      cache::readCheckpointSection(path_, stateEnd(), resident(), policy());
+  ASSERT_EQ(read.size(), 2u);
+  EXPECT_EQ(read.front().state.nPast, 4);
   EXPECT_TRUE(read.front().endsAtUserTurn);
+  EXPECT_EQ(read.back().state.nPast, 7);
 
   fs::resize_file(path_, stateEnd());
-  checkpoints.push_back(checkpoint(5, 'c'));
+  checkpoints.back().endsAtUserTurn = true;
   ASSERT_TRUE(cache::appendCheckpointSection(path_, checkpoints));
-  EXPECT_TRUE(
-      cache::readCheckpointSection(path_, stateEnd(), resident(), policy(limit))
-          .empty());
+  const cache::Checkpoints newestPinned =
+      cache::readCheckpointSection(path_, stateEnd(), resident(), policy());
+  ASSERT_EQ(newestPinned.size(), 1u);
+  EXPECT_EQ(newestPinned.front().state.nPast, 7);
 }
 
 TEST_F(CacheCheckpointFileTest, ToolResultFallbackIsNotPinnedOnReload) {
@@ -150,7 +154,7 @@ TEST_F(CacheCheckpointFileTest, ToolResultFallbackIsNotPinnedOnReload) {
   EXPECT_FALSE(read.front().endsAtUserTurn);
 }
 
-TEST_F(CacheCheckpointFileTest, KeepsEveryCheckpointAfterTheState) {
+TEST_F(CacheCheckpointFileTest, KeepsTheNewestCheckpointAfterTheState) {
   cache::Checkpoints checkpoints;
   checkpoints.push_back(checkpoint(4, 'a'));
   checkpoints.push_back(checkpoint(7, 'b'));
@@ -166,8 +170,7 @@ TEST_F(CacheCheckpointFileTest, KeepsEveryCheckpointAfterTheState) {
 
   const cache::Checkpoints read =
       cache::readCheckpointSection(path_, stateEnd(), resident(), policy());
-  ASSERT_EQ(read.size(), 2u);
-  EXPECT_EQ(read.front().state.nPast, 4);
+  ASSERT_EQ(read.size(), 1u);
   EXPECT_EQ(read.back().ledger.entries, checkpoints.back().ledger.entries);
   EXPECT_EQ(read.back().state.nPast, 7);
   EXPECT_EQ(read.back().cacheTokens, 7);

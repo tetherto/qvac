@@ -281,7 +281,7 @@ stateDiagram-v2
     Restored --> Checkpoint: stays in the list
     Checkpoint --> [*]: pruned, no longer a prefix<br/>of a later prompt
     Checkpoint --> [*]: evicted, oldest first (newest<br/>user-turn one last), when the list<br/>exceeds cache_checkpoints_max_bytes<br/>or cache_checkpoints
-    Checkpoint --> InFile: all of them, written<br/>with the cacheKey file
+    Checkpoint --> InFile: newest and newest user-turn one,<br/>written with the cacheKey file
     InFile --> Checkpoint: conversation loaded<br/>from its file, any process
     Checkpoint --> [*]: cacheKey switched without cache_ram_mib,<br/>cleared, or loaded from its file<br/>(cache_ram_mib, parallel >= 2: kept with<br/>the conversation across requests)
     Checkpoint --> [*]: process exits
@@ -434,12 +434,15 @@ larger models can reach hundreds of MB. Bound it
 with `cache_checkpoints_max_bytes`, or set `cache_checkpoints: 0`.
 Checkpoints live in host RAM by default
 (`cache_checkpoint_storage: memory`) or in files in `cache_checkpoint_dir`
-with `disk`. Every write of the `cacheKey` file appends the newest one after
-the sequence state, and a conversation loaded from its file starts with it,
-on both paths and after a restart. With `parallel >= 2` the scheduler also
-keeps a key's other checkpoints across a file round-trip while the process
-lives, and those replace the one from the file, which is then not read. With
-`disk` the checkpoint is copied between its file and the `cacheKey` file in
+with `disk`. Every write of the `cacheKey` file appends at most two after
+the sequence state: the newest one (next tool round or regenerate) and, when
+it is older, the newest one ending at a user message (next user turn). The
+file is therefore at most one checkpoint larger than with a single one,
+whatever `cache_checkpoints` is. A conversation loaded from its file starts
+with them, on both paths and after a restart. With `parallel >= 2` the
+scheduler also keeps a key's other checkpoints across a file round-trip while
+the process lives, and those replace the ones from the file, which are then
+not read. With `disk` each checkpoint is copied between its file and the `cacheKey` file in
 1 MiB chunks, never held whole in memory.
 
 ## The `cacheKey` file
@@ -463,8 +466,8 @@ stateDiagram-v2
     Resident --> Resident: rolled-back request<br/>(file untouched)
 ```
 
-Loading a file restores the sequence state and the ledger, and the newest
-checkpoint when the file carries one. With `parallel >= 2` the scheduler
+Loading a file restores the sequence state and the ledger, and the
+checkpoints the file carries (the newest, and the newest user-turn one). With `parallel >= 2` the scheduler
 instead hands the new slot the checkpoints the previous request on the same
 `cacheKey` left behind, when it still has them. Each checkpoint is checked
 against the loaded ledger before use. After a restart a full-state model
@@ -492,7 +495,7 @@ The file is a standard llama.cpp sequence-state file
 | llama.cpp header | magic, format version, number of tokens that follow |
 | ledger, stored as the token list | `QLDG` marker, ledger version, `nPast`, KV-cell count, entry count, a checksum over the entries, one reserved word; then five words per entry: kind (text token or media span), identity (the token id, or a hash of the media) in two words, positions, KV cells |
 | sequence state | the sequence's complete memory: every KV cell, and the recurrent state on hybrid and recurrent models (on DeepSeek V4: the sliding window, the compressed rows and the compressor states) |
-| checkpoint section (full-state models with a checkpoint) | `QCKP` marker, section version, checkpoint count; per checkpoint, oldest first: its `nPast`, a flags word (version 2: whether it ends at a user message), its ledger in the format above (which gives its KV-cell count), its partial state and a hash of that state; a checksum over everything but the state bytes |
+| checkpoint section (full-state models with a checkpoint) | `QCKP` marker, section version, checkpoint count (at most 2: the newest, and the newest user-turn one when older); per checkpoint, oldest first: its `nPast`, a flags word (version 2: whether it ends at a user message), its ledger in the format above (which gives its KV-cell count), its partial state and a hash of that state; a checksum over everything but the state bytes |
 
 The state is always written in full; the checkpoint after it holds only the
 partial state, as in memory. `llama_state_seq_load_file` stops reading at the

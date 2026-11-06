@@ -15,8 +15,8 @@ namespace qvac_lib_inference_addon_llama::cache {
 // with the section load unchanged in older addon versions, which ignore it.
 //
 // Layout, host byte order like the rest of the file:
-//   u32 magic "QCKP" · u32 version · u32 count (up to the checkpoint limit,
-//   plus one pinned user-turn checkpoint)
+//   u32 magic "QCKP" · u32 version · u32 count (the newest checkpoint, and
+//   the newest user-turn one when it is older: at most 2)
 //   per checkpoint, oldest first:
 //     i32 nPast
 //     u32 flags (version 2+; bit 0: the history ends at a user message)
@@ -30,7 +30,8 @@ inline constexpr uint32_t CHECKPOINT_SECTION_MAGIC = 0x504b4351; // "QCKP"
 inline constexpr uint32_t CHECKPOINT_SECTION_VERSION = 2;
 inline constexpr uint32_t CHECKPOINT_ENDS_AT_USER_TURN = 1U << 0;
 
-/// Appends every partial checkpoint with a payload in `checkpoints`, oldest
+/// Appends the newest partial checkpoint with a payload in `checkpoints`, and
+/// the newest such one ending at a user message when it is older, oldest
 /// first, to the cacheKey file at `path`, which already holds the header, the
 /// ledger and the sequence state (a `.tmp` file before its promotion). With
 /// none the file is left untouched. On a write failure the file is cut back to

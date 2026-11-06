@@ -303,9 +303,9 @@ public:
     return {};
   }
 
-  /// Appends the driver's checkpoint for the next turn to the cacheKey file
+  /// Appends the driver's checkpoints for the next turn to the cacheKey file
   /// being written at `path`, after its sequence state
-  /// (`cache::appendCheckpointSection`), so a later process can restore it.
+  /// (`cache::appendCheckpointSection`), so a later process can restore them.
   /// Best effort: a failure leaves the file with the state only. Drivers
   /// without checkpoints write nothing.
   virtual void appendCheckpointsToCacheFile(const std::string& path) const {

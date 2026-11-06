@@ -180,9 +180,9 @@ pure-attention models.
   with the default 1 an edit of the last user message reprocesses the entire
   conversation. That holds only while the turns in between each committed a
   checkpoint and `cache_checkpoints_max_bytes` did not evict it. A
-  conversation loaded from its file brings back the checkpoints it had when
-  the file was written. An edit also drops the checkpoints after it, which no
-  longer match. `0` keeps none and takes none, which makes every divergent turn a
+  conversation loaded from its file brings back only its newest checkpoint
+  and its newest one ending at a user message. An edit also drops the
+  checkpoints after it, which no longer match. `0` keeps none and takes none, which makes every divergent turn a
   cold prefill.
 - `cache_checkpoints_max_bytes`: total payload budget per sequence, enforced
   before the count: the oldest checkpoints are dropped until the total fits.
