@@ -403,7 +403,7 @@ export async function main(launchOptions: LaunchOptions) {
 
   options.version ??= pkg.version
   updates = options.standalone
-    ? await startUpdater(options.entries as Parameters<typeof startUpdater>[0])
+    ? await startUpdater(options.entries as Parameters<typeof startUpdater>[0]).catch(() => null)
     : null
   if (options.mode) {
     await runPrintMode()

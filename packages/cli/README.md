@@ -82,6 +82,7 @@ conversation, and `.qvac/prompts/*.md` become your own `/commands`.
 | `Ctrl+X`, `/export`   | copy the last answer, save the conversation as HTML or Markdown      |
 | `Alt+E`               | edit the draft in `$EDITOR`                                          |
 | `Ctrl+V`              | attach the file whose path is on the clipboard                       |
+| `Ctrl+U`, `Esc`       | install a downloaded update, or dismiss it (standalone build only)   |
 | wheel, drag           | scroll; select and copy (`Shift`+drag for your terminal's own)       |
 
 Editing is readline: word motion and deletion, `Ctrl+K`/`Ctrl+U`/`Ctrl+Y` kill and yank, undo,
@@ -292,6 +293,15 @@ requires the Node version in `package.json`. Explicit legacy HTTP launches
 (`qvac serve --openai`, `qvac serve --no-default`, and `qvac serve openai`) remain
 compatible with managed provider and editor integrations. Plain `qvac serve`
 starts the peer host.
+
+The standalone build (`pnpm pear:build`, or the `Release CLI standalone (OTA)` workflow per host)
+updates itself peer to peer with
+[`pear-runtime-updater`](https://github.com/holepunchto/pear-runtime-updater). It follows the
+`pear://` link that `UPGRADE_KEY` stamps into `release.json` at build time; without one the updater
+never starts, and an npm install never starts it. When the drive carries a newer version for this
+host, the TUI shows a banner and `Ctrl+U` swaps the new build in for the next launch. Updater state
+and its lock live in the per-user app directory (`~/Library/Application Support/qvac-cli`,
+`~/.config/qvac-cli`, `%APPDATA%\qvac-cli`), so only the first running `qvac` holds the updater.
 
 Python (Pyodide) and QuickJS are optional dependencies: a normal install includes them, and
 `--omit=optional` leaves them out, in which case the `python`, `quickjs` and `code-mode` plugins

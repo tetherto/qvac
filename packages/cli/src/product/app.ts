@@ -1626,6 +1626,8 @@ export class ProductApp {
       return this.openFork()
     } else if (this.notice) {
       this.notice = ''
+    } else if (['ready', 'applied', 'error'].includes(this.updateBanner?.state ?? '')) {
+      this.updateBanner!.update({ type: 'update.dismiss' })
     } else if (!this.editor.value) {
       this.composing = false
     }

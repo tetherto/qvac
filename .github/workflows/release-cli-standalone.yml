@@ -1,0 +1,145 @@
+name: Release CLI standalone (OTA)
+
+# Standalone qvac executables (packages/cli/scripts/make.mjs), one native runner per host, staged
+# to the qvac-cli pear-ci drive. The executables follow that drive through pear-runtime-updater
+# when built with the vars.QVAC_CLI_UPGRADE_KEY link (pear://<drive key>).
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "Stage the executables to the qvac-cli drive"
+        type: boolean
+        default: false
+      dry-run:
+        description: "Compute the stage diff without writing to the drive"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-cli-standalone
+  cancel-in-progress: false
+
+env:
+  WORKDIR: packages/cli
+
+jobs:
+  build:
+    name: Build ${{ matrix.host }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - host: linux-x64
+            runner: ubuntu-24.04
+            bin: qvac
+          - host: linux-arm64
+            runner: ubuntu-24.04-arm
+            bin: qvac
+          - host: darwin-arm64
+            runner: macos-15
+            bin: qvac
+          - host: darwin-x64
+            runner: macos-15-intel
+            bin: qvac
+          - host: win32-x64
+            runner: windows-2025
+            bin: qvac.exe
+    runs-on: ${{ matrix.runner }}
+    environment: release
+    permissions:
+      contents: read
+      packages: read
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
+        with:
+          node-version: 22
+
+      # the build script uses rm -rf, which cmd.exe lacks
+      - name: Run npm scripts under Git Bash
+        if: runner.os == 'Windows'
+        run: npm config set script-shell "C:\Program Files\Git\bin\bash.exe"
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+        working-directory: ${{ env.WORKDIR }}
+
+      - name: Apply dependency patches
+        run: npm run prepare:runtime
+        working-directory: ${{ env.WORKDIR }}
+
+      - name: Setup macOS signing
+        id: certificates
+        if: runner.os == 'macOS'
+        uses: holepunchto/actions/setup-certificates/macos@93d1343082a0b9f003a8e3f24825f9bfcc6d2a3b # v1
+        with:
+          development_certificate_base64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          development_password: ${{ secrets.MACOS_P12_PASSWORD }}
+          notarization_method: apple_id_password
+          apple_id: ${{ secrets.MACOS_APPLE_ID }}
+          apple_password: ${{ secrets.MACOS_APPLE_PASSWORD }}
+          apple_team_id: ${{ secrets.MACOS_APPLE_TEAM_ID }}
+
+      - name: Build standalone
+        run: npm run pear:build
+        working-directory: ${{ env.WORKDIR }}
+        shell: bash
+        env:
+          HOST: ${{ matrix.host }}
+          UPGRADE_KEY: ${{ vars.QVAC_CLI_UPGRADE_KEY }}
+          MAC_CODESIGN_IDENTITY: ${{ runner.os == 'macOS' && secrets.MACOS_CODESIGN_IDENTITY || '' }}
+          KEYCHAIN_PROFILE: ${{ steps.certificates.outputs.keychain-profile }}
+
+      - name: Smoke test standalone
+        run: npm run test:standalone
+        working-directory: ${{ env.WORKDIR }}
+
+      - name: Upload standalone
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
+        with:
+          name: qvac-cli-${{ matrix.host }}
+          path: ${{ env.WORKDIR }}/out/make/${{ matrix.bin }}
+          if-no-files-found: error
+          retention-days: 30
+
+  stage:
+    needs: build
+    if: inputs.stage
+    runs-on: ubuntu-24.04
+    environment: release
+    permissions:
+      contents: write
+      pull-requests: write
+    timeout-minutes: 30
+    steps:
+      # pear-ci commits ci/snapshot.json back to main, so this checkout keeps its credentials
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - name: Download standalones
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # 8.0.1
+        with:
+          pattern: qvac-cli-*
+          path: out/artifacts
+
+      - name: Build stage directory
+        run: PACKAGE_JSON_PATH=${{ env.WORKDIR }}/package.json ${{ env.WORKDIR }}/scripts/build-stage-artifact.sh out/artifacts out/stage
+
+      - name: Stage with pear-ci
+        uses: holepunchto/actions/pear-ci@93d1343082a0b9f003a8e3f24825f9bfcc6d2a3b # v1
+        with:
+          namespace: qvac-cli
+          primary-key: ${{ secrets.PEAR_PRIMARY_KEY }}
+          target: ./out/stage
+          dry-run: ${{ inputs.dry-run }}
+          github-token: ${{ github.token }}
