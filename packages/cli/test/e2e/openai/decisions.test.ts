@@ -2,6 +2,7 @@ import { describe, it, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   RequestRejectedByPolicyError,
+  RequestValidationFailedError,
   LAYA_MULTILINGUAL_322M_Q8_0,
   type DecisionResult
 } from '@qvac/sdk'
@@ -209,7 +210,11 @@ describe('OpenAI Decisions HTTP API', () => {
             criteria: { billing: 'Payments', technical: 'Bugs' }
           },
           question_1: { type: 'score', instructions: 'How severe?', criteria: ['Minor', 'Major'] },
-          question_2: { type: 'noul', instructions: 'Does this need a human now?' }
+          question_2: {
+            type: 'noul',
+            instructions: 'Does this need a human now?',
+            requireProbability: true
+          }
         }
       })
     }
@@ -451,7 +456,9 @@ describe('OpenAI Decisions HTTP API', () => {
       {
         modelId: 'sdk-laya-id',
         state: 'Help!',
-        questions: { question_0: { type: 'noul', instructions: 'Urgent?' } }
+        questions: {
+          question_0: { type: 'noul', instructions: 'Urgent?', requireProbability: true }
+        }
       }
     ])
     assert.deepEqual(response.json(), {
@@ -496,5 +503,24 @@ describe('OpenAI Decisions HTTP API', () => {
     })
     assert.equal(response.statusCode, 500)
     assert.equal(response.json().error.code, 'internal_error')
+  })
+
+  it('answers a request the model rejects with 400 and its message', async (t) => {
+    const message =
+      'questions.question_0: this lev model answers noul with an expected rating, not a probability'
+    const { app } = await server(t, {
+      decideOverride: () =>
+        Object.assign(Promise.reject(new RequestValidationFailedError(message)), {
+          requestId: 'decision-id'
+        })
+    })
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/decisions',
+      payload: { model: 'laya', input: 'a', questions }
+    })
+    assert.equal(response.statusCode, 400, response.body)
+    assert.equal(response.json().error.code, 'invalid_request')
+    assert.match(response.json().error.message, /expected rating, not a probability/)
   })
 })
