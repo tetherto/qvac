@@ -6,14 +6,21 @@ use `prediction: 'auto'`. No vision projector or external tokenizer is required.
 
 ## Backend and build
 
-This integration builds on [QVAC #5550](https://github.com/tetherto/qvac/pull/5550)
-and uses the same [registry #475](https://github.com/tetherto/qvac-registry-vcpkg/pull/475)
-baseline, `1c902fde9a74201917d03256449135495e9f6bf5`, on
-`feat/diffusion-2026-11-01`. The GGML port is `2026-11-01` and the diffusion port is
-`2026-11-01#1`. The diffusion engine starts from
-`11d3d0138537abd8098c13d9bd2889bf1413bab1` with registry patches for integer
-LoRA alpha conversion, latent-unit VAE tiles, and FLUX.3 reference editing.
-Keep the registry branch available until the pin is refreshed to merged main.
+This integration builds on [QVAC #5550](https://github.com/tetherto/qvac/pull/5550).
+Merge [engine #62](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp/pull/62)
+into `2026-11-01`, then
+[registry #475](https://github.com/tetherto/qvac-registry-vcpkg/pull/475) into
+registry `main`, before merging the addon PRs.
+
+The addon keeps the existing registry `main` reference and baseline
+`651be7f3023d30fffbe1593b35ba57b39f2ba78b`; explicit minimum versions request
+`2026-11-01` for both GGML and stable-diffusion-cpp. These versions become
+available from registry `main` after #475 merges, so no broad baseline bump is
+needed. The registry pins engine commit
+`7fb5779afe940b8e3670b089cdfb1daa4be53125`, which contains the integer LoRA
+alpha conversion, latent-unit VAE compatibility (including allocation-failure
+retry handling), and FLUX.3 reference-editing fixes directly in the engine
+source. The port applies no patches.
 
 Rebuild the addon and its paired GGML dependency together using the package's
 [build instructions](../build.md). Previously published `0.33.0` binaries do
