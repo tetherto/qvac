@@ -48,11 +48,26 @@ async function handleVectorIndexInternal(input: VectorIndexRequest): Promise<Vec
   })
   if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
   const base = { type: 'vectorIndex' as const, requestId: ctx.requestId }
+  // The three operations below await native or file work. A cancel that
+  // lands during that wait is reported as a cancel, not a success; an index
+  // opened for a cancelled caller is released, since nothing holds its id.
   switch (request.operation) {
-    case 'create':
-      return { ...base, operation: 'create', ...(await createVectorIndex(request)) }
-    case 'load':
-      return { ...base, operation: 'load', ...(await loadVectorIndex(request)) }
+    case 'create': {
+      const opened = await createVectorIndex(request)
+      if (ctx.signal.aborted) {
+        disposeVectorIndex(opened)
+        throw new InferenceCancelledError(ctx.requestId)
+      }
+      return { ...base, operation: 'create', ...opened }
+    }
+    case 'load': {
+      const opened = await loadVectorIndex(request)
+      if (ctx.signal.aborted) {
+        disposeVectorIndex(opened)
+        throw new InferenceCancelledError(ctx.requestId)
+      }
+      return { ...base, operation: 'load', ...opened }
+    }
     case 'add':
       return { ...base, operation: 'add', ...addVectors(request) }
     case 'search':
@@ -61,8 +76,11 @@ async function handleVectorIndexInternal(input: VectorIndexRequest): Promise<Vec
       return { ...base, operation: 'remove', ...removeVectors(request) }
     case 'contains':
       return { ...base, operation: 'contains', ...containsVectors(request) }
-    case 'write':
-      return { ...base, operation: 'write', ...(await writeVectorIndex(request)) }
+    case 'write': {
+      const written = await writeVectorIndex(request)
+      if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
+      return { ...base, operation: 'write', ...written }
+    }
     case 'dispose':
       return { ...base, operation: 'dispose', ...disposeVectorIndex(request) }
   }

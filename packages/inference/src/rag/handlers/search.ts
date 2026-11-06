@@ -1,20 +1,43 @@
 import { getRagInstance, hasRagWorkspaceStorage } from '@/rag/rag-workspace-manager'
+import {
+  createWorkspaceEmbeddingFunction,
+  stashQueryEmbedding,
+  takeQueryEmbedding
+} from '@/rag/embedding-scope'
 import { embed } from '@/plugins/ops/embed'
 import { ragSearchParamsSchema, type RagSearchParams } from '@/schemas/index'
 
-export async function search(params: RagSearchParams) {
+export interface SearchIdentity {
+  requestId?: string | undefined
+  sessionId?: string | undefined
+}
+
+/**
+ * A search is not a registered RAG operation, so its query is embedded here
+ * under the search's own request id and session, then handed to the
+ * workspace's embedding function through the stash; see `embedding-scope`.
+ */
+export async function search(params: RagSearchParams, identity: SearchIdentity = {}) {
   const { modelId, query, topK, n, workspace } = ragSearchParamsSchema.parse(params)
 
   if (!hasRagWorkspaceStorage(workspace)) {
     return []
   }
 
-  async function embeddingFunction(text: string | string[]) {
-    const result = await embed({ modelId, text })
-    return result.embedding
+  const rag = await getRagInstance(
+    modelId,
+    createWorkspaceEmbeddingFunction(modelId, workspace),
+    workspace
+  )
+  const { embedding } = await embed(
+    { modelId, text: query },
+    identity.requestId,
+    identity.sessionId
+  )
+  stashQueryEmbedding(workspace, query, embedding as number[])
+  try {
+    return await rag.search(query, { topK, n })
+  } finally {
+    takeQueryEmbedding(workspace, query)
   }
-
-  const rag = await getRagInstance(modelId, embeddingFunction, workspace)
-  const results = await rag.search(query, { topK, n })
-  return results
 }

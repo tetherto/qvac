@@ -18,6 +18,7 @@ import {
 import { getRequestRegistry, withRequestContext, type ManagedRequestContext } from '@/runtime/index'
 import { generateRandomRequestId } from '@/runtime/request-id'
 import { resolveSessionId } from '@/runtime/session-id'
+import { clearRagEmbedParent, setRagEmbedParent } from '@/rag/embedding-scope'
 import { getEngineLogger } from '@/logging/index'
 import { profileReplyHandler, registerOperationMetrics } from '@/profiling/index'
 
@@ -115,7 +116,12 @@ async function beginRagContext(
     kind: 'rag'
   })
   setActiveRagRequest(workspace, identity)
+  // The workspace's embeddings run as children of this request for its
+  // duration: the caller's session, aborted with it.
+  const embedParent = { signal: ctx.signal, requestId, sessionId: request.sessionId }
+  setRagEmbedParent(workspace, embedParent)
   ctx.scope.defer(() => {
+    clearRagEmbedParent(workspace, embedParent)
     clearActiveRagRequest(workspace, identity)
   })
   return ctx
@@ -184,7 +190,10 @@ async function handleRagInternal(
     }
 
     case 'search': {
-      const results = await search(request)
+      const results = await search(request, {
+        requestId: request.requestId,
+        sessionId: request.sessionId
+      })
       return {
         type: 'rag',
         operation: request.operation,
