@@ -1,0 +1,28 @@
+qvac-fabric[xdna-backend] requires system XRT >= 2.25 and an IRON Python
+interpreter in QVAC_XDNA_IRON_PYTHON. Export QVAC_XDNA_IRON_VERSION with the
+installed mlir-aie release and preserve QVAC_XDNA_IRON_PYTHON in the vcpkg
+build environment.
+
+The module uses the system libstdc++ ABI and embeds the absolute XRT library
+path in RUNPATH. Consumers must track the system toolchain in their Linux
+x64 triplet before binary-cache lookup (VCPKG_KEEP_ENV_VARS alone does not
+hash values):
+
+    if(PORT STREQUAL "qvac-fabric" OR PORT STREQUAL "xrt")
+      list(APPEND VCPKG_ENV_PASSTHROUGH XILINX_XRT QVAC_XDNA_IRON_VERSION)
+      if(NOT "$ENV{XILINX_XRT}" STREQUAL "")
+        file(TO_CMAKE_PATH "$ENV{XILINX_XRT}" _xrt_root)
+      else()
+        set(_xrt_root "/opt/xilinx/xrt")
+      endif()
+      if(EXISTS "${_xrt_root}/share/cmake/XRT/xrt-config.cmake")
+        list(APPEND VCPKG_HASH_ADDITIONAL_FILES "${_xrt_root}/share/cmake/XRT/xrt-config.cmake")
+      endif()
+    endif()
+
+CUDA and XDNA share ggml-base-libstdcxx, a PIC static archive compiled
+against libstdc++. The final CUDA module links its runtime statically; XDNA
+links it dynamically to match XRT. Both use the same CMake configure.
+
+No NPU is required to compile. The XDNA module and its kernel artifacts must
+be installed together. Hosts without XRT skip the optional module.
