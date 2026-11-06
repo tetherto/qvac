@@ -23,11 +23,7 @@ const { name, version } = require("../package.json") as {
 };
 
 // This library has error code range from 26001 to 27000.
-// Ranges used elsewhere in the @qvac/error registry:
-//   6001-6018  @qvac/transcription-whispercpp
-//   7001-7011  @qvac/tts-onnx
-//   8001-8008  @qvac/translation-nmtcpp
-//   24001+     @qvac/transcription-parakeet
+// Other reservations are maintained in packages/error/code-ranges.json.
 export const ERR_CODES = Object.freeze({
   FAILED_TO_LOAD_WEIGHTS: 26001,
   FAILED_TO_CANCEL: 26002,

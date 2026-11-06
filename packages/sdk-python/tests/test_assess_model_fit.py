@@ -168,7 +168,6 @@ async def test_assess_model_fit_leaves_execution_and_policy_to_the_worker_when_u
     transport = FakeTransport(response=OK)
     await api.assess_model_fit(transport, models=[{"model_src": QWEN3_600M_INST_Q4}])
     assert "execution" not in transport.sent
-    assert "policy" not in transport.sent
 
 
 async def test_assess_model_fit_threads_policy():

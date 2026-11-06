@@ -1043,6 +1043,10 @@
             "backendId": {
               "type": "number"
             },
+            "gpuFallbackReason": {
+              "description": "Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
+              "type": "number"
+            },
             "emittedFrames": {
               "description": "MiniMax only: semantic frames the autoregressive stage emitted (25 per second). Below the frame cap when the song ended at the model end-of-sequence.",
               "type": "number"
@@ -1623,6 +1627,10 @@
             "backendId": {
               "type": "number"
             },
+            "gpuFallbackReason": {
+              "description": "Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
+              "type": "number"
+            },
             "emittedFrames": {
               "description": "MiniMax only: semantic frames the autoregressive stage emitted (25 per second). Below the frame cap when the song ended at the model end-of-sequence.",
               "type": "number"
@@ -2048,6 +2056,10 @@
               "type": "number"
             },
             "backendId": {
+              "type": "number"
+            },
+            "gpuFallbackReason": {
+              "description": "Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
               "type": "number"
             },
             "emittedFrames": {
@@ -7018,6 +7030,21 @@
           },
           "required": ["type", "kvCacheKey"],
           "title": "DeleteCacheKvEntryRequest"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "deleteCache"
+            },
+            "modelSrc": {
+              "type": "string",
+              "description": "registry:// source of the model whose cached download to delete"
+            }
+          },
+          "required": ["type", "modelSrc"],
+          "title": "DeleteCacheModelRequest"
         }
       ]
     },
@@ -22133,6 +22160,7 @@
                 "audiogen-ggml",
                 "ggml-vla",
                 "ggml-classification",
+                "ggml-image-embedding",
                 "onnx-vad"
               ],
               "description": "Canonical inference engine identifier.",
@@ -22281,6 +22309,7 @@
                   "audiogen-ggml",
                   "ggml-vla",
                   "ggml-classification",
+                  "ggml-image-embedding",
                   "onnx-vad"
                 ],
                 "description": "Canonical inference engine identifier.",
@@ -22460,6 +22489,7 @@
                   "audiogen-ggml",
                   "ggml-vla",
                   "ggml-classification",
+                  "ggml-image-embedding",
                   "onnx-vad"
                 ],
                 "description": "Canonical inference engine identifier.",
@@ -23953,6 +23983,14 @@
             "enhancerBackendId": {
               "type": "number"
             },
+            "denoiserBackendDevice": {
+              "description": "LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed.",
+              "type": "number"
+            },
+            "denoiserBackendId": {
+              "description": "LavaSR denoiser backend family, same codes as `backendId`.",
+              "type": "number"
+            },
             "codecSidecarLoaded": {
               "description": "Audio8 on macOS / iOS: `1` while the Core ML codec sidecar is attached, `0` without one or once a failing sidecar was retired.",
               "type": "number"
@@ -24148,6 +24186,14 @@
               "type": "number"
             },
             "enhancerBackendId": {
+              "type": "number"
+            },
+            "denoiserBackendDevice": {
+              "description": "LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed.",
+              "type": "number"
+            },
+            "denoiserBackendId": {
+              "description": "LavaSR denoiser backend family, same codes as `backendId`.",
               "type": "number"
             },
             "codecSidecarLoaded": {

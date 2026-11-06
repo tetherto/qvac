@@ -860,6 +860,13 @@ class AudioEditStreamResponseStats(GeneratedBaseModel):
     real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
+    gpu_fallback_reason: Annotated[
+        float | None,
+        Field(
+            alias="gpuFallbackReason",
+            description="Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
+        ),
+    ] = None
     emitted_frames: Annotated[
         float | None,
         Field(
@@ -1469,6 +1476,13 @@ class AudioGenStreamResponseStats(GeneratedBaseModel):
     real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
+    gpu_fallback_reason: Annotated[
+        float | None,
+        Field(
+            alias="gpuFallbackReason",
+            description="Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
+        ),
+    ] = None
     emitted_frames: Annotated[
         float | None,
         Field(
@@ -1887,6 +1901,13 @@ class AudioUnderstandResponseStats(GeneratedBaseModel):
     real_time_factor: Annotated[float | None, Field(alias="realTimeFactor")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
     backend_id: Annotated[float | None, Field(alias="backendId")] = None
+    gpu_fallback_reason: Annotated[
+        float | None,
+        Field(
+            alias="gpuFallbackReason",
+            description="Why a run that asked for a GPU resolved to the CPU, as the engine codes it: 0 none, 1 not requested, 2 no devices, 3 init failed. `diagnostics.fallback.reason` names a lost GPU.",
+        ),
+    ] = None
     emitted_frames: Annotated[
         float | None,
         Field(
@@ -6011,6 +6032,17 @@ class DeleteCacheKvEntryRequest(GeneratedBaseModel):
     type: Literal["deleteCache"] = "deleteCache"
     kv_cache_key: Annotated[str, Field(alias="kvCacheKey")]
     model_id: Annotated[str | None, Field(alias="modelId")] = None
+
+
+class DeleteCacheModelRequest(GeneratedBaseModel):
+    type: Literal["deleteCache"] = "deleteCache"
+    model_src: Annotated[
+        str,
+        Field(
+            alias="modelSrc",
+            description="registry:// source of the model whose cached download to delete",
+        ),
+    ]
 
 
 class DeleteCacheResponse(GeneratedBaseModel):
@@ -22815,6 +22847,7 @@ class ModelRegistryGetModelResponseModelEngine(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
+    ggml_image_embedding = "ggml-image-embedding"
     onnx_vad = "onnx-vad"
 
 
@@ -22957,6 +22990,7 @@ class ModelRegistryListResponseModelsItemEngine(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
+    ggml_image_embedding = "ggml-image-embedding"
     onnx_vad = "onnx-vad"
 
 
@@ -23121,6 +23155,7 @@ class ModelRegistrySearchResponseModelsItemEngine(Enum):
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
     ggml_classification = "ggml-classification"
+    ggml_image_embedding = "ggml-image-embedding"
     onnx_vad = "onnx-vad"
 
 
@@ -24050,6 +24085,20 @@ class TextToSpeechResponseStats(GeneratedBaseModel):
     enhancer_backend_id: Annotated[float | None, Field(alias="enhancerBackendId")] = (
         None
     )
+    denoiser_backend_device: Annotated[
+        float | None,
+        Field(
+            alias="denoiserBackendDevice",
+            description="LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed.",
+        ),
+    ] = None
+    denoiser_backend_id: Annotated[
+        float | None,
+        Field(
+            alias="denoiserBackendId",
+            description="LavaSR denoiser backend family, same codes as `backendId`.",
+        ),
+    ] = None
     codec_sidecar_loaded: Annotated[
         float | None,
         Field(
@@ -24248,6 +24297,20 @@ class TextToSpeechStreamResponseStats(GeneratedBaseModel):
     enhancer_backend_id: Annotated[float | None, Field(alias="enhancerBackendId")] = (
         None
     )
+    denoiser_backend_device: Annotated[
+        float | None,
+        Field(
+            alias="denoiserBackendDevice",
+            description="LavaSR denoiser device: `-1` not loaded, `0` CPU, `1` GPU, `2` Core ML-managed.",
+        ),
+    ] = None
+    denoiser_backend_id: Annotated[
+        float | None,
+        Field(
+            alias="denoiserBackendId",
+            description="LavaSR denoiser backend family, same codes as `backendId`.",
+        ),
+    ] = None
     codec_sidecar_loaded: Annotated[
         float | None,
         Field(
@@ -26624,11 +26687,17 @@ class Request_2(RootModel[DecideSingleRequest | DecideBatchRequest]):
 
 class Request_3(
     RootModel[
-        DeleteCacheAllRequest | DeleteCacheAutoRequest | DeleteCacheKvEntryRequest
+        DeleteCacheAllRequest
+        | DeleteCacheAutoRequest
+        | DeleteCacheKvEntryRequest
+        | DeleteCacheModelRequest
     ]
 ):
     root: Annotated[
-        DeleteCacheAllRequest | DeleteCacheAutoRequest | DeleteCacheKvEntryRequest,
+        DeleteCacheAllRequest
+        | DeleteCacheAutoRequest
+        | DeleteCacheKvEntryRequest
+        | DeleteCacheModelRequest,
         Field(title="DeleteCacheRequest"),
     ]
 

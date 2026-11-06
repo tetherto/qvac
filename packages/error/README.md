@@ -27,7 +27,7 @@ import { QvacErrorBase, addCodes } from '@qvac/error'
 // Create your own error class extending the base
 class QvacErrorCustom extends QvacErrorBase {}
 
-// Define your error codes (reserve at least 1000 codes per library)
+// Example codes only: reserve your package's range before using real codes.
 const ERR_CODES = Object.freeze({
   VALIDATION_ERROR: 1000,
   CONNECTION_ERROR: 1001,
@@ -63,10 +63,18 @@ try {
 
 ### Error Code Conventions
 
-- Each library should reserve a range of at least 1000 codes
-- Keep codes in ascending order based on abstraction level
-- Base libraries should have lower code ranges
-- Document your code range to avoid conflicts with other libraries
+Check [code-ranges.json](./code-ranges.json) for occupied ranges before assigning
+codes. It covers monorepo packages, external products, and retired packages;
+unused numbers within a reservation remain occupied.
+
+Reserve a block before using it, normally at least 1000 codes. Monorepo packages
+use numbers below 100000; external products reserve blocks from 100000 up and
+merge their reservation here before adopting it in their own repository.
+
+Use the [reservation skill](../../.agents/skills/qv-error-code-reserve/SKILL.md),
+or edit the registry and run `npm run errors:check` from the repository root.
+See [validator details](./docs/code-ranges.md) for the registry format and checks
+in external repositories.
 
 ### API Reference
 

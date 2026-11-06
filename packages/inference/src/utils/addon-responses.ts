@@ -47,6 +47,8 @@ export interface TtsStats {
   gpuUnsupported?: number
   enhancerBackendDevice?: number
   enhancerBackendId?: number
+  denoiserBackendDevice?: number
+  denoiserBackendId?: number
   /** Audio8 only, macOS / iOS: 1 while the Core ML codec sidecar is attached. */
   codecSidecarLoaded?: number
   /** Audio8 only: 1 when the synthesis ran its codec on that sidecar, 0 on ggml. */

@@ -561,14 +561,16 @@ test('ttsResponseSchema: accepts optional chunk metadata', (t) => {
   }
 })
 
-test('ttsResponseSchema: accepts LavaSR enhancer backend stats', (t) => {
+test('ttsResponseSchema: accepts LavaSR enhancer and denoiser backend stats', (t) => {
   const r = ttsResponseSchema.safeParse({
     type: 'textToSpeech',
     buffer: [],
     done: true,
     stats: {
       enhancerBackendDevice: 1,
-      enhancerBackendId: 3
+      enhancerBackendId: 3,
+      denoiserBackendDevice: -1,
+      denoiserBackendId: -1
     }
   })
 
@@ -576,6 +578,8 @@ test('ttsResponseSchema: accepts LavaSR enhancer backend stats', (t) => {
   if (r.success) {
     t.is(r.data.stats?.enhancerBackendDevice, 1)
     t.is(r.data.stats?.enhancerBackendId, 3)
+    t.is(r.data.stats?.denoiserBackendDevice, -1)
+    t.is(r.data.stats?.denoiserBackendId, -1)
   }
 })
 
@@ -1407,7 +1411,9 @@ test('ttsStatsSchema: carries the addon RuntimeStats surface', (t) => {
       backendId: 1,
       gpuUnsupported: 0,
       enhancerBackendDevice: 0,
-      enhancerBackendId: 0
+      enhancerBackendId: 0,
+      denoiserBackendDevice: 0,
+      denoiserBackendId: 0
     }
   })
   t.is(r.success, true)
@@ -1415,6 +1421,8 @@ test('ttsStatsSchema: carries the addon RuntimeStats surface', (t) => {
     t.is(r.data.stats?.realTimeFactor, 0.33)
     t.is(r.data.stats?.backendId, 1)
     t.is(r.data.stats?.generatedFrames, 26)
+    t.is(r.data.stats?.denoiserBackendDevice, 0)
+    t.is(r.data.stats?.denoiserBackendId, 0)
   }
 })
 

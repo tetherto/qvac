@@ -230,7 +230,7 @@ TEST(RerankModelLoadTest, RerankerDeclaresNoPoolingButHasAClassifier) {
               "models/unit-test/rerank-test.gguf)";
   }
   ModelMetaData meta;
-  meta.parse(path, GGUFShards{}, false, "Test");
+  meta.parse(path, "Test");
   EXPECT_FALSE(meta.tryGetPoolingType().has_value());
   EXPECT_EQ(meta.hasAnyTensor({"cls.weight"}), true);
 }
