@@ -80,6 +80,13 @@ const RULES: Rule[] = [
     }
   },
   {
+    match: /^kv-cache-seed-/,
+    skip: {
+      reason: 'Step-based: the React Native runner has no step bindings',
+      platforms: ['mobile-ios', 'mobile-android']
+    }
+  },
+  {
     match: /^vla-/,
     skip: {
       reason:
