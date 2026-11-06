@@ -40,6 +40,15 @@ MultimodalOptions takeMultimodalOptions(
     std::unordered_map<std::string, std::string>& config,
     bool hasProjectionModel);
 
+/// @brief The image-token budget that lets one image fit in a mixed batch of
+/// @p nUbatch tokens, as llama-server caps it: half the batch, the rest left
+/// for the text of the input.
+/// @param budget The projector's largest per-image budget, as
+/// mtmd_get_memory_usage reports it (image-max-tokens when set); -1 when it
+/// has none.
+/// @return The capped budget, or nullopt when @p budget already fits.
+std::optional<int> imageTokenCap(int budget, int nUbatch);
+
 /// @brief One part of a multimodal input, in prompt order: text, or the bytes
 /// of a media file that mtmd decodes (an image, or wav/mp3/flac audio).
 struct MultimodalPart {

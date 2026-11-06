@@ -323,6 +323,24 @@ TEST(MultimodalOptionsTest, LeavesATextOnlyConfigAlone) {
   EXPECT_EQ(config, (Config{{"device", "gpu"}, {"batch_size", "512"}}));
 }
 
+TEST(ImageTokenCapTest, CapsABudgetLargerThanHalfTheBatch) {
+  // EmbeddingGemma 2's default budget of 1120 tokens.
+  EXPECT_EQ(imageTokenCap(1120, 512), 256);
+  EXPECT_EQ(imageTokenCap(1120, 2048), 1024);
+  EXPECT_EQ(imageTokenCap(1120, 4096), std::nullopt);
+  EXPECT_EQ(imageTokenCap(1024, 2048), std::nullopt);
+}
+
+TEST(ImageTokenCapTest, LeavesAProjectorWithoutABudgetAlone) {
+  // Fixed-size encoders and audio-only projectors report -1.
+  EXPECT_EQ(imageTokenCap(-1, 512), std::nullopt);
+}
+
+TEST(ImageTokenCapTest, NeverCapsToZero) {
+  // clip reads a budget of 0 as "keep the default".
+  EXPECT_EQ(imageTokenCap(1120, 1), 1);
+}
+
 TEST(AudioLengthLimitTest, RejectsMp3WithFreeFormatFrames) {
   // One normal frame, then a free-format header (bitrate index 0): minimp3
   // decodes such frames, so the length cannot be counted from the headers.

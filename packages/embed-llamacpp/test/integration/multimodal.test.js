@@ -295,6 +295,20 @@ safeTest('image-max-tokens bounds the tokens of a large image', {}, async (t) =>
   t.ok(capped < byDefault, 'the cap lowers the default budget')
 })
 
+safeTest('a small batch_size caps the image budget so a large image embeds', {}, async (t) => {
+  // Uncapped, the image takes more than a 256-token batch holds, so it would
+  // fail with InputTokensExceedBatchSize. The load caps the budget to half the
+  // batch, as llama-server does.
+  const uncapped = await withModel(t, OPTIONS_DEVICE, (model) => imageTokens(model, BIG))
+  const capped = await withModel(t, OPTIONS_DEVICE, (model) => imageTokens(model, BIG), {
+    batch_size: '256'
+  })
+  t.comment(`tokens: batch_size 2048 ${uncapped}, batch_size 256 -> ${capped}`)
+  t.ok(uncapped > 256, `uncapped, the image exceeds the batch (${uncapped})`)
+  // BOS, EOS and the image's start and end markers around the image tokens.
+  t.ok(capped <= 128 + 4, `the image uses at most 128 tokens (${capped})`)
+})
+
 safeTest('mmproj-no-audio rejects audio and keeps images', {}, async (t) => {
   await withModel(
     t,
