@@ -786,7 +786,7 @@ importers:
         specifier: ^3.6.2
         version: 3.6.2
       bare-cpu-info:
-        specifier: 0.1.1
+        specifier: ^0.1.1
         version: 0.1.1
       bare-crypto:
         specifier: ^1.15.3
@@ -798,7 +798,7 @@ importers:
         specifier: ^4.8.4
         version: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-gpu-info:
-        specifier: 0.1.2
+        specifier: ^0.1.2
         version: 0.1.2
       bare-http1:
         specifier: ^4.6.2
@@ -1660,7 +1660,7 @@ importers:
         specifier: ^3.4.2
         version: 3.6.2
       bare-cpu-info:
-        specifier: 0.1.1
+        specifier: ^0.1.1
         version: 0.1.1
       bare-crypto:
         specifier: ^1.15.0
@@ -1675,7 +1675,7 @@ importers:
         specifier: ^4.8.4
         version: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-gpu-info:
-        specifier: 0.1.2
+        specifier: ^0.1.2
         version: 0.1.2
       bare-link:
         specifier: ^4.0.1
