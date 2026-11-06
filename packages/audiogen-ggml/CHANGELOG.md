@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `encode()` / `encodePcm()` release every bare-ffmpeg object they create for
+  compressed formats. Before this, each encode kept the input PCM, the encoded
+  output and the native FFmpeg state in memory for the life of the process.
+
 ## [0.10.0] - 2026-11-05
 
 ### Breaking
