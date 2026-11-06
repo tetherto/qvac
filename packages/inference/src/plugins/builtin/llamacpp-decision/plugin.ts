@@ -1,4 +1,3 @@
-import { LayaDecisions } from '@qvac/embed-llamacpp'
 import {
   definePlugin,
   defineHandler,
@@ -15,11 +14,15 @@ import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
 import { getModelShardFiles } from '@/utils/shard-utils'
 import { decide } from './ops/decide'
 import { transformDecisionConfig } from './helpers'
+import { DecisionModel } from './upstream'
 
-function createDecisionModel(params: CreateModelParams): LayaDecisions {
-  const config = { ...transformDecisionConfig(decisionConfigSchema.parse(params.modelConfig)) }
+// The engine is chosen at load from the GGUF: fabric-format Laya keeps using
+// LayaDecisions, upstream llama.cpp decision models use DecisionEngine.
+function createDecisionModel(params: CreateModelParams): DecisionModel {
+  const validated = decisionConfigSchema.parse(params.modelConfig)
+  const layaConfig = { ...transformDecisionConfig(validated) }
   if (isMobile()) {
-    const stripped = stripMultiGpuKeys(config)
+    const stripped = stripMultiGpuKeys(layaConfig)
     if (stripped.length > 0) {
       getEngineLogger().warn(
         `[${ModelType.llamacppDecision}:${params.modelId}] Multi-GPU parameters (${stripped.join(', ')}) are not supported on mobile. Removing them from config; model will load with single-GPU defaults.`
@@ -28,9 +31,11 @@ function createDecisionModel(params: CreateModelParams): LayaDecisions {
   }
   const logger = createStreamLogger(params.modelId, ModelType.llamacppDecision)
   registerAddonLogger(params.modelId, ModelType.llamacppDecision, logger)
-  return new LayaDecisions({
-    files: { model: getModelShardFiles(params.modelPath) },
-    config,
+  return new DecisionModel({
+    modelPath: params.modelPath,
+    files: getModelShardFiles(params.modelPath),
+    layaConfig,
+    config: validated,
     logger
   })
 }

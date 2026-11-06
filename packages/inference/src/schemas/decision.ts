@@ -1,24 +1,48 @@
 import { z } from 'zod'
 
-// Nested JSON stays inline in the wire contract. The refinement rejects values
-// that JSON serialization would discard or change before reaching the model.
-function isJson(value: unknown, ancestors = new Set<object>()): boolean {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true
-  if (typeof value === 'number') return Number.isFinite(value)
-  if (typeof value !== 'object' || ancestors.has(value)) return false
-  if (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype) return false
+/**
+ * How deep a state, instruction or description may nest. The native decision
+ * engines walk these values recursively in-process, where a stack overflow
+ * cannot be caught; upstream llama.cpp applies the same limit (#30242).
+ */
+export const DECISION_MAX_JSON_DEPTH = 128
+
+const NESTED_TOO_DEEP = `JSON is nested more than ${DECISION_MAX_JSON_DEPTH} levels deep`
+
+type JsonCheck = 'ok' | 'invalid' | 'too-deep'
+
+// Nested JSON stays inline in the wire contract. The check rejects values that
+// JSON serialization would discard or change before reaching the model, and
+// stops at DECISION_MAX_JSON_DEPTH, so a hostile value cannot exhaust the stack
+// here or in the engine.
+function checkJson(value: unknown, depth = 1, ancestors = new Set<object>()): JsonCheck {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return 'ok'
+  if (typeof value === 'number') return Number.isFinite(value) ? 'ok' : 'invalid'
+  if (typeof value !== 'object' || ancestors.has(value)) return 'invalid'
+  if (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype) return 'invalid'
+  if (depth > DECISION_MAX_JSON_DEPTH) return 'too-deep'
   ancestors.add(value)
-  const valid = Object.values(value).every((child) => isJson(child, ancestors))
+  let result: JsonCheck = 'ok'
+  for (const child of Object.values(value)) {
+    result = checkJson(child, depth + 1, ancestors)
+    if (result !== 'ok') break
+  }
   ancestors.delete(value)
-  return valid
+  return result
+}
+
+function refineJson(value: unknown, ctx: z.RefinementCtx): void {
+  const result = checkJson(value)
+  if (result === 'too-deep') ctx.addIssue({ code: 'custom', message: NESTED_TOO_DEEP })
+  else if (result === 'invalid') ctx.addIssue({ code: 'custom', message: 'Expected JSON values' })
 }
 
 export const decisionStateSchema = z.union([
   z.string(),
   z.number(),
   z.boolean(),
-  z.record(z.string(), z.unknown()).refine(isJson, 'Expected JSON values'),
-  z.array(z.unknown()).refine(isJson, 'Expected JSON values')
+  z.record(z.string(), z.unknown()).superRefine(refineJson),
+  z.array(z.unknown()).superRefine(refineJson)
 ])
 
 const questionBase = {
@@ -56,7 +80,13 @@ export const decisionQuestionSchema = z.discriminatedUnion('type', [
         .strict()
         .nullable()
         .optional(),
-      labels: z.object({ false: z.string(), true: z.string() }).strict().optional()
+      labels: z.object({ false: z.string(), true: z.string() }).strict().optional(),
+      requireProbability: z
+        .boolean()
+        .optional()
+        .describe(
+          'Require the answer to be the probability that the statement holds. A model whose noul answer means something else (for example an expected rating) rejects the request.'
+        )
     })
     .strict()
 ])
@@ -105,28 +135,45 @@ export const decideRequestSchema = z.union([
   decisionBatchRequestSchema.extend(wireEnvelope).meta({ title: 'DecideBatchRequest' })
 ])
 
+// Diagnostics only some engines report. Fabric-format Laya models return them;
+// upstream decision engines do not, and they are left out rather than made up.
 const answerBase = {
-  answerConfidence: z.number(),
-  confidence: z.number(),
-  action: z.object({
-    actProbability: z.number().describe('Currently unreliable; do not use to trigger actions.')
-  })
+  answerConfidence: z
+    .number()
+    .optional()
+    .describe('Deprecated. Probability of the reported answer; only some models report it.'),
+  action: z
+    .object({
+      actProbability: z.number().describe('Currently unreliable; do not use to trigger actions.')
+    })
+    .optional()
+    .describe('Deprecated. Only some models report it.')
 }
 export const decisionAnswerSchema = z.discriminatedUnion('type', [
   z.object({
     ...answerBase,
+    confidence: z.number(),
     type: z.literal('choice'),
     choice: z.union([z.string(), z.number(), z.boolean()]),
     probabilities: z.record(z.string(), z.number())
   }),
   z.object({
     ...answerBase,
+    confidence: z.number(),
     type: z.literal('score'),
     score: z.number(),
     legend: z.record(z.string(), z.string()),
     probabilities: z.record(z.string(), z.number())
   }),
-  z.object({ ...answerBase, type: z.literal('noul'), noul: z.number() })
+  z.object({
+    ...answerBase,
+    confidence: z
+      .number()
+      .optional()
+      .describe('Only some models report a confidence for noul answers; none is derived.'),
+    type: z.literal('noul'),
+    noul: z.number()
+  })
 ])
 
 export const decisionResultSchema = z.object({
@@ -135,10 +182,10 @@ export const decisionResultSchema = z.object({
   usage: z.object({
     inputTokens: z.number(),
     outputTokens: z.number(),
-    stateTokens: z.number(),
-    stateTokensDropped: z.number(),
-    truncated: z.boolean(),
-    truncatedQuestions: z.array(z.string()),
+    stateTokens: z.number().optional(),
+    stateTokensDropped: z.number().optional(),
+    truncated: z.boolean().optional(),
+    truncatedQuestions: z.array(z.string()).optional(),
     options: z
       .record(
         z.string(),
