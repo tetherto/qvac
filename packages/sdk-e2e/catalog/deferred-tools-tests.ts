@@ -247,7 +247,7 @@ const HOROSCOPE = {
 // inventory eagerly costs more.
 export const deferredToolsPromptCost = createDeferredToolsTest(
   'deferred-tools-prompt-cost',
-  { ...HOROSCOPE, resourceKey: 'tools' },
+  HOROSCOPE,
   { suites: ['smoke'] }
 )
 
