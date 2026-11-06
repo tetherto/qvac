@@ -1,0 +1,86 @@
+---
+title: Multimodal embeddings
+icon: Hash
+description: Embed text, images, and audio in a shared vector space for cross-media search and retrieval.
+schemaType: HowTo
+---
+
+## Overview
+
+Multimodal embeddings use the Fabric LLM inference engine through [`@qvac/embed-llamacpp`](https://github.com/tetherto/qvac/tree/main/packages/embed-llamacpp). Load EmbeddingGemma 2 using `modelType: "llamacpp-embedding"` to embed text, images, and audio in a shared vector space.
+
+Pass an `inputs` array to [`embed()`](/sdk/reference/api#embed). It returns `number[][]`, with one 768-dimensional vector per item. Compare these vectors to retrieve images or audio using a text query.
+
+<Callout type="info">
+For text-only models and the `text` input form, see [Text embeddings](/sdk/ai-capabilities/text-embeddings).
+</Callout>
+
+## Functions
+
+Use the following sequence of function calls:
+
+1. [`loadModel()`](/sdk/reference/api#loadmodel)
+2. [`embed()`](/sdk/reference/api#embed)
+3. [`unloadModel()`](/sdk/reference/api#unloadmodel)
+
+For how to use each function, see [SDK API reference](/sdk/reference/api/).
+
+## Models
+
+Use `EMBEDDINGGEMMA_2_Q8_0` for the model and `MMPROJ_EMBEDDINGGEMMA_2_Q8_0` for its matching image and audio projector. Import both constants from `@qvac/sdk`, load the model with `modelType: "llamacpp-embedding"`, and pass the projector through `modelConfig.projectionModelSrc`. Model and projector sources also accept local paths, HTTP(S) URLs, and registry URIs through the usual model download lifecycle.
+
+For models available as constants, see [SDK Models](/sdk#models).
+
+## Inputs
+
+Pass `inputs` to [`embed()`](/sdk/reference/api#embed). Each item is a text string or an ordered array of text strings and `{ media: { type, value } }` parts. Use `type: "base64"` for encoded image or audio bytes, or `type: "filePath"` for a path accessible to the inference worker. The result is `number[][]`, with one vector per input item, including a batch with only one item. Plain text still works with a loaded projector. Choose either `text` or `inputs` in each call. Task prompts such as `task: search result | query: ` remain text you supply.
+
+Media requires a projector. Images include JPEG, PNG and BMP; audio supports WAV, MP3 and FLAC. WebP, AAC/M4A, Ogg and video are unsupported.
+
+## Model configuration
+
+* `ctxSize` sets the runtime context size in tokens. Omitted, it uses the trained context size. Set it explicitly to bound memory for long-context models.
+* `batchSize` defaults to `1024`. A mixed input's text and media tokens must fit together in this budget and in `ctxSize`. A large EmbeddingGemma 2 image can take 1120 tokens; the example uses `2048` for both settings.
+* `imageMaxTokens` and `imageMinTokens` set positive per-image token budgets. Omitted, they keep the projector defaults. The minimum must not exceed the maximum.
+* `mmprojNoAudio: true` skips loading the audio encoder and rejects audio input. The default is `false`.
+* `mmprojUseGpu` overrides projector placement. Omitted, it uses the addon's device policy. It is ignored when the model runs on CPU.
+* `imageMaxMegapixels` limits image size before decoding. The default is `50`.
+* `audioMaxSeconds` limits audio duration before decoding. The default is `600`.
+
+Projector options require `projectionModelSrc`. A memory assessment with a projector is unsupported because the fitter does not count projector memory. Each model processes one request at a time; an overlapping call rejects as busy. Await the current call before starting another. Cancellation uses the existing [`cancel()`](/sdk/reference/api#cancel) API and applies to the model's active job.
+
+## Example
+
+Save the example as `embed-multimodal.ts` and pass an image and an audio file:
+
+```bash
+npx tsx embed-multimodal.ts image.jpg audio.wav
+```
+
+The following script embeds text, an image, and audio with EmbeddingGemma 2 in one shared vector space:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/embed-multimodal.js title="embed-multimodal.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/embed-multimodal.ts title="embed-multimodal.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="info">
+The Python client supports this capability through the same worker. A dedicated Python example is not yet published. See the [Python SDK](/sdk/python-sdk) for the API surface.
+</Callout>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+</Callout>
