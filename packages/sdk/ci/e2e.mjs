@@ -64,13 +64,20 @@ export function runOptions(value) {
 export const encodeOptions = (suite, options = {}) =>
   [suite || '', ...OPTIONS.filter((k) => options[k]).map((k) => `${k}=${options[k]}`)].join(';')
 
-// The producer's selection: suite, exclusions, extra exact ids and the filter.
+// The producer's selection: suite, exclusions, extra exact ids and the filter. The ids go through a file, as main's
+// #5608: an impacted list can exceed the 8191 characters cmd.exe takes on one command line.
 export const selection = ({ suite, exclude, include }, filter) => [
   ...(filter ? [`--filter=${filter}`] : []),
   ...(suite ? [`--suite=${suite}`] : []),
   ...(exclude ? [`--exclude-suite=${exclude}`] : []),
-  ...(include ? [`--include=${include}`] : [])
+  ...(include ? [`--include-file=${includeFile(include)}`] : [])
 ]
+
+function includeFile(include) {
+  const file = join(mkdtempSync(join(process.env.RUNNER_TEMP || tmpdir(), 'sdk-include-')), 'include-tests.txt')
+  writeFileSync(file, `${include.split(',').join('\n')}\n`)
+  return file
+}
 
 export function summary(text) {
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${text}\n`)

@@ -336,6 +336,23 @@ and `mobile.mjs`), which build the SDK e2e suite for desktop, Python, Electron, 
 run builds and packs `packages/test-suite` from the checked-out ref and installs that tarball, so an SDK
 change is tested against the framework in the same commit without publishing.
 
+To prepare a leg before it starts (warming a model cache sized to the run, say), resolve the tests it will
+execute without starting a producer. `selectRunTests` applies the same `suite`/`excludeSuite`/`filter`/
+`include` rules the producer queues from, then drops what platform policy skips on the leg's label, as a
+consumer does before it bootstraps:
+
+```js
+import { loadConfig, loadTests, selectRunTests } from '@qvac/test-suite'
+
+const config = await loadConfig(configDir)
+const { tests } = selectRunTests(await loadTests(config, configDir), {
+  suite: 'smoke',
+  platform: 'desktop-macos'
+})
+```
+
+`selectTests` (the producer's half alone), `getPlatformSkipReason` and `matchesPlatform` are exported too.
+
 ## License
 
 Apache-2.0. See [LICENSE](./LICENSE).

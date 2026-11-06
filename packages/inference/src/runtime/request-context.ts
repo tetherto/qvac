@@ -114,6 +114,13 @@ function installDefaultPolicies(r: RequestRegistry): void {
     onOverflow: 'queue',
     maxQueueDepthPerModel: 64
   })
+  // Embeddings have one native job and model-wide cancellation. Preserve
+  // busy rejection, before media preparation or native cancellation is wired.
+  r.policy({
+    kind: 'embeddings',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'reject'
+  })
   // Cap is the model's `parallel`, passed per request by the handlers; the value
   // here is only the fallback when a caller supplies none.
   r.policy({

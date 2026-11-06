@@ -165,6 +165,9 @@ jobs:
           rocm-version: ${{ fromJSON(inputs.rows)[matrix.leg.i].toolchain.rocm.version }}
           gfx: ${{ fromJSON(inputs.rows)[matrix.leg.i].toolchain.rocm.gfx }}
           sha256: ${{ fromJSON(inputs.rows)[matrix.leg.i].toolchain.rocm.sha256 }}
+      # main's include-xdna: XRT and IRON for fabric's XDNA backend.
+      - if: contains(fromJSON(inputs.rows)[matrix.leg.i].setup, 'xdna')
+        uses: ./.github/actions/setup-xdna
       # The package and its workspace dependencies, so Nx builds a dependency the change touched from its sources.
       - name: Install
         shell: bash

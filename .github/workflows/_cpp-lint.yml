@@ -85,6 +85,9 @@ jobs:
           rocm-version: ${{ matrix.row.toolchain.rocm.version }}
           gfx: ${{ matrix.row.toolchain.rocm.gfx }}
           sha256: ${{ matrix.row.toolchain.rocm.sha256 }}
+      # main's include-xdna: XRT and IRON for fabric's XDNA backend.
+      - if: contains(matrix.row.setup, 'xdna')
+        uses: ./.github/actions/setup-xdna
       - name: Install
         shell: bash
         working-directory: src

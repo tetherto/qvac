@@ -31,12 +31,12 @@
         },
         "ios-arm64": {
           "ci": {
-            "runner": "macos_ios"
+            "runner": "macos_15"
           }
         },
         "ios-arm64-simulator": {
           "ci": {
-            "runner": "macos_ios"
+            "runner": "macos_15"
           }
         },
         "darwin-arm64": {
@@ -80,12 +80,12 @@
         },
         "ios-arm64": {
           "ci": {
-            "runner": "macos_ios"
+            "runner": "macos_15"
           }
         },
         "ios-arm64-simulator": {
           "ci": {
-            "runner": "macos_ios"
+            "runner": "macos_15"
           }
         },
         "darwin-arm64": {
@@ -161,7 +161,7 @@
         },
         "ios-arm64": {
           "ci": {
-            "runner": "macos_ios",
+            "runner": "macos_15",
             "setup": ["node22"]
           }
         }

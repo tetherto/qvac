@@ -50,8 +50,9 @@ const CI_KEYS = ['runner', 'setup', 'labels']
 const LABEL_KEY = /^(base:[a-z0-9._-]+\*?|dispatch:[a-z0-9-]+|[a-z0-9-]+)$/
 // Host setup a configuration may ask for; each is one workflow step, its version pinned in nx.json. cuda-jetson puts
 // CUDA 12 for Jetson beside the host's CUDA 13 and exports only QVAC_CUDA_JETSON_PATH; java is JDK 17 and android the
-// Android SDK, for a desktop leg that builds Kotlin; node22 runs the leg on Node 22 instead of the LTS.
-const SETUP = ['cuda', 'cuda-jetson', 'rocm', 'python', 'java', 'android', 'node22']
+// Android SDK, for a desktop leg that builds Kotlin; node22 runs the leg on Node 22 instead of the LTS; xdna provisions
+// XRT and IRON for fabric's XDNA backend.
+const SETUP = ['cuda', 'cuda-jetson', 'rocm', 'python', 'java', 'android', 'node22', 'xdna']
 
 // The metadata a target may carry, and on which targets. toolchain is nx.json's, merged into every build target.
 const METADATA = {

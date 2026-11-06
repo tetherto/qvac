@@ -33,6 +33,25 @@ When a sidecar is present, `assessFit` answers `unknown`, since the sidecar's
 memory usage is not projected.
 
 
+### Chatterbox Core ML sidecars
+
+Apple builds support optional Chatterbox Turbo and Multilingual Core ML
+sidecars for the S3Gen encoder, CFM estimator and HiFT vocoder through the
+native `speech-cpp` 2026-10-30 dependency. Export and placement details are in
+the [Chatterbox Core ML guide](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/9ed06a668923b1ea3f68ad28614228aa1156223e/engines/tts/docs/chatterbox.md#core-ml-sidecars).
+
+The three stages run on the Neural Engine when their sidecars sit next to the
+S3Gen GGUF and fall back to ggml when unavailable; T3 keeps the GPU. Set
+`maxSentenceChars` (the reference CLI uses 180) so S3Gen vocodes each sentence
+on the Neural Engine while T3 decodes the next one: on an Apple M2 a
+three-sentence prompt then synthesizes in 31% (Turbo) and 33% (Multilingual)
+less time than on Metal. Without a split there is nothing to overlap, so a call
+gains only the S3Gen time. The first use of each sidecar function by an
+executable compiles it for the Neural Engine (3 to 26 s per function on an M2;
+the OS caches the result). When a sidecar is present, `assessFit` answers
+`unknown`, since the sidecar's memory usage is not projected.
+
+
 Runs in-process with a persistent native engine — the GGUFs, the S3Gen
 preload, the ggml backend, and any voice-conditioning tensors are
 loaded once and reused across every synthesis call.  GPU acceleration
@@ -67,6 +86,7 @@ and registry prerequisites described under [MOSS](#moss).
   `tts-cpp` selects the GPU backend per its per-vendor allowlist (see
   [Backends & GPU acceleration](#backends--gpu-acceleration)).
 - **Apple Core ML sidecars** for the Supertonic vocoder, the Audio8 codec,
+  the Chatterbox S3Gen encoder, CFM and HiFT,
   and one stage each of MOSS, MOSS-SoundEffect, and MOSS-Speech on macOS /
   iOS, picked up when staged next to the model (see
   [Core ML sidecars on Apple](#core-ml-sidecars-on-apple)).
@@ -204,10 +224,13 @@ under `models/`:
 # Chatterbox turbo (English)
 chatterbox-t3-turbo.gguf   (~742 MB) — T3 GPT-2 Medium + BPE + VoiceEncoder
 chatterbox-s3gen.gguf      (~1.0 GB) — S3Gen encoder/CFM + HiFT + CAMPPlus + S3TokenizerV2
+chatterbox-s3gen-{encoder,cfm,hift}.mlmodelc/ (optional, macOS / iOS: Apple Core ML
+                           sidecars for the S3Gen stages; see Core ML sidecars on Apple)
 
 # Chatterbox multilingual (en/es/fr/de/pt/it/zh/ja/ko/...)
 chatterbox-t3-mtl.gguf     (~1.0 GB)
 chatterbox-s3gen-mtl.gguf  (~1.0 GB)
+chatterbox-s3gen-mtl-{encoder,cfm,hift}.mlmodelc/ (optional, macOS / iOS)
 
 # Supertonic 3 (Supertone/supertonic-3; 31 languages) — preferred Supertonic
 # checkpoint; published per quant tier (auto-detected from modelDir)
@@ -829,8 +852,8 @@ The example saves a WAV and prints stats. For CosyVoice3 it also saves
 ### Core ML sidecars on Apple
 
 The macOS / iOS prebuilds carry the Apple Core ML (Neural Engine) sidecars
-for the Supertonic vocoder, the Audio8 codec, and the MOSS models' fixed-shape
-stages. They are presence-driven:
+for the Supertonic vocoder, the Audio8 codec, the Chatterbox S3Gen stages, and
+the MOSS models' fixed-shape stages. They are presence-driven:
 each stage runs on a compiled `.mlmodelc` found next to its model file
 (`supertonic3-q8_0.gguf` -> `supertonic3-vocoder.mlmodelc`) and falls back to
 the ggml graph when it is absent, so a model directory without sidecars
@@ -847,13 +870,18 @@ published model set yet; supply your own to opt in.
 | MOSS-Speech | `moss-speech-codec-tokenizer.mlmodelc`, beside the codec GGUF | speech tokenizer (Whisper-VQ encoder), one full 30 s segment per call | segments shorter than 30 s, which ggml encodes faster; so most spoken questions | `MOSS_COREML_DISABLE=1` |
 | Parler | `<model>-dac.mlmodelc` and optional `<model>-decoder.mlmodelc` (drop the GGUF quant suffix) | DAC; decoder steps when `coremlDecoder: true` (macOS 15 / iOS 18); T5 and prefill stay on ggml | a failed sidecar, unless strict mode rejects it; see [Parler Core ML sidecars](#parler-core-ml-sidecars) | `PARLER_COREML_DISABLE=1` |
 | LavaSR | explicit `enhancer.coremlModelPath` / `denoiser.coremlModelPath` | denoiser and enhancer neural cores | only when Core ML options are absent; explicit load errors fail | omit both Core ML options |
-| Chatterbox, CosyVoice3 | none | — | always | — |
+| Chatterbox Turbo / Multilingual | `<s3gen>-encoder.mlmodelc`, `<s3gen>-cfm.mlmodelc` and `<s3gen>-hift.mlmodelc`, beside the S3Gen GGUF (`chatterbox-s3gen-q8_0.gguf` -> `chatterbox-s3gen-{encoder,cfm,hift}.mlmodelc`) | S3Gen encoder and CFM estimator, one function per width up to 1536 mel frames (voice prompt included); HiFT in 128-frame windows. With `maxSentenceChars` set, each sentence is vocoded while T3 decodes the next; T3 stays on the ggml backend | inputs past 1536 mel frames (encoder and CFM), and a call that fails on a sidecar, which also retires it | `CHATTERBOX_COREML_DISABLE=1` |
+| CosyVoice3 | none | — | always | — |
 
 Set the force-ggml variables in the process environment before `load()`.
 Audio8 reports its codec path in `response.stats`: `codecSidecarLoaded` is 1
 while the sidecar is attached and `codecOnCoreml` is 1 when that synthesis
 ran its codec on it (see [Response shape](#response-shape)). The Supertonic
-vocoder path is not reported in the stats, and neither are the MOSS paths.
+vocoder path is not reported in the stats, and neither are the Chatterbox and
+MOSS paths. The Chatterbox stages run on the CPU and Neural Engine, keeping the
+GPU for T3, unless `CHATTERBOX_COREML_COMPUTE_UNITS` (`all`, `cpu_and_gpu`,
+`cpu_only`) says otherwise; `CHATTERBOX_COREML_STRICT=1` turns a fallback into
+an error.
 The MOSS sidecars run on the GPU unless `MOSS_COREML_COMPUTE_UNITS` (`all`,
 `cpu_and_ane`, `cpu_only`) says otherwise: none of their stages ran faster on
 the Neural Engine, and the speech tokenizer loses code accuracy there.
@@ -876,12 +904,14 @@ The MOSS sidecars, per stage against Metal with f16 models:
 
 Export the sidecars from the model GGUFs with
 `engines/tts/scripts/export-supertonic-coreml.py`,
-`engines/tts/scripts/export-audio8-codec-coreml.py`, and
+`engines/tts/scripts/export-audio8-codec-coreml.py`,
+`engines/tts/scripts/export-chatterbox-coreml.py`, and
 `engines/tts/scripts/export-moss-{codec,sfx,speech-tokenizer}-coreml.py` from the
 [`qvac-fabric-speech.cpp`](https://github.com/tetherto/qvac-fabric-speech.cpp)
 tree at the ref `speech-cpp` pins. Its
 [Supertonic](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/supertonic.md#core-ml-vocoder-sidecar),
 [Audio8](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/audio8.md#core-ml-codec-sidecar),
+[Chatterbox](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/chatterbox.md#core-ml-sidecars),
 and
 [MOSS](https://github.com/tetherto/qvac-fabric-speech.cpp/blob/master/engines/tts/docs/moss.md#core-ml-codec-decoder)
 guides cover export, placement, and measurements.
@@ -1483,7 +1513,7 @@ instance.  Runtime stats add `promptTokens`, `generatedTokens`, `replyTokens`,
 | `cfmSteps`                | number     | 2          | Chatterbox native-streaming CFM steps: 1 = faster (halved CFM cost) |
 | `batchCfmSteps`           | number     | engine default | Chatterbox-only batch CFM steps (`0` = 2-step meanflow on Turbo, the model's full schedule on multilingual). The multilingual engine does not floor it, so values well below its schedule under-integrate |
 | `nPredict`                | number     | 1000       | Chatterbox-only cap on speech tokens per synthesis (25 ≈ 1 s, so ~40 s by default). Longer single calls also need `nCtx` to fit, or use `maxSentenceChars` |
-| `maxSentenceChars`        | number     | 0          | Chatterbox-only sentence auto-split: T3 + S3Gen run per segment of at most this many bytes (the reference CLI uses 180), so `nPredict` applies per segment |
+| `maxSentenceChars`        | number     | 0          | Chatterbox-only sentence auto-split: T3 + S3Gen run per segment of at most this many bytes (the reference CLI uses 180), so `nPredict` applies per segment; with [Chatterbox Core ML sidecars](#chatterbox-core-ml-sidecars), S3Gen vocodes a segment while T3 decodes the next |
 | `crossfadeMs`             | number     | 30         | Chatterbox-only raised-cosine crossfade between auto-split batch segments; native streaming stays gapless |
 | `repeatPenalty`           | number     | 1.2        | Chatterbox-only T3 repetition penalty (`1` = off) |
 | `exaggeration` / `cfgWeight` / `minP` | number | 0.5 / 0.5 / 0 | Chatterbox multilingual only (Turbo ignores them): prosody intensity (> 0 more expressive, < 0 flatter), T3 classifier-free guidance scale (`0` = off; `cfgRate` is the separate S3Gen rate), and the min-p sampling threshold |

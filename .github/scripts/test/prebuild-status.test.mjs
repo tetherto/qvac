@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 import {
   PREBUILD_KEYS,
@@ -307,7 +308,7 @@ test('PREBUILD_KEYS covers the merge-guard allowlist', () => {
 })
 
 test('CPP_TEST_KEYS covers C++-test packages and uses the vla merge-guard key', () => {
-  assert.equal(CPP_TEST_KEYS.length, 13)
+  assert.equal(CPP_TEST_KEYS.length, 14)
   assert.ok(CPP_TEST_KEYS.includes('asr-ggml'))
   assert.ok(CPP_TEST_KEYS.includes('bci-whispercpp'))
   assert.ok(CPP_TEST_KEYS.includes('audiogen-ggml'))
@@ -318,11 +319,13 @@ test('CPP_TEST_KEYS covers C++-test packages and uses the vla merge-guard key', 
   assert.ok(!CPP_TEST_KEYS.includes('vla-ggml'))
 })
 
-// A package without a C++ test producer cannot publish a status to verify.
-test('CPP_TEST_KEYS excludes packages with no failable C++ test producer', () => {
-  for (const pkg of ['ocr-ggml']) {
-    assert.ok(!CPP_TEST_KEYS.includes(pkg), `${pkg} has no failable C++ test producer`)
-  }
+test('OCR declares a failable Linux C++ test producer for its status key', () => {
+  const project = JSON.parse(
+    readFileSync(new URL('../../../packages/ocr-ggml/project.json', import.meta.url), 'utf8'),
+  )
+  // On the CI contract, pr-build-test.yml's cpp:tests leg is the producer.
+  assert.ok(CPP_TEST_KEYS.includes('ocr-ggml'))
+  assert.ok(project.targets['cpp:tests'].configurations['linux-x64'])
 })
 
 // --- poll loop: retry / deadline / terminal outcomes ---------------------

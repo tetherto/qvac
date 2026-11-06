@@ -65,6 +65,66 @@ Standard GitHub labels (`bug`, `documentation`, `enhancement`, `good first issue
 
 ---
 
+## Re-running failed SDK e2e tests
+
+`test-e2e-smoke`, `test-e2e-full`, and the release-branch auto-run are **base runs**. Each one records its per-platform failure set into a single hidden state comment on the PR (`sdk-e2e-base-state`), and posts a visible **QVAC E2E — base run recorded** summary alongside it.
+
+`test-e2e-rerun-failed` consumes that record and re-runs **only** those tests, **only** on the platforms that had failures. One failure on Windows and one on Linux means two tests on two runners; macOS, Android, and iOS never start.
+
+| | |
+|---|---|
+| **Needs a new commit?** | No. The rerun always tests the current PR HEAD, so it verifies a pushed fix or, on an unchanged commit, checks for flakiness. The PR comment says which. |
+| **Anchoring** | Always the last **base** run, never the previous rerun. Every attempt re-runs the same set until a new smoke/full run replaces the base — so a later fix cannot quietly break a test an earlier rerun had already turned green. |
+| **Re-applying** | The label is removed automatically once the run picks it up. Just add it again for the next attempt — GitHub only fires `labeled` when the label is absent, which is why it has to come back off. |
+| **`e2e-tested`** | Never applied by a rerun. A partial run does not verify the suite; only a base run can mark the PR as e2e-tested. |
+| **Base run still in flight** | Rejected. The base failure set is not known until every family finishes, so the rerun refuses rather than planning from a stale record. Wait for the **base run recorded** comment. Reruns run in their own concurrency group, so labelling early cannot cancel the base run. |
+| **No base recorded / base fully green** | Nothing runs, and a PR comment says why. Apply `test-e2e-smoke` or `test-e2e-full` first. |
+| **Base run cancelled or died** | The previously recorded base is kept, not wiped, and the "in flight" mark is ignored once the run is no longer running. |
+| **Test renamed or deleted since the base** | Warned in the job summary. If that leaves a platform with zero tests to run, the rerun **fails** rather than reporting a green summary that verified nothing. |
+
+Implementation: [`sdk-e2e.yml`](../../.github/workflows/sdk-e2e.yml) and its `plan`/`report` steps in [`e2e-report.mjs`](../../packages/sdk/ci/e2e-report.mjs).
+
+---
+
+## Smoke runs cover the tests a PR touched
+
+The smoke suite is a fraction of the SDK e2e catalog, and a test belongs to it only if someone tagged it `suites: ['smoke']`. Tests a PR adds or changes are therefore invisible to a smoke run unless the author remembered a manual filter, so a green smoke run routinely says nothing about the tests the PR actually touched.
+
+`test-e2e-smoke` now runs **the smoke suite plus the tests the PR touched**. Nothing to configure; `test-e2e-full` is unchanged and still runs everything.
+
+A PR comment reports what happened: tests touched, how many smoke already covered, how many the run added and at what runtime cost, and any changed file the mapper could not attribute. To get the same answer before pushing, run the mapper — it is the code CI runs, so it reports against today's catalog rather than a number written down here:
+
+```bash
+cd packages/sdk-e2e
+node scripts/impacted-tests.mjs --base main --head HEAD
+```
+
+Six relations connect a changed file to testIds:
+
+| Changed file | Resolved via |
+|---|---|
+| `catalog/*-tests.ts`, `catalog/test-definitions.ts` | the testIds it declares — narrowed to the changed lines when they name tests, widened to the whole file otherwise |
+| `runners/js/**/executors/*.ts` | the executor's `pattern` regex |
+| anything else under `catalog/` or `runners/js/` | the import graph, via the executors that reach it |
+| `packages/inference/src/plugins/builtin/<engine>/**` | the models that engine serves — directory name → `engine` in the SDK model contract → the resource constants naming those models → the tests depending on those resources |
+| `packages/sdk/src/client/api/*.ts` | the functions it exports, and the executors importing them |
+| a handler module registered in `packages/inference/src/registry.ts` | the same way, via the operation the registry binds it to. Operations dispatched to a plugin rather than a module are left to the engine relation |
+
+The last three relations are the only ones that reach outside `packages/sdk-e2e/`. It needs no table: the plugin directory name *is* the engine id the SDK loads by, the contract is regenerated and checked by `contract:check`, a wrong model constant fails the download, and a wrong `dependency` throws `Unknown dependency` at run time. Every link is already load-bearing, so none of them can rot silently to suit this mapper.
+
+Deliberate limits:
+
+- **Source with no declared link to a test is out of scope.** A PR touching only `packages/sdk/src/**` or the parts of inference that are neither an engine nor a registered handler maps to nothing and gets a plain smoke run. Inventing a link — a hand-kept `path -> category` table — would rot without anything failing.
+- **Lifecycle handlers legitimately pull in most of the catalog.** Changing `unload-model` or `cancelHandler` resolves to ~500 tests, because every test loads and cancels. That is real coverage rather than a bug, and it is still bounded by `test-e2e-full`; the comment reports the size so it is never a surprise.
+- **An engine or handler nothing exercises is reported, not silently empty.** It appears in the comment's unmapped list, so the gap shows up the first time someone changes it.
+- **Unattributable files are reported, not expanded.** `runners/js/*/consumer.ts`, `fixtures/`, and `assets/` map to no single test — a consumer change formally touches every test on its platform. The comment lists these files so they get a human look, and nothing is added for them.
+- **The impact set is never truncated.** It is bounded by the catalog, so extending a smoke run can never cost more than `test-e2e-full` would; capping it would only reduce coverage while pushing the author to the more expensive option. The comment states the added runtime so a broad change is visible.
+- **The mapper never blocks e2e.** If it fails, the smoke run proceeds unchanged and the comment says the analysis was unavailable.
+
+Implementation: [`impacted-tests.mjs`](../../packages/sdk-e2e/scripts/impacted-tests.mjs), `sdk-e2e.yml`'s `impacted` job, and `--include-file` in `@qvac/test-suite`, which takes the ids from a file because a list this long exceeds the Windows command-line limit.
+
+---
+
 ## Comment triggers (not labels)
 
 Some commands look like labels but are actually comment triggers handled by `approval-worker.yml`. They do not appear in the GitHub label sidebar.
