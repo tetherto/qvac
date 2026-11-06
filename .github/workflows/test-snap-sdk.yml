@@ -228,6 +228,7 @@ jobs:
           persist-credentials: false
           path: .sdk-e2e-workflow
           sparse-checkout: |
+            .github/actions/sdk-e2e-model-cache
             .github/actions/sdk-e2e-node-leg
             .github/actions/sdk-e2e-node-prepare
             .github/actions/sdk-e2e-node-results
@@ -375,46 +376,95 @@ jobs:
           snap list mesa-core22
           snap connections qvac-sdk-e2e
 
-      # A run of only snap-storage-* tests needs no model, so it skips the
-      # multi-gigabyte cache restore and bootstrap.
-      - name: Determine Snap model requirements
-        id: snap-model-requirements
-        shell: node {0}
+      # Same per-model cache as test-node-sdk.yml. The Snap reads its own models directory, so
+      # restored files are hard-linked into it. A selection with no models skips the bootstrap.
+      - name: Plan models cache
+        id: models-plan
+        continue-on-error: true
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
         env:
           TEST_FILTER: ${{ steps.leg.outputs.filter }}
+          SUITE: ${{ inputs.suite }}
+          EXCLUDE_SUITE: ${{ inputs.exclude-suite }}
+          INCLUDE_TESTS: ${{ inputs.include }}
+          CACHE_ROOT: ${{ inputs.working-directory }}/.qvac-cache
         run: |
-          const fs = require('fs');
-          const filters = (process.env.TEST_FILTER || '')
-            .split(',')
-            .map((filter) => filter.trim())
-            .filter(Boolean);
-          const requiresModels =
-            filters.length === 0 || filters.some((filter) => !filter.startsWith('snap-storage'));
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `required=${requiresModels}\n`);
+          if [ ! -f scripts/model-cache-plan.mjs ]; then
+            echo "::warning::This checkout predates the per-model cache, so every model is downloaded uncached. Rebase onto main."
+            exit 0
+          fi
+          node scripts/model-cache-plan.mjs \
+            --family=snap \
+            --os=linux \
+            "--suite=$SUITE" \
+            "--exclude-suite=$EXCLUDE_SUITE" \
+            "--filter=$TEST_FILTER" \
+            "--include=$INCLUDE_TESTS" \
+            "--cache-root=$CACHE_ROOT" \
+            "--out=$RUNNER_TEMP/sdk-e2e-model-cache-plan.json"
 
-      - name: Restore Snap models cache
-        id: snap-models-cache
-        if: steps.snap-model-requirements.outputs.required == 'true' && inputs.cache-models != false
-        uses: actions/cache/restore@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+      - name: Restore models cache
+        id: models-cache
+        if: inputs.cache-models != false && steps.models-plan.outputs.plan != ''
+        continue-on-error: true
+        uses: ./.sdk-e2e-workflow/.github/actions/sdk-e2e-model-cache
         with:
-          path: ~/snap/qvac-sdk-e2e/common/.qvac/models
-          key: qvac-snap-models-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
+          mode: restore
+          plan: ${{ steps.models-plan.outputs.plan }}
+
+      - name: Stage models into the Snap
+        if: steps.models-cache.outputs.hits != '' && steps.models-cache.outputs.hits != '0'
+        shell: bash
+        env:
+          WORKSPACE_MODELS: ${{ inputs.working-directory }}/.qvac-cache
+        run: |
+          set -euo pipefail
+          SNAP_MODELS="$HOME/snap/qvac-sdk-e2e/common/.qvac/models"
+          mkdir -p "$SNAP_MODELS"
+          cp -a -l --remove-destination "$WORKSPACE_MODELS/." "$SNAP_MODELS/" 2>/dev/null \
+            || cp -a --remove-destination "$WORKSPACE_MODELS/." "$SNAP_MODELS/"
+          du -sh "$SNAP_MODELS"
 
       - name: Bootstrap models inside Snap
-        if: steps.snap-model-requirements.outputs.required == 'true' && steps.snap-models-cache.outputs.cache-hit != 'true'
+        if: >-
+          steps.models-cache.outputs.complete != 'true' &&
+          steps.models-plan.outputs.deps != '[]'
         working-directory: ${{ inputs.working-directory }}
+        env:
+          QVAC_E2E_BOOTSTRAP_DEPS: ${{ steps.models-plan.outputs.deps }}
+          QVAC_E2E_BOOTSTRAP_MODELS: ${{ steps.models-cache.outputs.missing-models }}
         run: >-
           npx qvac-test run:bootstrap:snap
           --config=.
           --skip-build
           --skip-snap-install
 
-      - name: Save Snap models cache
-        if: steps.snap-model-requirements.outputs.required == 'true' && steps.snap-models-cache.outputs.cache-hit != 'true' && inputs.cache-models != false
-        uses: actions/cache/save@668228422ae6a00e4ad889ee87cd7109ec5666a7 # 5.0.4
+      # Trusted events only. Not `cp -n`: it exits 1 on existing files in coreutils 9.2-9.4.
+      - name: Collect Snap downloads for the cache
+        id: snap-collect
+        if: >-
+          !cancelled() &&
+          steps.models-cache.outputs.complete == 'false' &&
+          contains(fromJSON('["push","schedule","workflow_dispatch","merge_group"]'), github.event_name)
+        continue-on-error: true
+        shell: bash
+        env:
+          WORKSPACE_MODELS: ${{ inputs.working-directory }}/.qvac-cache
+        run: |
+          set -euo pipefail
+          SNAP_MODELS="$HOME/snap/qvac-sdk-e2e/common/.qvac/models"
+          mkdir -p "$WORKSPACE_MODELS"
+          cp -a -l --remove-destination "$SNAP_MODELS/." "$WORKSPACE_MODELS/" 2>/dev/null \
+            || cp -a --remove-destination "$SNAP_MODELS/." "$WORKSPACE_MODELS/"
+
+      - name: Save models cache
+        if: ${{ !cancelled() && steps.snap-collect.outcome == 'success' }}
+        continue-on-error: true
+        uses: ./.sdk-e2e-workflow/.github/actions/sdk-e2e-model-cache
         with:
-          path: ~/snap/qvac-sdk-e2e/common/.qvac/models
-          key: qvac-snap-models-${{ hashFiles('packages/inference/src/models/registry/models.ts') }}
+          mode: save
+          plan: ${{ steps.models-plan.outputs.plan }}
 
       - name: Run tests
         timeout-minutes: 60
