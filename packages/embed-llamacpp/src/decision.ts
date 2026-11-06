@@ -123,7 +123,12 @@ export interface DecisionEngineBinding extends ModelBinding {
     outputCallback: AddonOutputCallback,
   ): object;
   decisionInfo(handle: unknown): string;
-  runJob(handle: unknown, input: { type: "text"; input: string }): Promise<boolean>;
+  /**
+   * Admission: the job id (a positive number) under the engine's tagged
+   * scheduler, `true` on an untagged scheduler, or `false` when a request is
+   * already in flight.
+   */
+  runJob(handle: unknown, input: { type: "text"; input: string }): Promise<number | boolean>;
 }
 
 export type MappedDecisionEngineEvent = MappedModelEvent<DecisionEngineResult>;
@@ -195,9 +200,16 @@ export class DecisionEngineInterface extends ModelInterface<
     return this._binding.createDecisionEngineInstance(this, configurationParams, outputCb);
   }
 
-  /** Resolves `true` if the job was accepted, `false` if busy. */
+  /**
+   * Resolves `true` if the job was accepted, `false` if busy: a request is
+   * rejected, not queued, while another runs.
+   */
   async runJob(requestJson: string): Promise<boolean> {
-    return this._binding.runJob(this._handle, { type: "text", input: requestJson });
+    const admitted = await this._binding.runJob(this._handle, {
+      type: "text",
+      input: requestJson,
+    });
+    return typeof admitted === "number" ? admitted > 0 : admitted === true;
   }
 
   /** The loaded model's capabilities; call after activate(). */

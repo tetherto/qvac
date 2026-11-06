@@ -34,6 +34,7 @@
 #include <inference-addon-cpp/job/MultiJobScheduler.hpp>
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 
+#include "addon/DecisionEngineScheduler.hpp"
 #include "model-interface/BertModel.hpp"
 #include "model-interface/DecisionEngineModel.hpp"
 #include "model-interface/LayaModel.hpp"
@@ -610,13 +611,10 @@ createDecisionEngineInstance(js_env_t* env, js_callback_info_t* info) try {
       args.getSubmap(1, "config"),
       args.getMapEntry(1, "backendsDir"));
 
-  // One request at a time per engine, as the JS runner admits; raw model
-  // pointers stay valid: AddonCpp owns the model for the scheduler's lifetime.
-  auto scheduler = make_unique<MultiJobScheduler>(
-      static_cast<model::IModelMultiprocessor*>(model.get()),
-      1U,
-      static_cast<model::IModelCancel*>(model.get()),
-      static_cast<model::IModelCancelById*>(model.get()));
+  // One request at a time, rejected while busy (see
+  // makeDecisionEngineScheduler). Raw model pointers stay valid: AddonCpp owns
+  // the model for the scheduler's lifetime.
+  auto scheduler = makeDecisionEngineScheduler(*model);
 
   out_handl::OutputHandlers<out_handl::JsOutputHandlerInterface> outHandlers;
   outHandlers.add(make_shared<JsDecisionEngineOutputHandler>());

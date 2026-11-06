@@ -110,10 +110,15 @@ export interface DecisionEngineBinding extends ModelBinding {
         backendsDir?: string;
     }, outputCallback: AddonOutputCallback): object;
     decisionInfo(handle: unknown): string;
+    /**
+     * Admission: the job id (a positive number) under the engine's tagged
+     * scheduler, `true` on an untagged scheduler, or `false` when a request is
+     * already in flight.
+     */
     runJob(handle: unknown, input: {
         type: "text";
         input: string;
-    }): Promise<boolean>;
+    }): Promise<number | boolean>;
 }
 export type MappedDecisionEngineEvent = MappedModelEvent<DecisionEngineResult>;
 /**
@@ -130,7 +135,10 @@ export declare function mapDecisionEngineEvent(rawEvent: unknown, rawData: unkno
 /** An interface between the native DecisionEngine instance and the JS runtime. */
 export declare class DecisionEngineInterface extends ModelInterface<DecisionEngineConfig, DecisionEngineBinding> {
     protected _createInstance(configurationParams: ModelConfigurationParams<DecisionEngineConfig>, outputCb: AddonOutputCallback): object;
-    /** Resolves `true` if the job was accepted, `false` if busy. */
+    /**
+     * Resolves `true` if the job was accepted, `false` if busy: a request is
+     * rejected, not queued, while another runs.
+     */
     runJob(requestJson: string): Promise<boolean>;
     /** The loaded model's capabilities; call after activate(). */
     info(): DecisionEngineInfo;

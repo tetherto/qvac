@@ -1,16 +1,22 @@
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_map>
 
 #include <gtest/gtest.h>
 #include <inference-addon-cpp/Errors.hpp>
+#include <inference-addon-cpp/addon/AddonCpp.hpp>
+#include <inference-addon-cpp/queue/OutputCallbackInterface.hpp>
 #include <nlohmann/json.hpp>
 
+#include "addon/DecisionEngineScheduler.hpp"
 #include "model-interface/DecisionEngineModel.hpp"
 #include "test_common.hpp"
 
@@ -238,6 +244,87 @@ TEST(DecisionBridgeTest, RejectsUnusableSlotAndBatchCountsBeforeLoading) {
     EXPECT_EQ(engine, nullptr) << params;
     EXPECT_NE(message.find("must be"), std::string::npos) << message;
   }
+}
+
+namespace {
+
+namespace qaddon = qvac_lib_inference_addon_cpp;
+
+/// Implements the interfaces the decision scheduler drives, and holds its
+/// first job inside process() until released.
+class GateModel : public qaddon::model::IModel,
+                  public qaddon::model::IModelCancel,
+                  public qaddon::model::IModelMultiprocessor,
+                  public qaddon::model::IModelCancelById,
+                  public qaddon::model::IModelJobLifecycle {
+public:
+  [[nodiscard]] std::string getName() const override { return "GateModel"; }
+  std::any process(const std::any& input) override { return process(input, 0); }
+  std::any process(const std::any& input, qaddon::JobId /*id*/) override {
+    std::unique_lock<std::mutex> lock(mutex_);
+    ++started_;
+    cv_.notify_all();
+    cv_.wait(lock, [this] { return released_; });
+    return input;
+  }
+  [[nodiscard]] qaddon::RuntimeStats runtimeStats() const override {
+    return {};
+  }
+  void cancel() const override {}
+  void cancelById(qaddon::JobId /*id*/) const override {}
+  void jobStarting(qaddon::JobId /*id*/) override {}
+
+  void waitStarted(int n) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    cv_.wait(lock, [&] { return started_ >= n; });
+  }
+  void release() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    released_ = true;
+    cv_.notify_all();
+  }
+
+private:
+  std::mutex mutex_;
+  std::condition_variable cv_;
+  int started_ = 0;
+  bool released_ = false;
+};
+
+struct NullCallback : qaddon::OutputCallBackInterface {
+  void initializeProcessingThread(
+      std::shared_ptr<qaddon::OutputQueue> /*queue*/) override {}
+  void notify() override {}
+  void stop() override {}
+};
+
+} // namespace
+
+// runJob()'s contract is "false if busy": while one request runs, another is
+// rejected, not queued behind it.
+TEST(DecisionEngineSchedulerTest, RejectsASecondJobWhileOneIsInFlight) {
+  auto model = std::make_unique<GateModel>();
+  GateModel* gate = model.get();
+  auto scheduler =
+      qvac_lib_inference_addon_embed::makeDecisionEngineScheduler(*gate);
+  qaddon::AddonCpp addon(
+      std::make_unique<NullCallback>(), std::move(model), std::move(scheduler));
+
+  const auto first = addon.runJob(std::any(std::string("first")));
+  ASSERT_TRUE(first.has_value());
+  EXPECT_NE(*first, qaddon::kNoJobId) << "jobs are tagged with ids";
+  gate->waitStarted(1);
+
+  EXPECT_FALSE(addon.runJob(std::any(std::string("second"))).has_value())
+      << "a job submitted while one is in flight must be rejected";
+
+  gate->release();
+  for (int i = 0; i < 1000 && addon.activeJobs() != 0; ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  ASSERT_EQ(addon.activeJobs(), 0U);
+  EXPECT_TRUE(addon.runJob(std::any(std::string("third"))).has_value())
+      << "once the slot is free, a new job is admitted";
 }
 
 /// Needs the openjev fixture, see fixture().

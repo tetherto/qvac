@@ -52,9 +52,16 @@ class DecisionEngineInterface extends modelRunner_1.ModelInterface {
     _createInstance(configurationParams, outputCb) {
         return this._binding.createDecisionEngineInstance(this, configurationParams, outputCb);
     }
-    /** Resolves `true` if the job was accepted, `false` if busy. */
+    /**
+     * Resolves `true` if the job was accepted, `false` if busy: a request is
+     * rejected, not queued, while another runs.
+     */
     async runJob(requestJson) {
-        return this._binding.runJob(this._handle, { type: "text", input: requestJson });
+        const admitted = await this._binding.runJob(this._handle, {
+            type: "text",
+            input: requestJson,
+        });
+        return typeof admitted === "number" ? admitted > 0 : admitted === true;
     }
     /** The loaded model's capabilities; call after activate(). */
     info() {

@@ -70,3 +70,23 @@ test('other run errors pass through unchanged', function (t) {
   const cancelled = new Error('Job cancelled')
   t.is(mapDecisionEngineEvent('Error', undefined, cancelled).error, cancelled)
 })
+
+test('DecisionEngineInterface.runJob resolves a boolean, whatever admission returns', async function (t) {
+  const { DecisionEngineInterface } = require('../../decision.js')
+  let next
+  const binding = {
+    createDecisionEngineInstance: () => ({ handle: true }),
+    runJob: () => Promise.resolve(next)
+  }
+  const engine = new DecisionEngineInterface(binding, { path: '/m.gguf', config: {} }, () => {})
+  for (const [admitted, expected] of [
+    [7, true],
+    [1, true],
+    [true, true],
+    [false, false],
+    [0, false]
+  ]) {
+    next = admitted
+    t.is(await engine.runJob('{}'), expected, `admission ${admitted} -> ${expected}`)
+  }
+})
