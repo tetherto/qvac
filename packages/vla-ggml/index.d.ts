@@ -184,7 +184,7 @@ declare namespace VlaModel {
         total_ms: number;
         /** 0 = CPU backend, 1 = GPU backend (Vulkan / Metal / OpenCL). */
         backendDevice: number;
-        /** Selected backend name, matching `model.backendName`. Older addons omit it. */
+        /** Backend family, such as `cpu`, `cuda`, `metal`, or `vulkan`. */
         backendName?: string;
     }
     interface VlaRunResult {
