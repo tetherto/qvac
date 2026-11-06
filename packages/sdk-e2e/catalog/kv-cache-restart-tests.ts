@@ -16,7 +16,7 @@ export const kvCacheWorkerRestart: TestDefinition = {
   expectation: { validation: 'function', fn: () => true },
   metadata: {
     category: 'lifecycle',
-    dependency: 'llm-no-shared-cache',
+    dependency: 'llm',
     estimatedDurationMs: 90000
   },
   skip: {

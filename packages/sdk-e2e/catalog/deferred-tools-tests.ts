@@ -247,7 +247,7 @@ const HOROSCOPE = {
 // inventory eagerly costs more.
 export const deferredToolsPromptCost = createDeferredToolsTest(
   'deferred-tools-prompt-cost',
-  { ...HOROSCOPE, resourceKey: 'tools-no-shared-cache' },
+  { ...HOROSCOPE, resourceKey: 'tools' },
   { suites: ['smoke'] }
 )
 
@@ -341,7 +341,7 @@ export const deferredToolsCachedSearchQwen35 = createDeferredToolsTest(
 // Qwen 3.5 renders tools through its own template, which must keep deferred schemas out too.
 export const deferredToolsPromptCostQwen35 = createDeferredToolsTest(
   'deferred-tools-prompt-cost-qwen35',
-  { ...HOROSCOPE, resourceKey: 'tools-qwen35-no-shared-cache', toolDialect: 'qwen35' }
+  { ...HOROSCOPE, resourceKey: 'tools-qwen35', toolDialect: 'qwen35' }
 )
 
 // Qwen 3.5 restores recurrent state from the cache, so a reload must keep the loaded tool.
