@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GGMLBert = exports.assessFit = exports.mapRerankEvent = exports.RerankInterface = exports.Reranker = exports.mapLayaEvent = exports.LayaInterface = exports.LayaDecisions = exports.mapDecisionEngineEvent = exports.DecisionEngineInterface = exports.DecisionEngine = exports.validateModelPath = exports.BertInterface = void 0;
+exports.GGMLBert = exports.assessFit = exports.mapRerankEvent = exports.RerankInterface = exports.Reranker = exports.mapLayaEvent = exports.LayaInterface = exports.LayaDecisions = exports.DECISION_INVALID_REQUEST = exports.mapDecisionEngineEvent = exports.DecisionEngineInterface = exports.DecisionEngine = exports.validateModelPath = exports.BertInterface = void 0;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const path = require("bare-path");
 const QvacLogger = require("@qvac/logging");
@@ -18,6 +18,7 @@ var decision_2 = require("./decision");
 Object.defineProperty(exports, "DecisionEngine", { enumerable: true, get: function () { return decision_2.DecisionEngine; } });
 Object.defineProperty(exports, "DecisionEngineInterface", { enumerable: true, get: function () { return decision_2.DecisionEngineInterface; } });
 Object.defineProperty(exports, "mapDecisionEngineEvent", { enumerable: true, get: function () { return decision_2.mapDecisionEngineEvent; } });
+Object.defineProperty(exports, "DECISION_INVALID_REQUEST", { enumerable: true, get: function () { return decision_2.DECISION_INVALID_REQUEST; } });
 var laya_2 = require("./laya");
 Object.defineProperty(exports, "LayaDecisions", { enumerable: true, get: function () { return laya_2.LayaDecisions; } });
 Object.defineProperty(exports, "LayaInterface", { enumerable: true, get: function () { return laya_2.LayaInterface; } });
@@ -215,6 +216,7 @@ cjsExports.BertInterface = addon_1.BertInterface;
 cjsExports.DecisionEngine = decision_1.DecisionEngine;
 cjsExports.DecisionEngineInterface = decision_1.DecisionEngineInterface;
 cjsExports.mapDecisionEngineEvent = decision_1.mapDecisionEngineEvent;
+cjsExports.DECISION_INVALID_REQUEST = decision_1.DECISION_INVALID_REQUEST;
 cjsExports.LayaDecisions = laya_1.LayaDecisions;
 cjsExports.LayaInterface = laya_1.LayaInterface;
 cjsExports.mapLayaEvent = laya_1.mapLayaEvent;

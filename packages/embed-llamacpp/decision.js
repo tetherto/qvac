@@ -1,8 +1,32 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DecisionEngine = exports.DecisionEngineInterface = void 0;
+exports.DecisionEngine = exports.DecisionEngineInterface = exports.DECISION_INVALID_REQUEST = void 0;
 exports.mapDecisionEngineEvent = mapDecisionEngineEvent;
 const modelRunner_1 = require("./modelRunner");
+/**
+ * `code` of a run error for a request the model rejected (bad JSON, nesting
+ * too deep, a limit or control the model does not support). Other run errors
+ * are execution failures; a cancelled run fails with "Job cancelled".
+ */
+exports.DECISION_INVALID_REQUEST = "DECISION_INVALID_REQUEST";
+const INVALID_REQUEST_MARKER = /^(?:\w+: )?invalid request: /;
+// The native error is not always an `Error` instance of this realm, so it is
+// matched by shape: a string, or an object with a string `message`.
+function decisionRunError(rawError) {
+    const message = typeof rawError === "string"
+        ? rawError
+        : rawError !== null &&
+            typeof rawError === "object" &&
+            typeof rawError.message === "string"
+            ? rawError.message
+            : null;
+    if (message === null || !INVALID_REQUEST_MARKER.test(message)) {
+        return rawError;
+    }
+    const error = new Error(message.replace(INVALID_REQUEST_MARKER, ""));
+    error.code = exports.DECISION_INVALID_REQUEST;
+    return error;
+}
 /**
  * Normalize a raw native event of a DecisionEngine instance. The output is
  * upstream's response JSON, parsed here. Returns `null` for unknown events.
@@ -16,7 +40,7 @@ function mapDecisionEngineEvent(rawEvent, rawData, rawError) {
         };
     }
     if (typeof rawEvent === "string" && rawEvent.includes("Error")) {
-        return { type: "Error", data: rawData, error: rawError };
+        return { type: "Error", data: rawData, error: decisionRunError(rawError) };
     }
     if (rawData !== null && typeof rawData === "object" && "decision_input_tokens" in rawData) {
         return { type: "JobEnded", data: { ...rawData }, error: null };
