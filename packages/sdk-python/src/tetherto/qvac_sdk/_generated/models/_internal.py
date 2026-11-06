@@ -10709,6 +10709,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigBackendItem(Enum):
     vulkan = "vulkan"
     metal = "metal"
     opencl = "opencl"
+    xdna = "xdna"
     auto = "auto"
 
 
@@ -11050,7 +11051,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     backend: Annotated[
         list[LoadModelSrcRequestLlamacppCompletionModelConfigBackendItem] | None,
         Field(
-            description="Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with a split-mode other than 'none' or with devices.",
+            description="Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, xdna, and auto for no preference. xdna is the AMD XDNA NPU on Linux x64 (requires XRT 2.25 or newer); it is never selected automatically, only when named here or in devices as XDNA0. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with a split-mode other than 'none' or with devices.",
             min_length=1,
         ),
     ] = None
@@ -11236,7 +11237,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     devices: Annotated[
         str | None,
         Field(
-            description="Explicit ordered native device names, for example RPC0,RPC1. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order.",
+            description="Explicit ordered native device names, for example RPC0,RPC1, or XDNA0 for the AMD XDNA NPU. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order.",
             min_length=1,
         ),
     ] = None

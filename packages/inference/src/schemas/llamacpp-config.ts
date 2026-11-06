@@ -20,12 +20,13 @@ const verbositySchema = z.enum(VERBOSITY)
 // Base schema - validates types, all fields optional (for input validation)
 export const llmConfigBaseSchema = z.object({
   backend: z
-    .array(z.enum(['cuda', 'vulkan', 'metal', 'opencl', 'auto']))
+    .array(z.enum(['cuda', 'vulkan', 'metal', 'opencl', 'xdna', 'auto']))
     .min(1)
     .optional()
     .describe(
       "Ordered GPU backend names, such as ['cuda', 'vulkan']. " +
-        'Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. ' +
+        'Accepted names: cuda, vulkan, metal, opencl, xdna, and auto for no preference. ' +
+        'xdna is the AMD XDNA NPU on Linux x64 (requires XRT 2.25 or newer); it is never selected automatically, only when named here or in devices as XDNA0. ' +
         'If unset, uses the native default order. ' +
         'If none of the specified names has a corresponding available device, selection falls back to the native default order. ' +
         "Use device: 'cpu' for CPU. " +
@@ -192,7 +193,7 @@ export const llmConfigBaseSchema = z.object({
     .min(1)
     .optional()
     .describe(
-      "Explicit ordered native device names, for example RPC0,RPC1. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order."
+      "Explicit ordered native device names, for example RPC0,RPC1, or XDNA0 for the AMD XDNA NPU. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order."
     ),
   'split-mode': z
     .enum(['none', 'layer', 'tensor'])
