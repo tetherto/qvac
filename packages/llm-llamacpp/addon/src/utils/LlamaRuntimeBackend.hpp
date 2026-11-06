@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <map>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <ggml-backend.h>
@@ -49,11 +50,12 @@ inline std::string runtimeDeviceBackendName(ggml_backend_dev_t device) {
   // Match its members against the registry instead of guessing from ordinals.
   const char* rawName = ggml_backend_dev_name(device);
   const std::string name = rawName != nullptr ? rawName : "";
-  if (!name.starts_with("Meta(") || !name.ends_with(")")) {
+  constexpr std::string_view kMetaPrefix = "Meta(";
+  if (!name.starts_with(kMetaPrefix) || !name.ends_with(")")) {
     return {};
   }
   std::vector<ModelBackendAllocation> members;
-  size_t offset = 5;
+  size_t offset = kMetaPrefix.size();
   while (offset < name.size() - 1) {
     const size_t end = name.find_first_of(",)", offset);
     if (end == std::string::npos) {
