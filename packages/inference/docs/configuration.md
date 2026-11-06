@@ -35,7 +35,7 @@ include timestamps and optional `speakerId` / `speaker` labels. Streaming,
 and CoreML sidecars are not exposed by this plugin. `assessModelFit` accepts
 a MOSS candidate with `transcriptionWorkload: { audioSeconds, prompt?, hotwords?,
 maxNewTokens? }`, separate from `modelConfig`. An explicit positive recording
-duration is required for native fit evidence; omitted workloads remain unknown.
+duration is required for a verdict; omitted workloads remain unknown.
 The projection uses the same GPU/thread settings as the load, and uses registry
 descriptions or local files without reading full weights into memory.
 

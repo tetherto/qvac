@@ -33,10 +33,10 @@ test('runners.yaml parses with unique keys and labels', () => {
     runners.length,
   )
   assert.ok(runners.some((entry) => entry.label.startsWith('qvac-')))
-  assert.ok(runners.some((entry) => entry.key === 'macos_ios'))
+  assert.ok(runners.some((entry) => entry.key === 'macos_15'))
   assert.equal(
-    runners.find((entry) => entry.key === 'macos_ios').label,
-    'macos-14',
+    runners.find((entry) => entry.key === 'macos_15').label,
+    'macos-15',
   )
 })
 
@@ -91,7 +91,7 @@ test('reusable-runner-names.yml matches the catalog', () => {
   assert.match(rendered, /AUTO-GENERATED/)
   assert.match(rendered, /runs-on: ubuntu-latest/)
   assert.doesNotMatch(rendered, /actions\/checkout/)
-  assert.match(rendered, /macos_ios=macos-14/)
+  assert.match(rendered, /macos_15=macos-15/)
 })
 
 test('actionlint.yaml lists every self-hosted catalog label', () => {
@@ -270,5 +270,5 @@ test('validate-runner-names.mjs exits 0', () => {
 
 test('catalog path constants point at tracked files', () => {
   assert.equal(RUNNERS_YAML, '.github/runners.yaml')
-  assert.match(readRepoFile(RUNNERS_YAML), /macos_ios:/)
+  assert.match(readRepoFile(RUNNERS_YAML), /macos_15:/)
 })

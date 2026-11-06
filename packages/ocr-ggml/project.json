@@ -262,7 +262,7 @@
         },
         "ios-arm64": {
           "ci": {
-            "runner": "macos_ios"
+            "runner": "macos_15"
           }
         }
       },
@@ -330,6 +330,59 @@
     },
     "cache:models": {
       "executor": "nx:noop"
+    },
+    "cpp:build": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        {
+          "projects": [
+            "@qvac/fabric"
+          ],
+          "target": "link:platform"
+        }
+      ],
+      "options": {
+        "cwd": "packages/ocr-ggml",
+        "parallel": false,
+        "commands": [
+          "pnpm run test:cpp:build"
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2404_x64"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 120
+      }
+    },
+    "cpp:tests": {
+      "executor": "nx:run-commands",
+      "dependsOn": [
+        "cpp:build"
+      ],
+      "options": {
+        "cwd": "packages/ocr-ggml",
+        "parallel": false,
+        "commands": [
+          "pnpm run test:cpp:run",
+          "pnpm run fuzz:build",
+          "pnpm run fuzz:run"
+        ]
+      },
+      "configurations": {
+        "linux-x64": {
+          "ci": {
+            "runner": "linux_ubuntu2404_x64"
+          }
+        }
+      },
+      "metadata": {
+        "timeoutMinutes": 60
+      }
     },
     "publish": {
       "executor": "nx:noop",

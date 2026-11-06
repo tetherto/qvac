@@ -42,8 +42,8 @@ const CONFIG_KEYS = ['args', 'commands', 'ci']
 const CI_KEYS = ['runner', 'setup']
 // Host setup a configuration may ask for; each is one workflow step, its version pinned in nx.json. cuda-jetson puts
 // CUDA 12 for Jetson beside the host's CUDA 13 and exports only QVAC_CUDA_JETSON_PATH; node22 runs the leg on Node 22
-// instead of the LTS.
-const SETUP = ['cuda', 'cuda-jetson', 'rocm', 'python', 'node22']
+// instead of the LTS; xdna provisions XRT and IRON for fabric's XDNA backend.
+const SETUP = ['cuda', 'cuda-jetson', 'rocm', 'python', 'node22', 'xdna']
 
 // The metadata a target may carry, and on which targets. toolchain is nx.json's, merged into every build target.
 const METADATA = {

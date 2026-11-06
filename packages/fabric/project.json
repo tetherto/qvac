@@ -66,7 +66,10 @@
         "linux-x64": {
           "args": "--platform=linux --arch=x64",
           "ci": {
-            "runner": "linux_ubuntu2204_x64"
+            "runner": "linux_ubuntu2204_x64",
+            "setup": [
+              "xdna"
+            ]
           },
           "commands": [
             {
@@ -86,7 +89,11 @@
               "forwardAllArgs": false
             },
             {
-              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs prebuilds/linux-x64",
+              "command": "bash ci/verify-xdna-module.sh",
+              "forwardAllArgs": false
+            },
+            {
+              "command": "node ../../.github/scripts/check-linux-module-cxx-runtime.mjs prebuilds/linux-x64 --xdna",
               "forwardAllArgs": false
             }
           ]
@@ -220,7 +227,10 @@
       "configurations": {
         "linux-x64": {
           "ci": {
-            "runner": "linux_ubuntu2204_x64"
+            "runner": "linux_ubuntu2204_x64",
+            "setup": [
+              "xdna"
+            ]
           }
         }
       },

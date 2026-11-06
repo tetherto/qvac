@@ -320,7 +320,7 @@
         },
         "ios-arm64": {
           "ci": {
-            "runner": "macos_ios"
+            "runner": "macos_15"
           }
         }
       },
