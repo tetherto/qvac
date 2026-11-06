@@ -7,7 +7,7 @@
 
 namespace qvac_lib_inference_addon_llama::cache {
 
-// A cacheKey file can carry one of the conversation's checkpoints after its
+// A cacheKey file can carry the conversation's checkpoints after its
 // sequence state, so a model loaded in a new process restores the
 // end-of-history checkpoint instead of reprocessing the whole conversation on
 // a hybrid or recurrent model. llama.cpp's `llama_state_seq_load_file` stops
@@ -15,8 +15,7 @@ namespace qvac_lib_inference_addon_llama::cache {
 // with the section load unchanged in older addon versions, which ignore it.
 //
 // Layout, host byte order like the rest of the file:
-//   u32 magic "QCKP" · u32 version · u32 count (1 when written by this
-//   version; readers accept any count up to the checkpoint limit)
+//   u32 magic "QCKP" · u32 version · u32 count (up to the checkpoint limit)
 //   per checkpoint, oldest first:
 //     i32 nPast
 //     u32 flags (version 2+; bit 0: the history ends at a user message)
@@ -30,12 +29,11 @@ inline constexpr uint32_t CHECKPOINT_SECTION_MAGIC = 0x504b4351; // "QCKP"
 inline constexpr uint32_t CHECKPOINT_SECTION_VERSION = 2;
 inline constexpr uint32_t CHECKPOINT_ENDS_AT_USER_TURN = 1U << 0;
 
-/// Appends one of `checkpoints` (the newest partial checkpoint with a payload
-/// that ends at a user message, else the newest) to the cacheKey file at
-/// `path`, which already holds the header, the ledger and the sequence state
-/// (a `.tmp` file before its promotion). With none the file is left untouched.
-/// On a write failure the file is cut back to its previous size, so the state
-/// is still saved, and false is returned.
+/// Appends every partial checkpoint with a payload in `checkpoints`, oldest
+/// first, to the cacheKey file at `path`, which already holds the header, the
+/// ledger and the sequence state (a `.tmp` file before its promotion). With
+/// none the file is left untouched. On a write failure the file is cut back to
+/// its previous size, so the state is still saved, and false is returned.
 bool appendCheckpointSection(
     const std::string& path, const Checkpoints& checkpoints) noexcept;
 

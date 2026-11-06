@@ -169,18 +169,17 @@ struct SectionEntry {
 
 bool appendCheckpointSection(
     const std::string& path, const Checkpoints& checkpoints) noexcept {
-  // Newest last: `appendProcessCheckpoint` adds at the back.
-  auto newest = std::find_if(
-      checkpoints.rbegin(), checkpoints.rend(), [](const Checkpoint& entry) {
-        return entry.endsAtUserTurn && keepable(entry);
-      });
-  if (newest == checkpoints.rend()) {
-    newest = std::find_if(checkpoints.rbegin(), checkpoints.rend(), keepable);
+  // Oldest first, as `appendProcessCheckpoint` keeps them, so the reader
+  // trims them with the same policy.
+  std::vector<const Checkpoint*> kept;
+  for (const Checkpoint& checkpoint : checkpoints) {
+    if (keepable(checkpoint)) {
+      kept.push_back(&checkpoint);
+    }
   }
-  if (newest == checkpoints.rend()) {
+  if (kept.empty()) {
     return true;
   }
-  const Checkpoint& checkpoint = *newest;
   std::optional<uintmax_t> baseSize;
   // Cuts the file back to the state and logs why; never throws.
   const auto fail = [&path, &baseSize](const char* reason) noexcept {
@@ -203,11 +202,6 @@ bool appendCheckpointSection(
       throw std::runtime_error("cannot read its size");
     }
     baseSize = size;
-    const utils::SequenceStateSnapshot& state = checkpoint.state;
-    const uint64_t payloadSize = state.targetBytes();
-    if (payloadSize == 0) {
-      throw std::runtime_error("the checkpoint has no payload");
-    }
     std::ofstream out(path, std::ios::binary | std::ios::app);
     if (!out) {
       throw std::runtime_error("cannot open the file");
@@ -215,29 +209,37 @@ bool appendCheckpointSection(
     SectionWriter writer(out);
     writer.value(CHECKPOINT_SECTION_MAGIC);
     writer.value(CHECKPOINT_SECTION_VERSION);
-    writer.value(static_cast<uint32_t>(1));
-    writer.value(static_cast<int32_t>(state.nPast));
-    writer.value(checkpoint.endsAtUserTurn ? CHECKPOINT_ENDS_AT_USER_TURN : 0U);
-    const std::vector<llama_token> words = serialize(
-        checkpoint.ledger,
-        checkpoint.ledger.positions(),
-        checkpoint.ledger.cacheTokens());
-    writer.value(static_cast<uint32_t>(words.size()));
-    writer.words(words);
-    writer.value(payloadSize);
-    // A disk-backed payload is copied in bounded chunks, never held whole.
-    SectionHash payloadHash;
-    uint64_t written = 0;
-    const bool complete = utils::streamPartialSnapshot(
-        state, [&](const uint8_t* data, size_t chunkSize) {
-          writer.payload(data, chunkSize);
-          payloadHash.add(data, chunkSize);
-          written += chunkSize;
-        });
-    if (!complete || written != payloadSize) {
-      throw std::runtime_error("cannot read the checkpoint");
+    writer.value(static_cast<uint32_t>(kept.size()));
+    for (const Checkpoint* checkpoint : kept) {
+      const utils::SequenceStateSnapshot& state = checkpoint->state;
+      const uint64_t payloadSize = state.targetBytes();
+      if (payloadSize == 0) {
+        throw std::runtime_error("the checkpoint has no payload");
+      }
+      writer.value(static_cast<int32_t>(state.nPast));
+      writer.value(
+          checkpoint->endsAtUserTurn ? CHECKPOINT_ENDS_AT_USER_TURN : 0U);
+      const std::vector<llama_token> words = serialize(
+          checkpoint->ledger,
+          checkpoint->ledger.positions(),
+          checkpoint->ledger.cacheTokens());
+      writer.value(static_cast<uint32_t>(words.size()));
+      writer.words(words);
+      writer.value(payloadSize);
+      // A disk-backed payload is copied in bounded chunks, never held whole.
+      SectionHash payloadHash;
+      uint64_t written = 0;
+      const bool complete = utils::streamPartialSnapshot(
+          state, [&](const uint8_t* data, size_t chunkSize) {
+            writer.payload(data, chunkSize);
+            payloadHash.add(data, chunkSize);
+            written += chunkSize;
+          });
+      if (!complete || written != payloadSize) {
+        throw std::runtime_error("cannot read the checkpoint");
+      }
+      writer.value(payloadHash.value());
     }
-    writer.value(payloadHash.value());
     writer.checksum();
     out.close();
     if (!out) {

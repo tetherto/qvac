@@ -237,7 +237,7 @@ TEST(CacheLedger, UserTurnCheckpointsAloneKeepTheConfiguredCount) {
   EXPECT_EQ(checkpoints.back().id, 5);
 }
 
-TEST(CacheLedger, ByteBudgetEvictsTheUserTurnCheckpointLast) {
+TEST(CacheLedger, ByteBudgetKeepsTheUserTurnCheckpointWhileThePairFits) {
   cache::CheckpointPolicy policy;
   policy.maxCount = 4;
   policy.maxBytes = 2;
@@ -261,7 +261,7 @@ TEST(CacheLedger, ByteBudgetEvictsTheUserTurnCheckpointLast) {
   cache::appendProcessCheckpoint(
       tight, TurnCheckpoint{2, false}, oneByte, kOneByte, kIsUserTurn);
   ASSERT_EQ(tight.size(), 1u);
-  EXPECT_EQ(tight.front().id, 1);
+  EXPECT_EQ(tight.front().id, 2);
 }
 
 TEST(CacheLedger, ParseCheckpointPolicyDefaultsWhenAbsent) {

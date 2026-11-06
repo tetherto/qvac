@@ -102,29 +102,20 @@ protected:
 
 } // namespace
 
-TEST_F(CacheCheckpointFileTest, PrefersTheNewestUserTurnCheckpoint) {
+TEST_F(CacheCheckpointFileTest, MidLoopFileReloadsBothCheckpoints) {
   cache::Checkpoints checkpoints;
   checkpoints.push_back(checkpoint(3, 'a'));
   checkpoints.back().endsAtUserTurn = true;
-  checkpoints.push_back(checkpoint(5, 'b'));
-  checkpoints.back().endsAtUserTurn = true;
-  checkpoints.push_back(checkpoint(9, 'c'));
+  checkpoints.push_back(checkpoint(9, 'b'));
 
   ASSERT_TRUE(cache::appendCheckpointSection(path_, checkpoints));
-  cache::Checkpoints read =
+  const cache::Checkpoints read =
       cache::readCheckpointSection(path_, stateEnd(), resident(), policy(1));
-  ASSERT_EQ(read.size(), 1u);
-  EXPECT_EQ(read.front().state.nPast, 5);
-  EXPECT_TRUE(read.front().endsAtUserTurn);
-
-  cache::appendProcessCheckpoint(
-      read,
-      checkpoint(9, 'c'),
-      policy(1),
-      [](const cache::Checkpoint& kept) { return kept.state.bytes(); },
-      [](const cache::Checkpoint& kept) { return kept.endsAtUserTurn; });
   ASSERT_EQ(read.size(), 2u);
-  EXPECT_EQ(read.front().state.nPast, 5);
+  EXPECT_EQ(read.front().state.nPast, 3);
+  EXPECT_TRUE(read.front().endsAtUserTurn);
+  EXPECT_EQ(read.back().state.nPast, 9);
+  EXPECT_FALSE(read.back().endsAtUserTurn);
 }
 
 TEST_F(CacheCheckpointFileTest, ToolResultFallbackIsNotPinnedOnReload) {
@@ -137,7 +128,7 @@ TEST_F(CacheCheckpointFileTest, ToolResultFallbackIsNotPinnedOnReload) {
   EXPECT_FALSE(read.front().endsAtUserTurn);
 }
 
-TEST_F(CacheCheckpointFileTest, KeepsTheNewestCheckpointAfterTheState) {
+TEST_F(CacheCheckpointFileTest, KeepsEveryCheckpointAfterTheState) {
   cache::Checkpoints checkpoints;
   checkpoints.push_back(checkpoint(4, 'a'));
   checkpoints.push_back(checkpoint(7, 'b'));
@@ -153,12 +144,13 @@ TEST_F(CacheCheckpointFileTest, KeepsTheNewestCheckpointAfterTheState) {
 
   const cache::Checkpoints read =
       cache::readCheckpointSection(path_, stateEnd(), resident(), policy());
-  ASSERT_EQ(read.size(), 1u) << "only the newest checkpoint is kept";
-  EXPECT_EQ(read.front().ledger.entries, checkpoints.back().ledger.entries);
-  EXPECT_EQ(read.front().state.nPast, 7);
-  EXPECT_EQ(read.front().cacheTokens, 7);
-  EXPECT_EQ(read.front().state.scope(), utils::SnapshotScope::Partial);
-  EXPECT_EQ(read.front().state.buffer(), checkpoints.back().state.buffer());
+  ASSERT_EQ(read.size(), 2u);
+  EXPECT_EQ(read.front().state.nPast, 4);
+  EXPECT_EQ(read.back().ledger.entries, checkpoints.back().ledger.entries);
+  EXPECT_EQ(read.back().state.nPast, 7);
+  EXPECT_EQ(read.back().cacheTokens, 7);
+  EXPECT_EQ(read.back().state.scope(), utils::SnapshotScope::Partial);
+  EXPECT_EQ(read.back().state.buffer(), checkpoints.back().state.buffer());
 }
 
 TEST_F(CacheCheckpointFileTest, NoCheckpointLeavesTheFileUntouched) {

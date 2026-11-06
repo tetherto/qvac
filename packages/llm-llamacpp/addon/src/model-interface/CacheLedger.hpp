@@ -173,8 +173,9 @@ using Checkpoints = std::deque<Checkpoint>;
 // Appends `checkpoint` and evicts from the oldest end until both limits of
 // `policy` hold: total payload bytes (measured by `bytesOf`) within
 // `maxBytes` when set, then count within `maxCount`. The newest checkpoint
-// `isPinned` accepts is kept on top of `maxCount` and evicted last. A single
-// checkpoint larger than the whole budget is evicted immediately.
+// `isPinned` accepts is kept on top of `maxCount`, and under `maxBytes` while
+// it fits beside the newest one. A single checkpoint larger than the whole
+// budget is evicted immediately.
 template <typename T, typename BytesOf, typename IsPinned>
 void appendProcessCheckpoint(
     std::deque<T>& checkpoints, T checkpoint, const CheckpointPolicy& policy,
@@ -205,7 +206,13 @@ void appendProcessCheckpoint(
         (policy.maxBytes == 0 || totalBytes() <= policy.maxBytes)) {
       break;
     }
-    const size_t victim = pinned == 0 && checkpoints.size() > 1 ? 1 : 0;
+    // The newest checkpoint is the one the next tool round restores.
+    const bool pairFits =
+        policy.maxBytes == 0 ||
+        bytesOf(checkpoints.front()) + bytesOf(checkpoints.back()) <=
+            policy.maxBytes;
+    const size_t victim =
+        pinned == 0 && checkpoints.size() > 2 && pairFits ? 1 : 0;
     checkpoints.erase(
         checkpoints.begin() + static_cast<std::ptrdiff_t>(victim));
   }

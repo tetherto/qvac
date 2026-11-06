@@ -28,7 +28,7 @@ graph TB
     end
 
     subgraph "Durable"
-        FILE["cacheKey file<br/>sequence state + ledger<br/>+ newest checkpoint"]
+        FILE["cacheKey file<br/>sequence state + ledger<br/>+ checkpoints"]
     end
 
     HIST -->|render + tokenize| LEDGER
@@ -60,10 +60,8 @@ graph TB
   that part back and trims the rest to its position (see [Restoring a
   checkpoint](#restoring-a-checkpoint)).
 - The **`cacheKey` file** is the only durable artifact. On full-state models
-  it also carries one checkpoint after the sequence state: the newest one
-  that ends at a user message, else the newest. A conversation loaded in a
-  new process restores it on its next user turn. The other checkpoints do not
-  survive a process restart.
+  it also carries the checkpoints after the sequence state, so a
+  conversation loaded in a new process restores one on its next request.
 - With speculative decoding (`spec-type`), the **draft context's state** of
   the sequence travels with the pre-request snapshot, the checkpoints and the
   RAM tier, and is always kept in host RAM, even for a checkpoint whose target
@@ -173,8 +171,8 @@ answer in that loop, so the new prompt diverges right after the first answer's
 header: only the checkpoint at the end of the user message that started the
 loop still matches. The addon therefore keeps the newest checkpoint whose
 history ends at a user message (not a tool result) on top of the newest
-`cache_checkpoints`, and evicts it last. A tool round's checkpoint still
-serves a regenerate of that round.
+`cache_checkpoints`. The newest checkpoint still serves the next tool round
+and a regenerate.
 
 Sliding-window models (Gemma 3/4, gpt-oss, without `swa_full`) keep only the
 last `n_swa` positions in their window layers. A trim back to the shared prefix
@@ -283,7 +281,7 @@ stateDiagram-v2
     Restored --> Checkpoint: stays in the list
     Checkpoint --> [*]: pruned, no longer a prefix<br/>of a later prompt
     Checkpoint --> [*]: evicted, oldest first (newest<br/>user-turn one last), when the list<br/>exceeds cache_checkpoints_max_bytes<br/>or cache_checkpoints
-    Checkpoint --> InFile: newest user-turn one (else newest),<br/>written with the cacheKey file
+    Checkpoint --> InFile: all of them, written<br/>with the cacheKey file
     InFile --> Checkpoint: conversation loaded<br/>from its file, any process
     Checkpoint --> [*]: cacheKey switched without cache_ram_mib,<br/>cleared, or loaded from its file<br/>(cache_ram_mib, parallel >= 2: kept with<br/>the conversation across requests)
     Checkpoint --> [*]: process exits
@@ -292,8 +290,8 @@ stateDiagram-v2
 Eviction drops the oldest checkpoint until both the byte budget and the count
 hold. The newest checkpoint that ends at a user message is exempt from the
 count when it is older than the newest `cache_checkpoints`, so the list can
-hold one more than the count; under the byte budget it goes last. A budget that cannot
-hold `cache_checkpoints` checkpoints of the largest size the context allows is
+hold one more than the count. Under the byte budget it stays only while it
+fits beside the newest checkpoint. A budget that cannot hold `cache_checkpoints` checkpoints of the largest size the context allows is
 rejected at model load with `InvalidArgument`; the addon measures that size on
 the loaded model rather than estimating it. On a sliding-window model the
 largest size is that of a full window (`n_swa` positions).
@@ -494,7 +492,7 @@ The file is a standard llama.cpp sequence-state file
 | llama.cpp header | magic, format version, number of tokens that follow |
 | ledger, stored as the token list | `QLDG` marker, ledger version, `nPast`, KV-cell count, entry count, a checksum over the entries, one reserved word; then five words per entry: kind (text token or media span), identity (the token id, or a hash of the media) in two words, positions, KV cells |
 | sequence state | the sequence's complete memory: every KV cell, and the recurrent state on hybrid and recurrent models (on DeepSeek V4: the sliding window, the compressed rows and the compressor states) |
-| checkpoint section (full-state models with a checkpoint) | `QCKP` marker, section version, checkpoint count (1); the checkpoint's `nPast` (the newest ending at a user message, else the newest), a flags word (version 2: whether it ends at a user message), its ledger in the format above (which gives its KV-cell count), its partial state and a hash of that state; a checksum over everything but the state bytes |
+| checkpoint section (full-state models with a checkpoint) | `QCKP` marker, section version, checkpoint count; per checkpoint, oldest first: its `nPast`, a flags word (version 2: whether it ends at a user message), its ledger in the format above (which gives its KV-cell count), its partial state and a hash of that state; a checksum over everything but the state bytes |
 
 The state is always written in full; the checkpoint after it holds only the
 partial state, as in memory. `llama_state_seq_load_file` stops reading at the
