@@ -18,6 +18,8 @@ const backend = env.QVAC_BRIDGEDEPTH_BACKEND || (expectGpu ? undefined : 'CPU')
 const fixtures = path.join(__dirname, '..', 'fixtures')
 // backend_id in runtime stats, see GgmlBackend.hpp.
 const BACKEND_ID = { CPU: 0, METAL: 1, CUDA: 2, VULKAN: 3, OPENCL: 4 }
+// Set by the mobile automatic selection test.
+let mobileAutoBackend
 
 function asset(filename, modelEnv) {
   if (modelEnv && env[modelEnv]) return env[modelEnv]
@@ -129,23 +131,8 @@ async function checkParity(t, selected, check) {
   }
 }
 
-test(
-  'BridgeDepth matches the original PyTorch disparity on the fixture pair',
-  { skip: !modelPath && !isMobile },
-  async function (t) {
-    t.timeout(TEST_TIMEOUT)
-    if (!modelPath) {
-      t.fail('BridgeDepth test model missing from the mobile test assets')
-      return
-    }
-    await checkParity(t, backend, (stats) => {
-      if (expectGpu) t.not(stats.backend_id, BACKEND_ID.CPU, 'GPU runner runs on the GPU')
-    })
-  }
-)
-
-// The test above runs on the CPU on mobile, where no override is set. This one
-// covers the default path apps get: automatic selection of the device GPU.
+// The default path apps get on mobile: automatic selection of the device GPU.
+// Runs before the CPU test so that one can skip when this already ran on the CPU.
 test(
   'BridgeDepth matches the PyTorch disparity with automatic backend selection on mobile',
   { skip: !isMobile },
@@ -156,6 +143,7 @@ test(
       return
     }
     await checkParity(t, undefined, (stats) => {
+      mobileAutoBackend = stats.backend_id
       if (platform === 'ios') {
         t.is(stats.backend_id, BACKEND_ID.METAL, 'iOS automatic selection uses Metal')
       } else {
@@ -164,6 +152,26 @@ test(
           'automatic selection reports a known backend'
         )
       }
+    })
+  }
+)
+
+test(
+  'BridgeDepth matches the original PyTorch disparity on the fixture pair',
+  { skip: !modelPath && !isMobile },
+  async function (t) {
+    t.timeout(TEST_TIMEOUT)
+    if (!modelPath) {
+      t.fail('BridgeDepth test model missing from the mobile test assets')
+      return
+    }
+    // No override is set on mobile, so this test is the forced CPU run there.
+    if (mobileAutoBackend === BACKEND_ID.CPU) {
+      t.pass('automatic selection already ran the CPU parity checks')
+      return
+    }
+    await checkParity(t, backend, (stats) => {
+      if (expectGpu) t.not(stats.backend_id, BACKEND_ID.CPU, 'GPU runner runs on the GPU')
     })
   }
 )
