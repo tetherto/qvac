@@ -30,6 +30,15 @@ interface SessionRecord {
 
 const sessions = new Map<string, SessionRecord>()
 
+/**
+ * Ended sessions stay on record so a call on a dropped handle gets the typed
+ * local error, but a long-running owner opens many sessions, so the ended
+ * records are capped: once the cap is reached the oldest is forgotten, and a
+ * call on that handle reaches the worker, which refuses it as not open.
+ */
+const MAX_ENDED_RECORDS = 1024
+const endedInOrder: string[] = []
+
 /** Model ids the owner loaded on the running runtime and has not unloaded. */
 const ownerModels = new Set<string>()
 /**
@@ -53,8 +62,13 @@ export function registerSession(sessionId: string, opened: Promise<void>): void 
 
 export function endSession(sessionId: string, reason: SessionEndReason): void {
   const record = sessions.get(sessionId)
-  if (!record) return
-  if (record.ended === undefined) record.ended = reason
+  if (!record || record.ended !== undefined) return
+  record.ended = reason
+  endedInOrder.push(sessionId)
+  while (endedInOrder.length > MAX_ENDED_RECORDS) {
+    const oldest = endedInOrder.shift()
+    if (oldest !== undefined) sessions.delete(oldest)
+  }
 }
 
 /**
@@ -135,6 +149,10 @@ function endedError(sessionId: string, record: SessionRecord, modelId: string | 
 /** Test seam: forget every record. */
 export function resetSessionRegistry(): void {
   sessions.clear()
+  endedInOrder.length = 0
   ownerModels.clear()
   invalidOwnerModels.clear()
 }
+
+/** Test seam: the cap on ended records. */
+export const ENDED_RECORD_CAP = MAX_ENDED_RECORDS

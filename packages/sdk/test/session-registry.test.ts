@@ -1,10 +1,12 @@
 import test from 'brittle'
 import {
+  ENDED_RECORD_CAP,
   assertOwnerModelUsable,
   awaitSessionUsable,
   endAllSessions,
   endSession,
   isModelHeldBySession,
+  isSessionEnded,
   OWNER_HANDLE_ID,
   recordHeldModel,
   registerSession,
@@ -89,6 +91,27 @@ test('session registry: owner model handles die with the runtime and revive on r
 
   recordHeldModel(undefined, 'm-owner')
   assertOwnerModelUsable({ modelId: 'm-owner' })
+})
+
+test('session registry: ended records are capped, oldest first', async (t) => {
+  resetSessionRegistry()
+  for (let i = 0; i <= ENDED_RECORD_CAP; i++) {
+    registerSession(`s-${i}`, Promise.resolve())
+    endSession(`s-${i}`, 'closed')
+  }
+  t.is(isSessionEnded('s-0'), false, 'the oldest ended record is forgotten')
+  await awaitSessionUsable('s-0', {})
+  t.is(isSessionEnded('s-1'), true)
+  const error = await rejection(awaitSessionUsable(`s-${ENDED_RECORD_CAP}`, {}))
+  t.ok(error instanceof SessionInvalidatedError)
+
+  registerSession('s-open', Promise.resolve())
+  for (let i = 0; i < ENDED_RECORD_CAP; i++) {
+    registerSession(`t-${i}`, Promise.resolve())
+    endSession(`t-${i}`, 'crashed')
+  }
+  await awaitSessionUsable('s-open', {})
+  t.pass('an open session is never evicted')
 })
 
 test('session registry: a model the owner unloaded before shutdown is not invalidated', (t) => {
