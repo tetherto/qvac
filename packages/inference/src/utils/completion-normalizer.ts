@@ -63,7 +63,11 @@ const DIALECT_SPECS: Record<Dialect, DialectSpec> = {
     thinkingFrames: [{ open: '<|channel|>analysis<|message|>', close: '<|end|>' }],
     contentFrames: [
       { open: '<|channel|>final<|message|>', close: '<|return|>' },
-      { open: '<|channel|>assistant<|message|>', close: '<|end|>' }
+      { open: '<|channel|>assistant<|message|>', close: '<|end|>' },
+      // A commentary message with no recipient is a preamble meant for the
+      // user. The tool frame's open marker continues with ` to=`, so the two
+      // can't match the same text.
+      { open: '<|channel|>commentary<|message|>', close: '<|end|>' }
     ],
     // Role headers and stray Harmony control tokens between frames.
     dropTokens: [
