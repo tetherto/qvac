@@ -230,7 +230,16 @@ function createWriteIO(ffmpeg) {
     }
   })
 
-  return { io, getData: () => Buffer.from(buf.subarray(0, size)) }
+  // OutputFormatContext takes the handle via transfer() before it can throw; track the new owner.
+  let owner = io
+  const transfer = io.transfer
+  io.transfer = () => (owner = transfer.call(io))
+
+  return {
+    io,
+    getData: () => Buffer.from(buf.subarray(0, size)),
+    destroy: () => owner.destroy()
+  }
 }
 
 // A read-only in-memory source for FFmpeg (feeds the decoder our WAV bytes).
@@ -442,8 +451,8 @@ function encodeWithFfmpeg(pcm, format, { sampleRate = 48000, channels = 2 } = {}
     cc?.destroy()
     decoder?.destroy()
     ofc?.destroy()
-    // No-op once ofc took ownership; releases the IO if ofc was never created.
-    sink?.io.destroy()
+    // No-op once ofc owns the IO; releases it if OutputFormatContext was never created.
+    sink?.destroy()
     inFmt?.destroy()
   }
 }

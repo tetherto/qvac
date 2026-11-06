@@ -6,7 +6,13 @@
 // Runs under bare (brittle-bare), where bare-ffmpeg is available.
 
 const test = require('brittle')
-const { encodePcm, pcmToWav, SUPPORTED_FORMATS, MIME_TYPES } = require('../../lib/audio-format')
+const {
+  encodePcm,
+  pcmToWav,
+  SUPPORTED_FORMATS,
+  FFMPEG_FORMATS,
+  MIME_TYPES
+} = require('../../lib/audio-format')
 
 // Four interleaved Int16 samples (8 bytes) as a little-endian byte buffer.
 function samplePcm() {
@@ -249,7 +255,7 @@ test('encodePcm: destroys every bare-ffmpeg handle when an encode fails', (t) =>
   assertHandlesReleased(t, counts, 'failed encode')
 })
 
-test('encodePcm: destroys every bare-ffmpeg handle when muxer setup fails', (t) => {
+test('encodePcm: destroys every bare-ffmpeg handle when muxer setup fails before taking the IO', (t) => {
   const counts = trackFfmpegHandles((ffmpeg) => {
     // Throws before the output context takes ownership of the write IO.
     ffmpeg.OutputFormatContext = class {
@@ -264,4 +270,24 @@ test('encodePcm: destroys every bare-ffmpeg handle when muxer setup fails', (t) 
   })
   t.is(counts.created.IOContext, 2, 'read and write IO contexts were created')
   assertHandlesReleased(t, counts, 'muxer setup failure', { encoded: false })
+})
+
+test('encodePcm: destroys every bare-ffmpeg handle when muxer setup fails after taking the IO', (t) => {
+  const spec = FFMPEG_FORMATS.m4a
+  const container = spec.container
+  // OutputFormatContext transfers the write IO, then fails to find this muxer.
+  spec.container = 'no-such-muxer'
+  let counts
+  try {
+    counts = trackFfmpegHandles(() => {
+      t.exception(
+        () => encodePcm(tonePcm(), 'm4a', { sampleRate: 44100, channels: 2 }),
+        /No output format found/
+      )
+    })
+  } finally {
+    spec.container = container
+  }
+  t.is(counts.created.IOContext, 2, 'read and write IO contexts were created')
+  assertHandlesReleased(t, counts, 'muxer lookup failure', { encoded: false })
 })
