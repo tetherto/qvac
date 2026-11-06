@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.27.0] - 2026-11-05
+
+### Fixed
+
+- Native builds use `qvac-fabric 11739.0.0#1` from the registry instead of a
+  package-local overlay, so source and CI builds use the same port definition.
+- CUDA and XDNA share a private ggml core compiled against libstdc++. CUDA
+  retains static runtime linkage, while XDNA links the system runtime to match
+  XRT.
+
+### Added
+
+- Linux x64 packages ship the AMD XDNA backend with its compiled NPU kernels
+  and instruction stream beside the module. It requires system XRT 2.25 or
+  newer; hosts without XRT can continue using the other backends. Building the
+  kernels requires the pinned IRON toolchain but does not require NPU hardware.
+- Build validation checks the XDNA kernel files, instruction stream and runtime
+  dependencies alongside the existing checks for other backend modules.
+
 ## [0.26.0] - 2026-11-04
 
 ### Breaking

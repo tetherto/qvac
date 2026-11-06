@@ -206,7 +206,7 @@ export function estimateTargetFor(candidate: ModelFitCandidate): ModelFitEstimat
   const config = candidate.modelConfig ?? {}
   const modelType = modelTypeOf(candidate)
 
-  const contextTokens = config['ctx_size']
+  const contextTokens = config['ctxSize'] ?? config['ctx_size']
   const artifacts = companionRefs(config)
   const device = resolvedDevice(modelType, config)
   const windowMs =
