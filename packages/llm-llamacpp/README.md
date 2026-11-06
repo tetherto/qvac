@@ -65,6 +65,8 @@ On an XDNA2 NPU (Strix Point, Strix Halo, Krackan) with XRT 2.25 or newer instal
 - On an XDNA load the NPU runs the ops it supports and the CPU runs the rest. The GPU is not
   used, so another model can run on it at the same time. All loads in a process share one NPU
   context and take turns on it.
+- A vision model's projector follows the selection onto the NPU; untested there. Set
+  `mmproj-use-gpu: false` to keep it on the CPU.
 - The backend is built around Qwen3.5. A model whose `ssm_out` quantization the fused decode
   layer does not cover, such as a stock Qwen3.5-0.8B `Q4_K_M` with `Q8_0` `ssm_out`, fails at
   the first decode with `unsupported fused weight set` instead of falling back. Requantize
