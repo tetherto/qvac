@@ -35,7 +35,8 @@ import { WorkerCrashedError, RequestValidationFailedError } from '@/utils/errors
 import {
   assertOwnerModelUsable,
   awaitSessionUsable,
-  endAllSessions
+  endAllSessions,
+  sessionOf
 } from '@/client/session-registry'
 import { formatZodError } from '@/utils/zod-error'
 import { z } from 'zod'
@@ -289,7 +290,10 @@ async function stampSession<T extends Request>(request: T, options?: RPCOptions)
     assertOwnerModelUsable(target)
     return request
   }
-  await awaitSessionUsable(sessionId, target)
+  // A bare `sessionId` with no handle behind it has no local state; the
+  // worker decides whether that session is open.
+  const record = sessionOf(options)
+  if (record) await awaitSessionUsable(record, target)
   if (request.type === 'openSession' || request.type === 'closeSession') return request
   return { ...request, sessionId }
 }

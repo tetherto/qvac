@@ -342,7 +342,7 @@ async function runLoadModel(
         }
 
         const modelId = response.modelId!
-        recordHeldModel(rpcOptions?.sessionId, modelId)
+        recordHeldModel(rpcOptions, modelId)
 
         // Start logging stream in the background if logger is provided, catch to avoid failing the entire loadModel operation
         if (modelLogger) {
@@ -370,7 +370,7 @@ async function runLoadModel(
   }
 
   const modelId = response.modelId!
-  recordHeldModel(rpcOptions?.sessionId, modelId)
+  recordHeldModel(rpcOptions, modelId)
 
   if (modelLogger) {
     try {

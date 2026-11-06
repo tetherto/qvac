@@ -9,10 +9,12 @@ import { createVectorIndexClient } from '@/client/api/vector-index'
 import { send } from '@/client/rpc/rpc-client'
 import { generateClientRequestId } from '@/client/api/client-request-id'
 import {
+  bindSession,
+  createSessionRecord,
   endSession,
   isModelHeldBySession,
   isSessionEnded,
-  registerSession
+  type SessionRecord
 } from '@/client/session-registry'
 import { InvalidResponseError, SessionInvalidatedError } from '@/utils/errors-client'
 
@@ -137,8 +139,7 @@ export function openSession(options: OpenSessionOptions = {}): QvacSession {
   // Later calls surface the failure themselves; an unobserved rejection here
   // must not crash the host.
   opened.catch(() => {})
-  registerSession(sessionId, opened)
-  return createSessionHandle(sessionId, name, opened)
+  return createSessionHandle(createSessionRecord(sessionId, opened), name)
 }
 
 async function sendOpenSession(request: OpenSessionRequest): Promise<void> {
@@ -146,15 +147,16 @@ async function sendOpenSession(request: OpenSessionRequest): Promise<void> {
   if (response.type !== 'openSession') throw new InvalidResponseError('openSession')
 }
 
-function createSessionHandle(
-  sessionId: string,
-  name: string | undefined,
-  opened: Promise<void>
-): QvacSession {
+function createSessionHandle(record: SessionRecord, name: string | undefined): QvacSession {
+  const { sessionId, opened } = record
   // Session-stamped options for every wire call made through the handle. A
-  // caller's own options are kept; `sessionId` is set by the handle.
-  const withSession = <T extends RPCOptions | AbortableRPCOptions | undefined>(options: T) =>
-    ({ ...options, sessionId }) as NonNullable<T>
+  // caller's own options are kept; `sessionId` is set by the handle, and the
+  // record behind it rides along for the RPC layer's local checks.
+  const withSession = <T extends RPCOptions | AbortableRPCOptions | undefined>(options: T) => {
+    const stamped = { ...options, sessionId } as NonNullable<T>
+    bindSession(stamped, record)
+    return stamped
+  }
 
   // A vector index handle outlives the call that opened it, so its client is
   // built over a session-stamped transport: every later call on the handle
@@ -169,19 +171,21 @@ function createSessionHandle(
     api.loadModel(options as never, withSession(rpcOptions))) as Api['loadModel']
 
   async function close(options?: RPCOptions): Promise<void> {
-    if (isSessionEnded(sessionId)) throw new SessionInvalidatedError(sessionId, 'closed')
+    if (isSessionEnded(record)) {
+      throw new SessionInvalidatedError(sessionId, record.ended ?? 'closed')
+    }
     await opened
     const request: CloseSessionRequest = { type: 'closeSession', sessionId }
     const response = await send(request, options)
     if (response.type !== 'closeSession') throw new InvalidResponseError('closeSession')
-    endSession(sessionId, 'closed')
+    endSession(record, 'closed')
   }
 
   return {
     sessionId,
     name,
     opened,
-    isModelHeld: (modelId) => isModelHeldBySession(sessionId, modelId),
+    isModelHeld: (modelId) => isModelHeldBySession(record, modelId),
     close,
 
     loadModel,

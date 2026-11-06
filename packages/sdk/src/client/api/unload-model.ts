@@ -58,7 +58,7 @@ export async function unloadModel(
   }
 
   if (response.unloaded !== false) stopLoggingStreamForModel(params.modelId)
-  if (response.released !== false) releaseHeldModel(options?.sessionId, params.modelId)
+  if (response.released !== false) releaseHeldModel(options, params.modelId)
 
   const isOwnerCall = options?.sessionId === undefined
   const shouldAutoClose = isOwnerCall && (params.autoClose ?? !isBare)

@@ -1,13 +1,19 @@
+import type { RPCOptions } from '@qvac/inference/surface'
 import { ModelHandleInvalidatedError, SessionInvalidatedError } from '@/utils/errors-client'
 
 /**
- * Client-side record of every session handle this process opened, and of the
+ * Client-side state of the session handles this process opened, and of the
  * models the owner loaded. The RPC layer consults it on each request: a
  * session-stamped request waits for its session's `openSession` round trip,
  * and a request on a session that was closed, shut down with the runtime or
  * lost with the worker is refused locally with a typed error instead of
  * reaching the wire. An owner request naming a model that was loaded before
  * the runtime stopped is refused the same way until the model is loaded again.
+ *
+ * A session's state lives in its record, which the handle owns and binds to
+ * the options of every call it makes. The registry itself only tracks the
+ * sessions that are still open, so it needs no cap: an ended session's record
+ * goes away with its handle.
  */
 
 export type SessionEndReason = 'closed' | 'shutdown' | 'crashed'
@@ -15,8 +21,9 @@ export type SessionEndReason = 'closed' | 'shutdown' | 'crashed'
 /** The owner's id in errors about its own model handles. It never goes on the wire. */
 export const OWNER_HANDLE_ID = 'owner'
 
-interface SessionRecord {
-  opened: Promise<void>
+export interface SessionRecord {
+  readonly sessionId: string
+  readonly opened: Promise<void>
   /** Why the open failed; every later call on the handle fails with it. */
   openError: unknown
   ended: SessionEndReason | undefined
@@ -25,19 +32,18 @@ interface SessionRecord {
    * session ends, so a call naming one of them fails with
    * `ModelHandleInvalidatedError` rather than the plain session error.
    */
-  heldModels: Set<string>
+  readonly heldModels: Set<string>
 }
 
-const sessions = new Map<string, SessionRecord>()
+/** Sessions that have not ended; runtime shutdown and worker loss end them all. */
+const openSessions = new Set<SessionRecord>()
 
 /**
- * Ended sessions stay on record so a call on a dropped handle gets the typed
- * local error, but a long-running owner opens many sessions, so the ended
- * records are capped: once the cap is reached the oldest is forgotten, and a
- * call on that handle reaches the worker, which refuses it as not open.
+ * The record behind a call's options. The handle binds its record to the
+ * options object it stamps, so the RPC layer can find the session's state
+ * without a lookup by id that would have to outlive the handle.
  */
-const MAX_ENDED_RECORDS = 1024
-const endedInOrder: string[] = []
+const recordsByOptions = new WeakMap<object, SessionRecord>()
 
 /** Model ids the owner loaded on the running runtime and has not unloaded. */
 const ownerModels = new Set<string>()
@@ -47,8 +53,9 @@ const ownerModels = new Set<string>()
  */
 const invalidOwnerModels = new Set<string>()
 
-export function registerSession(sessionId: string, opened: Promise<void>): void {
+export function createSessionRecord(sessionId: string, opened: Promise<void>): SessionRecord {
   const record: SessionRecord = {
+    sessionId,
     opened,
     openError: undefined,
     ended: undefined,
@@ -57,18 +64,13 @@ export function registerSession(sessionId: string, opened: Promise<void>): void 
   opened.catch((error: unknown) => {
     record.openError = error
   })
-  sessions.set(sessionId, record)
+  openSessions.add(record)
+  return record
 }
 
-export function endSession(sessionId: string, reason: SessionEndReason): void {
-  const record = sessions.get(sessionId)
-  if (!record || record.ended !== undefined) return
-  record.ended = reason
-  endedInOrder.push(sessionId)
-  while (endedInOrder.length > MAX_ENDED_RECORDS) {
-    const oldest = endedInOrder.shift()
-    if (oldest !== undefined) sessions.delete(oldest)
-  }
+export function endSession(record: SessionRecord, reason: SessionEndReason): void {
+  openSessions.delete(record)
+  if (record.ended === undefined) record.ended = reason
 }
 
 /**
@@ -76,36 +78,46 @@ export function endSession(sessionId: string, reason: SessionEndReason): void {
  * is every model the owner had loaded.
  */
 export function endAllSessions(reason: Exclude<SessionEndReason, 'closed'>): void {
-  for (const sessionId of sessions.keys()) endSession(sessionId, reason)
+  for (const record of openSessions) endSession(record, reason)
   for (const modelId of ownerModels) invalidOwnerModels.add(modelId)
   ownerModels.clear()
 }
 
-export function isSessionEnded(sessionId: string): boolean {
-  return sessions.get(sessionId)?.ended !== undefined
+export function isSessionEnded(record: SessionRecord): boolean {
+  return record.ended !== undefined
 }
 
-/** A load resolved: the session, or the owner when `sessionId` is undefined, holds the model. */
-export function recordHeldModel(sessionId: string | undefined, modelId: string): void {
-  if (sessionId === undefined) {
+/** Binds the session behind a call's options; the handle calls it for every option object it stamps. */
+export function bindSession(options: object, record: SessionRecord): void {
+  recordsByOptions.set(options, record)
+}
+
+/** The session behind a call's options, or undefined for an owner call or a bare `sessionId`. */
+export function sessionOf(options: RPCOptions | undefined): SessionRecord | undefined {
+  return options === undefined ? undefined : recordsByOptions.get(options)
+}
+
+/** A load resolved: the session behind the options, or the owner when there is no `sessionId`, holds the model. */
+export function recordHeldModel(options: RPCOptions | undefined, modelId: string): void {
+  if (options?.sessionId === undefined) {
     invalidOwnerModels.delete(modelId)
     ownerModels.add(modelId)
     return
   }
-  sessions.get(sessionId)?.heldModels.add(modelId)
+  sessionOf(options)?.heldModels.add(modelId)
 }
 
 /** An unload released the caller's lease on the model. */
-export function releaseHeldModel(sessionId: string | undefined, modelId: string): void {
-  if (sessionId === undefined) {
+export function releaseHeldModel(options: RPCOptions | undefined, modelId: string): void {
+  if (options?.sessionId === undefined) {
     ownerModels.delete(modelId)
     return
   }
-  sessions.get(sessionId)?.heldModels.delete(modelId)
+  sessionOf(options)?.heldModels.delete(modelId)
 }
 
-export function isModelHeldBySession(sessionId: string, modelId: string): boolean {
-  return sessions.get(sessionId)?.heldModels.has(modelId) ?? false
+export function isModelHeldBySession(record: SessionRecord, modelId: string): boolean {
+  return record.heldModels.has(modelId)
 }
 
 /**
@@ -114,15 +126,13 @@ export function isModelHeldBySession(sessionId: string, modelId: string): boolea
  * typed local error when the session can no longer be used.
  */
 export async function awaitSessionUsable(
-  sessionId: string,
+  record: SessionRecord,
   request: { modelId?: string | undefined }
 ): Promise<void> {
-  const record = sessions.get(sessionId)
-  if (!record) return
   if (record.openError !== undefined) throw record.openError
-  if (record.ended !== undefined) throw endedError(sessionId, record, request.modelId)
+  if (record.ended !== undefined) throw endedError(record, request.modelId)
   await record.opened
-  if (record.ended !== undefined) throw endedError(sessionId, record, request.modelId)
+  if (record.ended !== undefined) throw endedError(record, request.modelId)
 }
 
 /**
@@ -138,21 +148,17 @@ export function assertOwnerModelUsable(request: { modelId?: string | undefined }
   }
 }
 
-function endedError(sessionId: string, record: SessionRecord, modelId: string | undefined): Error {
+function endedError(record: SessionRecord, modelId: string | undefined): Error {
   const reason = record.ended ?? 'closed'
   if (modelId !== undefined && record.heldModels.has(modelId)) {
-    return new ModelHandleInvalidatedError(modelId, sessionId)
+    return new ModelHandleInvalidatedError(modelId, record.sessionId)
   }
-  return new SessionInvalidatedError(sessionId, reason)
+  return new SessionInvalidatedError(record.sessionId, reason)
 }
 
-/** Test seam: forget every record. */
+/** Test seam: forget every open session and owner model. */
 export function resetSessionRegistry(): void {
-  sessions.clear()
-  endedInOrder.length = 0
+  openSessions.clear()
   ownerModels.clear()
   invalidOwnerModels.clear()
 }
-
-/** Test seam: the cap on ended records. */
-export const ENDED_RECORD_CAP = MAX_ENDED_RECORDS
