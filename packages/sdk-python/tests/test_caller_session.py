@@ -271,5 +271,6 @@ def test_the_transport_reports_worker_loss_once_and_not_on_its_own_close():
     closing = BareRpcTransport(["bare", "worker.js"])
     closing.on_worker_lost(lost)
     closing._closing = True
+    before = calls
     closing._notify_worker_lost()
-    assert calls == 1, "an EOF caused by close() is not a lost worker"
+    assert calls == before, "an EOF caused by close() is not a lost worker"
