@@ -227,10 +227,8 @@ function normalizeGPUSample(
       'GPU memory usage scope is unverified'
     ),
     memoryTotalBytes: normalizeSampledGPUMemory(usage.memoryTotal, scope, GPU_MEMORY_SCOPE_REASON),
-    // On a discrete GPU this is the same reading as `memoryUsed`, so it shares
-    // its scope. An integrated GPU's carve-out usage is read device-wide (sysfs
-    // on linux, the adapter's PDH counters on win32), is 0 where there is no
-    // carve-out, and is otherwise unavailable.
+    // A discrete GPU's dedicated usage is its memory usage, so it shares that
+    // scope. An integrated GPU's carve-out usage is read device-wide.
     dedicatedMemoryUsedBytes: normalizeSampledGPUMemory(
       usage.dedicatedMemoryUsed,
       device?.unifiedMemory === true ? 'device' : scope,

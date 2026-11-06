@@ -104,12 +104,10 @@ Declared memory (`capabilities`) is therefore `supported` on any non-unified
 GPU, while the per-sample readings additionally require that agreement.
 
 Dedicated memory is the exception to the unified-memory rule. An integrated
-GPU's `dedicatedMemoryTotalBytes` is the carve-out the firmware reserves for it,
-which the OS does not count as system RAM, so it is a device pool of its own
-and is `device`-scoped; its usage is read device-wide (sysfs on linux, the
-adapter's PDH counters on Windows) or is `unavailable`. Apple GPUs have no
-carve-out and report 0. On a discrete GPU the two fields repeat the declared
-memory and `memoryUsedBytes`, under the same scope.
+GPU's carve-out is reserved by the firmware and not counted as system RAM, so
+`dedicatedMemoryTotalBytes` and its usage are `device`-scoped. Apple reports 0.
+On a discrete GPU the fields repeat the declared memory and `memoryUsedBytes`,
+under the same scope.
 
 ## Platform limitations
 

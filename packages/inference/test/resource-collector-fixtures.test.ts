@@ -402,8 +402,6 @@ test('keeps windows unified-memory GPUs unverified', (t) => {
   }
 })
 
-// An AMD APU's carve-out is reserved for it and the OS does not count it as
-// RAM, so it is the GPU's own pool even though the rest of its memory is shared.
 test('trusts the carve-out of a unified-memory GPU and its usage', (t) => {
   const collector = createSystemResourceCollector(
     createFixture({
@@ -437,8 +435,6 @@ test('trusts the carve-out of a unified-memory GPU and its usage', (t) => {
   }
 })
 
-// A discrete GPU's dedicated usage is its memory usage, so it takes the same
-// scope: a budget on windows.
 test('scopes the dedicated memory usage of a discrete GPU like its memory usage', (t) => {
   const collector = createSystemResourceCollector(
     createFixture({
