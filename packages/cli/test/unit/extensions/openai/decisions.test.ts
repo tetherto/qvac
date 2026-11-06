@@ -66,7 +66,7 @@ describe('OpenAI Decisions adapter', () => {
       modelId: 'sdk-model',
       state: 'Ticket',
       questions: {
-        question_0: { type: 'noul', instructions: 'Urgent?' },
+        question_0: { type: 'noul', instructions: 'Urgent?', requireProbability: true },
         question_1: {
           type: 'choice',
           instructions: 'Which?',
