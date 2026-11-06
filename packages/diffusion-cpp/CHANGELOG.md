@@ -4,7 +4,7 @@
 
 ## [0.35.0] - 2026-11-06
 
-### ✨ Features
+### Features
 
 - Add Open-MOSS image generation support, external tokenizer loading, and a
   model download script ([#5550](https://github.com/tetherto/qvac/pull/5550)).
@@ -12,7 +12,7 @@
   multiple-reference image editing
   ([#5560](https://github.com/tetherto/qvac/pull/5560)).
 
-### 🐛 Fixes
+### Fixes
 
 - Preserve latent-unit VAE tile sizes and correctly shrink tiles during
   allocation-failure retries; handle integer LoRA alpha tensors in the native
@@ -27,7 +27,7 @@
 - Support Bash 3.2 in the FLUX.3 downloader and verify resumed downloads
   ([#5560](https://github.com/tetherto/qvac/pull/5560)).
 
-### 🔧 Changed
+### Changed
 
 - Require GGML and stable-diffusion-cpp `2026-11-01` from the merged QVAC
   registry ports, retaining the existing registry baseline
