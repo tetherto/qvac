@@ -178,7 +178,7 @@ jobs:
 
   build:
     name: "[ios] build"
-    runs-on: macos-15
+    runs-on: macos-26
     environment: release
     timeout-minutes: 60
     env:
@@ -212,9 +212,8 @@ jobs:
         with:
           node-version: 22
 
-      - name: Select Xcode
+      - name: Show Xcode
         run: |
-          sudo xcode-select -s /Applications/Xcode_26.3.app
           xcodebuild -version
           xcodebuild -showsdks | grep -i ios
 
