@@ -125,6 +125,61 @@ test('search honours the limit and clamps it', (t) => {
   t.is(searchDeferredTools(deferred, 'repository', 99).length, 2, 'capped by the matches')
 })
 
+const CATALOG: Tool[] = [
+  tool('http_request', 'Make an outbound HTTP request', {
+    deferLoading: true,
+    group: 'http-request'
+  }),
+  tool('weather_lookup', 'Look up the weather for a place', {
+    deferLoading: true,
+    group: 'http-request'
+  }),
+  tool('generate_image', 'Generate an image from a prompt', { deferLoading: true, group: 'image' }),
+  tool('edit_image', 'Edit an image; ids come from earlier tool results', {
+    deferLoading: true,
+    group: 'image'
+  })
+]
+
+function names(tools: readonly Tool[]): string[] {
+  return tools.map((each) => each.name)
+}
+
+test('a word that only reaches a description or group does not load a tool beside a strong match', (t) => {
+  t.alike(
+    names(searchDeferredTools(CATALOG, 'http request tool')),
+    ['http_request'],
+    'weather_lookup shares the group and edit_image says "tool" in its description'
+  )
+})
+
+test('tools tied at the top load together', (t) => {
+  t.alike(names(searchDeferredTools(CATALOG, 'image')), ['generate_image', 'edit_image'])
+  t.alike(
+    names(searchDeferredTools(partitionTools(INVENTORY).deferred, 'github')),
+    ['create_issue', 'list_prs'],
+    'a group name still loads the whole group'
+  )
+})
+
+test('an exact name loads that tool alone, even when others share its words', (t) => {
+  t.alike(names(searchDeferredTools(CATALOG, 'http_request', 3)), ['http_request'])
+})
+
+test('an exact name spelled as asked wins over a case variant', (t) => {
+  const variants = [
+    tool('GetWeather', 'Weather, upper camel', { deferLoading: true }),
+    tool('getWeather', 'Weather, lower camel', { deferLoading: true })
+  ]
+  t.alike(names(searchDeferredTools(variants, 'getWeather')), ['getWeather'])
+  t.alike(names(searchDeferredTools(variants, 'GetWeather')), ['GetWeather'])
+  t.alike(
+    names(searchDeferredTools(variants, 'getweather')),
+    ['GetWeather', 'getWeather'],
+    'with neither spelled as asked, both load'
+  )
+})
+
 test('a no-match search tells the model what to do instead of going quiet', (t) => {
   const parsed = JSON.parse(executeToolSearch(INVENTORY, { query: 'nothing here at all' }, [])) as {
     tool_search: { loaded: string[]; hint?: string }
