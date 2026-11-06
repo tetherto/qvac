@@ -26,6 +26,7 @@ import {
   HostPrebuildsMissingError
 } from '@/utils/errors-client'
 import { loadTargetPackage } from '@/commands/bundle/targets'
+import { parseBareKitPins } from '@/commands/verify/bare-kit-runtime'
 import { linkDependency } from './fixtures/link-dependency'
 
 const SDK_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -659,6 +660,42 @@ describe('bundleSdk', () => {
         error.cause instanceof Error &&
         error.cause.message.includes('phone-addon@1.0.0 for android-arm64')
     )
+  })
+
+  it('checks a phone bundle against the Bare Kit of the bare-stow that bundled it', async (t) => {
+    const { projectRoot, sdkPath, configPath } = fakeBundleSdkProject(t)
+    linkDependency(projectRoot, 'react-native-bare-kit', SDK_DIR)
+    linkDependency(projectRoot, 'bare-stow-target-react-native', SDK_DIR)
+    // The project's SDK has its own bare-stow, pinning a Bare Kit with no known Bare.
+    const projectBareStow = path.join(sdkPath, 'node_modules', 'bare-stow')
+    writeFile(
+      path.join(projectBareStow, 'package.json'),
+      JSON.stringify({ name: 'bare-stow', version: '0.0.1' })
+    )
+    writeFile(
+      path.join(projectBareStow, 'lib', 'target', 'bare-kit.js'),
+      "const bareKitKotlin = { 'com.github.holepunchto.bare-kit-kotlin:bare-kit-kotlin': 'v0.0.1' }\n"
+    )
+    const bundlerBareStow = path.dirname(createRequire(import.meta.url).resolve('bare-stow/package'))
+    const bundlerPins = parseBareKitPins(
+      fs.readFileSync(path.join(bundlerBareStow, 'lib', 'target', 'bare-kit.js'), 'utf8')
+    )
+
+    const result = await bundleSdk({
+      projectRoot,
+      configPath,
+      target: 'react-native',
+      hosts: ['android-arm64'],
+      link: false,
+      network: false,
+      quiet: true
+    })
+
+    const resolution = result.verification?.runtimes.find((runtime) =>
+      runtime.hosts.includes('android-arm64')
+    )?.resolution
+    assert.ok(resolution?.resolved === true)
+    assert.equal(resolution.runtime.packageVersion, bundlerPins.android)
   })
 
   it('names the addon and hosts a desktop bundle has no native build for', async (t) => {
