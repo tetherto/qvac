@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import type { TestDefinition } from '../types/test-definition.js'
 
 export interface SelectionOptions {
@@ -21,11 +22,16 @@ export interface Selection {
   unknownTestIds: string[]
 }
 
-function parseList(value: string) {
+function parseList(value: string, separator = ',') {
   return value
-    .split(',')
+    .split(separator)
     .map((entry) => entry.trim())
     .filter(Boolean)
+}
+
+/** The testIds listed in `file`, one per line. */
+export async function readTestIds(file: string): Promise<string[]> {
+  return parseList(await readFile(file, 'utf8'), '\n')
 }
 
 /**
