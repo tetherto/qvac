@@ -376,7 +376,8 @@ export async function plan(env) {
       json: env.IMPACTED_JSON || ''
     })
     if (found.include) {
-      const add = (r) => ({ ...r, suite: encodeOptions(r.suite, { include: found.include }) })
+      const add = (r) =>
+        r.project === '@qvac/sdk' ? { ...r, suite: encodeOptions(r.suite, { include: found.include }) } : r
       desktop = desktop.map(add)
       devices = devices.map(add)
     }
