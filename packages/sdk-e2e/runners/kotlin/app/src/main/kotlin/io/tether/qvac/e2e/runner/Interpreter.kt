@@ -175,6 +175,17 @@ class Interpreter(
     }
 
     private suspend fun invoke(method: String, params: Map<String, Any?>, collect: String?): Any? {
+        val value = dispatch(method, params, collect)
+        // Step loads bypass `useModel`; tell the resource manager who owns the model.
+        // Here, not in `callValue`, so a `callError` load that succeeds is tracked too.
+        when (method) {
+            "loadModel" -> ((value as? Map<*, *>)?.get("modelId") as? String)?.let(resources::adoptTestLoad)
+            "unloadModel" -> resources.released(params["modelId"].toString())
+        }
+        return value
+    }
+
+    private suspend fun dispatch(method: String, params: Map<String, Any?>, collect: String?): Any? {
         if (collect != null) {
             val fold = calls.streams[method]
                 ?: throw StepError("SDK method \"$method\" has no stream fold in the Kotlin interpreter yet", incomplete = true)
@@ -272,13 +283,7 @@ class Interpreter(
         }
         val params = callParams(body["params"], scope)
         log("call $method")
-        val value = invoke(method, params, collect)
-        // Step loads bypass `useModel`; tell the resource manager who owns the model.
-        when (method) {
-            "loadModel" -> ((value as? Map<*, *>)?.get("modelId") as? String)?.let(resources::adoptTestLoad)
-            "unloadModel" -> resources.released(params["modelId"].toString())
-        }
-        return value
+        return invoke(method, params, collect)
     }
 
     private suspend fun start(body: Map<String, Any?>, scope: Scope): StepResult? {

@@ -1412,6 +1412,24 @@ class Interpreter:
         collect: str | None,
     ) -> Any:
         """One call, folded if the step asked for a fold."""
+        response = await self._dispatch(method, call, params, collect)
+        # Step loads bypass `useModel`; tell the resource manager who owns the model.
+        # Here, not in `_call_value`, so a `callError` load that succeeds is tracked too.
+        if method == "loadModel" and isinstance(response, dict):
+            model_id = response.get("modelId")
+            if isinstance(model_id, str):
+                self._resources.adopt_test_load(model_id)
+        elif method == "unloadModel":
+            self._resources.released(str(params.get("modelId")))
+        return response
+
+    async def _dispatch(
+        self,
+        method: str,
+        call: Callable[[Any, dict[str, Any]], Any] | None,
+        params: dict[str, Any],
+        collect: str | None,
+    ) -> Any:
         if collect:
             stream = STREAMS.get(method)
             if stream is None:
@@ -1568,13 +1586,6 @@ class Interpreter:
 
         self._log(f"call {method}")
         response = await self._invoke(method, call, params, collect)
-        # Step loads bypass `useModel`; tell the resource manager who owns the model.
-        if method == "loadModel" and isinstance(response, dict):
-            model_id = response.get("modelId")
-            if isinstance(model_id, str):
-                self._resources.adopt_test_load(model_id)
-        elif method == "unloadModel":
-            self._resources.released(str(params.get("modelId")))
 
         return _jsonable(response)
 
