@@ -2,6 +2,8 @@ package io.tether.qvac.sdk
 
 import io.tether.qvac.sdk.generated.schema.CancelRequest
 import io.tether.qvac.sdk.generated.schema.CancelRequestRequest
+import io.tether.qvac.sdk.generated.schema.CloseSessionRequest
+import io.tether.qvac.sdk.generated.schema.OpenSessionRequest
 import io.tether.qvac.sdk.generated.schema.SuspendRequest
 import io.tether.qvac.sdk.generated.schema.UnloadModelRequest
 import kotlinx.coroutines.CompletableDeferred
@@ -80,6 +82,8 @@ class QvacSessionTest {
             assertEquals(session.sessionId, error.sessionId)
         }
         assertFailsWith<QvacOwnerOnlyException> { session.`suspend`(SuspendRequest()) }
+        assertFailsWith<QvacOwnerOnlyException> { session.closeSession(CloseSessionRequest(sessionId = "other")) }
+        assertFailsWith<QvacOwnerOnlyException> { session.openSession(OpenSessionRequest(sessionId = "other")) }
         assertEquals(listOf("openSession"), transport.requests.map { it.type() }, "nothing reached the wire")
 
         session.call(buildJsonObject { put("type", "state") })

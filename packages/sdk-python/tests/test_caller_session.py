@@ -128,6 +128,10 @@ async def test_runtime_wide_operations_are_refused_on_a_session_before_the_wire(
             await session.transport.call({"type": kind})
         assert info.value.operation == kind
         assert info.value.session_id == session.session_id
+    with pytest.raises(OwnerOnlyError):
+        await session.transport.call({"type": "closeSession", "sessionId": "other"})
+    with pytest.raises(OwnerOnlyError):
+        await session.transport.call({"type": "openSession", "sessionId": "other"})
     assert [p["type"] for p in owner.sent] == [
         "openSession"
     ], "nothing reached the wire"

@@ -12,7 +12,8 @@ works through it unchanged. Each payload it sends carries the session id, so
 session's `unload_model` releases, and `close()` ends the session without
 shutting the runtime down. Only `Client.close()`, the owner's call, does that.
 The operations that change the runtime for every session (`suspend`,
-`resume`, `delete_cache`, `start_rpc_server`, `stop_rpc_server`) raise
+`resume`, `delete_cache`, `start_rpc_server`, `stop_rpc_server`) and the
+session management calls (`open_session`, `close_session`) raise
 `OwnerOnlyError` on a session transport.
 """
 
@@ -30,11 +31,21 @@ from .errors import (
     SessionInvalidatedError,
 )
 
-# Operations that change the shared runtime for every session. The worker
-# refuses them from a session too; the session transport refuses them first,
-# before any wire traffic, like a call on an ended session.
+# Operations reserved for the owner client: the ones that change the shared
+# runtime for every session, and session management itself, since a session
+# must not open or close sessions by naming their ids. The session transport
+# refuses them before any wire traffic, like a call on an ended session; the
+# worker refuses the runtime-wide ones from a session as well.
 OWNER_ONLY_OPERATIONS = frozenset(
-    {"suspend", "resume", "deleteCache", "startRpcServer", "stopRpcServer"}
+    {
+        "suspend",
+        "resume",
+        "deleteCache",
+        "startRpcServer",
+        "stopRpcServer",
+        "openSession",
+        "closeSession",
+    }
 )
 
 
@@ -75,10 +86,8 @@ class SessionTransport:
         if kind in OWNER_ONLY_OPERATIONS:
             raise OwnerOnlyError(kind, self.session_id)
         # The handle's id replaces any id the payload carries, so a caller
-        # cannot send a request as another session. Only the session methods
-        # themselves name the session they act on.
-        if kind in ("openSession", "closeSession"):
-            return payload
+        # cannot send a request as another session. `Session.close` sends its
+        # `closeSession` through the owner transport, not through here.
         return {**payload, "sessionId": self.session_id}
 
     async def call(self, payload: dict[str, Any]) -> dict[str, Any]:

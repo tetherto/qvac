@@ -27,8 +27,9 @@ import kotlin.concurrent.Volatile
  *
  * Only the owner [QvacClient]'s `close()` stops the runtime, and it ends every
  * session with it. The operations that change the runtime for every session
- * (`suspend`, `resume`, `deleteCache`, `startRpcServer`, `stopRpcServer`)
- * throw [QvacOwnerOnlyException] on a session.
+ * (`suspend`, `resume`, `deleteCache`, `startRpcServer`, `stopRpcServer`) and
+ * the session management calls (`openSession`, `closeSession`) throw
+ * [QvacOwnerOnlyException] on a session.
  */
 class QvacSession internal constructor(
     val sessionId: String,
@@ -93,15 +94,14 @@ internal class SessionTransport(
     fun isModelHeld(modelId: String): Boolean = modelId in heldModels.value
 
     // The handle's id replaces any id the payload carries, so a caller cannot send a
-    // request as another session. Only the session methods themselves name the
-    // session they act on.
+    // request as another session. [QvacSession.close] sends its `closeSession`
+    // through the owner client, not through here.
     private suspend fun stamp(payload: JsonObject): JsonObject {
         ended?.let { throw endedError(payload, it) }
         val type = payload["type"]?.jsonPrimitive?.content
         if (type != null && type in OWNER_ONLY_OPERATIONS) throw QvacOwnerOnlyException(type, sessionId)
         opened.await()
         ended?.let { throw endedError(payload, it) }
-        if (type == "openSession" || type == "closeSession") return payload
         return JsonObject(payload + ("sessionId" to JsonPrimitive(sessionId)))
     }
 
@@ -168,11 +168,21 @@ class QvacModelHandleInvalidatedException(val modelId: String, val sessionId: St
     )
 
 /**
- * Operations that change the shared runtime for every session. The worker
- * refuses them from a session too; the session transport refuses them first,
- * before any wire traffic, like a call on an ended session.
+ * Operations reserved for the owner client: the ones that change the shared
+ * runtime for every session, and session management itself, since a session
+ * must not open or close sessions by naming their ids. The session transport
+ * refuses them before any wire traffic, like a call on an ended session; the
+ * worker refuses the runtime-wide ones from a session as well.
  */
-internal val OWNER_ONLY_OPERATIONS = setOf("suspend", "resume", "deleteCache", "startRpcServer", "stopRpcServer")
+internal val OWNER_ONLY_OPERATIONS = setOf(
+    "suspend",
+    "resume",
+    "deleteCache",
+    "startRpcServer",
+    "stopRpcServer",
+    "openSession",
+    "closeSession",
+)
 
 /** A runtime-wide operation called on a session handle; only the owner client may call it. */
 class QvacOwnerOnlyException(val operation: String, val sessionId: String) :
