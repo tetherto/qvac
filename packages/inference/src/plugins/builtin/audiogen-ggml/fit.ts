@@ -1,8 +1,8 @@
 import type { AudiogenFitRequest } from '@qvac/audiogen-ggml'
 
+import { gpuLayersFromGate } from '@/model-fit/gpu'
 import type { AudioGenRuntimeConfig, MinimaxAudioGenRuntimeConfig } from '@/schemas/index'
-import type { FitRequestPlan } from '@/model-fit/request/create'
-import { gpuLayersFromGate } from '@/model-fit/request/gpu'
+import type { FitLoad, FitRequestPlan } from '@/schemas/plugin'
 
 /**
  * `@qvac/audiogen-ggml` is an optional peer dependency, so its value exports
@@ -11,13 +11,6 @@ import { gpuLayersFromGate } from '@/model-fit/request/gpu'
  */
 const MINIMAX = 'minimax'
 
-export interface AudiogenFitRequestParams {
-  modelPath: string
-  modelConfig: unknown
-  artifacts?: Record<string, string> | undefined
-  marginBytes?: number | undefined
-}
-
 /**
  * MiniMax-Music3 is fitted from its LM and synthesis pair. The load config
  * carries no frame budget, so the fitter projects the default generation
@@ -25,19 +18,16 @@ export interface AudiogenFitRequestParams {
  *
  * `device` is passed through as the load takes it. Without one, the GPU switch
  * maps to `auto` as it does on load: the fitter reads a positive layer count
- * that way. The plugin refuses MiniMax on mobile before this is reached, and
- * mobile builds carry no MiniMax fitter.
+ * that way. The plugin refuses MiniMax on mobile before this is reached.
  */
 function minimaxFitRequest(
   config: MinimaxAudioGenRuntimeConfig,
-  artifacts: Record<string, string>,
-  marginBytes: number | undefined
+  artifacts: Record<string, string>
 ): FitRequestPlan {
   const lmPath = artifacts['lmModelPath']
   const synthPath = artifacts['synthModelPath']
-
   if (lmPath === undefined || synthPath === undefined) {
-    return { supported: false, detail: 'the minimax model pair is not resolved' }
+    return { unknown: 'the minimax model pair is not resolved' }
   }
 
   const request: AudiogenFitRequest = {
@@ -47,33 +37,29 @@ function minimaxFitRequest(
     ...(config.device !== undefined
       ? { device: config.device }
       : { gpuLayers: gpuLayersFromGate(config.useGPU) }),
-    ...(config.threads !== undefined && { threads: config.threads }),
-    ...(marginBytes !== undefined && { marginBytes })
+    ...(config.threads !== undefined && { threads: config.threads })
   }
-
-  return { supported: true, probe: { engine: 'audiogen-ggml', request } }
+  return { request }
 }
 
-export function createAudiogenFitRequest(params: AudiogenFitRequestParams): FitRequestPlan {
-  const config = (params.modelConfig ?? {}) as AudioGenRuntimeConfig
-  const artifacts = params.artifacts ?? {}
+/** The audiogen fit request for a load, from its resolved stage checkpoints. */
+export function audiogenFitRequest(load: FitLoad): FitRequestPlan {
+  const config = (load.modelConfig ?? {}) as AudioGenRuntimeConfig
+  const artifacts = load.artifacts ?? {}
 
-  if (config.engine === MINIMAX) {
-    return minimaxFitRequest(config, artifacts, params.marginBytes)
-  }
+  if (config.engine === MINIMAX) return minimaxFitRequest(config, artifacts)
 
   const textEncoderPath = artifacts['textEncModelPath']
   const lmPath = artifacts['lmModelPath']
   const ditPath = artifacts['ditModelPath']
   const vaePath = artifacts['vaeModelPath']
-
   if (
     textEncoderPath === undefined ||
     lmPath === undefined ||
     ditPath === undefined ||
     vaePath === undefined
   ) {
-    return { supported: false, detail: 'the ace-step stage checkpoints are not all resolved' }
+    return { unknown: 'the ace-step stage checkpoints are not all resolved' }
   }
 
   const layers = 'nGpuLayers' in config ? config.nGpuLayers : undefined
@@ -83,9 +69,7 @@ export function createAudiogenFitRequest(params: AudiogenFitRequestParams): FitR
     ditPath,
     vaePath,
     gpuLayers: gpuLayersFromGate(config.useGPU, layers),
-    ...(config.threads !== undefined && { threads: config.threads }),
-    ...(params.marginBytes !== undefined && { marginBytes: params.marginBytes })
+    ...(config.threads !== undefined && { threads: config.threads })
   }
-
-  return { supported: true, probe: { engine: 'audiogen-ggml', request } }
+  return { request }
 }
