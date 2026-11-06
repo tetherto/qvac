@@ -58,6 +58,7 @@ function createLlmModel(
   const logger = createStreamLogger(modelId, ModelType.llamacppCompletion)
   registerAddonLogger(modelId, ModelType.llamacppCompletion, logger)
   const llmConfigStrings = transformLlmConfig(llmConfig)
+  llmConfigStrings['cache_share_across_keys'] ??= 'false'
   if (draftModelPath) llmConfigStrings['spec_draft_model'] = draftModelPath
 
   if (isMobile()) {

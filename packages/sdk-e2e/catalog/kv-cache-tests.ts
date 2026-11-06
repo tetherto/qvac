@@ -751,8 +751,68 @@ export const kvCacheCancelKeepsCommittedCache: TestDefinition = {
   }
 }
 
+export const kvCacheSharedPrefixOptIn: TestDefinition = {
+  testId: 'kv-cache-shared-prefix-opt-in',
+  params: {
+    history: [
+      { role: 'system', content: 'You are a concise assistant.' },
+      {
+        role: 'user',
+        content:
+          'The access code is violet-harbor-731. Repeat only the access code, with no explanation.'
+      }
+    ],
+    sourceKey: 'shared-prefix-opt-in-source',
+    generationParams: { temp: 0, seed: 42, predict: 8 }
+  },
+  expectation: { validation: 'type', expectedType: 'string' },
+  steps: [
+    { useModel: { deps: ['llm-shared-cache'], as: 'model' } },
+    {
+      call: {
+        method: 'completion',
+        collect: 'text',
+        params: {
+          modelId: '$model',
+          history: '$params.history',
+          kvCache: '$params.sourceKey',
+          generationParams: '$params.generationParams'
+        },
+        as: 'source'
+      }
+    },
+    {
+      call: {
+        method: 'completion',
+        collect: 'text',
+        params: {
+          modelId: '$model',
+          history: '$params.history',
+          generationParams: '$params.generationParams'
+        },
+        as: 'shared'
+      }
+    },
+    { project: { from: '$source', path: 'stats.promptTokens', as: 'sourcePromptTokens' } },
+    { project: { from: '$shared', path: 'stats.promptTokens', as: 'sharedPromptTokens' } },
+    {
+      compare: {
+        left: '$sourcePromptTokens',
+        right: '$sharedPromptTokens',
+        named: 'greaterThan'
+      }
+    }
+  ],
+  metadata: {
+    category: 'kv-cache',
+    dependency: 'llm-shared-cache',
+    estimatedDurationMs: 10000
+  }
+}
+
 export const kvCacheTests = [
   ...kvCachePrefillTests,
+  kvCacheSharedPrefixOptIn,
   kvCacheCancelKeepsCommittedCache,
   kvCacheConcurrentSameKey,
   kvCacheConcurrentSameKeyAuto,
