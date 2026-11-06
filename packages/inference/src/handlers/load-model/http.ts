@@ -932,68 +932,84 @@ async function downloadShardsWithConcurrency(
 ) {
   const queue = [...shardsToDownload]
   const inFlight = new Set<Promise<void>>()
+  // Shard transfers run on a pool signal so that one failed shard can stop the
+  // others; a consumer cancel still reaches them through it.
+  const pool = new AbortController()
+  const forwardCancel = () => pool.abort(undefined)
+  if (signal.aborted) pool.abort(undefined)
+  else signal.addEventListener('abort', forwardCancel, { once: true })
 
-  while (queue.length > 0 || inFlight.size > 0) {
-    if (signal.aborted) {
-      throw new DownloadCancelledError()
+  try {
+    while (queue.length > 0 || inFlight.size > 0) {
+      if (signal.aborted) {
+        throw new DownloadCancelledError()
+      }
+
+      while (queue.length > 0 && inFlight.size < concurrency) {
+        const state = queue.shift()!
+
+        const downloadPromise = (async () => {
+          logger.info(`📥 Downloading shard ${state.index + 1}: ${state.shard.filename}`)
+
+          const meta = await performHttpDownloadWithResume(
+            state.shard.url,
+            state.shardPath,
+            downloadKey,
+            requireSecureTransport,
+            (progress) => {
+              state.downloadedBytes = progress.downloaded
+
+              if (progressCallback) {
+                const overallDownloaded = allShards.reduce((sum, s) => sum + s.downloadedBytes, 0)
+
+                progressCallback({
+                  type: 'modelProgress',
+                  downloaded: state.downloadedBytes,
+                  total: state.expectedSize,
+                  percentage: calculatePercentage(state.downloadedBytes, state.expectedSize),
+                  downloadKey,
+                  shardInfo: {
+                    currentShard: state.index + 1,
+                    totalShards: allShards.length,
+                    shardName: state.shard.filename,
+                    overallDownloaded,
+                    overallTotal,
+                    overallPercentage: calculatePercentage(overallDownloaded, overallTotal)
+                  }
+                })
+              }
+            },
+            pool.signal
+          )
+
+          await verifyHttpModelFile(
+            state.shard.url,
+            state.shardPath,
+            meta.hubSha256,
+            requireChecksum,
+            hooks
+          )
+
+          logger.info(`✅ Shard ${state.index + 1} complete: ${state.shard.filename}`)
+        })().finally(() => {
+          inFlight.delete(downloadPromise)
+        })
+
+        inFlight.add(downloadPromise)
+      }
+
+      if (inFlight.size > 0) {
+        await Promise.race(inFlight)
+      }
     }
-
-    while (queue.length > 0 && inFlight.size < concurrency) {
-      const state = queue.shift()!
-
-      const downloadPromise = (async () => {
-        logger.info(`📥 Downloading shard ${state.index + 1}: ${state.shard.filename}`)
-
-        const meta = await performHttpDownloadWithResume(
-          state.shard.url,
-          state.shardPath,
-          downloadKey,
-          requireSecureTransport,
-          (progress) => {
-            state.downloadedBytes = progress.downloaded
-
-            if (progressCallback) {
-              const overallDownloaded = allShards.reduce((sum, s) => sum + s.downloadedBytes, 0)
-
-              progressCallback({
-                type: 'modelProgress',
-                downloaded: state.downloadedBytes,
-                total: state.expectedSize,
-                percentage: calculatePercentage(state.downloadedBytes, state.expectedSize),
-                downloadKey,
-                shardInfo: {
-                  currentShard: state.index + 1,
-                  totalShards: allShards.length,
-                  shardName: state.shard.filename,
-                  overallDownloaded,
-                  overallTotal,
-                  overallPercentage: calculatePercentage(overallDownloaded, overallTotal)
-                }
-              })
-            }
-          },
-          signal
-        )
-
-        await verifyHttpModelFile(
-          state.shard.url,
-          state.shardPath,
-          meta.hubSha256,
-          requireChecksum,
-          hooks
-        )
-
-        logger.info(`✅ Shard ${state.index + 1} complete: ${state.shard.filename}`)
-      })().finally(() => {
-        inFlight.delete(downloadPromise)
-      })
-
-      inFlight.add(downloadPromise)
-    }
-
-    if (inFlight.size > 0) {
-      await Promise.race(inFlight)
-    }
+  } catch (error) {
+    // Stop the sibling transfers and wait for them to let go of their files
+    // before failing, so a retry can't start a second writer on a shard.
+    pool.abort(undefined)
+    await Promise.allSettled(inFlight)
+    throw error
+  } finally {
+    signal.removeEventListener('abort', forwardCancel)
   }
 
   // Mark all downloaded shards as complete
