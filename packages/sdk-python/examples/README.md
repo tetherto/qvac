@@ -106,6 +106,7 @@ extra.
 | `audiogen_minimax.py`              | `audiogen/generate-music-minimax.ts`                   | `audio_gen_stream` on the MiniMax-Music3 engine: a bring-your-own GGUF pair and the MiniMax-only sampling knobs           |
 | `diffusion_flux2_klein.py`         | `diffusion-flux2-klein.ts`                             | `diffusion_stream` (`DiffusionStreamRequest`) — split-layout FLUX.2 [klein]; progress, images and stats off one iterator  |
 | `diffusion_ideogram.py`            | `diffusion-ideogram.ts`                                | `diffusion_stream` with Ideogram 4's serialized structured caption; split layout with an extra unconditional model        |
+| `diffusion_moss_image.py`          | `diffusion-moss-image.ts`                              | `diffusion_stream` with a serialized MOSS-Image JSON layout; Qwen3.5 encoder plus external `tokenizerSrc`                 |
 | `diffusion_qwen_image_21.py`       | `diffusion-qwen-image-21.ts`                           | `diffusion_stream` with two base64 `init_images` references; Qwen3-VL encoder plus `projectionModelSrc`, RGBA output      |
 | `diffusion_simple.py`              | `diffusion-simple.ts`                                  | `diffusion_stream` at its smallest: one all-in-one SD 2.x GGUF, prompt only, image read off the stream                    |
 | `diffusion_flux2_klein_img2img.py` | `diffusion-flux2-klein-img2img.ts`                     | img2img via `init_image` as base64; FLUX.2 in-context conditioning (`prediction: flux2_flow`)                             |

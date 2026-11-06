@@ -79,7 +79,7 @@ export const sdcppConfigSchema = z.object({
       'Operation mode for the diffusion plugin. ' +
         "`'diffusion'` (default) builds a full SD / SDXL / SD3 / FLUX / Qwen-Image pipeline from " +
         'the primary model plus optional auxiliary text encoders, VAE, unconditional ' +
-        'diffusion model, and ESRGAN ' +
+        'diffusion model, external tokenizer, and ESRGAN ' +
         'upscaler, and exposes diffusion({ ... }). ' +
         "`'upscale'` builds a standalone ESRGAN upscaler from the primary model " +
         'file alone (auxiliary model sources are ignored) and exposes upscale({ ... }). ' +
@@ -264,7 +264,7 @@ export const sdcppConfigSchema = z.object({
     .optional()
     .describe(
       'LLM text encoder model — required for FLUX.2 [klein] (Qwen3), ' +
-        'Qwen-Image-2.1 and Ideogram 4 (Qwen3-VL), LTX-2 video (Gemma), ' +
+        'Qwen-Image-2.1 and Ideogram 4 (Qwen3-VL), MOSS-Image (Qwen3.5), LTX-2 video (Gemma), ' +
         'and MiniMax-H3 (H3-specific Qwen3-VL).'
     ),
   projectionModelSrc: modelSrcInputSchema
@@ -277,7 +277,7 @@ export const sdcppConfigSchema = z.object({
   vaeModelSrc: modelSrcInputSchema
     .optional()
     .describe(
-      'VAE decoder model, required for Qwen-Image-2.1, FLUX.2 [klein], Ideogram 4, ' +
+      'VAE decoder model, required for Qwen-Image-2.1, FLUX.2 [klein], Ideogram 4, MOSS-Image, ' +
         'LTX-2 video, and MiniMax-H3 video; optional for SDXL.'
     ),
   highNoiseDiffusionModelSrc: modelSrcInputSchema
@@ -295,6 +295,13 @@ export const sdcppConfigSchema = z.object({
         'llmModelSrc (Qwen3-VL), vaeModelSrc, and a JSON-serialized structured ' +
         'caption with explicit bounding boxes as the generation prompt. Plain-text ' +
         "prompts produce degenerate output or the model's placeholder response."
+    ),
+  tokenizerSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'External `tokenizer.json` for the Qwen3.5 text encoder — MOSS-Image only. ' +
+        'Requires diffusion mode, llmModelSrc (Qwen3.5) and vaeModelSrc. ' +
+        'Layout prompts can be passed as a JSON string.'
     ),
   clipVisionModelSrc: modelSrcInputSchema
     .optional()
