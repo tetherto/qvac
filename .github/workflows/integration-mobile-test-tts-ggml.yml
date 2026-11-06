@@ -173,7 +173,7 @@ jobs:
     # and blocks this job (no build, no Device Farm cost).
     needs: [runner_names, validate-devices]
     if: ${{ !cancelled() && needs.runner_names.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') }}
-    runs-on: ${{ matrix.platform == 'iOS' && needs.runner_names.outputs.macos_15 || needs.runner_names.outputs.linux_ubuntu2404_x64 }}
+    runs-on: ${{ matrix.platform == 'iOS' && needs.runner_names.outputs.macos_26 || needs.runner_names.outputs.linux_ubuntu2404_x64 }}
     environment: release
     # Functional shards can spend up to 120 minutes in Device Farm plus queue
     # time; retain enough budget for build, scheduling, and log collection.
