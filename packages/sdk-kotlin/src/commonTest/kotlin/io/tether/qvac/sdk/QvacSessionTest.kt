@@ -2,6 +2,7 @@ package io.tether.qvac.sdk
 
 import io.tether.qvac.sdk.generated.schema.CancelRequest
 import io.tether.qvac.sdk.generated.schema.CancelRequestRequest
+import io.tether.qvac.sdk.generated.schema.SuspendRequest
 import io.tether.qvac.sdk.generated.schema.UnloadModelRequest
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +66,24 @@ class QvacSessionTest {
         for (request in transport.requests.drop(1)) {
             assertEquals(session.sessionId, request["sessionId"]?.jsonPrimitive?.content, request.type())
         }
+    }
+
+    @Test
+    fun runtimeWideOperationsAreRefusedOnASessionBeforeTheWire() = runTest {
+        val transport = SessionRecordingTransport()
+        val session = QvacClient(transport).openSession()
+        session.opened.await()
+
+        for (type in listOf("suspend", "resume", "deleteCache", "startRpcServer", "stopRpcServer")) {
+            val error = assertFailsWith<QvacOwnerOnlyException> { session.call(buildJsonObject { put("type", type) }) }
+            assertEquals(type, error.operation)
+            assertEquals(session.sessionId, error.sessionId)
+        }
+        assertFailsWith<QvacOwnerOnlyException> { session.`suspend`(SuspendRequest()) }
+        assertEquals(listOf("openSession"), transport.requests.map { it.type() }, "nothing reached the wire")
+
+        session.call(buildJsonObject { put("type", "state") })
+        assertEquals("state", transport.requests.last().type(), "a read-only runtime call still goes through")
     }
 
     @Test

@@ -11,6 +11,9 @@ works through it unchanged. Each payload it sends carries the session id, so
 `cancel` reaches only this session's requests, `load_model` takes a lease the
 session's `unload_model` releases, and `close()` ends the session without
 shutting the runtime down. Only `Client.close()`, the owner's call, does that.
+The operations that change the runtime for every session (`suspend`,
+`resume`, `delete_cache`, `start_rpc_server`, `stop_rpc_server`) raise
+`OwnerOnlyError` on a session transport.
 """
 
 from __future__ import annotations
@@ -23,7 +26,15 @@ from ._transport import Transport
 from .errors import (
     InvalidResponseError,
     ModelHandleInvalidatedError,
+    OwnerOnlyError,
     SessionInvalidatedError,
+)
+
+# Operations that change the shared runtime for every session. The worker
+# refuses them from a session too; the session transport refuses them first,
+# before any wire traffic, like a call on an ended session.
+OWNER_ONLY_OPERATIONS = frozenset(
+    {"suspend", "resume", "deleteCache", "startRpcServer", "stopRpcServer"}
 )
 
 
@@ -60,10 +71,13 @@ class SessionTransport:
             if isinstance(model_id, str) and model_id in self._held_models:
                 raise ModelHandleInvalidatedError(model_id, self.session_id)
             raise SessionInvalidatedError(self.session_id, self._ended)
+        kind = payload.get("type")
+        if kind in OWNER_ONLY_OPERATIONS:
+            raise OwnerOnlyError(kind, self.session_id)
         # The handle's id replaces any id the payload carries, so a caller
         # cannot send a request as another session. Only the session methods
         # themselves name the session they act on.
-        if payload.get("type") in ("openSession", "closeSession"):
+        if kind in ("openSession", "closeSession"):
             return payload
         return {**payload, "sessionId": self.session_id}
 

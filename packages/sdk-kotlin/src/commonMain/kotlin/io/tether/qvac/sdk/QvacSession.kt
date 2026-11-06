@@ -26,7 +26,9 @@ import kotlin.concurrent.Volatile
  * and [close] ends the session without shutting the runtime down.
  *
  * Only the owner [QvacClient]'s `close()` stops the runtime, and it ends every
- * session with it.
+ * session with it. The operations that change the runtime for every session
+ * (`suspend`, `resume`, `deleteCache`, `startRpcServer`, `stopRpcServer`)
+ * throw [QvacOwnerOnlyException] on a session.
  */
 class QvacSession internal constructor(
     val sessionId: String,
@@ -95,9 +97,10 @@ internal class SessionTransport(
     // session they act on.
     private suspend fun stamp(payload: JsonObject): JsonObject {
         ended?.let { throw endedError(payload, it) }
+        val type = payload["type"]?.jsonPrimitive?.content
+        if (type != null && type in OWNER_ONLY_OPERATIONS) throw QvacOwnerOnlyException(type, sessionId)
         opened.await()
         ended?.let { throw endedError(payload, it) }
-        val type = payload["type"]?.jsonPrimitive?.content
         if (type == "openSession" || type == "closeSession") return payload
         return JsonObject(payload + ("sessionId" to JsonPrimitive(sessionId)))
     }
@@ -163,6 +166,17 @@ class QvacModelHandleInvalidatedException(val modelId: String, val sessionId: St
     QvacFeatureException(
         "Model \"$modelId\" is no longer loaded: session \"$sessionId\" that held it is no longer usable ($reason); load it again",
     )
+
+/**
+ * Operations that change the shared runtime for every session. The worker
+ * refuses them from a session too; the session transport refuses them first,
+ * before any wire traffic, like a call on an ended session.
+ */
+internal val OWNER_ONLY_OPERATIONS = setOf("suspend", "resume", "deleteCache", "startRpcServer", "stopRpcServer")
+
+/** A runtime-wide operation called on a session handle; only the owner client may call it. */
+class QvacOwnerOnlyException(val operation: String, val sessionId: String) :
+    QvacFeatureException("Operation \"$operation\" is reserved for the runtime owner; session \"$sessionId\" cannot call it")
 
 /** `openSession` called on a session handle instead of the owner client. */
 class QvacNestedSessionException(val sessionId: String) :

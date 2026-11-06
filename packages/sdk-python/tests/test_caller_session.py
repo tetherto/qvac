@@ -19,6 +19,7 @@ from tetherto.qvac_sdk.client import Client
 from tetherto.qvac_sdk.errors import (
     InvalidResponseError,
     ModelHandleInvalidatedError,
+    OwnerOnlyError,
     SessionInvalidatedError,
 )
 
@@ -116,6 +117,25 @@ async def test_a_payload_cannot_name_another_session():
     ]
     assert frames == [{"type": "classify", "done": True}]
     assert owner.sent[-1]["sessionId"] == session.session_id
+
+
+async def test_runtime_wide_operations_are_refused_on_a_session_before_the_wire():
+    owner = FakeTransport()
+    session = await open_session(owner)
+
+    for kind in ("suspend", "resume", "deleteCache", "startRpcServer", "stopRpcServer"):
+        with pytest.raises(OwnerOnlyError) as info:
+            await session.transport.call({"type": kind})
+        assert info.value.operation == kind
+        assert info.value.session_id == session.session_id
+    assert [p["type"] for p in owner.sent] == [
+        "openSession"
+    ], "nothing reached the wire"
+
+    await session.transport.call({"type": "state"})
+    assert (
+        owner.sent[-1]["type"] == "state"
+    ), "a read-only runtime call still goes through"
 
 
 async def test_a_session_cannot_open_a_nested_session():
