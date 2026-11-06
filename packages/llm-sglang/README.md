@@ -1,7 +1,8 @@
 # @qvac/llm-sglang
 
-Experimental addon on the `sglang` branch. It is not wired into CI or the SDK
-release flow.
+Experimental addon on the `sglang` branch. `prebuilds-nx.yml` builds only
+Linux x64 and Linux ARM64, running the mock HTTP integration suite against
+each native build before uploading it. The addon is not in the SDK release flow.
 
 `LlmSglang` implements the same load / run / unload shape as
 `@qvac/llm-llamacpp` for text prompts and image messages. `load()` starts the

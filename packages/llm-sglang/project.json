@@ -9,8 +9,8 @@
         "cwd": "packages/llm-sglang",
         "ci": {
           "installWithPnpm": true,
-          "desktopSmokeCommand": "test -s prebuilds/linux-arm64/qvac__llm-sglang.bare",
-          "matrixInclude": "[{\"os\":\"ubuntu-22.04-arm\",\"runner_key\":\"ubuntu_2204_arm\",\"platform\":\"linux\",\"arch\":\"arm64\"}]"
+          "desktopSmokeCommand": "npm run build:ts && node --test test/integration/http.test.cjs",
+          "matrixInclude": "[{\"os\":\"ubuntu-22.04\",\"runner_key\":\"linux_ubuntu2204_x64\",\"platform\":\"linux\",\"arch\":\"x64\"},{\"os\":\"ubuntu-22.04-arm\",\"runner_key\":\"ubuntu_2204_arm\",\"platform\":\"linux\",\"arch\":\"arm64\"}]"
         }
       },
       "inputs": ["default", "!{projectRoot}/prebuilds/**"],
