@@ -45,10 +45,20 @@ import {
 
 const logger = getEngineLogger()
 
+// The shard group a path belongs to: the path with its -NNNNN-of-NNNNN marker removed.
+function shardFamily(registryPath: string): string {
+  return registryPath.replace(/-\d{5}-of-\d{5}\./, '.')
+}
+
 /**
- * Find all shards for a model using path prefix query.
+ * Find the shards of a model in a registry source. The registry is queried by
+ * path prefix, which also matches other models sharing the prefix and the same
+ * path in other sources, so the result is narrowed to this shard group and source.
  */
-export async function findModelShards(registryPath: string): Promise<
+export async function findModelShards(
+  registryPath: string,
+  registrySource: string
+): Promise<
   {
     path: string
     source: string
@@ -64,8 +74,8 @@ export async function findModelShards(registryPath: string): Promise<
     throw new RegistryDownloadFailedError(`Not a sharded model path: ${registryPath}`)
   }
 
-  const pathPrefix = registryPath.replace(/-\d{5}-of-\d{5}\./, '.')
-  const basePath = pathPrefix.substring(0, pathPrefix.lastIndexOf('.'))
+  const family = shardFamily(registryPath)
+  const basePath = family.substring(0, family.lastIndexOf('.'))
 
   logger.info(`🔍 Finding shards with prefix: ${basePath}`)
 
@@ -77,7 +87,7 @@ export async function findModelShards(registryPath: string): Promise<
   const sortedShards = shards
     .filter((s) => {
       const info = detectShardedModel(s.path.split('/').pop() || '')
-      return info.isSharded
+      return info.isSharded && s.source === registrySource && shardFamily(s.path) === family
     })
     .sort((a, b) => {
       const aInfo = detectShardedModel(a.path.split('/').pop() || '')
@@ -141,7 +151,7 @@ async function downloadShardedFilesFromRegistry(
       throw new RegistryDownloadFailedError(`Not a sharded model: ${filename}`)
     }
 
-    const remoteShards = await findModelShards(registryPath)
+    const remoteShards = await findModelShards(registryPath, registrySource)
 
     if (remoteShards.length === 0) {
       throw new ModelNotFoundError(`No shards found for ${registryPath}`)

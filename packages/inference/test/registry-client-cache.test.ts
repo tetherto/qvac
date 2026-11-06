@@ -2,11 +2,13 @@ import test from 'brittle'
 import fs from 'bare-fs'
 import os from 'bare-os'
 import path from 'bare-path'
+import Buffer from 'bare-buffer'
 import { AbortController } from 'bare-abort-controller'
 import { QVACRegistryClient } from '@qvac/registry-client'
 import { initEnv } from '@/runtime/env'
 import { closeRegistryClient } from '@/runtime/registry-client'
 import { downloadSingleFileFromRegistry } from '@/handlers/load-model/registry-download-utils'
+import { downloadModelFromRegistry } from '@/handlers/load-model/registry'
 import { handleDeleteCache } from '@/handlers/delete-cache'
 import {
   getShardedModelCacheDir,
@@ -173,6 +175,51 @@ test('deleteCache({ modelSrc }): an uncatalogued sharded model clears every shar
   t.is(response.success, true)
   t.is(cleared.length, 2, "cleared both shards and no other model's")
   t.absent(fs.existsSync(shardDir), 'shard directory deleted')
+})
+
+// A GGUF v3 header declaring one tensor, enough for the shard tensor index.
+function ggufShard(tensorName: string): Buffer {
+  const name = Buffer.from(tensorName)
+  const header = Buffer.alloc(56 + name.length)
+  header.write('GGUF', 0, 'latin1')
+  header.writeUInt32LE(3, 4)
+  header.writeBigUInt64LE(1n, 8) // tensor count
+  header.writeBigUInt64LE(0n, 16) // metadata count
+  header.writeBigUInt64LE(BigInt(name.length), 24)
+  name.copy(header, 32)
+  header.writeUInt32LE(1, 32 + name.length) // dimensions
+  header.writeBigUInt64LE(4n, 36 + name.length) // shape
+  header.writeUInt32LE(0, 44 + name.length) // type
+  header.writeBigUInt64LE(0n, 48 + name.length) // data offset
+  return header
+}
+
+test('downloadModelFromRegistry: an uncatalogued sharded model downloads only its own shards', async (t) => {
+  const downloaded: string[] = []
+  stubClient(t, {
+    findModels: async () => [
+      { path: 'x/model-00001-of-00002.gguf', source: 's3' },
+      { path: 'x/model-00002-of-00002.gguf', source: 's3' },
+      { path: 'x/model-extra-00001-of-00002.gguf', source: 's3' },
+      { path: 'x/model-00001-of-00002.gguf', source: 'hf' }
+    ],
+    downloadModel: async (registryPath: string, source: string, opts: { outputFile: string }) => {
+      downloaded.push(`${source}:${registryPath}`)
+      fs.writeFileSync(opts.outputFile, ggufShard(`${source}:${registryPath}`))
+    }
+  })
+  const registryPath = 'x/model-00001-of-00002.gguf'
+  const shardDir = getShardedModelCacheDir(generateShortHash(registryPath))
+  t.teardown(() => fs.rmSync(shardDir, { recursive: true, force: true }))
+
+  const modelPath = await downloadModelFromRegistry(registryPath, 's3')
+
+  t.alike(
+    downloaded.sort(),
+    ['s3:x/model-00001-of-00002.gguf', 's3:x/model-00002-of-00002.gguf'],
+    "downloaded both shards and no other model's or source's"
+  )
+  t.is(modelPath, path.join(shardDir, 'model-00001-of-00002.gguf'))
 })
 
 test('deleteCache({ modelSrc }): removes the legacy flat cache of an NMT companion set', async (t) => {
