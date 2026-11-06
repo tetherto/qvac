@@ -9,6 +9,10 @@ on:
         description: JSON rows of every desktop target
         type: string
         required: true
+      toolchain:
+        description: Install the locked bare toolchain; false for callers whose tests compile nothing
+        type: boolean
+        default: true
 
 permissions: {}
 
@@ -54,7 +58,9 @@ jobs:
         with:
           package-json-file: src/package.json
       # main's locked bare toolchain: bare-make, clang, clang-format and llvm tools from the checkout's lock, first on PATH.
-      - name: Install the locked bare toolchain
+      # A caller whose tests compile nothing turns it off, as main's SDK e2e never installed it.
+      - if: inputs.toolchain
+        name: Install the locked bare toolchain
         run: node src/.github/bare-toolchain/install.mjs
       - uses: tetherto/qvac-actions/configure-aws-credentials@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
