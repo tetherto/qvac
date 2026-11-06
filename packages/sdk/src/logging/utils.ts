@@ -77,6 +77,10 @@ export function summarizeRequest(request: Request): Record<string, unknown> {
   }
 
   if (request.type === 'embed') {
+    if (request.inputs !== undefined) {
+      summary['inputs'] = `[${request.inputs.length} embedding inputs]`
+      return summary
+    }
     const text = request['text']
     if (Array.isArray(text)) {
       const totalLen = text.reduce((sum, t) => sum + t.length, 0)

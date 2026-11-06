@@ -82,10 +82,6 @@
       "types": "./dist/models/registry/index.d.ts",
       "import": "./dist/models/registry/index.js"
     },
-    "./model-resource-profiles": {
-      "types": "./dist/models/registry/resource-profiles.d.ts",
-      "import": "./dist/models/registry/resource-profiles.js"
-    },
     "./llamacpp-completion/plugin": {
       "types": "./dist/plugins/builtin/llamacpp-completion/plugin.d.ts",
       "import": "./dist/plugins/builtin/llamacpp-completion/plugin.js"
@@ -175,7 +171,7 @@
     "test": "npm run build:test && brittle-bare 'test/dist/test/**/*.test.js'",
     "test:bare": "npm run test",
     "check-models": "bare ./dist/models/update-models/index.js --check",
-    "update-models": "bare ./dist/models/update-models/index.js && prettier --write src/models/registry/models.ts src/models/registry/resource-profiles.ts"
+    "update-models": "bare ./dist/models/update-models/index.js && prettier --write src/models/registry/models.ts"
   },
   "engines": {
     "bare": ">=1.32.0"
@@ -212,21 +208,21 @@
     "zod": "4.6.5"
   },
   "peerDependencies": {
-    "@qvac/asr-ggml": "^0.11.1",
-    "@qvac/audiogen-ggml": "^0.9.0",
-    "@qvac/bci-whispercpp": "^0.14.0",
-    "@qvac/classification-ggml": "^0.34.0",
+    "@qvac/asr-ggml": "^0.12.0",
+    "@qvac/audiogen-ggml": "^0.10.0",
+    "@qvac/bci-whispercpp": "^0.15.0",
+    "@qvac/classification-ggml": "^0.35.0",
     "@qvac/decoder-audio": "^0.9.0",
-    "@qvac/diffusion-cpp": "^0.31.0",
-    "@qvac/embed-llamacpp": "^0.53.0",
+    "@qvac/diffusion-cpp": "^0.34.0",
+    "@qvac/embed-llamacpp": "^0.55.0",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.65.0",
-    "@qvac/ocr-ggml": "^0.31.0",
-    "@qvac/translation-nmtcpp": "^0.23.0",
-    "@qvac/tts-ggml": "^0.14.0",
-    "@qvac/turbovec-ggml": "^0.3.0",
-    "@qvac/vla-ggml": "^0.34.0",
-    "@qvac/ggml-rpc-server": "^0.7.0"
+    "@qvac/llm-llamacpp": "^0.68.0",
+    "@qvac/ocr-ggml": "^0.32.0",
+    "@qvac/translation-nmtcpp": "^0.24.0",
+    "@qvac/tts-ggml": "^0.15.0",
+    "@qvac/turbovec-ggml": "^0.4.0",
+    "@qvac/vla-ggml": "^0.35.0",
+    "@qvac/ggml-rpc-server": "^0.8.0"
   },
   "peerDependenciesMeta": {
     "@qvac/asr-ggml": {
@@ -276,20 +272,20 @@
     }
   },
   "devDependencies": {
-    "@qvac/asr-ggml": "^0.11.1",
-    "@qvac/audiogen-ggml": "^0.9.0",
-    "@qvac/bci-whispercpp": "^0.14.0",
-    "@qvac/classification-ggml": "^0.34.0",
+    "@qvac/asr-ggml": "^0.12.0",
+    "@qvac/audiogen-ggml": "^0.10.0",
+    "@qvac/bci-whispercpp": "^0.15.0",
+    "@qvac/classification-ggml": "^0.35.0",
     "@qvac/decoder-audio": "^0.9.0",
-    "@qvac/diffusion-cpp": "^0.31.0",
-    "@qvac/embed-llamacpp": "^0.53.0",
+    "@qvac/diffusion-cpp": "^0.34.0",
+    "@qvac/embed-llamacpp": "^0.55.0",
     "@qvac/langdetect-text": "^0.1.2",
-    "@qvac/llm-llamacpp": "^0.65.0",
-    "@qvac/ocr-ggml": "^0.31.0",
-    "@qvac/translation-nmtcpp": "^0.23.0",
-    "@qvac/tts-ggml": "^0.14.0",
-    "@qvac/turbovec-ggml": "^0.3.0",
-    "@qvac/vla-ggml": "^0.34.0",
+    "@qvac/llm-llamacpp": "^0.68.0",
+    "@qvac/ocr-ggml": "^0.32.0",
+    "@qvac/translation-nmtcpp": "^0.24.0",
+    "@qvac/tts-ggml": "^0.15.0",
+    "@qvac/turbovec-ggml": "^0.4.0",
+    "@qvac/vla-ggml": "^0.35.0",
     "@types/brittle": "^3.5.0",
     "bare": "1.34.1 || >=1.35.1",
     "bare-console": "*",
@@ -304,6 +300,6 @@
     "prettier-config-holepunch": "^2.0.0",
     "tsc-alias": "^1.8.17",
     "typescript": "^5.9.3",
-    "@qvac/ggml-rpc-server": "^0.7.0"
+    "@qvac/ggml-rpc-server": "^0.8.0"
   }
 }
