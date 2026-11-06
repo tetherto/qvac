@@ -29,11 +29,9 @@ class HeldModelTracker(Protocol):
 
     def record_held_model(self, model_id: str) -> None:
         """A load through this transport resolved to `model_id`."""
-        ...
 
     def release_held_model(self, model_id: str) -> None:
         """An unload through this transport released `model_id`."""
-        ...
 
 
 class Transport(Protocol):
