@@ -6023,6 +6023,10 @@
                         "required": ["false", "true"],
                         "additionalProperties": false,
                         "title": "DecideSingleRequestQuestionsValueNoulLabels"
+                      },
+                      "requireProbability": {
+                        "description": "Require the answer to be the probability that the statement holds. A model whose noul answer means something else (for example an expected rating) rejects the request.",
+                        "type": "boolean"
                       }
                     },
                     "required": ["instructions", "type"],
@@ -6406,6 +6410,10 @@
                         "required": ["false", "true"],
                         "additionalProperties": false,
                         "title": "DecideBatchRequestQuestionsValueNoulLabels"
+                      },
+                      "requireProbability": {
+                        "description": "Require the answer to be the probability that the statement holds. A model whose noul answer means something else (for example an expected rating) rejects the request.",
+                        "type": "boolean"
                       }
                     },
                     "required": ["instructions", "type"],
@@ -6503,12 +6511,11 @@
                         "type": "object",
                         "properties": {
                           "answerConfidence": {
-                            "type": "number"
-                          },
-                          "confidence": {
+                            "description": "Deprecated. Probability of the reported answer; only some models report it.",
                             "type": "number"
                           },
                           "action": {
+                            "description": "Deprecated. Only some models report it.",
                             "type": "object",
                             "properties": {
                               "actProbability": {
@@ -6519,6 +6526,9 @@
                             "required": ["actProbability"],
                             "additionalProperties": false,
                             "title": "DecideResponseResultAnswersValueChoiceAction"
+                          },
+                          "confidence": {
+                            "type": "number"
                           },
                           "type": {
                             "type": "string",
@@ -6548,14 +6558,7 @@
                             "title": "DecideResponseResultAnswersValueChoiceProbabilities"
                           }
                         },
-                        "required": [
-                          "answerConfidence",
-                          "confidence",
-                          "action",
-                          "type",
-                          "choice",
-                          "probabilities"
-                        ],
+                        "required": ["confidence", "type", "choice", "probabilities"],
                         "additionalProperties": false,
                         "title": "DecideResponseResultAnswersValueChoice"
                       },
@@ -6563,12 +6566,11 @@
                         "type": "object",
                         "properties": {
                           "answerConfidence": {
-                            "type": "number"
-                          },
-                          "confidence": {
+                            "description": "Deprecated. Probability of the reported answer; only some models report it.",
                             "type": "number"
                           },
                           "action": {
+                            "description": "Deprecated. Only some models report it.",
                             "type": "object",
                             "properties": {
                               "actProbability": {
@@ -6579,6 +6581,9 @@
                             "required": ["actProbability"],
                             "additionalProperties": false,
                             "title": "DecideResponseResultAnswersValueScoreAction"
+                          },
+                          "confidence": {
+                            "type": "number"
                           },
                           "type": {
                             "type": "string",
@@ -6608,15 +6613,7 @@
                             "title": "DecideResponseResultAnswersValueScoreProbabilities"
                           }
                         },
-                        "required": [
-                          "answerConfidence",
-                          "confidence",
-                          "action",
-                          "type",
-                          "score",
-                          "legend",
-                          "probabilities"
-                        ],
+                        "required": ["confidence", "type", "score", "legend", "probabilities"],
                         "additionalProperties": false,
                         "title": "DecideResponseResultAnswersValueScore"
                       },
@@ -6624,12 +6621,11 @@
                         "type": "object",
                         "properties": {
                           "answerConfidence": {
-                            "type": "number"
-                          },
-                          "confidence": {
+                            "description": "Deprecated. Probability of the reported answer; only some models report it.",
                             "type": "number"
                           },
                           "action": {
+                            "description": "Deprecated. Only some models report it.",
                             "type": "object",
                             "properties": {
                               "actProbability": {
@@ -6641,6 +6637,10 @@
                             "additionalProperties": false,
                             "title": "DecideResponseResultAnswersValueNoulAction"
                           },
+                          "confidence": {
+                            "description": "Only some models report a confidence for noul answers; none is derived.",
+                            "type": "number"
+                          },
                           "type": {
                             "type": "string",
                             "const": "noul"
@@ -6649,7 +6649,7 @@
                             "type": "number"
                           }
                         },
-                        "required": ["answerConfidence", "confidence", "action", "type", "noul"],
+                        "required": ["type", "noul"],
                         "additionalProperties": false,
                         "title": "DecideResponseResultAnswersValueNoul"
                       }
@@ -6713,14 +6713,7 @@
                       "title": "DecideResponseResultUsageOptions"
                     }
                   },
-                  "required": [
-                    "inputTokens",
-                    "outputTokens",
-                    "stateTokens",
-                    "stateTokensDropped",
-                    "truncated",
-                    "truncatedQuestions"
-                  ],
+                  "required": ["inputTokens", "outputTokens"],
                   "additionalProperties": false,
                   "title": "DecideResponseResultUsage"
                 }
@@ -6748,12 +6741,11 @@
                           "type": "object",
                           "properties": {
                             "answerConfidence": {
-                              "type": "number"
-                            },
-                            "confidence": {
+                              "description": "Deprecated. Probability of the reported answer; only some models report it.",
                               "type": "number"
                             },
                             "action": {
+                              "description": "Deprecated. Only some models report it.",
                               "type": "object",
                               "properties": {
                                 "actProbability": {
@@ -6764,6 +6756,9 @@
                               "required": ["actProbability"],
                               "additionalProperties": false,
                               "title": "DecideResponseResultItemAnswersValueChoiceAction"
+                            },
+                            "confidence": {
+                              "type": "number"
                             },
                             "type": {
                               "type": "string",
@@ -6793,14 +6788,7 @@
                               "title": "DecideResponseResultItemAnswersValueChoiceProbabilities"
                             }
                           },
-                          "required": [
-                            "answerConfidence",
-                            "confidence",
-                            "action",
-                            "type",
-                            "choice",
-                            "probabilities"
-                          ],
+                          "required": ["confidence", "type", "choice", "probabilities"],
                           "additionalProperties": false,
                           "title": "DecideResponseResultItemAnswersValueChoice"
                         },
@@ -6808,12 +6796,11 @@
                           "type": "object",
                           "properties": {
                             "answerConfidence": {
-                              "type": "number"
-                            },
-                            "confidence": {
+                              "description": "Deprecated. Probability of the reported answer; only some models report it.",
                               "type": "number"
                             },
                             "action": {
+                              "description": "Deprecated. Only some models report it.",
                               "type": "object",
                               "properties": {
                                 "actProbability": {
@@ -6824,6 +6811,9 @@
                               "required": ["actProbability"],
                               "additionalProperties": false,
                               "title": "DecideResponseResultItemAnswersValueScoreAction"
+                            },
+                            "confidence": {
+                              "type": "number"
                             },
                             "type": {
                               "type": "string",
@@ -6853,15 +6843,7 @@
                               "title": "DecideResponseResultItemAnswersValueScoreProbabilities"
                             }
                           },
-                          "required": [
-                            "answerConfidence",
-                            "confidence",
-                            "action",
-                            "type",
-                            "score",
-                            "legend",
-                            "probabilities"
-                          ],
+                          "required": ["confidence", "type", "score", "legend", "probabilities"],
                           "additionalProperties": false,
                           "title": "DecideResponseResultItemAnswersValueScore"
                         },
@@ -6869,12 +6851,11 @@
                           "type": "object",
                           "properties": {
                             "answerConfidence": {
-                              "type": "number"
-                            },
-                            "confidence": {
+                              "description": "Deprecated. Probability of the reported answer; only some models report it.",
                               "type": "number"
                             },
                             "action": {
+                              "description": "Deprecated. Only some models report it.",
                               "type": "object",
                               "properties": {
                                 "actProbability": {
@@ -6886,6 +6867,10 @@
                               "additionalProperties": false,
                               "title": "DecideResponseResultItemAnswersValueNoulAction"
                             },
+                            "confidence": {
+                              "description": "Only some models report a confidence for noul answers; none is derived.",
+                              "type": "number"
+                            },
                             "type": {
                               "type": "string",
                               "const": "noul"
@@ -6894,7 +6879,7 @@
                               "type": "number"
                             }
                           },
-                          "required": ["answerConfidence", "confidence", "action", "type", "noul"],
+                          "required": ["type", "noul"],
                           "additionalProperties": false,
                           "title": "DecideResponseResultItemAnswersValueNoul"
                         }
@@ -6958,14 +6943,7 @@
                         "title": "DecideResponseResultItemUsageOptions"
                       }
                     },
-                    "required": [
-                      "inputTokens",
-                      "outputTokens",
-                      "stateTokens",
-                      "stateTokensDropped",
-                      "truncated",
-                      "truncatedQuestions"
-                    ],
+                    "required": ["inputTokens", "outputTokens"],
                     "additionalProperties": false,
                     "title": "DecideResponseResultItemUsage"
                   }

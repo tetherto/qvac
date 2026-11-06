@@ -1,5 +1,5 @@
 import { HttpError } from '@/serve/lib/http-error'
-import { decide } from '@qvac/sdk'
+import { decide, RequestValidationFailedError, SDK_CLIENT_ERROR_CODES } from '@qvac/sdk'
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod'
 import { requireModel } from '@/serve/core/plugins/require-model'
 import { decisionsBody, decisionsResult } from '@/serve/extensions/openai/schemas/decisions'
@@ -46,9 +46,35 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       )
       req.bindCancel(run.requestId)
       app.qvac.logger.info(`  decisions model=${alias} questions=${req.body.questions.length}`)
-      return toDecisionsResult(await run, req.body, alias)
+      return toDecisionsResult(await rejectInvalidAs400(run), req.body, alias)
     }
   )
+}
+
+// A request the model rejects (a limit or control it does not support, or a
+// predicate on a model whose noul is not a probability) is the caller's error.
+// The global handler would answer it with 500; keep its message. Execution
+// failures and cancellations keep their own status.
+//
+// The client throws RequestValidationFailedError itself; the worker's comes
+// back over RPC as an error carrying the same code, not the class.
+function isValidationError(err: unknown): err is Error {
+  return (
+    err instanceof RequestValidationFailedError ||
+    (err instanceof Error &&
+      (err as { code?: unknown }).code === SDK_CLIENT_ERROR_CODES.REQUEST_VALIDATION_FAILED)
+  )
+}
+
+async function rejectInvalidAs400<T>(run: Promise<T>): Promise<T> {
+  try {
+    return await run
+  } catch (err) {
+    if (isValidationError(err)) {
+      throw new HttpError(400, 'invalid_request', err.message)
+    }
+    throw err
+  }
 }
 
 export default plugin
