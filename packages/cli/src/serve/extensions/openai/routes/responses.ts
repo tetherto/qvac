@@ -33,6 +33,7 @@ import {
 import { responseId as allocResponseId } from '@/serve/extensions/openai/adapters/responses-shape'
 import { RESPONSES_VOLATILE_STUB } from '@/serve/extensions/openai/adapters/responses-store'
 import {
+  takeSequenceNumber,
   writeBlockingResponse,
   writeStreamingResponse,
   type ResponsesHandlerParams,
@@ -107,8 +108,14 @@ constrain generation with the chat template's tool grammar.
 **\`parallel_tool_calls\`**: \`true\` (default) lets one response carry several
 tool calls; \`false\` limits it to one.
 
+**Reasoning** from models that emit \`<think>\` blocks is returned in
+\`reasoning\` output items, not in \`output_text\`. Items keep the order the
+model produced them, so answer text after a later reasoning block starts a new
+\`message\` item.
+
 **Streaming** (\`stream: true\`) emits the OpenAI Responses SSE event sequence
-(\`response.created\` → \`response.output_text.delta\` … → \`response.completed\`)
+(\`response.created\` → \`response.reasoning_text.delta\` … →
+\`response.output_text.delta\` … → \`response.completed\`)
 and terminates **without** a \`[DONE]\` sentinel (per the spec).
 `.trim(),
   getById:
@@ -147,6 +154,7 @@ function sendResponseFailed(
   }
   sendSSE(reply.raw, {
     type: 'response.failed',
+    sequence_number: takeSequenceNumber(reply.raw),
     response: {
       id: params.rid,
       object: 'response',
@@ -301,6 +309,7 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
             modelId: params.sdkModelId,
             history,
             stream,
+            captureThinking: true,
             ...(sdk.kvCache !== undefined ? { kvCache: sdk.kvCache } : {}),
             ...(params.tools !== undefined ? { tools: params.tools } : {}),
             ...(params.generationParams !== undefined

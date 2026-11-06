@@ -42,6 +42,9 @@ function baseHandlerParams(rid: string): ResponsesHandlerParams {
 }
 
 function fakeStreamCompletion(opts: {
+  thinkingTokens?: string[]
+  /** Interleaved reasoning and text, emitted in order after `thinkingTokens` and `tokens`. */
+  steps?: Array<{ think: string } | { text: string }>
   tokens: string[]
   toolCalls: ToolCall[]
   text: string
@@ -52,7 +55,13 @@ function fakeStreamCompletion(opts: {
   // and the terminal `stopReason` the way the SDK does.
   async function* events(): AsyncGenerator<unknown> {
     let seq = 0
+    for (const t of opts.thinkingTokens ?? []) yield { type: 'thinkingDelta', seq: seq++, text: t }
     for (const t of opts.tokens) yield { type: 'contentDelta', seq: seq++, text: t }
+    for (const step of opts.steps ?? []) {
+      yield 'think' in step
+        ? { type: 'thinkingDelta', seq: seq++, text: step.think }
+        : { type: 'contentDelta', seq: seq++, text: step.text }
+    }
     for (const call of opts.toolCalls) yield { type: 'toolCall', seq: seq++, call }
     if (opts.stats !== undefined) yield { type: 'completionStats', seq: seq++, stats: opts.stats }
     yield { type: 'completionDone', seq: seq++, stopReason: opts.stopReason ?? 'eos' }
@@ -165,18 +174,18 @@ describe('writeStreamingResponse', () => {
     assert.equal(argDeltas.length, 2)
     assert.notEqual((argDeltas[0] as { item_id: string }).item_id, 'call_a')
     assert.notEqual((argDeltas[1] as { item_id: string }).item_id, 'call_b')
-    assert.equal((argDeltas[0] as { output_index: number }).output_index, 1)
-    assert.equal((argDeltas[1] as { output_index: number }).output_index, 2)
+    assert.equal((argDeltas[0] as { output_index: number }).output_index, 0)
+    assert.equal((argDeltas[1] as { output_index: number }).output_index, 1)
 
+    // A turn that only calls tools returns only its calls, as OpenAI does.
     const out = completed['output'] as Array<{ type: string; id: string; call_id?: string }>
-    assert.equal(out.length, 3)
-    assert.equal(out[0]!.type, 'message')
+    assert.equal(out.length, 2)
+    assert.equal(out[0]!.type, 'function_call')
     assert.equal(out[1]!.type, 'function_call')
-    assert.equal(out[2]!.type, 'function_call')
-    assert.equal(out[1]!.id, (argDeltas[0] as { item_id: string }).item_id)
-    assert.equal(out[2]!.id, (argDeltas[1] as { item_id: string }).item_id)
-    assert.equal(out[1]!.call_id, 'call_a')
-    assert.equal(out[2]!.call_id, 'call_b')
+    assert.equal(out[0]!.id, (argDeltas[0] as { item_id: string }).item_id)
+    assert.equal(out[1]!.id, (argDeltas[1] as { item_id: string }).item_id)
+    assert.equal(out[0]!.call_id, 'call_a')
+    assert.equal(out[1]!.call_id, 'call_b')
 
     const completedEvent = events.find((e) => e['type'] === 'response.completed') as {
       response: { usage: { output_tokens: number } }
@@ -207,6 +216,221 @@ describe('writeStreamingResponse', () => {
     assert.ok(terminal)
     assert.equal(terminal.response.status, 'incomplete')
     assert.equal(terminal.response.incomplete_details.reason, 'max_output_tokens')
+  })
+})
+
+describe('writeStreamingResponse: reasoning', () => {
+  it('streams reasoning as its own item before the message and keeps it out of the text', async () => {
+    const holder = createStreamResponse()
+    const result = fakeStreamCompletion({
+      thinkingTokens: ['Check ', 'the file.'],
+      tokens: ['Done', '.'],
+      toolCalls: [],
+      text: 'Done.',
+      stats: { promptTokens: 50, emittedTokens: 6 }
+    })
+
+    const completed = await writeStreamingResponse(
+      holder.res,
+      baseHandlerParams('resp_reason'),
+      () => result
+    )
+    const events = parseSseJsonEvents(holder.raw) as Array<Record<string, unknown>>
+    const types = events.map((e) => e['type'])
+
+    const reasoningDeltas = events.filter((e) => e['type'] === 'response.reasoning_text.delta')
+    assert.deepEqual(
+      reasoningDeltas.map((e) => e['delta']),
+      ['Check ', 'the file.']
+    )
+    assert.equal(reasoningDeltas[0]!['output_index'], 0)
+    const rsId = reasoningDeltas[0]!['item_id'] as string
+    assert.match(rsId, /^rs_/)
+
+    const textDeltas = events.filter((e) => e['type'] === 'response.output_text.delta')
+    assert.deepEqual(
+      textDeltas.map((e) => e['delta']),
+      ['Done', '.']
+    )
+    assert.equal(textDeltas[0]!['output_index'], 1)
+
+    // The reasoning item closes before the message item opens.
+    const reasoningDone = events.findIndex(
+      (e) =>
+        e['type'] === 'response.output_item.done' &&
+        (e['item'] as { type: string }).type === 'reasoning'
+    )
+    const messageAdded = events.findIndex(
+      (e) =>
+        e['type'] === 'response.output_item.added' &&
+        (e['item'] as { type: string }).type === 'message'
+    )
+    assert.ok(reasoningDone !== -1 && reasoningDone < messageAdded)
+    assert.ok(types.includes('response.reasoning_text.done'))
+
+    const output = completed['output'] as Array<Record<string, unknown>>
+    assert.deepEqual(
+      output.map((o) => o['type']),
+      ['reasoning', 'message']
+    )
+    assert.equal(output[0]!['id'], rsId)
+    assert.deepEqual(output[0]!['content'], [{ type: 'reasoning_text', text: 'Check the file.' }])
+    assert.equal(completed['output_text'], 'Done.')
+    assert.deepEqual(completed['usage'], {
+      input_tokens: 50,
+      output_tokens: 6,
+      total_tokens: 56
+    })
+  })
+
+  it('indexes tool calls after the reasoning and message items', async () => {
+    const holder = createStreamResponse()
+    const result = fakeStreamCompletion({
+      thinkingTokens: ['Need to list files.'],
+      tokens: [],
+      toolCalls: [{ id: 'call_ls', name: 'shell', arguments: { cmd: 'ls' } }],
+      text: ''
+    })
+
+    const completed = await writeStreamingResponse(
+      holder.res,
+      baseHandlerParams('resp_reason_tool'),
+      () => result
+    )
+    const events = parseSseJsonEvents(holder.raw) as Array<Record<string, unknown>>
+    const argDelta = events.find((e) => e['type'] === 'response.function_call_arguments.delta')!
+    assert.equal(argDelta['output_index'], 1)
+    assert.deepEqual(
+      (completed['output'] as Array<{ type: string }>).map((o) => o.type),
+      ['reasoning', 'function_call']
+    )
+    assert.equal(completed['status'], 'requires_action')
+  })
+})
+
+describe('writeStreamingResponse: reasoning after answer text', () => {
+  it('finishes each item before the next, so text after reasoning opens a new message', async () => {
+    const holder = createStreamResponse()
+    const result = fakeStreamCompletion({
+      tokens: [],
+      steps: [{ think: 'First.' }, { text: 'Partial ' }, { think: 'Second.' }, { text: 'answer.' }],
+      toolCalls: [],
+      text: 'Partial answer.'
+    })
+
+    const completed = await writeStreamingResponse(
+      holder.res,
+      baseHandlerParams('resp_reason_late'),
+      () => result
+    )
+    const events = parseSseJsonEvents(holder.raw) as Array<Record<string, unknown>>
+    const reasoningDeltas = events.filter((e) => e['type'] === 'response.reasoning_text.delta')
+    assert.deepEqual(
+      reasoningDeltas.map((e) => [e['delta'], e['output_index']]),
+      [
+        ['First.', 0],
+        ['Second.', 2]
+      ]
+    )
+    assert.deepEqual(
+      events
+        .filter((e) => e['type'] === 'response.output_text.delta')
+        .map((e) => [e['delta'], e['output_index']]),
+      [
+        ['Partial ', 1],
+        ['answer.', 3]
+      ]
+    )
+
+    // An item is done before the next is added: added/done alternate by index.
+    const lifecycle = events
+      .filter(
+        (e) =>
+          e['type'] === 'response.output_item.added' || e['type'] === 'response.output_item.done'
+      )
+      .map((e) => `${e['type'] === 'response.output_item.added' ? '+' : '-'}${e['output_index']}`)
+    assert.deepEqual(lifecycle, ['+0', '-0', '+1', '-1', '+2', '-2', '+3', '-3'])
+
+    const output = completed['output'] as Array<Record<string, unknown>>
+    assert.deepEqual(
+      output.map((o) => o['type']),
+      ['reasoning', 'message', 'reasoning', 'message']
+    )
+    assert.equal(output[0]!['id'], reasoningDeltas[0]!['item_id'])
+    assert.equal(output[2]!['id'], reasoningDeltas[1]!['item_id'])
+    assert.deepEqual(output[2]!['content'], [{ type: 'reasoning_text', text: 'Second.' }])
+    assert.equal(completed['output_text'], 'Partial answer.')
+  })
+})
+
+describe('writeStreamingResponse: reasoning without answer text', () => {
+  it('finishes the reasoning item before the tool call', async () => {
+    const holder = createStreamResponse()
+    const result = fakeStreamCompletion({
+      thinkingTokens: ['Need to list files.'],
+      tokens: [],
+      toolCalls: [{ id: 'call_ls', name: 'shell', arguments: { cmd: 'ls' } }],
+      text: ''
+    })
+
+    await writeStreamingResponse(holder.res, baseHandlerParams('resp_reason_only'), () => result)
+    const events = parseSseJsonEvents(holder.raw) as Array<Record<string, unknown>>
+    const lifecycle = events
+      .filter(
+        (e) =>
+          e['type'] === 'response.output_item.added' || e['type'] === 'response.output_item.done'
+      )
+      .map((e) => `${e['type'] === 'response.output_item.added' ? '+' : '-'}${e['output_index']}`)
+    assert.deepEqual(lifecycle, ['+0', '-0', '+1', '-1'])
+    assert.ok(events.some((e) => e['type'] === 'response.reasoning_text.done'))
+  })
+})
+
+describe('writeStreamingResponse: tool calls and sequence numbers', () => {
+  it('keeps a tool call ahead of text generated after it', async () => {
+    const holder = createStreamResponse()
+    async function* events(): AsyncGenerator<unknown> {
+      yield { type: 'contentDelta', seq: 0, text: 'Reading it. ' }
+      yield { type: 'toolCall', seq: 1, call: { id: 'call_1', name: 'read', arguments: {} } }
+      yield { type: 'thinkingDelta', seq: 2, text: 'Waiting for the result.' }
+      yield { type: 'contentDelta', seq: 3, text: 'Done.' }
+      yield { type: 'completionDone', seq: 4, stopReason: 'eos' }
+    }
+    const run = {
+      ...fakeStreamCompletion({ tokens: [], toolCalls: [], text: '' }),
+      events: events() as unknown as CompletionRun['events']
+    }
+
+    const completed = await writeStreamingResponse(
+      holder.res,
+      baseHandlerParams('resp_call_order'),
+      () => run
+    )
+    const output = completed['output'] as Array<Record<string, unknown>>
+    assert.deepEqual(
+      output.map((o) => o['type']),
+      ['message', 'function_call', 'reasoning', 'message']
+    )
+    const streamed = parseSseJsonEvents(holder.raw) as Array<Record<string, unknown>>
+    for (const e of streamed.filter((e) => e['type'] === 'response.output_item.done')) {
+      assert.equal(output[e['output_index'] as number]!['id'], (e['item'] as { id: string }).id)
+    }
+  })
+
+  it('numbers every event in one increasing sequence', async () => {
+    const holder = createStreamResponse()
+    const result = fakeStreamCompletion({
+      thinkingTokens: ['Think.'],
+      tokens: ['Answer.'],
+      toolCalls: [{ id: 'call_1', name: 'read', arguments: {} }],
+      text: 'Answer.'
+    })
+    await writeStreamingResponse(holder.res, baseHandlerParams('resp_seq'), () => result)
+    const events = parseSseJsonEvents(holder.raw) as Array<Record<string, unknown>>
+    assert.deepEqual(
+      events.map((e) => e['sequence_number']),
+      events.map((_, i) => i)
+    )
   })
 })
 
@@ -248,7 +472,7 @@ describe('writeStreamingResponse: deferred tools', () => {
     parameters: { type: 'object' as const, properties: { title: { type: 'string' as const } } }
   }
 
-  it('streams both turns live and keeps only the answer in the response object', async () => {
+  it('streams both turns live and keeps tool_search out of the response object', async () => {
     const holder = createStreamResponse()
     const p = { ...baseHandlerParams('resp_defer'), tools: [deferredTool] }
 
@@ -291,8 +515,7 @@ describe('writeStreamingResponse: deferred tools', () => {
     assert.equal(second.at(-1)!.role, 'tool')
     assert.ok(second.at(-1)!.content.includes('"create_issue"'))
 
-    // The stored answer is the answering turn only, and carries no tool call
-    // the client would have to run.
+    // The response carries no tool call the client would have to run.
     assert.equal(completed['status'], 'completed')
     assert.equal(
       JSON.stringify(completed['output']).includes('tool_search'),
@@ -300,6 +523,96 @@ describe('writeStreamingResponse: deferred tools', () => {
       'tool_search never reaches the client'
     )
     assert.ok(JSON.stringify(completed['output']).includes('Opened it.'))
+  })
+
+  it('keeps every streamed item at its streamed position across a search round', async () => {
+    const holder = createStreamResponse()
+    const p = { ...baseHandlerParams('resp_defer_reason'), tools: [deferredTool] }
+    const turns = [
+      fakeStreamCompletion({
+        tokens: ['Looking that up. '],
+        toolCalls: [{ id: 'c1', name: 'tool_search', arguments: { query: 'create_issue' } }],
+        text: 'Looking that up. '
+      }),
+      fakeStreamCompletion({
+        thinkingTokens: ['The tool is loaded now.'],
+        tokens: ['Opened it.'],
+        toolCalls: [],
+        text: 'Opened it.'
+      })
+    ]
+    let turn = 0
+
+    const completed = await writeStreamingResponse(holder.res, p, () => turns[turn++]!)
+    const events = parseSseJsonEvents(holder.raw) as Array<Record<string, unknown>>
+    assert.deepEqual(
+      events.filter((e) => e['type'] === 'response.reasoning_text.delta').map((e) => e['delta']),
+      ['The tool is loaded now.']
+    )
+    const output = completed['output'] as Array<Record<string, unknown>>
+    assert.deepEqual(
+      output.map((o) => o['type']),
+      ['message', 'reasoning', 'message']
+    )
+    // Each finished item sits in `output` at the index it streamed under.
+    for (const e of events.filter((e) => e['type'] === 'response.output_item.done')) {
+      const item = e['item'] as Record<string, unknown>
+      assert.equal(output[e['output_index'] as number]!['id'], item['id'])
+    }
+    assert.equal(completed['output_text'], 'Looking that up. Opened it.')
+  })
+})
+
+describe('writeStreamingResponse: input tokens across search rounds', () => {
+  it('counts input per round when an overlapping search round precedes a solo one', async () => {
+    const holder = createStreamResponse()
+    const turns = [
+      fakeStreamCompletion({
+        tokens: [],
+        toolCalls: [{ id: 'c1', name: 'tool_search', arguments: { query: 'create_issue' } }],
+        text: '',
+        stats: {
+          promptTokens: 100,
+          cacheTokens: 900,
+          generatedTokens: 5,
+          emittedTokens: 5,
+          avgConcurrentSeq: 2
+        }
+      }),
+      fakeStreamCompletion({
+        tokens: ['Done.'],
+        toolCalls: [],
+        text: 'Done.',
+        stats: {
+          promptTokens: 20,
+          cacheTokens: 218,
+          generatedTokens: 10,
+          emittedTokens: 10,
+          avgConcurrentSeq: 1
+        }
+      })
+    ]
+    let turn = 0
+    const completed = await writeStreamingResponse(
+      holder.res,
+      {
+        ...baseHandlerParams('resp_rounds'),
+        tools: [
+          {
+            type: 'function' as const,
+            name: 'create_issue',
+            description: 'Open a new issue on a repository',
+            deferLoading: true,
+            parameters: {
+              type: 'object' as const,
+              properties: { title: { type: 'string' as const } }
+            }
+          }
+        ]
+      },
+      () => turns[turn++]!
+    )
+    assert.equal((completed['usage'] as { input_tokens: number }).input_tokens, 308)
   })
 })
 

@@ -24,6 +24,16 @@ test('handler: a completion load is sized by the context its config carries', (t
   t.is(target.model.registryPath, CONSTANT.registryPath)
 })
 
+test('handler: an embedding load is sized by its requested context', (t) => {
+  const target = estimateTargetFor({
+    modelSrc: CONSTANT,
+    modelType: ModelType.llamacppEmbedding,
+    modelConfig: { ctxSize: 2048 }
+  })
+
+  t.alike(target.workload, { kind: 'llm', contextTokens: 2048 })
+})
+
 test('handler: a transcription load is sized by its audio window', (t) => {
   const target = estimateTargetFor({
     modelSrc: CONSTANT,
@@ -242,7 +252,7 @@ test('handler: an explicit engine wins over the source', (t) => {
   })
 
   t.is(target.device, 'gpu')
-  t.alike(target.workload, { kind: 'llm' }, 'the embedding arm sizes no context')
+  t.alike(target.workload, { kind: 'llm' }, 'an omitted embedding context stays unspecified')
 })
 
 test('handler: a source naming no engine is refused', (t) => {

@@ -1,8 +1,12 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { ServerResponse } from 'node:http'
-import { buildResponseObject } from '@/serve/extensions/openai/adapters/responses-shape'
+import {
+  buildResponseObject,
+  responseUsage
+} from '@/serve/extensions/openai/adapters/responses-shape'
 import { writeBlockingResponse } from '@/serve/extensions/openai/adapters/response-writers'
+import { historyPrefixFromStoredResponse } from '@/serve/extensions/openai/schemas/responses'
 import type {
   ResponsesHandlerParams,
   ResponseWriterContext
@@ -10,6 +14,28 @@ import type {
 import type { CompletionRun, ToolCall, CompletionStats } from '@qvac/sdk'
 
 const uuidSuffix = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+describe('responseUsage', () => {
+  it('prefers summed per-round input and the drained completion count', () => {
+    assert.deepEqual(
+      responseUsage({
+        text: 'one two three',
+        stats: { promptTokens: 10, emittedTokens: 99 },
+        completionTokens: 4,
+        inputTokens: 30
+      }),
+      { input_tokens: 30, output_tokens: 4, total_tokens: 34 }
+    )
+  })
+
+  it('falls back to the stats when no counts are passed', () => {
+    assert.deepEqual(responseUsage({ text: 'hi', stats: { promptTokens: 12, emittedTokens: 3 } }), {
+      input_tokens: 12,
+      output_tokens: 3,
+      total_tokens: 15
+    })
+  })
+})
 
 describe('buildResponseObject', () => {
   it('builds text response', () => {
@@ -119,6 +145,93 @@ describe('buildResponseObject', () => {
     const u = o['usage'] as { output_tokens: number; input_tokens: number; total_tokens: number }
     assert.equal(u.output_tokens, 99)
     assert.equal(u.total_tokens, 99)
+  })
+
+  it('reports prompt tokens as input_tokens and sums total_tokens', () => {
+    const o = buildResponseObject({
+      id: 'resp_in',
+      modelAlias: 'm',
+      text: 'hi',
+      toolCalls: [],
+      createdAtSec: 1,
+      metadata: undefined,
+      temperature: undefined,
+      topP: undefined,
+      maxOutputTokens: undefined,
+      parallelToolCalls: true,
+      previousResponseId: null,
+      store: true,
+      stats: { promptTokens: 120, cacheTokens: 80, emittedTokens: 7 }
+    })
+    // cacheTokens is cache occupancy, not this request's reuse, so it is not reported.
+    assert.deepEqual(o['usage'], { input_tokens: 120, output_tokens: 7, total_tokens: 127 })
+  })
+
+  it('puts reasoning in its own output item ahead of the message', () => {
+    const o = buildResponseObject({
+      id: 'resp_r',
+      modelAlias: 'm',
+      text: 'The answer is 4.',
+      items: [
+        { type: 'reasoning', id: 'rs_1', text: '2 + 2 is 4.' },
+        { type: 'message', id: 'msg_1', text: 'The answer is 4.' }
+      ],
+      toolCalls: [],
+      createdAtSec: 1,
+      metadata: undefined,
+      temperature: undefined,
+      topP: undefined,
+      maxOutputTokens: undefined,
+      parallelToolCalls: true,
+      previousResponseId: null,
+      store: true
+    })
+    const out = o['output'] as Array<Record<string, unknown>>
+    assert.equal(out.length, 2)
+    assert.equal(out[0]!['type'], 'reasoning')
+    assert.match(out[0]!['id'] as string, /^rs_/)
+    assert.deepEqual(out[0]!['content'], [{ type: 'reasoning_text', text: '2 + 2 is 4.' }])
+    assert.equal(out[1]!['type'], 'message')
+    assert.equal(o['output_text'], 'The answer is 4.')
+  })
+
+  it('reports the full input whether or not the KV cache was reused', () => {
+    const usage = (stats: CompletionStats) =>
+      buildResponseObject({
+        id: 'resp_cache',
+        modelAlias: 'm',
+        text: 'hi',
+        toolCalls: [],
+        createdAtSec: 1,
+        metadata: undefined,
+        temperature: undefined,
+        topP: undefined,
+        maxOutputTokens: undefined,
+        parallelToolCalls: true,
+        previousResponseId: null,
+        store: true,
+        stats
+      })['usage']
+    // The same 262-token prompt: cold prefills all of it, warm only the tail.
+    const cold = usage({
+      promptTokens: 262,
+      cacheTokens: 268,
+      generatedTokens: 6,
+      emittedTokens: 6
+    })
+    const warm = usage({ promptTokens: 14, cacheTokens: 268, generatedTokens: 6, emittedTokens: 6 })
+    assert.deepEqual(cold, { input_tokens: 262, output_tokens: 6, total_tokens: 268 })
+    assert.deepEqual(warm, cold)
+    // Overlapping requests inflate the scheduler-wide cacheTokens; the request's
+    // own promptTokens is used then.
+    const overlapped = usage({
+      promptTokens: 262,
+      cacheTokens: 900,
+      generatedTokens: 6,
+      emittedTokens: 6,
+      avgConcurrentSeq: 2
+    })
+    assert.deepEqual(overlapped, cold)
   })
 
   it('marks status incomplete with max_output_tokens reason when truncated by length', () => {
@@ -242,6 +355,9 @@ function baseHandlerParams(): ResponsesHandlerParams {
 
 function fakeCompletion(opts: {
   text: string
+  thinking?: string
+  /** Interleaved reasoning and text, emitted after `thinking` and `text`. */
+  steps?: Array<{ think: string } | { text: string }>
   toolCalls: ToolCall[]
   stats?: CompletionStats
   stopReason?: string
@@ -250,7 +366,13 @@ function fakeCompletion(opts: {
   // delta, tool calls, stats, terminal done) rather than the legacy promises.
   async function* events(): AsyncGenerator<unknown> {
     let seq = 0
+    if (opts.thinking) yield { type: 'thinkingDelta', seq: seq++, text: opts.thinking }
     if (opts.text) yield { type: 'contentDelta', seq: seq++, text: opts.text }
+    for (const step of opts.steps ?? []) {
+      yield 'think' in step
+        ? { type: 'thinkingDelta', seq: seq++, text: step.think }
+        : { type: 'contentDelta', seq: seq++, text: step.text }
+    }
     for (const call of opts.toolCalls) yield { type: 'toolCall', seq: seq++, call }
     if (opts.stats !== undefined) yield { type: 'completionStats', seq: seq++, stats: opts.stats }
     yield { type: 'completionDone', seq: seq++, stopReason: opts.stopReason ?? 'eos' }
@@ -330,6 +452,244 @@ describe('writeBlockingResponse', () => {
       required_action: { submit_tool_outputs: { tool_calls: unknown[] } }
     }
     assert.equal(parsed.required_action.submit_tool_outputs.tool_calls.length, 1)
+  })
+
+  it('returns reasoning separately from the answer and reports input tokens', async () => {
+    let bodyStr = ''
+    let sent = false
+    const res = {
+      setHeader: (): void => {},
+      writeHead: (): void => {
+        sent = true
+      },
+      end(payload?: string | Buffer): void {
+        if (typeof payload === 'string') bodyStr = payload
+      },
+      get headersSent(): boolean {
+        return sent
+      }
+    } as unknown as ServerResponse
+
+    const result = fakeCompletion({
+      thinking: 'The user wants a greeting.',
+      text: 'Hello!',
+      toolCalls: [],
+      stats: { promptTokens: 31, emittedTokens: 9 }
+    })
+
+    await writeBlockingResponse(res, baseHandlerParams(), () => result)
+    const parsed = JSON.parse(bodyStr) as {
+      output: Array<Record<string, unknown>>
+      output_text: string
+      usage: { input_tokens: number; output_tokens: number; total_tokens: number }
+    }
+    assert.equal(parsed.output_text, 'Hello!')
+    assert.deepEqual(
+      parsed.output.map((o) => o['type']),
+      ['reasoning', 'message']
+    )
+    assert.deepEqual(parsed.output[0]!['content'], [
+      { type: 'reasoning_text', text: 'The user wants a greeting.' }
+    ])
+    assert.equal(JSON.stringify(parsed.output[1]).includes('greeting'), false)
+    assert.deepEqual(parsed.usage, { input_tokens: 31, output_tokens: 9, total_tokens: 40 })
+  })
+})
+
+describe('writeBlockingResponse: item order matches streaming', () => {
+  function captureRes(): { res: ServerResponse; body: () => any } {
+    let bodyStr = ''
+    let sent = false
+    const res = {
+      setHeader: (): void => {},
+      writeHead: (): void => {
+        sent = true
+      },
+      end(payload?: string | Buffer): void {
+        if (typeof payload === 'string') bodyStr = payload
+      },
+      get headersSent(): boolean {
+        return sent
+      }
+    } as unknown as ServerResponse
+    return { res, body: () => JSON.parse(bodyStr) }
+  }
+
+  it('keeps items in the order the model produced them', async () => {
+    const { res, body } = captureRes()
+    const result = fakeCompletion({
+      text: '',
+      steps: [{ think: 'First.' }, { text: 'Partial ' }, { think: 'Second.' }, { text: 'answer.' }],
+      toolCalls: []
+    })
+    await writeBlockingResponse(res, baseHandlerParams(), () => result)
+    const parsed = body()
+    assert.deepEqual(
+      parsed.output.map((o: { type: string }) => o.type),
+      ['reasoning', 'message', 'reasoning', 'message']
+    )
+    assert.equal(parsed.output_text, 'Partial answer.')
+  })
+
+  it('keeps the search preamble, as streaming does', async () => {
+    const { res, body } = captureRes()
+    const deferredTool = {
+      type: 'function' as const,
+      name: 'create_issue',
+      description: 'Open a new issue on a repository',
+      deferLoading: true,
+      parameters: { type: 'object' as const, properties: { title: { type: 'string' as const } } }
+    }
+    const turns = [
+      fakeCompletion({
+        text: 'Looking that up. ',
+        toolCalls: [{ id: 'c1', name: 'tool_search', arguments: { query: 'create_issue' } }]
+      }),
+      fakeCompletion({ thinking: 'The tool is loaded now.', text: 'Opened it.', toolCalls: [] })
+    ]
+    let turn = 0
+    await writeBlockingResponse(
+      res,
+      { ...baseHandlerParams(), tools: [deferredTool] },
+      () => turns[turn++]!
+    )
+    const parsed = body()
+    assert.equal(turn, 2)
+    assert.deepEqual(
+      parsed.output.map((o: { type: string }) => o.type),
+      ['message', 'reasoning', 'message']
+    )
+    assert.equal(parsed.output_text, 'Looking that up. Opened it.')
+  })
+})
+
+describe('historyPrefixFromStoredResponse', () => {
+  it('replays the answer without the reasoning item', () => {
+    const responseObject = buildResponseObject({
+      id: 'resp_prev',
+      modelAlias: 'm',
+      text: 'Hello!',
+      items: [
+        { type: 'reasoning', id: 'rs_1', text: 'The user wants a greeting.' },
+        { type: 'message', id: 'msg_1', text: 'Hello!' }
+      ],
+      toolCalls: [],
+      createdAtSec: 1,
+      metadata: undefined,
+      temperature: undefined,
+      topP: undefined,
+      maxOutputTokens: undefined,
+      parallelToolCalls: true,
+      previousResponseId: null,
+      store: true
+    })
+    const prefix = historyPrefixFromStoredResponse({
+      responseObject,
+      inputItems: [{ type: 'message', role: 'user', content: 'Hi' }]
+    })
+    assert.deepEqual(prefix, [
+      { role: 'user', content: 'Hi' },
+      { role: 'assistant', content: 'Hello!' }
+    ])
+  })
+
+  it('replays a tool call with the text generated before it', async () => {
+    async function* events(): AsyncGenerator<unknown> {
+      yield { type: 'contentDelta', seq: 0, text: 'Reading it.' }
+      yield { type: 'toolCall', seq: 1, call: { id: 'call_1', name: 'read', arguments: {} } }
+      yield { type: 'contentDelta', seq: 2, text: 'Done.' }
+      yield { type: 'completionDone', seq: 3, stopReason: 'eos' }
+    }
+    const run = {
+      ...fakeCompletion({ text: '', toolCalls: [] }),
+      events: events() as unknown as CompletionRun['events']
+    }
+    let sent = false
+    const res = {
+      setHeader: (): void => {},
+      writeHead: (): void => {
+        sent = true
+      },
+      end: (): void => {},
+      get headersSent(): boolean {
+        return sent
+      }
+    } as unknown as ServerResponse
+    const responseObject = await writeBlockingResponse(res, baseHandlerParams(), () => run)
+    assert.deepEqual(
+      (responseObject['output'] as Array<{ type: string }>).map((o) => o.type),
+      ['message', 'function_call', 'message']
+    )
+    const prefix = historyPrefixFromStoredResponse({ responseObject, inputItems: [] })
+    assert.deepEqual(
+      prefix.map((turn) => [turn.content, turn.toolCalls?.map((call) => call.name)]),
+      [
+        ['Reading it.', ['read']],
+        ['Done.', undefined]
+      ]
+    )
+  })
+})
+
+describe('writeBlockingResponse: input tokens across search rounds', () => {
+  it('counts input per round when an overlapping search round precedes a solo one', async () => {
+    let sent = false
+    const res = {
+      setHeader: (): void => {},
+      writeHead: (): void => {
+        sent = true
+      },
+      end: (): void => {},
+      get headersSent(): boolean {
+        return sent
+      }
+    } as unknown as ServerResponse
+    const turns = [
+      fakeCompletion({
+        text: '',
+        toolCalls: [{ id: 'c1', name: 'tool_search', arguments: { query: 'create_issue' } }],
+        stats: {
+          promptTokens: 100,
+          cacheTokens: 900,
+          generatedTokens: 5,
+          emittedTokens: 5,
+          avgConcurrentSeq: 2
+        }
+      }),
+      fakeCompletion({
+        text: 'Done.',
+        toolCalls: [],
+        stats: {
+          promptTokens: 20,
+          cacheTokens: 218,
+          generatedTokens: 10,
+          emittedTokens: 10,
+          avgConcurrentSeq: 1
+        }
+      })
+    ]
+    let turn = 0
+    const obj = await writeBlockingResponse(
+      res,
+      {
+        ...baseHandlerParams(),
+        tools: [
+          {
+            type: 'function' as const,
+            name: 'create_issue',
+            description: 'Open a new issue on a repository',
+            deferLoading: true,
+            parameters: {
+              type: 'object' as const,
+              properties: { title: { type: 'string' as const } }
+            }
+          }
+        ]
+      },
+      () => turns[turn++]!
+    )
+    // 100 (overlap: its own promptTokens) + 218 - 10 (solo: full prompt).
+    assert.equal((obj['usage'] as { input_tokens: number }).input_tokens, 308)
   })
 
   it("reports the last round's cache occupancy, not the sum across search rounds", async () => {
