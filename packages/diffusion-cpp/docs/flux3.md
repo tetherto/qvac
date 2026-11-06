@@ -16,9 +16,10 @@ baseline `651be7f3023d30fffbe1593b35ba57b39f2ba78b`; explicit minimum versions
 request `2026-11-01` for both GGML and stable-diffusion-cpp. After #475 merges,
 change the registry reference back to `main` before deleting the branch.
 The registry pins engine commit
-`7fb5779afe940b8e3670b089cdfb1daa4be53125`, which contains the integer LoRA
+`29f8fe63dc44c7bd4353dc0a71b4910e4b33e272`, which contains the integer LoRA
 alpha conversion, latent-unit VAE compatibility (including allocation-failure
-retry handling), and FLUX.3 reference-editing fixes directly in the engine
+retry handling), dedicated-GPU preference during automatic placement, and
+FLUX.3 reference-editing fixes directly in the engine
 source. The port applies no patches.
 
 Rebuild the addon and its paired GGML dependency together using the package's
