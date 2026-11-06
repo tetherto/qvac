@@ -11,6 +11,7 @@
 
 #include "audiogen-cpp/acestep/engine.h"
 #include "model-interface/BackendUtils.hpp"
+#include "model-interface/acestep/OutputGain.hpp"
 
 namespace qvac::audiogenggml::acestep {
 
@@ -353,28 +354,16 @@ AcestepModel::Output AcestepModel::generate(const AnyInput& in) {
     out.metadata = std::move(metadata);
   }
 
-  // Peak-normalise before the int16 quantisation, exactly like the music CLI's
-  // wav_write (gain = 0.9 / peak). The Oobleck VAE routinely outputs float
-  // samples slightly outside [-1, 1]; converting those straight to int16 hard-
-  // clips at full scale and produces the harsh, distorted "horrible" audio the
-  // addon path had (vs. the clean CLI output). Normalising to -0.9 dBFS keeps
-  // headroom and removes the clipping. Single-shot output, so a 2-pass over the
-  // full track is trivial.
-  //
-  // Always normalise non-silent output to a fixed -0.9 dBFS peak
-  // (gain = 0.9 / peak whenever peak > kMinNormPeak): this removes clipping and
-  // gives every track consistent headroom vs. the raw engine output. A
-  // silent/near-silent result (peak below the threshold) is left untouched:
-  // seeding the peak at ~0 and dividing would turn low-level noise into a
-  // ~-0.9 dBFS blast. kMinNormPeak ~= -60 dBFS.
-  constexpr float kMinNormPeak = 1e-3F;
-  float peak = 0.0F;
-  for (float s : result.pcm)
-    peak = std::fmax(peak, std::fabs(s));
-  // Edit plans promise exact preservation outside Repaint regions. Applying
-  // whole-track peak normalization here would modify every preserved sample.
-  const float gain =
-      in.editOperations.empty() && peak > kMinNormPeak ? 0.9F / peak : 1.0F;
+  // Edit plans promise exact preservation outside Repaint regions, a lego stem
+  // keeps its mix gain relative to the source, and `normalizeLoudness: false`
+  // asks for the engine's raw output, so only a normalized generation is
+  // rescaled here (see OutputGain.hpp).
+  const float gain = outputGain(
+      result.pcm,
+      OutputGainRequest{
+          .normalizeLoudness = in.normalizeLoudness,
+          .isEdit = !in.editOperations.empty(),
+          .isLegoStem = in.taskType == "lego"});
 
   out.pcm.reserve(result.pcm.size());
   for (float s : result.pcm)
