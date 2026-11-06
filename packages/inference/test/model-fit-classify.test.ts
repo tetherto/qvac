@@ -65,24 +65,16 @@ function llama(
   }
 }
 
-function sharedTts(devices: ReturnType<typeof device>[]) {
-  return { engine: 'tts-ggml' as const, result: { status: 'fits' as const, devices, stats: {} } }
-}
-
-function sharedAudiogen(devices: ReturnType<typeof device>[]) {
+function publishedTts(): FitProbeResult {
   return {
-    engine: 'audiogen-ggml' as const,
-    result: { status: 'fits' as const, devices, stats: {} }
-  }
-}
-
-function legacyTts() {
-  return {
-    engine: 'tts-ggml' as const,
+    engine: 'tts-ggml',
     result: {
-      status: 'fits' as const,
+      status: 'fits',
       reason: 'fits',
+      modelVariant: 'chatterbox-t3-turbo',
       deviceName: 'Metal',
+      deviceIsCpu: false,
+      deviceSharesHostMemory: true,
       deviceBytes: 2 * 1024 ** 3,
       hostBytes: 128 * 1024 ** 2,
       deviceFreeBytes: 20 * 1024 ** 3,
@@ -91,18 +83,22 @@ function legacyTts() {
       weightsBytes: 1024 ** 3,
       stateBytes: 64 * 1024 ** 2,
       lmComputeBytes: 32 * 1024 ** 2,
-      codecComputeBytes: 16 * 1024 ** 2
+      codecComputeBytes: 16 * 1024 ** 2,
+      lavasrFileBytes: 0
     }
   }
 }
 
-function legacyBci() {
+function publishedBci(): FitProbeResult {
   return {
-    engine: 'bci-whispercpp' as const,
+    engine: 'bci-whispercpp',
     result: {
-      status: 'fits' as const,
+      status: 'fits',
       reason: 'fits',
+      modelType: 'tiny',
       deviceName: 'Metal',
+      deviceIsCpu: false,
+      deviceSharesHostMemory: true,
       deviceBytes: 2 * 1024 ** 3,
       hostBytes: 128 * 1024 ** 2,
       deviceFreeBytes: 20 * 1024 ** 3,
@@ -110,22 +106,32 @@ function legacyBci() {
       report: 'table',
       weightsBytes: 1024 ** 3,
       kvBytes: 64 * 1024 ** 2,
-      computeBytes: 32 * 1024 ** 2
+      computeBytes: 32 * 1024 ** 2,
+      hostOverflowBytes: 0,
+      embedderBytes: 0
     }
   }
 }
 
-function legacyAudiogen() {
+function publishedAudiogen(deviceIsCpu = false): FitProbeResult {
   return {
-    engine: 'audiogen-ggml' as const,
+    engine: 'audiogen-ggml',
     result: {
-      status: 'fits' as const,
+      status: 'fits',
       reason: 'fits',
-      deviceName: 'Metal',
+      modelName: 'ace-step',
+      isTurbo: false,
+      deviceName: deviceIsCpu ? 'CPU' : 'Metal',
+      deviceIsCpu,
+      deviceSharesHostMemory: true,
       deviceBytes: 3 * 1024 ** 3,
       hostBytes: 128 * 1024 ** 2,
       deviceFreeBytes: 20 * 1024 ** 3,
       deviceTotalBytes: 24 * 1024 ** 3,
+      hostFreeBytes: 20 * 1024 ** 3,
+      hostTotalBytes: 24 * 1024 ** 3,
+      stagesResident: true,
+      stages: [],
       report: 'table'
     }
   }
@@ -241,27 +247,8 @@ test('the diffusion placement stands in for a reason string', (t) => {
   t.is(unsupported.reason, 'unsupported-config')
 })
 
-test('a speech projection carries the device the engine measured', (t) => {
-  const outcome = classifyFit(
-    sharedTts([device('Metal', 2 * 1024 ** 3), device('CPU', 128 * 1024 ** 2)]),
-    PROVENANCE
-  )
-
-  t.is(outcome.engine, 'tts-ggml')
-  t.is(outcome.verdict, 'fit')
-  // Nothing about a voice load is layer-sliced across devices.
-  t.absent(outcome.plan)
-  t.alike(outcome.projection, {
-    deviceName: 'Metal',
-    deviceBytes: 2 * 1024 ** 3,
-    hostBytes: 128 * 1024 ** 2,
-    deviceFreeBytes: 20 * 1024 ** 3,
-    deviceTotalBytes: 24 * 1024 ** 3
-  })
-})
-
 test('published tts fit results keep their memory breakdown', (t) => {
-  const outcome = classifyFit(legacyTts(), PROVENANCE)
+  const outcome = classifyFit(publishedTts(), PROVENANCE)
 
   t.is(outcome.projection?.weightsBytes, 1024 ** 3)
   t.is(outcome.projection?.contextBytes, 64 * 1024 ** 2)
@@ -269,7 +256,7 @@ test('published tts fit results keep their memory breakdown', (t) => {
 })
 
 test('published bci fit results keep their memory breakdown', (t) => {
-  const outcome = classifyFit(legacyBci(), PROVENANCE)
+  const outcome = classifyFit(publishedBci(), PROVENANCE)
 
   t.is(outcome.projection?.weightsBytes, 1024 ** 3)
   t.is(outcome.projection?.contextBytes, 64 * 1024 ** 2)
@@ -277,7 +264,7 @@ test('published bci fit results keep their memory breakdown', (t) => {
 })
 
 test('published audiogen fit results keep their totals', (t) => {
-  const outcome = classifyFit(legacyAudiogen(), PROVENANCE)
+  const outcome = classifyFit(publishedAudiogen(), PROVENANCE)
 
   t.is(outcome.verdict, 'fit')
   t.is(outcome.projection?.deviceBytes, 3 * 1024 ** 3)
@@ -287,13 +274,14 @@ test('published audiogen fit results keep their totals', (t) => {
   t.absent(outcome.projection?.computeBytes)
 })
 
-test('a shared engine result reporting only totals has no breakdown', (t) => {
-  const outcome = classifyFit(sharedAudiogen([device('Metal', 3 * 1024 ** 3)]), PROVENANCE)
+test('published audiogen on CPU charges the larger peak to host memory once', (t) => {
+  const outcome = classifyFit(publishedAudiogen(true), PROVENANCE)
 
+  t.absent(outcome.projection?.deviceBytes)
+  t.is(outcome.projection?.hostBytes, 3 * 1024 ** 3)
   t.absent(outcome.projection?.weightsBytes)
   t.absent(outcome.projection?.contextBytes)
   t.absent(outcome.projection?.computeBytes)
-  t.is(outcome.projection?.deviceBytes, 3 * 1024 ** 3)
 })
 
 test('the embed breakdown sums every device the demand is charged to', (t) => {
@@ -360,8 +348,8 @@ test('the embed projection keeps a row per device, host excluded', (t) => {
   t.is(summed, outcome.projection?.weightsBytes, 'the flattened total sums the rows')
 })
 
-test('an engine other than legacy llama carries no device rows', (t) => {
-  const outcome = classifyFit(legacyTts(), PROVENANCE)
+test('an engine other than llama carries no device rows', (t) => {
+  const outcome = classifyFit(publishedTts(), PROVENANCE)
 
   t.absent(outcome.projection?.devices)
 })

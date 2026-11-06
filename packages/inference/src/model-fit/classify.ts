@@ -1,57 +1,7 @@
 import type { NativeProbeFit, NativeProbeProjection, NativeProbeVerdict } from '@/schemas/index'
 import type { FitProbeResult } from '@/model-fit/run/engine'
 
-interface LegacySpeechResult {
-  status: 'fits' | 'does-not-fit' | 'error'
-  reason: string
-  deviceName: string
-  deviceBytes: number
-  hostBytes: number
-  deviceFreeBytes: number
-  deviceTotalBytes: number
-  report: string
-}
-
-interface LegacyBciProbe {
-  engine: 'bci-whispercpp'
-  result: LegacySpeechResult & {
-    weightsBytes: number
-    kvBytes: number
-    computeBytes: number
-  }
-}
-
-interface LegacyTtsProbe {
-  engine: 'tts-ggml'
-  result: LegacySpeechResult & {
-    weightsBytes: number
-    stateBytes: number
-    lmComputeBytes: number
-    codecComputeBytes: number
-  }
-}
-
-interface LegacyAudiogenProbe {
-  engine: 'audiogen-ggml'
-  result: LegacySpeechResult
-}
-
-interface SharedSpeechProbe {
-  engine: 'audiogen-ggml' | 'tts-ggml'
-  result: {
-    status: 'fits' | 'does-not-fit' | 'unknown'
-    devices: {
-      name: string
-      usedBytes: number
-      totalBytes: number
-      freeBytes: number
-    }[]
-    stats: object
-  }
-}
-
-type CompatibleProbe =
-  FitProbeResult | LegacyAudiogenProbe | LegacyBciProbe | LegacyTtsProbe | SharedSpeechProbe
+type CompatibleProbe = FitProbeResult
 type SharedProbe = CompatibleProbe extends infer Probe
   ? Probe extends { result: { devices: { usedBytes: number }[]; stats: object } }
     ? Probe
@@ -224,6 +174,17 @@ function projectionFor(probe: LegacyProbe): NativeProbeProjection {
   }
   if (probe.engine === 'translation-nmtcpp') return nmtProjection(probe.result)
   if (isLlama(probe)) return llamaProjection(probe)
+
+  if (probe.engine === 'audiogen-ggml' && probe.result.deviceIsCpu) {
+    const result = probe.result
+    return {
+      deviceName: result.deviceName,
+      hostBytes: Math.max(result.deviceBytes, result.hostBytes),
+      deviceFreeBytes: result.deviceFreeBytes,
+      deviceTotalBytes: result.deviceTotalBytes,
+      report: result.report
+    }
+  }
 
   const result = probe.result
   return {
