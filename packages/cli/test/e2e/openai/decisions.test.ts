@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   RequestRejectedByPolicyError,
   RequestValidationFailedError,
+  SDK_CLIENT_ERROR_CODES,
   LAYA_MULTILINGUAL_322M_Q8_0,
   type DecisionResult
 } from '@qvac/sdk'
@@ -522,5 +523,28 @@ describe('OpenAI Decisions HTTP API', () => {
     assert.equal(response.statusCode, 400, response.body)
     assert.equal(response.json().error.code, 'invalid_request')
     assert.match(response.json().error.message, /expected rating, not a probability/)
+  })
+
+  it('answers a worker-side rejection, which arrives over RPC as a coded error, with 400', async (t) => {
+    // What the SDK client reconstructs for the worker's RequestValidationFailedError.
+    const remote = Object.assign(
+      new Error(
+        'Invalid request:\nquestions.question_0: too many options (60), this model supports at most 52'
+      ),
+      {
+        name: 'REQUEST_VALIDATION_FAILED',
+        code: SDK_CLIENT_ERROR_CODES.REQUEST_VALIDATION_FAILED
+      }
+    )
+    const { app } = await server(t, {
+      decideOverride: () => Object.assign(Promise.reject(remote), { requestId: 'decision-id' })
+    })
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/decisions',
+      payload: { model: 'laya', input: 'a', questions }
+    })
+    assert.equal(response.statusCode, 400, response.body)
+    assert.match(response.json().error.message, /too many options/)
   })
 })
