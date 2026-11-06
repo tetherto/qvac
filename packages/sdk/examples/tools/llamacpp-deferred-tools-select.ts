@@ -14,7 +14,7 @@ import {
   type RankedTool,
   type Tool,
   type ToolSearchOptions,
-  QWEN3_1_7B_INST_Q4
+  QWEN3_5_2B_MULTIMODAL_Q4_K_M
 } from '@qvac/sdk'
 
 function deferred(name: string, description: string, group: string, param: string): Tool {
@@ -80,7 +80,7 @@ function mockFetch(args: Record<string, unknown>): string {
 
 try {
   const modelId = await loadModel({
-    modelSrc: QWEN3_1_7B_INST_Q4,
+    modelSrc: QWEN3_5_2B_MULTIMODAL_Q4_K_M,
     modelConfig: { ctx_size: 4096, tools: true }
   })
   console.log(`▸ Model loaded. Model ID: ${modelId}`)
@@ -117,11 +117,21 @@ try {
     )
     console.log(`▸ Strong matches load:  ${loadedBy(result).join(', ')}`)
 
-    history.push({ role: 'assistant', content: await first.text })
-    history.push({ role: 'tool', content: result })
-
     console.log('\n▸ Turn 2 — the loaded definitions are declared, so the model can call them\n')
-    const second = completion({ modelId, history, stream: true, tools })
+    const second = completion({
+      modelId,
+      history: [
+        ...history,
+        {
+          role: 'assistant',
+          content: '',
+          toolCalls: [{ id: call.id, name: call.name, arguments: call.arguments }]
+        },
+        { role: 'tool', content: result, toolCallId: call.id, toolName: TOOL_SEARCH_NAME }
+      ],
+      stream: true,
+      tools
+    })
     for await (const token of second.tokenStream) process.stdout.write(token)
 
     for (const each of await second.toolCalls) {
