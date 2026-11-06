@@ -33,7 +33,6 @@ import { getEngineLogger } from '@/logging/index'
 const logger = getEngineLogger()
 
 type BlobRange = Pick<QVACBlobBinding, 'coreKey' | 'blockOffset' | 'blockLength'>
-type ClearableClient = { clearBlob?: (binding: BlobRange) => Promise<void> }
 type RegistryClient = Awaited<ReturnType<typeof getRegistryClient>>
 type DeletePlan = { targets: string[]; bindings: BlobRange[]; registryPaths: string[] }
 
@@ -66,13 +65,7 @@ export async function deleteRegistryModelCache(modelSrc: string): Promise<void> 
     await withDownloadBlocked(sharedKeys, async () => {
       assertNotLoaded(modelSrc, plan.targets)
 
-      // Read structurally: older registry clients have no clearBlob.
-      const clearable = client as ClearableClient
-      if (typeof clearable.clearBlob === 'function') {
-        for (const binding of plan.bindings) await clearable.clearBlob(binding)
-      } else {
-        logger.warn('Registry client cannot clear blob blocks; deleting cached files only')
-      }
+      for (const binding of plan.bindings) await client.clearBlob(binding)
 
       assertNotLoaded(modelSrc, plan.targets)
       for (const target of plan.targets) {

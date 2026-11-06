@@ -558,6 +558,9 @@ private:
   // tags.
   bool thinkingForcedOpen_ = false;
   std::string thinkingForcedOpenText_;
+  // The batch path owes the opener to this request's stream: set by
+  // `onPrefillComplete`, cleared once the first `onLogitsReady` emits it.
+  bool thinkingOpenerPending_ = false;
 
   // Reasoning channel detection state (Qwen3 / Gemma 4 / ...). Empty
   // tags when the active model has no recognised channel.
