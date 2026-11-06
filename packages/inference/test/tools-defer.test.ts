@@ -8,10 +8,8 @@ import {
   executeToolSearch,
   loadedToolNames,
   partitionTools,
-  rankDeferredTools,
   resolveDeferredTools,
-  searchDeferredTools,
-  type RankedTool
+  searchDeferredTools
 } from '@/utils/tools/defer'
 import { getMcpToolsWithHandlers } from '@/utils/mcp-adapter'
 import type { McpClient } from '@/schemas/mcp-adapter'
@@ -143,92 +141,29 @@ const CATALOG: Tool[] = [
   })
 ]
 
-const HTTP_QUERY = 'http request tool'
-
-function scores(ranked: readonly RankedTool[]): [string, number][] {
-  return ranked.map(({ tool: each, score }) => [each.name, score])
-}
-
 function names(tools: readonly Tool[]): string[] {
   return tools.map((each) => each.name)
 }
 
-function halfOfBest(ranked: readonly RankedTool[]): readonly RankedTool[] {
-  const best = ranked[0]?.score ?? 0
-  return ranked.filter(({ score }) => score >= best / 2)
-}
-
-test('rankDeferredTools scores every match, best first, and leaves out the rest', (t) => {
+test('a word that only reaches a description or group does not load a tool beside a strong match', (t) => {
   t.alike(
-    scores(rankDeferredTools(CATALOG, HTTP_QUERY)),
-    [
-      ['http_request', 130],
-      ['weather_lookup', 10],
-      ['edit_image', 10]
-    ],
-    'a group word and a description word each count, ties in registration order'
+    names(searchDeferredTools(CATALOG, 'http request tool')),
+    ['http_request'],
+    'weather_lookup shares the group and edit_image says "tool" in its description'
   )
-  t.alike(scores(rankDeferredTools(CATALOG, 'http_request'))[0], ['http_request', 1000])
-  t.alike(rankDeferredTools(CATALOG, 'nothing here at all'), [])
 })
 
-test('without options a search loads every match up to the default limit', (t) => {
-  t.alike(names(searchDeferredTools(CATALOG, HTTP_QUERY)), [
-    'http_request',
-    'weather_lookup',
-    'edit_image'
-  ])
+test('tools tied at the top load together', (t) => {
+  t.alike(names(searchDeferredTools(CATALOG, 'image')), ['generate_image', 'edit_image'])
   t.alike(
-    searchDeferredTools(CATALOG, HTTP_QUERY, undefined, {}),
-    searchDeferredTools(CATALOG, HTTP_QUERY)
+    names(searchDeferredTools(partitionTools(INVENTORY).deferred, 'github')),
+    ['create_issue', 'list_prs'],
+    'a group name still loads the whole group'
   )
 })
 
 test('an exact name loads that tool alone, even when others share its words', (t) => {
   t.alike(names(searchDeferredTools(CATALOG, 'http_request', 3)), ['http_request'])
-
-  const seen: string[][] = []
-  const loaded = searchDeferredTools(CATALOG, 'http_request', 3, {
-    select: (ranked) => {
-      seen.push(ranked.map(({ tool: each }) => each.name))
-      return ranked
-    }
-  })
-  t.alike(seen, [['http_request']], 'select sees only the named tool')
-  t.alike(names(loaded), ['http_request'])
-})
-
-test('select narrows the ranking it is given', (t) => {
-  t.alike(names(searchDeferredTools(CATALOG, HTTP_QUERY, undefined, { select: halfOfBest })), [
-    'http_request'
-  ])
-  t.alike(
-    names(searchDeferredTools(CATALOG, 'image', undefined, { select: halfOfBest })),
-    ['generate_image', 'edit_image'],
-    'a tie for the top loads both'
-  )
-
-  const seen: { ranked: [string, number][]; limit: number }[] = []
-  searchDeferredTools(CATALOG, HTTP_QUERY, 2, {
-    select: (ranked, { limit }) => {
-      seen.push({ ranked: scores(ranked), limit })
-      return ranked
-    }
-  })
-  t.alike(seen, [{ ranked: scores(rankDeferredTools(CATALOG, HTTP_QUERY)), limit: 2 }])
-})
-
-test('the limit and size caps apply to what select returns', (t) => {
-  const reversed = { select: (ranked: readonly RankedTool[]) => [...ranked].reverse() }
-  t.alike(names(searchDeferredTools(CATALOG, HTTP_QUERY, 2, reversed)), [
-    'edit_image',
-    'weather_lookup'
-  ])
-  t.alike(
-    names(searchDeferredTools(CATALOG, HTTP_QUERY, 3, { maxDefinitionBytes: 1 })),
-    ['http_request'],
-    'the top match loads however large'
-  )
 })
 
 test('an exact name spelled as asked wins over a case variant', (t) => {
@@ -243,22 +178,6 @@ test('an exact name spelled as asked wins over a case variant', (t) => {
     ['GetWeather', 'getWeather'],
     'with neither spelled as asked, both load'
   )
-})
-
-test('select can only narrow: an outside tool or a repeat is skipped', (t) => {
-  const outside = tool('delete_everything', 'Not part of this search', { deferLoading: true })
-  const [top, second] = rankDeferredTools(CATALOG, HTTP_QUERY)
-  const loaded = searchDeferredTools(CATALOG, HTTP_QUERY, 2, {
-    select: () => [{ tool: outside, score: 2000 }, top!, top!, second!]
-  })
-  t.alike(names(loaded), ['http_request', 'weather_lookup'])
-})
-
-test('executeToolSearch passes its options to the search', (t) => {
-  const result = JSON.parse(
-    executeToolSearch(CATALOG, { query: HTTP_QUERY }, [], { select: halfOfBest })
-  ) as { tool_search: { loaded: string[] } }
-  t.alike(result.tool_search.loaded, ['http_request'])
 })
 
 test('a no-match search tells the model what to do instead of going quiet', (t) => {

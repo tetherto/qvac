@@ -16,40 +16,6 @@ const EXACT_NAME_SCORE = 1000
 // large schemas would otherwise undo the saving the catalog just made.
 const MAX_DEFINITION_BYTES = 8 * 1024
 
-/**
- * A deferred tool and how well it matched a `tool_search` query. Scores order
- * the tools of one search; compare them to each other, not to a fixed number,
- * since the weights behind them may change.
- */
-export type RankedTool = {
-  tool: Tool
-  score: number
-}
-
-/**
- * Picks which ranked matches a search loads, best first, given the limit this
- * search resolved to. It can only narrow: a tool missing from `ranked` or
- * returned twice is skipped, and the limit and size caps still apply.
- */
-export type ToolSearchSelect = (
-  ranked: readonly RankedTool[],
-  context: { query: string; limit: number }
-) => readonly RankedTool[]
-
-/**
- * How `tool_search` turns a ranking into the definitions it loads. Every field
- * is optional and defaults to the built-in behaviour.
- */
-export type ToolSearchOptions = {
-  /**
-   * Ceiling on the schema bytes one search declares. The top match always
-   * loads, however large. Defaults to 8 KiB.
-   */
-  maxDefinitionBytes?: number
-  /** Narrows the ranked matches before the limit and size caps apply. */
-  select?: ToolSearchSelect
-}
-
 export type HistoryMessage = {
   role: string
   content: string
@@ -206,59 +172,50 @@ function scoreTool(tool: Tool, query: string, tokens: readonly string[]): number
   return score
 }
 
-/**
- * Score the deferred inventory against a query, best first, leaving out what
- * shares nothing with it. An exact name scores 1000. Otherwise a query of three
- * or more characters inside the name adds 100, and each query word adds 50 in
- * the name, 10 in the description and 5 in the group. Ties keep registration
- * order so repeated searches are deterministic.
- */
-export function rankDeferredTools(deferred: readonly Tool[], query: string): RankedTool[] {
-  const tokens = tokenize(query)
-  return deferred
-    .map((tool, index) => ({ tool, index, score: scoreTool(tool, query, tokens) }))
-    .filter((entry) => entry.score > 0)
-    .sort((a, b) => b.score - a.score || a.index - b.index)
-    .map(({ tool, score }) => ({ tool, score }))
-}
+type Scored = { tool: Tool; score: number }
 
 // Names score case-insensitively, so `GetWeather` and `getWeather` both score as
 // exact; the one spelled as asked wins, and with neither, both load.
-function namedBy(ranked: readonly RankedTool[], query: string): RankedTool[] {
-  const exact = ranked.filter(({ score }) => score === EXACT_NAME_SCORE)
+function namedBy(scored: readonly Scored[], query: string): Scored[] {
+  const exact = scored.filter(({ score }) => score === EXACT_NAME_SCORE)
   const literal = exact.filter(({ tool }) => tool.name === query.trim())
   return literal.length > 0 ? literal : exact
 }
 
 /**
- * The deferred tools a search loads: the ranking, narrowed by `options`, then
- * capped. An exact name loads that tool alone.
+ * Rank the deferred inventory against a query. Exact name first, then text
+ * match. Ties keep registration order so repeated searches are deterministic.
+ *
+ * An exact name loads that tool alone. Otherwise a match scoring under half of
+ * the best is left out: one query word in a description or group is not enough
+ * to load a tool beside a strong match, while tools tied at the top load together.
  */
 export function searchDeferredTools(
   deferred: readonly Tool[],
   query: string,
-  limit?: number,
-  options: ToolSearchOptions = {}
+  limit?: number
 ): Tool[] {
-  const { maxDefinitionBytes = MAX_DEFINITION_BYTES, select } = options
-  const cap = Math.min(Math.max(Math.trunc(limit ?? DEFAULT_SEARCH_LIMIT), 1), MAX_SEARCH_LIMIT)
-  const ranked = rankDeferredTools(deferred, query)
-  const candidates = ranked[0]?.score === EXACT_NAME_SCORE ? namedBy(ranked, query) : ranked
-  const selected = select ? select(candidates, { query, limit: cap }) : candidates
+  const tokens = tokenize(query)
+  const scored = deferred
+    .map((tool, index) => ({ tool, index, score: scoreTool(tool, query, tokens) }))
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+  const best = scored[0]?.score ?? 0
+  const matches =
+    best === EXACT_NAME_SCORE
+      ? namedBy(scored, query)
+      : scored.filter(({ score }) => score >= best / 2)
 
-  // A tool outside the ranking would be reported loaded but never declared.
-  const offered = new Map(candidates.map(({ tool }) => [tool.name, tool]))
+  const cap = Math.min(Math.max(Math.trunc(limit ?? DEFAULT_SEARCH_LIMIT), 1), MAX_SEARCH_LIMIT)
+
   const picked: Tool[] = []
   let bytes = 0
-  for (const entry of selected) {
-    const tool = offered.get(entry.tool.name)
-    if (!tool) continue
-    offered.delete(tool.name)
+  for (const { tool } of matches) {
     if (picked.length >= cap) break
     const size = JSON.stringify(toWireTool(tool)).length
     // Always let the top match through, however large; past that, stop rather
     // than truncate, so what the model receives is always a complete schema.
-    if (picked.length > 0 && bytes + size > maxDefinitionBytes) break
+    if (picked.length > 0 && bytes + size > MAX_DEFINITION_BYTES) break
     picked.push(tool)
     bytes += size
   }
@@ -407,8 +364,7 @@ export function resolveDeferredTools(
 export function executeToolSearch(
   tools: readonly Tool[] | readonly ToolInput[],
   args: Record<string, unknown>,
-  history: readonly HistoryMessage[],
-  options: ToolSearchOptions = {}
+  history: readonly HistoryMessage[]
 ): string {
   const { tools: wire } = validateTools([...tools] as Tool[] | ToolInput[])
   const { alwaysLoaded, deferred: registered } = partitionTools(wire)
@@ -417,7 +373,7 @@ export function executeToolSearch(
   const limit = typeof args['limit'] === 'number' ? args['limit'] : undefined
 
   const loaded = loadedToolNames(history)
-  const matches = searchDeferredTools(deferred, query, limit, options)
+  const matches = searchDeferredTools(deferred, query, limit)
 
   // A tool the history already loaded is not reported as loaded again; naming
   // it back tells the model it can call the tool without searching again.

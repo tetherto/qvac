@@ -238,6 +238,12 @@ Notes:
 
 * Tools without `deferLoading` behave exactly as before.
 * `tool_search` is a reserved name and is added only when something defers.
+* A search ranks the deferred tools by where the query matches: an exact name
+  first, then words in the name, then in the description, then in the group.
+  An exact name loads that tool alone. Any other query loads the best match and
+  every match at least half as strong, up to the model's `limit`. A word that
+  only appears in another tool's description or group does not load it beside
+  a stronger match, while tools that match equally well load together.
 * `group` is the heading a tool is listed under in the catalog — a skill or an
   MCP server name.
 * To defer an MCP server's tools, set it on the client entry:
@@ -259,50 +265,6 @@ Notes:
   re-processes most or all of the prompt instead of reusing the cached prefix.
 * On the worker-orchestrated loop the SDK runs `tool_search` itself; your
   handlers are never called for it.
-
-#### Choosing what a search loads
-
-A search scores each deferred tool against the query: 1000 for its exact name;
-otherwise 100 when the whole query (three or more characters) appears inside
-the name, plus 50 for each query word in its name, 10 in its description and 5
-in its group. An exact name loads that tool alone. Any other query loads every
-tool scoring above 0, best first, up to the model's `limit` (default 3, at most
-8), and stops adding past 8 KiB of schemas once the top match is in. A query
-word that only happens to appear in another tool's description or group is
-enough to load that tool too.
-
-When you run the search yourself, the last argument of `executeToolSearch`
-takes options that change this; each one defaults to the behaviour above:
-
-* `select(ranked, { query, limit })`: receives every match with its score, best
-  first, and returns the ones to load. It can only narrow the ranking: a tool
-  not in it, or one returned twice, is skipped, and the limit and size budget
-  still apply.
-* `maxDefinitionBytes`: the schema budget past the top match.
-
-`rankDeferredTools(tools, query)` returns the same scored ranking for
-inspection. Scores order the tools of one search; compare them to each other,
-not to a fixed number, since the weights behind them may change. Neither option
-changes what the model is told. The following example keeps only the matches
-that score at least half of the best one:
-
-<Tabs>
-<Tab value="js" label="JavaScript" default>
-<WrapCode>
-
-```js file=<rootDir>/packages/sdk/dist/examples/tools/llamacpp-deferred-tools-select.js title="completion-deferred-tools-select.js" lineNumbers
-```
-</WrapCode>
-</Tab>
-
-<Tab value="ts" label="TypeScript">
-<WrapCode>
-
-```ts file=<rootDir>/packages/sdk/examples/tools/llamacpp-deferred-tools-select.ts title="completion-deferred-tools-select.ts" lineNumbers
-```
-</WrapCode>
-</Tab>
-</Tabs>
 
 ### MCP
 
