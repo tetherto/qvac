@@ -30,9 +30,7 @@ const { DecisionEngine } = require(path.join(__dirname, '..', 'index.js'))
 
 async function main() {
   const requests = JSON.parse(fs.readFileSync(requestsFile, 'utf8'))
-  const config = args.includes('--cpu')
-    ? { device: 'cpu' }
-    : { device: 'gpu', gpu_layers: '99' }
+  const config = args.includes('--cpu') ? { device: 'cpu' } : { device: 'gpu', gpu_layers: '99' }
   if (opt('--mmproj')) config.mmproj = opt('--mmproj')
   if (opt('--parallel')) config.parallel = opt('--parallel')
   if (opt('--ctx')) config.ctx_size = opt('--ctx')
@@ -41,13 +39,19 @@ async function main() {
   await engine.load()
   const results = []
   try {
-    console.error(`▸ ${engine.info().decision_type}: ${requests.length} requests through the bridge`)
+    console.error(
+      `▸ ${engine.info().decision_type}: ${requests.length} requests through the bridge`
+    )
     for (const { name, body } of requests) {
       try {
         const [result] = await (await engine.run(body)).await()
         results.push({ name, ok: true, result })
       } catch (error) {
-        results.push({ name, ok: false, error: { code: error.code ?? null, message: error.message } })
+        results.push({
+          name,
+          ok: false,
+          error: { code: error.code ?? null, message: error.message }
+        })
       }
     }
   } finally {
