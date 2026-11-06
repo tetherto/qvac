@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.25)
 
+# Engine source in the pending registry branch: 29f8fe63dc44c7bd4353dc0a71b4910e4b33e272.
+# Keep this revision in sync while that branch is mutable: CI fingerprints this
+# file, but cannot detect port updates made only in the external registry.
+
 # Shared fuzz helpers. Unmigrated addons call qvac_addon_fuzz_manifest()
 # rather than qvac_addon_preproject() so overlay triplets and Android STL
 # stay as this listfile already sets them. See docs/architecture/ADDON-FUZZING.md.
