@@ -4,7 +4,7 @@ import fs from 'bare-fs'
 import os from 'bare-os'
 import path from 'bare-path'
 
-import type { BciFitRequest } from '@qvac/bci-whispercpp'
+import type { BciFitRequest, BciFitResult } from '@qvac/bci-whispercpp'
 
 import { BCI_EMBEDDER, BCI_WINDOWED } from '@/models/registry/index'
 import { getPlugin, registerPlugin, unregisterPlugin } from '@/plugins/registry'
@@ -19,7 +19,7 @@ import type { FitRunResult } from '@/model-fit/run/run'
  * The projection `assessModelFit` runs for a BCI load before download: the
  * registry's weightless descriptions, resolved through the BCI plugin, and the
  * request its fitter is handed. The fitter is the addon's, so a stand-in reports
- * what it was pointed at and answers the way the published BCI addon
+ * what it was pointed at and answers the way `@qvac/bci-whispercpp` 0.11.0
  * documents: with no `embedderPath` it reads `bci-embedder.bin` beside the
  * model, it counts the host RAM the embedder keeps in `hostBytes`, and an
  * embedder it cannot read is an `error` with reason `embedder-unreadable`.
@@ -89,29 +89,10 @@ interface Seen {
   embedder: string | undefined
 }
 
-interface PublishedBciFitResult {
-  status: 'fits' | 'error'
-  reason: 'fits' | 'embedder-unreadable'
-  modelType: 'base'
-  deviceName: string
-  deviceIsCpu: boolean
-  deviceSharesHostMemory: boolean
-  deviceFreeBytes: number
-  deviceTotalBytes: number
-  deviceBytes: number
-  weightsBytes: number
-  kvBytes: number
-  computeBytes: number
-  hostOverflowBytes: number
-  hostBytes: number
-  embedderBytes: number
-  report: string
-}
-
-function bciResult(embedderReadable: boolean): PublishedBciFitResult {
+function bciResult(embedderReadable: boolean): BciFitResult {
   const embedderBytes = embedderReadable ? EMBEDDER_BYTES : 0
   return {
-    status: embedderReadable ? ('fits' as const) : ('error' as const),
+    status: embedderReadable ? 'fits' : 'error',
     reason: embedderReadable ? 'fits' : 'embedder-unreadable',
     modelType: 'base',
     deviceName: 'Metal',
@@ -136,7 +117,7 @@ function bciResult(embedderReadable: boolean): PublishedBciFitResult {
  */
 function bciFitter() {
   const seen: Seen[] = []
-  const runFit = async (probe: FitProbeRequest) => {
+  const runFit = async (probe: FitProbeRequest): Promise<FitRunResult> => {
     if (probe.engine !== 'bci-whispercpp') throw new Error(`unexpected engine ${probe.engine}`)
 
     const { request } = probe
@@ -148,7 +129,7 @@ function bciFitter() {
     return {
       status: 'completed',
       probe: { engine: 'bci-whispercpp', result: bciResult(embedder !== undefined) }
-    } satisfies { status: FitRunResult['status']; probe: object }
+    }
   }
   return { seen, runFit: runFit as never }
 }
