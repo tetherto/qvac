@@ -1,6 +1,7 @@
 import { describe, it, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, rm, stat, unlink, utimes, writeFile } from 'node:fs/promises'
+import { utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createNamedKvCacheRetention, folderUsage } from '@/serve/lib/responses-kv-cache'
@@ -372,6 +373,39 @@ describe('createNamedKvCacheRetention', () => {
       // The failed acquire left nothing reserved, so the expired cache goes.
       await r.sweep()
       assert.deepEqual(deleted, [K.old])
+    })
+
+    it('keeps a cache another server used just before the claim', async (t) => {
+      const dir = await cacheDir(t, { [K.old]: { bytes: 10, ageMs: 30 * HOUR_MS } })
+      const file = join(dir, K.old, 'model', 'config.bin')
+      const deleted: string[] = []
+      let touched = false
+      const r = createNamedKvCacheRetention({
+        prefix: 'responses-',
+        dir,
+        idleTtlMs: 24 * HOUR_MS,
+        now: () => NOW,
+        pid: 1,
+        // The claim checks this process's own marker; that is the moment
+        // another server finishes a turn on the key and releases it.
+        isAlive: (pid) => {
+          if (pid === 1 && !touched) {
+            touched = true
+            utimesSync(file, new Date(NOW), new Date(NOW))
+          }
+          return pid === 1
+        },
+        deleteKey: (key) => {
+          deleted.push(key)
+          return Promise.resolve()
+        }
+      })
+      assert.equal(await r.sweep(), 0)
+      assert.equal(touched, true)
+      assert.deepEqual(deleted, [])
+      await assert.rejects(stat(join(dir, '.responses-leases', `${K.old}.sweep-1`)), {
+        code: 'ENOENT'
+      })
     })
 
     it('leaves a key another live process is already sweeping', async (t) => {

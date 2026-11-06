@@ -256,6 +256,17 @@ export function createNamedKvCacheRetention(
       if (inUse.has(entry.key)) continue
       const release = await claim(entry.key)
       if (!release) continue
+      // Another server may have used the key before the marker was down;
+      // with it down no new turn can start, so this check is final.
+      const claimed = await folderUsage(join(dir, entry.key)).catch(async (err: unknown) => {
+        await release()
+        throw err
+      })
+      if (!claimed || (now() - claimed.lastUsedMs <= idleTtlMs && !evictable)) {
+        await release()
+        if (!claimed && mine) total -= current.bytes
+        continue
+      }
       const deletion = deleteKey(entry.key)
       deleting.set(entry.key, deletion)
       try {
