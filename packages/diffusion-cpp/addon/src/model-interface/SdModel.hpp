@@ -217,7 +217,7 @@ private:
 
   /** The one mapping from the stored config; load() and assessFit() share it.
    */
-  void fillCtxParams(CtxParams& out) const;
+  void fillCtxParams(CtxParams& out, bool allowMetadataOnly = false) const;
 
   const qvac_lib_inference_addon_sd::SdCtxConfig config_;
   qvac_lib_inference_addon_sd::PerformanceProfile performanceProfile_;

@@ -26,12 +26,14 @@ request rechecks its dimensions and free memory, so a later larger request
 returns to direct convolution. Reviewed output was visually identical, but not
 byte-identical; GEMM used about 4.2 GiB more VRAM in the RTX measurement.
 
-Fit probes return `unknown` for profiles with per-request GEMM changes
-or H3 graph changes: the current engine planner cannot represent those graphs.
-They never report a fit based on the smaller baseline workspace.
-Metadata-only registry descriptions also return `unknown` when their tensors
-could select a profile after downloading the full checkpoint. `off` retains
-baseline fit planning.
+Fit probes return `unknown` only when the requested dimensions and tiling can
+select GEMM or H3 graph changes: the current engine planner cannot represent
+those graphs. Other shapes and tiled FLUX requests retain baseline graph planning.
+Metadata-only registry descriptions use the measured tensor-data sizes and
+companion layouts to select the same profile as the full files. Header size may
+change when the registry removes tokenizer tables. Static flash-attention and
+F16 settings are passed to the planner; different quantizations or mismatched
+companions retain baseline settings. `off` retains baseline fit planning.
 
 H3's graph changes are local to its context. Explicit `flash_attn`/`fa` prevents
 automatic flash attention and the accompanying graph profile; disabling

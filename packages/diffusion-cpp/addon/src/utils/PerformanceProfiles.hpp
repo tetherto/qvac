@@ -28,9 +28,8 @@ struct PerformanceProfile {
   bool ltxF16 = false;
 };
 
-ProfileModel inspectProfileModel(const SdCtxConfig& config);
-bool hasUncertainPerformanceFit(
-    const SdCtxConfig& config, const ProfileDevice& device);
+ProfileModel
+inspectProfileModel(const SdCtxConfig& config, bool allowMetadataOnly = false);
 ProfileDevice
 profileDevice(const char* backend, sd_backend_preference_t preference);
 ProfileDevice classifyProfileDevice(

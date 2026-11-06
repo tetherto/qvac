@@ -376,7 +376,7 @@ SdModel::~SdModel() = default;
 // and assessFit()
 // ---------------------------------------------------------------------------
 
-void SdModel::fillCtxParams(CtxParams& out) const {
+void SdModel::fillCtxParams(CtxParams& out, bool allowMetadataOnly) const {
   sd_ctx_params_t& params = out.params;
   sd_ctx_params_init(&params);
 
@@ -577,7 +577,8 @@ void SdModel::fillCtxParams(CtxParams& out) const {
   params.force_sdxl_vae_conv_scale = config_.forceSDXLVaeConvScale;
   out.profile = qvac_lib_inference_addon_sd::selectPerformanceProfile(
       config_,
-      qvac_lib_inference_addon_sd::inspectProfileModel(config_),
+      qvac_lib_inference_addon_sd::inspectProfileModel(
+          config_, allowMetadataOnly),
       qvac_lib_inference_addon_sd::profileDevice(
           params.backend, params.preferred_gpu_backend));
   if (out.profile.flashAttention)
@@ -591,16 +592,20 @@ SdModel::FitOutcome SdModel::assessFit(const FitWorkload& workload) const {
     qvac_lib_inference_addon_sd::validatePerformanceWorkload(
         config_, workload.width, workload.height, workload.videoFrames);
   CtxParams ctx;
-  fillCtxParams(ctx);
+  fillCtxParams(ctx, true);
 
   // The planner cannot represent per-request profile fallbacks or the H3
   // graph toggle. Avoid a fit verdict for a different execution graph.
   if (!workload.upscaleOnly &&
-      (ctx.profile.vaeGemm || ctx.profile.h3LocalOps ||
-       qvac_lib_inference_addon_sd::hasUncertainPerformanceFit(
-           config_,
-           qvac_lib_inference_addon_sd::profileDevice(
-               ctx.params.backend, ctx.params.preferred_gpu_backend))))
+      (qvac_lib_inference_addon_sd::useVaeGemm(
+           ctx.profile,
+           workload.width,
+           workload.height,
+           1,
+           UINT64_MAX,
+           workload.vaeTiling) ||
+       qvac_lib_inference_addon_sd::useH3LocalOps(
+           ctx.profile, workload.width, workload.height, workload.videoFrames)))
     return {};
 
   // `sd_fit_params` answers any pinned placement with SD_FIT_FAILURE, and a
