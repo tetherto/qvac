@@ -219,8 +219,8 @@ function trackFfmpegHandles(fn) {
   return { created, released }
 }
 
-function assertHandlesReleased(t, { created, released }, label) {
-  t.ok(created.Frame > 0, `${label}: encoding created frames`)
+function assertHandlesReleased(t, { created, released }, label, { encoded = true } = {}) {
+  if (encoded) t.ok(created.Frame > 0, `${label}: encoding created frames`)
   for (const name of TRACKED_HANDLES) {
     // stream.decoder() builds its CodecContext internally, so it is not counted as created.
     if (name === 'CodecContext') continue
@@ -247,4 +247,21 @@ test('encodePcm: destroys every bare-ffmpeg handle when an encode fails', (t) =>
     )
   })
   assertHandlesReleased(t, counts, 'failed encode')
+})
+
+test('encodePcm: destroys every bare-ffmpeg handle when muxer setup fails', (t) => {
+  const counts = trackFfmpegHandles((ffmpeg) => {
+    // Throws before the output context takes ownership of the write IO.
+    ffmpeg.OutputFormatContext = class {
+      constructor() {
+        throw new Error('muxer setup failed')
+      }
+    }
+    t.exception(
+      () => encodePcm(tonePcm(), 'm4a', { sampleRate: 44100, channels: 2 }),
+      /muxer setup failed/
+    )
+  })
+  t.is(counts.created.IOContext, 2, 'read and write IO contexts were created')
+  assertHandlesReleased(t, counts, 'muxer setup failure', { encoded: false })
 })
