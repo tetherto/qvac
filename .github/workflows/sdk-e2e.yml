@@ -218,7 +218,8 @@ jobs:
 
   desktop:
     needs: plan
-    if: needs.plan.outputs.desktop != '' && needs.plan.outputs.desktop != '[]'
+    # always(): impacted runs only on smoke labels, and its skip would otherwise skip every job after plan.
+    if: always() && !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.desktop != '' && needs.plan.outputs.desktop != '[]'
     permissions:
       contents: read
       actions: read
@@ -233,7 +234,8 @@ jobs:
   # drives it over MQTT, as main's SDK Device Farm workflows did.
   mobile:
     needs: plan
-    if: needs.plan.outputs.mobile != '' && needs.plan.outputs.mobile != '[]'
+    # always(): impacted runs only on smoke labels, and its skip would otherwise skip every job after plan.
+    if: always() && !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.mobile != '' && needs.plan.outputs.mobile != '[]'
     name: mobile / ${{ matrix.row.slug }} ${{ matrix.row.config }}
     runs-on: ${{ matrix.row.runner }}
     environment: release
