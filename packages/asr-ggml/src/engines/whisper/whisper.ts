@@ -485,7 +485,8 @@ export class WhisperInterface {
             adds: `${MAX_BUFFERED_BYTES} bytes of ${this._sourceByteFormat} audio`,
           });
         }
-        this._bufferedAudio.push(data.input);
+        // Kept until end of input, so copy: the caller may reuse its buffer.
+        this._bufferedAudio.push(data.input.slice());
         this._bufferedBytes += data.input.byteLength;
         return this._nextJobId;
       }

@@ -12,7 +12,7 @@
 const test = require('brittle')
 const ASRGgml = require('../../index.js')
 const { normalizeAudioStream, createChunkNormalizer } = require('../../lib/audio.js')
-const { MODEL_PATH } = require('../mocks/createModel.js')
+const { MODEL_PATH, createWhisperModel, createParakeetModel } = require('../mocks/createModel.js')
 
 const process = require('bare-process')
 global.process = process
@@ -115,6 +115,56 @@ test('carried-over bytes are copied, so caller buffer reuse is safe', (t) => {
   t.is(out.length, 1, 'the next chunk completes the sample')
   t.is(Math.round(out[0] * 32768), 0x2010, 'the carried byte kept its original value')
   normalizer.flush()
+})
+
+// A capture loop (mic, ring buffer) that refills one Float32Array per chunk.
+function reusedBufferStream(values) {
+  const scratch = new Float32Array(4)
+  return {
+    async *[Symbol.asyncIterator]() {
+      for (const value of values) {
+        scratch.fill(value)
+        yield scratch
+      }
+    }
+  }
+}
+
+// Runs a stream to completion and returns the samples the native job got.
+async function transcribeAndCapture(model, binding, stream) {
+  let captured = null
+  const runJob = binding.runJob.bind(binding)
+  binding.runJob = (handle, data) => {
+    const input = data.input
+    const samples =
+      input instanceof Float32Array
+        ? input
+        : new Float32Array(input.buffer, input.byteOffset, input.byteLength / 4)
+    captured = Array.from(samples)
+    return runJob(handle, data)
+  }
+  await model.load()
+  try {
+    const response = await model.run(stream)
+    await response.await().catch(() => {})
+  } finally {
+    await model.unload().catch(() => {})
+  }
+  return captured
+}
+
+const REUSED_EXPECTED = [0.25, 0.25, 0.25, 0.25, 0.5, 0.5, 0.5, 0.5, 0.75, 0.75, 0.75, 0.75]
+
+test('whisper keeps each chunk when the caller reuses one Float32Array', async (t) => {
+  const { model, binding } = createWhisperModel()
+  const captured = await transcribeAndCapture(model, binding, reusedBufferStream([0.25, 0.5, 0.75]))
+  t.alike(captured, REUSED_EXPECTED)
+})
+
+test('parakeet keeps each chunk when the caller reuses one Float32Array', async (t) => {
+  const { model, binding } = createParakeetModel({ parakeetConfig: { maxThreads: 1 } })
+  const captured = await transcribeAndCapture(model, binding, reusedBufferStream([0.25, 0.5, 0.75]))
+  t.alike(captured, REUSED_EXPECTED)
 })
 
 test('f32le byte streams carry over partial samples the same way', async (t) => {
