@@ -5,9 +5,9 @@ const path = require('bare-path')
 const proc = require('bare-process')
 const test = require('brittle')
 
+const { NO_GPU } = require('../utils/runAudioGen')
 const { assessFit } = require('../../index.js')
 const { ensureAudiogenModels, getBaseDir } = require('../utils/downloadModel')
-const { NO_GPU } = require('../utils/runAudioGen')
 
 const TEST_TIMEOUT_MS = 1800000
 const VARIANT = 'turbo-q4'
@@ -74,15 +74,15 @@ test('a CPU load is one host row', { timeout: TEST_TIMEOUT_MS }, async (t) => {
 })
 
 test(
-  'a CPU pool peak is counted once compared with an offloaded projection',
+  'CPU and GPU projections count the host peak once',
   { timeout: TEST_TIMEOUT_MS, skip: NO_GPU },
   async (t) => {
     const dir = await stagedModels(t)
     if (dir === null) return
-
     const fit = await assessFit({ modelsDir: dir, durationSeconds: 10, gpuLayers: 0 })
     const offloaded = await assessFit({ modelsDir: dir, durationSeconds: 10, gpuLayers: 99 })
-
+    // The CPU pool is both the device and the host pool, so its peak is counted
+    // once: the staged pipeline needs about what it needs offloaded, never twice.
     t.ok(
       fit.devices[0].usedBytes < 1.5 * totalUsed(offloaded),
       `the pool's peak counts once (${fit.devices[0].usedBytes} < 1.5 × ${totalUsed(offloaded)})`
@@ -278,3 +278,37 @@ test('a broken request rejects', async (t) => {
   t.ok(promise instanceof Promise)
   await t.exception(promise, /non-negative count/)
 })
+
+test(
+  'explicit CPU selectors project the requested placement',
+  { timeout: TEST_TIMEOUT_MS },
+  async (t) => {
+    const dir = await stagedModels(t)
+    if (dir === null) return
+    const fit = await assessFit({
+      modelsDir: dir,
+      backend: 'cpu',
+      lmBackend: 'cpu',
+      durationSeconds: 6
+    })
+    t.ok(isVerdict(fit))
+    t.is(fit.devices.length, 1)
+    t.is(fit.devices[0].name, 'CPU')
+    t.ok(fit.devices[0].usedBytes > 0)
+  }
+)
+
+test(
+  'explicit unavailable selectors never silently change devices',
+  { timeout: TEST_TIMEOUT_MS },
+  async (t) => {
+    const dir = await stagedModels(t)
+    if (dir === null) return
+    for (const selectors of [
+      { backend: 'unavailable-test-backend', lmBackend: 'cpu' },
+      { backend: 'cpu', lmBackend: 'unavailable-test-backend' }
+    ]) {
+      await t.exception(() => assessFit({ modelsDir: dir, ...selectors }), /no-backend-device/)
+    }
+  }
+)

@@ -2,6 +2,7 @@ import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import type { FastifySchemaValidationError } from 'fastify/types/schema.js'
 import { validatorCompiler } from 'fastify-type-provider-zod'
+import { SDK_CLIENT_ERROR_CODES, SDK_SERVER_ERROR_CODES } from '@qvac/sdk'
 import {
   MAX_FIT_MODELS,
   MODEL_FIT_FIELD_CODES,
@@ -9,7 +10,7 @@ import {
   modelFitResult
 } from '@/serve/extensions/default/schemas/model-fit'
 import { systemQuery, systemResult } from '@/serve/extensions/default/schemas/system'
-import { mergeConfig } from '@/serve/extensions/default/routes/model-fit'
+import { mergeConfig, toHttpError } from '@/serve/extensions/default/routes/model-fit'
 import { errorResponses } from '@/serve/lib/error-responses'
 
 function issuePaths(input: unknown): string[] {
@@ -19,14 +20,12 @@ function issuePaths(input: unknown): string[] {
 }
 
 describe('modelFitBody', () => {
-  it('accepts named models with optional config, execution and policy', () => {
+  it('accepts named models with optional config', () => {
     const result = modelFitBody.safeParse({
       models: [
         { model: 'my-llm', modelConfig: { ctx_size: 8192 } },
         { model: 'QWEN3_600M_INST_Q4' }
-      ],
-      execution: 'concurrent',
-      policy: 'interactive-v1'
+      ]
     })
     assert.equal(result.success, true)
   })
@@ -51,11 +50,6 @@ describe('modelFitBody', () => {
     assert.deepEqual(issuePaths({ models: [{ model: 'm' }], nope: true }), [''])
   })
 
-  it('rejects an unknown execution or policy', () => {
-    assert.deepEqual(issuePaths({ models: [{ model: 'm' }], execution: 'parallel' }), ['execution'])
-    assert.deepEqual(issuePaths({ models: [{ model: 'm' }], policy: 'batch-v1' }), ['policy'])
-  })
-
   // The error handler builds its `models:too_big` lookup key from these two fields.
   it('surfaces the over-cap issue on err.validation as keyword and instancePath', () => {
     const validate = validatorCompiler({
@@ -75,15 +69,44 @@ describe('modelFitBody', () => {
 })
 
 describe('modelFitResult', () => {
+  it('carries the pools and each model with its device rows', () => {
+    const result = modelFitResult.safeParse({
+      object: 'model_fit',
+      verdict: 'fits',
+      pools: [{ id: 'host', unified: true, usedBytes: 1024, freeBytes: 4096, totalBytes: 8192 }],
+      models: [
+        {
+          model: 'a',
+          status: 'fits',
+          devices: [{ id: 'CPU', name: 'CPU', unified: true, usedBytes: 1024, freeBytes: 4096 }],
+          stats: {}
+        }
+      ]
+    })
+    assert.equal(result.success, true, JSON.stringify(result.error?.issues))
+  })
+
+  it('takes llama.cpp stats or empty stats, nothing else', () => {
+    const withStats = (stats: unknown) =>
+      modelFitResult.safeParse({
+        object: 'model_fit',
+        verdict: 'fits',
+        pools: [],
+        models: [{ model: 'a', status: 'fits', devices: [], stats }]
+      }).success
+
+    assert.equal(withStats({ ctxSize: 8192, gpuLayers: 37 }), true)
+    assert.equal(withStats({}), true)
+    assert.equal(withStats({ ctxSize: 8192 }), false)
+    assert.equal(withStats({ other: 1 }), false)
+  })
+
   it('passes through fields the SDK adds later', () => {
     const parsed = modelFitResult.parse({
       object: 'model_fit',
       verdict: 'unknown',
-      basis: 'system-memory',
-      execution: 'sequential',
-      models: [{ model: 'a', name: 'A', verdict: 'unknown', reasons: [], newField: 1 }],
-      reasons: [],
-      assumptions: [],
+      pools: [],
+      models: [{ model: 'a', status: 'unknown', devices: [], stats: {}, newField: 1 }],
       later: true
     })
     assert.equal((parsed as Record<string, unknown>)['later'], true)
@@ -144,6 +167,39 @@ describe('errorResponses', () => {
       '- `invalid_models`: bad models\n- `too_many_models`: too many'
     )
     assert.equal(responses[500]!.description, '- `model_fit_failed`: sdk failed')
+  })
+})
+
+describe('toHttpError', () => {
+  const sdkError = (code: number, message: string) => Object.assign(new Error(message), { code })
+
+  it('makes a config the engine schema refuses a 400 with its message', () => {
+    const err = toHttpError(
+      sdkError(SDK_SERVER_ERROR_CODES.PLUGIN_LOAD_CONFIG_VALIDATION_FAILED, 'ctx_size: too small')
+    )
+    assert.equal(err.status, 400)
+    assert.equal(err.code, 'invalid_model_config')
+    assert.equal(err.message, 'ctx_size: too small')
+  })
+
+  it('makes a config value the engine refuses while applying its defaults a 400', () => {
+    const err = toHttpError(
+      sdkError(SDK_CLIENT_ERROR_CODES.REQUEST_VALIDATION_FAILED, 'ctx_size: expected number')
+    )
+    assert.equal(err.status, 400)
+    assert.equal(err.code, 'invalid_model_config')
+    assert.equal(err.message, 'ctx_size: expected number')
+  })
+
+  it('keeps every other failure a 500', () => {
+    for (const err of [
+      toHttpError(sdkError(SDK_SERVER_ERROR_CODES.COMPLETION_FAILED, 'boom')),
+      toHttpError(new Error('boom')),
+      toHttpError('boom')
+    ]) {
+      assert.equal(err.status, 500)
+      assert.equal(err.code, 'model_fit_failed')
+    }
   })
 })
 
