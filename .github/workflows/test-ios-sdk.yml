@@ -178,7 +178,7 @@ jobs:
 
   build:
     name: "[ios] build"
-    runs-on: macos-14
+    runs-on: macos-15
     environment: release
     timeout-minutes: 60
     env:
@@ -214,20 +214,7 @@ jobs:
 
       - name: Select Xcode
         run: |
-          echo "Available Xcode versions:"
-          ls -d /Applications/Xcode*.app 2>/dev/null || echo "No Xcode found"
-
-          if [ -d "/Applications/Xcode_16.1.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_16.1.app
-          elif [ -d "/Applications/Xcode_16.1.0.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_16.1.0.app
-          elif [ -d "/Applications/Xcode_16.2.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_16.2.app
-          else
-            echo "No suitable Xcode version found (need >= 16.1)"
-            exit 1
-          fi
-
+          sudo xcode-select -s /Applications/Xcode_26.3.app
           xcodebuild -version
           xcodebuild -showsdks | grep -i ios
 
@@ -915,10 +902,11 @@ jobs:
           fi
 
           # Omitted when empty rather than passed as an empty value: a producer
-          # from a framework build that predates --include would reject it.
+          # from a framework build that predates --include-file would reject it.
           INCLUDE_ARG=""
           if [ -n "$INCLUDE_TESTS" ]; then
-            INCLUDE_ARG="--include=$INCLUDE_TESTS"
+            printf '%s\n' "$INCLUDE_TESTS" | tr ',' '\n' > include-tests.txt
+            INCLUDE_ARG="--include-file=include-tests.txt"
           fi
 
           # Word splitting is the point here, and the ids are restricted to
