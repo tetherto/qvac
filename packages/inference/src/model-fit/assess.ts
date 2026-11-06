@@ -369,8 +369,8 @@ function nativeFitDeclines(
  * True on unified-memory platforms whatever the collector reports, and
  * elsewhere when no usable GPU is present or every usable GPU allocates out of
  * system RAM. A card with its own memory, or a device whose class cannot be
- * told (an AMD APU on linux), fails it: the weights may live where the budget
- * cannot see them.
+ * told (an AMD GPU on linux that reports itself dedicated), fails it: the
+ * weights may live where the budget cannot see them.
  */
 export function boundBySystemMemory(
   resources: SystemResources,
@@ -529,15 +529,17 @@ function allocatesFromSystemMemory(gpu: GPUResourceCapabilities) {
 }
 
 /**
- * Whether the collector's dedicated/integrated call is trustworthy for this
- * device. On linux it is inferred from amdgpu's `mem_info_vram_total`, which an
- * APU also exposes for its carve-out — a Ryzen 5000U reported `dedicated` with
- * over a gigabyte of "VRAM". Vulkan calls the same device INTEGRATED_GPU, but
- * that is not in the collector, so an AMD GPU on linux cannot be placed and
- * assesses as `unknown`.
+ * Whether the collector's dedicated/integrated call is untrustworthy for this
+ * device. On linux the collector marks an amdgpu APU unified when the driver
+ * exposes the APU-only `vddnb` sensor, and that call is trusted. A `dedicated`
+ * amdgpu reading is not: an APU without the sensor (power management off, a
+ * virtual function) still reports its carve-out from `mem_info_vram_total` as
+ * its own memory — a Ryzen 5000U reported over a gigabyte of "VRAM" — so it
+ * cannot be told from a real card, cannot be placed, and assesses as `unknown`.
  */
 function integratedIsIndistinguishable(gpu: GPUResourceCapabilities, platform: ModelFitPlatform) {
   if (!platform.startsWith('linux')) return false
+  if (gpu.unifiedMemory.status === 'supported' && gpu.unifiedMemory.value) return false
   return gpu.driverName.status === 'supported' && gpu.driverName.value === 'amdgpu'
 }
 

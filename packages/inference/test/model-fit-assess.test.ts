@@ -1,5 +1,5 @@
 import test from 'brittle'
-import { assessModelFitFromResources } from '@/model-fit/assess'
+import { assessModelFitFromResources, boundBySystemMemory } from '@/model-fit/assess'
 import type { NativeCandidateFit } from '@/model-fit/assess'
 import { computeFloor, FLOOR_VERSION } from '@/model-fit/floor'
 import type { GgufFacts, ModelResourceProfile } from '@/schemas/model-resource-profile'
@@ -1221,10 +1221,10 @@ test('assess: a GPU with no graphics API the engine talks to is passed over', (t
   t.is(result.verdict, 'likely-fits')
 })
 
-// An AMD APU under amdgpu exposes a VRAM carve-out, so libgpuinfo infers
-// `dedicated` from sysfs and `unifiedMemory` reads false — a Ryzen 5000U
-// laptop reported over a gigabyte of "VRAM". Budgeting against the carve-out
-// would be wrong, so the set keeps the system budget.
+// An AMD APU without amdgpu's `vddnb` sensor exposes only a VRAM carve-out, so
+// libgpuinfo infers `dedicated` from sysfs and `unifiedMemory` reads false — a
+// Ryzen 5000U laptop reported over a gigabyte of "VRAM". Budgeting against the
+// carve-out would be wrong, so the set keeps the system budget.
 test('assess: an AMD GPU on linux is not budgeted against its carve-out', (t) => {
   const resources = discreteGpuResources({ vramTotalBytes: 2 * GIB, vramUsedBytes: 256 * MIB })
   const gpus = resources.capabilities.gpus
@@ -1259,6 +1259,86 @@ test('assess: an AMD GPU on linux is not budgeted against its carve-out', (t) =>
     nativeFits: [measured(1 * GIB, 0)]
   })
   t.is(onWindows.verdict, 'likely-fits')
+})
+
+// An AMD APU as the collector reads it on linux: amdgpu, with `unifiedMemory`
+// as libgpuinfo reported it and, when unified, its declared memory unverified.
+function amdApuResources(options: {
+  unified: boolean
+  systemTotalBytes: number
+  systemUsedBytes: number
+}) {
+  const resources = discreteGpuResources({
+    vramTotalBytes: 2 * GIB,
+    vramUsedBytes: 148 * MIB,
+    systemTotalBytes: options.systemTotalBytes,
+    systemUsedBytes: options.systemUsedBytes
+  })
+  const gpus = resources.capabilities.gpus
+  if (gpus.status === 'supported') {
+    const provenance = { source: 'test', scope: 'device' as const }
+    gpus.value[0] = {
+      ...gpus.value[0]!,
+      name: { status: 'supported', value: 'Strix Halo', provenance },
+      driverName: { status: 'supported', value: 'amdgpu', provenance },
+      unifiedMemory: { status: 'supported', value: options.unified, provenance },
+      ...(options.unified && { memoryTotalBytes: { status: 'unverified' as const } })
+    }
+  }
+  return resources
+}
+
+// libgpuinfo marks an AMD APU unified from amdgpu's APU-only `vddnb` sensor.
+// Its allocations are then system RAM (carve-out plus GTT), so it is placed like
+// any integrated GPU rather than left unplaceable.
+test('assess: an AMD APU on linux that reports unified memory is an integrated GPU', (t) => {
+  const result = assessModelFitFromResources({
+    models: [candidate()],
+    execution: 'sequential',
+    resources: amdApuResources({
+      unified: true,
+      systemTotalBytes: 128 * GIB,
+      systemUsedBytes: 6 * GIB
+    }),
+    platform: 'linux-x64',
+    resolveProfile: () => profile(),
+    nativeFits: [measured(1 * GIB, 0)]
+  })
+
+  t.is(result.verdict, 'likely-fits')
+  t.is(result.basis, 'system-memory')
+  t.ok(result.assumptions.some((a) => a.includes('integrated GPU allocates out of system RAM')))
+})
+
+// Unified, the APU's GPU bytes come out of the system budget, so the computed
+// floor can refuse. Reported dedicated, it may be a real card, so no floor.
+test('assess: an AMD APU on linux gets the floor only when it reports unified memory', (t) => {
+  const assess = (unified: boolean) =>
+    assessModelFitFromResources({
+      models: [candidate()],
+      execution: 'sequential',
+      resources: amdApuResources({ unified, systemTotalBytes: 8 * GIB, systemUsedBytes: 3 * GIB }),
+      platform: 'linux-x64',
+      resolveProfile: () => profile({ artifactBytes: 6 * GIB })
+    })
+
+  const unified = assess(true)
+  t.is(unified.verdict, 'likely-too-large')
+  t.is(unified.evidence, 'computed-only')
+  t.is(assess(false).verdict, 'unknown')
+})
+
+// loadModel's capacity check charges device bytes to system RAM only where this
+// holds, so a unified APU's GPU-placed weights count against the RAM they use.
+test('boundBySystemMemory: an AMD APU on linux is bound only when it reports unified memory', (t) => {
+  const bound = (unified: boolean) =>
+    boundBySystemMemory(
+      amdApuResources({ unified, systemTotalBytes: 32 * GIB, systemUsedBytes: 4 * GIB }),
+      'linux-x64'
+    )
+
+  t.is(bound(true), true)
+  t.is(bound(false), false)
 })
 
 // ---------------------------------------------------------------------------

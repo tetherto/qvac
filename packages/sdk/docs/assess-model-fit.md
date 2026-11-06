@@ -249,12 +249,15 @@ but not the RAM does not read as a fit.
 
 Where no single device can be named — cards that disagree on the backend or on
 the scope of their readings, a GPU whose readings carry no usable scope, an AMD
-GPU on linux — the basis stays `system-memory`. The collector infers
-dedicated-versus-integrated from the driver's reported VRAM, and an AMD APU
-exposes its carve-out the same way a small discrete card exposes its memory, so
-the two cannot be told apart from JS; budgeting against the carve-out would be
-wrong. The system budget still bounds the load, and an engine that cannot place
-the model refuses it outright.
+GPU on linux that reports itself dedicated — the basis stays `system-memory`.
+The collector marks an AMD APU on linux as unified memory when the driver
+exposes its APU-only voltage sensor, and such an APU is assessed like any other
+integrated GPU: its carve-out and GTT are system RAM, so the system budget
+covers the load. Without that sensor (power management off, a virtual function)
+an APU reports its carve-out the same way a small discrete card reports its
+memory, so the two cannot be told apart from JS; budgeting against the carve-out
+would be wrong. The system budget still bounds the load, and an engine that
+cannot place the model refuses it outright.
 
 Apple silicon is unaffected: its memory is unified, so a GPU allocation is system
 RAM and the system basis already covers it.
