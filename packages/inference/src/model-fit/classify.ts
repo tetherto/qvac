@@ -175,17 +175,6 @@ function projectionFor(probe: LegacyProbe): NativeProbeProjection {
   if (probe.engine === 'translation-nmtcpp') return nmtProjection(probe.result)
   if (isLlama(probe)) return llamaProjection(probe)
 
-  if (probe.engine === 'audiogen-ggml' && probe.result.deviceIsCpu) {
-    const result = probe.result
-    return {
-      deviceName: result.deviceName,
-      hostBytes: Math.max(result.deviceBytes, result.hostBytes),
-      deviceFreeBytes: result.deviceFreeBytes,
-      deviceTotalBytes: result.deviceTotalBytes,
-      report: result.report
-    }
-  }
-
   const result = probe.result
   return {
     deviceName: result.deviceName,

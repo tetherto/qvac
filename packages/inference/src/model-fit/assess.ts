@@ -46,10 +46,9 @@ type Evaluation =
   | { kind: 'unknown'; reasons: readonly string[]; assumptions?: readonly string[] }
 
 /**
- * An engine's verdict with no usable totals to compare, or with only a partial
- * breakdown. A refusal stands whatever else is in the set. A fit stands only
- * for a lone candidate, since it carries nothing to add to another model's
- * bytes.
+ * An engine's verdict with no breakdown to compare. A refusal stands whatever
+ * else is in the set. A fit stands only for a lone candidate, since it carries
+ * nothing to add to another model's bytes.
  */
 interface BareEvaluation {
   kind: 'bare'
@@ -59,10 +58,9 @@ interface BareEvaluation {
 }
 
 /**
- * What one engine fitter measured. With a complete breakdown, weights and the
- * KV cache stay resident for the model's lifetime while compute is one
- * operation's peak. Totals without a breakdown, and host totals, count as
- * resident whole.
+ * What one engine fitter measured. Weights and the KV cache stay resident for
+ * the model's lifetime; compute buffers are one operation's peak. The new LLM
+ * fit result reports totals instead, which count as resident whole.
  */
 interface NativeEvaluation {
   kind: 'native'
@@ -76,10 +74,10 @@ interface NativeEvaluation {
 }
 
 /**
- * What one fitter answered: its measurement where the figures divide, a
- * conservative all-resident measurement where it reports totals alone, its
- * bare verdict where its byte breakdown is partial or it reports no totals,
- * and `undefined` where it reached no verdict.
+ * What one fitter answered: its measurement where the figures divide, the new
+ * LLM measurement where it reports totals alone, its bare verdict where other
+ * engines do not provide a complete breakdown, and `undefined` where it
+ * reached no verdict.
  */
 function nativeEvaluation(
   native: NativeCandidateFit | undefined
@@ -100,6 +98,7 @@ function nativeEvaluation(
 
   const { weightsBytes, contextBytes, computeBytes, deviceBytes, hostBytes } = projection
   if (weightsBytes === undefined || contextBytes === undefined || computeBytes === undefined) {
+    if (fit.engine !== 'llm-llamacpp') return bare
     const hasPartialBreakdown =
       weightsBytes !== undefined || contextBytes !== undefined || computeBytes !== undefined
     if (hasPartialBreakdown) return bare

@@ -41,9 +41,8 @@ model:
 is what a verdict rests on wherever the fitter reaches one. Where the fitter
 splits its projection into weights, context and compute, those bytes compose:
 each candidate is measured against the whole machine on its own, and the set is
-summed under one budget according to `execution`. A fitter that reports only
-device and host totals has no working peak to separate, so those totals count
-entirely as resident memory.
+summed under one budget according to `execution`. The LLM fitter now reports
+only device and host totals, so those totals count entirely as resident memory.
 
 A refusal from the engine stands on its own. The fitter knows things the byte
 total does not carry — no device could hold the placement, a load shape it will
@@ -130,11 +129,10 @@ window.
 ### `execution` is a declared assumption
 
 `sequential` counts every model's resident memory and adds only the largest
-working peak among engines that report a complete breakdown. An engine that
-reports totals only is counted entirely as resident. `concurrent` adds every
-reported peak. It describes what you intend to do so the numbers match your
-plan — the SDK does not schedule, serialize, or reserve anything on the strength
-of it.
+working peak among engines that report a complete breakdown. LLM totals without
+a breakdown are counted entirely as resident. `concurrent` adds every reported
+peak. It describes what you intend to do so the numbers match your plan — the
+SDK does not schedule, serialize, or reserve anything on the strength of it.
 
 ### `policy: 'interactive-v1'`
 
@@ -198,14 +196,15 @@ Of those, whisper, parakeet, BCI whisper and TTS report a byte breakdown, so
 their measurements compose into a combined verdict. The BCI projection includes
 the embedder: the host RAM it keeps is counted in `hostBytes`, read from the
 `bci-embedder.bin` beside the model, or from the load's `embedderModelSrc` where
-it names one. Llama.cpp and the published audiogen addon report device and host
-totals without a weights/context/compute breakdown; those totals count entirely
-as resident memory when models are assessed together. Diffusion reports no byte
-totals, OCR reports only weights, and translation reports one allowance for the
-whole load. Assessed together with other models, a `fit` from any of those three
-falls back to the [computed floor](#two-kinds-of-evidence) while a refusal still
-stands. `onnx-tts`, `ggml-vla` and `ggml-classification` have no fitter and assess
-from the floor, as do a translation model not yet downloaded and MOSS-Speech.
+it names one. Llama.cpp reports device and host totals without a
+weights/context/compute breakdown; those totals count entirely as resident
+memory when models are assessed together. Audiogen reports a pipeline peak,
+diffusion reports no byte totals, OCR reports only weights, and translation
+reports one allowance for the whole load. Assessed together with other models,
+a `fit` from any of those four falls back to the
+[computed floor](#two-kinds-of-evidence) while a refusal still stands.
+`onnx-tts`, `ggml-vla` and `ggml-classification` have no fitter and assess from
+the floor, as do a translation model not yet downloaded and MOSS-Speech.
 
 For `sdcpp-generation` the fitter covers image generation, including a
 configured ESRGAN `upscaler`, standalone `mode: 'upscale'`, video, and

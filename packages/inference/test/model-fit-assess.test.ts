@@ -39,11 +39,16 @@ function measured(
   }
 }
 
-function measuredTotal(deviceBytes: number, hostBytes = 0): NativeCandidateFit {
+function measuredTotal(
+  deviceBytes: number,
+  hostBytes = 0,
+  engine = 'llm-llamacpp'
+): NativeCandidateFit {
   return {
     fit: {
       verdict: 'fit',
       basis: 'native-probe',
+      engine,
       estimatorVersion: 'native-probe-v2',
       reason: 'fits',
       projection: { deviceBytes, hostBytes }
@@ -459,7 +464,7 @@ test('assess: every model measured by its engine reports native evidence', (t) =
   t.ok(result.reasons.some((r) => r.includes('measured by the engine')))
 })
 
-test('assess: total-only native measurements combine conservatively', (t) => {
+test('assess: total-only LLM measurements combine conservatively', (t) => {
   const result = assessModelFitFromResources({
     models: [
       candidate({ model: { name: 'A', sha256Checksum: 'a'.repeat(64) } }),
@@ -477,7 +482,7 @@ test('assess: total-only native measurements combine conservatively', (t) => {
   t.ok(result.assumptions.some((assumption) => assumption.includes('totals only')))
 })
 
-test('assess: published audiogen totals stay resident beside an LLM working peak', (t) => {
+test('assess: published audiogen totals keep the existing floor fallback in a set', (t) => {
   const result = assessModelFitFromResources({
     models: [
       candidate({ model: { name: 'AUDIOGEN', sha256Checksum: 'a'.repeat(64) } }),
@@ -486,13 +491,13 @@ test('assess: published audiogen totals stay resident beside an LLM working peak
     execution: 'sequential',
     resources: resources({ totalBytes: 4.5 * GIB, usedBytes: 0 }),
     platform: 'darwin-arm64',
-    resolveProfile: () => undefined,
-    nativeFits: [measuredTotal(2 * GIB), measured(1 * GIB, 1 * GIB)]
+    resolveProfile: () => profile({ artifactBytes: 1 * GIB, ggufFacts: undefined }),
+    nativeFits: [measuredTotal(2 * GIB, 0, 'audiogen-ggml'), measured(1 * GIB, 1 * GIB)]
   })
 
-  t.is(result.verdict, 'likely-too-large')
-  t.is(result.evidence, 'native-fit')
-  t.ok(result.assumptions.some((assumption) => assumption.includes('totals only')))
+  t.is(result.verdict, 'unknown')
+  t.is(result.evidence, 'computed-only')
+  t.absent(result.assumptions.find((assumption) => assumption.includes('totals only')))
 })
 
 test('assess: a partial OCR measurement falls back to its floor in a set', (t) => {
