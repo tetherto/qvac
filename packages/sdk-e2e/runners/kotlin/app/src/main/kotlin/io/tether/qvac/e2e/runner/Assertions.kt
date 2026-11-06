@@ -581,6 +581,13 @@ object Assertions {
                 "no tool call matched a declared tool. Got: [$got], declared: [${declared.sorted().joinToString(", ")}]",
             )
         }
+        // `exclusive`: every call must be to a declared tool, as a forced `tool_choice` demands.
+        if (args["exclusive"] == true && valid.size != calls.size) {
+            val got = calls.joinToString(", ") { (it["name"] as? String)?.ifEmpty { null } ?: "<unnamed>" }
+            return StepResult.fail(
+                "a tool call is outside the declared tools. Got: [$got], declared: [${declared.sorted().joinToString(", ")}]",
+            )
+        }
         val match = valid.firstOrNull { it["name"] == args["name"] }
         if (match != null) {
             val callArgs = asMap(match["arguments"])

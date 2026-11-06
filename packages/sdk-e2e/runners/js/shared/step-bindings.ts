@@ -1840,6 +1840,16 @@ const ASSERTIONS: Record<
       }
     }
 
+    // `exclusive`: every call must be to a declared tool, as a forced `tool_choice` demands.
+    if (args.exclusive === true && valid.length !== calls.length) {
+      return {
+        passed: false,
+        output:
+          `a tool call is outside the declared tools. Got: [${calls.map((c) => c.name ?? '<unnamed>').join(', ')}], ` +
+          `declared: [${[...declared].join(', ')}]`
+      }
+    }
+
     const match = valid.find((call) => call.name === args.name)
     if (match) {
       const callArgs = match.arguments ?? {}

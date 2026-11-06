@@ -407,8 +407,18 @@ const toolTurn = (dependency: string): Step[] => [
   { project: { from: '$run', path: 'toolCalls', as: 'calls' } }
 ]
 
-const assertToolCall = (name: string, argKeys: string[], declared: string[]): Step => ({
-  assert: { on: '$calls', named: 'toolCallShape', with: { name, argKeys, declared } }
+/** A call to `name` with these argument keys; `exclusive` also rejects any call outside `declared`. */
+const assertToolCall = (
+  name: string,
+  argKeys: string[],
+  declared: string[],
+  exclusive = false
+): Step => ({
+  assert: {
+    on: '$calls',
+    named: 'toolCallShape',
+    with: { name, argKeys, declared, ...(exclusive && { exclusive }) }
+  }
 })
 
 const assertCallCount = (length: number): Step => ({
@@ -428,7 +438,10 @@ export const toolsChoiceAuto: TestDefinition = {
   steps: [...toolTurn('tools'), assertToolCall('get_weather', ['location'], ['get_weather'])]
 }
 
-/** A prompt no tool answers: only the forced grammar can make this a call. */
+/**
+ * A prompt no tool answers: only the forced grammar can make this a call. Parallel calls stay
+ * allowed, so the count is not pinned; every call must still be to the declared tool.
+ */
 export const toolsChoiceRequired: TestDefinition = {
   testId: 'tools-choice-required',
   params: {
@@ -439,11 +452,7 @@ export const toolsChoiceRequired: TestDefinition = {
   },
   expectation: { validation: 'type', expectedType: 'array' },
   metadata: toolsMetadata('tools'),
-  steps: [
-    ...toolTurn('tools'),
-    assertCallCount(1),
-    assertToolCall('get_weather', ['location'], ['get_weather'])
-  ]
+  steps: [...toolTurn('tools'), assertToolCall('get_weather', ['location'], ['get_weather'], true)]
 }
 
 /** The prompt asks about the weather; the request forces the other tool. */
@@ -459,17 +468,11 @@ export const toolsChoiceSpecific: TestDefinition = {
   metadata: toolsMetadata('tools'),
   steps: [
     ...toolTurn('tools'),
-    assertToolCall(
-      'get_time_difference',
-      ['city1', 'city2'],
-      ['get_weather', 'get_time_difference']
-    ),
-    { project: { from: '$run', path: 'toolCalls[0].name', as: 'firstCall' } },
-    { assert: { on: '$firstCall', named: 'valueIn', with: { values: ['get_time_difference'] } } }
+    // Every call must be to the named tool, not only the first.
+    assertToolCall('get_time_difference', ['city1', 'city2'], ['get_time_difference'], true)
   ]
 }
 
-/** The prompt asks for the tool; `none` keeps the definitions in the prompt but allows no call. */
 export const toolsChoiceNone: TestDefinition = {
   testId: 'tools-choice-none',
   params: {

@@ -795,6 +795,14 @@ def tool_call_shape(value: Any, args: dict[str, Any]) -> StepResult:
             f"declared: [{', '.join(sorted(declared))}]"
         )
 
+    # `exclusive`: every call must be to a declared tool, as a forced tool_choice demands.
+    if args.get("exclusive") is True and len(valid) != len(calls):
+        got = ", ".join(str(call.get("name") or "<unnamed>") for call in calls)
+        return StepResult.fail(
+            f"a tool call is outside the declared tools. Got: [{got}], "
+            f"declared: [{', '.join(sorted(declared))}]"
+        )
+
     match = next((call for call in valid if call.get("name") == args.get("name")), None)
     if match is not None:
         call_args = match.get("arguments") or {}
