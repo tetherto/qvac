@@ -327,10 +327,14 @@ describe('serve: context overflow errors', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ model: 'chat', input: 'Synthetic meeting transcript', stream: true })
     })
-    const failure = streamError(collectSSE(await response.text())) as {
-      error: { code: string }
-    }
+    const events = collectSSE(await response.text())
+    const failure = streamError(events) as { error: { code: string } }
     assert.equal(failure.error.code, 'inference_failed')
+    // response.failed continues the stream's sequence numbers.
+    assert.deepEqual(
+      events.map((e) => (e.data as { sequence_number?: number }).sequence_number),
+      events.map((_, i) => i)
+    )
     assert.equal(loggedErrors.length, 1)
     assert.match(loggedErrors[0]!, /streaming_error/)
   })
