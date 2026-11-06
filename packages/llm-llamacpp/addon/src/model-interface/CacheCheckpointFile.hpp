@@ -28,13 +28,12 @@ namespace qvac_lib_inference_addon_llama::cache {
 inline constexpr uint32_t CHECKPOINT_SECTION_MAGIC = 0x504b4351; // "QCKP"
 inline constexpr uint32_t CHECKPOINT_SECTION_VERSION = 1;
 
-/// Appends one of `checkpoints` to the cacheKey file at `path`, which already
-/// holds the header, the ledger and the sequence state (a `.tmp` file before
-/// its promotion): the newest partial checkpoint with a payload that ends at a
-/// user message, else the newest one. It is the one the next user turn
-/// restores, also after a tool loop. With none the file is left untouched. On a
-/// write failure the file is cut back to its previous size, so the state is
-/// still saved, and false is returned.
+/// Appends one of `checkpoints` (the newest partial checkpoint with a payload
+/// that ends at a user message, else the newest) to the cacheKey file at
+/// `path`, which already holds the header, the ledger and the sequence state
+/// (a `.tmp` file before its promotion). With none the file is left untouched.
+/// On a write failure the file is cut back to its previous size, so the state
+/// is still saved, and false is returned.
 bool appendCheckpointSection(
     const std::string& path, const Checkpoints& checkpoints) noexcept;
 

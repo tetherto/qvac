@@ -169,10 +169,7 @@ safeTest(
   }
 )
 
-// J2b: a tool loop commits a checkpoint per round. The next user message
-// re-renders those rounds without their reasoning, so only the checkpoint at
-// the end of the user message that started the loop still matches; the
-// default single checkpoint must not lose it to the rounds.
+// J2b: the next user turn after a tool loop on a hybrid model reuses the cache.
 safeTest(
   'kv-ext: hybrid next user turn after a tool loop reuses the cache',
   { skip: skipExtended, timeout: TIMEOUT },

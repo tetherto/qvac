@@ -117,7 +117,6 @@ TEST_F(CacheCheckpointFileTest, PrefersTheNewestUserTurnCheckpoint) {
   EXPECT_EQ(read.front().state.nPast, 5);
   EXPECT_TRUE(read.front().endsAtUserTurn);
 
-  // Read back, it outlives the tool rounds that follow.
   cache::appendProcessCheckpoint(
       read,
       checkpoint(9, 'c'),

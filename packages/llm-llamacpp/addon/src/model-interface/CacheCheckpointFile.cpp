@@ -168,9 +168,7 @@ struct SectionEntry {
 
 bool appendCheckpointSection(
     const std::string& path, const Checkpoints& checkpoints) noexcept {
-  // Newest last: `appendProcessCheckpoint` adds at the back. The newest one
-  // ending at a user message serves the next user turn, which a tool result's
-  // checkpoint does not once the template rewrites the answers after it.
+  // Newest last: `appendProcessCheckpoint` adds at the back.
   auto newest = std::find_if(
       checkpoints.rbegin(), checkpoints.rend(), [](const Checkpoint& entry) {
         return entry.endsAtUserTurn && keepable(entry);
@@ -344,8 +342,7 @@ Checkpoints readCheckpointSection(
       // From the ledger, which `deserialize` checked against its header:
       // the same value every writer means, whatever it kept in memory.
       checkpoint.cacheTokens = checkpoint.ledger.cacheTokens();
-      // The writer prefers a user-turn checkpoint, so keep it pinned until
-      // the next user turn takes its own.
+      // The writer stores the user-turn checkpoint when there is one.
       checkpoint.endsAtUserTurn = true;
       SectionHash payloadHash;
       if (!utils::partialSnapshotFromStream(

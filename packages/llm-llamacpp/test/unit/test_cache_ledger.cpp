@@ -205,8 +205,6 @@ const auto kIsUserTurn = [](const TurnCheckpoint& c) {
 };
 } // namespace
 
-// A tool loop commits a checkpoint per round; the one at the user message must
-// outlive them, since the next user turn re-renders the rounds after it.
 TEST(CacheLedger, ToolLoopKeepsTheUserTurnCheckpoint) {
   std::deque<TurnCheckpoint> checkpoints;
   const cache::CheckpointPolicy policy{};
@@ -220,7 +218,6 @@ TEST(CacheLedger, ToolLoopKeepsTheUserTurnCheckpoint) {
   EXPECT_EQ(checkpoints.front().id, 1);
   EXPECT_EQ(checkpoints.back().id, 5);
 
-  // The next user turn's checkpoint replaces the old one.
   cache::appendProcessCheckpoint(
       checkpoints, TurnCheckpoint{6, true}, policy, kOneByte, kIsUserTurn);
   ASSERT_EQ(checkpoints.size(), 1u);
