@@ -412,31 +412,6 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'nmtcpp-translation',
     artifactBytes: 4945796
   },
-  '117a0e308fbc31d68400f0496f0d47154c52d40814a6d3dedbc74893569d9188': {
-    schemaVersion: 1,
-    engine: 'llamacpp-completion',
-    artifactBytes: 200828233184,
-    ggufFacts: {
-      architecture: 'glm5-next',
-      blockCount: 46,
-      headCount: 64,
-      headCountKv: 1,
-      keyLength: 512,
-      valueLength: 512,
-      embeddingLength: 4096,
-      contextLength: 1048576,
-      kvLayerClasses: [
-        { count: 34, headCountKv: 0, keyLength: 512, valueLength: 512, windowed: false },
-        { count: 12, headCountKv: 1, keyLength: 512, valueLength: 512, windowed: false }
-      ],
-      ssmConvKernel: 4,
-      assumptions: [
-        'head_count_kv is per-layer — used the maximum',
-        'kvLayerClasses derived from per-layer attention metadata'
-      ]
-    },
-    assumptions: ['artifactBytes sums 6 shards']
-  },
   '1270162611a0c7074cc2a376380ddaca825702c62bebf2433baf42269de246fe': {
     schemaVersion: 1,
     engine: 'llamacpp-decision',
@@ -4579,11 +4554,6 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     engine: 'llamacpp-completion',
     artifactBytes: 7067
   },
-  c1215bca09ed783f34e66ab372b0b02e75213733bea8105764557b58f2082575: {
-    schemaVersion: 1,
-    engine: 'ggml-image-embedding',
-    artifactBytes: 292188448
-  },
   c16496eba77ffe58da672c20693e562124f72e415c40e16663081f50b8a574f3: {
     schemaVersion: 1,
     engine: 'parakeet-transcription',
@@ -4848,11 +4818,6 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'audiogen-ggml',
     artifactBytes: 121815
-  },
-  cf7ff0083e3fe7427ce02aa5bb89f0d79f5e830efa0b7f06a8987bc0d1e19ec5: {
-    schemaVersion: 1,
-    engine: 'llamacpp-completion',
-    artifactBytes: 1164010176
   },
   cfa6a9e601d74686b117f041eb1ad9de94c34219110b67367d570a9e27026a46: {
     schemaVersion: 1,
@@ -5672,11 +5637,6 @@ export const MODEL_RESOURCE_PROFILES: Readonly<Record<string, ModelResourceProfi
     schemaVersion: 1,
     engine: 'parakeet-transcription',
     artifactBytes: 374
-  },
-  f2519f42a826bb82f5d3bd6360e6017fb156ad3cb25f71d73163df01d26c6636: {
-    schemaVersion: 1,
-    engine: 'ggml-image-embedding',
-    artifactBytes: 458022688
   },
   f27814dffca6102255ed7a338f2a83c16905a07e09444016187c768aaf9ac7b6: {
     schemaVersion: 1,
