@@ -74,7 +74,7 @@ export const bciPlugin = definePlugin({
       // neural-signal job is interrupted on `cancel()`.
       cancel: { scope: 'model', hard: true },
 
-      handler: async function* (request) {
+      handler: async function* (request, _inputStream, context) {
         const metadata = request.metadata === true
         const stream = metadata
           ? bciTranscribe(
@@ -84,7 +84,8 @@ export const bciPlugin = definePlugin({
                 metadata: true
               },
               request.requestId,
-              request.sessionId
+              request.sessionId,
+              context
             )
           : bciTranscribe(
               {
@@ -92,7 +93,8 @@ export const bciPlugin = definePlugin({
                 neuralData: request.neuralData
               },
               request.requestId,
-              request.sessionId
+              request.sessionId,
+              context
             )
 
         try {
@@ -140,7 +142,7 @@ export const bciPlugin = definePlugin({
       // running window job.
       cancel: { scope: 'model', hard: true },
 
-      handler: async function* (request, inputStream) {
+      handler: async function* (request, inputStream, context) {
         const metadata = request.metadata === true
         const iterator = metadata
           ? bciTranscribeStream(
@@ -149,7 +151,8 @@ export const bciPlugin = definePlugin({
               true,
               request.streamOpts,
               request.requestId,
-              request.sessionId
+              request.sessionId,
+              context
             )
           : bciTranscribeStream(
               request.modelId,
@@ -157,7 +160,8 @@ export const bciPlugin = definePlugin({
               false,
               request.streamOpts,
               request.requestId,
-              request.sessionId
+              request.sessionId,
+              context
             )
 
         // Iterated by hand rather than with `for await` so the generator's

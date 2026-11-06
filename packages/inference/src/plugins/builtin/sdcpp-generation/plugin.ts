@@ -465,8 +465,8 @@ export const diffusionPlugin = definePlugin({
       // sdcpp diffusion exposes a model-wide hard cancel — compute
       // is interrupted on the currently-running generation.
       cancel: { scope: 'model', hard: true },
-      handler: (request) =>
-        withCompletionFrame(diffusion(request), ({ requestId, stats }) => ({
+      handler: (request, _inputStream, context) =>
+        withCompletionFrame(diffusion(request, context), ({ requestId, stats }) => ({
           type: 'diffusionStream' as const,
           requestId,
           done: true,
@@ -478,8 +478,8 @@ export const diffusionPlugin = definePlugin({
       responseSchema: videoStreamResponseSchema,
       streaming: true,
       cancel: { scope: 'model', hard: true },
-      handler: (request) =>
-        withCompletionFrame(video(request), ({ stats }) => ({
+      handler: (request, _inputStream, context) =>
+        withCompletionFrame(video(request, context), ({ stats }) => ({
           type: 'videoStream' as const,
           done: true,
           stats

@@ -79,7 +79,7 @@ export const parakeetPlugin = definePlugin({
       streaming: true,
       cancel: { scope: 'model', hard: true },
 
-      handler: async function* (request) {
+      handler: async function* (request, _inputStream, context) {
         // The native serializer emits start/end/id/toAppend/isEndOfTurn/
         // startsWord on every segment, so metadata mode is forwarded exactly
         // as the whisper plugin does. Branching the call keeps the op's
@@ -96,7 +96,8 @@ export const parakeetPlugin = definePlugin({
                 metadata: true
               },
               request.requestId,
-              request.sessionId
+              request.sessionId,
+              context
             )
           : transcribe(
               {
@@ -107,7 +108,8 @@ export const parakeetPlugin = definePlugin({
                 maxNewTokens: request.maxNewTokens
               },
               request.requestId,
-              request.sessionId
+              request.sessionId,
+              context
             )
 
         try {
@@ -159,7 +161,7 @@ export const parakeetPlugin = definePlugin({
       // consumers, `runStreaming` may buffer between the server generator and
       // the duplex RPC writer — backpressure is not yet characterised. Pair
       // the fix with request-lifecycle `cancel({ requestId })` routing.
-      handler: async function* (request, inputStream) {
+      handler: async function* (request, inputStream, context) {
         const metadata = request.metadata === true
         const streamOpts = {
           ...(request.parakeetStreamingConfig && {
@@ -175,7 +177,8 @@ export const parakeetPlugin = definePlugin({
               true,
               streamOpts,
               request.requestId,
-              request.sessionId
+              request.sessionId,
+              context
             )
           : transcribeStream(
               request.modelId,
@@ -184,7 +187,8 @@ export const parakeetPlugin = definePlugin({
               false,
               streamOpts,
               request.requestId,
-              request.sessionId
+              request.sessionId,
+              context
             )
 
         try {

@@ -1,4 +1,5 @@
-import { AbortController, type AbortSignal } from 'bare-abort-controller'
+import { AbortController } from 'bare-abort-controller'
+import type { AbortSignalLike } from '@/schemas/common'
 import { createDisposableScope, type DisposableScope } from '@/runtime/disposable-scope'
 import type { RequestContext, RequestKind, RequestState } from '@/runtime/request-context'
 import { RequestIdConflictError, RequestRejectedByPolicyError } from '@/errors/index'
@@ -30,7 +31,7 @@ export interface BeginOpts {
    * Composes through a `addEventListener("abort", ...)` hook so cancelling
    * the parent does not require iterating the registry.
    */
-  parentSignal?: AbortSignal
+  parentSignal?: AbortSignalLike & { readonly reason?: unknown }
   /**
    * Per-request override of the kind policy's `maxConcurrentPerModel`. The
    * policy value is one number for every model of a kind, but handlers may

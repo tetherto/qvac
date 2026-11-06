@@ -111,6 +111,8 @@ export {
   definePlugin,
   defineHandler,
   defineDuplexHandler,
+  requestParent,
+  type PluginHandlerContext,
   type QvacPlugin,
   type CreateModelParams,
   type PluginModelResult,

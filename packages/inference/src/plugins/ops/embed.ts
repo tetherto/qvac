@@ -3,6 +3,7 @@ import type { AbortSignal } from 'bare-abort-controller'
 import Buffer from 'bare-buffer'
 import type { EmbedRunInput, EmbedMultimodalInput } from '@qvac/embed-llamacpp'
 import type { EmbedInput } from '@/schemas/embed'
+import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
 import { getModel } from '@/runtime/model-registry'
 import { type EmbedParams, type EmbedStats, embedParamsSchema } from '@/schemas/index'
 import { buildUnaryResult } from '@/profiling/model-execution'
@@ -28,23 +29,27 @@ export function markEmbeddingProjector(model: object) {
 export async function embed(
   params: { modelId: string; text: string },
   requestId?: string,
-  sessionId?: string
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): Promise<EmbedResult>
 export async function embed(
   params: { modelId: string; text: string[] },
   requestId?: string,
-  sessionId?: string
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): Promise<EmbedResult>
 export async function embed(
   params: EmbedParams,
   requestId?: string,
-  sessionId?: string
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): Promise<EmbedResult>
 
 export async function embed(
   params: EmbedParams,
   requestId?: string,
-  sessionId?: string
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): Promise<EmbedResult> {
   const parsed = embedParamsSchema.parse(params)
   const { modelId } = parsed
@@ -56,6 +61,7 @@ export async function embed(
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRandomRequestId(),
     sessionId,
+    ...requestParent(context),
     kind: 'embeddings',
     modelId
   })

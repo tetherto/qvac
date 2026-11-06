@@ -1,3 +1,4 @@
+import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
 import fs, { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import WorldStableDiffusion from '@qvac/diffusion-cpp/world'
@@ -570,11 +571,14 @@ interface SceneResponseWithStats {
 }
 
 export async function* worldStep(
-  request: WorldStepRequest & TrackedRequest
+  request: WorldStepRequest & TrackedRequest,
+  _inputStream?: AsyncIterable<Buffer>,
+  context?: PluginHandlerContext
 ): AsyncGenerator<WorldStepStreamResponse> {
   await using ctx = await getRequestRegistry().begin({
     requestId: request.requestId ?? generateRandomRequestId(),
     sessionId: request.sessionId,
+    ...requestParent(context),
     kind: 'world',
     modelId: request.modelId
   })
@@ -744,11 +748,14 @@ export async function* worldStep(
 }
 
 export async function* worldCreateScene(
-  request: WorldSceneRequest & TrackedRequest
+  request: WorldSceneRequest & TrackedRequest,
+  _inputStream?: AsyncIterable<Buffer>,
+  context?: PluginHandlerContext
 ): AsyncGenerator<WorldSceneStreamResponse> {
   await using ctx = await getRequestRegistry().begin({
     requestId: request.requestId ?? generateRandomRequestId(),
     sessionId: request.sessionId,
+    ...requestParent(context),
     kind: 'world',
     modelId: request.modelId
   })

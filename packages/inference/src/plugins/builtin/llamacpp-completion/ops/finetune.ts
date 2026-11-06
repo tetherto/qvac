@@ -1,3 +1,4 @@
+import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
 import fs from 'bare-fs'
 import { getModel, type AnyModel } from '@/runtime/model-registry'
 import type {
@@ -160,7 +161,8 @@ function validateExplicitFinetuneOperation(request: FinetuneRunRequest) {
 
 export async function startFinetune(
   request: FinetuneRunRequest,
-  onProgress?: (progress: FinetuneProgress) => void
+  onProgress?: (progress: FinetuneProgress) => void,
+  context?: PluginHandlerContext
 ): Promise<FinetuneResult> {
   const model = getModel(request.modelId) as FinetuneCapableModel
   validateExplicitFinetuneOperation(request)
@@ -183,7 +185,7 @@ export async function startFinetune(
   // observes RUNNING, not IDLE, and a concurrent start is rejected above. Released
   // on a failed begin() or on scope unwind below.
   registerRunningFinetune(request.modelId)
-  const tracked = { requestId, sessionId: request.sessionId }
+  const tracked = { requestId, sessionId: context?.sessionId ?? request.sessionId }
   finetuneRequestIds.set(request.modelId, tracked)
 
   // Scope the run into the registry so cancel({ requestId }) and
@@ -193,6 +195,7 @@ export async function startFinetune(
     .begin({
       requestId,
       sessionId: request.sessionId,
+      ...requestParent(context),
       kind: 'finetune',
       modelId: request.modelId
     })
@@ -334,14 +337,15 @@ export function getFinetuneState(params: FinetuneGetStateRequest): FinetuneResul
 
 export async function finetune(
   request: FinetuneRequest,
-  onProgress?: (progress: FinetuneProgress) => void
+  onProgress?: (progress: FinetuneProgress) => void,
+  context?: PluginHandlerContext
 ): Promise<FinetuneResult> {
   if (
     request.operation === undefined ||
     request.operation === 'start' ||
     request.operation === 'resume'
   ) {
-    return startFinetune(request, onProgress)
+    return startFinetune(request, onProgress, context)
   }
 
   const callerSessionId = resolveSessionId(request)

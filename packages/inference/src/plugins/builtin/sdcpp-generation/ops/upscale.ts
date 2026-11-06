@@ -1,3 +1,4 @@
+import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
 import { EsrganUpscaler } from '@qvac/diffusion-cpp'
 import Buffer from 'bare-buffer'
 import { getModel, getModelEntry } from '@/runtime/model-registry'
@@ -27,7 +28,9 @@ function asUpscalerModel(model: unknown, modelId: string): EsrganUpscaler {
 }
 
 export async function* upscale(
-  request: UpscaleRequest & TrackedRequest
+  request: UpscaleRequest & TrackedRequest,
+  _inputStream?: AsyncIterable<Buffer>,
+  context?: PluginHandlerContext
 ): AsyncGenerator<UpscaleStreamResponse> {
   // Registered under the diffusion kind: the upscaler shares the model's single
   // native job slot, so an upscale and a generation on one model queue through
@@ -36,6 +39,7 @@ export async function* upscale(
   await using ctx = await getRequestRegistry().begin({
     requestId: request.requestId ?? generateRandomRequestId(),
     sessionId: request.sessionId,
+    ...requestParent(context),
     kind: 'diffusion',
     modelId: request.modelId
   })

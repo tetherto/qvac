@@ -1,3 +1,5 @@
+import type Buffer from 'bare-buffer'
+import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
 import { getModel } from '@/runtime/model-registry'
 import { getRequestRegistry, withRequestContext } from '@/runtime/request-context'
 import { generateRandomRequestId } from '@/runtime/request-id'
@@ -8,11 +10,16 @@ import { attachModelExecutionMs } from '@/profiling/model-execution'
 import { rerankScoresSchema, type RerankRequest } from '@/schemas/index'
 import type { Reranker } from '@qvac/embed-llamacpp'
 
-export async function rerank(request: RerankRequest) {
+export async function rerank(
+  request: RerankRequest,
+  _inputStream?: AsyncIterable<Buffer>,
+  context?: PluginHandlerContext
+) {
   const { modelId, requestId, sessionId, query, documents } = request
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRandomRequestId(),
     sessionId,
+    ...requestParent(context),
     kind: 'rerank',
     modelId
   })

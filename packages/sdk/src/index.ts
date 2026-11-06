@@ -308,6 +308,8 @@ export {
   definePlugin,
   defineHandler,
   defineDuplexHandler,
+  requestParent,
+  type PluginHandlerContext,
   PluginDefinitionInvalidError,
   type QvacPlugin,
   type CreateModelParams,

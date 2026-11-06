@@ -1,3 +1,4 @@
+import { requestParent } from '@/schemas/plugin'
 import ImageClassifier from '@qvac/classification-ggml'
 import {
   definePlugin,
@@ -68,10 +69,11 @@ export const classificationPlugin = definePlugin({
       // can't be interrupted partway, so we declare scope:"none".
       cancel: { scope: 'none' },
 
-      handler: async function* (request) {
+      handler: async function* (request, _inputStream, context) {
         await using ctx = await getRequestRegistry().begin({
           requestId: request.requestId ?? generateRandomRequestId(),
           sessionId: request.sessionId,
+          ...requestParent(context),
           kind: 'classification',
           modelId: request.modelId
         })

@@ -1,3 +1,4 @@
+import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
 import type { AbortSignal } from 'bare-abort-controller'
 import { getEngineLogger } from '@/logging/index'
 import { getRequestRegistry, withRequestContext } from '@/runtime/index'
@@ -46,11 +47,13 @@ export async function bindTtsCancel(
   model: unknown,
   modelId: string,
   requestId?: string,
-  sessionId?: string
+  sessionId?: string,
+  context?: PluginHandlerContext
 ) {
   const ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRequestId(),
     sessionId,
+    ...requestParent(context),
     kind: 'tts',
     modelId
   })

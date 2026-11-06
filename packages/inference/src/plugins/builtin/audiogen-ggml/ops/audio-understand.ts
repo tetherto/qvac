@@ -1,3 +1,5 @@
+import type Buffer from 'bare-buffer'
+import type { PluginHandlerContext } from '@/schemas/plugin'
 import type { AudioUnderstandRequest, AudioUnderstandResponse } from '@/schemas/audio-gen'
 import { resolveAudioGenPcm } from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-input'
 import { streamAudioGenRun } from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-run'
@@ -9,11 +11,14 @@ import { streamAudioGenRun } from '@/plugins/builtin/audiogen-ggml/ops/audio-gen
  * the terminal frame repeats it on `stats`.
  */
 export function audioUnderstand(
-  request: AudioUnderstandRequest
+  request: AudioUnderstandRequest,
+  _inputStream?: AsyncIterable<Buffer>,
+  context?: PluginHandlerContext
 ): AsyncGenerator<AudioUnderstandResponse> {
   return streamAudioGenRun({
     type: 'audioUnderstand',
     request,
+    context,
     async start(model, ctx) {
       // Decoded before the job is admitted, so the model slot is never held by
       // a request that fails on input decoding.

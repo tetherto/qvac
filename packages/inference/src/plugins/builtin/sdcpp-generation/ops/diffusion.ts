@@ -1,3 +1,4 @@
+import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
 import { getModel } from '@/runtime/model-registry'
 import Buffer from 'bare-buffer'
 import type ImgStableDiffusion from '@qvac/diffusion-cpp'
@@ -19,11 +20,13 @@ interface ResponseWithStats {
 export type DiffusionOpResult = { requestId: string; stats: DiffusionStats | undefined }
 
 export async function* diffusion(
-  request: DiffusionRequest & TrackedRequest
+  request: DiffusionRequest & TrackedRequest,
+  context?: PluginHandlerContext
 ): AsyncGenerator<DiffusionStreamResponse, DiffusionOpResult> {
   await using ctx = await getRequestRegistry().begin({
     requestId: request.requestId ?? generateRandomRequestId(),
     sessionId: request.sessionId,
+    ...requestParent(context),
     kind: 'diffusion',
     modelId: request.modelId
   })

@@ -7,6 +7,9 @@ import type {
 import { getModelEntry } from '@/runtime/model-registry'
 import { getPlugin, getPluginHandler } from '@/plugins/index'
 import { getRequestRegistry } from '@/runtime/index'
+import type { RequestContext } from '@/runtime/request-context'
+import { OWNER_SESSION_ID } from '@/runtime/session-id'
+import type { PluginHandlerContext } from '@/schemas/plugin'
 import { generateRandomRequestId } from '@/runtime/request-id'
 import { profileReplyHandler, profileStreamHandler } from '@/profiling/index'
 import {
@@ -56,6 +59,16 @@ function beginInvoke(request: PluginInvokeRequest | PluginInvokeStreamRequest) {
   })
 }
 
+// The owner's session is passed as undefined, the way the wire names it, so
+// an inner request begun from the context registers like a direct one.
+function invokeContext(ctx: RequestContext): PluginHandlerContext {
+  return {
+    signal: ctx.signal,
+    requestId: ctx.requestId,
+    sessionId: ctx.sessionId === OWNER_SESSION_ID ? undefined : ctx.sessionId
+  }
+}
+
 export async function handlePluginInvoke(
   request: PluginInvokeRequest
 ): Promise<PluginInvokeResponse> {
@@ -78,7 +91,7 @@ export async function handlePluginInvoke(
     await using ctx = await beginInvoke(request)
     if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
 
-    const result = await handlerDef.handler(parseResult.data, undefined, { signal: ctx.signal })
+    const result = await handlerDef.handler(parseResult.data, undefined, invokeContext(ctx))
     if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
 
     const responseParseResult = handlerDef.responseSchema.safeParse(result)
@@ -119,9 +132,11 @@ export async function* handlePluginInvokeStream(
     await using ctx = await beginInvoke(request)
     if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
 
-    const generator = handlerDef.handler(parseResult.data, undefined, {
-      signal: ctx.signal
-    }) as AsyncGenerator<unknown>
+    const generator = handlerDef.handler(
+      parseResult.data,
+      undefined,
+      invokeContext(ctx)
+    ) as AsyncGenerator<unknown>
 
     for await (const chunk of generator) {
       if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)

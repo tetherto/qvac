@@ -1,3 +1,4 @@
+import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
 import { AudioGen, audiogenBackendName, audiogenGpuFallbackReason } from '@qvac/audiogen-ggml'
 import {
   audioGenStatsSchema,
@@ -43,6 +44,8 @@ export type AudioGenRunResponse = Awaited<ReturnType<AudioGen['run']>>
 export interface AudioGenRunOptions<TType extends AudioGenRunType> {
   type: TType
   request: { modelId: string; requestId?: string | undefined; sessionId?: string | undefined }
+  /** The invoke this run belongs to, when reached through `pluginInvoke`. */
+  context?: PluginHandlerContext | undefined
   /**
    * Prepares the inputs and admits the native job once the request holds the
    * model slot. Preparation (decoding audio) can take real time, so the
@@ -67,10 +70,11 @@ export interface AudioGenRunOptions<TType extends AudioGenRunType> {
 export async function* streamAudioGenRun<TType extends AudioGenRunType>(
   options: AudioGenRunOptions<TType>
 ): AsyncGenerator<AudioGenRunFrame<TType>> {
-  const { type, request } = options
+  const { type, request, context } = options
   await using ctx = await getRequestRegistry().begin({
     requestId: request.requestId ?? generateRequestId(),
     sessionId: request.sessionId,
+    ...requestParent(context),
     kind: 'audiogen',
     modelId: request.modelId
   })

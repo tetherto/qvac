@@ -1,3 +1,4 @@
+import { requestParent } from '@/schemas/plugin'
 import {
   definePlugin,
   defineHandler,
@@ -100,13 +101,14 @@ export const ocrPlugin = definePlugin({
       // to soft-cancel.
       cancel: { scope: 'none' },
 
-      handler: async function* (request) {
+      handler: async function* (request, _inputStream, context) {
         // No addon abort hook: a cancel stops delivery, the native pass runs
         // to completion, and the request is still visible to cancel and
         // to model unload through the registry.
         await using ctx = await getRequestRegistry().begin({
           requestId: request.requestId ?? generateRandomRequestId(),
           sessionId: request.sessionId,
+          ...requestParent(context),
           kind: 'ocr',
           modelId: request.modelId
         })
