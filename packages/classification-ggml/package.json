@@ -71,7 +71,8 @@
     "README.md",
     "docs/megaloc.md",
     "docs/bridgedepth.md",
-    "!test/mobile/testAssets/megaloc-*"
+    "!test/mobile/testAssets/megaloc-*",
+    "!test/mobile/testAssets/bridgedepth-*"
   ],
   "repository": {
     "type": "git",

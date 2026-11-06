@@ -286,6 +286,9 @@ jobs:
       # mobilenetv3_3class_v3_fp16.gguf.bin". See scripts/copy-mobile-test-assets.js.
       - name: Copy mobile test assets (weights + images)
         working-directory: addon/${{ inputs.workdir || 'packages/classification-ggml' }}
+        env:
+          # A manual tests filter leaves out models no selected runner needs.
+          MOBILE_TESTS_FILTER: ${{ inputs.platform != '' && inputs.tests || '' }}
         run: npm run mobile:copy-prebuilds
 
       - name: Build mobile app

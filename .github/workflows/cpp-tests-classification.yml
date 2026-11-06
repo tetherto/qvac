@@ -233,6 +233,12 @@ jobs:
             console.log("Verified " + dest);
           '
 
+      - name: Drop staging AWS credentials
+        if: always() && steps.bridgedepth-model.outcome == 'success'
+        shell: bash
+        run: |
+          printf '%s=\n' AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN >> "$GITHUB_ENV"
+
       # Non-Linux: unit tests only (fuzzing is Linux-only — libFuzzer + ASan,
       # matching the if(NOT WIN32) ASan gate). These use the vcpkg GoogleTest in
       # the default build/ tree.
