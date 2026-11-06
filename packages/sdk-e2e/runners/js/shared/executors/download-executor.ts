@@ -46,6 +46,7 @@ type RegistryModel = typeof RESUME_TARGET | typeof RESTART_TARGET
 type Attempt = {
   firstPercentage: number | undefined
   status: 'ok' | 'fail'
+  stopped: boolean
   err?: string
 }
 
@@ -74,10 +75,20 @@ async function attempt(
   })
   try {
     await op
-    return { firstPercentage, status: 'ok' }
+    return { firstPercentage, status: 'ok', stopped }
   } catch (err) {
-    return { firstPercentage, status: 'fail', err: message(err) }
+    return { firstPercentage, status: 'fail', stopped, err: message(err) }
   }
+}
+
+// A pause only counts when our cancel fired and the download then ended early;
+// any other failure leaves nothing partial to resume or reclaim.
+function pauseFailure(paused: Attempt, stopAtPercent: number): string | undefined {
+  if (!paused.stopped) {
+    return `The download ended before reaching ${stopAtPercent}%: ${paused.err ?? 'completed'}`
+  }
+  if (paused.status === 'ok') return 'The download completed before the cancel took effect'
+  return undefined
 }
 
 export class DownloadExecutor extends BaseExecutor<typeof downloadTests> {
@@ -100,9 +111,8 @@ export class DownloadExecutor extends BaseExecutor<typeof downloadTests> {
     await deleteCache({ modelSrc: RESUME_TARGET.src })
     try {
       const paused = await attempt(RESUME_TARGET, params.pauseAtPercent)
-      if (paused.status === 'ok') {
-        return { passed: false, output: 'The download completed before it could be paused' }
-      }
+      const notPaused = pauseFailure(paused, params.pauseAtPercent)
+      if (notPaused) return { passed: false, output: notPaused }
       const resumed = await attempt(RESUME_TARGET, undefined)
       if (resumed.status !== 'ok') {
         return { passed: false, output: `Resumed download failed: ${resumed.err}` }
@@ -124,9 +134,8 @@ export class DownloadExecutor extends BaseExecutor<typeof downloadTests> {
     await deleteCache({ modelSrc: RESTART_TARGET.src })
     try {
       const cancelled = await attempt(RESTART_TARGET, params.pauseAtPercent, true)
-      if (cancelled.status === 'ok') {
-        return { passed: false, output: 'The download completed before it could be cancelled' }
-      }
+      const notCancelled = pauseFailure(cancelled, params.pauseAtPercent)
+      if (notCancelled) return { passed: false, output: notCancelled }
       return await this.expectRestart(params.restartBelowPercent, 'cancel({ clearCache: true })')
     } finally {
       await deleteCache({ modelSrc: RESTART_TARGET.src }).catch(() => {})
@@ -140,9 +149,8 @@ export class DownloadExecutor extends BaseExecutor<typeof downloadTests> {
     await deleteCache({ modelSrc: RESTART_TARGET.src })
     try {
       const paused = await attempt(RESTART_TARGET, params.pauseAtPercent)
-      if (paused.status === 'ok') {
-        return { passed: false, output: 'The download completed before it could be paused' }
-      }
+      const notPaused = pauseFailure(paused, params.pauseAtPercent)
+      if (notPaused) return { passed: false, output: notPaused }
       const { success } = await deleteCache({ modelSrc: RESTART_TARGET.src })
       if (!success) return { passed: false, output: 'deleteCache({ modelSrc }) reported failure' }
       return await this.expectRestart(params.restartBelowPercent, 'deleteCache({ modelSrc })')
