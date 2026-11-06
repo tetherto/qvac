@@ -118,12 +118,18 @@ class UnknownResourceError(LookupError):
 
 
 class ResourceManager:
-    """Loads models on demand and evicts what a test did not declare."""
+    """Loads models on demand and evicts what a test did not declare.
+
+    A model a `loadModel` step loaded is test-scoped: released when the test ends, or
+    before the next one.
+    """
 
     def __init__(self, transport: Any, log) -> None:
         self._transport = transport
         self._log = log
         self._loaded: dict[str, str] = {}
+        # A dict, not a set: released in load order.
+        self._test_scoped: dict[str, None] = {}
 
     @property
     def transport(self) -> Any:
@@ -180,7 +186,34 @@ class ResourceManager:
             model_config=config,
         )
         self._loaded[dep] = model_id
+        # Ids are hashes of the load request, so a key can land on a test-scoped id.
+        self._test_scoped.pop(model_id, None)
         return model_id
+
+    def adopt_test_load(self, model_id: str) -> None:
+        """No-op for a key-owned id: a config reload or an identical load returns it."""
+        if model_id in self._loaded.values():
+            return
+        self._test_scoped[model_id] = None
+
+    def released(self, model_id: str) -> None:
+        """Forgets an id a step unloaded, so no key hands out a stale id. Idempotent."""
+        self._test_scoped.pop(model_id, None)
+        for dep in [
+            d for d, loaded_id in self._loaded.items() if loaded_id == model_id
+        ]:
+            del self._loaded[dep]
+
+    async def release_test_scope(self) -> None:
+        """Never raises: an unload error is logged."""
+        while self._test_scoped:
+            model_id = next(iter(self._test_scoped))
+            del self._test_scoped[model_id]
+            self._log(f"releasing test-scoped model {model_id}")
+            try:
+                await unload_model(self._transport, model_id)
+            except Exception as error:  # noqa: BLE001 - a release must not fail a test
+                self._log(f"releasing {model_id} failed (continuing): {error}")
 
     async def evict(self, dep: str) -> None:
         """Unload one resource and forget it."""
@@ -194,6 +227,8 @@ class ResourceManager:
             self._log(f"evicting {dep} failed (continuing): {error}")
 
     async def evict_all_except(self, keep: set[str]) -> None:
+        # Catches what a timed-out test left behind.
+        await self.release_test_scope()
         for dep in [d for d in self._loaded if d not in keep]:
             model_id = self._loaded.pop(dep)
             self._log(f"evicting {dep}")

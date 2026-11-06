@@ -41,13 +41,16 @@ class Interpreter(
         resources.evictAllExcept(declared)
 
         val scope = Scope(this, mutableMapOf("params" to params))
+        // Released after `cleanUp` drains started calls, so none of them loses its model.
         val body = try {
             runBody(steps, scope, expectation)
         } catch (cancelled: CancellationException) {
             cleanUp(teardown, scope, expectation)
+            withContext(NonCancellable) { resources.releaseTestScope() }
             throw cancelled
         }
         val failedTeardown = cleanUp(teardown, scope, expectation)
+        withContext(NonCancellable) { resources.releaseTestScope() }
         when {
             failedTeardown == null -> body
             // A body that passed cannot be claimed on a client that could not clean up after it.
@@ -269,7 +272,13 @@ class Interpreter(
         }
         val params = callParams(body["params"], scope)
         log("call $method")
-        return invoke(method, params, collect)
+        val value = invoke(method, params, collect)
+        // Step loads bypass `useModel`; tell the resource manager who owns the model.
+        when (method) {
+            "loadModel" -> ((value as? Map<*, *>)?.get("modelId") as? String)?.let(resources::adoptTestLoad)
+            "unloadModel" -> resources.released(params["modelId"].toString())
+        }
+        return value
     }
 
     private suspend fun start(body: Map<String, Any?>, scope: Scope): StepResult? {
