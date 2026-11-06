@@ -1,4 +1,5 @@
 import test from 'brittle'
+import os from 'bare-os'
 import { AudioGen, ENGINE_ACESTEP, ENGINE_MINIMAX } from '@qvac/audiogen-ggml'
 import { ModelLoadFailedError } from '@/errors/index'
 import { resolveAudioGenConfig } from '@/plugins/builtin/audiogen-ggml/config'
@@ -238,4 +239,65 @@ test('AudioGen load config survives device-default resolution', (t) => {
   )
 
   t.alike(resolved, config)
+})
+
+const MINIMAX_COREML = {
+  engine: 'minimax',
+  lmModelSrc: 'minimax-lm.gguf',
+  synthModelSrc: 'minimax-synth.gguf',
+  coremlProfileDir: '/models/minimax-coreml',
+  coremlComputeUnits: 'CPU_AND_NE'
+}
+
+test('AudioGen rejects MiniMax Core ML off macOS before resolving model paths', async (t) => {
+  for (const platform of ['linux', 'win32'] as const) {
+    let resolveCalls = 0
+    const context: ResolveContext = {
+      modelSrc: '',
+      modelType: 'audiogen-ggml',
+      platform,
+      resolveModelPath: async function () {
+        resolveCalls++
+        return '/resolved/model.gguf'
+      }
+    }
+    await t.exception(() => resolveAudioGenConfig(MINIMAX_COREML, context), ModelLoadFailedError)
+    t.is(resolveCalls, 0, `${platform}: the guard runs before either model download`)
+  }
+})
+
+test('AudioGen plugin hands the MiniMax Core ML profile to the engine', async (t) => {
+  const context: ResolveContext = {
+    modelSrc: '',
+    modelType: 'audiogen-ggml',
+    platform: 'darwin',
+    resolveModelPath: async function (source) {
+      return `/resolved/${typeof source === 'string' ? source : source.src}`
+    }
+  }
+  const resolved = await resolveAudioGenConfig(MINIMAX_COREML, context)
+  t.alike(resolved.config, {
+    engine: 'minimax',
+    coremlProfileDir: '/models/minimax-coreml',
+    coremlComputeUnits: 'CPU_AND_NE'
+  })
+
+  const create = () =>
+    audioGenPlugin.createModel({
+      modelId: 'minimax-coreml-model',
+      modelPath: '',
+      modelConfig: resolved.config,
+      artifacts: resolved.artifacts
+    })
+  // The addon checks the host itself, so what a host sees depends on where
+  // this runs: macOS builds the engine config, anything else is refused.
+  if (os.platform() !== 'darwin') {
+    t.exception(create, /MiniMax Core ML requires macOS/)
+    return
+  }
+  const internals = create().model as unknown as {
+    _configuration: { coremlProfileDir?: string; coremlComputeUnits?: string }
+  }
+  t.is(internals._configuration.coremlProfileDir, '/models/minimax-coreml')
+  t.is(internals._configuration.coremlComputeUnits, 'CPU_AND_NE')
 })

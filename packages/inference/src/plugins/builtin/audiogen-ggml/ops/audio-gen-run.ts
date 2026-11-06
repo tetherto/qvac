@@ -1,6 +1,7 @@
 import { AudioGen, audiogenBackendName, audiogenGpuFallbackReason } from '@qvac/audiogen-ggml'
 import {
   audioGenStatsSchema,
+  type AudioGenOutputFormat,
   type AudioGenStats,
   type AudioGenStreamResponse,
   type AudioGenUnderstandResult,
@@ -17,6 +18,11 @@ import { getModel } from '@/runtime/model-registry'
 import { getRequestRegistry, withRequestContext, type RequestContext } from '@/runtime/index'
 import { generateRequestId } from '@/runtime/request-id'
 import { ModelOperationNotSupportedError } from '@/errors/index'
+import {
+  assertOutputFormatAvailable,
+  encodeRunAudio,
+  type PcmLayout
+} from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-encode'
 
 /**
  * Wire types that stream an AudioGen run: generation, source-driven editing,
@@ -42,7 +48,12 @@ export type AudioGenRunResponse = Awaited<ReturnType<AudioGen['run']>>
 
 export interface AudioGenRunOptions<TType extends AudioGenRunType> {
   type: TType
-  request: { modelId: string; requestId?: string | undefined }
+  request: {
+    modelId: string
+    requestId?: string | undefined
+    /** Generation and editing only: also deliver the run in this container. */
+    outputFormat?: AudioGenOutputFormat | undefined
+  }
   /**
    * Prepares the inputs and admits the native job once the request holds the
    * model slot. Preparation (decoding audio) can take real time, so the
@@ -60,14 +71,18 @@ export interface AudioGenRunOptions<TType extends AudioGenRunType> {
 
 /**
  * Runs one AudioGen job under the request registry and streams it as
- * `TType` frames: progress ticks, PCM chunks, then the terminal frame with
- * stats and backend diagnostics. Owns admission (`kind: 'audiogen'`, one
+ * `TType` frames: progress ticks, PCM chunks, the encoded file when the
+ * request named an `outputFormat`, then the terminal frame with stats and
+ * backend diagnostics. Owns admission (`kind: 'audiogen'`, one
  * active job per model), abort-to-cancel wiring, and the cancelled terminal.
  */
 export async function* streamAudioGenRun<TType extends AudioGenRunType>(
   options: AudioGenRunOptions<TType>
 ): AsyncGenerator<AudioGenRunFrame<TType>> {
   const { type, request } = options
+  // Checked before the request queues for the model: an encoder the host lacks
+  // must not cost a whole generation to find out about.
+  if (request.outputFormat !== undefined) assertOutputFormatAvailable(request.outputFormat)
   await using ctx = await getRequestRegistry().begin({
     requestId: request.requestId ?? generateRequestId(),
     kind: 'audiogen',
@@ -108,6 +123,9 @@ export async function* streamAudioGenRun<TType extends AudioGenRunType>(
 
   let response: AudioGenRunResponse | undefined
   let streamedUnderstand: AudioGenUnderstandResult | undefined
+  // Kept only when the run is also to be encoded.
+  const encodeChunks: Uint8Array[] = []
+  let encodeLayout: PcmLayout | undefined
   try {
     response = await options.start(model, ctx, logger)
     if (response !== undefined) {
@@ -140,6 +158,10 @@ export async function* streamAudioGenRun<TType extends AudioGenRunType>(
           chunk.outputArray.byteOffset,
           chunk.outputArray.byteLength
         )
+        if (request.outputFormat !== undefined) {
+          encodeChunks.push(pcm)
+          encodeLayout = { sampleRate: chunk.sampleRate, channels: chunk.channels }
+        }
         yield {
           type,
           data: Buffer.from(pcm).toString('base64'),
@@ -157,6 +179,14 @@ export async function* streamAudioGenRun<TType extends AudioGenRunType>(
   if (ctx.signal.aborted || response === undefined) {
     yield { type, done: true, stopReason: 'cancelled' } as AudioGenRunFrame<TType>
     return
+  }
+
+  if (request.outputFormat !== undefined && encodeLayout !== undefined) {
+    yield {
+      type,
+      encoded: encodeRunAudio(encodeChunks, request.outputFormat, encodeLayout),
+      done: false
+    } as AudioGenRunFrame<TType>
   }
 
   const raw = await response.await()

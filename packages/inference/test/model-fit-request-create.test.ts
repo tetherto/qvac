@@ -1210,3 +1210,30 @@ test('MOSS: missing workload cannot claim a fit; default load remains CPU', (t) 
     false
   )
 })
+
+// The fitter cannot size the Core ML route and says so; the request still has
+// to name it, or the answer would describe the native backend instead.
+test('audiogen: the minimax Core ML profile reaches the fitter', (t) => {
+  const plan = createFitRequest({
+    modelType: ModelType.audiogenGgml,
+    modelPath: '',
+    modelConfig: {
+      engine: 'minimax',
+      coremlProfileDir: '/models/minimax-coreml',
+      coremlComputeUnits: 'CPU_AND_NE'
+    },
+    artifacts: MINIMAX_ARTIFACTS,
+    isShardedModel: false
+  })
+
+  t.ok(plan.supported)
+  if (!plan.supported) return
+  t.alike(plan.probe.request, {
+    engine: 'minimax',
+    lmPath: MINIMAX_ARTIFACTS.lmModelPath,
+    synthPath: MINIMAX_ARTIFACTS.synthModelPath,
+    gpuLayers: 0,
+    coremlProfileDir: '/models/minimax-coreml',
+    coremlComputeUnits: 'CPU_AND_NE'
+  })
+})

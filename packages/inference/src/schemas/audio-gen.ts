@@ -25,6 +25,47 @@ export const audioGenEngineSchema = z.enum(AUDIOGEN_ENGINES)
  */
 const MINIMAX_DEVICES = ['cpu', 'gpu', 'auto'] as const
 
+/**
+ * Apple compute units a MiniMax-Music3 full Core ML profile may run on, in
+ * `@qvac/audiogen-ggml`'s vocabulary. A policy rather than a placement: Core
+ * ML decides where each operation runs within the units it is allowed.
+ */
+export const AUDIOGEN_MINIMAX_COREML_COMPUTE_UNITS = [
+  'CPU_ONLY',
+  'CPU_AND_GPU',
+  'CPU_AND_NE',
+  'ALL'
+] as const
+export const audioGenMinimaxCoremlComputeUnitsSchema = z.enum(AUDIOGEN_MINIMAX_COREML_COMPUTE_UNITS)
+
+/**
+ * Containers `outputFormat` can deliver next to the PCM, as
+ * `@qvac/audiogen-ggml` names them. `wav` is written without FFmpeg; the rest
+ * need the matching encoder in the inference host's FFmpeg build. There is no
+ * MP3: that build ships no MP3 encoder.
+ */
+export const AUDIOGEN_OUTPUT_FORMATS = [
+  'wav',
+  'flac',
+  'alac',
+  'aiff',
+  'caf',
+  'm4a',
+  'aac',
+  'opus',
+  'ogg',
+  'ac3',
+  'wma',
+  'mp2'
+] as const
+export const audioGenOutputFormatSchema = z.enum(AUDIOGEN_OUTPUT_FORMATS)
+
+const outputFormatParamSchema = audioGenOutputFormatSchema
+  .optional()
+  .describe(
+    'Also encode the finished audio into this container and deliver it as `encoded`, next to the PCM. `wav` is always available; `flac`, `alac`, `aiff`, `caf`, `m4a`, `aac`, `opus`, `ogg`, `ac3`, `wma` and `mp2` need the matching FFmpeg encoder on the inference host, and the request fails before generation starts when it is missing. `opus` is resampled to 48 kHz. Omit for PCM only.'
+  )
+
 /** Sample rate the ACE-Step engine expects for reference and source audio. */
 export const AUDIOGEN_INPUT_SAMPLE_RATE = 48000
 /** Channel count (interleaved stereo) the ACE-Step engine expects for input audio. */
@@ -162,23 +203,54 @@ const minimaxRuntimeConfigShape = {
     .describe(
       "Where MiniMax runs, instead of `useGPU`: `'gpu'` requires a usable GPU and fails the load otherwise, `'auto'` (what `useGPU: true` means) falls back to the CPU, `'cpu'` never touches a GPU. Cannot be combined with `useGPU`."
     ),
+  coremlProfileDir: z
+    .string()
+    .min(1)
+    .refine((value) => !value.includes('\0'), {
+      message: 'coremlProfileDir must not contain NUL characters'
+    })
+    .optional()
+    .describe(
+      'Advanced, macOS 15+: directory on the inference host holding the compiled full Core ML profile for this GGUF pair (`manifest.json` plus the LM, depth, conditioner, DiT and vocoder programs). Runs MiniMax through Core ML instead of the native backend and takes precedence over `device` and `useGPU`; the load fails when the build, OS or profile cannot support it rather than switching backends. Requires `coremlComputeUnits`.'
+    ),
+  coremlComputeUnits: audioGenMinimaxCoremlComputeUnitsSchema
+    .optional()
+    .describe(
+      'Apple compute units the Core ML profile may use: `CPU_ONLY`, `CPU_AND_GPU`, `CPU_AND_NE` or `ALL`. A policy, not a guarantee of where each operation runs. Requires `coremlProfileDir`.'
+    ),
   inferenceSteps: inferenceStepsSchema
     .optional()
     .describe('MiniMax flow sampling steps; `0` uses the engine default (20).'),
   cfgScale: minimaxCfgScaleSchema.optional()
 }
 
-/** The addon takes `useGPU` or `device` for MiniMax, never both. */
-function refineMinimaxDevice(
-  value: { useGPU?: boolean | undefined; device?: string | undefined },
+/**
+ * The addon takes `useGPU` or `device` for MiniMax, never both, and the Core
+ * ML profile and its compute units only as a pair.
+ */
+function refineMinimaxRuntime(
+  value: {
+    useGPU?: boolean | undefined
+    device?: string | undefined
+    coremlProfileDir?: string | undefined
+    coremlComputeUnits?: string | undefined
+  },
   ctx: z.RefinementCtx
 ) {
-  if (value.device === undefined || value.useGPU === undefined) return
-  ctx.addIssue({
-    code: 'custom',
-    path: ['device'],
-    message: 'MiniMax accepts either useGPU or device, not both'
-  })
+  if (value.device !== undefined && value.useGPU !== undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['device'],
+      message: 'MiniMax accepts either useGPU or device, not both'
+    })
+  }
+  if ((value.coremlProfileDir === undefined) !== (value.coremlComputeUnits === undefined)) {
+    ctx.addIssue({
+      code: 'custom',
+      path: [value.coremlProfileDir === undefined ? 'coremlProfileDir' : 'coremlComputeUnits'],
+      message: 'MiniMax Core ML requires both coremlProfileDir and coremlComputeUnits'
+    })
+  }
 }
 
 const acestepAudioGenRuntimeConfigSchema = z
@@ -196,7 +268,7 @@ const minimaxEngineShape = {
 const minimaxAudioGenRuntimeConfigSchema = z
   .object(minimaxEngineShape)
   .strict()
-  .superRefine(refineMinimaxDevice)
+  .superRefine(refineMinimaxRuntime)
 
 export const audioGenRuntimeConfigSchema = z.discriminatedUnion('engine', [
   acestepAudioGenRuntimeConfigSchema,
@@ -231,7 +303,7 @@ const minimaxAudioGenConfigSchema = z
     )
   })
   .strict()
-  .superRefine(refineMinimaxDevice)
+  .superRefine(refineMinimaxRuntime)
 
 export const audioGenConfigSchema = z.discriminatedUnion('engine', [
   acestepAudioGenConfigSchema,
@@ -442,7 +514,8 @@ const audioGenGenerationShape = {
     .optional()
     .describe(
       'Blend of the initial DiT noise toward the clean source latent (0..1). 0 = pure noise, 1 ≈ source latent. Default 0.'
-    )
+    ),
+  outputFormat: outputFormatParamSchema
 }
 
 const audioGenParamsShape = {
@@ -738,7 +811,8 @@ const audioEditShape = {
     ),
   shift: acestepShiftSchema
     .optional()
-    .describe('DiT timestep shift for every operation; omit to keep the load-time `shift`.')
+    .describe('DiT timestep shift for every operation; omit to keep the load-time `shift`.'),
+  outputFormat: outputFormatParamSchema
 }
 
 /**
@@ -991,6 +1065,18 @@ const audioGenStreamFrameShape = {
   sampleRate: z.number().int().positive().optional(),
   channels: z.number().int().positive().optional(),
   bitsPerSample: z.number().int().positive().optional(),
+  encoded: z
+    .object({
+      data: base64Schema,
+      format: audioGenOutputFormatSchema,
+      mimeType: z.string().min(1),
+      extension: z.string().min(1)
+    })
+    .strict()
+    .optional()
+    .describe(
+      'The run encoded as the requested `outputFormat`, sent once after the PCM: base64 file bytes, the MIME type and the file extension without its dot.'
+    ),
   done: z.boolean().default(false),
   stopReason: z.enum(['completed', 'cancelled']).optional(),
   stats: audioGenStatsSchema.optional(),
@@ -1039,6 +1125,10 @@ export type AudioGenStats = z.infer<typeof audioGenStatsSchema>
 export type AudioGenGenerationMetadata = z.infer<typeof audioGenGenerationMetadataSchema>
 export type AudioGenStreamResponse = z.infer<typeof audioGenStreamResponseSchema>
 export type AudioGenTrack = z.infer<typeof audioGenTrackSchema>
+export type AudioGenOutputFormat = z.infer<typeof audioGenOutputFormatSchema>
+export type AudioGenMinimaxCoremlComputeUnits = z.infer<
+  typeof audioGenMinimaxCoremlComputeUnitsSchema
+>
 export type AudioGenUnderstandResult = z.infer<typeof audioGenUnderstandResultSchema>
 export type AudioUnderstandClientParams = z.input<typeof audioUnderstandClientParamsSchema>
 export type AudioUnderstandRequest = z.infer<typeof audioUnderstandRequestSchema>
@@ -1051,10 +1141,35 @@ export interface AudioGenAudio {
   bitsPerSample: number
 }
 
+/** A run encoded as the `outputFormat` its request named. */
+export interface AudioGenEncodedAudio {
+  /** The complete file: container and payload. */
+  data: Uint8Array
+  format: AudioGenOutputFormat
+  /** For example `audio/wav` or `audio/mp4`. */
+  mimeType: string
+  /** File extension without the dot. `alac` is delivered as `m4a`. */
+  extension: string
+}
+
 export interface AudioGenResult {
   requestId: string
   progressStream: AsyncGenerator<AudioGenProgress>
+  /**
+   * The PCM as the engine delivers it, one `Int16Array` of interleaved signed
+   * 16-bit samples per chunk. Today the engines emit the whole track as a
+   * single chunk once generation finishes, so this is the chunk boundary the
+   * engine reports rather than incremental synthesis. Shares the run with
+   * `audio`, which still resolves with every chunk concatenated; ends without
+   * a chunk when the run is cancelled.
+   */
+  chunkStream: AsyncGenerator<Int16Array>
   audio: Promise<AudioGenAudio>
+  /**
+   * The run in the container named by `outputFormat`; resolves `undefined`
+   * when the request named none.
+   */
+  encoded: Promise<AudioGenEncodedAudio | undefined>
   stats: Promise<AudioGenStats | undefined>
   diagnostics: Promise<InferenceBackendDiagnostics | undefined>
 }

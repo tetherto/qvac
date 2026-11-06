@@ -570,6 +570,18 @@ export class InvalidAudioInputError extends QvacErrorBase {
   }
 }
 
+export class AudioEncodeFailedError extends QvacErrorBase {
+  constructor(format: string, details?: string, cause?: unknown) {
+    super(
+      createErrorOptions(
+        SDK_SERVER_ERROR_CODES.AUDIO_ENCODE_FAILED,
+        details ? [format, details] : [format],
+        cause
+      )
+    )
+  }
+}
+
 // ============== RAG Operation Errors ==============
 
 export class RAGSaveFailedError extends QvacErrorBase {
