@@ -62,6 +62,8 @@ On an XDNA2 NPU (Strix Point, Strix Halo, Krackan) with XRT 2.25 or newer instal
 
 - It is never chosen automatically. Select it with `backend: "xdna"` or `devices: "XDNA0"`.
   Without an NPU or XRT, `backend: "xdna"` is skipped like any other absent backend.
+- Selection is opt-in, initialisation is not: on a host with an NPU, fabric opens it and
+  registers its kernels when the backends load, and each process holds an NPU context.
 - On an XDNA load the NPU runs the ops it supports and the CPU runs the rest. The GPU is not
   used, so another model can run on it at the same time. All loads in a process share one NPU
   context and take turns on it.
