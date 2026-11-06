@@ -7,9 +7,10 @@ go/no-go record lives in the stack's top pull request.
 
 | File | Purpose |
 | --- | --- |
+| `build-inference.sh` | Builds `@qvac/inference` against the workspace stack: accepts only the known model-fit/rerank type errors, then rewrites and checks the `@/` imports. |
 | `check-resolution.sh` | Checks that the stack resolves to this checkout's workspace packages, not published copies. |
-| `parity.mjs` | Compares the bridge with `llama-server` from the same fabric commit, per question type, against `tolerances.json`. |
-| `requests.json` | The fixed `/v1/systemone` request set, including one rejected request. |
+| `parity.mjs` | Compares the bridge with `llama-server` from the same fabric commit: answers per question type against `tolerances.json`, rejections by status, code and message. |
+| `requests.json` | The fixed `/v1/systemone` request set. Each request declares its expected outcome (`expect`): `"answer"`, or the rejection's status, code and message. |
 | `tolerances.json` | Declared tolerances. **Proposed until the decision owners agree them.** |
 | `qvac.config.json` | Plugin list for a decision-only SDK worker (`qvac bundle sdk`). |
 | `../../packages/embed-llamacpp/scripts/decision-parity-collect.js` | Runs the request set through `DecisionEngine` (Bare); `parity.mjs` starts it. |
@@ -30,16 +31,18 @@ works without a global install).
      --filter "@qvac/cli..." --filter "@qvac/embed-llamacpp..." --filter "@qvac/fabric"
    ```
 
-2. Build, from the repo root. `@qvac/inference` is built with
-   `--noEmitOnError false`: linked to workspace embed 0.55, its `model-fit`
-   and rerank code no longer type-checks (embed's earlier breaking releases
-   #5470 and #5398, not yet consumed by inference). That skew is unrelated to
-   decisions and does not affect them at runtime.
+2. Build, from the repo root. `@qvac/inference` is built by
+   `build-inference.sh`, not its own `build`: linked to workspace embed 0.55,
+   its `model-fit` and rerank code no longer type-checks (embed's earlier
+   breaking releases #5470 and #5398, not yet consumed by inference). `tsc`
+   then exits 2 and the package's `build` stops before rewriting the `@/`
+   imports. The script accepts only those diagnostics, fails on any other,
+   and checks that no `@/` import is left. The skew is unrelated to decisions.
 
    ```sh
    npm --prefix packages/fabric run build          # overlay (fabric PR #497), then link:platform
    npm --prefix packages/embed-llamacpp run build  # build:ts + build:native
-   (cd packages/inference && npx tsc -p tsconfig.build.json --noEmitOnError false && npx tsc-alias -p tsconfig.alias.json)
+   bash scripts/decision-prototype/build-inference.sh
    npm --prefix packages/sdk run build
    npm --prefix packages/cli run build
    ```
@@ -96,5 +99,12 @@ works without a global install).
    ```
 
    `parity.mjs` uses the same model, context (`--ctx`, default 4096), slots
-   (`--parallel`, default 2) and GPU offload (`--cpu` for CPU) on both sides,
-   and exits 1 on any mismatch.
+   (`--parallel`, default 2) and offload on both sides. With `--cpu`, both
+   keep the model and the projector on the CPU (`-ngl 0 --no-mmproj-offload`
+   for `llama-server`). It exits 1 when any request's outcome differs from
+   its `expect` on either side, on any mismatch, and when an expected
+   rejection's status, code or message differs.
+
+   `llama-server` runs on a free port (`--port` must be free if given). The
+   script fails if the server exits before or during the run, or if `/props`
+   reports a different model, so results can't come from another process.
