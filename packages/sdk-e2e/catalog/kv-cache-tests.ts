@@ -241,7 +241,6 @@ export const kvCacheSessionSwitch: TestDefinition = {
   expectation: { validation: 'type', expectedType: 'string' },
   steps: [
     { useModel: { deps: ['llm'], as: 'model' } },
-    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.sourceKey' } } },
     {
       repeat: {
         over: '$params.sessions',
@@ -765,6 +764,7 @@ export const kvCacheSharedPrefixDefaultIsolated: TestDefinition = {
   expectation: { validation: 'type', expectedType: 'string' },
   steps: [
     { useModel: { deps: ['llm'], as: 'model' } },
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.sourceKey' } } },
     {
       call: {
         method: 'completion',
