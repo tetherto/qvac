@@ -318,12 +318,26 @@ async function performHttpDownload(
     // 416 Range Not Satisfiable — the partial on disk is already the whole file.
     if (response.status === 416 && startOffset > 0) {
       response.body.destroy()
-      logger.info(`✅ File already completely downloaded`)
       // A partial longer than the file also gets a 416, so only trust a size the server confirms.
       const unsatisfied = /^bytes \*\/(\d+)$/.exec(String(response.headers['content-range'] ?? ''))
-      if (unsatisfied?.[1] !== undefined && parseInt(unsatisfied[1]) === startOffset) {
-        meta.totalBytes = startOffset
+      const remoteSize = unsatisfied?.[1] !== undefined ? parseInt(unsatisfied[1]) : undefined
+      if (remoteSize !== undefined && remoteSize !== startOffset) {
+        // The file at the URL changed while the partial waited, so its bytes are not this file's.
+        logger.warn(
+          `⚠️ Partial is ${startOffset} bytes but the server reports ${remoteSize}, downloading again`
+        )
+        await fsPromises.unlink(modelPath)
+        return performHttpDownload(
+          url,
+          modelPath,
+          downloadKey,
+          requireSecureTransport,
+          progressCallback,
+          signal
+        )
       }
+      logger.info(`✅ File already completely downloaded`)
+      if (remoteSize !== undefined) meta.totalBytes = startOffset
       // Send 100% progress for already complete file
       if (progressCallback) {
         progressCallback({
