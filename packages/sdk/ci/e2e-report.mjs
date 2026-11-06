@@ -336,7 +336,8 @@ export async function plan(env) {
   const pr = event.pull_request?.number
   if (!pr) {
     // A dispatch runs what its inputs select, Device Farm only on the platform it names, as main's test-sdk.yml.
-    const platform = env.PLATFORM && env.PLATFORM !== 'none'
+    const configs = { Android: ['android-arm64'], iOS: ['ios-arm64'], both: ['android-arm64', 'ios-arm64'] }
+    const devices = mobile.filter((r) => (configs[env.PLATFORM] ?? []).includes(r.config))
     const suite = env.SUITE === 'smoke' ? 'smoke' : ''
     const options = {
       exclude: list('exclude-suite', env.EXCLUDE_SUITE),
@@ -353,7 +354,7 @@ export async function plan(env) {
       mode: 'dispatch',
       suite,
       desktop: rows(labelled),
-      mobile: platform ? rows(mobile) : [],
+      mobile: rows(devices),
       report: [],
       comments: {}
     })

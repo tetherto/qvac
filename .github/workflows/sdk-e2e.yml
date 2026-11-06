@@ -82,7 +82,6 @@ jobs:
       targets: test:integration,test:mobile
       packages: ${{ inputs.packages }}
       labels: ${{ github.event_name == 'workflow_dispatch' && (inputs.labels || 'test-e2e-full') || '' }}
-      configs: ${{ inputs.platform == 'iOS' && 'ios-arm64' || inputs.platform == 'Android' && 'android-arm64' || '' }}
       tags: ci:sdk
 
   fork-approval:
