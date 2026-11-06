@@ -231,6 +231,20 @@ test('the limit and size caps apply to what select returns', (t) => {
   )
 })
 
+test('an exact name spelled as asked wins over a case variant', (t) => {
+  const variants = [
+    tool('GetWeather', 'Weather, upper camel', { deferLoading: true }),
+    tool('getWeather', 'Weather, lower camel', { deferLoading: true })
+  ]
+  t.alike(names(searchDeferredTools(variants, 'getWeather')), ['getWeather'])
+  t.alike(names(searchDeferredTools(variants, 'GetWeather')), ['GetWeather'])
+  t.alike(
+    names(searchDeferredTools(variants, 'getweather')),
+    ['GetWeather', 'getWeather'],
+    'with neither spelled as asked, both load'
+  )
+})
+
 test('select can only narrow: an outside tool or a repeat is skipped', (t) => {
   const outside = tool('delete_everything', 'Not part of this search', { deferLoading: true })
   const [top, second] = rankDeferredTools(CATALOG, HTTP_QUERY)

@@ -222,6 +222,14 @@ export function rankDeferredTools(deferred: readonly Tool[], query: string): Ran
     .map(({ tool, score }) => ({ tool, score }))
 }
 
+// Names score case-insensitively, so `GetWeather` and `getWeather` both score as
+// exact; the one spelled as asked wins, and with neither, both load.
+function namedBy(ranked: readonly RankedTool[], query: string): RankedTool[] {
+  const exact = ranked.filter(({ score }) => score === EXACT_NAME_SCORE)
+  const literal = exact.filter(({ tool }) => tool.name === query.trim())
+  return literal.length > 0 ? literal : exact
+}
+
 /**
  * The deferred tools a search loads: the ranking, narrowed by `options`, then
  * capped. An exact name loads that tool alone.
@@ -235,7 +243,7 @@ export function searchDeferredTools(
   const { maxDefinitionBytes = MAX_DEFINITION_BYTES, select } = options
   const cap = Math.min(Math.max(Math.trunc(limit ?? DEFAULT_SEARCH_LIMIT), 1), MAX_SEARCH_LIMIT)
   const ranked = rankDeferredTools(deferred, query)
-  const candidates = ranked[0]?.score === EXACT_NAME_SCORE ? ranked.slice(0, 1) : ranked
+  const candidates = ranked[0]?.score === EXACT_NAME_SCORE ? namedBy(ranked, query) : ranked
   const selected = select ? select(candidates, { query, limit: cap }) : candidates
 
   // A tool outside the ranking would be reported loaded but never declared.
