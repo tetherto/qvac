@@ -2,7 +2,7 @@
 
 const os = require('bare-os')
 const path = require('bare-path')
-const { DecisionEngine } = require('../../index.js')
+const { DecisionEngine, DECISION_INVALID_REQUEST } = require('../../index.js')
 const { ensureModel, safeTest } = require('./utils')
 
 // Upstream decision models through @qvac/fabric's qvac_fabric_decision_*
@@ -118,11 +118,9 @@ safeTest(
         state: 'x',
         questions: { q: { type: 'score', instructions: '?', criteria: 'abcdefghijk'.split('') } }
       }
-      await t.exception(
-        decide(engine, tooManyLevels),
-        /2 to 10 levels/,
-        '11 score levels rejected by upstream'
-      )
+      const rejected = await decide(engine, tooManyLevels).catch((err) => err)
+      t.ok(/2 to 10 levels/.test(rejected.message), `11 score levels rejected: ${rejected.message}`)
+      t.is(rejected.code, DECISION_INVALID_REQUEST, 'rejection is coded as an invalid request')
 
       // The depth guard accepts a state nested 128 deep (upstream may still
       // answer or reject it on its own terms) and rejects 129 before any

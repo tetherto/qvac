@@ -8,6 +8,7 @@ const {
   DecisionEngine,
   DecisionEngineInterface,
   mapDecisionEngineEvent,
+  DECISION_INVALID_REQUEST,
   LayaDecisions,
   LayaInterface,
   mapLayaEvent,
@@ -20,6 +21,7 @@ export default GGMLBert
 export {
   assessFit,
   BertInterface,
+  DECISION_INVALID_REQUEST,
   DecisionEngine,
   DecisionEngineInterface,
   GGMLBert,

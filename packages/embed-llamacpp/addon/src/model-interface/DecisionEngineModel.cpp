@@ -243,10 +243,14 @@ DecisionEngineModel::predict(const std::string& requestJson) {
     // The job scheduler reports this as a cancellation, as with LayaModel.
     throw std::runtime_error("Job cancelled");
   case QVAC_FABRIC_DECISION_INVALID_REQUEST:
+    // Job errors reach JS as their message only, so "invalid request: " is a
+    // stable marker: decision.ts turns it into err.code
+    // DECISION_INVALID_REQUEST for callers that map it (e.g. to HTTP 400).
     throw qvac_errors::StatusError(
         ADDON_ID,
         toString(InvalidRequest),
-        string_format("%s: %s", __func__, errorMessage(body).c_str()));
+        string_format(
+            "%s: invalid request: %s", __func__, errorMessage(body).c_str()));
   default:
     throw qvac_errors::StatusError(
         ADDON_ID,

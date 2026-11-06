@@ -55,3 +55,18 @@ test('Laya and embedding events are not DecisionEngine events', function (t) {
   t.is(mapDecisionEngineEvent('14BertEmbeddings', [[0.1]], undefined), null)
   t.is(mapDecisionEngineEvent('Stats', { forward_passes: 1 }, null), null)
 })
+
+test('an invalid-request run error gets a code and loses the marker', function (t) {
+  const native = new Error('predict: invalid request: questions.q: too many options')
+  const result = mapDecisionEngineEvent('Error', undefined, native)
+  t.is(result.type, 'Error')
+  t.is(result.error.code, 'DECISION_INVALID_REQUEST')
+  t.is(result.error.message, 'questions.q: too many options')
+})
+
+test('other run errors pass through unchanged', function (t) {
+  const failed = new Error('predict: the decision handler returned no answers')
+  t.is(mapDecisionEngineEvent('Error', undefined, failed).error, failed)
+  const cancelled = new Error('Job cancelled')
+  t.is(mapDecisionEngineEvent('Error', undefined, cancelled).error, cancelled)
+})

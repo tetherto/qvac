@@ -117,6 +117,12 @@ export interface DecisionEngineBinding extends ModelBinding {
 }
 export type MappedDecisionEngineEvent = MappedModelEvent<DecisionEngineResult>;
 /**
+ * `code` of a run error for a request the model rejected (bad JSON, nesting
+ * too deep, a limit or control the model does not support). Other run errors
+ * are execution failures; a cancelled run fails with "Job cancelled".
+ */
+export declare const DECISION_INVALID_REQUEST = "DECISION_INVALID_REQUEST";
+/**
  * Normalize a raw native event of a DecisionEngine instance. The output is
  * upstream's response JSON, parsed here. Returns `null` for unknown events.
  */
