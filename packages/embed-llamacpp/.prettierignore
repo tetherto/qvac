@@ -17,6 +17,7 @@ addonLogging.js
 test/types/consumer-cjs.test.js
 *.d.ts
 fit.js
+decision.js
 laya.js
 rerank.js
 modelRunner.js

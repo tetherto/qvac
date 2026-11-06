@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GGMLBert = exports.assessFit = exports.mapRerankEvent = exports.RerankInterface = exports.Reranker = exports.mapLayaEvent = exports.LayaInterface = exports.LayaDecisions = exports.validateModelPath = exports.BertInterface = void 0;
+exports.GGMLBert = exports.assessFit = exports.mapRerankEvent = exports.RerankInterface = exports.Reranker = exports.mapLayaEvent = exports.LayaInterface = exports.LayaDecisions = exports.mapDecisionEngineEvent = exports.DecisionEngineInterface = exports.DecisionEngine = exports.validateModelPath = exports.BertInterface = void 0;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const path = require("bare-path");
 const QvacLogger = require("@qvac/logging");
@@ -8,11 +8,16 @@ const fit_1 = require("./fit");
 /* eslint-enable @typescript-eslint/no-require-imports */
 const infer_base_1 = require("@qvac/infer-base");
 const addon_1 = require("./addon");
+const decision_1 = require("./decision");
 const laya_1 = require("./laya");
 const rerank_1 = require("./rerank");
 var addon_2 = require("./addon");
 Object.defineProperty(exports, "BertInterface", { enumerable: true, get: function () { return addon_2.BertInterface; } });
 Object.defineProperty(exports, "validateModelPath", { enumerable: true, get: function () { return addon_2.validateModelPath; } });
+var decision_2 = require("./decision");
+Object.defineProperty(exports, "DecisionEngine", { enumerable: true, get: function () { return decision_2.DecisionEngine; } });
+Object.defineProperty(exports, "DecisionEngineInterface", { enumerable: true, get: function () { return decision_2.DecisionEngineInterface; } });
+Object.defineProperty(exports, "mapDecisionEngineEvent", { enumerable: true, get: function () { return decision_2.mapDecisionEngineEvent; } });
 var laya_2 = require("./laya");
 Object.defineProperty(exports, "LayaDecisions", { enumerable: true, get: function () { return laya_2.LayaDecisions; } });
 Object.defineProperty(exports, "LayaInterface", { enumerable: true, get: function () { return laya_2.LayaInterface; } });
@@ -207,6 +212,9 @@ cjsExports.default = GGMLBert;
 cjsExports.validateModelPath = addon_1.validateModelPath;
 cjsExports.GGMLBert = GGMLBert;
 cjsExports.BertInterface = addon_1.BertInterface;
+cjsExports.DecisionEngine = decision_1.DecisionEngine;
+cjsExports.DecisionEngineInterface = decision_1.DecisionEngineInterface;
+cjsExports.mapDecisionEngineEvent = decision_1.mapDecisionEngineEvent;
 cjsExports.LayaDecisions = laya_1.LayaDecisions;
 cjsExports.LayaInterface = laya_1.LayaInterface;
 cjsExports.mapLayaEvent = laya_1.mapLayaEvent;

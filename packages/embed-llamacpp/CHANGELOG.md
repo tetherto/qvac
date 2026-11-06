@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `DecisionEngine`: upstream llama.cpp decision models (openjev, lev, kev,
+  clef, upstream-format laya, ...) through `@qvac/fabric`'s decision bridge.
+  Requests and results use upstream's `/v1/systemone` shapes, one state per
+  run; `info()` reports the model's decision type, what its `noul` answers
+  mean, and its media and limit capabilities. Fabric-format Laya checkpoints
+  keep using `LayaDecisions` (QVAC-26667).
+
 ## [0.55.0] - 2026-11-04
 
 ### Breaking

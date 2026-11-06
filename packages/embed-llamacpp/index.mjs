@@ -5,6 +5,9 @@ const { BertInterface, mapAddonEvent } = addon
 const {
   assessFit,
   validateModelPath,
+  DecisionEngine,
+  DecisionEngineInterface,
+  mapDecisionEngineEvent,
   LayaDecisions,
   LayaInterface,
   mapLayaEvent,
@@ -17,10 +20,13 @@ export default GGMLBert
 export {
   assessFit,
   BertInterface,
+  DecisionEngine,
+  DecisionEngineInterface,
   GGMLBert,
   LayaDecisions,
   LayaInterface,
   mapAddonEvent,
+  mapDecisionEngineEvent,
   mapLayaEvent,
   mapRerankEvent,
   validateModelPath,
