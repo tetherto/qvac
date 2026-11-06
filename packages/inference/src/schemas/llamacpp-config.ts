@@ -149,6 +149,12 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       "Writable directory for checkpoint files, required with `cache_checkpoint_storage: 'disk'` and rejected without it. The addon writes in a private directory it creates inside it (on Windows, in the directory itself). On mobile, pass the app's cache directory."
     ),
+  cache_share_across_keys: z
+    .boolean()
+    .optional()
+    .describe(
+      'Let a request reuse the longest prompt prefix another conversation on this model holds. Default false: each request keeps to its own `kvCache` key, and a request without one starts cold. With `true`, callers can tell from prompt-token counts and timing whether another conversation shares their prompt.'
+    ),
   cache_ram_mib: z
     .number()
     .int()
@@ -450,7 +456,8 @@ export const LLM_CONFIG_DEFAULTS = {
   ctx_size: 1024,
   device: 'gpu',
   system_prompt: 'You are a helpful assistant.',
-  image_tile_mode: 'sequential'
+  image_tile_mode: 'sequential',
+  cache_share_across_keys: false
 } as const satisfies Partial<LlmConfigInput>
 
 // Full schema - applies defaults via transform (no duplication)
