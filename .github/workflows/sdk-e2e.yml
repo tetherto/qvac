@@ -229,6 +229,7 @@ jobs:
     secrets: inherit
     with:
       rows: ${{ needs.plan.outputs.desktop }}
+      toolchain: false
 
   # The package's test:mobile builds the app and a stub test package; the runner then schedules one run on a pool and
   # drives it over MQTT, as main's SDK Device Farm workflows did.
