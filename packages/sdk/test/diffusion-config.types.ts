@@ -29,3 +29,12 @@ acceptConfig({
 })
 // @ts-expect-error the projector uses the shared model-source type
 acceptConfig({ projectionModelSrc: true })
+
+acceptConfig({
+  mode: 'diffusion',
+  llmModelSrc: '/models/Qwen3.5-9B-Q4_K_M.gguf',
+  vaeModelSrc: '/models/flux2-vae_small.safetensors',
+  tokenizerSrc: '/models/tokenizer.json'
+})
+// @ts-expect-error the tokenizer uses the shared model-source type
+acceptConfig({ tokenizerSrc: true })

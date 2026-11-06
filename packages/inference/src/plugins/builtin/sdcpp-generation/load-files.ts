@@ -39,6 +39,7 @@ export function imageFilesFor(modelPath: string, artifacts: Artifacts): Diffusio
     ...(artifacts?.['uncondModelPath'] && {
       uncondModel: artifacts['uncondModelPath']
     }),
+    ...(artifacts?.['tokenizerPath'] && { tokenizer: artifacts['tokenizerPath'] }),
     ...(artifacts?.['esrganModelPath'] && { esrgan: artifacts['esrganModelPath'] })
   }
 }
