@@ -214,20 +214,7 @@ jobs:
 
       - name: Select Xcode
         run: |
-          echo "Available Xcode versions:"
-          ls -d /Applications/Xcode*.app 2>/dev/null || echo "No Xcode found"
-
-          if [ -d "/Applications/Xcode_16.1.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_16.1.app
-          elif [ -d "/Applications/Xcode_16.1.0.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_16.1.0.app
-          elif [ -d "/Applications/Xcode_16.2.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_16.2.app
-          else
-            echo "No suitable Xcode version found (need >= 16.1)"
-            exit 1
-          fi
-
+          sudo xcode-select -s /Applications/Xcode_26.3.app
           xcodebuild -version
           xcodebuild -showsdks | grep -i ios
 
