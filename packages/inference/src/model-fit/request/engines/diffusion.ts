@@ -95,6 +95,17 @@ export function createDiffusionFitRequest(params: DiffusionFitRequestParams): Fi
   // `mode` and `upscaler` are this SDK's own keys; the engine config has no
   // field for either.
   const { mode: _mode, upscaler: _upscaler, ...engineConfig } = config
+  const boundedVideoWorkload =
+    config.mode === 'video' &&
+    config.performance_max_width !== undefined &&
+    config.performance_max_height !== undefined &&
+    config.performance_max_frames !== undefined
+      ? {
+          width: config.performance_max_width,
+          height: config.performance_max_height,
+          videoFrames: config.performance_max_frames
+        }
+      : {}
 
   return {
     supported: true,
@@ -106,6 +117,7 @@ export function createDiffusionFitRequest(params: DiffusionFitRequestParams): Fi
         workload: {
           ...(config.vae_tiling !== undefined && { vaeTiling: config.vae_tiling }),
           ...(config.mode === 'video' && { videoFrames: DEFAULT_VIDEO_FRAMES }),
+          ...boundedVideoWorkload,
           ...(upscaler !== undefined && { upscaleRepeats: 1 })
         }
       }
