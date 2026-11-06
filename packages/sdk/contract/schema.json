@@ -14413,6 +14413,7 @@
                                     "sdcpp-generation",
                                     "audiogen-ggml",
                                     "ggml-vla",
+                                    "ggml-image-embedding",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",

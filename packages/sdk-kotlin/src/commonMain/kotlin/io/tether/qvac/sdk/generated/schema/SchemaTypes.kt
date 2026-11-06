@@ -4099,33 +4099,33 @@ data class LoadModelSrcRequestLlamacppEmbeddingModelConfig(
 @Serializable(with = LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcSerializer::class)
 sealed class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc {
     data class Variant1(val value: String) : LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc()
-    data class C0DF4256(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256) : LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc()
+    data class Value66F25F8A(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8A) : LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc()
 }
 internal object LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcSerializer : KSerializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"src\"],\"properties\":{\"src\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"modelId\":{\"type\":\"string\"},\"registryPath\":{\"type\":\"string\"},\"registrySource\":{\"type\":\"string\"},\"blobCoreKey\":{\"type\":\"string\"},\"blobIndex\":{\"type\":\"number\"},\"engine\":{\"type\":\"string\"},\"expectedSize\":{\"type\":\"number\"},\"sha256Checksum\":{\"type\":\"string\"},\"addon\":{\"anyOf\":[{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]},{\"type\":\"string\",\"const\":\"vad\"}]}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc.C0DF4256(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256>(), element))
+            1 -> LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc.Value66F25F8A(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8A>(), element))
             else -> throw SerializationException("No matching LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc variant")
         }
     }
     override fun serialize(encoder: Encoder, value: LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc) {
         when (value) {
             is LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc.C0DF4256 -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256>(), value.value)
+            is LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc.Value66F25F8A -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8A>(), value.value)
         }
     }
 }
 
 @Serializable
-data class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256(
+data class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8A(
     @SerialName("src") val `src`: String,
     @SerialName("name") val `name`: String? = null,
     @SerialName("modelId") val `modelId`: String? = null,
@@ -4136,33 +4136,33 @@ data class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF
     @SerialName("engine") val `engine`: String? = null,
     @SerialName("expectedSize") val `expectedSize`: Double? = null,
     @SerialName("sha256Checksum") val `sha256Checksum`: String? = null,
-    @SerialName("addon") val `addon`: LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon? = null,
+    @SerialName("addon") val `addon`: LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon? = null,
 )
 
-@Serializable(with = LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256AddonSerializer::class)
-sealed class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon {
-    data class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon) : LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon()
-    data class Variant2(val value: String) : LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon()
+@Serializable(with = LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddonSerializer::class)
+sealed class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon {
+    data class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon(val value: io.tether.qvac.sdk.generated.schema.LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon) : LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon()
+    data class Variant2(val value: String) : LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon()
 }
-internal object LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256AddonSerializer : KSerializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon")
+internal object LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddonSerializer : KSerializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"string\",\"enum\":[\"llamacpp-completion\",\"whispercpp-transcription\",\"bci-whispercpp-transcription\",\"llamacpp-embedding\",\"llamacpp-decision\",\"llamacpp-rerank\",\"nmtcpp-translation\",\"onnx-tts\",\"tts-ggml\",\"parakeet-transcription\",\"moss-transcribe\",\"ggml-ocr\",\"sdcpp-generation\",\"audiogen-ggml\",\"ggml-vla\",\"ggml-image-embedding\",\"ggml-classification\",\"llm\",\"whisper\",\"bci\",\"embeddings\",\"nmt\",\"parakeet\",\"tts\",\"ocr\",\"diffusion\",\"audiogen\",\"vla\",\"classification\"]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"string\",\"const\":\"vad\"}").jsonObject,
     )
-    override fun deserialize(decoder: Decoder): LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon {
+    override fun deserialize(decoder: Decoder): LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
-            0 -> LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon.LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon>(), element))
-            1 -> LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
-            else -> throw SerializationException("No matching LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon variant")
+            0 -> LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon.LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon(input.json.decodeFromJsonElement(serializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon>(), element))
+            1 -> LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon.Variant2(input.json.decodeFromJsonElement(serializer<String>(), element))
+            else -> throw SerializationException("No matching LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon variant")
         }
     }
-    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon) {
+    override fun serialize(encoder: Encoder, value: LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon) {
         when (value) {
-            is LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon.LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon>(), value.value)
-            is LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcC0DF4256Addon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon.LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon -> encoder.encodeSerializableValue(serializer<LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon>(), value.value)
+            is LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc66F25F8AAddon.Variant2 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
         }
     }
 }
@@ -4184,6 +4184,7 @@ enum class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddo
     @SerialName("sdcpp-generation") `SDCPPGENERATION`,
     @SerialName("audiogen-ggml") `AUDIOGENGGML`,
     @SerialName("ggml-vla") `GGMLVLA`,
+    @SerialName("ggml-image-embedding") `GGMLIMAGEEMBEDDING`,
     @SerialName("ggml-classification") `GGMLCLASSIFICATION`,
     @SerialName("llm") `LLM`,
     @SerialName("whisper") `WHISPER`,

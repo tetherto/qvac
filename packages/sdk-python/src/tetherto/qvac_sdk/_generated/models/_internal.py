@@ -13172,6 +13172,7 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon(Enu
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
