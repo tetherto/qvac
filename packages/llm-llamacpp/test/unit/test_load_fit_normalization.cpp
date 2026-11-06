@@ -2455,6 +2455,45 @@ TEST_F(LoadFitNormalizationTest, ExplicitDevicesRejectAbsentOptInDevice) {
       qvac_errors::StatusError);
 }
 
+TEST_F(LoadFitNormalizationTest, TensorSplitRejectsXdna) {
+  auto config = baseConfig();
+  config["devices"] = "local,XDNA0";
+  config["split-mode"] = "tensor";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "local"}, {"local"});
+  auto selection = splitSelection({"local", "XDNA0"});
+  selection.optInDevices.push_back(selection.devices[1]);
+  selection.devices.pop_back();
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies));
+    FAIL() << "a tensor split with XDNA0 must be rejected";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr("split-mode 'tensor' does not support the XDNA"));
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, LayerSplitAcceptsXdna) {
+  auto config = baseConfig();
+  config["devices"] = "local,XDNA0";
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "local"}, {"local"});
+  auto selection = splitSelection({"local", "XDNA0"});
+  selection.optInDevices.push_back(selection.devices[1]);
+  selection.devices.pop_back();
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_LAYER);
+}
+
 TEST_F(LoadFitNormalizationTest, AutomaticSplitLeavesOutOptInDevices) {
   auto config = baseConfig();
   config["split-mode"] = "layer";

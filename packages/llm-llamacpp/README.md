@@ -77,8 +77,9 @@ On an XDNA2 NPU (Strix Point, Strix Halo, Krackan) with XRT 2.25 or newer instal
   NPU's attention kernels need both. `poll: 0` (the default) stops the threadpool busy-waiting
   while the NPU works.
 - The NPU reports all of system memory as free, so fit and memory accounting are nominal.
-- Splitting one model across `XDNA0` and a GPU (`devices: "XDNA0,Vulkan0"` with a split mode) is
-  accepted but untested.
+- Splitting one model across `XDNA0` and a GPU (`devices: "XDNA0,Vulkan0"`) with
+  `split-mode: "layer"` is accepted but untested. `split-mode: "tensor"` with `XDNA0` is rejected:
+  it never gives the NPU a whole layer.
 
 **Note — BitNet models (TQ1_0 / TQ2_0 quantization):**
 BitNet models require special backend handling on Adreno GPUs. When a BitNet model is detected and no explicit `main-gpu` is set:

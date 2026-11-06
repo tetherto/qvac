@@ -1603,6 +1603,17 @@ NormalizedLoad normalizeLoadForFit(
                   "uses only one. Set split-mode to 'layer' or 'tensor'.\n",
                   K_LEGACY_PARSER_NAME.data()));
         }
+        // A tensor split never gives the NPU a whole layer, so its fused
+        // decode path cannot run.
+        if (splitMode == LLAMA_SPLIT_MODE_TENSOR &&
+            usesBackendFamily(true, "", splitSelection.devices, "xdna")) {
+          throw qvac_errors::StatusError(
+              qvac_errors::general_error::InvalidArgument,
+              string_format(
+                  "%s: split-mode 'tensor' does not support the XDNA NPU; use "
+                  "split-mode 'layer' or 'none'.\n",
+                  K_LEGACY_PARSER_NAME.data()));
+        }
       }
       // This path never calls chooseBackend, so apply its Adreno restrictions
       // to the split set; an emptied list falls through to the CPU branch.
