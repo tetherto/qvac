@@ -11590,7 +11590,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     cache_share_across_keys: Annotated[
         bool | None,
         Field(
-            description="Whether decoder-only requests may reuse a prompt prefix held by another conversation. Default true. Set false to keep each request to its own `kvCache` state; requests without a key then start cold and reset afterwards."
+            description="Whether decoder-only requests may reuse a prompt prefix held by another conversation. The SDK defaults this to false, keeping each request to its own `kvCache` state; requests without a key start cold and reset afterwards. Set true to opt in to model-wide sharing."
         ),
     ] = None
     cache_type_k: Annotated[
