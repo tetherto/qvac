@@ -102,14 +102,25 @@ export function createNamedKvCacheRetention(
     const names = (await gone(() => readdir(leases))) ?? []
     const live: string[] = []
     for (const name of names) {
-      if (!name.startsWith(prefix)) continue
-      const owner = Number(name.slice(prefix.length).split('-')[0])
-      const info = await gone(() => stat(join(leases, name)))
-      if (!info) continue
-      if (isAlive(owner) && now() - info.mtimeMs <= leaseStaleMs) live.push(name)
-      else await unlink(join(leases, name)).catch(() => undefined)
+      if (name.startsWith(prefix) && (await keepIfLive(name))) live.push(name)
     }
     return live
+  }
+
+  // Removes the file unless its process is alive and refreshed it recently.
+  async function keepIfLive(name: string): Promise<boolean> {
+    const owner = Number(/\.(?:lease|sweep)-(\d+)/.exec(name)?.[1])
+    const info = await gone(() => stat(join(leases, name)))
+    if (!info) return false
+    if (isAlive(owner) && now() - info.mtimeMs <= leaseStaleMs) return true
+    await unlink(join(leases, name)).catch(() => undefined)
+    return false
+  }
+
+  // A crashed request can leave a lease on a key that never got a cache
+  // folder, which no later lookup or sweep of that key would reach.
+  async function pruneLeases(): Promise<void> {
+    for (const name of (await gone(() => readdir(leases))) ?? []) await keepIfLive(name)
   }
 
   async function acquire(key: string): Promise<() => void> {
@@ -210,6 +221,7 @@ export function createNamedKvCacheRetention(
   }
 
   async function sweepNow({ all = false }: { all?: boolean }): Promise<number> {
+    await pruneLeases()
     const caches = await entries()
     // A failed or cancelled first turn can leave no folder behind; forget it.
     // The listing above is a snapshot, so a folder created since is re-checked.

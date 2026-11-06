@@ -322,6 +322,17 @@ describe('createNamedKvCacheRetention', () => {
       await assert.rejects(stat(stale), { code: 'ENOENT' })
     })
 
+    it('removes stale leases on keys that have no cache folder', async (t) => {
+      const dir = await cacheDir(t, {})
+      const dead = await leaseFile(dir, `${K.a}.lease-3-0`)
+      const deadSweep = await leaseFile(dir, `${K.b}.sweep-3`)
+      const live = await leaseFile(dir, `${K.c}.lease-2-0`)
+      await shared(dir, []).sweep()
+      await assert.rejects(stat(dead), { code: 'ENOENT' })
+      await assert.rejects(stat(deadSweep), { code: 'ENOENT' })
+      await stat(live)
+    })
+
     it('makes a request wait while another process deletes its key', async (t) => {
       const dir = await cacheDir(t, {})
       const marker = await leaseFile(dir, `${K.a}.sweep-2`)
