@@ -676,7 +676,9 @@ describe('bundleSdk', () => {
       path.join(projectBareStow, 'lib', 'target', 'bare-kit.js'),
       "const bareKitKotlin = { 'com.github.holepunchto.bare-kit-kotlin:bare-kit-kotlin': 'v0.0.1' }\n"
     )
-    const bundlerBareStow = path.dirname(createRequire(import.meta.url).resolve('bare-stow/package'))
+    const bundlerBareStow = path.dirname(
+      createRequire(import.meta.url).resolve('bare-stow/package')
+    )
     const bundlerPins = parseBareKitPins(
       fs.readFileSync(path.join(bundlerBareStow, 'lib', 'target', 'bare-kit.js'), 'utf8')
     )
