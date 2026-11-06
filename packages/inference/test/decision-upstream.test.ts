@@ -147,7 +147,40 @@ test('colliding and duplicate choice values are rejected', (t) => {
 test('choice records pass through with the caller keys', (t) => {
   const { body, keyMaps } = toUpstreamRequest({ questions }, 'state', openjev)
   t.alike(body.questions.route, questions.route)
-  t.absent(keyMaps.route, 'records need no key map')
+  t.absent(keyMaps.get('route'), 'records need no key map')
+})
+
+test('question names that are Object.prototype members convert like any other', (t) => {
+  const answer = (choice: string) => ({
+    type: 'choice' as const,
+    choice,
+    probabilities: { [choice]: 1 },
+    confidence: 1
+  })
+  for (const name of ['toString', 'constructor', 'hasOwnProperty']) {
+    const { keyMaps } = toUpstreamRequest(
+      {
+        questions: {
+          [name]: { type: 'choice', instructions: '?', criteria: { a: 'A', b: 'B' } },
+          typed: { type: 'choice', instructions: '?', criteria: [1, 2] }
+        }
+      },
+      's',
+      openjev
+    )
+    const { answers } = fromUpstreamResult(
+      {
+        model: 'm',
+        answers: { [name]: answer('b'), typed: answer('2') },
+        usage: { input_tokens: 1, output_tokens: 0 }
+      },
+      keyMaps
+    )
+    const record = answers[name]
+    const typed = answers['typed']
+    t.is(record?.type === 'choice' && record.choice, 'b', `record choice named ${name}`)
+    t.is(typed?.type === 'choice' && typed.choice, 2, `typed choice next to ${name}`)
+  }
 })
 
 test('score levels outside the model range are rejected', (t) => {
@@ -224,7 +257,7 @@ test('results: noul keeps no confidence, legends become text, usage is per state
         }
       }
     },
-    {}
+    new Map()
   )
   t.alike(converted.answers.refund, { type: 'noul', noul: 0.4709828670544308 })
   const urgency = converted.answers.urgency
@@ -402,6 +435,39 @@ function u64(n: number) {
   b.writeBigUInt64LE(BigInt(n))
   return b
 }
+
+test('upstream load: the plugin config, openclCacheDir included, reaches the engine', async (t) => {
+  const file = path.join(os.tmpdir(), `decision-config-${Date.now()}.gguf`)
+  writeGguf(file, 'openjev')
+  t.teardown(() => fs.rmSync(file, { force: true }))
+  const seen: Array<{ files: { model: string[] }; config: Record<string, unknown> }> = []
+  class Engine {
+    constructor(args: { files: { model: string[] }; config: Record<string, unknown> }) {
+      seen.push(args)
+    }
+    load = () => Promise.resolve()
+    unload = () => Promise.resolve()
+    cancel = () => Promise.resolve()
+    run = () => Promise.reject(new Error('not used'))
+    info = () => openjev
+  }
+  const model = new DecisionModel({
+    modelPath: file,
+    files: [file],
+    layaConfig: { device: 'gpu' },
+    config: { device: 'gpu', gpu_layers: 99, openclCacheDir: '/data/user/0/app/cache' },
+    engineClass: Engine
+  })
+  await model.load()
+  t.is(model.kind, 'upstream')
+  t.alike(seen, [
+    {
+      files: { model: [file] },
+      config: { device: 'gpu', gpu_layers: '99', openclCacheDir: '/data/user/0/app/cache' },
+      logger: undefined
+    }
+  ])
+})
 
 test('an addon without DecisionEngine: upstream models fail to load with a clear error', async (t) => {
   const embed = (await import('@qvac/embed-llamacpp')) as unknown as Record<string, unknown>
