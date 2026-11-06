@@ -6,11 +6,16 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.update
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.concurrent.Volatile
 
@@ -32,6 +37,13 @@ class QvacSession internal constructor(
 ) : QvacClient(transport, json) {
     /** Completes once the worker registered the session. Calls wait for it on their own. */
     val opened: Deferred<Unit> get() = transport.opened
+
+    /**
+     * Whether this session loaded `modelId` and has not unloaded it. Stays true
+     * after the session ends: a call naming such a model then fails with
+     * [QvacModelHandleInvalidatedException] instead of [QvacSessionClosedException].
+     */
+    fun isModelHeld(modelId: String): Boolean = transport.isModelHeld(modelId)
 
     /**
      * Cancels this session's requests, releases its model leases and ends the
@@ -66,28 +78,66 @@ internal class SessionTransport(
     var ended: String? = null
         private set
 
+    // Model ids this session loaded and has not unloaded, kept after the session
+    // ends so a call naming one gets the model error, not the session error.
+    private val heldModels = MutableStateFlow<Set<String>>(emptySet())
+
     override val runtimeProfile: QvacRuntimeProfile? get() = inner.runtimeProfile
 
     fun markEnded(reason: String) {
         if (ended == null) ended = reason
     }
 
+    fun isModelHeld(modelId: String): Boolean = modelId in heldModels.value
+
     // The handle's id replaces any id the payload carries, so a caller cannot send a
     // request as another session. Only the session methods themselves name the
     // session they act on.
     private suspend fun stamp(payload: JsonObject): JsonObject {
-        ended?.let { throw QvacSessionClosedException(sessionId, it) }
+        ended?.let { throw endedError(payload, it) }
         opened.await()
-        ended?.let { throw QvacSessionClosedException(sessionId, it) }
+        ended?.let { throw endedError(payload, it) }
         val type = payload["type"]?.jsonPrimitive?.content
         if (type == "openSession" || type == "closeSession") return payload
         return JsonObject(payload + ("sessionId" to JsonPrimitive(sessionId)))
     }
 
-    override suspend fun call(payload: JsonObject): JsonObject = inner.call(stamp(payload))
+    private fun endedError(payload: JsonObject, reason: String): QvacFeatureException {
+        val modelId = payload["modelId"]?.jsonPrimitive?.contentOrNull
+        if (modelId != null && isModelHeld(modelId)) {
+            return QvacModelHandleInvalidatedException(modelId, sessionId, reason)
+        }
+        return QvacSessionClosedException(sessionId, reason)
+    }
+
+    // A `loadModel` reply names the model this session now holds; an `unloadModel`
+    // reply that released the lease drops it. Both arrive on the unary call and,
+    // for a load with progress, as the last frame of the stream.
+    private fun trackHeldModel(request: JsonObject, response: JsonObject) {
+        val type = request["type"]?.jsonPrimitive?.content
+        if (response["type"]?.jsonPrimitive?.content != type) return
+        if (response["success"]?.jsonPrimitive?.booleanOrNull == false) return
+        when (type) {
+            "loadModel" -> response["modelId"]?.jsonPrimitive?.contentOrNull?.let { modelId ->
+                heldModels.update { it + modelId }
+            }
+            "unloadModel" -> {
+                if (response["released"]?.jsonPrimitive?.booleanOrNull == false) return
+                request["modelId"]?.jsonPrimitive?.contentOrNull?.let { modelId ->
+                    heldModels.update { it - modelId }
+                }
+            }
+        }
+    }
+
+    override suspend fun call(payload: JsonObject): JsonObject {
+        val stamped = stamp(payload)
+        return inner.call(stamped).also { trackHeldModel(stamped, it) }
+    }
 
     override fun stream(payload: JsonObject): Flow<JsonObject> = flow {
-        emitAll(inner.stream(stamp(payload)))
+        val stamped = stamp(payload)
+        emitAll(inner.stream(stamped).onEach { trackHeldModel(stamped, it) })
     }
 
     override fun duplex(payload: JsonObject, input: Flow<ByteArray>): Flow<JsonObject> = flow {
@@ -104,6 +154,15 @@ internal class SessionTransport(
  */
 class QvacSessionClosedException(val sessionId: String, val reason: String = "closed") :
     QvacFeatureException("Session \"$sessionId\" is no longer usable ($reason); open a new session")
+
+/**
+ * A call naming a model this session loaded, after the session ended. The
+ * model is gone with the session: load it again through a new session.
+ */
+class QvacModelHandleInvalidatedException(val modelId: String, val sessionId: String, val reason: String) :
+    QvacFeatureException(
+        "Model \"$modelId\" is no longer loaded: session \"$sessionId\" that held it is no longer usable ($reason); load it again",
+    )
 
 /** `openSession` called on a session handle instead of the owner client. */
 class QvacNestedSessionException(val sessionId: String) :

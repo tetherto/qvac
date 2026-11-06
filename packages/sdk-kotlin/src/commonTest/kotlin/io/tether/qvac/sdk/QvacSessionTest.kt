@@ -134,6 +134,33 @@ class QvacSessionTest {
     }
 
     @Test
+    fun aModelLoadedThroughTheSessionNamesItsOwnErrorAfterTheSessionEnds() = runTest {
+        val transport = SessionRecordingTransport()
+        val client = QvacClient(transport)
+        val session = client.openSession()
+        assertEquals(false, session.isModelHeld("m-1"))
+
+        session.call(buildJsonObject { put("type", "loadModel"); put("modelSrc", "/models/x.gguf"); put("modelType", "llamacpp-completion") })
+        assertEquals(true, session.isModelHeld("m-1"), "a load through the session is recorded")
+        session.unloadModel(UnloadModelRequest(modelId = "m-1"))
+        assertEquals(false, session.isModelHeld("m-1"), "an unload releases it")
+        session.call(buildJsonObject { put("type", "loadModel"); put("modelSrc", "/models/x.gguf"); put("modelType", "llamacpp-completion") })
+
+        client.close()
+
+        val held = assertFailsWith<QvacModelHandleInvalidatedException> {
+            session.call(buildJsonObject { put("type", "embed"); put("modelId", "m-1"); put("text", "x") })
+        }
+        assertEquals("m-1", held.modelId)
+        assertEquals("shutdown", held.reason)
+        assertEquals(true, session.isModelHeld("m-1"), "the handle still reports what it held")
+        val other = assertFailsWith<QvacSessionClosedException> {
+            session.call(buildJsonObject { put("type", "embed"); put("modelId", "m-2"); put("text", "x") })
+        }
+        assertEquals("shutdown", other.reason)
+    }
+
+    @Test
     fun aClosedSessionIsNotEndedAgainByTheOwnerClose() = runTest {
         val transport = SessionRecordingTransport()
         val client = QvacClient(transport)
@@ -196,6 +223,11 @@ private class SessionRecordingTransport(
                 put("type", "unloadModel")
                 put("success", true)
                 put("hasActiveModels", true)
+            }
+            "loadModel" -> buildJsonObject {
+                put("type", "loadModel")
+                put("success", true)
+                put("modelId", "m-1")
             }
             else -> buildJsonObject { put("type", payload["type"]?.jsonPrimitive?.content ?: "") }
         }
