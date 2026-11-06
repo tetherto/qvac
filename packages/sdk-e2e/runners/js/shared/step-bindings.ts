@@ -11,6 +11,7 @@ import {
   loggingStream,
   SDK_LOG_ID,
   cancel,
+  calcTokens,
   classify,
   completion,
   createVectorIndex,
@@ -65,6 +66,7 @@ const CALLS: Record<string, (params: never) => Promise<unknown>> = {
   embed: (params) => embed(params),
   classify: async (params) => ({ results: await classify(params) }),
   rerank: async (params) => ({ scores: await rerank(params) }),
+  calcTokens: (params) => calcTokens(params),
   /**
    * One transcription, bound under the name that says what came back: `metadata` swaps the flat
    * transcript for per-segment records, so a body that projected `text` off a metadata run would be

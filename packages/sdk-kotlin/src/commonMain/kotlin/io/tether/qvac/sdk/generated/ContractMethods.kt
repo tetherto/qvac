@@ -73,6 +73,14 @@ object QvacMethods {
         progressResponseType = null,
         progressCondition = null,
     )
+    val calcTokens = QvacMethodDescriptor(
+        name = "calcTokens",
+        callShape = QvacCallShape.REQUEST_REPLY,
+        requestType = "CalcTokensRequest",
+        responseType = "CalcTokensResponse",
+        progressResponseType = null,
+        progressCondition = null,
+    )
     val cancel = QvacMethodDescriptor(
         name = "cancel",
         callShape = QvacCallShape.REQUEST_REPLY,
@@ -410,6 +418,7 @@ object QvacMethods {
         batchCompletionStream,
         bciTranscribe,
         bciTranscribeStream,
+        calcTokens,
         cancel,
         classify,
         completionOrchestrate,
