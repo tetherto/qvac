@@ -65,6 +65,14 @@ async function resolveTableAsset(kind: string, file: string): Promise<string> {
   return await resolveBundledAssetUri(assetModule)
 }
 
+// The SDK places llm and embedding loads on the CPU on Pixel phones (`BUILTIN_DEVICE_PATTERNS` in
+// @qvac/inference), matched on the same brand and model `expo-device` reports.
+const androidConstants = Platform.constants as { Brand?: string; Model?: string }
+const hostLlamaOnCpu =
+  Platform.OS === 'android' &&
+  androidConstants.Brand?.toLowerCase() === 'google' &&
+  (androidConstants.Model?.startsWith('Pixel') ?? false)
+
 // Download plan and the unload settling mobile needs -- and why it needs it -- come from the shared
 // platform policy; see catalog/platform-policy.ts.
 const resources = new ResourceManager(policyFor('mobile'))
@@ -205,7 +213,7 @@ export const executor = createExecutor({
     new MobileRagExecutor(resources),
     new VectorIndexExecutor(resources),
     new ModelInfoExecutor(resources),
-    new ModelFitExecutor(resources),
+    new ModelFitExecutor(resources, hostLlamaOnCpu),
     new WrongModelExecutor(resources),
     new ErrorExecutor(resources),
     new ToolsExecutor(resources),
