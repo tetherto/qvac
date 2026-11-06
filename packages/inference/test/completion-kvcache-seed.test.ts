@@ -258,6 +258,14 @@ test('completion: a seed is refused when the source is missing or sharing is off
       `a model loaded ${label} cannot seed`
     )
     t.is(isolatedCalls.length, 1, `the refused seed never reached the model loaded ${label}`)
+
+    // A chat that already has a cache ignores `seedFrom` before any sharing check.
+    await completeIsolated([...baseHistory, assistant('Hi.'), user('Again')], {
+      kvCache: 'base',
+      seedFrom: 'chat-1'
+    })
+    t.is(isolatedCalls.length, 2, `a saved chat continues on the model loaded ${label}`)
+    t.is(isolatedCalls[1]?.baseCacheKey, undefined, 'and is not seeded')
     unregisterModel(isolated)
   }
 

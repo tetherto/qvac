@@ -448,15 +448,6 @@ export async function* completion(
   })
   const configHash = generateConfigHash(extractSystemPrompt(history))
 
-  // The addon ignores `baseCacheKey` on a model loaded with sharing off; a
-  // caller who named a source wants to hear that it cannot be used.
-  if (
-    seedFrom !== undefined &&
-    (modelConfig as { cache_share_across_keys?: boolean }).cache_share_across_keys !== true
-  ) {
-    throw new KvCacheSeedSharingDisabledError(modelId)
-  }
-
   let turn: TurnHandle
   if (typeof kvCache === 'string') {
     turn = await session.beginTurn({
@@ -482,9 +473,13 @@ export async function* completion(
   scope.defer(() => (rollbackOnUnwind ? session.rollback(turn) : session.releaseTurn(turn)))
 
   // A seed starts a chat that has no cache yet; a chat that has one keeps it.
-  // The addon skips a missing source silently, so it is checked here first.
+  // The addon ignores `baseCacheKey` on a model loaded with sharing off and
+  // skips a missing source silently, so both are checked here first.
   let baseCacheKey: string | undefined
   if (seedFrom !== undefined && turn.createdCache) {
+    if ((modelConfig as { cache_share_across_keys?: boolean }).cache_share_across_keys !== true) {
+      throw new KvCacheSeedSharingDisabledError(modelId)
+    }
     const sourcePath = resolveCacheFilePath(modelId, configHash, seedFrom)
     try {
       await fs.promises.access(sourcePath)
