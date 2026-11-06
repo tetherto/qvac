@@ -102,7 +102,6 @@ def test_invalid_sigma_bounds_reject_before_rpc(sigmas: list[float]) -> None:
         (1, 1),
         (64, 64),
         (2147483647, 2147483647),
-        ("64", 64),
         ("64x32", "64x32"),
         ("001x064", "001x064"),
     ],

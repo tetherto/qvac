@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 
 // Combine two references into an RGBA image, with optional Qwen-Image-2.1-Turbo sampling.
-// Set QWEN_TURBO=1 and QWEN_TURBO_MODEL to your Turbo weights, as a path or URL.
+// Set QWEN_TURBO=1 and pass Turbo weights as the model argument, as a path or URL.
 // Use the pinned model revisions from the diffusion addon's Qwen-Image-2.1 downloader.
 // Model terms: https://huggingface.co/Qwen/Qwen-Image-2.1/blob/d26bb61231c349cf6b7896fa83353113880e1ba3/LICENSE
 
@@ -17,7 +17,7 @@ const prompt =
   'Place the subjects from both reference images side by side. Generate an RGBA image with a transparent background and no scenery.'
 const outputDir = process.argv[5] || '.'
 const diffusionModelSrc =
-  (turbo ? process.env['QWEN_TURBO_MODEL'] : process.argv[6]) ||
+  process.argv[6] ||
   `${HF}/leejet/Qwen-Image-2.1-GGUF/resolve/cc11433936a06e9765f7c0c0b1f0436cfd2b9856/qwen_image_2.1-Q4_K.gguf`
 const llmModelSrc = process.argv[7] || `${encoderRepo}/Qwen3VL-8B-Instruct-Q4_K_M.gguf`
 const vaeModelSrc =
@@ -33,7 +33,7 @@ if (process.argv.includes('--help')) {
   console.log(
     '▸ Defaults download pinned Hugging Face weights. Model overrides accept paths or URLs.'
   )
-  console.log('▸ Turbo: set QWEN_TURBO=1 and QWEN_TURBO_MODEL to your Turbo weights.')
+  console.log('▸ Turbo: set QWEN_TURBO=1 and pass your Turbo weights as the model argument.')
   console.log('▸ The default prompt combines both subjects on a transparent background.')
   process.exit(0)
 }
@@ -44,8 +44,8 @@ if (!referencePathA || !referencePathB) {
   process.exit(1)
 }
 
-if (turbo && !process.env['QWEN_TURBO_MODEL']) {
-  console.error('✖ Set QWEN_TURBO_MODEL to the Turbo diffusion weights, as a path or URL')
+if (turbo && !process.argv[6]) {
+  console.error('✖ Pass the Turbo diffusion weights as the model argument, as a path or URL')
   process.exit(1)
 }
 
@@ -86,7 +86,7 @@ try {
     init_images,
     width: 512,
     height: 512,
-    steps: turbo ? 8 : 30,
+    ...(!turbo && { steps: 30 }),
     cfg_scale: turbo ? 1 : 6,
     ...(turbo && {
       // Official Turbo sample_sigmas plus the native terminal zero.

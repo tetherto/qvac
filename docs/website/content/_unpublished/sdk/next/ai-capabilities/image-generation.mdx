@@ -99,11 +99,11 @@ For Qwen outputs at 2048×2048 or larger, pass `vae_tiling: true` and `vae_tile_
 The following script combines two references into an RGBA image, with optional Qwen-Image-2.1-Turbo sampling. Pass the two reference image paths as the first two arguments and an optional prompt as the third:
 
 ```sh
-QWEN_TURBO=1 QWEN_TURBO_MODEL=/absolute/path/to/qwen-image-2.1-turbo.gguf \
-  node --import tsx examples/diffusion-qwen-image-21.ts reference-a.png reference-b.png
+QWEN_TURBO=1 node --import tsx examples/diffusion-qwen-image-21.ts \
+  reference-a.png reference-b.png "" . /absolute/path/to/qwen-image-2.1-turbo.gguf
 ```
 
-The Python example accepts the same environment variables. `QWEN_TURBO_MODEL` accepts a local path or URL. Leave `QWEN_TURBO` unset to run the base model with 30 steps and CFG 6.
+The Python example uses the same arguments and `QWEN_TURBO` flag. Turbo mode requires the model argument, which accepts a local path or URL. Leave `QWEN_TURBO` unset to run the base model with 30 steps and CFG 6.
 
 <Tabs>
 <Tab value="js" label="JavaScript" default>

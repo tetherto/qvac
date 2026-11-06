@@ -13,7 +13,7 @@ progress, the finished images and the closing stats, which TypeScript receives
 as three separate channels.
 
 The defaults download pinned Hugging Face weights. Model overrides accept local
-paths or URLs. Set QWEN_TURBO=1 and QWEN_TURBO_MODEL to your Turbo weights
+paths or URLs. Set QWEN_TURBO=1 and pass Turbo weights as the model argument
 to use the fixed eight-step schedule with CFG 1.
 Model terms: https://huggingface.co/Qwen/Qwen-Image-2.1/blob/d26bb61231c349cf6b7896fa83353113880e1ba3/LICENSE
 
@@ -84,27 +84,21 @@ async def main() -> int:
             "▸ Defaults download pinned Hugging Face weights. Model overrides accept paths or URLs."
         )
         print(
+            "▸ Turbo: set QWEN_TURBO=1 and pass your Turbo weights as the model argument."
+        )
+        print(
             "▸ The default prompt combines both subjects on a transparent background."
         )
         return 0
 
     turbo = os.environ.get("QWEN_TURBO") == "1"
-    turbo_model = os.environ.get("QWEN_TURBO_MODEL")
-    if turbo and not turbo_model:
-        print(
-            "✖ Set QWEN_TURBO_MODEL to the Turbo weights, as a path or URL",
-            file=sys.stderr,
-        )
-        return 1
-
     reference_path_a = sys.argv[1] if len(sys.argv) > 1 else None
     reference_path_b = sys.argv[2] if len(sys.argv) > 2 else None
     prompt = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else DEFAULT_PROMPT
     output_dir = Path(sys.argv[4]) if len(sys.argv) > 4 else Path(".")
-    diffusion_model_src = sys.argv[5] if len(sys.argv) > 5 else DIFFUSION_MODEL_SRC
-    if turbo:
-        assert turbo_model is not None
-        diffusion_model_src = turbo_model
+    diffusion_model_src = (
+        sys.argv[5] if len(sys.argv) > 5 and sys.argv[5] else DIFFUSION_MODEL_SRC
+    )
     llm_model_src = sys.argv[6] if len(sys.argv) > 6 else LLM_MODEL_SRC
     vae_model_src = sys.argv[7] if len(sys.argv) > 7 else VAE_MODEL_SRC
     projection_model_src = sys.argv[8] if len(sys.argv) > 8 else PROJECTION_MODEL_SRC
@@ -112,6 +106,13 @@ async def main() -> int:
     if not reference_path_a or not reference_path_b:
         print("✖ two reference image paths are required", file=sys.stderr)
         print(USAGE, file=sys.stderr)
+        return 1
+
+    if turbo and (len(sys.argv) <= 5 or not sys.argv[5]):
+        print(
+            "✖ Pass the Turbo diffusion weights as the model argument, as a path or URL",
+            file=sys.stderr,
+        )
         return 1
 
     async with Client() as client:
@@ -150,7 +151,7 @@ async def main() -> int:
                     "init_images": init_images,
                     "width": 512,
                     "height": 512,
-                    "steps": 8 if turbo else 30,
+                    **({} if turbo else {"steps": 30}),
                     "cfg_scale": 1 if turbo else 6,
                     **(
                         {
