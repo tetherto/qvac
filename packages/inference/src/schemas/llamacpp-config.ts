@@ -474,6 +474,55 @@ export type LlmConfig = z.infer<typeof llmConfigSchema>
 
 // Base schema - validates types, all fields optional (for input validation)
 export const embedConfigBaseSchema = z.object({
+  ctxSize: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      'Runtime context size in tokens. Unset uses the model trained context size. Lower it to bound memory for long-context models.'
+    ),
+  projectionModelSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'Projection model for image and audio embeddings, such as EmbeddingGemma 2 mmproj. Omit for text-only use.'
+    ),
+  imageMaxTokens: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      'Maximum image token budget. Unset keeps the projector default. Each input must fit in batchSize.'
+    ),
+  imageMinTokens: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe('Minimum image token budget. Must not exceed imageMaxTokens.'),
+  mmprojNoAudio: z
+    .boolean()
+    .optional()
+    .describe('Skip the audio encoder. Defaults to false. Audio is rejected when enabled.'),
+  mmprojUseGpu: z
+    .boolean()
+    .optional()
+    .describe(
+      'Projector GPU override. Unset follows the addon device policy; ignored when the model runs on CPU.'
+    ),
+  imageMaxMegapixels: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe('Maximum image size before decoding. Defaults to 50 megapixels.'),
+  audioMaxSeconds: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe('Maximum audio duration before decoding. Defaults to 600 seconds.'),
   poll: z
     .number()
     .int()
@@ -570,6 +619,40 @@ export const embedConfigBaseSchema = z.object({
 })
 
 export type EmbedConfigInput = z.infer<typeof embedConfigBaseSchema>
+
+function refineEmbedLoadConfig(config: EmbedConfigInput, ctx: z.RefinementCtx) {
+  if (
+    config.imageMinTokens !== undefined &&
+    config.imageMaxTokens !== undefined &&
+    config.imageMinTokens > config.imageMaxTokens
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['imageMinTokens'],
+      message: 'imageMinTokens must not exceed imageMaxTokens.'
+    })
+  }
+
+  if (config.projectionModelSrc) return
+  for (const key of [
+    'imageMinTokens',
+    'imageMaxTokens',
+    'imageMaxMegapixels',
+    'audioMaxSeconds',
+    'mmprojNoAudio',
+    'mmprojUseGpu'
+  ] as const) {
+    if (config[key] !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [key],
+        message: `${key} requires projectionModelSrc.`
+      })
+    }
+  }
+}
+
+export const embedLoadConfigSchema = embedConfigBaseSchema.superRefine(refineEmbedLoadConfig)
 
 // Default values - typed as partial of the config
 export const EMBED_CONFIG_DEFAULTS = {
