@@ -244,8 +244,17 @@ async function getRPCInstance(): Promise<RPCResult> {
   if (rpcInstance) return { rpc: await rpcInstance }
 
   const connectionStart = firstConnectionPending ? nowMs() : null
-  rpcInstance = getRPC()
-  const rpc = await rpcInstance
+  const connecting = getRPC()
+  rpcInstance = connecting
+  let rpc: RPC
+  try {
+    rpc = await connecting
+  } catch (error) {
+    // Callers that joined this attempt share its rejection; later calls must
+    // start a fresh one. Only drop our own attempt, which close() may have replaced.
+    if (rpcInstance === connecting) rpcInstance = null
+    throw error
+  }
 
   // Drop the cache on worker death so the next call respawns and
   // records connectionMs again as a "first" connection.
