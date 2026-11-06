@@ -48,7 +48,7 @@ test('integration: NVIDIA backend selection', { timeout: 1800000 }, async (t) =>
       noise: new Float32Array(hp.chunkSize * hp.maxActionDim)
     })
     const { actions, stats } = await response.await()
-    t.is(stats.backendName, model.backendName, 'run stats report the selected backend')
+    t.is(stats.backendName, expectedBackend, 'run stats report the selected backend family')
     t.is(actions.length, hp.chunkSize * hp.actionDim, 'action shape matches')
     t.ok(actions.every(Number.isFinite), 'all actions are finite')
   } finally {

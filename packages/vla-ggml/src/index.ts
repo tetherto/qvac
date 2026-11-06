@@ -113,6 +113,13 @@ function pickPrimaryGgufPath(files: string[]): string {
   return files.find((p) => FIRST_SHARD_REGEX.test(p)) || files[0];
 }
 
+function backendFamily(name: string): string {
+  const family = name.toLowerCase().replace(/\d+$/, "");
+  if (family === "mtl") return "metal";
+  if (family === "gpuopencl") return "opencl";
+  return family;
+}
+
 // Largest camera count the native resolver accepts (GROOT_MAX_SANE_NUM_CAMERAS)
 // — validated here too so a typo is a JS config error instead of a native throw.
 const MAX_NUM_CAMERAS = 64;
@@ -617,7 +624,9 @@ class VlaModel {
     if (outputData && typeof outputData === "object") {
       const stats = {
         ...outputData,
-        ...(this._backendName !== null && { backendName: this._backendName }),
+        ...(this._backendName !== null && {
+          backendName: backendFamily(this._backendName),
+        }),
       };
       const actions = this._pending ? this._pending.actions : null;
       this._pending = null;
@@ -1091,7 +1100,7 @@ namespace VlaModel {
     total_ms: number;
     /** 0 = CPU backend, 1 = GPU backend (Vulkan / Metal / OpenCL). */
     backendDevice: number;
-    /** Selected backend name, matching `model.backendName`. Older addons omit it. */
+    /** Backend family, such as `cpu`, `cuda`, `metal`, or `vulkan`. */
     backendName?: string;
   }
 
