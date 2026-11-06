@@ -215,6 +215,14 @@ const DESKTOP_RUNTIMES: Record<BundleTarget, NonNullable<VerifyBundleOptions['de
   'bare-kit': 'bare-kit-kotlin'
 }
 
+/**
+ * The bare-stow this command bundles and links with, whose Bare Kit pins are
+ * the phone runtimes, even when the project installs another SDK.
+ */
+function bundlerBareStowDir(): string {
+  return path.dirname(createRequire(import.meta.url).resolve('bare-stow/package'))
+}
+
 async function verifyOutput(options: VerifyOutputOptions): Promise<VerifyBundleResult> {
   const { projectRoot, bundlePath, hosts, target, network, logger } = options
 
@@ -223,6 +231,7 @@ async function verifyOutput(options: VerifyOutputOptions): Promise<VerifyBundleR
     projectRoot,
     addonsSource: bundlePath,
     hosts,
+    bareStowDir: bundlerBareStowDir(),
     desktopRuntime: DESKTOP_RUNTIMES[target],
     ...(network !== undefined ? { network } : {}),
     onProgress: (message) => logger.info(`   ${message}`)
