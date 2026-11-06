@@ -12,6 +12,7 @@
 #include <llama.h>
 
 #include "ModelBackendName.hpp"
+#include "model-interface/BackendSelection.hpp"
 
 #if __has_include(<llama-ext.h>)
 #include <llama-ext.h>
@@ -35,18 +36,20 @@ llama_get_memory_breakdown(const struct llama_context* ctx);
 
 namespace qvac_lib_inference_addon_embed::backend_reporting {
 
-inline std::string runtimeDeviceBackendName(ggml_backend_dev_t device) {
+inline std::string runtimeDeviceBackendName(
+    ggml_backend_dev_t device,
+    const backend_selection::BackendInterface& bckI) {
   if (device == nullptr) {
     return {};
   }
-  if (auto registry = ggml_backend_dev_backend_reg(device)) {
-    const char* name = ggml_backend_reg_name(registry);
+  if (auto registry = bckI.ggml_backend_dev_backend_reg(device)) {
+    const char* name = bckI.ggml_backend_reg_name(registry);
     return canonicalBackendFamily(name != nullptr ? name : "");
   }
 
   // Tensor split uses an unregistered Meta(device,device,...) device.
   // Match its members against the registry instead of guessing from ordinals.
-  const char* rawName = ggml_backend_dev_name(device);
+  const char* rawName = bckI.ggml_backend_dev_name(device);
   const std::string name = rawName != nullptr ? rawName : "";
   constexpr std::string_view kMetaPrefix = "Meta(";
   if (!name.starts_with(kMetaPrefix) || !name.ends_with(")")) {
@@ -61,12 +64,12 @@ inline std::string runtimeDeviceBackendName(ggml_backend_dev_t device) {
     }
     const std::string member = name.substr(offset, end - offset);
     std::string family;
-    for (size_t index = 0; index < ggml_backend_dev_count(); ++index) {
-      auto candidate = ggml_backend_dev_get(index);
-      const char* candidateName = ggml_backend_dev_name(candidate);
+    for (size_t index = 0; index < bckI.ggml_backend_dev_count(); ++index) {
+      auto candidate = bckI.ggml_backend_dev_get(index);
+      const char* candidateName = bckI.ggml_backend_dev_name(candidate);
       if (candidateName != nullptr && member == candidateName &&
           candidate != device) {
-        family = runtimeDeviceBackendName(candidate);
+        family = runtimeDeviceBackendName(candidate, bckI);
         break;
       }
     }
@@ -77,6 +80,16 @@ inline std::string runtimeDeviceBackendName(ggml_backend_dev_t device) {
     offset = end + 1;
   }
   return modelBackendName(members);
+}
+
+inline std::string runtimeDeviceBackendName(ggml_backend_dev_t device) {
+  const backend_selection::BackendInterface bckI{
+      .ggml_backend_dev_count = ::ggml_backend_dev_count,
+      .ggml_backend_dev_backend_reg = ::ggml_backend_dev_backend_reg,
+      .ggml_backend_dev_get = ::ggml_backend_dev_get,
+      .ggml_backend_reg_name = ::ggml_backend_reg_name,
+      .ggml_backend_dev_name = ::ggml_backend_dev_name};
+  return runtimeDeviceBackendName(device, bckI);
 }
 
 inline std::string runtimeModelBackendName(const llama_context* context) {
