@@ -80,10 +80,13 @@ inline std::filesystem::path defaultBackendsDir() {
   return dir;
 }
 
-// A configured directory is used as given; otherwise the module's own.
+// A configured directory is used as given; otherwise the module's own. The
+// configured string comes from JS as UTF-8; a plain std::string path is read
+// in the ANSI code page on Windows.
 inline std::filesystem::path resolveBackendsDir(const std::string& configured) {
   if (!configured.empty())
-    return std::filesystem::path(configured);
+    return std::filesystem::path(
+        std::u8string(configured.begin(), configured.end()));
   return defaultBackendsDir();
 }
 

@@ -25,17 +25,17 @@ The backmerge PR carries the version bump + changelog metadata from the release 
 read `release-train-<train>-<x.y.z>` wherever this skill says
 `release-<pkg>-<x.y.z>`, so the head is `backmerge/release-train-<train>-<x.y.z>`
 and the title names `release-train-<train>-<x.y.z>`. `pr-checks-sdk-pod.yml`
-recognises that head name and checks the backmerge against the train's
-tarballs, because npm does not have the new versions until the train publishes.
+recognises that head name and checks the published train: the commit npm
+records for it, with every package from npm. The checks pass only after the
+push run publishes.
 The source carries several manifests, changelogs and `pnpm-lock.yaml`; that is
 release metadata for the sanity check in "Resolve the cherry-pick source".
 Never carry a `.nx/version-plans/` file to `main`: if the cherry-pick brings
 one, `git rm` it before committing, or the next train applies it again. A train
-with `fromNpm` packages also changes `pnpm-workspace.yaml` on its release
+also takes the packages outside it out of `pnpm-workspace.yaml` on its release
 branch: keep `main`'s copy (`git checkout ORG_REMOTE/main --
 pnpm-workspace.yaml`) and regenerate `pnpm-lock.yaml` as the `pnpm-lock.yaml`
-rule in "Conflict triage" describes. Its backmerge checks install the train
-from npm, so they pass only after the push run publishes.
+rule in "Conflict triage" describes.
 `docs/ci/RELEASE-TRAIN.md` ("Making a release") says when to merge it.
 
 ## Inputs (resolve in priority order)

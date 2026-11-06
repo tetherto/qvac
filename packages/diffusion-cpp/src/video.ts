@@ -27,6 +27,7 @@ export interface VideoDiffusionFiles {
   t5Xxl?: string
   llm?: string
   llmVision?: string
+  tokenizer?: string
   vae?: string
   clipVision?: string
   audioVae?: string
@@ -85,6 +86,7 @@ export interface VideoGenerationBaseParams {
   /** LTX IC-LoRA reference-image spatial factor. Currently only exactly 1 is supported. */
   reference_downscale_factor?: number
   vae_tiling?: boolean
+  /** Positive spatial tile dimensions in latent pixels; omit to use the engine default. */
   vae_tile_size?: number | string
   vae_tile_overlap?: number
   temporal_tiling?: boolean
@@ -139,7 +141,8 @@ const COMPANION_FILE_KEYS = [
   'esrgan',
   'llm',
   'audioVae',
-  'embeddingsConnectors'
+  'embeddingsConnectors',
+  'tokenizer'
 ] as const
 
 const VIDEO_MODES = new Set<VideoMode>(['txt2vid', 'img2vid'])
@@ -303,6 +306,7 @@ export default class VideoStableDiffusion {
       t5XxlPath: this._files.t5Xxl || '',
       llmPath: this._files.llm || '',
       llmVisionPath: this._files.llmVision || '',
+      tokenizerPath: this._files.tokenizer || '',
       vaePath: this._files.vae || '',
       clipVisionPath: this._files.clipVision || '',
       esrganPath: this._files.esrgan || '',

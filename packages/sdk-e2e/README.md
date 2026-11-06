@@ -55,6 +55,8 @@ keeps an embedded broker alive while tests are running. Bring your own broker if
 `--include` takes exact testIds and adds them on top, so it is how you run a suite plus a
 specific test. An id it cannot find fails the run rather than being skipped. It needs
 `@qvac/test-suite` 0.11.2 or newer.
+`--include-file <path>` takes the same testIds from a file, one per line, for a list too long
+for the command line.
 Mobile and Electron add `--skip-build` (see below). Run `npx qvac-test run:local:<platform> --help` for the
 full list.
 
@@ -165,8 +167,8 @@ the worker during long-running operations, and
 no-lingering Bare tests intentionally spawn and terminate standalone Bare workers that conflict with Electron's
 packaged worker lock.
 
-`classification-` runs in Electron through the shared Node executor and bundled `@qvac/classification-ggml`
-weights; no registry model pre-download is required.
+`classification-` runs in Electron through the shared Node executor with the `MOBILENETV3_3CLASS_V3_FP16`
+registry model, pre-downloaded like the other models.
 
 ### Strict Snap e2e
 

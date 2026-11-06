@@ -785,8 +785,9 @@
     "link": "https://huggingface.co/ggml-org/embeddinggemma-2-GGUF"
   },
   {
-    "source": "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300m-Q4_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/embeddinggemma-300m/2026-11-05/embeddinggemma-300M-Q4_0.gguf",
     "engine": "@qvac/embed-llamacpp",
+    "link": "https://huggingface.co/google/embeddinggemma-300m",
     "description": "Google multilingual embedding model, 768-dim output, 2048 token context",
     "quantization": "q4_0",
     "params": "300M",
@@ -795,8 +796,9 @@
     "notes": ""
   },
   {
-    "source": "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300M-Q8_0.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/embeddinggemma-300m/2026-11-05/embeddinggemma-300M-Q8_0.gguf",
     "engine": "@qvac/embed-llamacpp",
+    "link": "https://huggingface.co/google/embeddinggemma-300m",
     "description": "Google multilingual embedding model, 768-dim output, 2048 token context",
     "quantization": "q8_0",
     "params": "300M",
@@ -805,20 +807,11 @@
     "notes": ""
   },
   {
-    "source": "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300M-BF16.gguf",
+    "source": "s3:///qvac_models_compiled/ggml/embeddinggemma-300m/2026-11-05/embeddinggemma-300M-BF16.gguf",
     "engine": "@qvac/embed-llamacpp",
-    "description": "",
+    "link": "https://huggingface.co/google/embeddinggemma-300m",
+    "description": "Google multilingual embedding model, 768-dim output, 2048 token context",
     "quantization": "BF16",
-    "params": "300M",
-    "licenseId": "gemma",
-    "tags": ["embedding", "embed", "embeddinggemma"],
-    "notes": ""
-  },
-  {
-    "source": "https://huggingface.co/unsloth/embeddinggemma-300m-GGUF/resolve/6661a6504c30d8304af13455cb4a5d4f5bc6011f/embeddinggemma-300M-F32.gguf",
-    "engine": "@qvac/embed-llamacpp",
-    "description": "",
-    "quantization": "F32",
     "params": "300M",
     "licenseId": "gemma",
     "tags": ["embedding", "embed", "embeddinggemma"],
@@ -10253,5 +10246,27 @@
     "tags": ["classification", "mobilenetv3"],
     "notes": "",
     "link": "https://github.com/tetherto/qvac/tree/main/packages/classification-ggml"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-f16.gguf",
+    "engine": "ggml-image-embedding",
+    "description": "MegaLoc image embeddings, F16 weights, 8448-dimensional L2-normalized visual place descriptors",
+    "quantization": "f16",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["image-embedding", "visual-place-recognition", "megaloc"],
+    "notes": "Converted from the supported MegaLoc checkpoint. JPEG/PNG and packed RGB input. Requires the ggml-image-embedding plugin.",
+    "link": "https://huggingface.co/gberton/MegaLoc"
+  },
+  {
+    "source": "s3:///qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-mixed.gguf",
+    "engine": "ggml-image-embedding",
+    "description": "MegaLoc image embeddings, F16 body with a Q6_K final projection, 8448-dimensional L2-normalized visual place descriptors",
+    "quantization": "f16-q6_k",
+    "params": "",
+    "licenseId": "MIT",
+    "tags": ["image-embedding", "visual-place-recognition", "megaloc"],
+    "notes": "Converted from the supported MegaLoc checkpoint. JPEG/PNG and packed RGB input. Requires the ggml-image-embedding plugin.",
+    "link": "https://huggingface.co/gberton/MegaLoc"
   }
 ]
