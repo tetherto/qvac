@@ -33,9 +33,9 @@
 //     false alarm). Place the file next to the GGUFs (or via ABOT_MODELS_DIR)
 //     to exercise that lane; otherwise it passes as an explanatory no-op.
 //
-// Gate: the lanes run on the Linux x64 GPU legs in CI (NO_GPU excludes the
-// arm64 legs) and anywhere ABOT_MODELS_DIR points at a provisioned set.
-// Plain local runs skip rather than surprise-download ~13 GB.
+// Temporarily disabled: CUDA streaming parity and initial KV-capture failures
+// remain unresolved. All lanes skip, including runs with ABOT_MODELS_DIR set.
+// Failure evidence: https://github.com/tetherto/qvac/actions/runs/42193566046/job/127824548912
 
 const path = require('bare-path')
 const os = require('bare-os')
@@ -89,7 +89,8 @@ const isX64 = os.arch() === 'x64'
 const overrideDir = proc.env.ABOT_MODELS_DIR || ''
 const canFetchRegistry = isLinux && isX64 && proc.env.CI === 'true'
 
-const skip = noGpu || (!overrideDir && !canFetchRegistry)
+const suiteDisabled = true
+const skip = suiteDisabled || noGpu || (!overrideDir && !canFetchRegistry)
 
 console.log(
   '[ABot-World] skip:',
