@@ -310,7 +310,7 @@ jobs:
       - if: env.PLATFORM == 'iOS'
         uses: tetherto/qvac-actions/setup-xcode@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
-          xcode-versions: "16.1 16.2"
+          xcode-versions: "26.3"
           brew-packages: ninja
           gems: cocoapods
           require-tools: xcodebuild pod ninja

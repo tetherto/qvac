@@ -279,8 +279,8 @@ jobs:
       - if: inputs.platform == 'iOS'
         uses: tetherto/qvac-actions/setup-xcode@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
-          # The first one the image has: 16.x on macos-15, 26.3 on the SDK's macos-26, as main's test-ios-sdk.yml.
-          xcode-versions: "16.1 16.2 26.3"
+          # As main's #5607: ibtool needs the iOS runtime matching the SDK, and macos-15 ships only iOS 18.5+ runtimes.
+          xcode-versions: "26.3"
           brew-packages: ninja
           gems: cocoapods
           require-tools: xcodebuild pod ninja
