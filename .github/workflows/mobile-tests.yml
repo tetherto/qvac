@@ -173,7 +173,7 @@ jobs:
     with:
       rows: ${{ toJSON(fromJSON(needs.weekly-select-android.outputs.matrices)['test:mobile']) }}
       platform: Android
-      devices: Google Pixel 9
+      devices: Google Pixel 9 Pro, Samsung Galaxy S25 Ultra, Samsung Galaxy S26 Ultra
       weekly: true
 
   weekly-ios:
@@ -189,7 +189,7 @@ jobs:
     with:
       rows: ${{ toJSON(fromJSON(needs.weekly-select-ios.outputs.matrices)['test:mobile']) }}
       platform: iOS
-      devices: Apple iPhone 16 Pro
+      devices: Apple iPhone 16, Apple iPhone 17
       weekly: true
 
   # One weekly-mobile-report issue per package that ran, from each platform's test-case-details.json.
