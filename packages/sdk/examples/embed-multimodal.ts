@@ -1,4 +1,6 @@
 // Embed text, an image, and audio with EmbeddingGemma 2 in one shared vector space.
+// Usage: npx tsx embed-multimodal.ts [image.jpg] [audio.wav]
+// Defaults use image/test.jpg and audio/sample-16khz.wav from the source repository.
 import {
   close,
   embed,
@@ -8,6 +10,7 @@ import {
   unloadModel
 } from '@qvac/sdk'
 import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 // EmbeddingGemma 2 normalizes its embeddings, so their dot product is cosine similarity.
 function cosineSimilarity(vecA: number[], vecB: number[]) {
@@ -20,10 +23,10 @@ function cosineSimilarity(vecA: number[], vecB: number[]) {
 
 let modelId: string | undefined
 try {
-  const [imagePath, audioPath] = process.argv.slice(2)
-  if (!imagePath || !audioPath) {
-    throw new Error('Usage: npx tsx embed-multimodal.ts image.jpg audio.wav')
-  }
+  const [
+    imagePath = fileURLToPath(new URL('./image/test.jpg', import.meta.url)),
+    audioPath = fileURLToPath(new URL('./audio/sample-16khz.wav', import.meta.url))
+  ] = process.argv.slice(2)
   console.error('▸ Loading EmbeddingGemma 2 and its projector')
   modelId = await loadModel({
     modelType: 'llamacpp-embedding',
@@ -43,7 +46,7 @@ try {
   const { embedding, stats } = await embed({
     modelId,
     inputs: [
-      'task: search result | query: waterproof trail running shoes',
+      'task: search result | query: a newspaper report about the Titanic',
       ['title: none | text: ', { media: { type: 'filePath', value: resolve(imagePath) } }],
       [{ media: { type: 'filePath', value: resolve(audioPath) } }]
     ]
