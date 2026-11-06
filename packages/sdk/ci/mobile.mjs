@@ -77,9 +77,13 @@ function buildKotlin(env) {
   const pack = (cwd) =>
     run('npm', ['pack', '--ignore-scripts', '--silent'], { cwd, env, capture: true }).trim()
   const sdkTgz = pack(SDK)
-  const infTgz = pack(join(ROOT, 'packages/inference'))
+  // A dispatch's inference version installs that published @qvac/inference instead of this commit's.
+  const { inference } = runOptions(env.CI_SUITE)
+  const infSpec = inference
+    ? `npm:@qvac/inference@${inference}`
+    : `file:../inference/${pack(join(ROOT, 'packages/inference'))}`
   const kotlin = join(ROOT, 'packages/sdk-kotlin')
-  run('npm', ['pkg', 'set', `overrides.@qvac/inference=file:../inference/${infTgz}`], {
+  run('npm', ['pkg', 'set', `overrides.@qvac/inference=${infSpec}`], {
     cwd: kotlin,
     env
   })

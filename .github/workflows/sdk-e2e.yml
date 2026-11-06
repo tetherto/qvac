@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       packages:
-        description: Comma-separated SDK pod packages or directories; empty selects by change
+        description: Comma-separated SDK pod packages or directories; empty runs @qvac/sdk only, name sdk-python or sdk-kotlin to add them
         type: string
         default: ""
       labels:
@@ -206,6 +206,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           MATRICES: ${{ needs.select.outputs.matrices }}
+          PACKAGES: ${{ inputs.packages }}
           PLATFORM: ${{ inputs.platform }}
           SUITE: ${{ inputs.suite }}
           FILTER: ${{ inputs.filter }}

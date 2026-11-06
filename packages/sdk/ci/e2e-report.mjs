@@ -337,7 +337,9 @@ export async function plan(env) {
   if (!pr) {
     // A dispatch runs what its inputs select, Device Farm only on the platform it names, as main's test-sdk.yml.
     const configs = { Android: ['android-arm64'], iOS: ['ios-arm64'], both: ['android-arm64', 'ios-arm64'] }
-    const devices = mobile.filter((r) => (configs[env.PLATFORM] ?? []).includes(r.config))
+    // Empty packages runs the SDK alone; sdk-python and sdk-kotlin are opt-in, as on main.
+    const named = (r) => env.PACKAGES || r.project === SDK
+    const devices = mobile.filter((r) => named(r) && (configs[env.PLATFORM] ?? []).includes(r.config))
     const suite = env.SUITE === 'smoke' ? 'smoke' : ''
     const options = {
       exclude: list('exclude-suite', env.EXCLUDE_SUITE),
@@ -345,16 +347,14 @@ export async function plan(env) {
       inference: list('inference-version', env.INFERENCE_VERSION)
     }
     const tests = list('filter', env.FILTER)
-    // The dispatch's suite and options are the SDK's; sdk-python and sdk-kotlin keep the suite their label gives them.
-    const rows = (rs) =>
-      rs.map((r) =>
-        r.project === '@qvac/sdk' ? { ...r, suite: encodeOptions(suite, options), tests } : r
-      )
+    // The dispatch's suite and options go to every Device Farm row and the SDK's desktop rows; sdk-python and
+    // sdk-kotlin's conformance keep the suite their label gives them.
+    const withOptions = (r) => ({ ...r, suite: encodeOptions(suite, options), tests })
     return output(env, {
       mode: 'dispatch',
       suite,
-      desktop: rows(labelled),
-      mobile: rows(devices),
+      desktop: labelled.filter(named).map((r) => (r.project === SDK ? withOptions(r) : r)),
+      mobile: devices.map(withOptions),
       report: [],
       comments: {}
     })
