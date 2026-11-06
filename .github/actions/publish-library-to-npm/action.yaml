@@ -31,7 +31,8 @@ runs:
   steps:
     - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
       with:
-        node-version: "24.14.1" # installs npm version 11.11.0
+        node-version: lts/*
+        check-latest: true
         registry-url: https://registry.npmjs.org/
         scope: "@qvac"
 
