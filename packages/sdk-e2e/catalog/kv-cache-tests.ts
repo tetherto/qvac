@@ -241,6 +241,7 @@ export const kvCacheSessionSwitch: TestDefinition = {
   expectation: { validation: 'type', expectedType: 'string' },
   steps: [
     { useModel: { deps: ['llm'], as: 'model' } },
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.sourceKey' } } },
     {
       repeat: {
         over: '$params.sessions',
@@ -805,6 +806,7 @@ export const kvCacheSharedPrefixDefaultIsolated: TestDefinition = {
       }
     }
   ],
+  finally: [{ call: { method: 'deleteCache', params: { kvCacheKey: '$params.sourceKey' } } }],
   metadata: { category: 'kv-cache', dependency: 'llm', estimatedDurationMs: 10000 }
 }
 
@@ -825,6 +827,7 @@ export const kvCacheSharedPrefixOptIn: TestDefinition = {
   expectation: { validation: 'type', expectedType: 'string' },
   steps: [
     { useModel: { deps: ['llm-shared-cache'], as: 'model' } },
+    { call: { method: 'deleteCache', params: { kvCacheKey: '$params.sourceKey' } } },
     {
       call: {
         method: 'completion',
@@ -860,6 +863,7 @@ export const kvCacheSharedPrefixOptIn: TestDefinition = {
       }
     }
   ],
+  finally: [{ call: { method: 'deleteCache', params: { kvCacheKey: '$params.sourceKey' } } }],
   metadata: {
     category: 'kv-cache',
     dependency: 'llm-shared-cache',
