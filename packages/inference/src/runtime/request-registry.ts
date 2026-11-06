@@ -650,38 +650,56 @@ export function createRequestRegistry(options?: {
       )
     }
 
+    // A parent abort while queued must not leave this begin behind a busy lane
+    // until the lane frees: pull it out the way a cancel by id would, so it
+    // resumes at once into an aborted context. A parent abort after the grant
+    // is seen when the context is created.
+    const parent = opts.parentSignal
+    const onParentAbortWhileQueued = () => {
+      const queued = waitersById.get(registryKey)
+      if (!queued) return
+      const reason = typeof parent?.reason === 'string' ? parent.reason : undefined
+      cancelQueuedWaiterGracefully(queued.key, queued.waiter, reason)
+    }
+    parent?.addEventListener('abort', onParentAbortWhileQueued, { once: true })
+
     const queue = st
-    const granted = await new Promise<boolean>((resolve, reject) => {
-      const waiter: SlotWaiter = {
-        requestId: opts.requestId,
-        sessionId,
-        key: registryKey,
-        kind: opts.kind,
-        modelId,
-        enqueuedAt: Date.now(),
-        resolve,
-        reject,
-        timer: undefined,
-        exclusive,
-        cap: maxConcurrent
-      }
-      if (policy.queueTimeoutMs !== undefined) {
-        const timeoutMs = policy.queueTimeoutMs
-        waiter.timer = setTimeout(() => {
-          removeWaiter(key, waiter)
-          reject(
-            new RequestRejectedByPolicyError(
-              opts.requestId,
-              opts.kind,
-              modelId,
-              `timed out waiting ${timeoutMs}ms for a slot on this model`
+    let granted: boolean
+    try {
+      granted = await new Promise<boolean>((resolve, reject) => {
+        const waiter: SlotWaiter = {
+          requestId: opts.requestId,
+          sessionId,
+          key: registryKey,
+          kind: opts.kind,
+          modelId,
+          enqueuedAt: Date.now(),
+          resolve,
+          reject,
+          timer: undefined,
+          exclusive,
+          cap: maxConcurrent
+        }
+        if (policy.queueTimeoutMs !== undefined) {
+          const timeoutMs = policy.queueTimeoutMs
+          waiter.timer = setTimeout(() => {
+            removeWaiter(key, waiter)
+            reject(
+              new RequestRejectedByPolicyError(
+                opts.requestId,
+                opts.kind,
+                modelId,
+                `timed out waiting ${timeoutMs}ms for a slot on this model`
+              )
             )
-          )
-        }, timeoutMs)
-      }
-      queue.waiters.push(waiter)
-      waitersById.set(registryKey, { key, waiter })
-    })
+          }, timeoutMs)
+        }
+        queue.waiters.push(waiter)
+        waitersById.set(registryKey, { key, waiter })
+      })
+    } finally {
+      parent?.removeEventListener('abort', onParentAbortWhileQueued)
+    }
 
     return granted ? { slotKey: key, exclusive } : { slotKey: undefined, exclusive: false }
   }

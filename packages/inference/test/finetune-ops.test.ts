@@ -2,6 +2,7 @@ import fs from 'bare-fs'
 import os from 'bare-os'
 import path from 'bare-path'
 import test from 'brittle'
+import { AbortController } from 'bare-abort-controller'
 import {
   clearRegistry,
   registerModel,
@@ -940,6 +941,28 @@ test('cancelFinetune: another session cannot cancel a session finetune, the owne
 
     const owner = await cancelFinetune(modelId)
     t.is(owner.status, 'CANCELLED', 'the owner may cancel any session finetune')
+    t.is((await running).status, 'CANCELLED')
+    t.is(calls.cancel, 1)
+  } finally {
+    unregisterModel(modelId)
+    clearRegistry()
+  }
+})
+
+test('cancelFinetune: an owner invoke keeps the owner as the job session whatever the params name', async (t) => {
+  clearRegistry()
+  const modelId = 'finetune-owner-invoke-session'
+  const calls = registerStoppableModel(modelId)
+
+  try {
+    const running = finetuneOp(
+      { type: 'finetune', modelId, operation: 'start', options: stopOptions, sessionId: 'X' },
+      undefined,
+      { signal: new AbortController().signal, requestId: 'invoke-1', sessionId: undefined }
+    )
+    await new Promise<void>((resolve) => setTimeout(resolve, 20))
+
+    t.is((await cancelFinetune(modelId)).status, 'CANCELLED', 'the owner stops its own job')
     t.is((await running).status, 'CANCELLED')
     t.is(calls.cancel, 1)
   } finally {

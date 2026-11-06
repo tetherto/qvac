@@ -4,6 +4,7 @@ import { z } from 'zod'
 
 import { InferenceCancelledError, ModelLeasedError } from '@/errors/index'
 import { handleLoadModel } from '@/handlers/load-model/handler'
+import { getRequestRegistry } from '@/runtime/index'
 import { loadModel, withModelWorkLock } from '@/plugins/ops/load-model'
 import { registerPlugin, unregisterPlugin } from '@/plugins/registry'
 import {
@@ -127,6 +128,105 @@ test('shared load: a cancel that lands while waiting takes no lease', async (t) 
   await first
   await t.exception(second, InferenceCancelledError as unknown as new () => Error)
   t.alike(Array.from(getModelEntry(modelId)!.leases), ['A'])
+  unregisterModel(modelId)
+})
+
+test('shared load: a cancelled waiter leaves the lock before the other load finishes', async (t) => {
+  const loads = registerCountingPlugin(t)
+  const modelId = 'shared-load-cancel-leaves'
+  const controller = new AbortController()
+
+  const first = load(modelId, 'A')
+  const second = load(modelId, 'B', controller.signal)
+  await new Promise<void>((resolve) => setTimeout(resolve, 5))
+  controller.abort(undefined)
+  await t.exception(
+    second,
+    InferenceCancelledError as unknown as new () => Error,
+    'the waiter rejects while the first load is still running'
+  )
+  t.is(loads.length, 1)
+  loads[0]!.resolve()
+  await first
+  t.alike(Array.from(getModelEntry(modelId)!.leases), ['A'], 'the first load was not touched')
+  unregisterModel(modelId)
+})
+
+test('shared load: a session close waits for its running reload', async (t) => {
+  registerCountingPlugin(t)
+  const modelId = 'b2c3d4e5f6071829'
+  const reload = deferred()
+  registerModel(
+    modelId,
+    {
+      model: {
+        load: async () => {},
+        unload: () => {},
+        pause: () => {},
+        run: async () => ({
+          iterate: async function* () {},
+          await: async () => undefined,
+          cancel: async () => {}
+        }),
+        reload: () => reload.promise
+      } as AnyModel,
+      path: '/models/shared.bin',
+      config: {},
+      modelType: ModelType.whispercppTranscription
+    },
+    'A'
+  )
+  const registry = getRequestRegistry()
+
+  const reloading = handleLoadModel({
+    type: 'loadModel',
+    modelId,
+    modelType: ModelType.whispercppTranscription,
+    modelConfig: { language: 'en' },
+    requestId: 'reload-a',
+    sessionId: 'A'
+  })
+  await new Promise<void>((resolve) => setTimeout(resolve, 5))
+  t.ok(registry.get('reload-a', 'A'), 'the reload is a registered request of the session')
+
+  let drained = false
+  const drain = registry.drainSession('A', 'sessionClosed').then((count) => {
+    drained = true
+    return count
+  })
+  await new Promise<void>((resolve) => setTimeout(resolve, 5))
+  t.is(drained, false, 'the drain waits while the native reload runs')
+
+  reload.resolve()
+  t.is((await reloading).success, true)
+  t.is(await drain, 1)
+  unregisterModel(modelId)
+})
+
+test('shared load: a reload waiting for the lock is cancelled by id without running', async (t) => {
+  const loads = registerCountingPlugin(t)
+  const modelId = 'c3d4e5f607182930'
+  const registry = getRequestRegistry()
+
+  const loading = load(modelId, 'A')
+  await new Promise<void>((resolve) => setTimeout(resolve, 5))
+  t.is(loads.length, 1)
+
+  const reloading = handleLoadModel({
+    type: 'loadModel',
+    modelId,
+    modelType: ModelType.whispercppTranscription,
+    modelConfig: { language: 'en' },
+    requestId: 'reload-b',
+    sessionId: 'B'
+  })
+  await new Promise<void>((resolve) => setTimeout(resolve, 5))
+  t.is(registry.cancel({ requestId: 'reload-b', sessionId: 'B' }), 1)
+  await t.exception(reloading, InferenceCancelledError as unknown as new () => Error)
+  t.absent(isModelLoaded(modelId), 'nothing was reconfigured: the model is not even loaded yet')
+
+  loads[0]!.resolve()
+  await loading
   unregisterModel(modelId)
 })
 

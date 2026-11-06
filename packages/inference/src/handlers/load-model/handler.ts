@@ -256,15 +256,31 @@ export async function handleLoadModel(
 }
 
 async function handleConfigReload(request: ReloadConfigRequest): Promise<LoadModelResponse> {
+  // Registered like a load, so a cancel by id reaches a reload still waiting
+  // for the lock, and a session close waits for a running reload before it
+  // releases the session's leases.
+  const requestId = request.requestId ?? generateRandomRequestId()
+  await using ctx = await getRequestRegistry().begin({
+    requestId,
+    sessionId: resolveSessionId(request),
+    kind: 'loadModel'
+  })
   try {
     // Under the same lock as a load of this id: a session loading the same
     // configuration waits until the reload is done instead of taking a lease
     // on a model whose configuration is changing.
-    return await withModelWorkLock(request.modelId, () => reloadConfig(request))
+    return await withModelWorkLock(
+      request.modelId,
+      () => {
+        if (ctx.signal.aborted) throw new InferenceCancelledError(requestId)
+        return reloadConfig(request)
+      },
+      { signal: ctx.signal, requestId }
+    )
   } catch (error) {
-    // A refused reload is a typed error the client reacts to, not a
-    // generic `success: false` envelope.
-    if (error instanceof ModelLeasedError) throw error
+    // A refused reload and a cancel are typed errors the client reacts to,
+    // not a generic `success: false` envelope.
+    if (error instanceof ModelLeasedError || error instanceof InferenceCancelledError) throw error
     logger.error('Error reloading config:', error)
     return {
       type: 'loadModel',

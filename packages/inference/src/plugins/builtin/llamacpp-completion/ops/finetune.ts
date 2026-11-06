@@ -185,7 +185,10 @@ export async function startFinetune(
   // observes RUNNING, not IDLE, and a concurrent start is rejected above. Released
   // on a failed begin() or on scope unwind below.
   registerRunningFinetune(request.modelId)
-  const tracked = { requestId, sessionId: context?.sessionId ?? request.sessionId }
+  // Under an invoke the job runs as the invoke's session, the owner included,
+  // so the stop paths compare against that session and not one named inside
+  // the params.
+  const tracked = { requestId, sessionId: context ? context.sessionId : request.sessionId }
   finetuneRequestIds.set(request.modelId, tracked)
 
   // Scope the run into the registry so cancel({ requestId }) and

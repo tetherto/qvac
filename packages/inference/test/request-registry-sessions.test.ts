@@ -1,6 +1,7 @@
 import test from 'brittle'
 import { createRequestRegistry } from '@/runtime/request-registry'
-import { OWNER_SESSION_ID } from '@/runtime/session-id'
+import { OWNER_SESSION_ID, requestRegistryKey } from '@/runtime/session-id'
+import { AbortController } from 'bare-abort-controller'
 import { RequestIdConflictError } from '@/errors'
 
 // The registry keys requests by (sessionId, requestId). These tests pin what
@@ -213,6 +214,43 @@ test('sessions: drainSession waits for a queued begin of the session to land and
   t.is(holder.signal.aborted, true)
   await using b = await queuedB
   t.is(b.signal.aborted, false, "B's waiter is admitted once the lane frees")
+})
+
+test('sessions: no pair of ids shares a registry key', async (t) => {
+  t.not(
+    requestRegistryKey('a', 'b\u0000c'),
+    requestRegistryKey('a\u0000b', 'c'),
+    'a separator inside an id does not move the boundary'
+  )
+  t.not(requestRegistryKey('a:b', 'c'), requestRegistryKey('a', 'b:c'))
+  t.not(requestRegistryKey('1:a', 'b'), requestRegistryKey('a', '1:b'))
+  const r = createRequestRegistry()
+  await using a = await r.begin({ requestId: 'b\u0000c', sessionId: 'a', kind: 'embeddings' })
+  await using b = await r.begin({ requestId: 'c', sessionId: 'a\u0000b', kind: 'embeddings' })
+  t.is(r.cancel({ requestId: 'c', sessionId: 'a\u0000b' }), 1)
+  t.is(b.signal.aborted, true)
+  t.is(a.signal.aborted, false, "the other session's request is untouched")
+})
+
+test('sessions: a parent abort pulls a queued child out of admission', async (t) => {
+  const r = createRequestRegistry()
+  r.policy({ kind: 'completion', maxConcurrentPerModel: 1, onOverflow: 'queue' })
+  await using holder = await r.begin({ requestId: 'h', kind: 'completion', modelId: 'm' })
+  const parent = new AbortController()
+  const child = r.begin({
+    requestId: 'child',
+    sessionId: 'A',
+    kind: 'completion',
+    modelId: 'm',
+    parentSignal: parent.signal
+  })
+  await new Promise<void>((resolve) => setTimeout(resolve, 5))
+
+  parent.abort('invokeCancelled')
+  await using ctx = await child
+  t.is(ctx.signal.aborted, true, 'the child lands aborted while the holder still runs')
+  t.is(holder.signal.aborted, false)
+  t.is(holder.state, 'running')
 })
 
 test('sessions: end() resolves the id within the given session', async (t) => {

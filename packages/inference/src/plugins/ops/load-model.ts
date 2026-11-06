@@ -63,12 +63,19 @@ const modelWorkInFlight = new Map<string, Promise<unknown>>()
  * Runs `task` as the only load or reload of `modelId`. A caller that arrives
  * while one is running waits for it to settle before running its own task,
  * so it sees the model registered (and takes a lease) or finds it absent
- * (and loads it itself after a failed load).
+ * (and loads it itself after a failed load). A caller whose request is
+ * cancelled while it waits leaves the queue at once with
+ * `InferenceCancelledError`; the load it waited for is not touched.
  */
-export async function withModelWorkLock<T>(modelId: string, task: () => Promise<T>): Promise<T> {
+export async function withModelWorkLock<T>(
+  modelId: string,
+  task: () => Promise<T>,
+  request?: { signal: AbortSignal; requestId: string }
+): Promise<T> {
   let pending = modelWorkInFlight.get(modelId)
   while (pending !== undefined) {
-    await pending
+    await (request ? untilSettledOrAborted(pending, request.signal) : pending)
+    if (request?.signal.aborted === true) throw new InferenceCancelledError(request.requestId)
     pending = modelWorkInFlight.get(modelId)
   }
   const run = task()
@@ -86,12 +93,30 @@ export async function withModelWorkLock<T>(modelId: string, task: () => Promise<
   }
 }
 
+function untilSettledOrAborted(pending: Promise<unknown>, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve()
+  return new Promise<void>((resolve) => {
+    const onAbort = () => resolve()
+    signal.addEventListener('abort', onAbort, { once: true })
+    void pending.then(
+      () => {
+        signal.removeEventListener('abort', onAbort)
+        resolve()
+      },
+      () => {
+        signal.removeEventListener('abort', onAbort)
+        resolve()
+      }
+    )
+  })
+}
+
 export async function loadModel(
   params: LoadModelServerParams,
   options?: LoadModelOptions
 ): Promise<LoadModelResult> {
   const parsed = loadModelServerParamsSchema.parse(params)
-  return withModelWorkLock(parsed.modelId, () => loadModelLocked(parsed, options))
+  return withModelWorkLock(parsed.modelId, () => loadModelLocked(parsed, options), options?.request)
 }
 
 async function loadModelLocked(

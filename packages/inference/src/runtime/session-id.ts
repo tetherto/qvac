@@ -13,10 +13,10 @@ export function resolveSessionId(request: { sessionId?: string | undefined }): s
 }
 
 /**
- * Key the request registry stores a request under. The session id prefix is
- * fixed by the dispatcher, so a client that puts the NUL separator in its own
- * ids can only collide with its own requests.
+ * Key the request registry stores a request under. The session id is length
+ * prefixed, so no choice of characters in either id lets two different
+ * `(sessionId, requestId)` pairs share a key.
  */
 export function requestRegistryKey(sessionId: string, requestId: string): string {
-  return `${sessionId}\u0000${requestId}`
+  return `${sessionId.length}:${sessionId}:${requestId}`
 }
