@@ -388,21 +388,11 @@ runs:
 
     # ---- iOS build path -----------------------------------------------------
 
-    - name: Set up Xcode version (iOS, github-hosted only)
+    - name: Show Xcode (iOS, github-hosted only)
       if: inputs.platform == 'iOS' && runner.environment == 'github-hosted'
       shell: bash
       run: |
-        echo "Available Xcode versions:"
-        ls /Applications | grep Xcode || echo "No Xcode apps found"
-        # ibtool needs the iOS runtime matching the Xcode SDK. macos-15 only
-        # ships iOS 18.5+ runtimes, so older 16.x fails on the storyboard.
-        if [ -d "/Applications/Xcode_26.3.app" ]; then
-          echo "Switching to Xcode 26.3..."
-          sudo xcode-select -s /Applications/Xcode_26.3.app
-        else
-          echo "ERROR: Xcode 26.3 not found"
-          exit 1
-        fi
+        # Uses the image's default Xcode; no xcode-select pin.
         xcodebuild -version
         xcodebuild -showsdks | grep -i ios
 
