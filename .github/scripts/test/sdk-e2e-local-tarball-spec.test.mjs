@@ -10,8 +10,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { toLocalTarballSpec as inferenceSpec } from '../../actions/sdk-e2e-prepare-inference/prepare.mjs'
-import { toLocalTarballSpec as suiteSpec } from '../../actions/sdk-e2e-prepare-test-suite/prepare.mjs'
+import { toLocalTarballSpec as inferenceSpec } from '../../../packages/sdk/ci/e2e-inference.mjs'
+import { toLocalTarballSpec as suiteSpec } from '../../../packages/sdk/ci/e2e-test-suite.mjs'
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../..')
 const WIN32_TARBALL =
@@ -22,8 +22,8 @@ const WIN32_RETURN =
   /return `file:\$\{path\.win32\.resolve\(tarballPath\)\.replaceAll\(/
 
 const COPIES = [
-  '.github/actions/sdk-e2e-prepare-inference/prepare.mjs',
-  '.github/actions/sdk-e2e-prepare-test-suite/prepare.mjs',
+  'packages/sdk/ci/e2e-inference.mjs',
+  'packages/sdk/ci/e2e-test-suite.mjs',
   'packages/sdk-e2e/scripts/build-local-inference.mjs'
 ]
 

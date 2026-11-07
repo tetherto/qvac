@@ -1,7 +1,7 @@
 name: Create Release Tag
 
 # Creates a git tag for a published package WITHOUT creating a GitHub Release.
-# Only the SDK publishes GitHub Releases (see publish-sdk.yml /
+# Only the SDK publishes GitHub Releases (publish-npm.yml's githubRelease, through
 # create-github-release.yml); every other package just gets a version tag for
 # traceability, keeping the Releases page focused on the SDK.
 #

@@ -18,7 +18,8 @@ on:
       - ".github/actions/run-mobile-integration-tests/extract-addon-perf/**"
       - ".github/actions/run-mobile-integration-tests/test/**"
       - ".github/actions/select-prebuild-symbols-verifier/**"
-      - ".github/actions/sdk-device-farm-wait-for-running/**"
+      - ".github/scripts/devicefarm-pool-run.mjs"
+      - ".github/scripts/test/devicefarm-slot-wait.test.mjs"
       - "scripts/perf-report/**"
       - "scripts/ci/**"
       - "packages/ocr-ggml/.agent/setup.sh"
@@ -71,14 +72,13 @@ jobs:
       # build, so a wrong cutoff would first show up as a failed backport.
       - name: Run prebuild symbols verifier selector unit tests
         run: node --test .github/actions/select-prebuild-symbols-verifier/test/*.test.mjs
-      # The SDK e2e mobile workflows that use it run only on label or dispatch.
-      - name: Run SDK Device Farm wait action unit tests
-        run: node --test .github/actions/sdk-device-farm-wait-for-running/test/*.test.mjs
+      # sdk-e2e, the script's only caller, runs only on label or dispatch.
+      - name: Run Device Farm slot wait unit tests
+        run: node --test .github/scripts/test/devicefarm-slot-wait.test.mjs
 
-  # The per-addon benchmark aggregators are plain Node scripts shared by the
-  # benchmark and perf-report workflows, which only run on demand — so without
-  # this job a broken normalizer would not surface until someone triggered a
-  # sweep.
+  # The per-addon benchmark aggregators are plain Node scripts that benchmarks.yml
+  # runs only on dispatch and in its weekly perf report, so without this job a
+  # broken normalizer would not surface until someone triggered a sweep.
   perf-report-unit-tests:
     name: perf-report aggregator unit tests
     runs-on: ubuntu-latest

@@ -33,41 +33,33 @@ coverage denominator.
 
 ## CI
 
-| Trigger                                         | Job               | What runs                                                                        |
-| ----------------------------------------------- | ----------------- | -------------------------------------------------------------------------------- |
-| PR touching this folder / workflow / CLI config | `harness-unit`    | `tsx` unit tests (no models, no live servers) on the PR merge SHA                |
-| CLI `test:unit` (SDK Pod Checks)                | same harness      | via `npm run test:bench-serve-openai-providers`                                  |
-| `workflow_dispatch` (any mode)                  | `validate-target` | validates the full SHA, checks it out, and typechecks + tests it (GitHub-hosted) |
-| `workflow_dispatch` `mode=coverage-report`      | `coverage-report` | provider-free coverage JSON + Markdown preview artifact on GitHub-hosted infra   |
-| `workflow_dispatch` `mode=smoke` / `full`       | `live`            | live providers on the self-hosted GPU runner, gated by `benchmark-live`          |
+| Trigger                                                                        | Where                                             | What runs                                                                                                            |
+| ------------------------------------------------------------------------------ | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| PR changing the CLI                                                            | cli `test:unit` in `pr-checks.yml`                | `tsx` harness typecheck and unit tests (no models, no live servers), via `npm run test:bench-serve-openai-providers` |
+| `benchmarks.yml` dispatch, `packages=cli`                                      | cli `benchmark` `report` configuration            | provider-free coverage JSON + Markdown preview on GitHub-hosted infra                                                |
+| `benchmarks.yml` dispatch, `configs=darwin-arm64-live`, `args=smoke` or `full` | cli `benchmark` `darwin-arm64-live` configuration | live providers on the self-hosted GPU runner, in the `release` environment                                           |
 
-Dispatch is **immutable**: the required `target_sha` input must be a full
-40-character commit SHA (`^[0-9a-fA-F]{40}$`); branch names and tags are
-rejected. `validate-target` runs on GitHub-hosted infra and pins the exact
-commit before any self-hosted code runs. The `live` job then uses the protected
-`benchmark-live` environment (see [`environment.md`](./environment.md)) before
-it installs or executes anything on the self-hosted runner. The environment
-requires review from `tether-devops` and prevents self-review; repository
-administrators can use GitHub's configured admin bypass. Approval attests to the
-selected commit's benchmark harness code and dependency install scripts as well
-as the protected external configuration. The hosted preview job audits runner
-egress, and both hosted and live checkouts do not persist GitHub credentials.
-Network monitoring for the self-hosted bare-metal live runner must be
-provisioned as a runner-level service rather than a workflow action.
+A dispatch runs the commit its ref pointed at when dispatched. The live job
+checks that the checkout is exactly that full 40-character commit SHA before it
+installs anything, and runs in the `release` environment (see
+[`environment.md`](./environment.md)), whose branch policy limits the refs that
+can reach it; no reviewer approves the run. Checkouts do not persist GitHub
+credentials. Network
+monitoring for the self-hosted bare-metal live runner must be provisioned as a
+runner-level service rather than a workflow action.
 
-The `coverage-report` mode does not use models, provider servers, protected
+The `report` configuration does not use models, provider servers, protected
 configuration, environments, or self-hosted runners. It fetches the OpenAI
-specification, compares it with the checked-out QVAC router, and uploads
-`coverage.json` plus `report.md` as `openai-coverage-report-<run-id>`.
-The target SHA pins repository source. npm dependencies still resolve from the
-version ranges in `packages/cli/package.json`, because this monorepo intentionally
-does not commit package-level npm lockfiles; runner egress is audited.
+specification, compares it with the checked-out QVAC router, and uploads the
+preview as `cli-benchmark-report`. npm dependencies resolve from the version
+ranges in `packages/cli/package.json`, because this monorepo intentionally does
+not commit package-level npm lockfiles.
 
-The full three-provider sweep is **not** part of SDK Pod Checks. It needs local
+The full three-provider sweep is **not** part of the CLI's PR checks. It needs local
 LM Studio / Ollama / `qvac serve` and the shared GGUF on a `qvac-macos*-gpu`
-runner, with the runtime config and environment manifest supplied by protected
-`benchmark-live` environment variables (never from the checked-out tree).
-The protected job validates the immutable target before dispatch and rejects
+runner, with the runtime config and environment manifest supplied by `release`
+environment variables (never from the checked-out tree).
+The job checks the immutable target before it installs anything and rejects
 runtime files that are missing, relative, inside the checkout, or reachable
 through a symlink into it.
 

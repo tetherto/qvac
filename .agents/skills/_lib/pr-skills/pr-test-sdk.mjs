@@ -259,7 +259,7 @@ export function relatedSdkTests({
 }
 
 // Both branches resolve to install:build:full on purpose: CI always builds
-// packages/inference from branch too (on-pr-test-sdk.yml), so an SDK-only PR
+// packages/inference from branch too (packages/sdk/ci/e2e.mjs), so an SDK-only PR
 // still needs it to avoid testing against a different inference than CI does.
 export function sdkE2eSetup(touchedPaths) {
   const touchesInference = touchedPaths.some((path) =>

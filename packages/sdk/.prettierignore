@@ -4,3 +4,6 @@ test/mocks/*
 SECURITY.md
 .github
 *.mdx
+ci/validator.cjs
+ci/e2e-inference.mjs
+ci/e2e-test-suite.mjs

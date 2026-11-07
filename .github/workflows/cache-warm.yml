@@ -9,6 +9,7 @@ on:
       - "packages/*/vcpkg.json"
       - "packages/*/vcpkg-configuration.json"
       - "packages/*/test/integration/models.manifest.json"
+      - "packages/inference/src/models/registry/models.ts"
       - "vcpkg-overlays/triplets/**"
       - "vcpkg-overlays/toolchains/**"
       - ".github/workflows/cache-warm.yml"
@@ -54,6 +55,7 @@ jobs:
     uses: ./.github/workflows/_select-projects.yml
     with:
       targets: cache:models,build,cpp:tests
+      tags: ci:addons,ci:sdk
       packages: ${{ inputs.packages }}
 
   # One entry per package and target that restores models; a hit is still downloaded, which resets the prune clock.
@@ -67,6 +69,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      # A cache:models that installs from GitHub Packages, with the token its secrets name.
+      packages: read
     strategy:
       fail-fast: false
       max-parallel: 2
@@ -100,6 +104,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: eu-central-1
       - if: steps.models.outputs.paths != ''
+        id: cache
         uses: tetherto/qvac-actions/cache@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           key: ${{ steps.models.outputs.key }}
@@ -111,6 +116,22 @@ jobs:
           workdir: ${{ env.WORKDIR }}
           bucket: ${{ secrets.MODEL_S3_BUCKET }}
           target: ${{ matrix.target }}
+      # A directory no manifest lists (metadata.modelCache) is filled by the package's own cache:models, on a miss.
+      - if: steps.models.outputs.fill == 'true' && steps.cache.outputs.cache-hit != 'true'
+        uses: tetherto/qvac-actions/setup-pnpm@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          package-json-file: src/package.json
+      - if: steps.models.outputs.fill == 'true' && steps.cache.outputs.cache-hit != 'true'
+        name: cache:models
+        shell: bash
+        working-directory: src
+        env:
+          PROJECT: ${{ matrix.row.project }}
+          GH: ${{ contains(matrix.row.meta.secrets, 'GITHUB_TOKEN') && github.token || '' }}
+        run: |
+          if [ -n "$GH" ]; then export GITHUB_TOKEN="$GH"; fi
+          pnpm install --frozen-lockfile --ignore-scripts --filter .
+          pnpm exec nx run "$PROJECT:cache:models" --exclude-task-dependencies --outputStyle=stream
 
   # Providers first, once per configuration; a pull request's build legs may reuse these from main (Q1).
   providers:

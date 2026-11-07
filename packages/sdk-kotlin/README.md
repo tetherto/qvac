@@ -203,7 +203,7 @@ Set `MAVEN_SIGNING_KEY` and `MAVEN_SIGNING_PASSWORD` to sign every publication
 with an in-memory PGP key. `./gradlew verifyMavenPublications` checks every current
 coordinate's documentation, sources, artifact presence and checksums.
 
-The SDK release (`publish-sdk.yml`) calls `publish-sdk-kotlin.yml` with the
+The SDK release (`publish-npm.yml`) calls `publish-kotlin.yml` with the
 `release-assets` destination, which packages the Maven repository into the
 per-profile ZIPs and attaches them to the `sdk-v<version>` release. No Maven
 registry is published by default. Maven Central uses its dedicated deployment
@@ -225,7 +225,7 @@ deployments and Dokka generates the API documentation.
 For CI, configure the protected `release` environment with
 `KOTLIN_CENTRAL_USERNAME`, `KOTLIN_CENTRAL_PASSWORD`, `KOTLIN_MAVEN_SIGNING_KEY`
 and `KOTLIN_MAVEN_SIGNING_PASSWORD`. Select `central` as the destination when
-dispatching `publish-sdk-kotlin.yml` by hand; it only stages unless
+dispatching `publish-kotlin.yml` by hand; it only stages unless
 `release_central` is explicitly enabled. Namespace ownership
 and a discoverable production signing public key must be configured beforehand.
 Never run both staging and automatic publication for the same release blindly;

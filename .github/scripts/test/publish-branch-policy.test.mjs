@@ -23,7 +23,7 @@ const PUBLISH_MARKER = /uses:.*(npm-publish-logic|publish-library-to-(gpr|npm))/
 const ALLOWED = ['release-*']
 
 // A pattern is allowed when every branch it can match is a release branch. That
-// is `release-*` itself and any narrower glob under it, e.g. publish-inference's
+// is `release-*` itself and any narrower glob under it, e.g. a
 // `release-inference-*` — per docs/gitflow.md you PR INTO a release branch from
 // a fork, so a push to one is a merge, which is the publish trigger this policy
 // exists to permit. Comparing the glob literally rejected the narrower spelling
@@ -44,17 +44,6 @@ const isAllowed = (branch) =>
 // markers and pushing off main/feature-*/tmp-* passed every assertion.
 const LIBRARY_PUBLISHERS = new Set([
   'publish-registry-server.yml',
-  'publish-sdk.yml',
-  'trigger-reusable-infer-base.yml',
-  'trigger-reusable-lib-ai-sdk-provider.yml',
-  'trigger-reusable-lib-cli.yml',
-  'trigger-reusable-lib-error.yml',
-  'trigger-reusable-lib-logging.yml',
-  'trigger-reusable-lib-openclaw-plugin.yml',
-  'trigger-reusable-lib-opencode-plugin.yml',
-  'trigger-reusable-lib-rag.yml',
-  'trigger-reusable-lib-test-suite.yml',
-  'trigger-reusable-lib.yml',
 ])
 
 function read(name) {

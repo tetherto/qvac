@@ -95,5 +95,16 @@
     "prettier-config-holepunch": "^2.0.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
+  },
+  "nx": {
+    "includedScripts": [
+      "build:watch",
+      "format",
+      "format:fix",
+      "lint:fix",
+      "check-models",
+      "update-models",
+      "test:e2e"
+    ]
   }
 }

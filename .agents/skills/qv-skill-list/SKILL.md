@@ -43,7 +43,7 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 | [`qv-devops-why-my-pr-not`](../qv-devops-why-my-pr-not/SKILL.md) | Diagnose missing CI checks or merge blockers (labels, CODEOWNERS, approvals). | "Why aren't checks running?" / "Why can't I merge?" **Manual:** `/qv-devops-why-my-pr-not` |
 | [`qv-devops-daily-update`](../qv-devops-daily-update/SKILL.md) | Slack standup (Done / Planned / Blockers) from PRs, reviews, CI. | DevOps EOD or standup. **Manual:** `/qv-devops-daily-update` |
 | [`qv-mobile-test-dispatch`](../qv-mobile-test-dispatch/SKILL.md) | Start an addon mobile (Device Farm) test and pick the right prebuild source; where the Android/iOS and C++ logs are. | "Run mobile tests for X" / "test my native change on a device" / reading a mobile failure. **Manual:** `/qv-mobile-test-dispatch` |
-| [`qv-ci-contract`](../qv-ci-contract/SKILL.md) | Change CI for a package on the CI contract (`ci:addons` tag), add a package to it, or write an action the contract's groups call. | A tagged package's build/test/publish CI, the contract workflows, a native provider such as fabric, or adding a package to the contract. |
+| [`qv-ci-contract`](../qv-ci-contract/SKILL.md) | Change CI for a package on the CI contract (`ci:addons` or `ci:sdk` tag), add a package to it, or write an action the contract's groups call. | A tagged package's build/test/publish CI, the contract workflows, a native provider such as fabric, or adding a package to the contract. |
 
 ---
 
