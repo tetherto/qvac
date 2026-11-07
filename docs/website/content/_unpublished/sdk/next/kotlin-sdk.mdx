@@ -14,12 +14,18 @@ isolated Android service host.
 
 ## Requirements
 
-- Android: `arm64-v8a`, API 29 or newer.
-- Desktop JVM: experimental. The client resolves and starts a local `@qvac/sdk`
-  worker.
-- A Kotlin 2.3 or newer compiler. The artifacts depend on
-  [`bare-rpc-kotlin`](https://github.com/holepunchto/bare-rpc-kotlin), which is
-  compiled with Kotlin 2.4.
+- Android: `arm64-v8a`, API 29 or newer, compiled with `compileSdk` 36 or newer.
+  Bare Kit ships for four ABIs while the QVAC addons ship for `arm64-v8a` only,
+  so set `ndk { abiFilters += "arm64-v8a" }` in the app's `defaultConfig`;
+  without it the app carries about 108 MB of unusable libraries and installs on
+  devices it cannot run on.
+- Desktop JVM: experimental. The worker runs inside the JVM on Bare Kit, built
+  from this repository for the host it is built on.
+- A Kotlin 2.3 or newer compiler. The artifacts depend on Holepunch's
+  [`bare-rpc-kotlin`](https://github.com/holepunchto/bare-rpc-kotlin),
+  [`bare-stow-host-kotlin`](https://github.com/holepunchto/bare-stow-host-kotlin)
+  and [`bare-kit-kotlin`](https://github.com/holepunchto/bare-kit-kotlin), which
+  are compiled with Kotlin 2.4.
 
 Kotlin/Native targets are not published.
 
@@ -39,8 +45,10 @@ Gradle at. There is one archive per Android runtime profile:
 | `qvac-sdk-android-media-0.23.0-maven.zip` | `io.tether:qvac-sdk-android-media` | audio, image, video, world generation, and upscaling |
 | `qvac-sdk-android-robotics-0.23.0-maven.zip` | `io.tether:qvac-sdk-android-robotics` | VLA inference |
 
-For the experimental desktop JVM client, see the
-[package README](https://github.com/tetherto/qvac/blob/main/packages/sdk-kotlin/README.md).
+The experimental desktop JVM worker host is not in these archives; it is built
+from this repository, as the
+[package README](https://github.com/tetherto/qvac/blob/main/packages/sdk-kotlin/README.md)
+describes.
 
 <Steps>
 
@@ -69,7 +77,7 @@ unzip qvac-sdk-android-llm-0.23.0-maven.zip -d qvac-maven-repository
 
 <Step>
 Declare the extracted directory as a Maven repository, next to JitPack, which
-serves the `bare-rpc-kotlin` dependency the archive does not include:
+serves the Holepunch libraries the archive does not include:
 
 ```kotlin
 // settings.gradle.kts
@@ -78,7 +86,7 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         exclusiveContent {
-            forRepository { maven("https://jitpack.io") } // bare-rpc-kotlin
+            forRepository { maven("https://jitpack.io") } // Holepunch's Kotlin libraries
             filter { includeGroupByRegex("com\\.github\\.holepunchto\\..*") }
         }
         maven { url = uri("/absolute/path/to/qvac-maven-repository") }
@@ -134,9 +142,8 @@ try {
 ```
 
 The service runs in the app's private `:qvac_worker` process. Desktop JVM uses
-`JvmBareRpcTransport.connectResolved()`, which starts the resolved `@qvac/sdk`
-worker over a loopback channel. Kotlin/Native targets are not published until
-they have tested worker hosts.
+`JvmBareKitTransport.connect()`, which starts the worker inside the JVM.
+Kotlin/Native targets are not published until they have tested worker hosts.
 
 ## Completion and multimodal input
 

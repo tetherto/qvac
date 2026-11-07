@@ -74,7 +74,7 @@ class AndroidContractInstrumentationTest {
     @Test
     fun packagedWorkerBundleIsReadable() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        context.assets.open("qvac/worker.bundle").use { bundle ->
+        context.assets.open(WORKER_BUNDLE_ASSET).use { bundle ->
             assertTrue(bundle.read() >= 0)
         }
     }
@@ -92,7 +92,7 @@ class AndroidContractInstrumentationTest {
             kotlinx.serialization.json.Json.parseToJsonElement(input.bufferedReader().readText())
                 .jsonObject
         }
-        val workerDigest = context.assets.open("qvac/worker.bundle").use { input ->
+        val workerDigest = context.assets.open(WORKER_BUNDLE_ASSET).use { input ->
             MessageDigest.getInstance("SHA-256")
                 .digest(input.readBytes())
                 .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
@@ -314,5 +314,8 @@ class AndroidContractInstrumentationTest {
 
     private companion object {
         const val MODEL_TEST_TIMEOUT_MS = 15 * 60 * 1_000L
+
+        /** Where bare-stow's `bare-kit` harness module puts the worker bundle. */
+        const val WORKER_BUNDLE_ASSET = "io/tether/qvac/sdk/barekit/worker/index.bundle"
     }
 }
