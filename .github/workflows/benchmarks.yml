@@ -84,8 +84,22 @@ jobs:
       packages: ${{ inputs.packages }}
       configs: ios-arm64
 
-  build:
+  # Providers build first, once per configuration the build rows use.
+  providers:
     needs: select
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    uses: ./.github/workflows/_build.yml
+    secrets: inherit
+    with:
+      rows: ${{ toJSON(fromJSON(needs.select.outputs.matrices)['build:providers']) }}
+      reuse: true
+
+  build:
+    needs: [select, providers]
+    if: always() && !cancelled() && needs.select.result == 'success' && (needs.providers.result == 'success' || needs.providers.result == 'skipped')
     permissions:
       contents: read
       actions: read
@@ -98,7 +112,8 @@ jobs:
 
   # Folds a package's build jobs into prebuilds-<slug>, which the mobile run installs from this run.
   merge:
-    needs: [select, build]
+    needs: [select, providers, build]
+    if: always() && !cancelled() && needs.build.result == 'success' && (needs.providers.result == 'success' || needs.providers.result == 'skipped')
     name: merge ${{ matrix.project.slug }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -126,7 +141,7 @@ jobs:
 
   desktop:
     needs: [select, build]
-    if: inputs.run_desktop
+    if: always() && !cancelled() && needs.build.result == 'success' && inputs.run_desktop
     permissions:
       contents: read
       actions: read
@@ -142,6 +157,7 @@ jobs:
 
   mobile-android:
     needs: [select-android, merge]
+    if: always() && !cancelled() && needs.select-android.result == 'success' && needs.merge.result == 'success'
     permissions:
       contents: read
       actions: read
@@ -162,6 +178,7 @@ jobs:
 
   mobile-ios:
     needs: [select-ios, merge]
+    if: always() && !cancelled() && needs.select-ios.result == 'success' && needs.merge.result == 'success'
     permissions:
       contents: read
       actions: read

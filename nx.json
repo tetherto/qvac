@@ -13,6 +13,7 @@
           },
           "llvm": { "linux": "22", "windows": "22.1.0" },
           "cuda": "13.0.3",
+          "cudaJetson": "12.6.3",
           "rocm": {
             "version": "7.13.0",
             "gfx": "gfx1151",

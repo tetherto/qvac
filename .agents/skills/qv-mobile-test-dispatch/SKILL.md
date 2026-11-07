@@ -60,49 +60,38 @@ The input is named `package` everywhere, and `prebuild_run_id` too.
 ## Step 2 — get a run id (only for the `prebuild_run_id` route)
 
 **First: the PR must have built prebuilds at all.** The prebuild stage is
-label-gated by `ci-router` — it runs only when the PR carries `prebuilds`,
-`run-desktop-addon-tests`, or `run-mobile-addon-tests`. With none of those there
-is no bundle and no run id. Add the `prebuilds` label and let CI re-run.
+label-gated by `ci-route-stages`: it runs only when the PR carries `prebuilds`,
+`run-cpp-addon-tests` or `run-desktop-addon-tests`. With none of those there is
+no bundle and no run id. Add the `prebuilds` label and let CI re-run.
 
-**Then:** open the PR's Checks tab, click the run that built the prebuilds, and
-take the number at the end of its URL. For a package on the CI contract (see the
-per-addon notes) that run is always the PR's `PR build and test`:
-`gh run list --repo tetherto/qvac --workflow pr-build-test.yml --commit <head sha> --limit 1`.
-
-Do **not** filter by the addon's own workflow name. Which workflow built the
-bundle varies — `on-pr-nx.yml` for most addons, `on-pr-<addon>.yml` for some,
-`on-merge-nx.yml` for a branch build. Scope by the PR's head commit:
+**Then:** take the PR's `PR build and test` run for its head commit:
 
 ```bash
 PKG=llm-llamacpp   # the package directory name, i.e. packages/<PKG>
 PR=1234
 
 SHA=$(gh pr view "$PR" --repo tetherto/qvac --json headRefOid --jq .headRefOid)
-for rid in $(gh api "repos/tetherto/qvac/actions/runs?head_sha=$SHA&per_page=100" \
-               --jq '.workflow_runs[].id'); do
-  gh api "repos/tetherto/qvac/actions/runs/$rid/artifacts?per_page=100" \
-    --jq ".artifacts[]|select(.name==\"prebuilds-$PKG\" and .expired==false)|.name" \
-    2>/dev/null | grep -q . && { echo "$rid"; break; }
-done
+gh run list --repo tetherto/qvac --workflow pr-build-test.yml --commit "$SHA" \
+  --limit 1 --json databaseId --jq '.[0].databaseId'
 
 # An empty result must not be dispatched: prebuild_run_id="" is the unchanged
 # path and quietly resolves @latest, which is the failure this route closes.
 ```
 
-Nothing printed means either the label is missing, or — on the nx path — that run
-only built the addons it considered affected and yours was not one. The dispatch
-failure message lists which addons a run did build.
+That run holds `prebuilds-<PKG>` only when it built the package: the label is
+there and Nx selected the package as affected. Otherwise the dispatch fails and
+names the artifact it could not find.
 
 ## Step 3 — pick a valid test filter
 
 `tests` is a mocha `--grep` over runner **names**, not file names. A name that
-matches nothing is rejected up front by `validate-devices`, for free, with the
-list of valid names — so a wrong guess costs nothing but a round trip.
+matches nothing is rejected up front by the `check` job, for free, with the
+list of valid names, so a wrong guess costs nothing but a round trip.
 
-Read the names from the same source `validate-devices` uses:
+Read the names from the same source the `check` job uses:
 
 ```bash
-# sharded addons (llm-llamacpp, diffusion-cpp, tts-ggml, audiogen-ggml, vla, ...)
+# sharded addons (llm-llamacpp, tts-ggml, audiogen-ggml, vla, ...)
 jq -r '(.android//{})|[..|strings]|unique|.[]' packages/<PKG>/test/mobile/test-groups.json
 
 # single-spec addons
@@ -137,20 +126,22 @@ default `EQUALS` operator. The supported one is the Pro.
 
 ## Step 4 — dispatch
 
-First run — full matrix, one dispatch per platform, `tests` left empty. **Run them
-in sequence, not back to back:** the concurrency group is keyed on workflow and
-ref and does NOT include the platform, so dispatching iOS while Android is still
-running cancels Android. Wait for the first to finish, then fire the second.
+First run: full matrix, one dispatch per platform, `tests` left empty. **Run them
+in sequence, not back to back:** the concurrency group is keyed on the ref and
+`packages` and does NOT include the platform, so dispatching iOS while Android is
+still running cancels Android. Wait for the first to finish, then fire the second.
 
 ```bash
-gh workflow run integration-mobile-test-<addon>.yml --repo tetherto/qvac --ref <branch> \
+gh workflow run mobile-tests.yml --repo tetherto/qvac --ref <branch> \
+  -f packages=<dir> \
   -f platform=Android \
   -f devices_custom="Google Pixel 9 Pro, Samsung Galaxy S25 Ultra, Samsung Galaxy S26 Ultra" \
   -f device_model_operator=EQUALS \
   -f prebuild_run_id=<run id>
 
-# iOS — only after the Android run finishes, or it cancels it
-gh workflow run integration-mobile-test-<addon>.yml --repo tetherto/qvac --ref <branch> \
+# iOS: only after the Android run finishes, or it cancels it
+gh workflow run mobile-tests.yml --repo tetherto/qvac --ref <branch> \
+  -f packages=<dir> \
   -f platform=iOS \
   -f devices_custom="Apple iPhone 16 Pro, Apple iPhone 17 Pro" \
   -f device_model_operator=EQUALS \
@@ -161,22 +152,11 @@ Report a first run as complete only when **both** platforms actually completed. 
 cancelled Android leg is not a pass, and on `llm-llamacpp` it also discards the
 model seeding into the Device Farm bucket, which can take up to two hours.
 
-A package on the CI contract dispatches `mobile-tests.yml` instead, naming the
-package directory; every other input is the same:
+Follow-up: one device, one test, after something fails:
 
 ```bash
 gh workflow run mobile-tests.yml --repo tetherto/qvac --ref <branch> \
   -f packages=<dir> \
-  -f platform=Android \
-  -f devices_custom="Google Pixel 9 Pro, Samsung Galaxy S25 Ultra, Samsung Galaxy S26 Ultra" \
-  -f device_model_operator=EQUALS \
-  -f prebuild_run_id=<run id>
-```
-
-Follow-up — one device, one test, after something fails:
-
-```bash
-gh workflow run integration-mobile-test-<addon>.yml --repo tetherto/qvac --ref <branch> \
   -f platform=Android \
   -f devices_custom="Samsung Galaxy S26 Ultra" \
   -f device_model_operator=EQUALS \
@@ -193,7 +173,7 @@ gh workflow run integration-mobile-test-<addon>.yml --repo tetherto/qvac --ref <
 
 ## Step 5 — read the result
 
-The build job's setup phase prints the provenance:
+The test job's prebuild step prints the provenance:
 
 ```
 Verified: prebuilds come from run <id> — artifact 'prebuilds-<pkg>',
@@ -262,9 +242,9 @@ failure is still reproducing, and when a leg was cancelled rather than run.
 |---|---|
 | `llm-llamacpp` | sharded — always pass `tests` |
 | `asr-ggml`, `audiogen-ggml`, `tts-ggml` | split addons: an empty input or `@qvac` pin installs the matching `-android-arm64` / `-ios` package from npm at the same version. `@tetherto` `-mono` builds carry prebuilds inline. A mobile benchmark run is a `benchmarks.yml` dispatch whose `args` pick one matrix row (see `docs/ci/MOBILE-ON-DEMAND.md`). |
-| `asr-ggml`, `audiogen-ggml`, `bci-whispercpp`, `classification-ggml`, `decoder-audio`, `embed-llamacpp`, `ggml-rpc-server`, `llm-llamacpp`, `model-fit`, `ocr-ggml`, `translation-nmtcpp`, `tts-ggml`, `turbovec-ggml`, `vla-ggml` | on the CI contract: one workflow, `mobile-tests.yml`, with `-f packages=<dir>`. `prebuild_run_id` is a `pr-build-test.yml` run; Route B dev builds come from dispatching `publish-gpr.yml` with `-f packages=<dir>` |
+| every addon | on the CI contract: one workflow, `mobile-tests.yml`, with `-f packages=<dir>`. `prebuild_run_id` is a `pr-build-test.yml` run; Route B dev builds come from dispatching `publish-gpr.yml` with `-f packages=<dir>`. A fabric consumer takes `prebuilds-fabric` from the `prebuild_run_id` run when that run built fabric, or from `dependency_prebuild_run_id`. |
 | `decoder-audio` | no native prebuild of its own (rides `bare-ffmpeg` from npm), so it takes no prebuild source; the dispatched `ref` is what gets tested. |
-| `inference-addon-cpp` | compiles its own prebuilds in-run from the dispatched `ref`, so no prebuild input is needed or offered |
+| `inference-addon-cpp` | compiles its `mobile/` test addon in the run from the dispatched `ref`, so it takes no prebuild source; its suite is generated in the run, so a `tests` filter is checked only on device |
 
 ## Reading a failure — where the logs are
 

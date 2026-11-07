@@ -37,6 +37,13 @@ inputs:
       only the commands that load it compile with that toolset.
     required: false
     default: "job"
+  export:
+    description: >-
+      env exports CUDA_PATH, CUDACXX, PATH and the rest to every later step. path
+      exports only QVAC_CUDA_<TARGET>_PATH, so a second toolkit sits beside the
+      first and only commands that read it use it.
+    required: false
+    default: "env"
 
 outputs:
   msvc-version:
@@ -324,6 +331,7 @@ runs:
       env:
         CUDA_TARGET: ${{ inputs.cuda-target }}
         CUDA_VERSION: ${{ inputs.cuda-version }}
+        EXPORT: ${{ inputs.export }}
       run: |
         if [ "$RUNNER_OS" = "Windows" ]; then
           nvcc="$RUNNER_TEMP/cuda/$CUDA_TARGET/toolkit/bin/nvcc.exe"
@@ -333,6 +341,12 @@ runs:
         if [ ! -x "$nvcc" ]; then echo "::error::nvcc not found after assembly"; exit 1; fi
         cuda_prefix="$RUNNER_TEMP/cuda/$CUDA_TARGET/toolkit"
         echo "CUDA prefix: $cuda_prefix"
+        if [ "$EXPORT" = "path" ]; then
+          echo "QVAC_CUDA_$(echo "$CUDA_TARGET" | tr '[:lower:]' '[:upper:]')_PATH=$cuda_prefix" >> "$GITHUB_ENV"
+          exit 0
+        elif [ "$EXPORT" != "env" ]; then
+          echo "::error::setup-cuda: export must be env or path, got '$EXPORT'"; exit 1
+        fi
         echo "CUDA_PATH=$cuda_prefix" >> "$GITHUB_ENV"
         echo "CUDACXX=$nvcc" >> "$GITHUB_ENV"
         # The qvac triplets hash it into qvac-fabric's ABI, and with it set the

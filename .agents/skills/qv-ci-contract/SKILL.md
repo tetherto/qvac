@@ -1,6 +1,6 @@
 ---
 name: qv-ci-contract
-description: Change CI for a package tagged ci:addons, migrate the next package onto the CI contract, or write or change an action the contract's groups call. Use when a task touches a tagged package's build, test, mobile or publish CI, the contract's groups (pr-checks, pr-build-test, mobile-tests, cache-warm, publish-npm, publish-gpr, the _*.yml templates), select-projects.mjs, or moves a package off on-pr-nx.yml or its own on-pr workflow.
+description: Change CI for a package tagged ci:addons, add a package to the CI contract, or write or change an action the contract's groups call. Use when a task touches a tagged package's build, test, mobile or publish CI, a native provider such as fabric, the contract's groups (pr-checks, pr-build-test, mobile-tests, cache-warm, publish-npm, publish-gpr, the _*.yml templates), select-projects.mjs, or gives a package native CI.
 ---
 
 # qv-ci-contract
@@ -10,7 +10,7 @@ The standard is [`docs/ci/workflow-standard.md`](../../../docs/ci/workflow-stand
 Pick the task:
 
 1. A tagged package's CI changes: [Change CI for a package](#1-change-ci-for-a-package).
-2. A package moves onto the contract: [Migrate a package](#2-migrate-a-package).
+2. A package joins the contract: [Add a package](#2-add-a-package).
 3. A shared step is added or changed: [Write or change an action](#3-write-or-change-an-action).
 
 ## 1. Change CI for a package
@@ -29,17 +29,17 @@ Pick the task:
 
 Done when both test files pass and the target runs locally, or the change is confirmed in a `pr-build-test.yml` run on the branch.
 
-## 2. Migrate a package
+## 2. Add a package
 
-One pull request switches the package: before it merges only the old path runs, after it merges only the contract does, and reverting it restores the old path with no other edit. `main` is the source of truth: port its runners, flags, system packages, timeouts and dormant settings as they are.
+One pull request adds the package. When it replaces a workflow of its own, before it merges only that workflow runs, after it merges only the contract does, and reverting it restores the workflow with no other edit. `main` is the source of truth: port its runners, flags, system packages, timeouts and dormant settings as they are.
 
 1. Tag the package `ci:addons` in its `project.json`.
-2. Map every step its current workflow runs (`options.ci` for `on-pr-nx.yml`, or its own `on-pr-<pkg>.yml` and `prebuilds-<pkg>.yml`) to a standard target, with a configuration per platform on the runner the old job used.
-3. Depend on each native dependency's `link:platform` by name. Give the dependency a `link:platform` target if it lacks one.
+2. Map every step its CI runs to a standard target, with a configuration per platform on the runner the old job used.
+3. Depend on each native dependency's `link:platform` by name. Give the dependency a `link:platform` target if it lacks one. A dependency on the contract builds first as a provider, so it needs a build configuration for every configuration the package builds or lints, and the package's ranges on it must include its workspace version.
 4. Move scripts the targets call into the package's `ci/` directory, and models into its manifest.
 5. For mobile, set `metadata.mobile` and map the Device Farm project in `DEVICEFARM_PROJECTS` (`select-projects.mjs`) and `PROJECT_ARN` (`_mobile.yml`).
 6. Wire Merge Guard as `docs/ci/MERGE-GUARD.md` says: a `packages/<dir>/**`-only filter entry, `ALL_PACKAGES`, the status keys, and the package's producer in `CARVED_OUT_PRODUCERS` set to `pr-build-test.yml`. The status contexts stay the same.
-7. Delete the package's own workflows, remove it from `on-pr-nx.yml` and `on-merge-nx.yml`, and limit edits to shared files to letting go of the package.
+7. Delete the package's own workflows, and limit edits to shared files to letting go of them.
 8. Point the package's npm trusted publisher at `publish-npm.yml`, so only one workflow can publish it.
 9. Rehearse on the branch: `pr-checks`, `pr-build-test` with the `prebuilds`, `run-cpp-addon-tests` and `run-desktop-addon-tests` labels, `cache-warm`, `mobile-tests` on one Android and one iOS device one after the other (dispatches on one branch cancel each other), `publish-npm` with `dry_run`, and `publish-gpr`. Compare each with the old path on the same commit, and compare the prebuilds binary by binary.
 10. Stop before anything leaves the machine. Show the full diff and wait for approval before a push, a dispatch or a pull request, and get a separate yes before creating the pull request.
