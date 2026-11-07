@@ -114,7 +114,7 @@ jobs:
     runs-on: ${{ matrix.row.runner }}
     environment: release
     # No continue-on-error: a Device Farm failure must fail the run.
-    timeout-minutes: ${{ matrix.row.timeout || 120 }}
+    timeout-minutes: ${{ matrix.row.timeout || 135 }}
     permissions:
       contents: read
       actions: read
@@ -140,6 +140,9 @@ jobs:
       NPM: ${{ matrix.row.npm }}
       PLATFORM: ${{ inputs.platform }}
     steps:
+      # The Device Farm wait stops 15 minutes before the job limit, so the steps after it still collect what finished.
+      - run: echo "JOB_START=$(date +%s)" >> "$GITHUB_ENV"
+        shell: bash
       - name: Checkout actions
         uses: tetherto/qvac-actions/checkout@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
@@ -337,22 +340,29 @@ jobs:
           specs: ${{ steps.spec-uploads.outputs.uploads }}
           devices: ${{ env.DEVICES }}
           device-model-operator: ${{ inputs.device_model_operator }}
-      - uses: tetherto/qvac-actions/devicefarm-wait-runs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+      - id: budget
+        shell: bash
+        env:
+          LIMIT: ${{ matrix.row.timeout || 135 }}
+        run: echo "minutes=$(( (LIMIT * 60 - ($(date +%s) - JOB_START)) / 60 - 15 ))" >> "$GITHUB_OUTPUT"
+      - id: wait
+        timeout-minutes: ${{ fromJSON(steps.budget.outputs.minutes) }}
+        uses: tetherto/qvac-actions/devicefarm-wait-runs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           run-arns: ${{ steps.schedule.outputs.run-arns }}
           specs: ${{ steps.spec-uploads.outputs.uploads }}
           # As main did: a device stopped on its timeout after every counted test passed is a teardown overrun.
           accept-stopped: "true"
-      - if: cancelled() && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'
-        uses: tetherto/qvac-actions/devicefarm-cancel-runs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
-        with:
-          run-arns: ${{ steps.schedule.outputs.run-arns }}
       # Fresh credentials: the session above may have run out during a long wait.
       - if: always() && steps.schedule.outputs.run-count != '' && steps.schedule.outputs.run-count != '0'
         uses: tetherto/qvac-actions/configure-aws-credentials@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-2
+      - if: (cancelled() || steps.wait.outcome == 'failure') && steps.schedule.outputs.run-arns != '' && steps.schedule.outputs.run-arns != '[]'
+        uses: tetherto/qvac-actions/devicefarm-cancel-runs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0
+        with:
+          run-arns: ${{ steps.schedule.outputs.run-arns }}
       - id: logs
         if: always() && steps.schedule.outputs.run-count != '' && steps.schedule.outputs.run-count != '0'
         uses: tetherto/qvac-actions/devicefarm-download-logs@f8e0afb2e5c51b94abdef6bea77caa4a9fb3adaf # 0.6.0

@@ -352,7 +352,7 @@
           "devicefarmProject": "LLAMACPP_EMBED",
           "enablesPerf": false
         },
-        "timeoutMinutes": 120,
+        "timeoutMinutes": 135,
         "secrets": [
           "HF_TOKEN"
         ]
