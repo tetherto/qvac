@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 
+#include "model-interface/BackendIdentity.hpp"
 #include "model-interface/MainGpuSelection.hpp"
 #include "model-interface/WhisperGpuSelection.hpp"
 
@@ -183,4 +184,48 @@ TEST(MainGpuRegistry, CpuFallbackNamesEveryRefusedGpuTypeDevice) {
       main_gpu::registryDevices(MockRegistry{{&adrenoOpencl}});
   EXPECT_TRUE(select(eligibleOnly, {}).refused.empty());
 }
+
+TEST(MainGpuRegistry, AllowsWebGpuAndRejectsHexagon) {
+  const MockDevice webgpu{
+      GGML_BACKEND_DEVICE_TYPE_GPU, "WebGPU", "Dawn", "WebGPU0"};
+  const MockDevice hexagon{
+      GGML_BACKEND_DEVICE_TYPE_GPU, "HTP", "Hexagon", "HTP0"};
+  const auto devices =
+      main_gpu::registryDevices(MockRegistry{{&webgpu, &hexagon}});
+  EXPECT_TRUE(devices[0].eligible);
+  EXPECT_FALSE(devices[1].eligible);
+  EXPECT_EQ(select(devices, {Kind::Index, 0}).whisperIndex, 0);
+  EXPECT_EQ(select(devices, {Kind::Index, 1}).whisperIndex, -1);
+}
+
+TEST(AsrBackendRegistry, ResolvesOpenClBackendToItsDifferentlyNamedDevice) {
+  const MockDevice cpu{GGML_BACKEND_DEVICE_TYPE_CPU, "CPU", "CPU", "CPU"};
+  const MockDevice opencl{
+      GGML_BACKEND_DEVICE_TYPE_GPU, "OpenCL", "Adreno 740", "GPUOpenCL"};
+  const MockRegistry registry{{&cpu, nullptr, &opencl}};
+  const auto device = qvac::asrggml::resolveBackendDevice("OpenCL", registry);
+  ASSERT_EQ(device, &opencl);
+  EXPECT_EQ(registry.type(device), GGML_BACKEND_DEVICE_TYPE_GPU);
+  EXPECT_STREQ(registry.description(device), "Adreno 740");
+}
+
+TEST(AsrBackendRegistry, PrefersExactDeviceNamesBeforeBackendNames) {
+  const MockDevice first{
+      GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA", "First GPU", "CUDA0"};
+  const MockDevice second{
+      GGML_BACKEND_DEVICE_TYPE_GPU, "CUDA", "Second GPU", "CUDA1"};
+  const MockRegistry registry{{&first, &second}};
+  EXPECT_EQ(qvac::asrggml::resolveBackendDevice("CUDA1", registry), &second);
+  EXPECT_EQ(qvac::asrggml::resolveBackendDevice("CUDA", registry), &first);
+  EXPECT_EQ(qvac::asrggml::resolveBackendDevice("CUDA2", registry), nullptr);
+}
+
+TEST(AsrBackendRegistry, RetainsUnknownDevicesAndHandlesMissingNames) {
+  const MockDevice unknown{GGML_BACKEND_DEVICE_TYPE_ACCEL, nullptr, "Unknown"};
+  const MockRegistry registry{{nullptr, &unknown}};
+  EXPECT_EQ(qvac::asrggml::resolveBackendDevice("OpenCL", registry), nullptr);
+  EXPECT_EQ(
+      qvac::asrggml::resolveBackendDevice("CPU", MockRegistry{}), nullptr);
+}
+
 } // namespace

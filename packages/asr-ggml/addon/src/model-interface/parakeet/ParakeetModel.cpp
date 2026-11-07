@@ -47,6 +47,8 @@ enum BackendId {
   BackendCuda = 2,
   BackendVulkan = 3,
   BackendOpenCl = 4,
+  BackendWebGpu = 5,
+  BackendHexagon = 6,
   BackendOther = 99
 };
 enum BackendDeviceClass { DeviceCpu = 0, DeviceGpu = 1, DeviceNpu = 2 };
@@ -77,6 +79,10 @@ int backendIdFromName(const std::string& name) {
     return BackendVulkan;
   if (name.rfind("OpenCL", 0) == 0)
     return BackendOpenCl;
+  if (name.rfind("WebGPU", 0) == 0 || name.rfind("WEBGPU", 0) == 0)
+    return BackendWebGpu;
+  if (name.rfind("HTP", 0) == 0 || name.rfind("Hexagon", 0) == 0)
+    return BackendHexagon;
   return BackendOther;
 }
 
@@ -95,6 +101,10 @@ int backendIdFromRegName(std::string regName) {
     return BackendVulkan;
   if (regName.rfind("opencl", 0) == 0)
     return BackendOpenCl;
+  if (regName.rfind("webgpu", 0) == 0)
+    return BackendWebGpu;
+  if (regName.rfind("hexagon", 0) == 0 || regName.rfind("htp", 0) == 0)
+    return BackendHexagon;
   return BackendOther;
 }
 
@@ -240,6 +250,8 @@ Transcript makeAsrTranscript(const pkt::StreamingSegment& seg) {
   t.isFinal = seg.is_final;
   t.chunkIndex = seg.chunk_index;
   t.eotConfidence = seg.eot_confidence;
+  t.encoderMs = seg.encoder_ms;
+  t.decoderMs = seg.decode_ms;
   return t;
 }
 
@@ -556,6 +568,8 @@ void ParakeetModel::captureBackend() {
   backend_device_ = static_cast<int>(engine_->backend_device());
   backend_name_ = engine_->backend_name();
   backend_id_ = backendIdFromName(backend_name_);
+  if (backend_id_ == BackendHexagon)
+    backend_device_ = DeviceNpu;
   backend_gpu_unsupported_ = engine_->gpu_unsupported() ? 1 : 0;
   backend_description_ =
       captureBackendDescription(backend_name_, backend_id_, backend_device_);
@@ -576,7 +590,8 @@ void ParakeetModel::captureBackend() {
 
 void ParakeetModel::warnOnGpuFallback() const {
   if ((cfg_.backend.empty() || cfg_.backend == "auto") && cfg_.useGPU &&
-      backend_device_ != DeviceGpu && !backend_gpu_unsupported_) {
+      backend_device_ != DeviceGpu && backend_device_ != DeviceNpu &&
+      !backend_gpu_unsupported_) {
     QLOG(
         logger::Priority::WARNING,
         "Parakeet: useGPU=true was requested but the active backend is CPU. "
@@ -858,7 +873,8 @@ std::vector<float> ParakeetModel::preprocessAudioData(
   return qvac::asrggml::decodeS16lePcm(audioData);
 }
 
-std::string ParakeetModel::runAsrProcess(const Input& input) {
+std::string
+ParakeetModel::runAsrProcess(const Input& input, Transcript* details) {
   if (input.empty())
     return ERR_AUDIO_SHORT;
 
@@ -873,6 +889,9 @@ std::string ParakeetModel::runAsrProcess(const Input& input) {
   pkt::EngineResult result = engine->transcribe_samples(
       input.data(), static_cast<int>(input.size()), sample_rate_);
   recordTranscriptionResult(result);
+  if (details) {
+    details->tokenIds = std::move(result.token_ids);
+  }
 
   if (result.text.empty())
     return ERR_NO_SPEECH;
@@ -976,6 +995,8 @@ ParakeetModel::runAttributedProcess(const Input& input, float offset) {
 }
 
 void ParakeetModel::recordTranscriptionResult(const pkt::EngineResult& result) {
+  segmentPlanMs_ += result.segment_plan_ms;
+  assembleMs_ += result.assemble_ms;
   encoderMs_ += static_cast<int64_t>(result.encoder_ms);
   decoderMs_ += static_cast<int64_t>(result.decode_ms);
   melSpecMs_ += static_cast<int64_t>(result.preprocess_ms);
@@ -987,7 +1008,8 @@ void ParakeetModel::recordTranscriptionResult(const pkt::EngineResult& result) {
 }
 
 std::string ParakeetModel::runSortformerProcess(
-    const Input& input, std::vector<SpeakerSegment>& segmentsOut) {
+    const Input& input, std::vector<SpeakerSegment>& segmentsOut,
+    std::optional<SpeakerProbabilities>* probabilities) {
   if (input.empty())
     return ERR_AUDIO_SHORT;
 
@@ -1000,7 +1022,7 @@ std::string ParakeetModel::runSortformerProcess(
     return ERR_MODEL_NOT_LOADED;
 
   const pkt::DiarizationOptions dopts = buildDiarizationOptions(cfg_);
-  const pkt::DiarizationResult diar = engine->diarize_samples(
+  pkt::DiarizationResult diar = engine->diarize_samples(
       input.data(), static_cast<int>(input.size()), sample_rate_, dopts);
   // Same per-stage mapping as runAsrProcess.
   melSpecMs_ += static_cast<int64_t>(diar.preprocess_ms);
@@ -1008,6 +1030,14 @@ std::string ParakeetModel::runSortformerProcess(
   decoderMs_ += static_cast<int64_t>(diar.decode_ms);
   totalEncodedFrames_ += diar.n_frames;
 
+  if (probabilities) {
+    probabilities->emplace(
+        SpeakerProbabilities{
+            std::move(diar.speaker_probs),
+            diar.n_frames,
+            diar.num_spks,
+            diar.frame_stride_s});
+  }
   if (diar.segments.empty())
     return ERR_NO_SPEAKERS;
 
@@ -1262,8 +1292,16 @@ std::string ParakeetModel::runStreamingProcess(const Input& input) {
   return joined;
 }
 
-void ParakeetModel::process(const Input& input) {
+void ParakeetModel::process(const Input& input) { processInput(input, false); }
+
+void ParakeetModel::processInput(
+    const Input& input, bool includeSpeakerProbabilities) {
   throwIfCancelled();
+  if (includeSpeakerProbabilities &&
+      (!isDiarization() || cfg_.streaming || cfg_.speakerAttribution)) {
+    throwInvalidConfig(
+        "includeSpeakerProbabilities requires standalone batch diarization");
+  }
 
   if (input.empty()) {
     QLOG(logger::Priority::WARNING, "Empty audio input received");
@@ -1279,6 +1317,7 @@ void ParakeetModel::process(const Input& input) {
 
   std::string text;
   std::vector<SpeakerSegment> speakerSegments;
+  Transcript transcript;
   Output attributedSegments;
   bool attributed = false;
   bool streamed = false;
@@ -1301,9 +1340,13 @@ void ParakeetModel::process(const Input& input) {
         text = runStreamingProcess(input);
         streamed = true;
       } else if (isDiarization()) {
-        text = runSortformerProcess(input, speakerSegments);
+        text = runSortformerProcess(
+            input,
+            speakerSegments,
+            includeSpeakerProbabilities ? &transcript.speakerProbabilities
+                                        : nullptr);
       } else {
-        text = runAsrProcess(input);
+        text = runAsrProcess(input, &transcript);
       }
       throwIfCancelled();
     } catch (const std::exception& e) {
@@ -1340,7 +1383,6 @@ void ParakeetModel::process(const Input& input) {
     return;
   }
 
-  Transcript transcript;
   transcript.text = text;
   transcript.start = startTime;
   transcript.end = startTime + duration;
@@ -1381,7 +1423,7 @@ std::any ParakeetModel::process(const std::any& input) {
   reset();
   activeGeneration_.store(generation, std::memory_order_relaxed);
   try {
-    process(modelInput.input);
+    processInput(modelInput.input, modelInput.includeSpeakerProbabilities);
   } catch (...) {
     activeGeneration_.store(0, std::memory_order_relaxed);
     throw;
@@ -1410,6 +1452,8 @@ RuntimeStats ParakeetModel::runtimeStats() const {
   stats.emplace_back("modelLoadMs", static_cast<int64_t>(modelLoadMs_));
   stats.emplace_back("encoderMs", static_cast<int64_t>(encoderMs_));
   stats.emplace_back("decoderMs", static_cast<int64_t>(decoderMs_));
+  stats.emplace_back("segmentPlanMs", segmentPlanMs_);
+  stats.emplace_back("assembleMs", assembleMs_);
   stats.emplace_back("melSpecMs", static_cast<int64_t>(melSpecMs_));
   stats.emplace_back(
       "totalEncodedFrames", static_cast<int64_t>(totalEncodedFrames_));
