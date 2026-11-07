@@ -151,7 +151,7 @@ jobs:
 
   weekly-select-ios:
     needs: weekly
-    if: needs.weekly.outputs.ios != ''
+    if: needs.weekly.outputs.ios != '' && github.event_name != 'workflow_dispatch'
     permissions:
       contents: read
     uses: ./.github/workflows/_select-projects.yml
