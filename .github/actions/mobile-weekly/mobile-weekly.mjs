@@ -4,7 +4,7 @@
 // main's weekend run filed for llm-llamacpp.
 
 import { appendFileSync, existsSync, readFileSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 export function find(root) {
@@ -21,7 +21,7 @@ export function find(root) {
 // Total, passed, failed and skipped test cases on one platform, from devicefarm-summarize-results' test-case-details.json.
 // A case that neither passed on every device nor failed on one counts as skipped.
 export function counts(file) {
-  if (!existsSync(file)) return null
+  if (!file || !existsSync(file)) return null
   const { testCases = [] } = JSON.parse(readFileSync(file, 'utf8'))
   const status = (t) => {
     const s = Object.values(t.results).map((r) => r.status)
@@ -97,13 +97,20 @@ async function report(env) {
   // 422: the label exists already.
   await api(env, '/labels', { method: 'POST', body: JSON.stringify(label), allow: [422] })
   const date = new Date().toISOString().slice(0, 10)
+  // download-artifact unpacks a lone match straight into logs/, not logs/<artifact>/, so each file is found at any
+  // depth and keyed by its console-logs-<slug>-<platform> folder or, unpacked flat, by its "<npm> (<platform>)" title.
+  const details = new Map()
+  const files = existsSync(env.LOGS) ? readdirSync(env.LOGS, { recursive: true }) : []
+  for (const file of files.filter((f) => basename(f) === 'test-case-details.json')) {
+    const path = join(env.LOGS, file)
+    details.set(basename(dirname(path)), path)
+    const { title } = JSON.parse(readFileSync(path, 'utf8'))
+    if (title) details.set(title, path)
+  }
   for (const { slug, npm } of projects) {
     if (seen.has(slug)) continue
     seen.add(slug)
-    const rows = ['Android', 'iOS'].map((p) => [
-      p,
-      counts(join(env.LOGS, `console-logs-${slug}-${p}`, 'test-case-details.json'))
-    ])
+    const rows = ['Android', 'iOS'].map((p) => [p, counts(details.get(`console-logs-${slug}-${p}`) ?? details.get(`${npm} (${p})`))])
     const issue = {
       title: `Weekend Mobile Tests (${npm}) — ${date}`,
       labels: [label.name],
