@@ -420,7 +420,7 @@
             "merge": true
           }
         },
-        "timeoutMinutes": 210
+        "timeoutMinutes": 225
       }
     },
     "benchmark": {

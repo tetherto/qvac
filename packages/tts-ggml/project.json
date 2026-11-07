@@ -386,7 +386,7 @@
             "merge": true
           }
         },
-        "timeoutMinutes": 180
+        "timeoutMinutes": 195
       }
     },
     "benchmark": {

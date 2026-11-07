@@ -172,7 +172,7 @@
           "enablesPerf": false,
           "jobTimeoutMinutes": 25
         },
-        "timeoutMinutes": 120
+        "timeoutMinutes": 135
       }
     }
   },
