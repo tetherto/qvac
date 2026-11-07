@@ -1224,9 +1224,11 @@ namespace LlmLlamacpp {
     device?: string;
     /**
      * Comma-separated GPU backend priority list, e.g. `'cuda,vulkan'`.
-     * Accepted names: cuda, vulkan, metal, opencl, plus
+     * Accepted names: cuda, vulkan, metal, opencl, xdna, plus
      * `auto` for no preference. An unrecognised name is rejected; a recognised
      * one with no device present is skipped. Use `device: 'cpu'` to run on CPU.
+     * `xdna` (the AMD XDNA NPU, Linux x64) is never chosen automatically;
+     * it is used only when named here or in `devices` as `XDNA0`.
      */
     backend?: string;
     gpu_layers?: NumericLike;

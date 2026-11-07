@@ -974,8 +974,8 @@ importers:
   packages/llm-llamacpp:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.26.0
-        version: 0.26.0(@qvac/fabric-android-arm64@0.26.0)(@qvac/fabric-ios@0.26.0)
+        specifier: ^0.27.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -990,11 +990,11 @@ importers:
         version: 3.1.1
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.26.0
-        version: 0.26.0
+        specifier: ^0.27.0
+        version: 0.27.0
       '@qvac/fabric-ios':
-        specifier: ^0.26.0
-        version: 0.26.0
+        specifier: ^0.27.0
+        version: 0.27.0
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
@@ -1054,20 +1054,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.26.0
-        version: 0.26.0
+        specifier: ^0.27.0
+        version: 0.27.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.26.0
-        version: 0.26.0
+        specifier: ^0.27.0
+        version: 0.27.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.26.0
-        version: 0.26.0
+        specifier: ^0.27.0
+        version: 0.27.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.26.0
-        version: 0.26.0
+        specifier: ^0.27.0
+        version: 0.27.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.26.0
-        version: 0.26.0
+        specifier: ^0.27.0
+        version: 0.27.0
 
   packages/logging:
     dependencies:
@@ -4579,6 +4579,10 @@ packages:
     resolution: {integrity: sha512-IBVIaeLj/u0NgClGhhxh7678nYXumONVgOZyjlwwFhQ6DN5IXU8N6lo6U3ZUGfa3xaDHX5pbNoU0HmnTCrVZSw==}
     engines: {bare: '>=1.24.0'}
 
+  '@qvac/fabric-android-arm64@0.27.0':
+    resolution: {integrity: sha512-Icw9egKzoobPj4ssHiL3o7jleFyS6DSFyl8JvZW0EufTtuaPr5Jedy50qyxGCdmO4aU481Zo0u9lcbCPfx7xrA==}
+    engines: {bare: '>=1.24.0'}
+
   '@qvac/fabric-darwin-arm64@0.22.0':
     resolution: {integrity: sha512-VveZlg8vEg02tT6fP9va6yojgyENyvAgOzWh+H8my444wGWUQtk+F1h82F/F/wSPeTFxsJaC29BsztJWM5Rk6A==}
     engines: {bare: '>=1.24.0'}
@@ -4593,6 +4597,12 @@ packages:
 
   '@qvac/fabric-darwin-arm64@0.26.0':
     resolution: {integrity: sha512-4+8j+dN2MnEeZz8dJOUbHAdwyH+A6/TeRTzPaQNXKzCfmnTeLqa9mWgSiOHZrpX0u2LqZj02+lAMUUF1MVLcNA==}
+    engines: {bare: '>=1.24.0'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@qvac/fabric-darwin-arm64@0.27.0':
+    resolution: {integrity: sha512-R7i/CUBVKjDsLFArHFU5w0Rk65YyscDJuen6BooSW5IYTTGsvFmU5E0JL0e48pp+1JBIteygnrbuR2PmFN+q5w==}
     engines: {bare: '>=1.24.0'}
     cpu: [arm64]
     os: [darwin]
@@ -4615,6 +4625,12 @@ packages:
     cpu: [x64]
     os: [darwin]
 
+  '@qvac/fabric-darwin-x64@0.27.0':
+    resolution: {integrity: sha512-LCSZ4LCmlPh7mkQh32UD4tgqQu7BOAdKT947bLNt1z3Haayo8dnTpTsLXDgYmQDeLHFBLOAWIZ9LqoS7ojhQkg==}
+    engines: {bare: '>=1.24.0'}
+    cpu: [x64]
+    os: [darwin]
+
   '@qvac/fabric-ios@0.22.0':
     resolution: {integrity: sha512-JSjz82zfR0jkJdJhxcpwEutZ5WEw3VZUvgMrhYPawZHD1pgN9SQDsdMgu9shay5mA0Kfc4M7jyOAw6/LR8ATOw==}
     engines: {bare: '>=1.24.0'}
@@ -4625,6 +4641,10 @@ packages:
 
   '@qvac/fabric-ios@0.26.0':
     resolution: {integrity: sha512-Zq1YbKRComdCYnao3Ig91Nfmpzz9mbspZwat4CW9De3z7kuDh5pWhaMLu2M/J/4YL26gNre83cA5OeGXmhGgmA==}
+    engines: {bare: '>=1.24.0'}
+
+  '@qvac/fabric-ios@0.27.0':
+    resolution: {integrity: sha512-FBM6BhV3W4JK4EkCt4ZKartSKLqfwejfbMShyzGyaDQtX6fq2/goggj+Rgr2rvH9PzSbIu7KyuQ55iKDdYTJFQ==}
     engines: {bare: '>=1.24.0'}
 
   '@qvac/fabric-linux-arm64@0.22.0':
@@ -4643,6 +4663,13 @@ packages:
 
   '@qvac/fabric-linux-arm64@0.26.0':
     resolution: {integrity: sha512-Jex0YPq4hSS6b+qYY9whVR0YTPJCoJO7FxwUMI1YvmSFsQWEIRW7k3OtZK3gXSTr2TWXqeY42bxqF25PDN4Dzw==}
+    engines: {bare: '>=1.24.0'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@qvac/fabric-linux-arm64@0.27.0':
+    resolution: {integrity: sha512-HKOzcoFI7tCbLxn0DyuIfdWBhhKwJBNjJcv/1oxlcjLZmk3025K2XaGOjunrJRtW9U+yunHFmKCxe7CsuzxDJw==}
     engines: {bare: '>=1.24.0'}
     cpu: [arm64]
     os: [linux]
@@ -4669,6 +4696,13 @@ packages:
     os: [linux]
     libc: [glibc]
 
+  '@qvac/fabric-linux-x64@0.27.0':
+    resolution: {integrity: sha512-A7BWU5yoFCU5ed4K7WCBp95XQbkIeihnp2qFO+tCUyjVPZ2LWrinWsnpKJ+nWSe7an12YA1k8XpPpJrOEPr2ow==}
+    engines: {bare: '>=1.24.0'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
   '@qvac/fabric-win32-x64@0.22.0':
     resolution: {integrity: sha512-6z73O2CJNffTzcOTBrSb2NSCbzE6nh5EgkHie/5gVWVLDlLmXMBVH/+t+RX7siBW6/rYx0xfLi8L7yHuiflTew==}
     engines: {bare: '>=1.24.0'}
@@ -4683,6 +4717,12 @@ packages:
 
   '@qvac/fabric-win32-x64@0.26.0':
     resolution: {integrity: sha512-oBtZ+jythZZzdzLZk23yT/aElPd5JnkOn6VyLMqzG+Dg66d/K2312s3BUvLobhWrmey+x2Nb9QxIPgDx+zxeSQ==}
+    engines: {bare: '>=1.24.0'}
+    cpu: [x64]
+    os: [win32]
+
+  '@qvac/fabric-win32-x64@0.27.0':
+    resolution: {integrity: sha512-mmcTMbGtA2wz0EZmM6UG//mjJAcF9wFuGjvvZp2guEui1WnRL9HA0yXrO7YyCzJhgs1E0V9Hp2MuXe1Ps7Hnjg==}
     engines: {bare: '>=1.24.0'}
     cpu: [x64]
     os: [win32]
@@ -14357,6 +14397,8 @@ snapshots:
 
   '@qvac/fabric-android-arm64@0.26.0': {}
 
+  '@qvac/fabric-android-arm64@0.27.0': {}
+
   '@qvac/fabric-darwin-arm64@0.22.0':
     optional: true
 
@@ -14364,6 +14406,9 @@ snapshots:
     optional: true
 
   '@qvac/fabric-darwin-arm64@0.26.0':
+    optional: true
+
+  '@qvac/fabric-darwin-arm64@0.27.0':
     optional: true
 
   '@qvac/fabric-darwin-x64@0.22.0':
@@ -14375,12 +14420,17 @@ snapshots:
   '@qvac/fabric-darwin-x64@0.26.0':
     optional: true
 
+  '@qvac/fabric-darwin-x64@0.27.0':
+    optional: true
+
   '@qvac/fabric-ios@0.22.0':
     optional: true
 
   '@qvac/fabric-ios@0.24.0': {}
 
   '@qvac/fabric-ios@0.26.0': {}
+
+  '@qvac/fabric-ios@0.27.0': {}
 
   '@qvac/fabric-linux-arm64@0.22.0':
     optional: true
@@ -14389,6 +14439,9 @@ snapshots:
     optional: true
 
   '@qvac/fabric-linux-arm64@0.26.0':
+    optional: true
+
+  '@qvac/fabric-linux-arm64@0.27.0':
     optional: true
 
   '@qvac/fabric-linux-x64@0.22.0':
@@ -14400,6 +14453,9 @@ snapshots:
   '@qvac/fabric-linux-x64@0.26.0':
     optional: true
 
+  '@qvac/fabric-linux-x64@0.27.0':
+    optional: true
+
   '@qvac/fabric-win32-x64@0.22.0':
     optional: true
 
@@ -14407,6 +14463,9 @@ snapshots:
     optional: true
 
   '@qvac/fabric-win32-x64@0.26.0':
+    optional: true
+
+  '@qvac/fabric-win32-x64@0.27.0':
     optional: true
 
   '@qvac/fabric@0.22.0(@qvac/fabric-android-arm64@0.22.0)(@qvac/fabric-ios@0.22.0)':
