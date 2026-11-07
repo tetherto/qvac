@@ -137,6 +137,14 @@ const RULES: Rule[] = [
     }
   },
   {
+    match: ['kv-cache-shared-prefix-default-isolated', 'kv-cache-shared-prefix-opt-in'],
+    skip: {
+      reason:
+        'Step-defined tests have no mobile interpreter and are covered by desktop and Python e2e',
+      platforms: ['mobile']
+    }
+  },
+  {
     match: /^tools-(?!simple-function$|no-function-match$)/,
     skip: { reason: 'Tools test disabled on mobile', platforms: ['mobile'] }
   },
