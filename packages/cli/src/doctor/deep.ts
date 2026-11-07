@@ -2,6 +2,7 @@ import { fork, spawn } from 'node:child_process'
 import fs from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { resolveSdkEntrypoint } from '@/doctor/checks/project'
+import { checkNativeLibraries } from '@/doctor/native-libraries'
 import {
   isDeepProbeMessage,
   isDeepProbeProtocolCandidate,
@@ -418,9 +419,28 @@ export async function checkSdkRuntime(projectRoot: string): Promise<CheckResult>
 }
 
 export async function collectDeepCheckSection(projectRoot: string): Promise<CheckSection> {
+  const nativeChecks = await checkNativeLibraries(projectRoot)
+  return combineDeepChecks(nativeChecks, await checkSdkRuntime(projectRoot))
+}
+
+export function combineDeepChecks(nativeChecks: CheckResult[], runtime: CheckResult): CheckSection {
   return {
     id: 'deep',
     title: 'SDK runtime (deep)',
-    checks: [await checkSdkRuntime(projectRoot)]
+    // Preserve the heartbeat's position for existing JSON consumers, even though
+    // the static preflight runs first. Loader success outweighs a static guess.
+    checks: [
+      runtime,
+      ...nativeChecks.map((check): CheckResult =>
+        runtime.status === 'pass' && check.status === 'fail'
+          ? {
+              ...check,
+              status: 'warn',
+              severity: 'recommended',
+              hint: 'The SDK heartbeat passed. These libraries may belong to an unused plugin or use loader paths the static scan cannot resolve. Check the listed module before changing system packages.'
+            }
+          : check
+      )
+    ]
   }
 }

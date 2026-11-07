@@ -7,17 +7,28 @@ import type { Check } from '@/doctor/check'
 // Locate @qvac/sdk the same way a consumer project's runtime would, so
 // we correctly find the package whether installed locally, hoisted in a
 // monorepo, or linked via workspaces.
-function resolveSdkPackageJson(projectRoot: string): string | null {
+export function resolvePackageJson(projectRoot: string, name = DEFAULT_SDK_NAME): string | null {
   try {
     const req = createRequire(path.join(projectRoot, 'package.json'))
-    for (const spec of [`${DEFAULT_SDK_NAME}/package.json`, `${DEFAULT_SDK_NAME}/package`]) {
+    for (const spec of [`${name}/package.json`, `${name}/package`]) {
       try {
         return req.resolve(spec)
       } catch {
         // try the next spec
       }
     }
-    return null
+    // Packages may export their entry point without exporting the manifest.
+    let dir = path.dirname(req.resolve(name))
+    for (;;) {
+      const manifest = path.join(dir, 'package.json')
+      if (fs.existsSync(manifest)) {
+        const pkg = JSON.parse(fs.readFileSync(manifest, 'utf8')) as { name?: string }
+        if (pkg.name === name) return manifest
+      }
+      const parent = path.dirname(dir)
+      if (parent === dir) return null
+      dir = parent
+    }
   } catch {
     return null
   }
@@ -30,7 +41,7 @@ export function resolveSdkEntrypoint(projectRoot: string): string {
 
 export const checkSdkInstalled: Check = (ctx) => {
   const projectRoot = ctx.projectRoot
-  const pkgPath = resolveSdkPackageJson(projectRoot)
+  const pkgPath = resolvePackageJson(projectRoot)
   if (pkgPath === null) {
     return {
       id: 'project-sdk',
