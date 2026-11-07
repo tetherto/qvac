@@ -84,6 +84,13 @@ struct SdCtxConfig {
   bool flashAttn = false; // flash_attn:           full-model flash attention
   bool diffusionFlashAttn =
       true; // diffusion_flash_attn: flash attention on diffusion only
+  std::string performanceProfile = "auto";
+  int performanceMaxWidth = 0;
+  int performanceMaxHeight = 0;
+  int performanceMaxFrames = 0;
+  bool explicitFlashAttention = false;
+  bool explicitVaeConvDirect = false;
+  bool explicitTensorTypeRules = false;
 
   // -- Memory management -----------------------------------------------------
   bool mmap = false;         // enable_mmap:           memory-map the GGUF file

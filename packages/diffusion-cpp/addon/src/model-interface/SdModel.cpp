@@ -376,7 +376,7 @@ SdModel::~SdModel() = default;
 // and assessFit()
 // ---------------------------------------------------------------------------
 
-void SdModel::fillCtxParams(CtxParams& out) const {
+void SdModel::fillCtxParams(CtxParams& out, bool allowMetadataOnly) const {
   sd_ctx_params_t& params = out.params;
   sd_ctx_params_init(&params);
 
@@ -576,11 +576,38 @@ void SdModel::fillCtxParams(CtxParams& out) const {
   params.diffusion_conv_direct = config_.diffusionConvDirect;
   params.vae_conv_direct = config_.vaeConvDirect;
   params.force_sdxl_vae_conv_scale = config_.forceSDXLVaeConvScale;
+  out.profile = qvac_lib_inference_addon_sd::selectPerformanceProfile(
+      config_,
+      qvac_lib_inference_addon_sd::inspectProfileModel(
+          config_, allowMetadataOnly),
+      qvac_lib_inference_addon_sd::profileDevice(
+          params.backend, params.preferred_gpu_backend));
+  if (out.profile.flashAttention)
+    params.flash_attn = true;
+  if (out.profile.ltxF16)
+    params.tensor_type_rules = qvac_lib_inference_addon_sd::ltxF16TensorRules();
 }
 
 SdModel::FitOutcome SdModel::assessFit(const FitWorkload& workload) const {
+  if (workload.videoFrames > 1)
+    qvac_lib_inference_addon_sd::validatePerformanceWorkload(
+        config_, workload.width, workload.height, workload.videoFrames);
   CtxParams ctx;
-  fillCtxParams(ctx);
+  fillCtxParams(ctx, true);
+
+  // The planner cannot represent per-request profile fallbacks or the H3
+  // graph toggle. Avoid a fit verdict for a different execution graph.
+  if (!workload.upscaleOnly &&
+      (qvac_lib_inference_addon_sd::useVaeGemm(
+           ctx.profile,
+           workload.width,
+           workload.height,
+           1,
+           UINT64_MAX,
+           workload.vaeTiling) ||
+       qvac_lib_inference_addon_sd::useH3LocalOps(
+           ctx.profile, workload.width, workload.height, workload.videoFrames)))
+    return {};
 
   // `sd_fit_params` answers any pinned placement with SD_FIT_FAILURE, and a
   // `device` of cpu reaches it as `preferred_gpu_backend`, which its planner
@@ -755,6 +782,17 @@ void SdModel::load() {
   }
 
   sdCtx_.reset(raw);
+  performanceProfile_ = ctx.profile;
+  performanceBackend_ = params.backend == nullptr ? "" : params.backend;
+  QLOG_IF(
+      qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+      "Performance profile: flash=" +
+          std::to_string(performanceProfile_.flashAttention) +
+          ", h3_local_ops_candidate=" +
+          std::to_string(performanceProfile_.h3LocalOps) +
+          ", vae_gemm_candidate=" +
+          std::to_string(performanceProfile_.vaeGemm) +
+          ", ltx_f16=" + std::to_string(performanceProfile_.ltxF16));
 
   // LTX-2 is identified by the embeddings-connectors input, which no other
   // model family uses. Its temporal shape is used for per-job validation.
@@ -860,6 +898,29 @@ SdModel::processImage(const GenerationJob& job, const picojson::value& parsed) {
   qvac_lib_inference_addon_sd::SdGenConfig gen{};
   qvac_lib_inference_addon_sd::applySdGenHandlers(
       gen, parsed.get<picojson::object>());
+
+  if (performanceProfile_.vaeGemm) {
+    const auto device = qvac_lib_inference_addon_sd::profileDevice(
+        performanceBackend_.c_str(), SD_BACKEND_PREF_GPU);
+    const bool gemm = gen.mode == "txt2img" && gen.loraPath.empty() &&
+                      job.initImagesBytes.empty() &&
+                      job.initImageBytes.empty() &&
+                      qvac_lib_inference_addon_sd::useVaeGemm(
+                          performanceProfile_,
+                          gen.width,
+                          gen.height,
+                          gen.batchCount,
+                          device.freeBytes,
+                          gen.vaeTiling);
+    if (!sd_set_vae_conv_direct(sdCtx_.get(), !gemm))
+      throw StatusError(
+          general_error::InternalError,
+          "VAE performance profile could not be applied");
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        std::string("Automatic VAE convolution: ") +
+            (gemm ? "GEMM" : "direct"));
+  }
 
   if (gen.mode != "txt2img" && gen.mode != "img2img")
     throw StatusError(
@@ -1539,6 +1600,21 @@ SdModel::processVideo(const GenerationJob& job, const picojson::value& parsed) {
             "x" + std::to_string(vid.height));
 
   // -- Decode init / end / control-frame images -----------------------------
+  qvac_lib_inference_addon_sd::validatePerformanceWorkload(
+      config_, vid.width, vid.height, vid.videoFrames);
+  if (performanceProfile_.h3LocalOps) {
+    const bool enabled =
+        vid.mode == "txt2vid" &&
+        qvac_lib_inference_addon_sd::useH3LocalOps(
+            performanceProfile_, vid.width, vid.height, vid.videoFrames);
+    if (!sd_set_h3_local_ops(sdCtx_.get(), enabled))
+      throw StatusError(
+          general_error::InternalError,
+          "MiniMax-H3 performance profile could not be applied");
+    QLOG_IF(
+        qvac_lib_inference_addon_cpp::logger::Priority::INFO,
+        std::string("H3 graph profile: ") + (enabled ? "enabled" : "baseline"));
+  }
   // sd_image_t::data is allocated by stb_image via malloc(), so we wrap each
   // pixel buffer in unique_ptr with image_codec::FreeDeleter to guarantee
   // release on every exit path (including exceptions from generate_video()

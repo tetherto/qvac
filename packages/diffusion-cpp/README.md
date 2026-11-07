@@ -448,6 +448,8 @@ argument.
 | `vae_decode_only`       | boolean                                   | `false`           | Load only VAE decoder weights; leave false for img2img/fusion/hires paths |
 | `vae_tiling`            | boolean                                   | `false`           | Tile VAE decode to reduce peak VRAM                                       |
 | `flash_attn`            | boolean                                   | `false`           | Enable flash attention globally                                           |
+| `performance_profile`  | `auto`, `off`                              | `auto`            | Select [validated model/GPU/API profiles](docs/performance-profiles.md); explicit settings win |
+| `performance_max_width`, `performance_max_height`, `performance_max_frames` | positive integers | unset | Declare all three video output limits to permit bounded memory profiles |
 | `diffusion_fa`          | boolean                                   | `true`            | Enable diffusion-model flash attention; important for FLUX/LTX memory use |
 | `mmap`                  | boolean                                   | backend default   | Memory-map weights when supported                                         |
 | `offload_to_cpu`        | boolean                                   | backend default   | Keep weights on CPU/offload as supported by backend                       |
