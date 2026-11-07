@@ -438,7 +438,8 @@ export const llmPlugin = definePlugin({
             result = await stream.next()
           }
 
-          const { modelExecutionMs, stats, toolCalls, stoppedAtContextBoundary } = result.value
+          const { modelExecutionMs, stats, toolCalls, stoppedAtContextBoundary, stopReason } =
+            result.value
           // Cancellation rides the done path: observable via the last event's
           // stopReason; client aggregates reject with InferenceCancelledError.
           const cancelled = ctx.signal.aborted
@@ -457,6 +458,7 @@ export const llmPlugin = definePlugin({
           const terminalEvents = normalizer.finish({
             ...(stats && { stats }),
             ...(toolCalls.length > 0 && { toolCalls }),
+            ...(stopReason && { stopReason }),
             ...(cancelled && { stopReason: 'cancelled' as const }),
             ...(lengthStop && { stopReason: 'length' as const })
           })
