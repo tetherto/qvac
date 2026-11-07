@@ -395,6 +395,18 @@ TEST_F(LlamaModelTest, IsLoadedAfterProcessing) {
   });
 }
 
+TEST_F(LlamaModelTest, RuntimeBackendNameReportsCpuWithZeroGpuLayers) {
+  config_files["device"] = "gpu";
+  config_files["gpu_layers"] = "0";
+  auto model = createModel();
+  model.waitForLoadInitialization();
+  ASSERT_TRUE(model.isLoaded());
+
+  const auto stats = model.runtimeStats();
+  EXPECT_EQ(model.runtimeBackendName()->get(), "cpu");
+  EXPECT_EQ(getStatValue(stats, "backendDevice"), 0.0);
+}
+
 TEST_F(LlamaModelTest, RuntimeStatsAfterProcessing) {
   if (!fs::exists(getValidModelPath())) {
     FAIL() << "Test model not found at: " << getValidModelPath();
