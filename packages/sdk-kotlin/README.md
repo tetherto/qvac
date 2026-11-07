@@ -511,7 +511,10 @@ several times over while it is decoded, so account for device RAM.
 ./gradlew :android-barekit:assemble
 ./gradlew :android-example:assembleDebug
 ./gradlew publishSdkToBuildRepository
+./gradlew -p examples check  # compile every example in isolation
 ```
+
+The runnable examples the docs embed live in [`examples/`](examples/README.md).
 
 Real-engine cross-client conformance uses the same corpus as JS/Python:
 
