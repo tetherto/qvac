@@ -113,7 +113,8 @@
     "README.md",
     "CHANGELOG.md",
     "NOTICE",
-    "LICENSE"
+    "LICENSE",
+    "examples/generate-with-backends.js"
   ],
   "license": "Apache-2.0",
   "repository": {

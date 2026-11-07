@@ -83,6 +83,10 @@ export interface BuildResponseObjectParams {
    * Wins over the stats, whose counts are summed before that guard could run.
    */
   inputTokens?: number
+  /** The request named a KV cache session; only then is `qvac_cache_tokens` reported. */
+  kvCached?: boolean
+  /** SDK cacheTokens of the last generation round; the stats sum every round. */
+  cacheOccupancy?: number
 }
 
 // Every tool-call field (output items, status, required_action) comes from this
@@ -118,15 +122,32 @@ function requiredAction(calls: FunctionCallSegment[]): Record<string, unknown> {
 }
 
 export function responseUsage(
-  params: Pick<BuildResponseObjectParams, 'text' | 'stats' | 'completionTokens' | 'inputTokens'>
-): { input_tokens: number; output_tokens: number; total_tokens: number } {
+  params: Pick<
+    BuildResponseObjectParams,
+    'text' | 'stats' | 'completionTokens' | 'inputTokens' | 'kvCached' | 'cacheOccupancy'
+  >
+): {
+  input_tokens: number
+  qvac_cache_tokens?: number
+  output_tokens: number
+  total_tokens: number
+} {
   const outputTokens =
     typeof params.completionTokens === 'number' && Number.isFinite(params.completionTokens)
       ? params.completionTokens
       : completionTokensFromStats(params.text || '', params.stats)
   const inputTokens = params.inputTokens ?? inputTokensFromStats(params.stats)
+  // SDK cacheTokens is what the context holds, not what this request reused,
+  // so it is only a QVAC diagnostic.
+  const cacheTokens = params.cacheOccupancy
   return {
     input_tokens: inputTokens,
+    ...(params.kvCached &&
+    typeof cacheTokens === 'number' &&
+    Number.isFinite(cacheTokens) &&
+    cacheTokens >= 0
+      ? { qvac_cache_tokens: cacheTokens }
+      : {}),
     output_tokens: outputTokens,
     total_tokens: inputTokens + outputTokens
   }
