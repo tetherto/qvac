@@ -339,8 +339,27 @@ test('integration manifest is well-formed and covers MODEL_CONFIGS', function (t
   t.is(new Set(names).size, names.length, 'no duplicate model keys')
 
   for (const [name, entry] of Object.entries(manifest.models)) {
+    // CI-only entries: an S3 object, or a pinned URL for another target, each with its dest.
+    const ciKeys = ['dest', 'skip', 'targets']
+    if (entry.s3Path) {
+      // As llm's S3 entries on main: sha256 and bytes, when known, let models-download verify the object.
+      const extra = Object.keys(entry).filter((k) => !ciKeys.includes(k) && k !== 's3Path')
+      t.ok(
+        extra.every((k) => k === 'sha256' || k === 'bytes'),
+        `${name} is an S3 entry, with only its sha256 and bytes besides`
+      )
+      if (entry.sha256 !== undefined || entry.bytes !== undefined) {
+        t.ok(/^[0-9a-f]{64}$/i.test(entry.sha256), `${name} sha256 is pinned`)
+        t.ok(Number.isInteger(entry.bytes) && entry.bytes > 0, `${name} bytes is pinned`)
+      }
+      t.ok(typeof entry.dest === 'string' && entry.dest, `${name} names its dest`)
+      continue
+    }
     t.is(
-      Object.keys(entry).sort().join(','),
+      Object.keys(entry)
+        .filter((k) => !(entry.targets && ciKeys.includes(k)))
+        .sort()
+        .join(','),
       'bytes,sha256,urls',
       `${name} contains only cache-key-bearing fields`
     )

@@ -94,7 +94,8 @@ function mobileCalls(sources = definitions()) {
 
 test('discovery finds the leaves and their callers', () => {
   const need = leavesNeedingActionsRead()
-  assert.ok(need.size >= 12, `expected at least 12 leaves needing actions: read, found ${need.size}`)
+  // 5 since the fabric consumers' mobile workflows gave way to the CI contract's mobile-tests.yml.
+  assert.ok(need.size >= 5, `expected at least 5 leaves needing actions: read, found ${need.size}`)
   const found = mobileCalls()
   // Speech publishing no longer calls mobile tests. Benchmark callers still
   // exercise the reusable workflows and their permission requirements.

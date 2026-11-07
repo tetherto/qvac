@@ -105,9 +105,10 @@ test('on-pr-ts-nx publishes a check for every package on-pr-nx awaits', () => {
 
   // on-pr-nx builds the awaited name per package in a jq map; read it back out.
   const mapped = [...nx.matchAll(/"([a-z0-9-]+)":\s*"([^"]*pr-head-ts-checks[^"]*)"/g)]
+  // Floor against a blind regex; 1 since the fabric consumers moved to the CI contract, leaving diffusion.
   assert.ok(
-    mapped.length >= 8,
-    `expected on-pr-nx to map at least 8 packages, found ${mapped.length}`
+    mapped.length >= 1,
+    `expected on-pr-nx to map at least 1 package, found ${mapped.length}`
   )
 
   for (const [, pkg, awaited] of mapped) {
@@ -179,8 +180,9 @@ test('on-pr-ts-nx triggers on everything on-pr-nx triggers on', () => {
   // matching nothing, which would make the loop below vacuous. Dropped from 8 to
   // 3 when the per-addon on-pr-<pkg>.yml lanes were deleted, leaving on-pr-nx
   // and the carve-outs that keep their own orchestrators, then to 2 when vla
-  // moved to the CI contract, whose pr-checks runs the TS checks itself.
-  assert.ok(consumers.length >= 2, `expected at least 2 awaiting consumers, found ${consumers.length}`)
+  // moved to the CI contract, whose pr-checks runs the TS checks itself, then to
+  // 1 when the classification carve-out followed it.
+  assert.ok(consumers.length >= 1, `expected at least 1 awaiting consumer, found ${consumers.length}`)
 
   const uncovered = []
   for (const name of consumers) {

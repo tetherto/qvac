@@ -45,7 +45,7 @@ source_ref, model, device, block, stability:{kind:'temp'|'probe', value_ms?, wai
 
 ## 3 · Launch grammar (`gh workflow run` inputs)
 
-**`matrix_models`** — comma-separated, three forms, freely mixed; empty = config `defaultModels`:
+**`models`** — comma-separated, three forms, freely mixed; empty = config `defaultModels`:
 
 ```
 qwen3.5-q8                                        # catalog name (config.cjs catalog)
@@ -58,18 +58,16 @@ URLs are reported as Source=HF with repo+ref (unpinned refs flagged); other URLs
 Registry-type sources: `json:` form only, desktop-only (no registry client in the mobile app).
 Presigned S3 URLs work for a one-off dispatch but expire — don't commit them to the catalog.
 
-**`matrix_sources`** — comma-separated builds-under-comparison: `addon` (published, default) ·
+**`sources`** — comma-separated builds-under-comparison: `addon` (published, default) ·
 `addon@candidate` / `addon@baseline` *(build comparison)* · `fabric@<ref>` ·
 `upstream@<ref>` (CLI sources are desktop-only — Linux/macOS/Windows — several-sources mode).
 
 **Scenario** — task-set name from `scenarios.cjs` (`config.defaultScenario`, single `default`
-set today). Config-only: there is no `matrix_scenarios` dispatch input (local override via
+set today). Config-only: there is no `scenarios` word (local override via
 the `QVAC_VLM_SCENARIOS` env still works).
 
-**`matrix_desktop` / `matrix_mobile` / `matrix_preset` / …** — unchanged (see README).
-GitHub caps `workflow_dispatch` at **10 inputs**, and the benchmark now uses all **10**
-(the vestigial `run_matrix` switch was removed — the matrix always runs — and that slot
-was reclaimed by `baseline_npm`, which pins `addon@baseline`; empty = auto-detect latest).
+The legs and the mobile run are `benchmarks.yml` inputs (`configs`, `run_mobile`, `platform`,
+`devices`); everything above is an `args` word (see README).
 
 ## 4 · Quality reporting (no gate)
 

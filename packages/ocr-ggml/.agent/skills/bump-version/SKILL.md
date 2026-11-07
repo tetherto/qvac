@@ -175,8 +175,9 @@ Rules:
 
 ## Step 6 — Report what happens next
 
-Look up the git tag by reading `repoName` from `packages/<pkg>/project.json`
-(`targets.on-merge.options.ci`), which `on-merge-nx.yml` passes to `create-release-tag.yml`.
+Look up the git tag prefix in `packages/<pkg>/project.json`: `metadata.publish.tagPrefix` on the
+`publish` target for a package on the CI contract (passed by `publish-npm.yml`), else `repoName` in
+`targets.on-merge.options.ci` (passed by `on-merge-nx.yml`). Both feed `create-release-tag.yml`.
 **Never derive the tag from the directory name** — several are counter-intuitive:
 
 | Package | Tag |
@@ -184,15 +185,15 @@ Look up the git tag by reading `repoName` from `packages/<pkg>/project.json`
 | `llm-llamacpp` | `llamacpp-llm-v<ver>` (reversed) |
 | `embed-llamacpp` | `llamacpp-embed-v<ver>` (reversed) |
 | `vla-ggml` | `vla-v<ver>` (no `-ggml`) |
-| `translation-nmtcpp` | bare `v<ver>` |
+| `translation-nmtcpp` | `translation-nmtcpp-v<ver>` |
 | `ocr-ggml` | `ocr-ggml-v<ver>` |
 | `classification-ggml` | `classification-ggml-v<ver>` |
 
-Addons get a **git tag only, no GitHub Release** — `on-merge-nx.yml` calls `create-release-tag.yml`
+Addons get a **git tag only, no GitHub Release** — the release workflow calls `create-release-tag.yml`
 since #2602. Do not promise a Releases-page entry; only the SDK publishes one.
 
 Then tell the user the next step is `/release <pkg>`, which cuts `release-<pkg>-<version>`, dispatches
-`on-merge-nx.yml` with `package=<pkg>`, and pauses at
+its release workflow (`publish-npm.yml` for a package on the CI contract, else `on-merge-nx.yml`), and pauses at
 the human-only `npm` approval gate.
 
 ## Step 7 — Verify before committing

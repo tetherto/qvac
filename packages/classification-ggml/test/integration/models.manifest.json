@@ -1,0 +1,16 @@
+{
+  "models": {
+    "megaloc-f16.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-f16.gguf",
+      "dest": "test/fixtures/megaloc-f16.gguf",
+      "sha256": "f2519f42a826bb82f5d3bd6360e6017fb156ad3cb25f71d73163df01d26c6636",
+      "targets": ["test:integration", "test:mobile"]
+    },
+    "megaloc-mixed.gguf": {
+      "s3Path": "qvac_models_compiled/ggml/megaloc/2026-10-20/megaloc-mixed.gguf",
+      "dest": "test/fixtures/megaloc-mixed.gguf",
+      "sha256": "c1215bca09ed783f34e66ab372b0b02e75213733bea8105764557b58f2082575",
+      "targets": ["test:integration", "test:mobile"]
+    }
+  }
+}

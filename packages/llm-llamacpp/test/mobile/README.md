@@ -25,21 +25,15 @@ There is **no separate `test.cjs` file** and the addon no longer takes a `Loader
 
 ## Test Groups & the Weekend Suite
 
-`test-groups.json` shards the suite into Device Farm runs. The per-PR mobile
-workflow auto-detects **only** the `android` and `ios` keys — every group under
-them runs on each labelled PR.
+`test-groups.json` shards the suite into Device Farm runs. The mobile workflow
+(`mobile-tests.yml`, run by dispatch) reads **only** the `android` and `ios`
+keys, and every group under them runs.
 
-The sibling `androidWeekly` / `iosWeekly` keys are **ignored by the PR path** and
-are consumed only by `.github/workflows/weekend-mobile-test-llm-llamacpp.yml`
-(Sundays 06:00 UTC + manual dispatch), which feeds them to the reusable mobile
-workflow as a `test_groups` override. The heavier/slower tests (both OCR tests,
-the Elephant + HighResAurora image functional tests, and the full
-`vlmPerf{Gemma4,Qwen35}` perf groups) live there to keep PR runs fast.
-
-To move a test between the per-PR and weekend cadence, just move its entry
-between the `android`/`ios` and `androidWeekly`/`iosWeekly` sections — no
-workflow edits required. The weekend run posts a pass/fail report to a
-`weekly-mobile-report`-labelled GitHub issue and to the run's Summary page.
+The sibling `androidWeekly` / `iosWeekly` keys are **not run by CI**. The
+heavier/slower tests (both OCR tests, the Elephant + HighResAurora image
+functional tests, and the full `vlmPerf{Gemma4,Qwen35}` perf groups) live
+there to keep the dispatched runs fast; to run one in CI, move its entry into
+the `android`/`ios` sections.
 
 Every generated runner must appear in a group, and every group must name a
 generated runner. Coverage is pooled across each OS family's daily and weekly

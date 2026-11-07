@@ -27,7 +27,7 @@ const contract = readdirSync(join(root, 'packages'))
   .filter((project) => project.tags?.includes(TAG))
 
 // Targets whose jobs restore the build job's prebuild-<slug>-<platform>-<arch> artifact.
-const RESTORE_BUILD = ['cpp:build', 'cpp:tests', 'test:integration', 'test:backend']
+const RESTORE_BUILD = ['cpp:build', 'cpp:tests', 'test:integration', 'test:backend', 'benchmark']
 // Targets that set up the host; an argument meant for the target after them must never reach their commands.
 const HOST_TARGETS = ['ci:setup', 'ci:system']
 
