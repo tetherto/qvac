@@ -22,6 +22,7 @@ declare class VlaModel {
     private _job;
     private _run;
     private _handle;
+    private _instanceGeneration;
     private _hparams;
     private _backendName;
     private _hasActiveResponse;
@@ -183,6 +184,8 @@ declare namespace VlaModel {
         total_ms: number;
         /** 0 = CPU backend, 1 = GPU backend (Vulkan / Metal / OpenCL). */
         backendDevice: number;
+        /** Backend family, such as `cpu`, `cuda`, `metal`, or `vulkan`. */
+        backendName?: string;
     }
     interface VlaRunResult {
         actions: Float32Array;
