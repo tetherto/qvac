@@ -1,7 +1,7 @@
 {
   "name": "@qvac/classification-ggml",
   "version": "0.35.0",
-  "description": "GGML vision addon for QVAC: MobileNet classification and MegaLoc image embeddings",
+  "description": "GGML vision addon for QVAC: MobileNet classification, MegaLoc image embeddings and BridgeDepth stereo disparity",
   "addon": true,
   "scripts": {
     "build": "npm run build:ts && npm run build:native",
@@ -17,7 +17,7 @@
     "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
     "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
-    "lint-cpp": "clang-tidy -p build addon/src/js-interface/binding.cpp addon/src/model-interface/mobilenet/ClassificationModel.cpp addon/src/model-interface/ImagePreprocessor.cpp addon/src/model-interface/mobilenet/MobileNetGraph.cpp addon/src/model-interface/megaloc/MegaLocModel.cpp addon/src/model-interface/megaloc/MegaLocPreprocessor.cpp",
+    "lint-cpp": "clang-tidy -p build addon/src/js-interface/binding.cpp addon/src/model-interface/mobilenet/ClassificationModel.cpp addon/src/model-interface/ImagePreprocessor.cpp addon/src/model-interface/mobilenet/MobileNetGraph.cpp addon/src/model-interface/megaloc/MegaLocModel.cpp addon/src/model-interface/megaloc/MegaLocPreprocessor.cpp addon/src/model-interface/GgmlBackend.cpp addon/src/model-interface/bridgedepth/BridgeDepthGraph.cpp addon/src/model-interface/bridgedepth/BridgeDepthModel.cpp",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "npm run test:types && npm run test:package && npm run test:integration",
     "test:package": "node --test test/package/package-contract.test.js",
@@ -54,8 +54,12 @@
     "addon.d.ts",
     "megaloc.js",
     "megaloc.d.ts",
+    "bridgedepth.js",
+    "bridgedepth.d.ts",
     "scripts/convert-megaloc.py",
+    "scripts/convert-bridgedepth.py",
     "LICENSE-MegaLoc",
+    "LICENSE-BridgeDepth",
     "test/fixtures",
     "!test/fixtures/*.gguf",
     "prebuilds",
@@ -66,7 +70,9 @@
     "NOTICE",
     "README.md",
     "docs/megaloc.md",
-    "!test/mobile/testAssets/megaloc-*"
+    "docs/bridgedepth.md",
+    "!test/mobile/testAssets/megaloc-*",
+    "!test/mobile/testAssets/bridgedepth-*"
   ],
   "repository": {
     "type": "git",
