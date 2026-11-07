@@ -1,5 +1,5 @@
 import type { ServerResponse } from 'node:http'
-import type { CompletionRun, Tool } from '@qvac/sdk'
+import type { CompletionRun, Tool, ToolCall } from '@qvac/sdk'
 import { sendSSE, endSSE } from '@/serve/lib/sse'
 import { accumulateUsage, formatToolErrors } from '@/serve/core/completion'
 import {
@@ -10,6 +10,7 @@ import { sdkToolCallsToOpenai } from '@/serve/extensions/openai/adapters/tool-ca
 import {
   MAX_TOOL_SEARCH_ROUNDS,
   foldToolSearch,
+  isInternalToolSearch,
   stripToolSearchCalls
 } from '@/serve/lib/tool-search'
 import type { GenerationParams, ResponseFormat } from '@/serve/extensions/openai/schemas/common'
@@ -19,9 +20,14 @@ import type {
 } from '@/serve/extensions/openai/schemas/responses'
 import {
   buildResponseObject,
+  functionCallItem,
   clientToolName,
   functionCallOutputItemId,
-  messageId
+  inputTokensFromStats,
+  messageId,
+  outputItem,
+  reasoningItemId,
+  type OutputSegment
 } from '@/serve/extensions/openai/adapters/responses-shape'
 import {
   RESPONSES_DEFAULT_TTL_SEC,
@@ -65,6 +71,154 @@ export interface ResponsesHandlerParams {
   maxOutputTokens: number | undefined
   parallelToolCalls: boolean
   previousResponseId: string | null
+  kvCached?: boolean
+}
+
+type SendEvent = (event: Record<string, unknown>) => void
+
+interface OutputTimeline {
+  text: (token: string) => void
+  reasoning: (token: string) => void
+  toolCall: (call: ToolCall) => void
+  /** Ends a generation round; the next round's output starts new items. */
+  endRound: () => void
+  /** Closes the open item and returns every item; an empty turn gets an empty message. */
+  finish: () => OutputSegment[]
+}
+
+type TextKind = 'message' | 'reasoning'
+
+// Output items in the order the model produces them, function calls included.
+// Each item finishes before the next starts, so text that follows reasoning or
+// a call opens a new message item. Streaming passes `send` to emit the matching
+// SSE events; blocking does not.
+function createOutputTimeline(
+  tools: Tool[] | undefined,
+  namespaces: ToolNamespaces | undefined,
+  send?: SendEvent
+): OutputTimeline {
+  type Open = Extract<OutputSegment, { type: TextKind }> & { outputIndex: number }
+  let nextOutputIndex = 0
+  let open: Open | undefined
+  const items: OutputSegment[] = []
+
+  function start(type: TextKind): Open {
+    close()
+    const item: Open = {
+      type,
+      id: type === 'message' ? messageId() : reasoningItemId(),
+      text: '',
+      outputIndex: nextOutputIndex++
+    }
+    open = item
+    items.push(item)
+    const part = type === 'message' ? 'output_text' : 'reasoning_text'
+    send?.({
+      type: 'response.output_item.added',
+      output_index: item.outputIndex,
+      item:
+        type === 'message'
+          ? { type: 'message', id: item.id, status: 'in_progress', role: 'assistant', content: [] }
+          : { type: 'reasoning', id: item.id, status: 'in_progress', summary: [], content: [] }
+    })
+    send?.({
+      type: 'response.content_part.added',
+      item_id: item.id,
+      output_index: item.outputIndex,
+      content_index: 0,
+      part: { type: part, text: '' }
+    })
+    return item
+  }
+
+  function close(): void {
+    const item = open
+    if (!item) return
+    open = undefined
+    const part = item.type === 'message' ? 'output_text' : 'reasoning_text'
+    send?.({
+      type: item.type === 'message' ? 'response.output_text.done' : 'response.reasoning_text.done',
+      item_id: item.id,
+      output_index: item.outputIndex,
+      content_index: 0,
+      text: item.text
+    })
+    send?.({
+      type: 'response.content_part.done',
+      item_id: item.id,
+      output_index: item.outputIndex,
+      content_index: 0,
+      part: { type: part, text: item.text }
+    })
+    send?.({
+      type: 'response.output_item.done',
+      output_index: item.outputIndex,
+      item: outputItem(item)
+    })
+  }
+
+  function add(type: TextKind, token: string): void {
+    const item = open?.type === type ? open : start(type)
+    item.text += token
+    send?.({
+      type: type === 'message' ? 'response.output_text.delta' : 'response.reasoning_text.delta',
+      item_id: item.id,
+      output_index: item.outputIndex,
+      content_index: 0,
+      delta: token
+    })
+  }
+
+  function toolCall(call: ToolCall): void {
+    if (isInternalToolSearch(tools, call)) return
+    close()
+    const tc = sdkToolCallsToOpenai([call])![0]!
+    const item = {
+      type: 'function_call' as const,
+      id: functionCallOutputItemId(),
+      callId: tc.id,
+      ...clientToolName(tc.function.name, namespaces),
+      arguments: tc.function.arguments
+    }
+    const outputIndex = nextOutputIndex++
+    items.push(item)
+    send?.({
+      type: 'response.output_item.added',
+      output_index: outputIndex,
+      item: functionCallItem(item, 'in_progress')
+    })
+    send?.({
+      type: 'response.function_call_arguments.delta',
+      item_id: item.id,
+      output_index: outputIndex,
+      delta: item.arguments
+    })
+    send?.({
+      type: 'response.function_call_arguments.done',
+      item_id: item.id,
+      output_index: outputIndex,
+      arguments: item.arguments
+    })
+    send?.({ type: 'response.output_item.done', output_index: outputIndex, item: outputItem(item) })
+  }
+
+  return {
+    text: (token) => add('message', token),
+    reasoning: (token) => add('reasoning', token),
+    toolCall,
+    endRound: close,
+    finish: () => {
+      if (!items.some((item) => item.type !== 'reasoning')) start('message')
+      close()
+      return items.map((item) =>
+        item.type === 'function_call' ? item : { type: item.type, id: item.id, text: item.text }
+      )
+    }
+  }
+}
+
+function answerText(items: OutputSegment[]): string {
+  return items.map((item) => (item.type === 'message' ? item.text : '')).join('')
 }
 
 export async function writeBlockingResponse(
@@ -78,9 +232,19 @@ export async function writeBlockingResponse(
   let turnHistory = p.history
   let drained
   let total: DrainedOpenAICompletion | undefined
+  let inputTokens = 0
+  const timeline = createOutputTimeline(p.tools, p.toolNamespaces)
   for (let round = 0; ; round++) {
-    drained = await drainCompletion(runTurn(turnHistory))
+    if (round > 0) timeline.endRound()
+    drained = await drainCompletion(
+      runTurn(turnHistory),
+      timeline.text,
+      timeline.reasoning,
+      timeline.toolCall
+    )
     total = accumulateUsage(total, drained)
+    // Per round: the overlap guard needs each round's own concurrency.
+    inputTokens += inputTokensFromStats(drained.stats)
     if (round >= MAX_TOOL_SEARCH_ROUNDS) break
     const extended = foldToolSearch(
       p.tools,
@@ -91,15 +255,17 @@ export async function writeBlockingResponse(
     if (!extended) break
     turnHistory = extended
   }
-  const { text, toolCalls, toolErrors, stats, stopReason, completionTokens } = stripToolSearchCalls(
+  const { toolCalls, toolErrors, stats, stopReason, completionTokens } = stripToolSearchCalls(
     p.tools,
     total ?? drained
   )
+  const items = timeline.finish()
 
   const responseObject = buildResponseObject({
     id: p.rid,
     modelAlias: p.modelAlias,
-    text,
+    text: answerText(items),
+    items,
     toolCalls,
     createdAtSec: p.createdAtSec,
     metadata: p.metadata,
@@ -110,7 +276,12 @@ export async function writeBlockingResponse(
     previousResponseId: p.previousResponseId,
     store: p.storeEnabled,
     ...(p.toolNamespaces !== undefined ? { toolNamespaces: p.toolNamespaces } : {}),
+    ...(p.kvCached ? { kvCached: true } : {}),
+    ...(drained?.stats?.cacheTokens !== undefined
+      ? { cacheOccupancy: drained.stats.cacheTokens }
+      : {}),
     completionTokens,
+    inputTokens,
     ...(stopReason !== undefined ? { stopReason } : {}),
     ...(stats !== undefined ? { stats } : {})
   })
@@ -143,15 +314,26 @@ export async function writeBlockingResponse(
   return responseObject
 }
 
+// Every event of a Responses stream carries one increasing sequence number;
+// kept per response so an error path outside the writer continues it.
+const streamSequence = new WeakMap<ServerResponse, number>()
+
+export function takeSequenceNumber(res: ServerResponse): number {
+  const next = streamSequence.get(res) ?? 0
+  streamSequence.set(res, next + 1)
+  return next
+}
+
 export async function writeStreamingResponse(
   res: ServerResponse,
   p: ResponsesHandlerParams,
   runTurn: RunTurn
 ): Promise<Record<string, unknown>> {
-  const msgId = messageId()
-  let fullText = ''
+  // Every event carries one increasing sequence number.
+  const emit: SendEvent = (event) =>
+    sendSSE(res, { ...event, sequence_number: takeSequenceNumber(res) })
 
-  sendSSE(res, {
+  emit({
     type: 'response.created',
     response: {
       id: p.rid,
@@ -161,48 +343,32 @@ export async function writeStreamingResponse(
       model: p.modelAlias
     }
   })
-  sendSSE(res, {
-    type: 'response.output_item.added',
-    output_index: 0,
-    item: { type: 'message', id: msgId, status: 'in_progress', role: 'assistant', content: [] },
-    sequence_number: 0,
-    response_id: p.rid
-  })
-  sendSSE(res, {
-    type: 'response.content_part.added',
-    item_id: msgId,
-    output_index: 0,
-    content_index: 0,
-    part: { type: 'output_text', text: '' },
-    response_id: p.rid
-  })
 
   // Every turn streams live. Tool-call syntax is framed into `toolCall` events
   // by the normalizer, so a search turn emits no text deltas to withhold; what
   // it can emit is a preamble, which is fine to show. Only the SSE stream is
   // held open across a search round.
-  const sendDelta = (token: string) =>
-    sendSSE(res, {
-      type: 'response.output_text.delta',
-      item_id: msgId,
-      output_index: 0,
-      content_index: 0,
-      delta: token,
-      response_id: p.rid
-    })
+  const timeline = createOutputTimeline(p.tools, p.toolNamespaces, (event) =>
+    emit({ ...event, response_id: p.rid })
+  )
 
   let turnHistory = p.history
   let drained
   let total: DrainedOpenAICompletion | undefined
+  let inputTokens = 0
   for (let round = 0; ; round++) {
-    // Only the answering turn's text belongs in the final response object; a
-    // search turn's preamble was streamed but is not part of the answer.
-    fullText = ''
-    drained = await drainCompletion(runTurn(turnHistory), (token) => {
-      fullText += token
-      sendDelta(token)
-    })
+    // A search turn's preamble stays in the response object: it was streamed at
+    // its own output_index, which must match its position in `output`.
+    if (round > 0) timeline.endRound()
+    drained = await drainCompletion(
+      runTurn(turnHistory),
+      timeline.text,
+      timeline.reasoning,
+      timeline.toolCall
+    )
     total = accumulateUsage(total, drained)
+    // Per round: the overlap guard needs each round's own concurrency.
+    inputTokens += inputTokensFromStats(drained.stats)
 
     const extended =
       round >= MAX_TOOL_SEARCH_ROUNDS
@@ -222,93 +388,13 @@ export async function writeStreamingResponse(
     p.tools,
     total ?? drained
   )
-  const hasToolCalls = toolCalls.length > 0
-
-  sendSSE(res, {
-    type: 'response.output_text.done',
-    item_id: msgId,
-    output_index: 0,
-    content_index: 0,
-    text: fullText,
-    response_id: p.rid
-  })
-  sendSSE(res, {
-    type: 'response.content_part.done',
-    item_id: msgId,
-    output_index: 0,
-    content_index: 0,
-    response_id: p.rid
-  })
-  sendSSE(res, {
-    type: 'response.output_item.done',
-    output_index: 0,
-    item: {
-      type: 'message',
-      id: msgId,
-      status: 'completed',
-      role: 'assistant',
-      content: [{ type: 'output_text', text: fullText, annotations: [] }]
-    },
-    response_id: p.rid
-  })
-
-  const openaiCalls = sdkToolCallsToOpenai(toolCalls)
-  const fcItemIds = hasToolCalls ? (openaiCalls ?? []).map(() => functionCallOutputItemId()) : []
-
-  if (hasToolCalls) {
-    let i = 0
-    for (const tc of openaiCalls ?? []) {
-      const fcItemId = fcItemIds[i]!
-      const outputIndex = i + 1
-      const argsStr = tc.function.arguments
-      sendSSE(res, {
-        type: 'response.output_item.added',
-        output_index: outputIndex,
-        item: {
-          type: 'function_call',
-          id: fcItemId,
-          call_id: tc.id,
-          ...clientToolName(tc.function.name, p.toolNamespaces),
-          arguments: '',
-          status: 'in_progress'
-        },
-        response_id: p.rid
-      })
-      sendSSE(res, {
-        type: 'response.function_call_arguments.delta',
-        item_id: fcItemId,
-        output_index: outputIndex,
-        delta: argsStr,
-        response_id: p.rid
-      })
-      sendSSE(res, {
-        type: 'response.function_call_arguments.done',
-        item_id: fcItemId,
-        output_index: outputIndex,
-        arguments: argsStr,
-        response_id: p.rid
-      })
-      sendSSE(res, {
-        type: 'response.output_item.done',
-        output_index: outputIndex,
-        item: {
-          type: 'function_call',
-          id: fcItemId,
-          call_id: tc.id,
-          ...clientToolName(tc.function.name, p.toolNamespaces),
-          arguments: argsStr,
-          status: 'completed'
-        },
-        response_id: p.rid
-      })
-      i++
-    }
-  }
+  const items = timeline.finish()
 
   const responseObject = buildResponseObject({
     id: p.rid,
     modelAlias: p.modelAlias,
-    text: fullText,
+    text: answerText(items),
+    items,
     toolCalls,
     createdAtSec: p.createdAtSec,
     metadata: p.metadata,
@@ -319,9 +405,12 @@ export async function writeStreamingResponse(
     previousResponseId: p.previousResponseId,
     store: p.storeEnabled,
     ...(p.toolNamespaces !== undefined ? { toolNamespaces: p.toolNamespaces } : {}),
-    messageItemId: msgId,
+    ...(p.kvCached ? { kvCached: true } : {}),
+    ...(drained?.stats?.cacheTokens !== undefined
+      ? { cacheOccupancy: drained.stats.cacheTokens }
+      : {}),
     completionTokens,
-    ...(hasToolCalls ? { functionCallItemIds: fcItemIds } : {}),
+    inputTokens,
     ...(stopReason !== undefined ? { stopReason } : {}),
     ...(stats !== undefined ? { stats } : {})
   })
@@ -340,7 +429,7 @@ export async function writeStreamingResponse(
 
   const terminalType =
     responseObject['status'] === 'incomplete' ? 'response.incomplete' : 'response.completed'
-  sendSSE(res, { type: terminalType, response: responseObject })
+  emit({ type: terminalType, response: responseObject })
   endSSE(res, { sentinel: false })
   p.ctx.logger.info(
     `  responses stream done id=${p.rid} stored=${p.storeEnabled}${formatToolErrors(toolErrors)}`

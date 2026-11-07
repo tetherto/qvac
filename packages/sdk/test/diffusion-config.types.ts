@@ -29,3 +29,17 @@ acceptConfig({
 })
 // @ts-expect-error the projector uses the shared model-source type
 acceptConfig({ projectionModelSrc: true })
+
+function acceptGeneration(_params: import('@qvac/inference/surface').DiffusionClientParams) {}
+
+acceptGeneration({
+  modelId: 'qwen-turbo',
+  prompt: 'A red teapot.',
+  custom_sigmas: [1, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0],
+  cfg_scale: 1,
+  sampling_method: 'euler',
+  vae_tiling: true,
+  vae_tile_size: 64
+})
+// @ts-expect-error custom sigma schedules contain numbers
+acceptGeneration({ modelId: 'qwen-turbo', prompt: 'A teapot.', custom_sigmas: ['1', '0'] })

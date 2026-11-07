@@ -136,8 +136,8 @@ const fit = await assessModelFit({
 
 `transcriptionWorkload` is fit-only and requires a positive duration in seconds.
 It accepts the same prompt, hotwords, and token limit as MOSS transcription;
-omit either prompt or hotwords. Without a declared workload or an available
-registry description/local model, the assessment can remain `unknown`.
+omit either prompt or hotwords. Without a declared workload, or without a
+registry description or local model, the verdict is `unknown`.
 Assessment does not load the model, reserve memory, or block transcription.
 
 ## Nemotron 3 speaker diarization

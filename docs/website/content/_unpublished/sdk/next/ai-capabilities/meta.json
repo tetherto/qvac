@@ -3,6 +3,7 @@
   "pages": [
     "text-generation",
     "text-embeddings",
+    "multimodal-embeddings",
     "rag",
     "fine-tuning",
     "multimodal",

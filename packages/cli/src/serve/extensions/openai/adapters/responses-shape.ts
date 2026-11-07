@@ -12,6 +12,10 @@ export function messageId(): string {
   return `msg_${randomId()}`
 }
 
+export function reasoningItemId(): string {
+  return `rs_${randomId()}`
+}
+
 export function functionCallOutputItemId(): string {
   return `fc_${randomId()}`
 }
@@ -20,10 +24,31 @@ function randomId(): string {
   return crypto.randomUUID()
 }
 
+/** One output item, in the order the model produced it. */
+export type OutputSegment =
+  | { type: 'message' | 'reasoning'; id: string; text: string }
+  | {
+      type: 'function_call'
+      id: string
+      callId: string
+      /** As the client declared it; a namespaced tool's `namespace` is split out. */
+      name: string
+      namespace?: string
+      arguments: string
+    }
+
+type FunctionCallSegment = Extract<OutputSegment, { type: 'function_call' }>
+
 export interface BuildResponseObjectParams {
   id: string
   modelAlias: string
+  /** The answer, all message text joined; `output_text`. */
   text: string
+  /**
+   * Output items in order, function calls included. Without it, `output` holds
+   * one message carrying `text`, then a `function_call` per entry of `toolCalls`.
+   */
+  items?: OutputSegment[]
   toolCalls: ToolCall[] | null | undefined
   createdAtSec: number
   metadata: Record<string, unknown> | null | undefined
@@ -53,51 +78,103 @@ export interface BuildResponseObjectParams {
    * tool calls take precedence with `requires_action`.
    */
   stopReason?: string
+  /**
+   * Input tokens summed per generation round (see `inputTokensFromStats`).
+   * Wins over the stats, whose counts are summed before that guard could run.
+   */
+  inputTokens?: number
+  /** The request named a KV cache session; only then is `qvac_cache_tokens` reported. */
+  kvCached?: boolean
+  /** SDK cacheTokens of the last generation round; the stats sum every round. */
+  cacheOccupancy?: number
 }
 
-export function buildResponseObject(params: BuildResponseObjectParams): Record<string, unknown> {
-  const hasToolCalls =
-    params.toolCalls !== null && params.toolCalls !== undefined && params.toolCalls.length > 0
-  const msgId = params.messageItemId ?? messageId()
-  const output: unknown[] = []
+// Every tool-call field (output items, status, required_action) comes from this
+// one list: the ordered items when given, otherwise `toolCalls`.
+function responseToolCalls(params: BuildResponseObjectParams): FunctionCallSegment[] {
+  if (params.items) {
+    return params.items.filter((item): item is FunctionCallSegment => item.type === 'function_call')
+  }
+  return (sdkToolCallsToOpenai(params.toolCalls) ?? []).map((tc, i) => ({
+    type: 'function_call',
+    id: params.functionCallItemIds?.[i] ?? functionCallOutputItemId(),
+    callId: tc.id,
+    ...clientToolName(tc.function.name, params.toolNamespaces),
+    arguments: tc.function.arguments
+  }))
+}
 
-  output.push({
-    type: 'message',
-    id: msgId,
-    status: 'completed',
-    role: 'assistant',
-    content: [{ type: 'output_text', text: params.text || '', annotations: [] }]
-  })
-
-  const openaiCalls = sdkToolCallsToOpenai(params.toolCalls)
-  if (hasToolCalls) {
-    const ids = params.functionCallItemIds
-    let i = 0
-    for (const tc of openaiCalls ?? []) {
-      const fcId = ids !== undefined && ids[i] !== undefined ? ids[i]! : functionCallOutputItemId()
-      i++
-      output.push({
-        type: 'function_call',
-        id: fcId,
-        call_id: tc.id,
-        ...clientToolName(tc.function.name, params.toolNamespaces),
-        arguments: tc.function.arguments,
-        status: 'completed'
-      })
+function requiredAction(calls: FunctionCallSegment[]): Record<string, unknown> {
+  return {
+    type: 'submit_tool_outputs',
+    submit_tool_outputs: {
+      tool_calls: calls.map((call) => ({
+        id: call.callId,
+        type: 'function',
+        function: {
+          name: call.name,
+          ...(call.namespace !== undefined && { namespace: call.namespace }),
+          arguments: call.arguments
+        }
+      }))
     }
   }
+}
 
+export function responseUsage(
+  params: Pick<
+    BuildResponseObjectParams,
+    'text' | 'stats' | 'completionTokens' | 'inputTokens' | 'kvCached' | 'cacheOccupancy'
+  >
+): {
+  input_tokens: number
+  qvac_cache_tokens?: number
+  output_tokens: number
+  total_tokens: number
+} {
   const outputTokens =
     typeof params.completionTokens === 'number' && Number.isFinite(params.completionTokens)
       ? params.completionTokens
       : completionTokensFromStats(params.text || '', params.stats)
-  // SDK does not expose prompt token count today; `cacheTokens` is KV-cache hit count, not full prompt size.
-  const inputTokens = 0
-  const usage = {
+  const inputTokens = params.inputTokens ?? inputTokensFromStats(params.stats)
+  // SDK cacheTokens is what the context holds, not what this request reused,
+  // so it is only a QVAC diagnostic.
+  const cacheTokens = params.cacheOccupancy
+  return {
     input_tokens: inputTokens,
+    ...(params.kvCached &&
+    typeof cacheTokens === 'number' &&
+    Number.isFinite(cacheTokens) &&
+    cacheTokens >= 0
+      ? { qvac_cache_tokens: cacheTokens }
+      : {}),
     output_tokens: outputTokens,
     total_tokens: inputTokens + outputTokens
   }
+}
+
+// The request settings a response echoes back, each only when it was set.
+function requestEcho(params: BuildResponseObjectParams): Record<string, unknown> {
+  return {
+    ...(params.metadata !== undefined && params.metadata !== null && { metadata: params.metadata }),
+    ...(params.temperature !== undefined && { temperature: params.temperature }),
+    ...(params.topP !== undefined && { top_p: params.topP }),
+    ...(params.maxOutputTokens !== undefined && { max_output_tokens: params.maxOutputTokens }),
+    ...(params.previousResponseId && { previous_response_id: params.previousResponseId })
+  }
+}
+
+export function buildResponseObject(params: BuildResponseObjectParams): Record<string, unknown> {
+  const calls = responseToolCalls(params)
+  const hasToolCalls = calls.length > 0
+  const output: unknown[] = params.items
+    ? params.items.map(outputItem)
+    : [
+        messageItem(params.messageItemId ?? messageId(), params.text || ''),
+        ...calls.map((call) => functionCallItem(call, 'completed'))
+      ]
+
+  const usage = responseUsage(params)
 
   const truncated = !hasToolCalls && params.stopReason === 'length'
   const status = hasToolCalls ? 'requires_action' : truncated ? 'incomplete' : 'completed'
@@ -119,31 +196,67 @@ export function buildResponseObject(params: BuildResponseObjectParams): Record<s
     base['incomplete_details'] = { reason: 'max_output_tokens' }
   }
 
-  if (hasToolCalls) {
-    base['required_action'] = {
-      type: 'submit_tool_outputs',
-      submit_tool_outputs: {
-        tool_calls: (openaiCalls ?? []).map((tc) => ({
-          id: tc.id,
-          type: 'function',
-          function: {
-            ...clientToolName(tc.function.name, params.toolNamespaces),
-            arguments: tc.function.arguments
-          }
-        }))
-      }
-    }
-  }
+  if (hasToolCalls) base['required_action'] = requiredAction(calls)
 
-  if (params.metadata !== undefined && params.metadata !== null) {
-    base['metadata'] = params.metadata
-  }
-  if (params.temperature !== undefined) base['temperature'] = params.temperature
-  if (params.topP !== undefined) base['top_p'] = params.topP
-  if (params.maxOutputTokens !== undefined) base['max_output_tokens'] = params.maxOutputTokens
-  if (params.previousResponseId) base['previous_response_id'] = params.previousResponseId
+  Object.assign(base, requestEcho(params))
 
   return base
+}
+
+export function reasoningItem(id: string, text: string): Record<string, unknown> {
+  return {
+    type: 'reasoning',
+    id,
+    status: 'completed',
+    summary: [],
+    content: [{ type: 'reasoning_text', text }]
+  }
+}
+
+export function messageItem(id: string, text: string): Record<string, unknown> {
+  return {
+    type: 'message',
+    id,
+    status: 'completed',
+    role: 'assistant',
+    content: [{ type: 'output_text', text, annotations: [] }]
+  }
+}
+
+// On a KV-cache hit the SDK's promptTokens counts only the newly evaluated
+// tail. cacheTokens is what the context holds after the run (the whole prompt
+// plus what was generated), so the full input is that minus the generated part.
+// cacheTokens is scheduler-wide, though: when other requests overlapped this
+// one it includes theirs, so promptTokens, this request's own, is used instead.
+export function inputTokensFromStats(stats: CompletionStats | undefined): number {
+  const prompt = stats?.promptTokens ?? 0
+  const held = stats?.cacheTokens
+  const generated = stats?.generatedTokens
+  if (typeof held !== 'number' || typeof generated !== 'number') return prompt
+  if ((stats?.avgConcurrentSeq ?? 1) > 1) return prompt
+  return Math.max(prompt, held - generated)
+}
+
+export function functionCallItem(
+  item: FunctionCallSegment,
+  status: 'in_progress' | 'completed'
+): Record<string, unknown> {
+  return {
+    type: 'function_call',
+    id: item.id,
+    call_id: item.callId,
+    name: item.name,
+    ...(item.namespace !== undefined && { namespace: item.namespace }),
+    arguments: status === 'completed' ? item.arguments : '',
+    status
+  }
+}
+
+export function outputItem(item: OutputSegment): Record<string, unknown> {
+  if (item.type === 'function_call') return functionCallItem(item, 'completed')
+  return item.type === 'message'
+    ? messageItem(item.id, item.text)
+    : reasoningItem(item.id, item.text)
 }
 
 /** `name`, plus `namespace` when the tool was declared inside one. */
