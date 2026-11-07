@@ -47,6 +47,8 @@ from . import (
     DiscoverRpcServersResponse,
     DownloadAssetRequest,
     DownloadAssetResponse,
+    EmbedImageRequest,
+    EmbedImageResponse,
     EmbedRequest,
     EmbedResponse,
     FinetuneProgressResponse,
@@ -255,6 +257,13 @@ async def download_asset_with_progress(
 async def embed(transport: Transport, params: EmbedRequest) -> EmbedResponse:
     payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
     return EmbedResponse.model_validate(await transport.call(payload))
+
+
+async def embed_image(
+    transport: Transport, params: EmbedImageRequest
+) -> EmbedImageResponse:
+    payload = params.model_dump(mode="json", by_alias=True, exclude_unset=True)
+    return EmbedImageResponse.model_validate(await transport.call(payload))
 
 
 async def finetune(transport: Transport, params: FinetuneRequest) -> FinetuneResponse:
@@ -544,6 +553,7 @@ __all__ = [
     "download_asset",
     "download_asset_with_progress",
     "embed",
+    "embed_image",
     "finetune",
     "finetune_with_progress",
     "get_loaded_model_info",

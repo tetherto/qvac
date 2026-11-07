@@ -9,6 +9,7 @@ import kotlinx.serialization.json.jsonPrimitive
 enum class QvacCapability {
     LLM,
     EMBEDDINGS,
+    IMAGE_EMBEDDINGS,
     DECISION,
     RERANK,
     TRANSCRIPTION,
@@ -47,6 +48,7 @@ internal fun QvacRuntimeProfile.requirePayload(payload: JsonObject) {
     val capability = when (operation) {
         "completionStream", "completionOrchestrate", "batchCompletionStream" -> QvacCapability.LLM
         "embed" -> QvacCapability.EMBEDDINGS
+        "embedImage" -> QvacCapability.IMAGE_EMBEDDINGS
         "decide" -> QvacCapability.DECISION
         "rerank" -> QvacCapability.RERANK
         "transcribe", "transcribeStream", "bciTranscribe", "bciTranscribeStream" ->
@@ -77,6 +79,7 @@ internal fun QvacRuntimeProfile.requirePayload(payload: JsonObject) {
 private fun String.toCapability(): QvacCapability? = when (this) {
     "llm", "llamacpp-completion" -> QvacCapability.LLM
     "embeddings", "llamacpp-embedding" -> QvacCapability.EMBEDDINGS
+    "ggml-image-embedding" -> QvacCapability.IMAGE_EMBEDDINGS
     "llamacpp-decision" -> QvacCapability.DECISION
     "llamacpp-rerank" -> QvacCapability.RERANK
     "whisper", "whispercpp-transcription", "parakeet", "parakeet-transcription",
