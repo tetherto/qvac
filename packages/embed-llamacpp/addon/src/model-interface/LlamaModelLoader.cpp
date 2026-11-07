@@ -24,6 +24,7 @@
 #include "addon/BertErrors.hpp"
 #include "logging.hpp"
 #include "utils.hpp"
+#include "utils/LlamaRuntimeBackend.hpp"
 
 using namespace qvac_lib_infer_llamacpp_embed::errors;
 using namespace qvac_lib_infer_llamacpp_embed::logging;
@@ -578,6 +579,12 @@ void LlamaModelLoader::init(LlamaModelSetup& setup) {
   }
   if (hooks_.onLoaded) {
     hooks_.onLoaded(model_, ctx_);
+  }
+  const auto backendName = qvac_lib_inference_addon_embed::backend_reporting::
+      runtimeModelBackendName(ctx_);
+  runtimeBackendName_->set(backendName);
+  if (!backendName.empty()) {
+    runtimeBackendDevice_ = backendName == "cpu" ? 0 : 1;
   }
 
   // print system information

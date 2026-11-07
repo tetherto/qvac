@@ -23,6 +23,17 @@ test('stats payload maps backendDevice 1 to "gpu"', function (t) {
   t.is(result.data.backendDevice, 'gpu')
 })
 
+test('runtime stats preserve the native backend name without guessing from the device', function (t) {
+  for (const backendName of ['cpu', 'cuda', 'vulkan', 'metal', 'opencl', 'rpc', 'cuda,vulkan']) {
+    const raw = { total_tokens: 10, backendDevice: backendName === 'cpu' ? 0 : 1, backendName }
+    const result = mapAddonEvent('Stats', raw, null)
+    t.is(result.data.backendName, backendName)
+    t.is(raw.backendDevice, backendName === 'cpu' ? 0 : 1, 'the native payload stays unchanged')
+  }
+  const legacy = mapAddonEvent('Stats', { total_tokens: 1, backendDevice: 1 }, null)
+  t.absent('backendName' in legacy.data, 'older addons do not gain an inferred name')
+})
+
 test('stats payload leaves unknown backendDevice values as-is', function (t) {
   const result = mapAddonEvent('Stats', { context_size: 512, backendDevice: 2 }, null)
   t.is(result.type, 'JobEnded')
