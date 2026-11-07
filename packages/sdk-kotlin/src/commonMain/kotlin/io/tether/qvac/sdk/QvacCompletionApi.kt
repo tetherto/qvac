@@ -7,6 +7,7 @@ import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateResponseToolCall
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequest
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestGenerationParams
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContent
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemAttachmentsItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemToolCallsItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestKvCache
@@ -531,7 +532,7 @@ private fun CompletionStreamResponseEventsItemCompletionStatsStats.toCompletionS
 
 private fun QvacMessage.toStreamItem() = CompletionStreamRequestHistoryItem(
     role = role,
-    content = content,
+    content = content?.let { CompletionStreamRequestHistoryItemContent.Variant1(it) },
     attachments = attachments.takeIf { it.isNotEmpty() }
         ?.map { CompletionStreamRequestHistoryItemAttachmentsItem(path = it.path) },
     toolCalls = toolCalls.takeIf { it.isNotEmpty() }?.map { call ->
