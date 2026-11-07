@@ -25,6 +25,7 @@ interface HostResolvers {
 /**
  * Resource key -> model, loaded and evicted around each test. Table: catalog/resources/resource-table.json;
  * `on` / `configOn` platform matching: catalog/resource-table-types.ts.
+ * A model a `loadModel` step loaded is test-scoped: released when the test ends, or before the next one.
  */
 class Resources(
     private val client: QvacClient,
@@ -44,6 +45,8 @@ class Resources(
             on == null || on.any { appliesHere(it.toString()) }
         }
     private val loaded = LinkedHashMap<String, String>()
+
+    private val testScoped = LinkedHashSet<String>()
 
     private fun appliesHere(entry: String): Boolean {
         if (entry == platform) return true
@@ -97,7 +100,31 @@ class Resources(
         log("loading $dep")
         val modelId = loadModel(source)
         loaded[dep] = modelId
+        // Ids are hashes of the load request, so a key can land on a test-scoped id; the key wins.
+        testScoped.remove(modelId)
         return modelId
+    }
+
+    /** No-op for a key-owned id: a config reload or an identical load returns it. */
+    fun adoptTestLoad(modelId: String) {
+        if (modelId in loaded.values) return
+        testScoped += modelId
+    }
+
+    /** Forgets an id a step unloaded, so no key hands out a stale id. Idempotent. */
+    fun released(modelId: String) {
+        testScoped -= modelId
+        loaded.values.removeAll { it == modelId }
+    }
+
+    /** Never throws: an unload error is logged. */
+    suspend fun releaseTestScope() {
+        while (testScoped.isNotEmpty()) {
+            val modelId = testScoped.first()
+            testScoped -= modelId
+            log("releasing test-scoped model $modelId")
+            unload(modelId, modelId)
+        }
     }
 
     /** What a `loadModel` step asks for, resolved the way the JS client resolves it. */
@@ -141,6 +168,8 @@ class Resources(
     }
 
     suspend fun evictAllExcept(keep: Set<String>) {
+        // Catches what a timed-out test left behind.
+        releaseTestScope()
         for (dep in loaded.keys.filter { it !in keep }) {
             unload(dep, loaded.remove(dep)!!)
         }
