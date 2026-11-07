@@ -1,0 +1,36 @@
+name: Publish to GitHub Packages
+description: Publish a package to GitHub Packages as @tetherto/<name><suffix>, with a per-run version unless it is a release. The calling job decides whether to publish.
+
+inputs:
+  workdir:
+    description: Package directory, with prebuilds/ already placed
+    required: true
+  tag:
+    description: Dist-tag; empty uses the branch default (dev, feature or temp), and a release-* ref always publishes latest
+    default: ""
+  name-suffix:
+    description: Suffix appended to the package name
+    default: -mono
+  token:
+    description: Token with packages:write
+    required: true
+
+outputs:
+  name:
+    description: Published package name
+    value: ${{ steps.publish.outputs.name }}
+  version:
+    description: Published version
+    value: ${{ steps.publish.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - id: publish
+      shell: bash
+      env:
+        WORKDIR: ${{ inputs.workdir }}
+        TAG: ${{ inputs.tag }}
+        NAME_SUFFIX: ${{ inputs.name-suffix }}
+        NODE_AUTH_TOKEN: ${{ inputs.token }}
+      run: node "$GITHUB_ACTION_PATH/gpr-publish.mjs"

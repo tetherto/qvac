@@ -1,0 +1,35 @@
+name: Pack npm prebuilds
+description: Install a published build's prebuilds into a package, from npmjs or GitHub Packages, checking it is that package and version.
+
+inputs:
+  workdir:
+    description: Package directory to receive prebuilds/
+    required: true
+  npm-name:
+    description: The package's npm name, which the packed build must match
+    required: true
+  platform:
+    description: Android or iOS, which picks the slice of a split package
+    required: true
+  package:
+    description: Version, dist-tag, or full @qvac/<name>@<v> or @tetherto/<name>-mono@<v> spec; empty means latest
+    default: ""
+  pinned:
+    description: Replace any prebuilds/ already present and assert an exact version
+    default: "false"
+  gpr-token:
+    description: Token with packages:read, for @tetherto specs
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        WORKDIR: ${{ inputs.workdir }}
+        ADDON: ${{ inputs.npm-name }}
+        PLATFORM: ${{ inputs.platform }}
+        PACKAGE: ${{ inputs.package }}
+        PINNED: ${{ inputs.pinned }}
+        GPR_TOKEN: ${{ inputs.gpr-token }}
+      run: node "$GITHUB_ACTION_PATH/prebuilds-from-registry.mjs"

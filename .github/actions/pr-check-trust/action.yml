@@ -1,0 +1,35 @@
+name: Check PR trust
+description: Decide whether a pull_request_target run may proceed. Load it from the default branch, never the PR.
+
+inputs:
+  github-token:
+    description: Token for the permission and status lookups
+    required: true
+  label:
+    description: Extra label a fork PR must carry, on top of SHA-bound fork-ci approval
+    default: ""
+
+outputs:
+  allowed:
+    description: true when the run may proceed
+    value: ${{ steps.check.outputs.allowed }}
+  has_write:
+    description: 1 when the triggering actor has write or admin permission, else empty
+    value: ${{ steps.check.outputs.has_write }}
+
+runs:
+  using: composite
+  steps:
+    - id: check
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        EVENT: ${{ github.event_name }}
+        ACTION: ${{ github.event.action }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        BASE_REPO: ${{ github.repository }}
+        IS_DRAFT: ${{ github.event.pull_request.draft }}
+        LABEL_NAME: ${{ inputs.label }}
+        LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+      run: node "$GITHUB_ACTION_PATH/pr-check-trust.mjs"

@@ -1,0 +1,35 @@
+name: Cache vcpkg
+description: Point vcpkg at its binary cache, S3 for prebuilds or host and workspace dirs for C++ tests.
+
+inputs:
+  mode:
+    description: s3 or files
+    required: true
+  cache-bucket:
+    description: S3 bucket, s3 mode; the job holds the credentials
+    default: ""
+  platform:
+    description: Build platform, s3 mode
+    default: ""
+  arch:
+    description: Build architecture, s3 mode
+    default: ""
+  workdir:
+    description: Package directory, files mode
+    default: ""
+  trusted:
+    description: true when the event may write the shared host cache, files mode
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+        CACHE_BUCKET: ${{ inputs.cache-bucket }}
+        PLATFORM: ${{ inputs.platform }}
+        ARCH: ${{ inputs.arch }}
+        WORKDIR: ${{ inputs.workdir }}
+        TRUSTED: ${{ inputs.trusted }}
+      run: node "$GITHUB_ACTION_PATH/vcpkg-cache-setup.mjs"

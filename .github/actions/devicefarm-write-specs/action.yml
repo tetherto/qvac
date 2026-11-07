@@ -1,0 +1,56 @@
+name: Generate Device Farm specs
+description: Write one Device Farm test spec per test group of a package, each with its own WDIO config, and pack the test framework's e2e suite as the Device Farm test package.
+
+inputs:
+  platform:
+    description: Android or iOS
+    required: true
+  workdir:
+    description: Package directory, read for test/mobile/test-groups.json
+    required: true
+  tests:
+    description: A mocha --grep over test names; when set it replaces the package's groups with one spec
+    default: ""
+  app-dir:
+    description: Mobile test framework checkout whose e2e/ suite is packed
+    default: test-framework
+  enables-perf:
+    description: The package's tests emit a perf report
+    default: "false"
+  mocha-timeout-ms:
+    description: WDIO session ceiling
+    default: "1800000"
+  waitfor-timeout-ms:
+    description: WDIO waitforTimeout
+    default: "120000"
+  extra-pre-test-commands:
+    description: Newline-separated host commands run before Appium starts; may hold presigned URLs
+    default: ""
+  bundle-id:
+    description: App bundle id
+    default: io.tether.test.qvac
+
+outputs:
+  specs:
+    description: JSON [{name, grep, tests, file}], one per group
+    value: ${{ steps.generate.outputs.specs }}
+  test-package:
+    description: Path to the zipped e2e suite, for an APPIUM_NODE_TEST_PACKAGE upload
+    value: ${{ steps.generate.outputs.test-package }}
+
+runs:
+  using: composite
+  steps:
+    - id: generate
+      shell: bash
+      env:
+        PLATFORM: ${{ inputs.platform }}
+        WORKDIR: ${{ inputs.workdir }}
+        TESTS: ${{ inputs.tests }}
+        APP_DIR: ${{ inputs.app-dir }}
+        ENABLES_PERF: ${{ inputs.enables-perf }}
+        MOCHA_TIMEOUT_MS: ${{ inputs.mocha-timeout-ms }}
+        WAITFOR_MS: ${{ inputs.waitfor-timeout-ms }}
+        EXTRA_PRE_TEST: ${{ inputs.extra-pre-test-commands }}
+        BUNDLE_ID: ${{ inputs.bundle-id }}
+      run: node "$GITHUB_ACTION_PATH/devicefarm-write-specs.mjs"

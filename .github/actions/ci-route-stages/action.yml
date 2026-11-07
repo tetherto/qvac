@@ -1,0 +1,31 @@
+name: Route CI
+description: Map the event and PR labels to stage flags. Not a trust decision; fork approval gates secrets.
+
+outputs:
+  run_verified_checks:
+    description: Baseline checks for a ready PR or a trusted event
+    value: ${{ steps.route.outputs.run_verified_checks }}
+  run_prebuilds:
+    description: Build prebuilds (prebuilds, cpp, desktop or mobile label)
+    value: ${{ steps.route.outputs.run_prebuilds }}
+  run_cpp_tests:
+    description: Run C++ tests (run-cpp-addon-tests label)
+    value: ${{ steps.route.outputs.run_cpp_tests }}
+  run_desktop:
+    description: Run desktop integration tests (run-desktop-addon-tests label)
+    value: ${{ steps.route.outputs.run_desktop }}
+  run_mobile:
+    description: Mobile flag (run-mobile-addon-tests label); mobile runs by dispatch only
+    value: ${{ steps.route.outputs.run_mobile }}
+
+runs:
+  using: composite
+  steps:
+    - id: route
+      shell: bash
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        PR_LABELS_JSON: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        IS_DRAFT: ${{ github.event.pull_request.draft }}
+      run: node "$GITHUB_ACTION_PATH/ci-route-stages.mjs"
