@@ -14,6 +14,7 @@ import { nowMs, generateProfileId } from '@/profiling/clock'
 import { getEngineLogger } from '@/logging/index'
 import { getRequestRegistry, withRequestContext } from '@/runtime/index'
 import { generateRandomRequestId } from '@/runtime/request-id'
+import { resolveSessionId } from '@/runtime/session-id'
 import { InferenceCancelledError } from '@/errors/index'
 
 const logger = getEngineLogger()
@@ -30,12 +31,14 @@ export async function handleDownloadAsset(
   const profilingEnabled = profilingMeta?.enabled !== false && !!profilingMeta
 
   const requestId = request.requestId ?? generateRandomRequestId()
+  const sessionId = resolveSessionId(request)
   // `downloadAsset` is artifact-shaped, not model-shaped — there is no
   // `modelId` to register on the registry entry. Cancel by `requestId`
   // is the primary path; `cancel({ modelId })` is intentionally a
   // non-match for this kind.
   await using ctx = await getRequestRegistry().begin({
     requestId,
+    sessionId,
     kind: 'downloadAsset'
   })
   const log = withRequestContext(getEngineLogger(), ctx)
@@ -45,7 +48,8 @@ export async function handleDownloadAsset(
     requestBinding: {
       signal: ctx.signal,
       scope: ctx.scope,
-      requestId
+      requestId,
+      sessionId
     }
   }
 

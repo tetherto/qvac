@@ -32,6 +32,12 @@ import {
   notifyChannelClosed
 } from '#rpc'
 import { WorkerCrashedError, RequestValidationFailedError } from '@/utils/errors-client'
+import {
+  assertOwnerModelUsable,
+  awaitSessionUsable,
+  endAllSessions,
+  sessionOf
+} from '@/client/session-registry'
 import { formatZodError } from '@/utils/zod-error'
 import { z } from 'zod'
 import {
@@ -259,6 +265,39 @@ function invalidateRPCInstance(): void {
   resetConnectionTracking()
 }
 
+// The worker died under the sessions: every handle this process opened is
+// now invalid, and later calls on them fail locally.
+function onWorkerLost(): void {
+  invalidateRPCInstance()
+  endAllSessions('crashed')
+}
+
+/**
+ * A request made through a session handle carries the session id. The call
+ * waits for the session's `openSession` round trip, so a handle is usable the
+ * moment `openSession()` returns, and is refused locally once the session is
+ * closed or lost. The handle's id replaces any id the request carries, so a
+ * caller cannot send a request as another session; only the session methods
+ * themselves (`openSession`, `closeSession`) name the session they act on.
+ *
+ * An owner request is refused the same way when it names a model the owner
+ * loaded on a runtime that has since stopped.
+ */
+async function stampSession<T extends Request>(request: T, options?: RPCOptions): Promise<T> {
+  const sessionId = options?.sessionId
+  const target = request as { modelId?: string | undefined }
+  if (sessionId === undefined) {
+    assertOwnerModelUsable(target)
+    return request
+  }
+  // A bare `sessionId` with no handle behind it has no local state; the
+  // worker decides whether that session is open.
+  const record = sessionOf(options)
+  if (record) await awaitSessionUsable(record, target)
+  if (request.type === 'openSession' || request.type === 'closeSession') return request
+  return { ...request, sessionId }
+}
+
 async function getRPCInstance(): Promise<RPCResult> {
   if (rpcInstance) return { rpc: await rpcInstance }
 
@@ -270,9 +309,9 @@ async function getRPCInstance(): Promise<RPCResult> {
   // records connectionMs again as a "first" connection.
   const lifeSignal = getWorkerLifeSignal()
   if (lifeSignal?.aborted) {
-    invalidateRPCInstance()
+    onWorkerLost()
   } else if (lifeSignal) {
-    lifeSignal.addEventListener('abort', invalidateRPCInstance, {
+    lifeSignal.addEventListener('abort', onWorkerLost, {
       once: true
     })
   }
@@ -311,10 +350,11 @@ async function prepareRPCContext(
 }
 
 export async function send<T extends Request>(
-  request: T,
+  input: T,
   options?: RPCOptions,
   rpc?: RPC
 ): Promise<Response> {
+  const request = await stampSession(input, options)
   const ctx = await prepareRPCContext(request.type, options?.profiling, rpc)
 
   if (!ctx.profilingEnabled) {
@@ -415,11 +455,12 @@ async function sendProfiled<T extends Request>(
 
 /** `options.signal` ends the stream; only `endsOnAbort` handlers stop on the worker. */
 export async function* stream<T extends Request>(
-  request: T,
+  input: T,
   options: AbortableRPCOptions = {},
   rpc?: RPC
 ): AsyncGenerator<Response> {
   if (options.signal?.aborted) return
+  const request = await stampSession(input, options)
   const ctx = await prepareRPCContext(request.type, options?.profiling, rpc)
   if (options.signal?.aborted) return
 
@@ -619,9 +660,10 @@ function withLifeSignalDuplex(raw: DuplexReadable): DuplexReadable {
 }
 
 export async function duplex<T extends Request>(
-  request: T,
+  input: T,
   options?: RPCOptions
 ): Promise<DuplexSession> {
+  const request = await stampSession(input, options)
   const ctx = await prepareRPCContext(request.type, options?.profiling)
 
   if (!ctx.profilingEnabled) {
@@ -779,7 +821,9 @@ async function duplexProfiled<T extends Request>(
   }
 }
 
+/** Owner shutdown. Every session handle opened on this runtime ends with it. */
 export async function close() {
+  endAllSessions('shutdown')
   if (!rpcInstance) return
   invalidateRPCInstance()
   await closeRPC()

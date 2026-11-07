@@ -27,6 +27,7 @@ export {
   createVectorIndex,
   loadVectorIndex,
   type VectorIndex,
+  type VectorIndexOperation,
   textToSpeech,
   textToSpeechStream,
   getModelInfo,
@@ -75,6 +76,7 @@ export {
   type FinetuneHandle
 } from './client/api'
 export { close } from './client'
+export { openSession, type QvacSession, type OpenSessionOptions } from './client/session'
 export { plugins } from './client/plugins-factory'
 export {
   type LifecycleState,
@@ -306,6 +308,8 @@ export {
   definePlugin,
   defineHandler,
   defineDuplexHandler,
+  requestParent,
+  type PluginHandlerContext,
   PluginDefinitionInvalidError,
   type QvacPlugin,
   type CreateModelParams,
@@ -389,7 +393,11 @@ export {
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
-  TranslationFailedError
+  TranslationFailedError,
+  SessionIdConflictError,
+  SessionNotOpenError,
+  ModelLeasedError,
+  OwnerOnlyError
 } from './utils/errors-server'
 
 // `WorkerCrashedError` and `WorkerShutdownError` are thrown by the
@@ -417,7 +425,9 @@ export {
   WorkerStartupError,
   RequestValidationFailedError,
   StreamEndedError,
-  TextToSpeechStreamFailedError
+  TextToSpeechStreamFailedError,
+  SessionInvalidatedError,
+  ModelHandleInvalidatedError
 } from './utils/errors-client'
 
 // Logging exports

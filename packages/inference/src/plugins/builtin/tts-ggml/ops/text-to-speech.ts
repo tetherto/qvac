@@ -1,3 +1,4 @@
+import type { PluginHandlerContext } from '@/schemas/plugin'
 import { getMossJobOptions } from './moss-options'
 import type { AbortSignal } from 'bare-abort-controller'
 import { getModel } from '@/runtime/model-registry'
@@ -62,7 +63,10 @@ function rethrowUnlessCancelled(error: unknown, signal: AbortSignal) {
   if (!signal.aborted) throw error
 }
 
-export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYield, TtsOpResult> {
+export async function* textToSpeech(
+  params: TtsRequest,
+  context?: PluginHandlerContext
+): AsyncGenerator<TtsOpYield, TtsOpResult> {
   const request = ttsRequestSchema.parse(params)
   const {
     modelId,
@@ -98,7 +102,13 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
     )
   }
 
-  await using ctx = await bindTtsCancel(model, modelId, request.requestId)
+  await using ctx = await bindTtsCancel(
+    model,
+    modelId,
+    request.requestId,
+    request.sessionId,
+    context
+  )
   if (ctx.signal.aborted) return { ...buildStreamResult(0), cancelled: true }
 
   const modelStart = nowMs()

@@ -123,6 +123,12 @@ export const ERROR_CODES = {
   LIFECYCLE_RESUME_FAILED: 53601,
   LIFECYCLE_OPERATION_BLOCKED: 53602,
 
+  // Caller sessions and model leases (53,620-53,649)
+  SESSION_ID_CONFLICT: 53620,
+  SESSION_NOT_OPEN: 53621,
+  MODEL_LEASED: 53622,
+  OWNER_ONLY: 53623,
+
   // System / runtime (53,500-53,699)
   FFMPEG_NOT_AVAILABLE: 53500,
   AUDIO_PLAYER_FAILED: 53501,
@@ -625,6 +631,26 @@ const errorDefinitions: ErrorCodesMap = {
     name: 'LIFECYCLE_OPERATION_BLOCKED',
     message: (requestType: string, lifecycleState: string) =>
       `Operation "${requestType}" is blocked while runtime state is "${lifecycleState}"`
+  },
+
+  // Caller sessions and model leases
+  [ERROR_CODES.SESSION_ID_CONFLICT]: {
+    name: 'SESSION_ID_CONFLICT',
+    message: (sessionId: string) => `Session id "${sessionId}" is already open`
+  },
+  [ERROR_CODES.SESSION_NOT_OPEN]: {
+    name: 'SESSION_NOT_OPEN',
+    message: (sessionId: string) => `Session "${sessionId}" is not open`
+  },
+  [ERROR_CODES.MODEL_LEASED]: {
+    name: 'MODEL_LEASED',
+    message: (modelId: string, leaseCount: string) =>
+      `Model "${modelId}" is held by ${leaseCount} other session(s); it cannot be reconfigured while another session uses it`
+  },
+  [ERROR_CODES.OWNER_ONLY]: {
+    name: 'OWNER_ONLY',
+    message: (operation: string, sessionId: string) =>
+      `Operation "${operation}" is reserved for the runtime owner; session "${sessionId}" cannot call it`
   },
 
   // System / runtime

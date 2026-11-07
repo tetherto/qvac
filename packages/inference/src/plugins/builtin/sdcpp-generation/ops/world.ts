@@ -1,3 +1,4 @@
+import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
 import fs, { promises as fsPromises } from 'bare-fs'
 import path from 'bare-path'
 import WorldStableDiffusion from '@qvac/diffusion-cpp/world'
@@ -24,6 +25,7 @@ import type {
   WorldStepStats,
   WorldStepStreamResponse
 } from '@/schemas/sdcpp-config'
+import type { TrackedRequest } from '@/schemas/request-base'
 
 // A step is ~1.8s and a scene is bounded by its encoder loads, so anything past
 // this means the native job is not progressing. Warn only — see settleInFlight.
@@ -569,10 +571,14 @@ interface SceneResponseWithStats {
 }
 
 export async function* worldStep(
-  request: WorldStepRequest
+  request: WorldStepRequest & TrackedRequest,
+  _inputStream?: AsyncIterable<Buffer>,
+  context?: PluginHandlerContext
 ): AsyncGenerator<WorldStepStreamResponse> {
   await using ctx = await getRequestRegistry().begin({
     requestId: request.requestId ?? generateRandomRequestId(),
+    sessionId: request.sessionId,
+    ...requestParent(context),
     kind: 'world',
     modelId: request.modelId
   })
@@ -742,10 +748,14 @@ export async function* worldStep(
 }
 
 export async function* worldCreateScene(
-  request: WorldSceneRequest
+  request: WorldSceneRequest & TrackedRequest,
+  _inputStream?: AsyncIterable<Buffer>,
+  context?: PluginHandlerContext
 ): AsyncGenerator<WorldSceneStreamResponse> {
   await using ctx = await getRequestRegistry().begin({
     requestId: request.requestId ?? generateRandomRequestId(),
+    sessionId: request.sessionId,
+    ...requestParent(context),
     kind: 'world',
     modelId: request.modelId
   })

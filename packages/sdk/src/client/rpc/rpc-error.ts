@@ -8,7 +8,11 @@ import {
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
-  TranslationFailedError
+  TranslationFailedError,
+  SessionIdConflictError,
+  SessionNotOpenError,
+  ModelLeasedError,
+  OwnerOnlyError
 } from '@/utils/errors-server'
 
 export class RPCError extends Error {
@@ -190,7 +194,26 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
   // class -- matching the Python client's reconstructor.
   TRANSLATION_FAILED: (response) => {
     return new TranslationFailedError(response.message, response.cause)
-  }
+  },
+  SESSION_ID_CONFLICT: (response) =>
+    new SessionIdConflictError(
+      readStringField(response.typedFields, 'sessionId', ''),
+      response.cause
+    ),
+  SESSION_NOT_OPEN: (response) =>
+    new SessionNotOpenError(readStringField(response.typedFields, 'sessionId', ''), response.cause),
+  MODEL_LEASED: (response) =>
+    new ModelLeasedError(
+      readStringField(response.typedFields, 'modelId', ''),
+      readOptionalNumberField(response.typedFields, 'leaseCount') ?? 0,
+      response.cause
+    ),
+  OWNER_ONLY: (response) =>
+    new OwnerOnlyError(
+      readStringField(response.typedFields, 'operation', ''),
+      readStringField(response.typedFields, 'sessionId', ''),
+      response.cause
+    )
 }
 
 /**

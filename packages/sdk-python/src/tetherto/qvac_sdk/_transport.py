@@ -17,7 +17,21 @@ shaping.
 from __future__ import annotations
 
 from collections.abc import AsyncIterable, AsyncIterator
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
+
+
+@runtime_checkable
+class HeldModelTracker(Protocol):
+    """A transport that records the models loaded through it, so a model loaded
+    through a session can be told apart from an unknown id once the session
+    ended. `SessionTransport` implements it; the plain worker transport does
+    not."""
+
+    def record_held_model(self, model_id: str) -> None:
+        """A load through this transport resolved to `model_id`."""
+
+    def release_held_model(self, model_id: str) -> None:
+        """An unload through this transport released `model_id`."""
 
 
 class Transport(Protocol):

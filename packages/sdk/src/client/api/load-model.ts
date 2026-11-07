@@ -29,6 +29,7 @@ import { parseClientInput } from '@/client/parse-input'
 import { getClientLogger } from '@/logging'
 import { decoratePromise } from '@/utils/decorate-promise'
 import { generateClientRequestId } from '@/client/api/client-request-id'
+import { recordHeldModel } from '@/client/session-registry'
 
 const logger = getClientLogger()
 
@@ -341,6 +342,7 @@ async function runLoadModel(
         }
 
         const modelId = response.modelId!
+        recordHeldModel(rpcOptions, modelId)
 
         // Start logging stream in the background if logger is provided, catch to avoid failing the entire loadModel operation
         if (modelLogger) {
@@ -368,6 +370,7 @@ async function runLoadModel(
   }
 
   const modelId = response.modelId!
+  recordHeldModel(rpcOptions, modelId)
 
   if (modelLogger) {
     try {

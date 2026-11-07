@@ -1,6 +1,7 @@
 import { ModelAlreadyRegisteredError, ModelNotFoundError } from '@/errors/index'
 import type { CanonicalModelType, ModelFitProbe, ToolDialect } from '@/schemas/index'
 import { getEngineLogger } from '@/logging/index'
+import { OWNER_SESSION_ID } from '@/runtime/session-id'
 
 const logger = getEngineLogger()
 
@@ -39,7 +40,12 @@ interface LocalOptions {
   toolDialect?: ToolDialect | undefined
 }
 
-export type ModelEntry = { id: string; local: LocalOptions }
+/**
+ * `leases` holds the ids of the caller sessions that loaded the model and have
+ * not unloaded it. The model leaves memory when the set empties or on root
+ * shutdown.
+ */
+export type ModelEntry = { id: string; local: LocalOptions; leases: Set<string> }
 
 // Global registry state - using stateless functions to manage it
 const modelRegistry = new Map<string, ModelEntry>()
@@ -54,7 +60,8 @@ export function registerModel(
     name?: string | undefined
     fitProbe?: ModelFitProbe | undefined
     toolDialect?: ToolDialect | undefined
-  }
+  },
+  sessionId: string = OWNER_SESSION_ID
 ): void {
   if (modelRegistry.has(id)) {
     throw new ModelAlreadyRegisteredError(id)
@@ -62,6 +69,7 @@ export function registerModel(
 
   modelRegistry.set(id, {
     id,
+    leases: new Set([sessionId]),
     local: {
       model: options.model,
       path: options.path,
@@ -80,6 +88,36 @@ export function registerModel(
 
 export function getModelEntry(id: string): ModelEntry | null {
   return modelRegistry.get(id) || null
+}
+
+/** Records that `sessionId` holds the model. Idempotent per session. */
+export function addModelLease(id: string, sessionId: string): void {
+  const entry = modelRegistry.get(id)
+  if (!entry) {
+    throw new ModelNotFoundError(id)
+  }
+  entry.leases.add(sessionId)
+}
+
+/**
+ * Drops `sessionId`'s lease. Returns the number of leases left, or `null` when
+ * the session held none, so the caller can tell "released, model stays" from
+ * "nothing to release".
+ */
+export function releaseModelLease(id: string, sessionId: string): number | null {
+  const entry = modelRegistry.get(id)
+  if (!entry || !entry.leases.has(sessionId)) return null
+  entry.leases.delete(sessionId)
+  return entry.leases.size
+}
+
+/** Ids of the models `sessionId` holds a lease on. */
+export function getModelIdsLeasedBy(sessionId: string): string[] {
+  const ids: string[] = []
+  for (const entry of modelRegistry.values()) {
+    if (entry.leases.has(sessionId)) ids.push(entry.id)
+  }
+  return ids
 }
 
 export function getModel(id: string): AnyModel {

@@ -3,6 +3,7 @@ import { toolSchema } from '@/schemas/tools'
 import { TOOL_SEARCH_NAME } from '@/utils/tools/defer'
 import { completionEventSchema } from '@/schemas/completion-event'
 import { REASONING_BUDGET_MAX } from '@/schemas/llamacpp-config'
+import { trackedRequestSchema } from '@/schemas/request-base'
 
 export { completionStatsSchema, type CompletionStats } from '@/schemas/completion-event'
 
@@ -375,6 +376,7 @@ export const completionStreamRequestSchema = completionClientParamsBaseSchema
   .extend({
     type: z.literal('completionStream')
   })
+  .extend(trackedRequestSchema.shape)
   .superRefine(refinePrefill)
   .superRefine(refineNoToolsWithStructuredOutput)
   .superRefine(refineToolChoiceMatchesTools)
@@ -408,6 +410,7 @@ export const completionOrchestrateRequestSchema = completionClientParamsBaseSche
           'the next turn. Defaults to 8.'
       )
   })
+  .extend(trackedRequestSchema.shape)
   .superRefine(refinePrefill)
   .superRefine(refineNoToolsWithStructuredOutput)
   .superRefine(refineToolChoiceMatchesTools)

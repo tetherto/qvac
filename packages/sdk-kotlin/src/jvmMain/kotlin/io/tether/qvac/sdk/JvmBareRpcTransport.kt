@@ -1,5 +1,6 @@
 package io.tether.qvac.sdk
 
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withTimeout
@@ -30,6 +31,7 @@ class JvmBareRpcTransport internal constructor(
     rpcLimits: RpcLimits = RpcLimits(),
 ) : QvacTransport {
     private val rpc = WorkerRpc(read = ::read, send = ::send, limits = rpcLimits)
+    override val lost: Deferred<Unit> get() = rpc.ended
     private val closeMutex = Mutex()
     private var closed = false
     val isWorkerAlive: Boolean get() = process?.isAlive == true

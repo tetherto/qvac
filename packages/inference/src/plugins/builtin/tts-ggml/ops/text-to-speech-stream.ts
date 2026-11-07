@@ -1,3 +1,4 @@
+import type { PluginHandlerContext } from '@/schemas/plugin'
 import type { AbortSignal } from 'bare-abort-controller'
 import { getModel } from '@/runtime/model-registry'
 import { textToSpeechStreamRequestSchema, type TextToSpeechStreamRequest } from '@/schemas/index'
@@ -143,7 +144,8 @@ function buildRunStreamingOptions(
 
 export async function* textToSpeechStream(
   params: TextToSpeechStreamRequest,
-  inputStream: AsyncIterable<Buffer>
+  inputStream: AsyncIterable<Buffer>,
+  context?: PluginHandlerContext
 ): AsyncGenerator<TtsOpYield, TtsOpResult, unknown> {
   const request = textToSpeechStreamRequestSchema.parse(params)
 
@@ -154,7 +156,13 @@ export async function* textToSpeechStream(
   const parlerJobOptions = getParlerJobOptions(request)
   assertParlerJobOptionsSupported(model, parlerJobOptions, 'textToSpeechStream')
 
-  await using ctx = await bindTtsCancel(model, request.modelId, request.requestId)
+  await using ctx = await bindTtsCancel(
+    model,
+    request.modelId,
+    request.requestId,
+    request.sessionId,
+    context
+  )
   if (ctx.signal.aborted) return { ...buildStreamResult(0), cancelled: true }
 
   const modelStart = nowMs()

@@ -57,6 +57,7 @@ import { SystemResourcesExecutor } from '../shared/executors/system-resources-ex
 import { ConfigExecutor } from '../shared/executors/config-executor.js'
 import { BatchCompletionExecutor } from '../shared/executors/batch-completion-executor.js'
 import { NodeCancellationExecutor } from '../shared/executors/node/cancellation-executor.js'
+import { SessionExecutor } from '../shared/executors/session-executor.js'
 import { PluginExecutor } from '../shared/executors/plugin-executor.js'
 import { SnapStorageExecutor } from '../shared/executors/node/snap-storage-executor.js'
 import { runSnapRefreshProbe as executeSnapRefreshProbe } from './snap-refresh-probe.js'
@@ -203,6 +204,7 @@ export const executor = createExecutor({
     new SystemResourcesExecutor(),
     new ConfigExecutor(),
     new NodeCancellationExecutor(resources),
+    new SessionExecutor(resources),
     new PluginExecutor(resources)
   ],
   profiling: {

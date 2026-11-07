@@ -71,7 +71,10 @@ async def test_generated_plugin_module_round_trips_both_call_shapes():
     response = await module.echo(transport, "m-1", module.EchoRequest(message="hi"))
     assert isinstance(response, module.EchoResponse)
     assert response.message == "hi back"
-    assert transport.sent == {
+    sent = dict(transport.sent)
+    request_id = sent.pop("requestId")
+    assert isinstance(request_id, str) and request_id
+    assert sent == {
         "type": "pluginInvoke",
         "modelId": "m-1",
         "handler": "echo",

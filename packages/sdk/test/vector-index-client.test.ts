@@ -75,8 +75,58 @@ test('vector index client: create applies the default storage and returns a popu
     type: 'vectorIndex',
     operation: 'create',
     dim: 3,
-    storage: 'turbovec-q4'
+    storage: 'turbovec-q4',
+    requestId: sent[0]?.request['requestId']
   })
+})
+
+test('vector index client: every operation is sent under a request id the caller can read first', async (t) => {
+  const { send, sent } = fakeTransport()
+  const { createVectorIndex, loadVectorIndex } = createVectorIndexClient(send)
+
+  const opening = createVectorIndex({ dim: 2 })
+  t.is(typeof opening.requestId, 'string', 'the id is readable before the open settles')
+  const index = await opening
+  t.is(sent[0]?.request['requestId'], opening.requestId, 'the open was sent under that id')
+
+  const adding = index.add({ ids: ['1'], vectors: [[1, 0]] })
+  const searching = index.search({ query: [1, 0], k: 1 })
+  const checking = index.contains({ ids: ['1'] })
+  const removing = index.remove({ ids: ['1'] })
+  const writing = index.write({ path: 'a.qvi' })
+  const disposing = index.dispose()
+  await Promise.all([adding, searching, checking, removing, writing, disposing])
+  const ids = [adding, searching, checking, removing, writing, disposing].map((op) => op.requestId)
+  t.alike(
+    sent.slice(1).map((entry) => entry.request['requestId']),
+    ids,
+    'each operation carries its own id on the wire'
+  )
+  t.is(new Set([opening.requestId, ...ids]).size, 7, 'the ids are distinct')
+
+  const loading = loadVectorIndex({ path: 'a.qvi' })
+  await loading
+  t.is(sent.at(-1)?.request['requestId'], loading.requestId)
+})
+
+test('vector index client: a handle keeps the transport it was opened on', async (t) => {
+  // A session builds its client over a transport that stamps its id; every
+  // later call on the handle must go through the same transport.
+  const { send, sent } = fakeTransport()
+  const stamped = ((request: unknown, options?: Record<string, unknown>) =>
+    send(request, { ...options, sessionId: 's-1' })) as typeof send
+  const { createVectorIndex } = createVectorIndexClient(stamped)
+
+  const index = await createVectorIndex({ dim: 2 })
+  await index.add({ ids: ['1'], vectors: [[1, 0]] })
+  await index.search({ query: [1, 0], k: 1 }, { timeout: 10 })
+  await index.dispose()
+  t.alike(
+    sent.map((entry) => (entry.options as { sessionId?: string }).sessionId),
+    ['s-1', 's-1', 's-1', 's-1'],
+    'open, add, search and dispose all carry the session'
+  )
+  t.alike(sent[2]?.options, { timeout: 10, sessionId: 's-1' }, 'per-call options are kept')
 })
 
 test('vector index client: ids are normalized to wire form and length follows the worker', async (t) => {

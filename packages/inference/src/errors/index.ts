@@ -1039,6 +1039,65 @@ export class LifecycleOperationBlockedError extends QvacErrorBase {
   }
 }
 
+// ============== Caller sessions and model leases ==============
+
+export class SessionIdConflictError extends QvacErrorBase {
+  readonly sessionId: string
+
+  constructor(sessionId: string, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.SESSION_ID_CONFLICT, [sessionId], cause))
+    this.sessionId = sessionId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { sessionId: this.sessionId }
+  }
+}
+
+export class SessionNotOpenError extends QvacErrorBase {
+  readonly sessionId: string
+
+  constructor(sessionId: string, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.SESSION_NOT_OPEN, [sessionId], cause))
+    this.sessionId = sessionId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { sessionId: this.sessionId }
+  }
+}
+
+/** A `reloadConfig` on a model another session holds a lease on. */
+export class ModelLeasedError extends QvacErrorBase {
+  readonly modelId: string
+  readonly leaseCount: number
+
+  constructor(modelId: string, leaseCount: number, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.MODEL_LEASED, [modelId, String(leaseCount)], cause))
+    this.modelId = modelId
+    this.leaseCount = leaseCount
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { modelId: this.modelId, leaseCount: this.leaseCount }
+  }
+}
+
+export class OwnerOnlyError extends QvacErrorBase {
+  readonly operation: string
+  readonly sessionId: string
+
+  constructor(operation: string, sessionId: string, cause?: unknown) {
+    super(createErrorOptions(ERROR_CODES.OWNER_ONLY, [operation, sessionId], cause))
+    this.operation = operation
+    this.sessionId = sessionId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { operation: this.operation, sessionId: this.sessionId }
+  }
+}
+
 // ============== Security ==============
 
 export class PathTraversalError extends QvacErrorBase {

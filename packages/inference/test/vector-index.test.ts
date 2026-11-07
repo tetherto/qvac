@@ -14,6 +14,7 @@ import {
 import { getConfiguredCacheDir } from '@/runtime/state'
 import { storageFromBitWidth } from '@/plugins/turbovec-backend'
 import {
+  InferenceCancelledError,
   RequestValidationFailedError,
   VectorIndexFailedError,
   VectorIndexInvalidVectorsError,
@@ -23,6 +24,8 @@ import {
 import type { Response } from '@/schemas/index'
 import { makeFakePlugin } from './fixtures/fake-plugin'
 import { observableIndexProvider, registerProviderPlugin } from './fixtures/turbovec-provider'
+import { handleVectorIndex } from '@/handlers/vector-index'
+import { getRequestRegistry } from '@/runtime/index'
 
 // Keep the storage-root lock out of the real home, as dispatch.test.ts does.
 env['HOME'] = path.join(os.tmpdir(), `qvac-inference-test-${os.pid()}`)
@@ -31,6 +34,7 @@ type Provider = ReturnType<typeof observableIndexProvider>
 type ProviderCalls = Provider['calls']
 type ProviderFailures = Provider['failures']
 type ProviderFailRemoveId = Provider['failRemoveId']
+type ProviderGates = Provider['gates']
 
 function tempSnapshotPath(suffix: string) {
   return path.join(os.tmpdir(), `qvac-vector-index-${os.pid()}-${suffix}.qvi`)
@@ -40,14 +44,15 @@ async function withProvider(
   run: (
     calls: ProviderCalls,
     failures: ProviderFailures,
-    failRemoveId: ProviderFailRemoveId
+    failRemoveId: ProviderFailRemoveId,
+    gates: ProviderGates
   ) => Promise<void>
 ) {
   clearPlugins()
-  const { provider, calls, failures, failRemoveId } = observableIndexProvider()
+  const { provider, calls, failures, failRemoveId, gates } = observableIndexProvider()
   registerProviderPlugin('test-vector-index-provider', provider)
   try {
-    await run(calls, failures, failRemoveId)
+    await run(calls, failures, failRemoveId, gates)
   } finally {
     failures.dispose = false
     await disposeAllVectorIndexes()
@@ -78,6 +83,32 @@ test('storageFromBitWidth: maps unambiguous widths and leaves 4 bits undefined',
   t.is(storageFromBitWidth(4), undefined, 'q4 and turbovec-q4 share a bit width')
   t.is(storageFromBitWidth(undefined), undefined)
 })
+
+// A cancel that lands while the native open is in flight: the call reports
+// the cancel and the index it opened is released, since no caller holds its id.
+for (const operation of ['create', 'load'] as const) {
+  test(`vectorIndex: a ${operation} cancelled during the native open is released and reported cancelled`, async (t) => {
+    await withProvider(async (calls, _failures, _failRemoveId, gates) => {
+      let finishOpen = () => {}
+      gates[operation] = new Promise<void>((resolve) => {
+        finishOpen = resolve
+      })
+      const requestId = `vi-cancel-${operation}`
+      const pending = handleVectorIndex(
+        operation === 'create'
+          ? { type: 'vectorIndex', operation, dim: 2, storage: 'f32', requestId }
+          : { type: 'vectorIndex', operation, path: tempSnapshotPath('cancelled-load'), requestId }
+      )
+      await new Promise<void>((resolve) => setTimeout(resolve, 5))
+      t.is(getRequestRegistry().cancel({ requestId }), 1, 'the open is in flight and cancellable')
+      finishOpen()
+      await expectRejects(t, () => pending, InferenceCancelledError, 'the open reports the cancel')
+      t.is(calls[operation], 1)
+      t.is(calls.dispose, 1, 'the index the cancelled caller opened is released')
+      t.is(getOpenVectorIndexCount(), 0)
+    })
+  })
+}
 
 test('createVectorIndex: rejects when no plugin provides a vector index', async (t) => {
   clearPlugins()

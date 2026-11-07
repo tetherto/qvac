@@ -28,7 +28,7 @@ from ._generated.models import (
     ModelRegistryListResponseModelsItem,
     ModelRegistrySearchResponseModelsItem,
 )
-from ._transport import Transport
+from ._transport import HeldModelTracker, Transport
 
 # Re-exported so `tetherto.qvac_sdk.api.CancelFailedError` etc. keep resolving; the classes
 # now live in tetherto.qvac_sdk.errors as part of the one QvacError hierarchy.
@@ -293,6 +293,7 @@ async def load_model(
             if not event.success:
                 raise ModelLoadFailedError(event.error)
             assert event.model_id is not None
+            _record_held_model(transport, event.model_id)
             if logger is not None:
                 _start_model_logging(transport, event.model_id, logger)
             return event.model_id
@@ -302,9 +303,20 @@ async def load_model(
     if not response.success:
         raise ModelLoadFailedError(response.error)
     assert response.model_id is not None
+    _record_held_model(transport, response.model_id)
     if logger is not None:
         _start_model_logging(transport, response.model_id, logger)
     return response.model_id
+
+
+def _record_held_model(transport: Transport, model_id: str) -> None:
+    if isinstance(transport, HeldModelTracker):
+        transport.record_held_model(model_id)
+
+
+def _release_held_model(transport: Transport, model_id: str) -> None:
+    if isinstance(transport, HeldModelTracker):
+        transport.release_held_model(model_id)
 
 
 _FIT_CANDIDATE_KEYS = {
@@ -601,18 +613,28 @@ async def unload_model(
     response = UnloadModelResponse.model_validate(await transport.call(_dump(request)))
     if not response.success:
         raise ModelUnloadFailedError(model_id)
+    if response.released is not False:
+        _release_held_model(transport, model_id)
     stop_logging_stream_for_model(model_id)
 
 
 async def invoke_plugin(
-    transport: Transport, model_id: str, handler: str, params: Any = None
+    transport: Transport,
+    model_id: str,
+    handler: str,
+    params: Any = None,
+    *,
+    request_id: str | None = None,
 ) -> Any:
+    """`request_id` is minted when omitted; pass your own to target the invoke
+    with `cancel(request_id=...)`."""
     request = PluginInvokeRequest.model_validate(
         {
             "type": "pluginInvoke",
             "modelId": model_id,
             "handler": handler,
             "params": params,
+            "requestId": request_id or generate_client_request_id(),
         }
     )
     response = PluginInvokeResponse.model_validate(await transport.call(_dump(request)))
@@ -620,7 +642,12 @@ async def invoke_plugin(
 
 
 async def invoke_plugin_stream(
-    transport: Transport, model_id: str, handler: str, params: Any = None
+    transport: Transport,
+    model_id: str,
+    handler: str,
+    params: Any = None,
+    *,
+    request_id: str | None = None,
 ) -> AsyncIterator[Any]:
     request = PluginInvokeStreamRequest.model_validate(
         {
@@ -628,6 +655,7 @@ async def invoke_plugin_stream(
             "modelId": model_id,
             "handler": handler,
             "params": params,
+            "requestId": request_id or generate_client_request_id(),
         }
     )
     async for chunk in transport.call_stream(_dump(request)):

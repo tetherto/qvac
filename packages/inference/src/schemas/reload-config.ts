@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { whisperConfigSchema } from '@/schemas/transcription-config'
 import { whisperModelTypeSchema } from '@/schemas/model-types'
+import { trackedRequestSchema } from '@/schemas/request-base'
 
 export const modelIdSchema = z.string().regex(/^[0-9a-f]{16}$/, 'Invalid modelId format')
 
@@ -27,14 +28,16 @@ export const reloadConfigOptionsToRequestSchema = z.union([
     }))
 ])
 
-const reloadConfigRequestBaseSchema = z.object({
-  type: z.literal('loadModel'),
-  modelId: modelIdSchema,
-  // Explicitly exclude load-specific fields for type narrowing
-  modelSrc: z.never().optional(),
-  withProgress: z.never().optional(),
-  seed: z.never().optional()
-})
+const reloadConfigRequestBaseSchema = z
+  .object({
+    type: z.literal('loadModel'),
+    modelId: modelIdSchema,
+    // Explicitly exclude load-specific fields for type narrowing
+    modelSrc: z.never().optional(),
+    withProgress: z.never().optional(),
+    seed: z.never().optional()
+  })
+  .extend(trackedRequestSchema.shape)
 
 export const reloadConfigWhisperRequestSchema = reloadConfigRequestBaseSchema.extend({
   modelType: whisperModelTypeSchema,

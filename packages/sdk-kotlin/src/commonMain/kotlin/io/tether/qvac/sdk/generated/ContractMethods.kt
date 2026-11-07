@@ -89,6 +89,14 @@ object QvacMethods {
         progressResponseType = null,
         progressCondition = null,
     )
+    val closeSession = QvacMethodDescriptor(
+        name = "closeSession",
+        callShape = QvacCallShape.REQUEST_REPLY,
+        requestType = "CloseSessionRequest",
+        responseType = "CloseSessionResponse",
+        progressResponseType = null,
+        progressCondition = null,
+    )
     val completionOrchestrate = QvacMethodDescriptor(
         name = "completionOrchestrate",
         callShape = QvacCallShape.DUPLEX,
@@ -238,6 +246,14 @@ object QvacMethods {
         callShape = QvacCallShape.SERVER_STREAM,
         requestType = "OcrStreamRequest",
         responseType = "OcrStreamResponse",
+        progressResponseType = null,
+        progressCondition = null,
+    )
+    val openSession = QvacMethodDescriptor(
+        name = "openSession",
+        callShape = QvacCallShape.REQUEST_REPLY,
+        requestType = "OpenSessionRequest",
+        responseType = "OpenSessionResponse",
         progressResponseType = null,
         progressCondition = null,
     )
@@ -412,6 +428,7 @@ object QvacMethods {
         bciTranscribeStream,
         cancel,
         classify,
+        closeSession,
         completionOrchestrate,
         completionStream,
         decide,
@@ -431,6 +448,7 @@ object QvacMethods {
         modelRegistryList,
         modelRegistrySearch,
         ocrStream,
+        openSession,
         pluginInvoke,
         pluginInvokeStream,
         rag,

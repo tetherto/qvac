@@ -1,3 +1,5 @@
+import type Buffer from 'bare-buffer'
+import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
 import { getModel } from '@/runtime/model-registry'
 import { getRequestRegistry, withRequestContext } from '@/runtime/request-context'
 import { generateRandomRequestId } from '@/runtime/request-id'
@@ -12,11 +14,17 @@ import {
 } from '@/plugins/builtin/llamacpp-decision/helpers'
 import type { LayaDecisions } from '@qvac/embed-llamacpp'
 
-export async function decide(request: DecideRequest) {
-  const { modelId, requestId } = request
+export async function decide(
+  request: DecideRequest,
+  _inputStream?: AsyncIterable<Buffer>,
+  context?: PluginHandlerContext
+) {
+  const { modelId, requestId, sessionId } = request
   const nativeRequest = transformDecisionRequest(request)
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRandomRequestId(),
+    sessionId,
+    ...requestParent(context),
     kind: 'decision',
     modelId
   })

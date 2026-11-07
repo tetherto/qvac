@@ -1,8 +1,11 @@
 import { z } from 'zod'
+import { sessionScopedRequestSchema } from '@/schemas/request-base'
 
-const cancelBaseSchema = z.object({
-  type: z.literal('cancel')
-})
+const cancelBaseSchema = z
+  .object({
+    type: z.literal('cancel')
+  })
+  .extend(sessionScopedRequestSchema.shape)
 
 /**
  * Public-API base for the broad-cancel escape hatch. Kept exported so
@@ -35,7 +38,10 @@ const cancelKindSchema = z
     'audiogen',
     'tts',
     'ocr',
+    'classification',
     'vla',
+    'plugin',
+    'vectorIndex',
     'finetune',
     'loadModel',
     'downloadAsset',

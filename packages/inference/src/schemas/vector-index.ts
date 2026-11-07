@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { trackedRequestSchema } from '@/schemas/request-base'
 
 // ============== Storage vocabulary ==============
 
@@ -94,50 +95,51 @@ export const vectorIndexWriteParamsSchema = z.object({
 // ============== Requests ==============
 
 const vectorIndexTypeField = { type: z.literal('vectorIndex') }
+const vectorIndexRequestFields = { ...vectorIndexTypeField, ...trackedRequestSchema.shape }
 const handleField = { indexId: indexIdSchema }
 
 const vectorIndexCreateRequestSchema = createVectorIndexParamsSchema.extend({
-  ...vectorIndexTypeField,
+  ...vectorIndexRequestFields,
   operation: z.literal('create')
 })
 
 const vectorIndexLoadRequestSchema = loadVectorIndexParamsSchema.extend({
-  ...vectorIndexTypeField,
+  ...vectorIndexRequestFields,
   operation: z.literal('load')
 })
 
 const vectorIndexAddRequestSchema = vectorIndexAddParamsSchema.extend({
-  ...vectorIndexTypeField,
+  ...vectorIndexRequestFields,
   ...handleField,
   operation: z.literal('add')
 })
 
 const vectorIndexSearchRequestSchema = vectorIndexSearchParamsSchema.extend({
-  ...vectorIndexTypeField,
+  ...vectorIndexRequestFields,
   ...handleField,
   operation: z.literal('search')
 })
 
 const vectorIndexRemoveRequestSchema = vectorIndexIdsParamsSchema.extend({
-  ...vectorIndexTypeField,
+  ...vectorIndexRequestFields,
   ...handleField,
   operation: z.literal('remove')
 })
 
 const vectorIndexContainsRequestSchema = vectorIndexIdsParamsSchema.extend({
-  ...vectorIndexTypeField,
+  ...vectorIndexRequestFields,
   ...handleField,
   operation: z.literal('contains')
 })
 
 const vectorIndexWriteRequestSchema = vectorIndexWriteParamsSchema.extend({
-  ...vectorIndexTypeField,
+  ...vectorIndexRequestFields,
   ...handleField,
   operation: z.literal('write')
 })
 
 const vectorIndexDisposeRequestSchema = z.object({
-  ...vectorIndexTypeField,
+  ...vectorIndexRequestFields,
   ...handleField,
   operation: z.literal('dispose')
 })
@@ -160,7 +162,10 @@ export const vectorIndexHitSchema = z.object({
   score: z.number()
 })
 
-const vectorIndexResponseBaseSchema = z.object(vectorIndexTypeField)
+const vectorIndexResponseBaseSchema = z.object({
+  ...vectorIndexTypeField,
+  requestId: z.string().optional().describe('Identity of the request.')
+})
 
 const vectorIndexCreateResponseSchema = vectorIndexResponseBaseSchema.extend({
   operation: z.literal('create'),

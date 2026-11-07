@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { sessionScopedRequestSchema } from '@/schemas/request-base'
 
 const countSchema = z.number().int().nonnegative()
 const nonnegativeNumberSchema = z.number().nonnegative()
@@ -168,9 +169,11 @@ export const getSystemResourcesInputSchema = z.object({
   sample: z.boolean().optional()
 })
 
-export const getSystemResourcesRequestSchema = getSystemResourcesInputSchema.extend({
-  type: z.literal('getSystemResources')
-})
+export const getSystemResourcesRequestSchema = getSystemResourcesInputSchema
+  .extend({
+    type: z.literal('getSystemResources')
+  })
+  .extend(sessionScopedRequestSchema.shape)
 
 export const getSystemResourcesResponseSchema = systemResourcesSchema.extend({
   type: z.literal('getSystemResources')

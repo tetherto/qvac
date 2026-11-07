@@ -10,6 +10,12 @@ import { z } from 'zod'
 import { perCallProfilingSchema } from '@/schemas/profiling'
 import { heartbeatRequestSchema, heartbeatResponseSchema } from '@/schemas/heartbeat'
 import {
+  openSessionRequestSchema,
+  openSessionResponseSchema,
+  closeSessionRequestSchema,
+  closeSessionResponseSchema
+} from '@/schemas/session'
+import {
   completionOrchestrateRequestSchema,
   completionOrchestrateResponseSchema,
   completionStreamRequestSchema,
@@ -130,6 +136,8 @@ export const requestSchema = z.union([
   stopRpcServerRequestSchema,
   discoverRpcServersRequestSchema,
   heartbeatRequestSchema,
+  openSessionRequestSchema,
+  closeSessionRequestSchema,
   loadModelRequestSchema,
   downloadAssetRequestSchema,
   completionStreamRequestSchema,
@@ -181,6 +189,8 @@ export const responseSchema = z.discriminatedUnion('type', [
   stopRpcServerResponseSchema,
   discoverRpcServersResponseSchema,
   heartbeatResponseSchema,
+  openSessionResponseSchema,
+  closeSessionResponseSchema,
   loadModelResponseSchema,
   downloadAssetResponseSchema,
   completionStreamResponseSchema,
@@ -254,6 +264,14 @@ export const rpcOptionsSchema = z.object({
     .optional()
     .describe(
       'Per-call profiler configuration; when present, overrides the global profiler settings for this request.'
+    ),
+  sessionId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Caller session to run this request as. Set by a session handle; the ' +
+        'transport copies it onto the request body.'
     )
 })
 

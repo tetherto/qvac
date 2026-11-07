@@ -33,6 +33,7 @@ from typing import Any
 
 from ._generated.sdk_version import SDK_VERSION
 from .bare_rpc_transport import BareRpcTransport
+from .caller_session import Session, open_session
 
 _PLATFORM_MAP = {"Darwin": "darwin", "Linux": "linux", "Windows": "win32"}
 _ARCH_MAP = {"x86_64": "x64", "AMD64": "x64", "arm64": "arm64", "aarch64": "arm64"}
@@ -200,7 +201,9 @@ class Client:
         self._transport = BareRpcTransport(
             [bare, worker], home_dir=home_dir, config=config
         )
+        self._transport.on_worker_lost(lambda: self._end_sessions("crashed"))
         self._connected = False
+        self._sessions: list[Session] = []
 
     @property
     def transport(self) -> BareRpcTransport:
@@ -216,7 +219,21 @@ class Client:
             self._connected = True
         return self
 
+    async def open_session(self, name: str | None = None) -> Session:
+        """Opens a caller session on this runtime. Pass `session.transport` to
+        any wrapper or stub; its calls carry the session id."""
+        session = await open_session(self.transport, name)
+        self._sessions.append(session)
+        return session
+
+    def _end_sessions(self, reason: str) -> None:
+        for session in self._sessions:
+            session.transport.end(reason)
+        self._sessions.clear()
+
     async def close(self) -> None:
+        """Owner shutdown. Every session opened on this client ends with it."""
+        self._end_sessions("shutdown")
         if self._connected:
             await self._transport.close()
             self._connected = False

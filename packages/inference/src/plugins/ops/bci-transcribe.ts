@@ -1,3 +1,4 @@
+import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
 import { getModel } from '@/runtime/model-registry'
 import {
   type BciStreamOpts,
@@ -87,15 +88,21 @@ type BciTranscribeReturn = {
 
 export function bciTranscribe(
   params: BciTranscribeParams & { metadata: true },
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<TranscribeSegment, BciTranscribeReturn, void>
 export function bciTranscribe(
   params: BciTranscribeParams,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<string, BciTranscribeReturn, void>
 export async function* bciTranscribe(
   params: BciTranscribeParams,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<string | TranscribeSegment, BciTranscribeReturn, void> {
   const { modelId, metadata } = params
 
@@ -105,6 +112,8 @@ export async function* bciTranscribe(
   // caller didn't send one.
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRandomRequestId(),
+    sessionId,
+    ...requestParent(context),
     kind: 'transcribe',
     modelId
   })
@@ -214,21 +223,27 @@ export function bciTranscribeStream(
   neuralStream: AsyncIterable<Buffer>,
   metadata: true,
   opts?: BciStreamOpts,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<TranscribeSegment, BciStreamReturn, void>
 export function bciTranscribeStream(
   modelId: string,
   neuralStream: AsyncIterable<Buffer>,
   metadata?: boolean,
   opts?: BciStreamOpts,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<string, BciStreamReturn, void>
 export async function* bciTranscribeStream(
   modelId: string,
   neuralStream: AsyncIterable<Buffer>,
   metadata?: boolean,
   opts?: BciStreamOpts,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<string | TranscribeSegment, BciStreamReturn, void> {
   // Same `kind: "transcribe"` as the unary BCI variant — the registry
   // doesn't distinguish streaming vs non-streaming variants of the same
@@ -236,6 +251,8 @@ export async function* bciTranscribeStream(
   // either shape.
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRandomRequestId(),
+    sessionId,
+    ...requestParent(context),
     kind: 'transcribe',
     modelId
   })

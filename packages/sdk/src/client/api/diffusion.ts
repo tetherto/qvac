@@ -2,9 +2,11 @@ import {
   diffusionStreamResponseSchema,
   type DiffusionStreamRequest,
   type DiffusionClientParams,
-  type DiffusionStats
+  type DiffusionStats,
+  type RPCOptions
 } from '@qvac/inference/surface'
 import { stream as streamRpc } from '@/client/rpc/rpc-client'
+import { generateClientRequestId } from '@/client/api/client-request-id'
 import { decodeBase64, encodeBase64 } from '@/utils/encoding'
 
 export interface DiffusionProgressTick {
@@ -14,6 +16,8 @@ export interface DiffusionProgressTick {
 }
 
 interface DiffusionResult {
+  /** Stable id of this generation; pass to `cancel({ requestId })` to stop it. */
+  requestId: string
   progressStream: AsyncGenerator<DiffusionProgressTick>
   outputs: Promise<Uint8Array[]>
   stats: Promise<DiffusionStats | undefined>
@@ -23,7 +27,8 @@ interface DiffusionResult {
  * Generates images using a loaded diffusion model.
  *
  * @param params - Diffusion request parameters (model, prompt, dimensions, sampler, seed, etc.).
- * @returns A result object exposing `progressStream` (async iterator of `{ step, totalSteps, elapsedMs }`), `outputs` (promise of the generated image buffers), and `stats` (promise of generation statistics).
+ * @param options - Optional RPC options (timeout, profiling, force new connection).
+ * @returns A result object exposing `requestId` (stable identifier for this generation, for `cancel({ requestId })`), `progressStream` (async iterator of `{ step, totalSteps, elapsedMs }`), `outputs` (promise of the generated image buffers), and `stats` (promise of generation statistics).
  * @throws {InferenceCancelledError} The run's promises reject and progress stream throws when an active generation is cancelled.
  * @throws {RequestRejectedByPolicyError} The run rejects when another image or video generation owns the model.
  *
@@ -115,16 +120,18 @@ interface DiffusionResult {
  * const buffers = await outputs;
  * ```
  */
-export function diffusion(params: DiffusionClientParams): DiffusionResult {
+export function diffusion(params: DiffusionClientParams, options?: RPCOptions): DiffusionResult {
   const { init_image, init_images, ...rest } = params
 
+  const requestId = generateClientRequestId()
   const request: DiffusionStreamRequest = {
     ...rest,
     ...(init_image !== undefined && { init_image: encodeBase64(init_image) }),
     ...(init_images !== undefined && {
       init_images: init_images.map(encodeBase64)
     }),
-    type: 'diffusionStream'
+    type: 'diffusionStream',
+    requestId
   }
 
   let statsResolver: (value: DiffusionStats | undefined) => void = () => {}
@@ -151,7 +158,7 @@ export function diffusion(params: DiffusionClientParams): DiffusionResult {
 
   const processResponses = async () => {
     try {
-      for await (const response of streamRpc(request)) {
+      for await (const response of streamRpc(request, options)) {
         if (
           response &&
           typeof response === 'object' &&
@@ -217,6 +224,7 @@ export function diffusion(params: DiffusionClientParams): DiffusionResult {
   })()
 
   return {
+    requestId,
     progressStream,
     outputs: outputsPromise,
     stats: statsPromise

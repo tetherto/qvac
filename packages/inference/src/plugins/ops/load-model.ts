@@ -9,7 +9,13 @@ import {
 import type { LoadTimingStats } from '@/profiling/types'
 import { nowMs } from '@/profiling/clock'
 import { forwardBackendDiagnostics } from '@/profiling/backend-diagnostics'
-import { isModelLoaded, registerModel, type AnyModel } from '@/runtime/model-registry'
+import {
+  addModelLease,
+  isModelLoaded,
+  registerModel,
+  type AnyModel
+} from '@/runtime/model-registry'
+import { OWNER_SESSION_ID } from '@/runtime/session-id'
 import { startLogBuffering, stopLogBufferingWithTimeout } from '@/runtime/logging-stream-registry'
 import {
   detectShardedModel,
@@ -42,27 +48,99 @@ export interface LoadModelResult {
 export interface LoadModelOptions {
   collectTiming?: boolean
   request?: { signal: AbortSignal; requestId: string }
+  /** Session that takes a lease on the model. Defaults to the owner session. */
+  sessionId?: string
+}
+
+// A load or reload in progress per model id. Two sessions loading the same
+// configuration at once would both pass the loaded check and both load
+// natively; the second native model could never be registered or unloaded.
+// The id is a hash of the configuration, so one native load per id is the
+// rule, and a lease is taken only once the model is registered or reconfigured.
+const modelWorkInFlight = new Map<string, Promise<unknown>>()
+
+/**
+ * Runs `task` as the only load or reload of `modelId`. A caller that arrives
+ * while one is running waits for it to settle before running its own task,
+ * so it sees the model registered (and takes a lease) or finds it absent
+ * (and loads it itself after a failed load). A caller whose request is
+ * cancelled while it waits leaves the queue at once with
+ * `InferenceCancelledError`; the load it waited for is not touched.
+ */
+export async function withModelWorkLock<T>(
+  modelId: string,
+  task: () => Promise<T>,
+  request?: { signal: AbortSignal; requestId: string }
+): Promise<T> {
+  let pending = modelWorkInFlight.get(modelId)
+  while (pending !== undefined) {
+    await (request ? untilSettledOrAborted(pending, request.signal) : pending)
+    if (request?.signal.aborted === true) throw new InferenceCancelledError(request.requestId)
+    pending = modelWorkInFlight.get(modelId)
+  }
+  const run = task()
+  modelWorkInFlight.set(
+    modelId,
+    run.then(
+      () => undefined,
+      () => undefined
+    )
+  )
+  try {
+    return await run
+  } finally {
+    modelWorkInFlight.delete(modelId)
+  }
+}
+
+function untilSettledOrAborted(pending: Promise<unknown>, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve()
+  return new Promise<void>((resolve) => {
+    const onAbort = () => resolve()
+    signal.addEventListener('abort', onAbort, { once: true })
+    void pending.then(
+      () => {
+        signal.removeEventListener('abort', onAbort)
+        resolve()
+      },
+      () => {
+        signal.removeEventListener('abort', onAbort)
+        resolve()
+      }
+    )
+  })
 }
 
 export async function loadModel(
   params: LoadModelServerParams,
   options?: LoadModelOptions
 ): Promise<LoadModelResult> {
-  const {
-    modelId,
-    modelPath,
-    options: modelOptions,
-    artifacts,
-    modelName
-  } = loadModelServerParamsSchema.parse(params)
+  const parsed = loadModelServerParamsSchema.parse(params)
+  return withModelWorkLock(parsed.modelId, () => loadModelLocked(parsed, options), options?.request)
+}
+
+async function loadModelLocked(
+  params: LoadModelServerParams,
+  options?: LoadModelOptions
+): Promise<LoadModelResult> {
+  const { modelId, modelPath, options: modelOptions, artifacts, modelName } = params
   const { modelConfig, modelType: rawModelType, modelFitPolicy } = modelOptions
 
   // Normalize modelType to canonical form (handles aliases and custom types)
   const modelType = normalizeModelType(rawModelType)
 
-  // Check if model is already loaded
+  const sessionId = options?.sessionId ?? OWNER_SESSION_ID
+
+  // A cancel that landed while this load waited for another load of the same
+  // model must not take a lease the caller no longer wants.
+  if (options?.request?.signal.aborted === true) {
+    throw new InferenceCancelledError(options.request.requestId)
+  }
+
+  // An already loaded model is shared: the caller takes a lease on it.
   if (isModelLoaded(modelId)) {
-    logger.info(`${modelType} model ${modelId} is already loaded`)
+    addModelLease(modelId, sessionId)
+    logger.info(`${modelType} model ${modelId} is already loaded; lease added for ${sessionId}`)
     return {}
   }
 
@@ -164,15 +242,19 @@ export async function loadModel(
         ? await resolveToolDialect(modelName, modelPath)
         : undefined
 
-    registerModel(modelId, {
-      model: result.model,
-      path: modelPath,
-      config: modelConfig,
-      modelType: modelType as CanonicalModelType,
-      name: modelName,
-      fitProbe,
-      toolDialect
-    })
+    registerModel(
+      modelId,
+      {
+        model: result.model,
+        path: modelPath,
+        config: modelConfig,
+        modelType: modelType as CanonicalModelType,
+        name: modelName,
+        fitProbe,
+        toolDialect
+      },
+      sessionId
+    )
 
     const loadResult: LoadModelResult =
       modelInitializationTimeMs !== undefined ? { timing: { modelInitializationTimeMs } } : {}

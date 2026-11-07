@@ -6,6 +6,7 @@ import {
   type InferenceBackendDiagnostics
 } from '@/schemas/system-resources'
 import { encodeBase64 } from '@/utils/encoding'
+import { trackedRequestSchema } from '@/schemas/request-base'
 
 const base64Schema = z.string().min(1)
 // Mirror requireInferenceSteps, requireAcestepShift, requireMinimaxCfgScale and
@@ -613,9 +614,9 @@ export const audioGenClientParamsSchema = z
 export const audioGenStreamRequestSchema = z
   .object({
     ...audioGenParamsShape,
-    type: z.literal('audioGenStream'),
-    requestId: z.string().min(1).optional()
+    type: z.literal('audioGenStream')
   })
+  .extend(trackedRequestSchema.shape)
   .strict()
   .superRefine(validateAudioGenRequest)
 
@@ -790,9 +791,9 @@ export const audioEditStreamRequestSchema = z
       .describe(
         'Optional timbre reference for every operation: a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM.'
       ),
-    type: z.literal('audioEditStream'),
-    requestId: z.string().min(1).optional()
+    type: z.literal('audioEditStream')
   })
+  .extend(trackedRequestSchema.shape)
   .strict()
   .superRefine(validateAudioEditOperations)
 
@@ -967,9 +968,9 @@ export const audioUnderstandRequestSchema = z
     sourceAudio: audioGenAudioInputSchema.describe(
       'Recording to analyse: a file path decoded server-side, or raw interleaved stereo 48 kHz Float32 LE PCM in [-1, 1].'
     ),
-    type: z.literal('audioUnderstand'),
-    requestId: z.string().min(1).optional()
+    type: z.literal('audioUnderstand')
   })
+  .extend(trackedRequestSchema.shape)
   .strict()
 export const audioUnderstandResponseSchema = z
   .object({

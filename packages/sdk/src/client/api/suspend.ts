@@ -1,3 +1,4 @@
+import type { RPCOptions } from '@qvac/inference/surface'
 import { send } from '@/client/rpc/rpc-client'
 import { InvalidResponseError } from '@/utils/errors-client'
 
@@ -26,8 +27,8 @@ import { InvalidResponseError } from '@/utils/errors-client'
  * await suspend();
  * console.log(await state()); // "suspended"
  */
-export async function suspend(): Promise<void> {
-  const response = await send({ type: 'suspend' })
+export async function suspend(options?: RPCOptions): Promise<void> {
+  const response = await send({ type: 'suspend' }, options)
   if (response.type !== 'suspend') {
     throw new InvalidResponseError('suspend')
   }
