@@ -316,6 +316,7 @@ void TextLlmContext::tokenizeChat(
   if (cacheReconciliationEnabled_) {
     const auto& lastRole = chatMsgs.back().role;
     isLastMessageFromUser = lastRole == "user" || lastRole == "tool";
+    historyEndsAtUserTurn_ = lastRole == "user";
     addSpecial = true;
   } else if (nPast_ == 0 && !isCacheLoaded) {
     const auto& lastRole = chatMsgs.back().role;
@@ -1820,7 +1821,8 @@ void TextLlmContext::commitCacheRequest() {
         cacheCheckpoints_,
         std::move(*pendingHistoryCheckpoint_),
         cacheCheckpointPolicy_,
-        [](const CacheCheckpoint& entry) { return entry.state.bytes(); });
+        [](const CacheCheckpoint& entry) { return entry.state.bytes(); },
+        [](const CacheCheckpoint& entry) { return entry.endsAtUserTurn; });
     pendingHistoryCheckpoint_.reset();
   }
   cacheRequestActive_ = false;
@@ -1847,7 +1849,8 @@ void TextLlmContext::captureHistoryCheckpoint(llama_pos pos) {
             ledger.positions()));
     return;
   }
-  CacheCheckpoint checkpoint{.ledger = std::move(ledger)};
+  CacheCheckpoint checkpoint{
+      .ledger = std::move(ledger), .endsAtUserTurn = historyEndsAtUserTurn_};
   // Only an optimisation for the next turn: a failed capture costs that turn
   // a longer prefill, never this request.
   if (!snapshotSequenceState(
