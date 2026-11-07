@@ -318,7 +318,7 @@
           "devicefarmProject": "LLM",
           "enablesPerf": false
         },
-        "timeoutMinutes": 120
+        "timeoutMinutes": 135
       }
     },
     "publish": {
