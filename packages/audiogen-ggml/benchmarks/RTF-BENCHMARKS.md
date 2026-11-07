@@ -153,40 +153,34 @@ The matrix runner additionally honours `MATRIX_JSON` (the sweep) and
 
 ## Running in CI
 
-There are three entry points.
+audiogen is on the package CI contract, so the benchmarks run through
+`benchmarks.yml`, dispatched with `-f packages=audiogen-ggml`.
 
-`.github/workflows/benchmark-performance-audiogen-ggml.yml` is the manual one
-(`workflow_dispatch`). It builds prebuilds (or takes a published
-`prebuild_package`), fans out to both lanes, and aggregates.
+**Desktop** is the `benchmark` target, one job per configuration in
+`project.json`. Each configuration names a set in `ci/benchmark-matrix.json`
+with `--matrix`: every runner sweeps the three
+variants on CPU, and GPU-capable runners sweep them again on the platform backend
+(Vulkan on linux/win32, Metal on darwin). Artifacts:
+`audiogen-ggml-benchmark-<configuration>`. A job fails when the matrix runner
+fails or writes no result.
 
-On a pull request, add the **`run-benchmarks`** label alongside
-`run-desktop-addon-tests` and `run-mobile-addon-tests`. The lanes then run with
-`run_rtf_benchmarks: true` and `summarize-benchmarks` renders the findings table
-onto the run summary. Without the label a PR pays nothing, which is the default:
-a full sweep renders for hours and downloads every DiT variant.
+**Mobile** runs when the dispatch sets `run_mobile`, on the chosen platform and
+devices. The dispatch's `args` input picks the one matrix row the run measures,
+as `key=value` words (`dit_variant`, `use_gpu`, `warmup`, `runs`, `duration`), for
+example `args=dit_variant=sft use_gpu=true`; `ci/prepare-mobile.mjs` turns it into
+the device environment and runs only the perf tests. The numbers leave the device
+inside `[PERF_REPORT_START]` log markers, which the shared extractor scrapes.
+Artifacts: `audiogen-ggml-perf-mobile-<platform>-<run number>`.
 
-Both paths share `reusable-summarize-audiogen-ggml-benchmarks.yml`, so the table
-on a PR is the table a manual sweep produces.
+The `benchmark` target's `report` configuration then runs
+`ci/benchmark-report.sh` over every result of the run and renders the findings
+table onto the run summary.
 
 `.github/workflows/perf-report.yml` is the weekly cross-addon report. It measures
-nothing itself: it re-aggregates the artifacts of the last six sweeps into
-`reports/audiogen-ggml-performance.md`, which lands in that run's summary
+nothing itself: it re-aggregates the artifacts of the last six `Benchmarks` runs
+into `reports/audiogen-ggml-performance.md`, which lands in that run's summary
 alongside the other addons. ACE-Step is therefore only as fresh as the last
-sweep — nothing dispatches one on a schedule.
-
-**Desktop** — `integration-test-audiogen-ggml.yml` with
-`run_rtf_benchmarks: true`. Every runner sweeps the three variants on CPU;
-GPU-capable runners sweep them again on the platform backend (Vulkan on
-linux/win32, Metal on darwin). Artifacts: `rtf-results-audiogen-ggml-*`.
-
-**Mobile** — `integration-mobile-test-audiogen-ggml.yml` with
-`run_rtf_benchmarks: true`. One AWS Device Farm row per variant/provider on
-Android and iOS, since each row downloads its variant's GGUFs on-device. The
-numbers leave the device inside `[PERF_REPORT_START]` log markers, which the
-shared extractor scrapes. Artifacts: `perf-report-audiogen-ggml-*`.
-
-Both lanes are `continue-on-error`, so a configuration that OOMs or overruns
-shows up as a missing row rather than a failed sweep.
+sweep; nothing dispatches one on a schedule.
 
 ## How the findings table is built
 

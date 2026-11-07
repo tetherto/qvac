@@ -24,9 +24,8 @@ on:
           - "On PR Trigger (nx)"
           - "PR build and test"
           - "Mobile tests"
-          - "Mobile Integration Tests (Parakeet)"
           - "Mobile Integration Tests (Diffusion CPP)"
-          - "Benchmark Performance (AudioGen GGML)"
+          - "Benchmarks"
       runs:
         description: "Number of recent runs to aggregate"
         type: number
@@ -166,14 +165,17 @@ jobs:
             --output-html reports/vlm-mobile-performance.html \
             || echo "::warning::VLM (Mobile): no runs or artifacts found"
 
+          # asr's mobile runs, Parakeet included, upload <slug>-perf-mobile-* from the contract's Mobile tests.
           echo "=== Parakeet (Mobile) ==="
           node scripts/perf-report/aggregate.js \
-            --addon parakeet \
-            --workflow "Mobile Integration Tests (Parakeet)" \
+            --addon asr-ggml \
+            --workflow "Mobile tests" \
+            --artifact-pattern "asr-ggml-perf-mobile-*" \
             --runs 6 \
             --output reports/parakeet-mobile-performance.md \
             --output-json reports/parakeet-mobile-performance.json \
-            --output-html reports/parakeet-mobile-performance.html || true
+            --output-html reports/parakeet-mobile-performance.html ||
+            echo "::warning::Parakeet (Mobile): no Mobile tests runs or asr-ggml-perf-mobile-* artifacts found"
 
           echo "=== Diffusion (Desktop) ==="
           node scripts/perf-report/aggregate.js \
@@ -195,10 +197,10 @@ jobs:
 
           # ACE-Step (audiogen-ggml) reports desktop and mobile in one table, so
           # a single aggregation covers both lanes. It is only as fresh as the
-          # last sweep — the benchmark workflow is dispatch-only.
+          # last benchmarks.yml run, which is dispatch-only.
           echo "=== ACE-Step (Desktop + Mobile) ==="
           node scripts/perf-report/aggregate-audiogen-ggml-rtf.js \
-            --workflow "Benchmark Performance (AudioGen GGML)" \
+            --workflow "Benchmarks" \
             --runs 6 \
             --output reports/audiogen-ggml-performance.md \
             --output-json reports/audiogen-ggml-performance.json || true

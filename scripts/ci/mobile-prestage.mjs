@@ -35,7 +35,8 @@ export function seedAndPresign({ pkg, manifest, prefix, out, names = '', env = p
   })
 }
 
-// Step outputs _mobile.yml reads from test:mobile: test-groups, device-env, mocha-timeout-ms, per-test-timeout-minutes.
+// Step outputs _mobile.yml reads from test:mobile: test-groups, device-env, mocha-timeout-ms, per-test-timeout-minutes,
+// enables-perf.
 export function emitOutputs(outputs, env = process.env) {
   for (const [k, v] of Object.entries(outputs))
     appendFileSync(env.GITHUB_OUTPUT, `${k}<<EOF_OUT\n${v}\nEOF_OUT\n`)

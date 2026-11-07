@@ -41,12 +41,13 @@ test('the on-pr orchestrator accepts explicit packages only on manual dispatch',
   assert.match(workflow, /target: on-pr\n[^\n]*config-ref:[^\n]*\n\s+packages: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.packages \|\| '\[\]' \}\}/)
 })
 
-test('explicit ASR selection builds a nonempty on-pr matrix even with no affected code', () => {
-  const result = runMatrix('["asr-ggml"]')
+test('explicit package selection builds a nonempty on-pr matrix even with no affected code', () => {
+  // diffusion-cpp, which still builds and runs C++ tests through on-pr-nx.yml.
+  const result = runMatrix('["diffusion-cpp"]')
   assert.equal(result.status, 0, result.stderr)
   const matrix = JSON.parse(result.output.match(/^matrix=(.+)$/m)[1])
   assert.ok(matrix.length > 0)
-  assert.deepEqual([...new Set(matrix.map(row => row.package))], ['asr-ggml'])
+  assert.deepEqual([...new Set(matrix.map(row => row.package))], ['diffusion-cpp'])
   assert.ok(matrix.every(row => row.hasPrebuilds && row.hasCppTests))
   assert.match(result.output, /^any=true$/m)
 })
@@ -141,7 +142,8 @@ test('empty config-ref retains the affected base configuration', (t) => {
 
 test('failed prebuilds cannot start artifact consumers or empty performance collectors', () => {
   assert.match(jobBlock(workflow, 'run-integration-tests'), /needs\.prebuild\.result == 'success'/)
-  for (const job of ['perf-report', 'perf-report-rtf']) {
+  // perf-report-rtf left with the speech packages, which pr-build-test now runs.
+  for (const job of ['perf-report']) {
     const block = jobBlock(workflow, job)
     assert.ok(block.includes("needs.run-integration-tests.result == 'success' || needs.run-integration-tests.result == 'failure'"))
   }

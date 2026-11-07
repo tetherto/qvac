@@ -2,20 +2,14 @@
 'use strict'
 
 // Stage the parakeet-engine integration test GGUFs declared in
-// test/integration/parakeet-models.manifest.json into ./models/ by copying each object
+// test/integration/models.manifest.json (its s3Path entries; the whisper urls
+// entries belong to stage-whisper-models.mjs) into ./models/ by copying each object
 // from the QVAC S3 model registry (`aws s3 cp s3://$MODEL_S3_BUCKET/<s3Path>`).
 //
-// Why this exists:
-//   The manifest is the single source of truth for BOTH the cache key
-//   (.github/actions/cache-models hashes the manifest) AND the CI staging set.
-//   Driving the `aws s3 cp` list from the manifest keeps the two in lockstep:
-//   adding/removing a model is one edit, and it can never silently produce a
-//   cache hit that skips a now-missing download.
-//
-//   Parakeet models live in S3 (not HuggingFace), so the cache-models `warm`
-//   step (HTTP/HF downloader) is disabled for this package and this script does
-//   the fetch instead. It runs only on a cache miss (gated in the workflow);
-//   on a hit every file is already present and this is a fast verify no-op.
+// The manifest is the single source of truth for both the model cache key and the
+// staging set, so adding or removing a model is one edit. The CI contract's model
+// download fetches the same entries; this script stages them locally and, on darwin
+// with --coreml-only, the Core ML sidecars the contract's download skips.
 //
 // Integrity: when a manifest entry pins bytes/sha256, a present file is verified
 // (size first, then sha256) and re-copied on mismatch; a freshly copied file is
@@ -41,30 +35,16 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const MANIFEST_PATH = resolve(
-  __dirname,
-  '..',
-  'test',
-  'integration',
-  'parakeet-models.manifest.json'
-)
+const MANIFEST_PATH = resolve(__dirname, '..', 'test', 'integration', 'models.manifest.json')
 const DEFAULT_OUT_DIR = resolve(__dirname, '..', 'models')
 
-// Core ML encoder sidecars are pinned in their own manifest rather than as a
-// new key in parakeet-models.manifest.json: that manifest's guard test asserts
-// an exact top-level key set, and both files are hashed into the model cache
-// key by the same `*.manifest.json` glob, so a separate file costs nothing.
+// Core ML encoder sidecars are pinned in the same manifest's top-level
+// `sidecars` object, which the CI contract's model download ignores.
 //
-// Sidecars are optional. An absent manifest, or an empty `sidecars` object,
-// leaves models/coreml/ unpopulated and the Core ML benchmark lanes skip
-// themselves -- no other lane is affected.
-const COREML_MANIFEST_PATH = resolve(
-  __dirname,
-  '..',
-  'test',
-  'integration',
-  'parakeet-coreml.manifest.json'
-)
+// Sidecars are optional. An empty `sidecars` object leaves models/coreml/
+// unpopulated and the Core ML benchmark lanes skip themselves -- no other
+// lane is affected.
+const COREML_MANIFEST_PATH = MANIFEST_PATH
 const COREML_SUBDIR = 'coreml'
 
 function parseArgs(argv) {
@@ -135,7 +115,7 @@ async function stageCoremlSidecars(bucket, outputDir) {
   console.log(`Staging ${entries.length} Core ML sidecar(s) into ${coremlDir}`)
 
   for (const [name, entry] of entries) {
-    if (!entry.s3Path) throw new Error(`${name}: missing s3Path in Core ML manifest`)
+    if (!entry.s3Path) throw new Error(`${name}: missing s3Path in the manifest's sidecars`)
     // `<stem>-encoder.mlmodelc.zip` unpacks to `<stem>-encoder.mlmodelc`, the
     // exact name parakeet.cpp derives from the GGUF path beside it.
     const bundleName = name.replace(/\.zip$/, '')
@@ -197,8 +177,9 @@ async function main() {
 
   if (!existsSync(MANIFEST_PATH)) throw new Error(`missing manifest at ${MANIFEST_PATH}`)
   const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'))
-  const entries = Object.entries(manifest.models || {})
-  if (!entries.length) throw new Error('manifest has no models')
+  // The whisper entries (urls) are stage-whisper-models.mjs's.
+  const entries = Object.entries(manifest.models || {}).filter(([, entry]) => !entry.urls)
+  if (!entries.length) throw new Error('manifest has no parakeet models')
 
   mkdirSync(args.output, { recursive: true })
   console.log(`Staging ${entries.length} parakeet GGUF(s) from s3://${bucket} into ${args.output}`)

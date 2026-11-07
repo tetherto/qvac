@@ -1,9 +1,8 @@
 'use strict'
 
-// Guards test/integration/parakeet-coreml.manifest.json — the pinned set of
-// Apple Neural Engine encoder sidecars staged for the darwin Core ML benchmark
-// lanes, and (via the same `*.manifest.json` cache-key glob as the model
-// manifest) part of the model cache key.
+// Guards the `sidecars` object of test/integration/models.manifest.json — the
+// pinned set of Apple Neural Engine encoder sidecars staged for the darwin Core ML
+// benchmark lanes, and part of the model cache key with the rest of the manifest.
 //
 // Kept import-light (reads files only, never requires the native addon) so it
 // runs under brittle-bare without a prebuild. Mirrors the shape guarantees in
@@ -16,7 +15,7 @@ const test = require('brittle')
 const fs = require('bare-fs')
 const path = require('bare-path')
 
-const MANIFEST_PATH = path.join(__dirname, '..', 'integration', 'parakeet-coreml.manifest.json')
+const MANIFEST_PATH = path.join(__dirname, '..', 'integration', 'models.manifest.json')
 
 function loadManifest() {
   return JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'))
@@ -26,14 +25,16 @@ test('coreml manifest: contains only cache-key-bearing fields', (t) => {
   const manifest = loadManifest()
   t.alike(
     Object.keys(manifest).sort(),
-    ['cacheEpoch', 'sidecars', 'source'],
+    ['cacheEpoch', 'models', 'sidecars'],
     'top level excludes prose and unrelated metadata'
   )
   t.ok(
     Number.isInteger(manifest.cacheEpoch) && manifest.cacheEpoch > 0,
     'cacheEpoch is a positive integer'
   )
-  t.is(manifest.source, 's3', 'source is s3')
+  for (const [name, entry] of Object.entries(manifest.sidecars)) {
+    t.is(typeof entry.s3Path, 'string', `${name}: source is s3`)
+  }
   t.ok(
     manifest.sidecars && typeof manifest.sidecars === 'object',
     'sidecars is an object (may be empty until the bundles are published)'

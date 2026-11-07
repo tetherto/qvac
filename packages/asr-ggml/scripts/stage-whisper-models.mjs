@@ -1,31 +1,13 @@
 #!/usr/bin/env node
 'use strict'
 
-// Stage the whisper-engine integration test models declared in
-// test/integration/whisper-models.manifest.json into ./models/.
-//
-// Why this exists:
-//   packages/asr-ggml/models is ONE cache entry covering BOTH engines. The
-//   parakeet GGUFs come from S3 (stage-integration-models.mjs); the whisper
-//   model and the VAD model are pulled from HuggingFace by the tests
-//   themselves, at test runtime, via test/integration/helpers.js.
-//
-//   That was fine while nothing pre-populated the entry: a same-repo PR's first
-//   run downloaded them and the post-job save captured the whole directory, so
-//   its next run was warm. Once on-merge-model-cache-asr.yml seeds the entry,
-//   every PR leg gets an EXACT primary-key hit, actions/cache skips its save by
-//   design, and the entry can never grow to include them -- so all seven legs
-//   would re-fetch ~78 MB from HuggingFace on every run, forever. Seeding them
-//   here keeps the entry complete.
-//
-//   cache-models' own `warm` step cannot do this: warm-models.mjs reads
-//   packages/<pkg>/test/integration/models.manifest.json and writes to
-//   packages/<pkg>/test/model, and asr-ggml uses neither path.
+// Stage the whisper-engine models declared in test/integration/models.manifest.json
+// (its urls entries; the s3Path ones are stage-integration-models.mjs's) into ./models/.
+// The CI contract's model download fetches the same entries; this is the local equivalent.
 //
 // Revisions are pinned. `resolve/main` would let the bytes behind an unchanged
-// cache key change under us; bumping a revision here changes the manifest,
-// which changes the cache key (cache-models hashes test/integration/*.manifest.json),
-// which re-seeds. That is the intended behaviour.
+// cache key change under us; bumping a revision changes the manifest, which
+// changes the model cache key. That is the intended behaviour.
 //
 // Integrity: size first, then sha256. A present file that fails either is
 // re-downloaded; a freshly downloaded file that fails either FAILS the step.
@@ -42,13 +24,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const MANIFEST_PATH = resolve(
-  __dirname,
-  '..',
-  'test',
-  'integration',
-  'whisper-models.manifest.json'
-)
+const MANIFEST_PATH = resolve(__dirname, '..', 'test', 'integration', 'models.manifest.json')
 const DEFAULT_OUT_DIR = resolve(__dirname, '..', 'models')
 const MAX_ATTEMPTS = 3
 
@@ -92,7 +68,10 @@ async function download(url, dest) {
 async function main() {
   const { outDir } = parseArgs(process.argv.slice(2))
   const manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'))
-  const models = manifest.models || {}
+  // Only the urls entries: the s3Path ones are stage-integration-models.mjs's.
+  const models = Object.fromEntries(
+    Object.entries(manifest.models || {}).filter(([, entry]) => entry.urls)
+  )
   const names = Object.keys(models)
   if (names.length === 0) throw new Error(`No models declared in ${MANIFEST_PATH}`)
 
