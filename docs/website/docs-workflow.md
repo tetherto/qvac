@@ -43,7 +43,7 @@ The docs site lives in `docs/website/`. It is a fully static site (Next.js `outp
 | Docs framework | Fumadocs (`fumadocs-core`, `fumadocs-mdx`, `fumadocs-ui`) |
 | Styling | Tailwind CSS |
 | Content | MDX files in `docs/website/content/docs/` |
-| API docs | Auto-generated via TypeDoc (`docs/website/scripts/generate-api-docs.ts`) |
+| API reference | Rendered from the SDK contract and generated surface data (`scripts/api-reference/`) |
 | Build output | `docs/website/dist/` (static HTML/CSS/JS) |
 | Hosting | Static site CDN (hosting provider runs the build and serves the output) |
 
@@ -52,31 +52,45 @@ Content falls into two categories:
 | Category | Path | Committed? |
 |---|---|---|
 | Manual content (guides, tutorials, addons) | one collection folder per top level: `content/docs/ecosystem/`, `content/docs/sdk/`, `content/docs/cli/`, `content/docs/resources/` | Yes |
-| The line being written, per versioned collection | `content/_unpublished/<collection>/next/` | Yes, but not built and not served |
-| SDK API summary (generated) | `content/_unpublished/sdk/next/reference/api.mdx`, published with its line | Yes (committed once per minor release) |
+| The line being written, per versioned collection | the software's `packages/<pkg>/docs/users/` (SDK), or `content/_unpublished/<collection>/next/` until the software migrates (CLI) | Yes, but not served in production |
+| SDK API data (generated) | `packages/sdk/docs/users/_generated/` and the reference stubs in `packages/sdk/docs/users/reference/api/` | Yes, kept fresh by `npm run docs:sdk-api -- --check` |
 
-The SDK API summary is **generated from TypeScript source** via [TypeDoc](https://typedoc.org/) and Nunjucks. It is one MDX page inside the SDK's development line — the version being written, which the release cutoff publishes. A line already published is never regenerated, so there is one target and no way to name another. It is generated at the release cutoff; locally a maintainer can regenerate to preview.
+The SDK API reference is **rendered from data**, never written by hand. Field facts — types, nesting, constraints, descriptions — come from the SDK's exported contract (`packages/sdk/contract/`, generated from its Zod schemas). The client functions come from `packages/sdk/docs/users/_generated/`: `js-api.json`, extracted by TypeDoc, and `python-api.json`, read from the Python client's source. Each line renders the data of its own commit.
 
 **The site publishes no release-notes pages.** Each line's sidebar carries a `Release Notes` entry that links out to that minor's GitHub release, which is where the changelog already lives. The release notes a release authors (`qv-sdk-changelog`) therefore reach readers through GitHub, and a patch release touches `docs/website` not at all.
 
 ### How the Pipeline Works
 
-The generation pipeline has two phases — TypeDoc extraction and Nunjucks
-rendering. Output is deterministic: identical SDK input always produces
-identical MDX. (AI-assisted authoring happens locally via agent skills,
-never inside this pipeline.)
+Generation and rendering are separate. Generation needs the packages'
+sources, so it runs in the repository and its output is committed; the site
+build only reads committed data. Output is deterministic. (AI-assisted
+authoring happens locally via agent skills, never inside this pipeline.)
 
 ```
-SDK source (packages/sdk)
-  │
+packages/sdk (TypeDoc) + packages/sdk-python (source)
+  │  npm run docs:sdk-api
   ▼
-Phase 1: TypeDoc extraction  ──►  api-data.json
-  │
+packages/sdk/docs/users/_generated/{js-api,python-api}.json
+packages/sdk/docs/users/reference/api/<function>.mdx   (one stub per function)
+  │  build: materialize the line, then render
   ▼
-Phase 2: Nunjucks rendering  ──►  content/_unpublished/sdk/next/reference/api.mdx
+reference pages   ── <FunctionReference>, <SchemaTable>, <ModelsTable>
+Markdown twins    ── the same components rendered as cards
+<function>.schema.json   ── scripts/write-schema-slices.ts, after next build
 ```
 
-The API summary is the only generated page. Release notes are not rendered
+- `<SchemaTable fn>` renders a function's request fields as nested tables,
+  with a JavaScript/Python switch for field names.
+- `<ModelsTable engines>` lists the registry models of the given engines.
+- `<FunctionReference fn>` renders a function's whole reference page.
+
+In a page's Markdown twin, each component renders as a card: a TypeScript
+type for fields, a list for models. `npm run docs:sdk-parity` checks that every
+contract method is reachable from JavaScript and Python, and
+`npm run docs:sdk-descriptions` lists the public request fields the contract
+leaves undescribed.
+
+Release notes are not rendered
 into the site at all: `reference/meta.json` declares the sidebar entry as an
 external link to `https://github.com/tetherto/qvac/releases/tag/sdk-v<X.Y>.0`,
 so each line points at the GitHub release of its own minor. A cut rewrites that
@@ -121,22 +135,15 @@ SDK_PATH=/path/to/qvac/packages/sdk
 
 Bun loads `.env` automatically when running scripts.
 
-### Generating API Docs Locally
+### Generating the SDK API data
 
 ```bash
-bun run scripts/generate-api-docs.ts <version> [flags]
+npm run docs:sdk-api            # regenerate after changing the SDK's public API
+npm run docs:sdk-api -- --check # fail when the committed data is stale
 ```
 
-This will:
-
-1. Run TypeDoc against the SDK entry point (`SDK_PATH/index.ts`) and write `api-data.json`
-2. Render a single MDX via the Nunjucks `single-page.njk` template into
-   `content/_unpublished/sdk/next/reference/api.mdx`, the line being written
-3. Run a smoke test that checks for `## Functions` and `## Errors` headings
-
-`--title-only` short-circuits this: it skips TypeDoc + render and only
-rewrites the `title:` line of the existing page, then runs the
-same smoke test.
+It writes `packages/sdk/docs/users/_generated/` and the reference stubs in
+`packages/sdk/docs/users/reference/api/`. Commit both with the SDK change.
 
 **Flags:**
 
@@ -250,16 +257,6 @@ naming the version at fault. A pinned line is one edit: the materializer
 writes its folder. `scripts/update-versions-list.ts`, which used to
 regenerate the file from disk, is retired and refuses to run.
 
-### Full Generation (Orchestrated)
-
-When running inside the monorepo, use the orchestrator script that reads the SDK version from `packages/sdk/package.json` automatically:
-
-```bash
-bun run docs:generate
-```
-
-This runs `generate-api-docs.ts` — useful for previewing a regen against the current SDK. It no longer refreshes the version list, which is hand-edited.
-
 ---
 
 ## Versioning
@@ -371,8 +368,10 @@ carries a note at the top saying so. Do not call them:
   `release-notes-patch-section.njk`
 - `release-notes-overrides/`
 
-The release path is `generate-api-docs.ts` at the cutoff; the cut is
-`scripts/cut-line.ts` or the hand procedure in [`README.md`](README.md).
+The SDK publishes a line by pinning its release commit in
+`versions/sdk.json`; its API data is already committed with the release. The
+CLI still publishes by a cut: `scripts/cut-line.ts` or the hand procedure in
+[`README.md`](README.md).
 
 ---
 
@@ -526,8 +525,7 @@ Two GitHub Actions workflows touch the docs: one validates docs PRs, one manuall
 **What it does:**
 - Installs dependencies with Bun
 - Runs `bun run build` to validate the site compiles
-- Runs Vitest tests (sidebar consistency, link integrity, single-page rendering, the cut) excluding TSDoc completeness tests that require SDK source
-- Optionally installs the SDK and runs the TSDoc completeness audit in warning mode
+- Runs Vitest tests (sidebar consistency, link integrity, materialization, API reference, the cut)
 - Runs `Documentation lines` in a second job, described below
 
 **Purpose:** Catches build errors and broken links in docs PRs before merge.
@@ -627,13 +625,11 @@ this list is the only reading there is.
 
 **What the PR carries**, per collection the release moves:
 
-1. The regenerated API summary of the version being released, written into the development line just before it is published:
+1. For the SDK, the pin of the release commit in `versions/sdk.json`. Its API
+   data and reference stubs are already committed with the release
+   (`npm run docs:sdk-api -- --check` keeps them fresh).
 
-   ```bash
-   bun run scripts/generate-api-docs.ts <version> --force-extract
-   ```
-
-2. The cut itself, one commit per collection:
+2. For the CLI, the cut itself:
 
    ```bash
    bun run scripts/cut-line.ts <collection> v<X.Y>
@@ -678,14 +674,17 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 | `release-version.ts` | -- | **Retired**, kept for reference. Was the release dispatcher forwarding to the minor or patch orchestrator. |
 | `release-version-minor.ts` | -- | **Retired**, kept for reference. Was the minor (X.Y.0) orchestrator: freeze outgoing series → generate new latest → refresh `versions.ts`. |
 | `release-version-patch.ts` | -- | **Retired**, kept for reference. Was the patch (X.Y.Z, Z>=1) orchestrator, inserting `## v<X.Y.Z>` after the existing minor block. |
-| `generate-api-docs.ts` | `docs:generate-api` | Renders the API summary page of the SDK's development line. `--title-only` rewrites only the frontmatter title. |
-| `api-docs/extract.ts` | -- | Phase 1: TypeDoc analysis, writes `api-data.json` |
-| `api-docs/render.ts` | -- | Phase 2: Nunjucks rendering of `single-page.njk` from `api-data.json` |
-| `api-docs/audit-tsdoc.ts` | `docs:audit-tsdoc` | TSDoc completeness audit (standalone or via extraction) |
+| `api-reference/generate-sdk-data.ts` | `docs:sdk-api` | Writes the SDK's generated surface data (`js-api.json`, `python-api.json`) and its reference stubs. `--check` fails when they are stale. |
+| `api-reference/python-surface.py` | -- | Reads the Python client's public functions from source, standard library only |
+| `api-reference/check-sdk-parity.ts` | `docs:sdk-parity` | Fails naming each contract method a published language does not reach |
+| `api-reference/report-sdk-descriptions.ts` | `docs:sdk-descriptions` | Lists public request fields without a description; never fails |
+| `api-docs/extract.ts` | -- | TypeDoc analysis of the SDK's client functions, used by `generate-sdk-data.ts` |
+| `write-schema-slices.ts` | -- | After `next build`: publishes each function's `<fn>.schema.json` beside its reference page |
+| `write-line-redirects.ts` | -- | After `next build`: expands the documentation-line markers of `out/_redirects` |
+| `materialize-lines.ts` | `docs:materialize` | Materializes every pinned line from its commit; `--override`, `--include-dev` |
 | `generate-release-notes.ts` | `docs:generate-release-notes` | **Dormant**, kept on disk. Rendered a release-notes page of the SDK's newest line; the site publishes no such page any more. Do not call it. |
 | `cut-line.ts` | -- | Publishes the line of the version being released: preserves the outgoing one, copies the development line in as the new one, and updates the manifest, the redirects, the currency marker, and the opened line's release-notes link. The development line stays in place. A convenience for the hand procedure in `README.md`, never a dependency. |
 | `update-versions-list.ts` | -- | **Retired**, kept for reference. Rebuilt `src/lib/versions.ts` from the series siblings on disk; that file is now hand-edited. |
-| `run-docs-generate.ts` | `docs:generate` | Convenience: regenerates the development line's API summary using the monorepo SDK's `package.json` version (no version bump) |
 | `create-version-bundle.ts` | -- | **Retired**, kept for reference. Copied the current `index.mdx` of each versioned section to `v<X.Y>.x.mdx`. |
 | `lib/release-shared.ts` | -- | Shared helpers for the generators: version parsing, the manifest reader, `developmentLineDir`, and `referenceDirFor` / `apiPageFor` / `releaseNotesPageFor`, which resolve the development line's reference folder and refuse a version that has already shipped |
 | `lib/changelog-parser.ts` | -- | **Dormant**, kept on disk. Changelog parsing for the release-notes page generator, its only caller. |
@@ -799,15 +798,14 @@ The committed API summary of each published line is what `next build` reads. If 
 2. Run `bun run build` locally to reproduce
 3. Look for broken MDX frontmatter or invalid imports in `content/`
 
-### Recover a broken API summary
+### Recover stale SDK API data
 
-If the cutoff produced a broken `reference/api.mdx`, re-render it before the cut, from the version being released:
+If a reference page shows a function or field that no longer matches the SDK,
+the committed data is stale. Regenerate and commit it:
 
 ```bash
-bun run scripts/generate-api-docs.ts <X.Y.Z> --force-extract
+npm run docs:sdk-api
 ```
-
-If the cut has already been committed, reset the branch and re-run both steps rather than patching the published folder. There is no automatic backup directory — the retained lines are the safety net, each a full copy of the tree as that release stood.
 
 ### Correct a published page without waiting for the next release
 

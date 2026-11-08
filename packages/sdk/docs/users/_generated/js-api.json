@@ -1,0 +1,1225 @@
+{
+  "functions": [
+    {
+      "name": "assessModelFit",
+      "signature": "function assessModelFit(input: AssessModelFitInput): Promise<AssessModelFitResult>;",
+      "description": "Whether a set of models fits in this device's memory when loaded together,\nwithout downloading them.",
+      "returns": "Promise<AssessModelFitResult>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "",
+          "description": "The error `loadModel` would throw for a load it refuses: no plugin\n  for the model type, a config the plugin refuses, or a model the fitter\n  cannot read."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "audioEdit",
+      "signature": "function audioEdit(params: AudioEditClientParams): AudioGenResult;",
+      "description": "Edits a source recording with a loaded ACE-Step AudioGen model: an ordered\npipeline of `flow-edit` and `repaint` operations, executed in array order.",
+      "returns": "AudioGenResult",
+      "returnFields": [],
+      "throws": [],
+      "deprecated": null
+    },
+    {
+      "name": "audioGen",
+      "signature": "function audioGen(params: AudioGenClientParams): AudioGenResult;",
+      "description": "Generates PCM audio using a loaded AudioGen model.",
+      "returns": "AudioGenResult",
+      "returnFields": [],
+      "throws": [],
+      "deprecated": null
+    },
+    {
+      "name": "audioUnderstand",
+      "signature": "function audioUnderstand(params: AudioUnderstandClientParams): AudioUnderstandResult;",
+      "description": "Describes a recording with a loaded ACE-Step AudioGen model, running the\nengine's reverse pipeline: the PCM is encoded, its FSQ semantic codes are\nrecovered, and the LM reports a caption and the clip's metadata.",
+      "returns": "AudioUnderstandResult",
+      "returnFields": [],
+      "throws": [],
+      "deprecated": null
+    },
+    {
+      "name": "batchCompletion",
+      "signature": "function batchCompletion(params: BatchCompletionParams): BatchCompletionRun;",
+      "description": "Runs multiple prompts concurrently through one loaded model.",
+      "returns": "BatchCompletionRun",
+      "returnFields": [],
+      "throws": [],
+      "deprecated": null
+    },
+    {
+      "name": "bciTranscribe",
+      "signature": "function bciTranscribe(params: any, options?: RPCOptions): Promise<TranscribeSegment[]> & { requestId: string };\nfunction bciTranscribe(params: BciTranscribeClientParams, options?: RPCOptions): Promise<string> & { requestId: string };",
+      "description": "Transcribe a neural-signal buffer with a loaded BCI model and return the\ncomplete text. Accepts either a `.bin` file path or a raw neural buffer.",
+      "returns": "Promise<TranscribeSegment[]> & { requestId: string }",
+      "returnFields": [
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "throws": [],
+      "deprecated": null
+    },
+    {
+      "name": "bciTranscribeStream",
+      "signature": "function bciTranscribeStream(params: any, options?: RPCOptions): Promise<BciTranscribeStreamMetadataSession>;\nfunction bciTranscribeStream(params: BciTranscribeStreamClientParams, options?: RPCOptions): Promise<BciTranscribeStreamSession>;",
+      "description": "Opens a bidirectional streaming BCI transcription session. Neural-signal\nchunks are streamed in via `write()`, and transcription is yielded as the\naddon's sliding window decodes successive windows.",
+      "returns": "Promise<BciTranscribeStreamMetadataSession>",
+      "returnFields": [],
+      "throws": [],
+      "deprecated": null
+    },
+    {
+      "name": "cancel",
+      "signature": "function cancel(params: CancelClientInput): Promise<void>;",
+      "description": "Cancels an ongoing operation.",
+      "returns": "Promise<void>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "QvacErrorBase",
+          "description": "When the response type is invalid or the cancellation fails."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "classify",
+      "signature": "function classify(params: ClassifyClientParams): Promise<ClassificationResult[]>;",
+      "description": "Classifies an image using a loaded classification model.",
+      "returns": "Promise<ClassificationResult[]>",
+      "returnFields": [],
+      "throws": [],
+      "deprecated": null
+    },
+    {
+      "name": "completion",
+      "signature": "function completion(params: CompletionParams): CompletionRun;",
+      "description": "Generates completion from a language model based on conversation history.",
+      "returns": "CompletionRun",
+      "returnFields": [],
+      "throws": [],
+      "deprecated": null
+    },
+    {
+      "name": "createVectorIndex",
+      "signature": "function createVectorIndex(params: CreateVectorIndexParams, options?: RPCOptions): Promise<VectorIndex>;",
+      "description": "Creates an empty vector index in worker memory and returns a handle to it.",
+      "returns": "Promise<VectorIndex>",
+      "returnFields": [
+        {
+          "name": "dim",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "indexId",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "length",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "storage",
+          "type": "any",
+          "required": true
+        },
+        {
+          "name": "[asyncDispose]",
+          "type": "unknown",
+          "required": true
+        },
+        {
+          "name": "add",
+          "type": "unknown",
+          "required": true
+        },
+        {
+          "name": "contains",
+          "type": "unknown",
+          "required": true
+        },
+        {
+          "name": "dispose",
+          "type": "unknown",
+          "required": true
+        },
+        {
+          "name": "remove",
+          "type": "unknown",
+          "required": true
+        },
+        {
+          "name": "search",
+          "type": "unknown",
+          "required": true
+        },
+        {
+          "name": "write",
+          "type": "unknown",
+          "required": true
+        }
+      ],
+      "throws": [
+        {
+          "error": "VectorIndexProviderUnavailableError",
+          "description": "When no registered plugin exposes a vector index provider"
+        },
+        {
+          "error": "VectorIndexFailedError",
+          "description": "When the native index rejects the dimension or storage mode"
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "decide",
+      "signature": "function decide(params: Extract<DecideParams, { state: unknown }>, options?: RPCOptions): Promise<DecisionResult> & { requestId: string };\nfunction decide(params: Extract<DecideParams, { states: unknown }>, options?: RPCOptions): Promise<DecisionResult[]> & { requestId: string };\nfunction decide(params: DecideParams, options?: RPCOptions): Promise<DecisionResponse> & { requestId: string };",
+      "description": "Answers typed decision questions about one state or a batch of states.",
+      "returns": "Promise<DecisionResult> & { requestId: string }",
+      "returnFields": [
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "throws": [
+        {
+          "error": "RequestValidationFailedError",
+          "description": "If the request is invalid."
+        },
+        {
+          "error": "InferenceCancelledError",
+          "description": "If the request is cancelled."
+        },
+        {
+          "error": "RequestRejectedByPolicyError",
+          "description": "If this model's decision queue is full."
+        },
+        {
+          "error": "InvalidResponseError",
+          "description": "If the worker returns a malformed result."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "deleteCache",
+      "signature": "function deleteCache(params: { all: true } | { auto: true } | { kvCacheKey: string; modelId?: string } | { modelSrc: string }): Promise<{ success: any }>;",
+      "description": "Deletes KV cache files, or a registry model's cached download.",
+      "returns": "Promise<{ success: any }>",
+      "returnFields": [
+        {
+          "name": "success",
+          "type": "any",
+          "required": true
+        }
+      ],
+      "throws": [
+        {
+          "error": "QvacErrorBase",
+          "description": "When the cache parameters are invalid (`InvalidDeleteCacheParamsError`) or the server reports a delete failure (`DeleteCacheFailedError`)."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "diffusion",
+      "signature": "function diffusion(params: DiffusionClientParams): DiffusionResult;",
+      "description": "Generates images using a loaded diffusion model.",
+      "returns": "DiffusionResult",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "InferenceCancelledError",
+          "description": "The run's promises reject and progress stream throws when an active generation is cancelled."
+        },
+        {
+          "error": "RequestRejectedByPolicyError",
+          "description": "The run rejects when another image or video generation owns the model.\n\nSupports txt2img without input images, img2img via `init_image`,\nand ordered multi-reference editing via `init_images` on supported models."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "discoverRpcServers",
+      "signature": "function discoverRpcServers(options: DiscoverRpcServersOptions): Promise<RpcServerCandidate[]> & { requestId: string };",
+      "description": "Find private-network candidates with device inventories and server RDMA availability.\nRDMA availability is a server-side offer, not a guarantee of the negotiated transport.\nUse getRpcDeviceMap with the chosen endpoint registration order before loadModel.\nCancel a pending search with its promise.requestId.",
+      "returns": "Promise<RpcServerCandidate[]> & { requestId: string }",
+      "returnFields": [
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "throws": [],
+      "deprecated": null
+    },
+    {
+      "name": "downloadAsset",
+      "signature": "function downloadAsset(options: DownloadAssetOptions, rpcOptions?: RPCOptions): Promise<string> & { requestId: string };",
+      "description": "Downloads an asset (model file) without loading it into memory.",
+      "returns": "Promise<string> & { requestId: string }",
+      "returnFields": [
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "throws": [
+        {
+          "error": "QvacErrorBase",
+          "description": "When asset download fails, with details in the error message"
+        },
+        {
+          "error": "QvacErrorBase",
+          "description": "When streaming ends unexpectedly (only when using onProgress)"
+        },
+        {
+          "error": "QvacErrorBase",
+          "description": "When receiving an invalid response type from the server"
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "embed",
+      "signature": "function embed(params: { inputs?: undefined; modelId: string; text: string }, options?: RPCOptions): Promise<{ embedding: number[]; stats?: any }> & { requestId: string };\nfunction embed(params: { inputs?: undefined; modelId: string; text: string[] }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: any }> & { requestId: string };\nfunction embed(params: { inputs: EmbedInput[]; modelId: string; text?: undefined }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: any }> & { requestId: string };\nfunction embed(params: EmbedParams, options?: RPCOptions): Promise<{ embedding: number[] | number[][]; stats?: any }> & { requestId: string };",
+      "description": "Generates embeddings for a single text using a specified model.",
+      "returns": "Promise<{ embedding: number[]; stats?: any }> & { requestId: string }",
+      "returnFields": [
+        {
+          "name": "embedding",
+          "type": "number[]",
+          "required": true
+        },
+        {
+          "name": "stats",
+          "type": "any",
+          "required": false
+        },
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "throws": [
+        {
+          "error": "QvacErrorBase",
+          "description": "When the response type is invalid or when the embedding fails"
+        },
+        {
+          "error": "QvacErrorBase",
+          "description": "When validation or embedding fails"
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "finetune",
+      "signature": "function finetune(params: FinetuneRunParams, rpcOptions?: RPCOptions): FinetuneHandle;\nfunction finetune(params: FinetuneReplyParams, rpcOptions?: RPCOptions): Promise<FinetuneResult>;",
+      "description": "Run / start / resume a finetune job. Returns a handle with a streaming\n`progressStream` and a terminal `result` promise.",
+      "returns": "FinetuneHandle",
+      "returnFields": [
+        {
+          "name": "progressStream",
+          "type": "AsyncGenerator<FinetuneProgress>",
+          "required": true
+        },
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "result",
+          "type": "Promise<FinetuneResult>",
+          "required": true
+        }
+      ],
+      "throws": [],
+      "deprecated": null
+    },
+    {
+      "name": "getLoadedModelInfo",
+      "signature": "function getLoadedModelInfo(params: GetLoadedModelInfoParams, rpcOptions?: RPCOptions): Promise<LoadedModelInfo>;",
+      "description": "Returns introspection info for a loaded `modelId`.",
+      "returns": "Promise<LoadedModelInfo>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "InvalidResponseError",
+          "description": "When the worker returns an unexpected response."
+        },
+        {
+          "error": "ModelNotFoundError",
+          "description": "When no loaded model has the requested ID."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "getModelInfo",
+      "signature": "function getModelInfo(params: GetModelInfoParams): Promise<ModelInfo>;",
+      "description": "Returns status information for a catalog model, including cache state and loaded instances.",
+      "returns": "Promise<ModelInfo>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "QvacErrorBase",
+          "description": "When the response type is invalid (`InvalidResponseError`) or the RPC layer fails."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "getSystemResources",
+      "signature": "function getSystemResources(input?: GetSystemResourcesInput): Promise<SystemResources>;",
+      "description": "Read the worker's system capabilities and optional resource sample.",
+      "returns": "Promise<SystemResources>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "InvalidResponseError",
+          "description": "If the worker returns a different response type."
+        },
+        {
+          "error": "Error",
+          "description": "If the RPC request fails."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "heartbeat",
+      "signature": "function heartbeat(): Promise<HeartbeatResponse>;",
+      "description": "Checks whether the local SDK worker is responsive by sending a heartbeat\nround-trip.",
+      "returns": "Promise<HeartbeatResponse>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "QvacErrorBase",
+          "description": "When the response is invalid."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "invokePlugin",
+      "signature": "function invokePlugin(options: InvokePluginOptions<TParams>, rpcOptions?: RPCOptions): Promise<TResponse>;",
+      "description": "Invoke a non-streaming plugin handler.",
+      "returns": "Promise<TResponse>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "QvacErrorBase",
+          "description": "When the response type is invalid (`InvalidResponseError`) or the RPC layer fails."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "invokePluginStream",
+      "signature": "function invokePluginStream(options: InvokePluginOptions<TParams>, rpcOptions?: RPCOptions): AsyncGenerator<TResponse>;",
+      "description": "Invoke a streaming plugin handler.",
+      "returns": "AsyncGenerator<TResponse>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "QvacErrorBase",
+          "description": "When an intermediate response has the wrong type (`InvalidResponseError`) or the RPC layer fails."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "loadModel",
+      "signature": "function loadModel(options: LoadModelDescriptorParam<S>, rpcOptions?: RPCOptions): Promise<string> & { requestId: string };\nfunction loadModel(options: LoadModelOptions, rpcOptions?: RPCOptions): Promise<string> & { requestId: string };\nfunction loadModel(options: LoadCustomPluginModelOptions<T>, rpcOptions?: RPCOptions): Promise<string> & { requestId: string };\nfunction loadModel(options: ReloadConfigOptions, rpcOptions?: RPCOptions): Promise<string> & { requestId: string };",
+      "description": "Loads a model from a descriptor; `modelType` is inferred from `modelSrc`.\n`modelConfig` narrows per-engine when `modelSrc.engine` is a literal,\notherwise falls back to a permissive shape.",
+      "returns": "Promise<string> & { requestId: string }",
+      "returnFields": [
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "throws": [
+        {
+          "error": "ModelTypeRequiredError",
+          "description": "When `modelType` cannot be inferred from `modelSrc` at runtime."
+        },
+        {
+          "error": "QvacErrorBase",
+          "description": "When model loading fails, with details in the error message"
+        },
+        {
+          "error": "QvacErrorBase",
+          "description": "When streaming ends unexpectedly (only when using onProgress)"
+        },
+        {
+          "error": "QvacErrorBase",
+          "description": "When receiving an invalid response type from the server"
+        },
+        {
+          "error": "QvacErrorBase",
+          "description": "When model reload fails, with details in the error message"
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "loadVectorIndex",
+      "signature": "function loadVectorIndex(params: LoadVectorIndexParams, options?: RPCOptions): Promise<VectorIndex>;",
+      "description": "Loads a vector index snapshot written by `VectorIndex.write()` into worker\nmemory and returns a handle to it.",
+      "returns": "Promise<VectorIndex>",
+      "returnFields": [
+        {
+          "name": "dim",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "indexId",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "length",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "storage",
+          "type": "any",
+          "required": true
+        },
+        {
+          "name": "[asyncDispose]",
+          "type": "unknown",
+          "required": true
+        },
+        {
+          "name": "add",
+          "type": "unknown",
+          "required": true
+        },
+        {
+          "name": "contains",
+          "type": "unknown",
+          "required": true
+        },
+        {
+          "name": "dispose",
+          "type": "unknown",
+          "required": true
+        },
+        {
+          "name": "remove",
+          "type": "unknown",
+          "required": true
+        },
+        {
+          "name": "search",
+          "type": "unknown",
+          "required": true
+        },
+        {
+          "name": "write",
+          "type": "unknown",
+          "required": true
+        }
+      ],
+      "throws": [
+        {
+          "error": "VectorIndexProviderUnavailableError",
+          "description": "When no registered plugin exposes a vector index provider"
+        },
+        {
+          "error": "VectorIndexFailedError",
+          "description": "When the file is missing, corrupt, or not a vector index snapshot"
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "loggingStream",
+      "signature": "function loggingStream(params: LoggingParams, options?: AbortableRPCOptions): AsyncGenerator<LoggingStreamResponse>;",
+      "description": "Opens a logging stream to receive real-time logs.",
+      "returns": "AsyncGenerator<LoggingStreamResponse>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "QvacErrorBase",
+          "description": "When the response type is invalid or when the stream fails"
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "modelRegistryGetModel",
+      "signature": "function modelRegistryGetModel(registryPath: string, registrySource: string): Promise<ModelRegistryEntry>;",
+      "description": "Fetches a single model entry from the registry by its path and source.",
+      "returns": "Promise<ModelRegistryEntry>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "ModelRegistryModelNotFoundError",
+          "description": "When the registry has no model at this source and path."
+        },
+        {
+          "error": "ModelRegistryQueryFailedError",
+          "description": "When the registry query fails."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "modelRegistryList",
+      "signature": "function modelRegistryList(): Promise<ModelRegistryEntry[]>;",
+      "description": "Returns all available models from the QVAC distributed model registry.",
+      "returns": "Promise<ModelRegistryEntry[]>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "ModelRegistryQueryFailedError",
+          "description": "When the registry query fails."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "modelRegistrySearch",
+      "signature": "function modelRegistrySearch(params: ModelRegistrySearchParams): Promise<ModelRegistryEntry[]>;",
+      "description": "Searches the model registry with optional filters for model type, engine, and quantization.",
+      "returns": "Promise<ModelRegistryEntry[]>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "ModelRegistryQueryFailedError",
+          "description": "When the registry query fails."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "ocr",
+      "signature": "function ocr(params: OCRClientParams): { blocks: Promise<OCRTextBlock[]>; blockStream: AsyncGenerator<OCRTextBlock[]>; stats: Promise<any> };",
+      "description": "Performs Optical Character Recognition (OCR) on an image to extract text.",
+      "returns": "{ blocks: Promise<OCRTextBlock[]>; blockStream: AsyncGenerator<OCRTextBlock[]>; stats: Promise<any> }",
+      "returnFields": [
+        {
+          "name": "blocks",
+          "type": "Promise<OCRTextBlock[]>",
+          "required": true
+        },
+        {
+          "name": "blockStream",
+          "type": "AsyncGenerator<OCRTextBlock[]>",
+          "required": true
+        },
+        {
+          "name": "stats",
+          "type": "Promise<any>",
+          "required": true
+        }
+      ],
+      "throws": [],
+      "deprecated": null
+    },
+    {
+      "name": "ragChunk",
+      "signature": "function ragChunk(params: RagChunkParams, options?: RPCOptions): Promise<RagDoc[]>;",
+      "description": "Chunks documents into smaller pieces for embedding.\nPart of the segregated flow: ragChunk() → embed() → ragSaveEmbeddings()",
+      "returns": "Promise<RagDoc[]>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "RAGChunkFailedError",
+          "description": "When the operation fails"
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "ragCloseWorkspace",
+      "signature": "function ragCloseWorkspace(params?: RagCloseWorkspaceParams, options?: RPCOptions): Promise<void>;",
+      "description": "Closes a RAG workspace, releasing in-memory resources (Corestore, HyperDB adapter, RAG instance).\n\n**Workspace lifecycle:** Workspaces are implicitly opened.\nThis function explicitly closes them, releasing memory and file locks. The workspace data\nremains on disk unless `deleteOnClose` is set to true.",
+      "returns": "Promise<void>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "RAGCloseWorkspaceFailedError",
+          "description": "When the operation fails"
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "ragDeleteEmbeddings",
+      "signature": "function ragDeleteEmbeddings(params: RagDeleteEmbeddingsParams, options?: RPCOptions): Promise<void>;",
+      "description": "Deletes document embeddings from the RAG vector database.\n\n**Workspace lifecycle:** This operation requires an existing workspace.",
+      "returns": "Promise<void>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "RAGDeleteFailedError",
+          "description": "When the operation fails or workspace doesn't exist"
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "ragDeleteWorkspace",
+      "signature": "function ragDeleteWorkspace(params: RagDeleteWorkspaceParams, options?: RPCOptions): Promise<void>;",
+      "description": "Deletes a RAG workspace and all its data.\nThe workspace must not be currently loaded/in-use.",
+      "returns": "Promise<void>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "RAGDeleteFailedError",
+          "description": "When the workspace doesn't exist or is currently loaded"
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "ragIngest",
+      "signature": "function ragIngest(params: RagIngestParams, options?: RPCOptions): Promise<{ droppedIndices: number[]; processed: RagSaveEmbeddingsResult[] }> & { requestId: string };",
+      "description": "Ingests documents into the RAG vector database.\nFull pipeline: chunk → embed → save\n\n**Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.\nThe workspace remains open until closed.",
+      "returns": "Promise<{ droppedIndices: number[]; processed: RagSaveEmbeddingsResult[] }> & { requestId: string }",
+      "returnFields": [
+        {
+          "name": "droppedIndices",
+          "type": "number[]",
+          "required": true
+        },
+        {
+          "name": "processed",
+          "type": "RagSaveEmbeddingsResult[]",
+          "required": true
+        },
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "throws": [
+        {
+          "error": "RAGSaveFailedError",
+          "description": "When the operation fails"
+        },
+        {
+          "error": "StreamEndedError",
+          "description": "When streaming ends unexpectedly (only when using onProgress)"
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "ragListWorkspaces",
+      "signature": "function ragListWorkspaces(options?: RPCOptions): Promise<RagWorkspaceInfo[]>;",
+      "description": "Lists all RAG workspaces with their open status.\n\nReturns all workspaces that exist on disk. The `open` field indicates whether\nthe workspace is currently loaded in memory and holding active resources\n(Corestore, HyperDB adapter, and possibly a RAG instance).",
+      "returns": "Promise<RagWorkspaceInfo[]>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "RAGListWorkspacesFailedError",
+          "description": "When the operation fails"
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "ragReindex",
+      "signature": "function ragReindex(params: RagReindexParams, options?: RPCOptions): Promise<RagReindexResult> & { requestId: string };",
+      "description": "Reindexes the RAG database to optimize search performance.\nFor HyperDB, this rebalances centroids using k-means clustering.\n\n**Workspace lifecycle:** This operation requires an existing workspace.\n\n**Note:** Reindex requires a minimum number of documents to perform clustering.\nFor HyperDB, this is 16 documents by default. If there are insufficient documents,\n`reindexed` will be `false` with `details` explaining the reason.",
+      "returns": "Promise<RagReindexResult> & { requestId: string }",
+      "returnFields": [
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "throws": [
+        {
+          "error": "RAGSaveFailedError",
+          "description": "When the operation fails or workspace doesn't exist"
+        },
+        {
+          "error": "StreamEndedError",
+          "description": "When streaming ends unexpectedly (only when using onProgress)"
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "ragSaveEmbeddings",
+      "signature": "function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: RPCOptions): Promise<RagSaveEmbeddingsResult[]> & { requestId: string };",
+      "description": "Saves pre-embedded documents to the RAG vector database.\nPart of the segregated flow: chunk() → embed() → saveEmbeddings()\n\n**Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.\nThe workspace remains open until closed.",
+      "returns": "Promise<RagSaveEmbeddingsResult[]> & { requestId: string }",
+      "returnFields": [
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "throws": [
+        {
+          "error": "RAGSaveFailedError",
+          "description": "When the operation fails"
+        },
+        {
+          "error": "StreamEndedError",
+          "description": "When streaming ends unexpectedly (only when using onProgress)"
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "ragSearch",
+      "signature": "function ragSearch(params: RagSearchParams, options?: RPCOptions): Promise<RagSearchResult[]>;",
+      "description": "Searches for similar documents in the RAG vector database.\n\n**Workspace lifecycle:** This operation requires an existing workspace. If the workspace\ndoesn't exist, returns an empty array.",
+      "returns": "Promise<RagSearchResult[]>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "RAGSearchFailedError",
+          "description": "When the operation fails"
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "rerank",
+      "signature": "function rerank(params: RerankParams, options?: RPCOptions): Promise<RerankScores> & { requestId: string };",
+      "description": "Scores documents by relevance to a query with a reranker model.",
+      "returns": "Promise<RerankScores> & { requestId: string }",
+      "returnFields": [
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "throws": [
+        {
+          "error": "RequestValidationFailedError",
+          "description": "If the request is invalid."
+        },
+        {
+          "error": "InferenceCancelledError",
+          "description": "If the request is cancelled."
+        },
+        {
+          "error": "RequestRejectedByPolicyError",
+          "description": "If this model's rerank queue is full."
+        },
+        {
+          "error": "InvalidResponseError",
+          "description": "If the worker returns a malformed result."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "resume",
+      "signature": "function resume(): Promise<void>;",
+      "description": "Resumes the SDK runtime: restores all suspended Hyperswarm and Corestore\nresources and releases the lifecycle gate so all SDK operations are allowed\nagain.",
+      "returns": "Promise<void>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "RPCError",
+          "description": "When one or more resources fail to resume. On partial\n  failure the runtime stays `\"suspended\"` (operations remain blocked) so\n  callers can retry `resume()`."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "startRpcServer",
+      "signature": "function startRpcServer(options: StartRpcServerOptions): Promise<RpcServerInfo> & { requestId: string };",
+      "description": "Start a worker-owned native RPC server. Non-loopback binding and advertising require explicit opt-in.\nCancel a pending start with its promise.requestId.",
+      "returns": "Promise<RpcServerInfo> & { requestId: string }",
+      "returnFields": [
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        }
+      ],
+      "throws": [],
+      "deprecated": null
+    },
+    {
+      "name": "state",
+      "signature": "function state(): Promise<LifecycleState>;",
+      "description": "Returns the current runtime lifecycle state.",
+      "returns": "Promise<LifecycleState>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "InvalidResponseError",
+          "description": "When the response envelope does not match the request type."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "stopRpcServer",
+      "signature": "function stopRpcServer(options: StopRpcServerOptions): Promise<void>;",
+      "description": "Withdraw the announcement and await native stop. Bare stop has no deadline.",
+      "returns": "Promise<void>",
+      "returnFields": [],
+      "throws": [],
+      "deprecated": null
+    },
+    {
+      "name": "subscribeServerLogs",
+      "signature": "function subscribeServerLogs(handler: ServerLogHandler): () => void;",
+      "description": "Subscribes to every server-side log through a single stream: SDK server logs,\nper-model addon logs (llamacpp, whispercpp, …) for all loaded models, and RAG\nlogs — without having to open a loggingStream per id.",
+      "returns": "() => void",
+      "returnFields": [],
+      "throws": [],
+      "deprecated": null
+    },
+    {
+      "name": "suspend",
+      "signature": "function suspend(): Promise<void>;",
+      "description": "Suspends the SDK runtime: pauses all registered Hyperswarm and Corestore\nresources and engages the lifecycle gate so non-lifecycle operations are\nblocked until `resume()` is called.",
+      "returns": "Promise<void>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "RPCError",
+          "description": "When one or more resources fail to suspend. The runtime\n  still commits to `\"suspended\"` so callers can recover with `resume()`."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "textToSpeech",
+      "signature": "function textToSpeech(params: TtsClientParamsInput, options?: RPCOptions): TextToSpeechStreamResult;",
+      "description": "Converts text to speech audio using a loaded TTS model.",
+      "returns": "TextToSpeechStreamResult",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "TextToSpeechStreamFailedError",
+          "description": "When `sentenceStream: true` is paired\n        with `stream: false`, or when the underlying RPC stream errors."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "textToSpeechStream",
+      "signature": "function textToSpeechStream(params: TextToSpeechStreamClientParams, options?: RPCOptions): Promise<TextToSpeechStreamSession>;",
+      "description": "Duplex session: write UTF-8 text fragments (e.g. LLM token deltas) via `write`. Each string or\nUint8Array should be a complete UTF-8 fragment. The worker forwards them to the TTS streaming handler\n(optional sentence accumulation via request fields). Iterate the session for `TextToSpeechStreamResponse`\nlines (PCM in `buffer`, optional `chunkIndex` / `sentenceChunk`) until `done`.",
+      "returns": "Promise<TextToSpeechStreamSession>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "TextToSpeechStreamFailedError",
+          "description": "When the session is iterated more\n  than once, receives a server error, or is written after closing."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "transcribe",
+      "signature": "function transcribe(params: any, options?: RPCOptions): TranscribeCall<TranscribeSegment[]>;\nfunction transcribe(params: TranscribeClientParams, options?: RPCOptions): TranscribeCall<string>;",
+      "description": "",
+      "returns": "TranscribeCall<TranscribeSegment[]>",
+      "returnFields": [],
+      "throws": [],
+      "deprecated": null
+    },
+    {
+      "name": "transcribeStream",
+      "signature": "function transcribeStream(params: any, options?: RPCOptions): AsyncGenerator<TranscribeSegment>;\nfunction transcribeStream(params: TranscribeClientParams, options?: RPCOptions): AsyncGenerator<string>;\nfunction transcribeStream(params: any, options?: RPCOptions): Promise<TranscribeStreamConversationSession>;\nfunction transcribeStream(params: any, options?: RPCOptions): Promise<TranscribeStreamMetadataSession>;\nfunction transcribeStream(params: TranscribeStreamClientParams, options?: RPCOptions): Promise<TranscribeStreamSession>;",
+      "description": "",
+      "returns": "AsyncGenerator<TranscribeSegment>",
+      "returnFields": [],
+      "throws": [],
+      "deprecated": "Pass audio via `transcribe()` instead. This overload will be\nremoved in the next major version.\n\nStreaming transcription with upfront audio: sends full audio, yields text\nchunks as they arrive."
+    },
+    {
+      "name": "translate",
+      "signature": "function translate(params: TranslateClientParams, options?: RPCOptions): { requestId: string; stats: Promise<any>; text: Promise<string>; tokenStream: AsyncGenerator<string>; translations: Promise<string[]> };",
+      "description": "Translates text from one language to another using a specified translation model.\nSupports both NMT (Neural Machine Translation) and LLM models.",
+      "returns": "{ requestId: string; stats: Promise<any>; text: Promise<string>; tokenStream: AsyncGenerator<string>; translations: Promise<string[]> }",
+      "returnFields": [
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "stats",
+          "type": "Promise<any>",
+          "required": true
+        },
+        {
+          "name": "text",
+          "type": "Promise<string>",
+          "required": true
+        },
+        {
+          "name": "tokenStream",
+          "type": "AsyncGenerator<string>",
+          "required": true
+        },
+        {
+          "name": "translations",
+          "type": "Promise<string[]>",
+          "required": true
+        }
+      ],
+      "throws": [
+        {
+          "error": "QvacErrorBase",
+          "description": "When translation fails with an error message or when language detection fails"
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "unloadModel",
+      "signature": "function unloadModel(params: UnloadModelParams): Promise<void>;",
+      "description": "Unloads a previously loaded model from the server.",
+      "returns": "Promise<void>",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "QvacErrorBase",
+          "description": "When the response type is invalid or when the unload operation fails"
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "upscale",
+      "signature": "function upscale(params: UpscaleClientParams): UpscaleResult;",
+      "description": "Runs standalone ESRGAN upscaling on an arbitrary PNG/JPEG image.",
+      "returns": "UpscaleResult",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "ModelOperationNotSupportedError",
+          "description": "If the model was not loaded\n  with `mode: \"upscale\"`."
+        },
+        {
+          "error": "StreamEndedError",
+          "description": "If the RPC stream closes without emitting a\n  terminal `done` chunk."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "video",
+      "signature": "function video(params: VideoClientParams): VideoResult;",
+      "description": "Generates a video using a loaded video diffusion model.",
+      "returns": "VideoResult",
+      "returnFields": [],
+      "throws": [],
+      "deprecated": null
+    },
+    {
+      "name": "vla",
+      "signature": "function vla(params: VlaClientRunParams): Promise<VlaClientRunResult>;",
+      "description": "Run VLA inference on a loaded model (SmolVLA, π₀.₅, or GR00T) and return the\nproduced action chunk plus per-stage timings.",
+      "returns": "Promise<VlaClientRunResult>",
+      "returnFields": [],
+      "throws": [],
+      "deprecated": null
+    },
+    {
+      "name": "vlaHparams",
+      "signature": "function vlaHparams(params: { modelId: string }): Promise<{ hparams: VlaHparams; backendName: string | null }>;",
+      "description": "Fetch the loaded VLA model's hyperparameters and the active ggml backend\nname. Useful to size token / state / noise buffers before calling `vla()`.",
+      "returns": "Promise<{ hparams: VlaHparams; backendName: string | null }>",
+      "returnFields": [
+        {
+          "name": "backendName",
+          "type": "string | null",
+          "required": true
+        },
+        {
+          "name": "hparams",
+          "type": "VlaHparams",
+          "required": true
+        }
+      ],
+      "throws": [],
+      "deprecated": null
+    },
+    {
+      "name": "vlaPadState",
+      "signature": "function vlaPadState(state: ArrayLike<number>, targetDim: number): Float32Array;",
+      "description": "Zero-pad a state vector to `targetDim`. Extra entries are zero-initialised;\ninput longer than `targetDim` raises. Mirrors how smolvla.cpp expects the\nstate tensor (`max_state_dim` = 32 by default).",
+      "returns": "Float32Array",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "TypeError",
+          "description": "When `targetDim` is not a positive integer."
+        },
+        {
+          "error": "RangeError",
+          "description": "When `state` is longer than `targetDim`."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "vlaPreprocessImage",
+      "signature": "function vlaPreprocessImage(pixels: PixelsInput, width: number, height: number, opts: VlaPreprocessImageOptions): Float32Array;",
+      "description": "Resize + letterbox + normalize a camera frame to `(3, size, size)` Float32\nin `[-1, 1]`. Drop-in equivalent of `@qvac/vla-ggml`'s `preprocessImage`.",
+      "returns": "Float32Array",
+      "returnFields": [],
+      "throws": [
+        {
+          "error": "TypeError",
+          "description": "When width or height is not a positive integer."
+        },
+        {
+          "error": "RangeError",
+          "description": "When the pixel count does not match the dimensions."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "vlaSetEmbodiment",
+      "signature": "function vlaSetEmbodiment(params: { embodiment: VlaEmbodimentSelection; modelId: string }): Promise<{ hparams: VlaHparams }>;",
+      "description": "Switch a loaded multi-embodiment GR00T model to another embodiment shipped\nin the same GGUF — no reload, only that embodiment's weight rows are re-read.",
+      "returns": "Promise<{ hparams: VlaHparams }>",
+      "returnFields": [
+        {
+          "name": "hparams",
+          "type": "VlaHparams",
+          "required": true
+        }
+      ],
+      "throws": [],
+      "deprecated": null
+    },
+    {
+      "name": "worldCreateScene",
+      "signature": "function worldCreateScene(params: any): WorldSceneResultWithPack;\nfunction worldCreateScene(params: any): WorldSceneResult;\nfunction worldCreateScene(params: WorldSceneClientParams): WorldSceneResultWithPack | WorldSceneResult;",
+      "description": "Builds a world for an ABot-World session: the prompt and first frame are\nencoded into a scene pack the walk then runs on.",
+      "returns": "WorldSceneResultWithPack",
+      "returnFields": [
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "scene",
+          "type": "Promise<Uint8Array<ArrayBufferLike>>",
+          "required": true
+        },
+        {
+          "name": "stats",
+          "type": "Promise<any>",
+          "required": true
+        }
+      ],
+      "throws": [
+        {
+          "error": "RequestValidationFailedError",
+          "description": "Client-side, before any RPC, if the\n  prompt is empty, the dimensions are not positive multiples of 32 within the\n  per-axis and total-pixel ceilings, or the first frame exceeds 3 MB.\n  Server-side, before the session is touched, if the first frame's header\n  declares more than 8192x8192 pixels or cannot be read. Raised as\n  `PluginRequestValidationFailedError` on the engine; that class is not\n  exported from the client package and is not in the RPC reconstructor map, so\n  match it on message rather than with `instanceof`."
+        },
+        {
+          "error": "ModelOperationNotSupportedError",
+          "description": "If the model was not loaded with\n  `mode: \"world\"`."
+        },
+        {
+          "error": "RequestRejectedByPolicyError",
+          "description": "If a world job is already running on\n  this model — world refuses rather than queues."
+        },
+        {
+          "error": "InferenceCancelledError",
+          "description": "If cancel by request id is accepted.\n  Scene creation is uninterruptible, so this stops delivery while the encode\n  runs to completion."
+        },
+        {
+          "error": "StreamEndedError",
+          "description": "If the RPC stream closes without a terminal\n  `done` chunk."
+        }
+      ],
+      "deprecated": null
+    },
+    {
+      "name": "worldStep",
+      "signature": "function worldStep(params: WorldStepClientParams): WorldStepResult;",
+      "description": "Generates the next block of an ABot-World walk under the keys held for it.",
+      "returns": "WorldStepResult",
+      "returnFields": [
+        {
+          "name": "frames",
+          "type": "Promise<Uint8Array<ArrayBufferLike>[]>",
+          "required": true
+        },
+        {
+          "name": "frameStream",
+          "type": "AsyncGenerator<Uint8Array<ArrayBufferLike>>",
+          "required": true
+        },
+        {
+          "name": "progressStream",
+          "type": "AsyncGenerator<WorldStepProgressTick>",
+          "required": true
+        },
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "stats",
+          "type": "Promise<any>",
+          "required": true
+        }
+      ],
+      "throws": [
+        {
+          "error": "RequestValidationFailedError",
+          "description": "Client-side, before any RPC, on an\n  unknown walk key."
+        },
+        {
+          "error": "ModelOperationNotSupportedError",
+          "description": "If the model was not loaded with\n  `mode: \"world\"`."
+        },
+        {
+          "error": "RequestRejectedByPolicyError",
+          "description": "If a block is already in flight on\n  this model."
+        },
+        {
+          "error": "InferenceCancelledError",
+          "description": "If cancel by request id is accepted. The\n  step rejects rather than resolving with a truncated block, and the session\n  is rebuilt on the next call."
+        },
+        {
+          "error": "StreamEndedError",
+          "description": "If the RPC stream closes without a terminal\n  `done` chunk."
+        }
+      ],
+      "deprecated": null
+    }
+  ]
+}

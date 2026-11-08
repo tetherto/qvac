@@ -6,11 +6,7 @@ import { InvalidResponseError } from '@/utils/errors-client'
  * Checks whether the local SDK worker is responsive by sending a heartbeat
  * round-trip.
  *
- * @returns A promise that resolves to a heartbeat response.
  * @throws {QvacErrorBase} When the response is invalid.
- *
- * @example
- * await heartbeat();
  */
 export async function heartbeat(): Promise<HeartbeatResponse> {
   const request: HeartbeatRequest = { type: 'heartbeat' }

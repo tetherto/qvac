@@ -2,6 +2,7 @@ import { source } from '@/lib/source';
 import { buildCanonicalDocsUrl } from '@/lib/docs-open-graph';
 import { pageAttributes } from '@/lib/page-attributes';
 import { stripMdxComments } from '@/lib/mdx-comments';
+import { renderDataComponentsAsMarkdown } from '@/lib/api-reference/markdown';
 import type { InferPageType } from 'fumadocs-core/source';
 
 /**
@@ -15,7 +16,12 @@ import type { InferPageType } from 'fumadocs-core/source';
  * "this applies to v0.16".
  */
 export async function getLLMText(page: InferPageType<typeof source>) {
-  const processed = stripMdxComments(await page.data.getText('processed'));
+  // Data components render as tables in HTML and as cards here, from the same
+  // line data, so the twin states the same facts in the form agents read.
+  const processed = renderDataComponentsAsMarkdown(
+    stripMdxComments(await page.data.getText('processed')),
+    page.url,
+  );
   const front = frontMatter(page);
 
   return `---

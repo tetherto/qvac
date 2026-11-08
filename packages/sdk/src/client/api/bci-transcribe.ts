@@ -44,20 +44,6 @@ function buildBciTranscribeRequest(
 /**
  * Transcribe a neural-signal buffer with a loaded BCI model and return the
  * complete text. Accepts either a `.bin` file path or a raw neural buffer.
- *
- * @param params - BCI transcription parameters.
- * @param params.modelId - The identifier of the loaded BCI model to use.
- * @param params.neuralData - Neural signal as either a file path (string) or
- *                            a binary buffer (`Uint8Array`).
- * @param params.metadata - When true, resolves to an array of transcript
- *                          segments (`{ text, startMs, endMs, append, id }`)
- *                          instead of joined text.
- * @param options - Optional RPC options including per-call profiling.
- * @returns A promise (decorated with `requestId`) resolving to the complete
- *          transcribed text, or — when `metadata` is true — the list of
- *          transcript segments in emission order. The `requestId` is
- *          reachable synchronously so callers can target this in-flight
- *          transcription with `cancel({ requestId })` before `await` resolves.
  */
 export function bciTranscribe(
   params: BciTranscribeClientParams & { metadata: true },
@@ -146,29 +132,6 @@ function buildBciTranscribeStreamRequest(
  * Opens a bidirectional streaming BCI transcription session. Neural-signal
  * chunks are streamed in via `write()`, and transcription is yielded as the
  * addon's sliding window decodes successive windows.
- *
- * The returned session is single-use. Attempting to iterate a second time
- * will throw a `TranscriptionFailedError`.
- *
- * @param params - Streaming BCI transcription parameters.
- * @param params.modelId - The loaded BCI model to use.
- * @param params.metadata - When true, the session yields transcript segment
- *                          objects (`{ text, startMs, endMs, append, id }`)
- *                          instead of plain text. With `emit: 'delta'`, each
- *                          segment also carries `windowStartTimestep`: its
- *                          timestamps are window-local, and this maps them
- *                          onto the stream timeline.
- * @param params.windowTimesteps - Decode window size in timesteps.
- * @param params.hopTimesteps - How far the window advances between decodes.
- * @param params.emit - `'delta'` (default) yields only the newly-discovered
- *                       tail per window; `'full'` yields the full running
- *                       transcript each update.
- * @param options - Optional RPC options including per-call profiling.
- * @returns A session object: call `write(neuralChunk)` with a `Uint8Array`
- *          to feed neural-signal bytes, iterate with `for await (...)` to
- *          receive transcription, and `end()` to signal end of input. The
- *          session exposes `requestId` synchronously for targeted
- *          `cancel({ requestId })`.
  */
 export function bciTranscribeStream(
   params: BciTranscribeStreamClientParams & { metadata: true },

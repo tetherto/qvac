@@ -51,25 +51,6 @@ function buildTranscribeRequest(
 /**
  * Transcribe audio and return the complete text. Accepts either a file
  * path or an audio buffer.
- *
- * @param params - Transcription parameters.
- * @param params.modelId - The identifier of the transcription model to use
- * @param params.audioChunk - Audio input as either a file path (string) or audio buffer
- * @param params.prompt - Optional initial prompt to guide the transcription
- * @param params.metadata - When true, resolves to an array of transcript
- *                          segments (`{ text, startMs, endMs, append, id }`,
- *                          plus `isEndOfTurn` and `startsWord` on parakeet, and
- *                          `language`, `noSpeechProb`, `speakerTurnNext` and
- *                          `tokens` on whisper when the engine reports them)
- *                          instead of joined text.
- * @param options - Optional RPC options including per-call profiling
- * @returns A promise (decorated with `requestId`) resolving to the
- *          complete transcribed text, or — when `metadata` is true —
- *          the list of transcript segments in emission order. The
- *          `requestId` is reachable synchronously so callers can target
- *          this in-flight transcription with `cancel({ requestId })`
- *          before `await` resolves. `stats` resolves to the terminal engine
- *          statistics, including Parakeet's per-run Core ML usage.
  */
 type TranscribeCall<T> = Promise<T> & {
   requestId: string
@@ -168,9 +149,6 @@ async function runTranscribe(
  * chunks as they arrive.
  *
  * @overloadLabel "Upfront audio (deprecated)"
- * @param params - Transcription parameters including audio source.
- * @param options - Optional RPC options including per-call profiling.
- * @returns An async generator yielding text chunks as they become available.
  */
 export function transcribeStream(
   params: TranscribeClientParams & { metadata: true },
@@ -186,25 +164,7 @@ export function transcribeStream(
  * in via `write()`, and transcription text is yielded as the model's VAD
  * detects complete speech segments.
  *
- * The returned session is single-use. Attempting to iterate a second
- * time will throw a `TranscriptionFailedError`.
- *
  * @overloadLabel "Bidirectional session"
- * @param params - Streaming transcription parameters.
- * @param params.modelId - The loaded transcription model to use
- * @param params.prompt - Optional initial prompt to guide transcription
- * @param params.metadata - When true, the session yields transcript segment
- *                          objects (`{ text, startMs, endMs, append, id }`,
- *                          plus `isEndOfTurn` and `startsWord` on parakeet, and
- *                          `language`, `noSpeechProb`, `speakerTurnNext` and
- *                          `tokens` on whisper when the engine reports them)
- *                          instead of plain text.
- * @param options - Optional RPC options including per-call profiling.
- * @returns A session object: call `write(audioChunk)` with a `Uint8Array`
- *          (Node `Buffer` is a `Uint8Array` subtype) to feed audio,
- *          iterate with `for await (...)` to receive transcription, and
- *          `end()` to signal end of audio. After consuming the iterator,
- *          await `session.stats` for terminal engine statistics.
  */
 export function transcribeStream(
   params: TranscribeStreamClientParams & { emitVadEvents: true },

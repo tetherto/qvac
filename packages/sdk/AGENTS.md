@@ -12,7 +12,7 @@ Source code and tests win over historical agent notes.
   conventions. Shared client/server contracts use exported Zod schemas and inferred
   types.
 - Keep client and server error layers separate, use structured errors, and preserve
-  the original cause when translating failures. See [`docs/error-handling.md`](docs/error-handling.md).
+  the original cause when translating failures. See [`docs/contributors/error-handling.md`](docs/contributors/error-handling.md).
 - Treat exported constants, schemas, RPC shapes, streaming, cancellation, and model
   lifecycle behavior as public contracts. Update contract generation and focused
   tests when changing them.

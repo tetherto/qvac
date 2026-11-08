@@ -236,8 +236,15 @@ describe('the manifest against the content tree', () => {
         continue
       }
       listings.set(software.path, {
+        // A `preview` the materializer wrote for `--include-dev` ignores
+        // itself in git and is not a line, so it is left out; a symlinked
+        // preview is still reported below.
         directories: entries
           .filter((entry) => entry.isDirectory())
+          .filter(
+            (entry) =>
+              !(entry.name === 'preview' && existsSync(path.join(directory, entry.name, '.materialized'))),
+          )
           .map((entry) => entry.name),
         files: entries
           .filter((entry) => entry.isFile() && /\.mdx?$/.test(entry.name))

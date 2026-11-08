@@ -31,7 +31,9 @@ async function runStartRpcServer(options: StartRpcServerOptions, requestId: stri
   }
 }
 
-/** Withdraw the announcement and await native stop. Bare stop has no deadline. */
+/**
+ *  Withdraw the announcement and await native stop. Bare stop has no deadline.
+ */
 export async function stopRpcServer(options: StopRpcServerOptions): Promise<void> {
   const response = await send({ ...options, type: 'stopRpcServer' })
   if (response.type !== 'stopRpcServer') throw new InvalidResponseError('stopRpcServer')

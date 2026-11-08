@@ -22,18 +22,18 @@ No other package is touched.
 
 ## 2. SDK migration and API reference
 
-- [ ] 2.1 Move `content/_unpublished/sdk/next/` to `packages/sdk/docs/users/` 
-- [ ] 2.2 Move the SDK's maintainer documentation from `packages/sdk/docs/` to `packages/sdk/docs/contributors/` and fix links to it
-- [ ] 2.3 Implement the schema table component: nested, collapsible, to primitives, with the declared-type fallback
-- [ ] 2.4 Implement the model table component, filtered by capability engines
-- [ ] 2.5 Derive the client-function map (client function → wire definitions + client-only parameters and returns) in `docs/website` from `contract/manifest.json` and TypeDoc. Any SDK exporter change: review case by case
-- [ ] 2.6 Implement the language switcher and the per-language signature cards (TypeDoc for JavaScript, griffe for Python)
-- [ ] 2.7 Add the SDK parity check: every contract method exists in every published language
-- [ ] 2.8 Replace hand-written facts in the SDK pages with the data components
-- [ ] 2.9 Replace the Nunjucks API summary with a contract-driven reference, one page per public function, and delete `scripts/api-docs/templates` and the Nunjucks dependency
-- [ ] 2.10 Render each reference page's Markdown twin as its function's card, publish the `<fn>.schema.json` slice beside it, list both in each line's `llms.txt` and `llms-full.txt`, and carry them through every agent channel (each line's `llms.txt` corpus, the reference pages' Markdown twins, the MCP server), and make the agent protocol page declare the site the reference source
-- [ ] 2.11 Add the non-failing description report for public request fields in the SDK contract
-- [ ] 2.12 Trim SDK client TSDoc to summary, deprecation, throws, and status tags
+- [x] 2.1 Move `content/_unpublished/sdk/next/` to `packages/sdk/docs/users/` 
+- [x] 2.2 Move the SDK's maintainer documentation from `packages/sdk/docs/` to `packages/sdk/docs/contributors/` and fix links to it
+- [x] 2.3 Implement the schema table component: nested, collapsible, to primitives, with the declared-type fallback
+- [x] 2.4 Implement the model table component, filtered by capability engines
+- [x] 2.5 Derive the client-function map (client function → wire definitions + client-only parameters and returns) in `docs/website` from `contract/manifest.json` and TypeDoc. Any SDK exporter change: review case by case
+- [x] 2.6 Implement the language switcher and the per-language signature cards (TypeDoc for JavaScript, griffe for Python)
+- [x] 2.7 Add the SDK parity check: every contract method exists in every published language
+- [x] 2.8 Replace hand-written facts in the SDK pages with the data components
+- [x] 2.9 Replace the Nunjucks API summary with a contract-driven reference, one page per public function, and delete `scripts/api-docs/templates` and the Nunjucks dependency
+- [x] 2.10 Render each reference page's Markdown twin as its function's card, publish the `<fn>.schema.json` slice beside it, list both in each line's `llms.txt` and `llms-full.txt`, and carry them through every agent channel (each line's `llms.txt` corpus, the reference pages' Markdown twins, the MCP server), and make the agent protocol page declare the site the reference source
+- [x] 2.11 Add the non-failing description report for public request fields in the SDK contract
+- [x] 2.12 Trim SDK client TSDoc to summary, deprecation, throws, and status tags
 - [ ] 2.13 Pin the SDK's first release after the migration as its first line, and delete `content/docs/sdk/`
 - [ ] 2.14 Sync the `docs-collections`, `collection-navigation`, `api-reference`, and `agent-entry-points` deltas into the main specs
 

@@ -1,0 +1,71 @@
+---
+title: Translation
+icon: Languages
+description: Text-to-text neural machine translation (NMT) — i.e., translate text between different languages.
+schemaType: HowTo
+---
+
+## Overview
+
+Translation uses your choice of either [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp) or [Bergamot](https://browser.mt) as inference engine. Load any supported model using `modelType: "nmt"`, and `modelConfig.engine: "Bergamot"` for Bergamot.
+
+Translation input depends on the engine: an NMT model takes the text, and an LLM also takes the target language and, optionally, the source language and a context hint.
+
+<SchemaTable fn="translate" />
+
+`translate()` returns an object containing `translations` — one entry per input, in the order the inputs were given — and `text`, those entries joined by newlines. When streaming is enabled it returns a `tokenStream` for real-time output instead; a batch emits one whole translation per token, so the position of each token is the position of its input.
+
+For a list of supported languages and their ids (string abbreviations), see [qvac-sdk/schemas/translation-config.ts](https://github.com/tetherto/qvac/blob/main/packages/sdk/schemas/translation-config.ts).
+
+## Functions
+
+Use the following sequence of function calls:
+1. [`loadModel()`](/sdk/reference/api/loadModel)
+2. [`translate()`](/sdk/reference/api/translate)
+3. [`unloadModel()`](/sdk/reference/api/unloadModel)
+
+For how to use each function, see [SDK — API reference](/sdk/reference/api/).
+
+## Models
+
+You should load a model compatible with your chosen inference engine:
+- `qvac-fabric-llm.cpp` (default): Bergamot or IndicTrans2. Bergamot uses intgemm `*.bin` + `*.spm` vocab files; IndicTrans2 uses GGML `*.bin`.
+- Bergamot: Bergamot model bundle. Required files: model `*.bin` + `vocab*.spm`.
+
+Models available as constants:
+
+<ModelsTable engines={["nmtcpp-translation"]} />
+
+## Example
+
+The following script shows an example of translation:
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/translation/translation-stream.js title="translation.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/translation/translation-stream.ts title="translation.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/translation.py title="translation.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+<Callout type="success">
+**Tip:** all examples throughout this documentation are self-contained and runnable. For instructions on how to run them, see the [JS/TS quickstart](/sdk/js-ts-sdk#quickstart) or the [Python quickstart](/sdk/python-sdk#quickstart).
+</Callout>

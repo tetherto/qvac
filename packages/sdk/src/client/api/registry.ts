@@ -35,7 +35,6 @@ function validateRegistryResponse(response: RegistryResponse): void {
 /**
  * Returns all available models from the QVAC distributed model registry.
  *
- * @returns A promise resolving to an array of `ModelRegistryEntry` describing every model the SDK's connected registry knows about.
  * @throws {ModelRegistryQueryFailedError} When the registry query fails.
  */
 async function modelRegistryList(): Promise<ModelRegistryEntry[]> {
@@ -52,13 +51,6 @@ async function modelRegistryList(): Promise<ModelRegistryEntry[]> {
 /**
  * Searches the model registry with optional filters for model type, engine, and quantization.
  *
- * @param params - Search filters (all optional).
- * @param params.filter - Free-text filter matched against model metadata.
- * @param params.engine - Inference engine identifier (e.g., `"llamacpp-completion"`).
- * @param params.quantization - Quantization identifier (e.g., `"Q4_K_M"`).
- * @param params.modelType - Alias for `addon`; kept for backward compatibility.
- * @param params.addon - Model addon / category to restrict results to.
- * @returns A promise resolving to the matching `ModelRegistryEntry` entries.
  * @throws {ModelRegistryQueryFailedError} When the registry query fails.
  */
 async function modelRegistrySearch(
@@ -80,10 +72,8 @@ async function modelRegistrySearch(
 /**
  * Fetches a single model entry from the registry by its path and source.
  *
- * @param registryPath - Registry-relative path of the model to fetch.
- * @param registrySource - Registry source identifier (e.g., `"huggingface"`, `"local"`).
- * @returns A promise resolving to the matching `ModelRegistryEntry`.
  * @throws {ModelRegistryModelNotFoundError} When the registry has no model at this source and path.
+ *
  * @throws {ModelRegistryQueryFailedError} When the registry query fails.
  */
 async function modelRegistryGetModel(

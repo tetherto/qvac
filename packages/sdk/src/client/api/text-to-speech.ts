@@ -191,48 +191,6 @@ function buildTextToSpeechStreamRequest(
 /**
  * Converts text to speech audio using a loaded TTS model.
  *
- * Three modes selected by `params.stream` and `params.sentenceStream`:
- *
- * - `stream: false` — collect all PCM samples and resolve once via
- *   `result.buffer` (`Promise<number[]>`). `bufferStream` is empty.
- * - `stream: true` (default) — yield PCM through `result.chunkStream`
- *   (`AsyncGenerator<Int16Array>`, one chunk per frame) or
- *   `result.bufferStream` (`AsyncGenerator<number>`, one sample at a time).
- *   `buffer` resolves to an empty array.
- * - `stream: true, sentenceStream: true` — also exposes `result.chunkUpdates`
- *   (`AsyncGenerator<TtsSentenceChunkUpdate>`) so callers can mux per-sentence
- *   metadata with the audio. Multiple consumers can iterate the response
- *   independently via the underlying `TtsMulticast`.
- *
- * MOSS models stream natively rather than by sentence: under `stream: true`
- * the whole text is one synthesis whose audio arrives every
- * `streamChunkTokens` codec frames (in one piece when that is unset), so
- * `durationTokens` and a MOSS-TTSD dialogue's reference transcripts apply to
- * the text as a whole. `sentenceStream: true` still splits a single-speaker
- * text; a dialogue rejects it. `sentenceStreamLocale` and
- * `sentenceStreamMaxChunkScalars` configure that splitting, so a MOSS request
- * rejects them unless it sets `sentenceStream: true`.
- *
- * `result.done` resolves to `true` when synthesis completes cleanly, `false`
- * if the consumer breaks out before the terminal frame, or rejects on a
- * pipeline error. Awaiting `done` is safe even when no stream is iterated.
- *
- * `result.sampleRate` resolves from the first audio frame (so it can be awaited
- * before draining the audio); `result.stats` and `result.stopReason` resolve
- * from the terminal frame. All three resolve — with `undefined` when the run
- * produced none — rather than reject. In `stream: true` mode (the default) the
- * run starts lazily: nothing is sent until `chunkStream` or `bufferStream` is
- * first iterated, so
- * `done`, `sampleRate`, `stats` and `stopReason` stay pending until then. In
- * `stream: false` and `sentenceStream: true` modes the run starts immediately.
- * Read `sampleRate` rather than assuming the engine default: `outputSampleRate`
- * and the LavaSR enhancer both change it.
- *
- * @param params - TTS request parameters (see `TtsClientParamsInput`).
- * @param options - Optional RPC options (timeout, profiling, force new connection).
- * @returns A `TextToSpeechStreamResult` with `chunkStream`, `bufferStream`, `buffer`, `done`,
- *          `sampleRate`, `stats`, and (when `sentenceStream: true`)
- *          `chunkUpdates`.
  * @throws {TextToSpeechStreamFailedError} When `sentenceStream: true` is paired
  *         with `stream: false`, or when the underlying RPC stream errors.
  */
@@ -568,11 +526,6 @@ export function encodeTextToSpeechFragment(textFragment: string | Uint8Array) {
  * (optional sentence accumulation via request fields). Iterate the session for `TextToSpeechStreamResponse`
  * lines (PCM in `buffer`, optional `chunkIndex` / `sentenceChunk`) until `done`.
  *
- * @param params - The loaded TTS model, input mode, buffering controls, and
- *   optional voice settings.
- * @param options - Optional timeout, profiling, and connection settings.
- * @returns A single-consumer duplex session for writing text fragments and
- *   iterating PCM response frames.
  * @throws {TextToSpeechStreamFailedError} When the session is iterated more
  *   than once, receives a server error, or is written after closing.
  */

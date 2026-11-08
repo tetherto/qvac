@@ -9,6 +9,7 @@ import {
   extractInternalLinks,
   contentPathsOfLink,
 } from '../scripts/lib/link-validator'
+import { developmentLineDir } from '../scripts/lib/release-shared'
 import {
   DOCUMENTED_SOFTWARE,
   getCurrentLine,
@@ -126,7 +127,13 @@ describe('contentPathsOfLink', () => {
 
 describe('docs link integrity', () => {
   it('has no broken internal links', async () => {
-    const broken = await validateLinks(DOCS_BASE, DOCS_BASE)
+    // A `preview` materialized for `--include-dev` is the development line,
+    // checked by its own suite below; its links target the line it will
+    // become, not the tree it sits in.
+    const broken = (await validateLinks(DOCS_BASE, DOCS_BASE)).filter(
+      (link) => !/^[^/]+\/preview\//.test(link.source) ||
+        !fs.existsSync(path.join(DOCS_BASE, link.source.split('/').slice(0, 2).join('/'), '.materialized')),
+    )
     if (broken.length > 0) {
       const details = broken
         .map((b) => `  ${b.source} → ${b.target}`)
@@ -185,13 +192,7 @@ describe('the development line, which the build does not see', () => {
   ).map((software) => software.path.slice(1))
 
   describe.each(collections)('%s', (slug) => {
-    const lineDir = path.join(
-      WEBSITE_DIR,
-      'content',
-      '_unpublished',
-      slug,
-      'next',
-    )
+    const lineDir = developmentLineDir(slug)
     it('has no broken internal links', async () => {
       const broken = await validateDevelopmentLine(slug, lineDir, DOCS_BASE)
       const details = broken.map((b) => `  ${b.source} → ${b.target}`).join('\n')

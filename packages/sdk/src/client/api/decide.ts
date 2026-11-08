@@ -15,13 +15,12 @@ import { generateClientRequestId } from '@/client/api/client-request-id'
 /**
  * Answers typed decision questions about one state or a batch of states.
  *
- * @param params - Model ID, states, questions, and optional token budgets.
- * @param options - RPC transport options.
- * @returns A promise with a synchronous requestId for cancel(). One state
- * resolves to one result; a batch resolves to results in input order.
  * @throws {RequestValidationFailedError} If the request is invalid.
+ *
  * @throws {InferenceCancelledError} If the request is cancelled.
+ *
  * @throws {RequestRejectedByPolicyError} If this model's decision queue is full.
+ *
  * @throws {InvalidResponseError} If the worker returns a malformed result.
  */
 export function decide(

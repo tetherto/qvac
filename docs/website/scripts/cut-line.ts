@@ -280,6 +280,13 @@ export async function cutLine(request: CutRequest): Promise<CutResult> {
   const released = `v${line.major}.${line.minor}`;
   const collectionDir = path.join(root, "content", "docs", slug);
   const development = developmentLineDir(slug, root);
+  if (!development.startsWith(path.join(root, "content", "_unpublished"))) {
+    throw new Error(
+      `'${slug}' keeps its documentation in its package, so a cut cannot publish it: ` +
+        `its lines render API data that only a materialized line has. Publish the line ` +
+        `by pinning its release commit in versions/${slug}.json.`,
+    );
+  }
   const hasDevelopmentLine = await exists(development);
 
   if (!isAbove(line, parseLine(current.version))) {

@@ -1,0 +1,1903 @@
+{
+  "functions": [
+    {
+      "name": "assess_model_fit",
+      "async": true,
+      "signature": "async def assess_model_fit(transport: Transport, *, models: list[dict[str, Any]]) -> AssessModelFitResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "models",
+          "kind": "keyword",
+          "annotation": "list[dict[str, Any]]",
+          "default": null
+        }
+      ],
+      "returns": "AssessModelFitResponse",
+      "summary": "Ergonomic assessModelFit mirroring JS's `client/api/assess-model-fit.ts`:\nwhether the given models fit in this device's memory when loaded together,\nwithout downloading them.",
+      "module": "_api"
+    },
+    {
+      "name": "audio_edit_stream",
+      "async": true,
+      "signature": "async def audio_edit_stream(transport: Transport, params: AudioEditStreamRequest) -> AsyncIterator[AudioEditStreamResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "AudioEditStreamRequest",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[AudioEditStreamResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "audio_gen_stream",
+      "async": true,
+      "signature": "async def audio_gen_stream(transport: Transport, params: AudioGenStreamRequest) -> AsyncIterator[AudioGenStreamResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "AudioGenStreamRequest",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[AudioGenStreamResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "audio_understand",
+      "async": true,
+      "signature": "async def audio_understand(transport: Transport, params: AudioUnderstandRequest) -> AsyncIterator[AudioUnderstandResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "AudioUnderstandRequest",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[AudioUnderstandResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "batch_completion_stream",
+      "async": true,
+      "signature": "async def batch_completion_stream(transport: Transport, params: BatchCompletionStreamRequest) -> AsyncIterator[BatchCompletionStreamResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "BatchCompletionStreamRequest",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[BatchCompletionStreamResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "bci_transcribe",
+      "async": true,
+      "signature": "async def bci_transcribe(transport: Transport, params: BciTranscribeRequest) -> AsyncIterator[BciTranscribeResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "BciTranscribeRequest",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[BciTranscribeResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "bci_transcribe_stream",
+      "async": true,
+      "signature": "async def bci_transcribe_stream(transport: Transport, params: BciTranscribeStreamRequest, up: AsyncIterable[bytes]) -> AsyncIterator[BciTranscribeStreamResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "BciTranscribeStreamRequest",
+          "default": null
+        },
+        {
+          "name": "up",
+          "kind": "positional",
+          "annotation": "AsyncIterable[bytes]",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[BciTranscribeStreamResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "bci_transcribe_stream_session",
+      "async": false,
+      "signature": "def bci_transcribe_stream_session(transport: Transport, *, model_id: str, metadata: bool=False, window_timesteps: int | None=None, hop_timesteps: int | None=None, emit: str | None=None, request_id: str | None=None) -> DuplexSession[Any]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "model_id",
+          "kind": "keyword",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "metadata",
+          "kind": "keyword",
+          "annotation": "bool",
+          "default": "False"
+        },
+        {
+          "name": "window_timesteps",
+          "kind": "keyword",
+          "annotation": "int | None",
+          "default": "None"
+        },
+        {
+          "name": "hop_timesteps",
+          "kind": "keyword",
+          "annotation": "int | None",
+          "default": "None"
+        },
+        {
+          "name": "emit",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        },
+        {
+          "name": "request_id",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        }
+      ],
+      "returns": "DuplexSession[Any]",
+      "summary": "Bidirectional BCI transcription session: `write()` raw neural-signal\nbytes and iterate decoded text (or segments with `metadata=True`). The\nclient-generated `request_id` is threaded on the wire and exposed on the\nsession for `cancel(request_id=...)`, mirroring JS.",
+      "module": "sessions"
+    },
+    {
+      "name": "cancel",
+      "async": true,
+      "signature": "async def cancel(transport: Transport, *, request_id: str | None=None, model_id: str | None=None, kind: str | None=None, clear_cache: bool | None=None) -> None",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "request_id",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        },
+        {
+          "name": "model_id",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        },
+        {
+          "name": "kind",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        },
+        {
+          "name": "clear_cache",
+          "kind": "keyword",
+          "annotation": "bool | None",
+          "default": "None"
+        }
+      ],
+      "returns": "None",
+      "summary": "Mirrors JS's `cancel()` legacy-shape normalization: a bare\n`request_id` targets one in-flight call (`operation: \"request\"`); a bare\n`model_id` (with optional `kind`) cancels every in-flight call of that\nkind on that model (`operation: \"broad\"`).",
+      "module": "_api"
+    },
+    {
+      "name": "classify",
+      "async": true,
+      "signature": "async def classify(transport: Transport, params: ClassifyRequest) -> AsyncIterator[ClassifyResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "ClassifyRequest",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[ClassifyResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "completion",
+      "async": false,
+      "signature": "def completion(transport: Transport, *, model_id: str, history: list[dict[str, Any]], tools: list[dict[str, Any]] | None=None, stream: bool=True, generation_params: dict[str, Any] | None=None, kv_cache: Any=None, prefill: bool | None=None, capture_thinking: bool | None=None, emit_raw_deltas: bool | None=None, tool_dialect: str | None=None, response_format: dict[str, Any] | None=None, request_id: str | None=None) -> CompletionRun",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "model_id",
+          "kind": "keyword",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "history",
+          "kind": "keyword",
+          "annotation": "list[dict[str, Any]]",
+          "default": null
+        },
+        {
+          "name": "tools",
+          "kind": "keyword",
+          "annotation": "list[dict[str, Any]] | None",
+          "default": "None"
+        },
+        {
+          "name": "stream",
+          "kind": "keyword",
+          "annotation": "bool",
+          "default": "True"
+        },
+        {
+          "name": "generation_params",
+          "kind": "keyword",
+          "annotation": "dict[str, Any] | None",
+          "default": "None"
+        },
+        {
+          "name": "kv_cache",
+          "kind": "keyword",
+          "annotation": "Any",
+          "default": "None"
+        },
+        {
+          "name": "prefill",
+          "kind": "keyword",
+          "annotation": "bool | None",
+          "default": "None"
+        },
+        {
+          "name": "capture_thinking",
+          "kind": "keyword",
+          "annotation": "bool | None",
+          "default": "None"
+        },
+        {
+          "name": "emit_raw_deltas",
+          "kind": "keyword",
+          "annotation": "bool | None",
+          "default": "None"
+        },
+        {
+          "name": "tool_dialect",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        },
+        {
+          "name": "response_format",
+          "kind": "keyword",
+          "annotation": "dict[str, Any] | None",
+          "default": "None"
+        },
+        {
+          "name": "request_id",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        }
+      ],
+      "returns": "CompletionRun",
+      "summary": "Start a completion and return its `CompletionRun`. The wire call\nstarts eagerly (like the JS promise), so `final` resolves even if\n`events` is never consumed. Must be called with a running event loop.",
+      "module": "_completion"
+    },
+    {
+      "name": "completion_orchestrate",
+      "async": true,
+      "signature": "async def completion_orchestrate(transport: Transport, params: CompletionOrchestrateRequest, up: AsyncIterable[bytes]) -> AsyncIterator[CompletionOrchestrateResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "CompletionOrchestrateRequest",
+          "default": null
+        },
+        {
+          "name": "up",
+          "kind": "positional",
+          "annotation": "AsyncIterable[bytes]",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[CompletionOrchestrateResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "completion_stream",
+      "async": true,
+      "signature": "async def completion_stream(transport: Transport, params: CompletionStreamRequest) -> AsyncIterator[CompletionStreamResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "CompletionStreamRequest",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[CompletionStreamResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "decide",
+      "async": true,
+      "signature": "async def decide(transport: Transport, params: DecideRequest) -> DecideResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "DecideRequest",
+          "default": null
+        }
+      ],
+      "returns": "DecideResponse",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "delete_cache",
+      "async": true,
+      "signature": "async def delete_cache(transport: Transport, *, all: bool | None=None, auto: bool | None=None, kv_cache_key: str | None=None, model_id: str | None=None, model_src: str | None=None) -> dict[str, bool]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "all",
+          "kind": "keyword",
+          "annotation": "bool | None",
+          "default": "None"
+        },
+        {
+          "name": "auto",
+          "kind": "keyword",
+          "annotation": "bool | None",
+          "default": "None"
+        },
+        {
+          "name": "kv_cache_key",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        },
+        {
+          "name": "model_id",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        },
+        {
+          "name": "model_src",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        }
+      ],
+      "returns": "dict[str, bool]",
+      "summary": "Delete KV cache files, or a registry model's cached download.",
+      "module": "_api"
+    },
+    {
+      "name": "diffusion_stream",
+      "async": true,
+      "signature": "async def diffusion_stream(transport: Transport, params: DiffusionStreamRequest) -> AsyncIterator[DiffusionStreamResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "DiffusionStreamRequest",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[DiffusionStreamResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "discover_rpc_servers",
+      "async": true,
+      "signature": "async def discover_rpc_servers(transport: Transport, params: DiscoverRpcServersRequest) -> DiscoverRpcServersResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "DiscoverRpcServersRequest",
+          "default": null
+        }
+      ],
+      "returns": "DiscoverRpcServersResponse",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "download_asset",
+      "async": true,
+      "signature": "async def download_asset(transport: Transport, params: DownloadAssetRequest) -> DownloadAssetResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "DownloadAssetRequest",
+          "default": null
+        }
+      ],
+      "returns": "DownloadAssetResponse",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "download_asset_with_progress",
+      "async": true,
+      "signature": "async def download_asset_with_progress(transport: Transport, params: DownloadAssetRequest) -> AsyncIterator[ModelProgressResponse | DownloadAssetResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "DownloadAssetRequest",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[ModelProgressResponse | DownloadAssetResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "embed",
+      "async": true,
+      "signature": "async def embed(transport: Transport, params: EmbedRequest) -> EmbedResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "EmbedRequest",
+          "default": null
+        }
+      ],
+      "returns": "EmbedResponse",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "finetune",
+      "async": true,
+      "signature": "async def finetune(transport: Transport, params: FinetuneRequest) -> FinetuneResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "FinetuneRequest",
+          "default": null
+        }
+      ],
+      "returns": "FinetuneResponse",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "finetune_with_progress",
+      "async": true,
+      "signature": "async def finetune_with_progress(transport: Transport, params: FinetuneRequest) -> AsyncIterator[FinetuneProgressResponse | FinetuneResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "FinetuneRequest",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[FinetuneProgressResponse | FinetuneResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "generate_client_request_id",
+      "async": false,
+      "signature": "def generate_client_request_id() -> str",
+      "params": [],
+      "returns": "str",
+      "summary": "UUIDv4 for client-side request ids -- the same value goes on the wire\n(`requestId`) and is what `cancel(request_id=...)` targets, mirroring the\nJS SDK's generateClientRequestId contract.",
+      "module": "_api"
+    },
+    {
+      "name": "get_loaded_model_info",
+      "async": true,
+      "signature": "async def get_loaded_model_info(transport: Transport, params: GetLoadedModelInfoRequest) -> GetLoadedModelInfoResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "GetLoadedModelInfoRequest",
+          "default": null
+        }
+      ],
+      "returns": "GetLoadedModelInfoResponse",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "get_model_info",
+      "async": true,
+      "signature": "async def get_model_info(transport: Transport, params: GetModelInfoRequest) -> GetModelInfoResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "GetModelInfoRequest",
+          "default": null
+        }
+      ],
+      "returns": "GetModelInfoResponse",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "get_system_resources",
+      "async": true,
+      "signature": "async def get_system_resources(transport: Transport, params: GetSystemResourcesRequest) -> GetSystemResourcesResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "GetSystemResourcesRequest",
+          "default": null
+        }
+      ],
+      "returns": "GetSystemResourcesResponse",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "heartbeat",
+      "async": true,
+      "signature": "async def heartbeat(transport: Transport, params: HeartbeatRequest) -> HeartbeatResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "HeartbeatRequest",
+          "default": null
+        }
+      ],
+      "returns": "HeartbeatResponse",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "invoke_plugin",
+      "async": true,
+      "signature": "async def invoke_plugin(transport: Transport, model_id: str, handler: str, params: Any=None) -> Any",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "model_id",
+          "kind": "positional",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "handler",
+          "kind": "positional",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "Any",
+          "default": "None"
+        }
+      ],
+      "returns": "Any",
+      "summary": "",
+      "module": "_api"
+    },
+    {
+      "name": "invoke_plugin_stream",
+      "async": true,
+      "signature": "async def invoke_plugin_stream(transport: Transport, model_id: str, handler: str, params: Any=None) -> AsyncIterator[Any]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "model_id",
+          "kind": "positional",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "handler",
+          "kind": "positional",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "Any",
+          "default": "None"
+        }
+      ],
+      "returns": "AsyncIterator[Any]",
+      "summary": "",
+      "module": "_api"
+    },
+    {
+      "name": "load_model",
+      "async": true,
+      "signature": "async def load_model(transport: Transport, *, model_src: Any=None, model_type: str | None=None, model_config: dict[str, Any] | None=None, model_name: str | None=None, model_id: str | None=None, on_progress: Callable[[ModelProgressResponse], None] | None=None, request_id: str | None=None, seed: bool | None=None, model_fit_policy: ModelFitPolicy | None=None, logger: Any=None) -> str",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "model_src",
+          "kind": "keyword",
+          "annotation": "Any",
+          "default": "None"
+        },
+        {
+          "name": "model_type",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        },
+        {
+          "name": "model_config",
+          "kind": "keyword",
+          "annotation": "dict[str, Any] | None",
+          "default": "None"
+        },
+        {
+          "name": "model_name",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        },
+        {
+          "name": "model_id",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        },
+        {
+          "name": "on_progress",
+          "kind": "keyword",
+          "annotation": "Callable[[ModelProgressResponse], None] | None",
+          "default": "None"
+        },
+        {
+          "name": "request_id",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        },
+        {
+          "name": "seed",
+          "kind": "keyword",
+          "annotation": "bool | None",
+          "default": "None"
+        },
+        {
+          "name": "model_fit_policy",
+          "kind": "keyword",
+          "annotation": "ModelFitPolicy | None",
+          "default": "None"
+        },
+        {
+          "name": "logger",
+          "kind": "keyword",
+          "annotation": "Any",
+          "default": "None"
+        }
+      ],
+      "returns": "str",
+      "summary": "Ergonomic loadModel mirroring JS's `client/api/load-model.ts`:",
+      "module": "_api"
+    },
+    {
+      "name": "load_model_with_progress",
+      "async": true,
+      "signature": "async def load_model_with_progress(transport: Transport, params: LoadModelRequest) -> AsyncIterator[ModelProgressResponse | LoadModelResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "LoadModelRequest",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[ModelProgressResponse | LoadModelResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "logging_stream",
+      "async": false,
+      "signature": "def logging_stream(transport: Transport, id: str) -> AsyncIterator[LoggingStreamResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "id",
+          "kind": "positional",
+          "annotation": "str",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[LoggingStreamResponse]",
+      "summary": "Open a logging stream for `id` -- a model id, `SDK_LOG_ID` for SDK\nserver logs, or `SDK_ALL_LOG_ID` for every log. Mirrors JS's\n`loggingStream()`.",
+      "module": "logging_streams"
+    },
+    {
+      "name": "model_registry_get_model",
+      "async": true,
+      "signature": "async def model_registry_get_model(transport: Transport, registry_path: str, registry_source: str) -> ModelRegistryGetModelResponseModel",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "registry_path",
+          "kind": "positional",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "registry_source",
+          "kind": "positional",
+          "annotation": "str",
+          "default": null
+        }
+      ],
+      "returns": "ModelRegistryGetModelResponseModel",
+      "summary": "",
+      "module": "_api"
+    },
+    {
+      "name": "model_registry_list",
+      "async": true,
+      "signature": "async def model_registry_list(transport: Transport) -> list[ModelRegistryListResponseModelsItem]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        }
+      ],
+      "returns": "list[ModelRegistryListResponseModelsItem]",
+      "summary": "",
+      "module": "_api"
+    },
+    {
+      "name": "model_registry_search",
+      "async": true,
+      "signature": "async def model_registry_search(transport: Transport, *, filter: str | None=None, engine: str | None=None, quantization: str | None=None, addon: str | None=None, model_type: str | None=None) -> list[ModelRegistrySearchResponseModelsItem]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "filter",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        },
+        {
+          "name": "engine",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        },
+        {
+          "name": "quantization",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        },
+        {
+          "name": "addon",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        },
+        {
+          "name": "model_type",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        }
+      ],
+      "returns": "list[ModelRegistrySearchResponseModelsItem]",
+      "summary": "`model_type` is an accepted alias for `addon`, mirroring JS's\n`modelRegistrySearch` — if both are given, `model_type` wins.",
+      "module": "_api"
+    },
+    {
+      "name": "normalize_assistant_cache_content",
+      "async": false,
+      "signature": "def normalize_assistant_cache_content(content: str) -> str",
+      "params": [
+        {
+          "name": "content",
+          "kind": "positional",
+          "annotation": "str",
+          "default": null
+        }
+      ],
+      "returns": "str",
+      "summary": "Canonicalize assistant text for the auto-cache key -- strip paired and\nunclosed-trailing think blocks, then trim. Byte-for-byte the same rules\nas utils/cache-normalize.ts, so pushing this string back into `history`\nkeeps hitting the server's cache.",
+      "module": "_completion"
+    },
+    {
+      "name": "ocr_stream",
+      "async": true,
+      "signature": "async def ocr_stream(transport: Transport, params: OcrStreamRequest) -> AsyncIterator[OcrStreamResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "OcrStreamRequest",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[OcrStreamResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "plugin_invoke",
+      "async": true,
+      "signature": "async def plugin_invoke(transport: Transport, params: PluginInvokeRequest) -> PluginInvokeResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "PluginInvokeRequest",
+          "default": null
+        }
+      ],
+      "returns": "PluginInvokeResponse",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "plugin_invoke_stream",
+      "async": true,
+      "signature": "async def plugin_invoke_stream(transport: Transport, params: PluginInvokeStreamRequest) -> AsyncIterator[PluginInvokeStreamResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "PluginInvokeStreamRequest",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[PluginInvokeStreamResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "rag",
+      "async": true,
+      "signature": "async def rag(transport: Transport, params: RagRequest) -> RagResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "RagRequest",
+          "default": null
+        }
+      ],
+      "returns": "RagResponse",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "rag_with_progress",
+      "async": true,
+      "signature": "async def rag_with_progress(transport: Transport, params: RagRequest) -> AsyncIterator[RagProgressResponse | RagResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "RagRequest",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[RagProgressResponse | RagResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "reconstruct_error",
+      "async": false,
+      "signature": "def reconstruct_error(response: dict[str, Any]) -> QvacError",
+      "params": [
+        {
+          "name": "response",
+          "kind": "positional",
+          "annotation": "dict[str, Any]",
+          "default": null
+        }
+      ],
+      "returns": "QvacError",
+      "summary": "Rebuild the original server-thrown typed error from its envelope so\n`isinstance(err, RequestRejectedByPolicyError)` works across RPC. Unknown\nnames fall through to `RPCError`, which preserves name/code/message.",
+      "module": "errors"
+    },
+    {
+      "name": "rerank",
+      "async": true,
+      "signature": "async def rerank(transport: Transport, params: RerankRequest) -> RerankResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "RerankRequest",
+          "default": null
+        }
+      ],
+      "returns": "RerankResponse",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "resume",
+      "async": true,
+      "signature": "async def resume(transport: Transport, params: ResumeRequest) -> ResumeResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "ResumeRequest",
+          "default": null
+        }
+      ],
+      "returns": "ResumeResponse",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "start_rpc_server",
+      "async": true,
+      "signature": "async def start_rpc_server(transport: Transport, params: StartRpcServerRequest) -> StartRpcServerResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "StartRpcServerRequest",
+          "default": null
+        }
+      ],
+      "returns": "StartRpcServerResponse",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "state",
+      "async": true,
+      "signature": "async def state(transport: Transport, params: StateRequest) -> StateResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "StateRequest",
+          "default": null
+        }
+      ],
+      "returns": "StateResponse",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "stop_rpc_server",
+      "async": true,
+      "signature": "async def stop_rpc_server(transport: Transport, params: StopRpcServerRequest) -> StopRpcServerResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "StopRpcServerRequest",
+          "default": null
+        }
+      ],
+      "returns": "StopRpcServerResponse",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "subscribe_server_logs",
+      "async": false,
+      "signature": "def subscribe_server_logs(transport: Transport, handler: Callable[[LoggingStreamResponse], None]) -> Callable[[], None]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "handler",
+          "kind": "positional",
+          "annotation": "Callable[[LoggingStreamResponse], None]",
+          "default": null
+        }
+      ],
+      "returns": "Callable[[], None]",
+      "summary": "Subscribe to every server-side log through the reserved\n`SDK_ALL_LOG_ID` fan-in stream: SDK server logs, per-model addon logs for\nall loaded models, RAG logs. Each log keeps its origin in `log.id`.\nReturns an unsubscribe function. Mirrors JS's `subscribeServerLogs()`.",
+      "module": "logging_streams"
+    },
+    {
+      "name": "suspend",
+      "async": true,
+      "signature": "async def suspend(transport: Transport, params: SuspendRequest) -> SuspendResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "SuspendRequest",
+          "default": null
+        }
+      ],
+      "returns": "SuspendResponse",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "text_to_speech",
+      "async": true,
+      "signature": "async def text_to_speech(transport: Transport, params: TextToSpeechRequest) -> AsyncIterator[TextToSpeechResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "TextToSpeechRequest",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[TextToSpeechResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "text_to_speech_stream",
+      "async": true,
+      "signature": "async def text_to_speech_stream(transport: Transport, params: TextToSpeechStreamRequest, up: AsyncIterable[bytes]) -> AsyncIterator[TextToSpeechStreamResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "TextToSpeechStreamRequest",
+          "default": null
+        },
+        {
+          "name": "up",
+          "kind": "positional",
+          "annotation": "AsyncIterable[bytes]",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[TextToSpeechStreamResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "text_to_speech_stream_session",
+      "async": false,
+      "signature": "def text_to_speech_stream_session(transport: Transport, *, model_id: str, input_type: str='text', accumulate_sentences: bool | None=None, sentence_delimiter_preset: str | None=None, max_buffer_scalars: int | None=None, flush_after_ms: float | None=None) -> DuplexSession[TextToSpeechStreamResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "model_id",
+          "kind": "keyword",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "input_type",
+          "kind": "keyword",
+          "annotation": "str",
+          "default": "'text'"
+        },
+        {
+          "name": "accumulate_sentences",
+          "kind": "keyword",
+          "annotation": "bool | None",
+          "default": "None"
+        },
+        {
+          "name": "sentence_delimiter_preset",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        },
+        {
+          "name": "max_buffer_scalars",
+          "kind": "keyword",
+          "annotation": "int | None",
+          "default": "None"
+        },
+        {
+          "name": "flush_after_ms",
+          "kind": "keyword",
+          "annotation": "float | None",
+          "default": "None"
+        }
+      ],
+      "returns": "DuplexSession[TextToSpeechStreamResponse]",
+      "summary": "Bidirectional TTS session: `write()` UTF-8 text fragments (e.g. LLM\ntoken deltas; str or bytes) and iterate TextToSpeechStreamResponse frames\n(PCM in `buffer`, optional `chunk_index`/`sentence_chunk`) until the\nterminal done frame, which IS yielded. Mirrors JS's\n`textToSpeechStream()`.",
+      "module": "sessions"
+    },
+    {
+      "name": "transcribe",
+      "async": true,
+      "signature": "async def transcribe(transport: Transport, params: TranscribeRequest) -> AsyncIterator[TranscribeResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "TranscribeRequest",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[TranscribeResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "transcribe_stream",
+      "async": true,
+      "signature": "async def transcribe_stream(transport: Transport, params: TranscribeStreamRequest, up: AsyncIterable[bytes]) -> AsyncIterator[TranscribeStreamResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "TranscribeStreamRequest",
+          "default": null
+        },
+        {
+          "name": "up",
+          "kind": "positional",
+          "annotation": "AsyncIterable[bytes]",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[TranscribeStreamResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "transcribe_stream_session",
+      "async": false,
+      "signature": "def transcribe_stream_session(transport: Transport, *, model_id: str, prompt: str | None=None, metadata: bool=False, emit_vad_events: bool=False, end_of_turn_silence_ms: float | None=None, vad_run_interval_ms: float | None=None, parakeet_streaming_config: dict[str, Any] | None=None) -> DuplexSession[Any]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "model_id",
+          "kind": "keyword",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "prompt",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        },
+        {
+          "name": "metadata",
+          "kind": "keyword",
+          "annotation": "bool",
+          "default": "False"
+        },
+        {
+          "name": "emit_vad_events",
+          "kind": "keyword",
+          "annotation": "bool",
+          "default": "False"
+        },
+        {
+          "name": "end_of_turn_silence_ms",
+          "kind": "keyword",
+          "annotation": "float | None",
+          "default": "None"
+        },
+        {
+          "name": "vad_run_interval_ms",
+          "kind": "keyword",
+          "annotation": "float | None",
+          "default": "None"
+        },
+        {
+          "name": "parakeet_streaming_config",
+          "kind": "keyword",
+          "annotation": "dict[str, Any] | None",
+          "default": "None"
+        }
+      ],
+      "returns": "DuplexSession[Any]",
+      "summary": "Bidirectional transcription session: `write()` raw audio chunks and\niterate transcription output. Yields plain text by default, transcript\nsegments with `metadata=True`, or typed conversation events (VadEvent /\nEndOfTurnEvent / TextEvent / SegmentEvent) when `emit_vad_events=True` or\na `parakeet_streaming_config` is given -- same mode routing as JS's\n`transcribeStream()`.",
+      "module": "sessions"
+    },
+    {
+      "name": "translate",
+      "async": false,
+      "signature": "def translate(transport: Transport, *, model_id: str, text: str | list[str], model_type: str, to: str | None=None, from_: str | None=None, stream: bool=True, context: str | None=None, request_id: str | None=None) -> TranslateRun",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "model_id",
+          "kind": "keyword",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "text",
+          "kind": "keyword",
+          "annotation": "str | list[str]",
+          "default": null
+        },
+        {
+          "name": "model_type",
+          "kind": "keyword",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "to",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        },
+        {
+          "name": "from_",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        },
+        {
+          "name": "stream",
+          "kind": "keyword",
+          "annotation": "bool",
+          "default": "True"
+        },
+        {
+          "name": "context",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        },
+        {
+          "name": "request_id",
+          "kind": "keyword",
+          "annotation": "str | None",
+          "default": "None"
+        }
+      ],
+      "returns": "TranslateRun",
+      "summary": "Mirrors JS's `client/api/translate.ts`. For LLM-backed translation\nwith `from_` omitted, the worker auto-detects the source language and\nraises TranslationFailedError (reconstructed across the RPC boundary) when\nit can't -- detection lives in the worker so every language binding shares\none detector. NMT models are per-language-pair, so `from_`/`to` don't\napply to them.",
+      "module": "_api"
+    },
+    {
+      "name": "unload_model",
+      "async": true,
+      "signature": "async def unload_model(transport: Transport, model_id: str, clear_storage: bool=False) -> None",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "model_id",
+          "kind": "positional",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "clear_storage",
+          "kind": "positional",
+          "annotation": "bool",
+          "default": "False"
+        }
+      ],
+      "returns": "None",
+      "summary": "Core wire semantics plus the logging-stream cleanup JS's\n`unloadModel` performs (stopLoggingStreamForModel); connection auto-close\nstays out of scope for the thin per-call transport.",
+      "module": "_api"
+    },
+    {
+      "name": "upscale_stream",
+      "async": true,
+      "signature": "async def upscale_stream(transport: Transport, params: UpscaleStreamRequest) -> AsyncIterator[UpscaleStreamResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "UpscaleStreamRequest",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[UpscaleStreamResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "vector_index",
+      "async": true,
+      "signature": "async def vector_index(transport: Transport, params: VectorIndexRequest) -> VectorIndexResponse",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "VectorIndexRequest",
+          "default": null
+        }
+      ],
+      "returns": "VectorIndexResponse",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "video_stream",
+      "async": true,
+      "signature": "async def video_stream(transport: Transport, params: VideoStreamRequest) -> AsyncIterator[VideoStreamResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "VideoStreamRequest",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[VideoStreamResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "vla",
+      "async": true,
+      "signature": "async def vla(transport: Transport, *, model_id: str, images: list[Any], img_width: int, img_height: int, state: Any, tokens: Any, mask: Any, noise: Any=None) -> VlaRunResult",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "model_id",
+          "kind": "keyword",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "images",
+          "kind": "keyword",
+          "annotation": "list[Any]",
+          "default": null
+        },
+        {
+          "name": "img_width",
+          "kind": "keyword",
+          "annotation": "int",
+          "default": null
+        },
+        {
+          "name": "img_height",
+          "kind": "keyword",
+          "annotation": "int",
+          "default": null
+        },
+        {
+          "name": "state",
+          "kind": "keyword",
+          "annotation": "Any",
+          "default": null
+        },
+        {
+          "name": "tokens",
+          "kind": "keyword",
+          "annotation": "Any",
+          "default": null
+        },
+        {
+          "name": "mask",
+          "kind": "keyword",
+          "annotation": "Any",
+          "default": null
+        },
+        {
+          "name": "noise",
+          "kind": "keyword",
+          "annotation": "Any",
+          "default": "None"
+        }
+      ],
+      "returns": "VlaRunResult",
+      "summary": "Run VLA inference on a loaded model (SmolVLA or pi-0.5) and return the\nproduced action chunk plus per-stage timings. Mirrors JS's `vla()`:\nfloat32 images/state/noise, int32 tokens, uint8 mask are base64-encoded\nonto the `vlaRun` plugin request; the response's `actions` decode back to\na float32 array of length `chunk_size * action_dim`.",
+      "module": "vla"
+    },
+    {
+      "name": "vla_hparams",
+      "async": true,
+      "signature": "async def vla_hparams(transport: Transport, *, model_id: str) -> tuple[VlaHparams, str | None]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "model_id",
+          "kind": "keyword",
+          "annotation": "str",
+          "default": null
+        }
+      ],
+      "returns": "tuple[VlaHparams, str | None]",
+      "summary": "Fetch the loaded VLA model's hyperparameters and the active ggml\nbackend name -- sizes token/state/noise buffers before calling `vla()`.",
+      "module": "vla"
+    },
+    {
+      "name": "vla_pad_state",
+      "async": false,
+      "signature": "def vla_pad_state(state: Any, target_dim: int=32) -> Any",
+      "params": [
+        {
+          "name": "state",
+          "kind": "positional",
+          "annotation": "Any",
+          "default": null
+        },
+        {
+          "name": "target_dim",
+          "kind": "positional",
+          "annotation": "int",
+          "default": "32"
+        }
+      ],
+      "returns": "Any",
+      "summary": "Zero-pad a state vector to `target_dim` float32 entries; input longer\nthan `target_dim` raises. Mirrors `vlaPadState`.",
+      "module": "vla"
+    },
+    {
+      "name": "vla_preprocess_image",
+      "async": false,
+      "signature": "def vla_preprocess_image(pixels: Any, width: int, height: int, *, size: int=VLA_DEFAULT_IMAGE_SIZE, layout: str='hwc', scale: float | str='auto') -> Any",
+      "params": [
+        {
+          "name": "pixels",
+          "kind": "positional",
+          "annotation": "Any",
+          "default": null
+        },
+        {
+          "name": "width",
+          "kind": "positional",
+          "annotation": "int",
+          "default": null
+        },
+        {
+          "name": "height",
+          "kind": "positional",
+          "annotation": "int",
+          "default": null
+        },
+        {
+          "name": "size",
+          "kind": "keyword",
+          "annotation": "int",
+          "default": "VLA_DEFAULT_IMAGE_SIZE"
+        },
+        {
+          "name": "layout",
+          "kind": "keyword",
+          "annotation": "str",
+          "default": "'hwc'"
+        },
+        {
+          "name": "scale",
+          "kind": "keyword",
+          "annotation": "float | str",
+          "default": "'auto'"
+        }
+      ],
+      "returns": "Any",
+      "summary": "Resize + letterbox + normalize a camera frame to `(3, size, size)`\nfloat32 in `[-1, 1]`, flattened CHW -- drop-in equivalent of\n`@qvac/vla-ggml`'s `preprocessImage` (and the SDK's `vlaPreprocessImage`).",
+      "module": "vla"
+    },
+    {
+      "name": "vla_set_embodiment",
+      "async": true,
+      "signature": "async def vla_set_embodiment(transport: Transport, *, model_id: str, embodiment: VlaEmbodimentSelector) -> VlaHparams",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "model_id",
+          "kind": "keyword",
+          "annotation": "str",
+          "default": null
+        },
+        {
+          "name": "embodiment",
+          "kind": "keyword",
+          "annotation": "VlaEmbodimentSelector",
+          "default": null
+        }
+      ],
+      "returns": "VlaHparams",
+      "summary": "Switch a loaded multi-embodiment GR00T model to another embodiment in\nthe same GGUF -- no reload. Mirrors JS's `vlaSetEmbodiment()`. Returns the\nrefreshed hparams: `num_cameras` follows the new embodiment, so re-size\nbuffers before the next `vla()` call. Rejects for a non-GR00T or\nsingle-embodiment model, an unknown tag or cat_id, or while an inference\nresponse is still pending.",
+      "module": "vla"
+    },
+    {
+      "name": "world_scene_stream",
+      "async": true,
+      "signature": "async def world_scene_stream(transport: Transport, params: WorldSceneStreamRequest) -> AsyncIterator[WorldSceneStreamResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "WorldSceneStreamRequest",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[WorldSceneStreamResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    },
+    {
+      "name": "world_step_stream",
+      "async": true,
+      "signature": "async def world_step_stream(transport: Transport, params: WorldStepStreamRequest) -> AsyncIterator[WorldStepStreamResponse]",
+      "params": [
+        {
+          "name": "transport",
+          "kind": "positional",
+          "annotation": "Transport",
+          "default": null
+        },
+        {
+          "name": "params",
+          "kind": "positional",
+          "annotation": "WorldStepStreamRequest",
+          "default": null
+        }
+      ],
+      "returns": "AsyncIterator[WorldStepStreamResponse]",
+      "summary": "",
+      "module": "_generated.methods"
+    }
+  ]
+}

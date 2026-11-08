@@ -14,6 +14,7 @@ import * as path from "path";
 import { execSync } from "child_process";
 import { fileURLToPath } from "node:url";
 import {
+  declaredSoftware,
   getCurrentLine,
   getDocumentedSoftware,
 } from "../../src/lib/versions.js";
@@ -40,10 +41,23 @@ export const DOCS_WEBSITE_DIR = path.resolve(SCRIPT_DIR, "..", "..");
  */
 export const DEVELOPMENT_LINE = "next";
 
+/**
+ * The development line of a collection. Once the software keeps its
+ * documentation in its package, that is the documentation root its versions
+ * file declares (`packages/<pkg>/docs/users`). Until then it is the legacy
+ * `content/_unpublished/<collection>/next/`.
+ */
 export function developmentLineDir(
   slug: string,
   root: string = DOCS_WEBSITE_DIR,
 ): string {
+  const declaration = declaredSoftware().find(
+    (entry) => entry.declaration.path === `/${slug}`,
+  )?.declaration;
+  if (declaration) {
+    const inPackage = path.join(root, "..", "..", declaration.paths[0]);
+    if (existsSync(inPackage)) return inPackage;
+  }
   return path.join(root, "content", "_unpublished", slug, DEVELOPMENT_LINE);
 }
 

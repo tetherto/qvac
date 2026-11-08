@@ -464,3 +464,47 @@
   }
 }
 
+
+/* API reference data components (src/components/api-reference). Every field
+   name is written in both SDK languages; the language switch sets
+   `data-sdk-language` on <html> and this shows one. */
+:root:not([data-sdk-language="python"]) [data-sdk-language-name="python"],
+:root[data-sdk-language="python"] [data-sdk-language-name="js"] {
+  display: none;
+}
+.qv-language-switch {
+  display: inline-flex;
+  gap: 0.25rem;
+  margin: 0.5rem 0;
+  padding: 0.125rem;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 0.5rem;
+}
+.qv-language-switch button {
+  padding: 0.125rem 0.625rem;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+}
+.qv-language-switch button[aria-pressed="true"] {
+  background: var(--color-fd-accent);
+  color: var(--color-fd-accent-foreground);
+}
+.qv-field-notes {
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--color-fd-muted-foreground);
+}
+.qv-field-children > summary,
+.qv-schema-variant > summary {
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: var(--color-fd-muted-foreground);
+}
+.qv-signature {
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+.qv-api-missing {
+  font-style: italic;
+  color: var(--color-fd-muted-foreground);
+}

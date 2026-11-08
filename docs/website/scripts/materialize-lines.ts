@@ -286,7 +286,14 @@ async function publishPageTree(line: PlannedLine, snapshot: string, websiteRoot:
   const version = line.folder.replace(/^\((.*)\)$/, '$1')
   for (const candidate of new Set([line.folder, version, `(${version})`])) {
     const existing = path.join(softwareDir, candidate)
-    if (!existsSync(existing)) continue
+    const entry = await fs.lstat(existing).catch(() => null)
+    if (!entry) continue
+    if (entry.isSymbolicLink()) {
+      throw new Error(
+        `${path.relative(websiteRoot, existing)} is a symbolic link, probably the old manual ` +
+          `preview: remove it, the materializer writes that folder itself`,
+      )
+    }
     if (!existsSync(path.join(existing, MARKER))) {
       throw new Error(
         `${path.relative(websiteRoot, existing)} exists and was not materialized: ` +
@@ -297,7 +304,13 @@ async function publishPageTree(line: PlannedLine, snapshot: string, websiteRoot:
   }
 
   await fs.mkdir(softwareDir, { recursive: true })
-  await fs.cp(path.join(snapshot, line.software.paths[0]), target, { recursive: true })
+  // Generated data stays in the snapshot, where the data components read it;
+  // the page tree carries pages and navigation only.
+  const docsRoot = path.join(snapshot, line.software.paths[0])
+  await fs.cp(docsRoot, target, {
+    recursive: true,
+    filter: (source) => path.relative(docsRoot, source).split(path.sep)[0] !== '_generated',
+  })
   await fs.writeFile(path.join(target, MARKER), describe(line.source))
   await fs.writeFile(path.join(target, '.gitignore'), '*\n')
 }

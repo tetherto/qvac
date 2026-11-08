@@ -12,7 +12,6 @@ import ts from "typescript";
 import { Application, ReflectionKind } from "typedoc";
 import type { DeclarationReflection, SignatureReflection } from "typedoc";
 import type { ApiFunction, ApiObject, ApiOverload, ExpandedType, TypeField, ErrorEntry, ApiData, StructuredType } from "./types.js";
-import { auditTsDoc } from "./audit-tsdoc.js";
 import {
   CURATED_SINGLETONS,
   CURATED_SINGLETON_NAMES,
@@ -110,7 +109,6 @@ async function tryLoadCache(
     path.join(SCRIPT_DIR, "sample-parser.ts"),
     path.join(SCRIPT_DIR, "zod-describe-extractor.ts"),
     path.join(SCRIPT_DIR, "audit-tsdoc.ts"),
-    path.join(SCRIPT_DIR, "render.ts"),
     path.join(SCRIPT_DIR, "curated-singletons.ts"),
   ];
   for (const file of helperFiles) {
@@ -217,9 +215,6 @@ export async function extractApiData(
       `✓ Converted ${curatedVariables.length} curated singleton(s) from sibling packages`,
     );
   }
-
-  console.log(`🔍 Auditing TSDoc completeness...`);
-  await auditTsDoc(project, sdkPath, { curatedVariables });
 
   const apiFunctions = extractApiFunctions(project);
   console.log(`✓ Extracted ${apiFunctions.length} API functions`);

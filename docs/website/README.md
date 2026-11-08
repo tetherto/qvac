@@ -113,7 +113,12 @@ never pass it.
 
 ## Cutting a documentation line
 
-A versioned collection — SDK, CLI — publishes one folder per line it has cut:
+**Only the CLI is still cut.** The SDK keeps its documentation in
+`packages/sdk/docs/users/` and publishes a line by pinning its release commit
+in `versions/sdk.json` (see "Documentation lines and versions files");
+`cut-line.ts` refuses it. The CLI follows once it migrates.
+
+A versioned collection publishes one folder per line it has cut:
 the parenthesized one is a Fumadocs group, so its pages answer at the
 version-less paths, and every plain one carries its version in the URL. A
 cut adds a line and retires none; retiring a line is a separate edit to its
@@ -174,13 +179,6 @@ Then edit the one hand-maintained input:
 The preserved line's redirect rules follow from that file at build. A page
 carried by both lines keeps resolving on its own, and a page the new line drops
 is the only case that needs a rule of its own in `public/_redirects`.
-
-Then move the currency marker. A page that states in its own title which series
-it documents also states whether that series is current, and the parentheses
-are the only other place currency is recorded, so nothing else can maintain the
-claim. Today that is the SDK's generated API summary: `v0.17.x (latest)` becomes
-plain `v0.17.x` in the preserved line, and `v0.18.x (latest)` in the new one.
-The development line carries no marker.
 
 Then retarget the new line's release-notes link. `reference/meta.json` carries
 the sidebar entry as an external link to that minor's GitHub release:

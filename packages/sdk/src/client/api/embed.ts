@@ -14,11 +14,7 @@ import { generateClientRequestId } from '@/client/api/client-request-id'
  * Generates embeddings for a single text using a specified model.
  *
  * @overloadLabel "Single text"
- * @param params - The parameters for the embedding
- * @param params.modelId - The identifier of the embedding model to use
- * @param params.text - The input text to embed
- * @param options - Optional RPC options including per-call profiling
- * @returns A promise (decorated with `requestId`) resolving to an object with `embedding` (a single `number[]` vector) and optional `stats` performance data.
+ *
  * @throws {QvacErrorBase} When the response type is invalid or when the embedding fails
  */
 export function embed(
@@ -30,11 +26,7 @@ export function embed(
  * Generates embeddings for multiple texts using a specified model.
  *
  * @overloadLabel "Multiple texts"
- * @param params - The parameters for the embedding
- * @param params.modelId - The identifier of the embedding model to use
- * @param params.text - The input texts to embed
- * @param options - Optional RPC options including per-call profiling
- * @returns A promise (decorated with `requestId`) resolving to an object with `embedding` (one `number[]` vector per input text, i.e. `number[][]`) and optional `stats` performance data.
+ *
  * @throws {QvacErrorBase} When the response type is invalid or when the embedding fails
  */
 export function embed(
@@ -48,9 +40,7 @@ export function embed(
  * Embeds ordered text and media inputs.
  *
  * @overloadLabel "Text and media batch"
- * @param params - Model identifier and ordered inputs to embed
- * @param options - Optional RPC options including per-call profiling
- * @returns One embedding vector per input, with optional statistics and a synchronous requestId for cancellation.
+ *
  * @throws {QvacErrorBase} When validation or embedding fails
  */
 export function embed(
@@ -61,9 +51,6 @@ export function embed(
 /**
  * Embeds text or a batch of ordered text and media inputs.
  *
- * @param params - Model identifier and either text or inputs
- * @param options - Optional RPC options including per-call profiling
- * @returns Embeddings with optional statistics and a synchronous requestId for cancellation.
  * @throws {QvacErrorBase} When validation or embedding fails
  */
 export function embed(

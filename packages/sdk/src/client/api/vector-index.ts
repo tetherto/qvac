@@ -260,36 +260,9 @@ const client = createVectorIndexClient(send)
 /**
  * Creates an empty vector index in worker memory and returns a handle to it.
  *
- * The index is backed by the native TurboVec engine of the registered
- * embedding plugin (the built-in llama.cpp embedding plugin provides it).
- * Pair it with `embed()` to build retrieval over documents kept in any store:
- * add each document's embedding under an id of your choosing, then search
- * with the embedding of a query and map the returned ids back to your
- * documents.
- *
- * @param params - Index parameters
- * @param params.dim - Vector dimensionality, for example 1024 for GTE Large. TurboVec storage needs a multiple of 8 no greater than 1024.
- * @param params.storage - Storage mode from `VectorIndexStorage`; defaults to `TURBOVEC_Q4`. `TURBOVEC_Q2` halves memory again at lower recall; `F32`, `Q8`, and `Q4` are exact or generically quantised stores for dimensions TurboVec cannot hold.
- * @param options - Optional RPC options (timeout, profiling, force new connection, etc.).
- * @returns A handle whose methods add, search, remove, snapshot, and dispose the index.
  * @throws {VectorIndexProviderUnavailableError} When no registered plugin exposes a vector index provider
+ *
  * @throws {VectorIndexFailedError} When the native index rejects the dimension or storage mode
- *
- * @example
- * ```typescript
- * const documents = new Map([
- *   ['1', 'Saturn moon Titan has lakes of liquid methane.'],
- *   ['2', 'Solar panels turn sunlight into electricity.']
- * ])
- * const { embedding } = await embed({ modelId, text: [...documents.values()] })
- *
- * await using index = await createVectorIndex({ dim: embedding[0].length })
- * await index.add({ ids: [...documents.keys()], vectors: embedding })
- *
- * const { embedding: query } = await embed({ modelId, text: 'Which moon has methane lakes?' })
- * const hits = await index.search({ query, k: 1 })
- * console.log(documents.get(hits[0].id))
- * ```
  */
 export function createVectorIndex(
   params: CreateVectorIndexParams,
@@ -302,23 +275,9 @@ export function createVectorIndex(
  * Loads a vector index snapshot written by `VectorIndex.write()` into worker
  * memory and returns a handle to it.
  *
- * The snapshot records its dimension, storage mode, and entries, so nothing
- * else needs to be supplied. Loading copies the file into memory; later
- * changes are not written back until `write()` is called again.
- *
- * @param params - Load parameters
- * @param params.path - Snapshot path. An absolute path is used as given; a relative path resolves under the QVAC data directory, the same rule `write()` applies.
- * @param options - Optional RPC options (timeout, profiling, force new connection, etc.).
- * @returns A handle to the loaded index.
  * @throws {VectorIndexProviderUnavailableError} When no registered plugin exposes a vector index provider
- * @throws {VectorIndexFailedError} When the file is missing, corrupt, or not a vector index snapshot
  *
- * @example
- * ```typescript
- * const index = await loadVectorIndex({ path: 'indexes/articles.qvi' })
- * const hits = await index.search({ query, k: 5 })
- * await index.dispose()
- * ```
+ * @throws {VectorIndexFailedError} When the file is missing, corrupt, or not a vector index snapshot
  */
 export function loadVectorIndex(
   params: LoadVectorIndexParams,

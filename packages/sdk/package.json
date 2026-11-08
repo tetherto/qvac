@@ -200,7 +200,7 @@
     "!**/bun.lock",
     "LICENSE",
     "NOTICE",
-    "docs/system-resources-support-matrix.md"
+    "docs/contributors/system-resources-support-matrix.md"
   ],
   "scripts": {
     "test:unit": "tsx scripts/run-unit-tests.ts",
