@@ -23,6 +23,10 @@ export {
   type BatchCompletionRun,
   type BatchPrompt,
   type EmbedStats,
+  type EmbedInput,
+  type EmbedInputPart,
+  type EmbedMediaSource,
+  type EmbedParams,
   VERBOSITY,
   type Attachment,
   type TranscribeStreamSession,
@@ -185,6 +189,7 @@ export { SUPPORTED_AUDIO_FORMATS } from '@/constants/audio'
 // group below).
 export {
   RpcServerOperationError,
+  AudioEncodeFailedError,
   InferenceCancelledError,
   ContextOverflowError,
   type ContextOverflowErrorSizes,

@@ -96,6 +96,10 @@ export {
   type BatchCompletionRun,
   type BatchPrompt,
   type EmbedStats,
+  type EmbedInput,
+  type EmbedInputPart,
+  type EmbedMediaSource,
+  type EmbedParams,
   type DecideParams,
   type DecisionState,
   type DecisionQuestion,
@@ -219,6 +223,13 @@ export {
   type TranscriptionFitWorkload,
   type TtsFitWorkload,
   type AssessModelFitResult,
+  type ModelFitVerdict,
+  type ModelFitModelResult,
+  type ModelFitDevice,
+  type ModelFitStats,
+  type LlamaFitStats,
+  type ModelFitPool,
+  type ModelFitProbe,
   type LoadedInstance,
   type CacheFileInfo,
   toolSchema,
@@ -383,7 +394,8 @@ export {
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
-  TranslationFailedError
+  TranslationFailedError,
+  AudioEncodeFailedError
 } from './utils/errors-server'
 
 // `WorkerCrashedError` and `WorkerShutdownError` are thrown by the
