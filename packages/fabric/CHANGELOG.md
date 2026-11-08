@@ -6,7 +6,8 @@
 
 - `qvac-fabric` dependency bumped `11739.0.0#1` -> `11739.1.1`. `common_params`
   gains four `coreml_ffn*` fields mid-struct, so native consumers that use the
-  `common` library must rebuild against these headers.
+  `common` library must rebuild against these headers. Core ML FFN itself is
+  not built into this package.
 
 ### Fixed
 
@@ -17,9 +18,8 @@
 - OpenCL initializes before buffer-type queries, fixing a crash when a buffer
   type is queried before the backend, and keeps non-contiguous ADD inputs off
   the broadcast fast path.
-- Hexagon keeps canonical weight bytes across partial REPACK uploads and counts
-  the reserved space in allocation sizes.
-- WebGPU registers no device on Dawn's Null adapter.
+- TurboQuant sign tables and `GGML_TQ_NORM_CORRECTION` initialize once,
+  thread-safely, instead of racing on first use.
 - mtmd keeps DeepSeek OCR SAM position tables in F32 when quantizing and
   reports projector memory under the device that holds it.
 - Metal supports `DIAG_MASK_INF`.
@@ -32,7 +32,6 @@
   accept `GGML_VEC_INDEX_LOAD_TURBOVEC_STAGED_OFF`, which skips building the
   staged-search caches on load. Turning staged search off now frees the sign
   planes.
-- Hexagon runtime memory information and optional F32 convolution taps.
 
 ### Changed
 
