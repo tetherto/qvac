@@ -140,3 +140,42 @@ test('parakeet handlers keep plain text when metadata is not requested', async (
   )
   t.is(frames.filter((frame) => frame.segment).length, 0, 'no segment frames without metadata')
 })
+
+test('parakeet duplex handler forwards native end-of-turn and VAD chunk detail', async (t) => {
+  // The native EOU boundary arrives with its timing and confidence; a VAD
+  // transition arrives with its chunk index. Both must reach the wire frame,
+  // and a boundary without detail must stay the bare parakeet variant.
+  const modelId = 'parakeet-eou-detail'
+  register(t, modelId, [
+    { type: 'vad', speaking: true, score: 0.8, source: 'energy', timestamp: 0.5, chunkIndex: 1 },
+    { ...NATIVE_SEGMENT, tokenIds: [12, 7], isFinal: true, chunkIndex: 6, eotConfidence: 0.93 },
+    { type: 'endOfTurn', source: 'model-eou', timestamp: 4.125, chunkIndex: 6, confidence: 0.93 },
+    { type: 'endOfTurn', source: 'model-eou' }
+  ])
+
+  const frames = await collect(
+    parakeetPlugin.handlers.transcribeStream.handler(
+      { type: 'transcribeStream', modelId, metadata: true },
+      emptyInput()
+    ) as unknown as AsyncIterable<TranscribeStreamResponse>
+  )
+
+  t.alike(
+    frames.find((frame) => frame.vad)?.vad,
+    { speaking: true, probability: 0.8, source: 'energy', timestamp: 0.5, chunkIndex: 1 },
+    'the VAD frame carries the native chunk index'
+  )
+  const segment = frames.find((frame) => frame.segment)?.segment
+  t.alike(segment?.tokenIds, [12, 7], 'token ids reach the segment frame')
+  t.is(segment?.isFinal, true, 'isFinal reaches the segment frame')
+  t.is(segment?.chunkIndex, 6, 'chunkIndex reaches the segment frame')
+  t.is(segment?.eotConfidence, 0.93, 'eotConfidence reaches the segment frame')
+  t.alike(
+    frames.filter((frame) => frame.endOfTurn).map((frame) => frame.endOfTurn),
+    [
+      { source: 'parakeet', timestamp: 4.125, chunkIndex: 6, confidence: 0.93 },
+      { source: 'parakeet' }
+    ],
+    'the boundary detail is forwarded only when the engine sent it'
+  )
+})

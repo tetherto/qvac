@@ -261,7 +261,7 @@ export const whisperConfigSchema = z.object({
 
 export type WhisperConfig = z.infer<typeof whisperConfigSchema>
 
-const PARAKEET_LANGUAGE_PATTERN = /^(|auto|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$/
+const PARAKEET_LANGUAGE_PATTERN = /^(|auto|other|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$/
 
 // === Parakeet (NVIDIA NeMo GGML) engine config ===
 //
@@ -278,6 +278,52 @@ const PARAKEET_LANGUAGE_PATTERN = /^(|auto|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$/
 // per-call schema intentionally drops the `streaming` prefix because
 // every field on it is already namespaced under `parakeetStreamingConfig`.
 
+// Mirrors the addon's native integer bound for the speaker-attribution durations.
+const NATIVE_INT_MAX = 2147483647
+
+/**
+ * Speaker-attributed batch transcription: a separate diarization GGUF
+ * (Sortformer or Nemotron 3 Diarization) loaded beside the ASR model. The
+ * addon diarizes the recording, transcribes each retained turn and reports
+ * text per speaker. Batch `transcribe()` only.
+ */
+export const parakeetSpeakerAttributionConfigSchema = z
+  .object({
+    modelSrc: modelSrcInputSchema.describe(
+      'Diarization model (Sortformer or Nemotron 3 Diarization GGUF) loaded beside the ASR model, as `loadModel` takes a `modelSrc`.'
+    ),
+    mergeSameSpeaker: z
+      .boolean()
+      .optional()
+      .describe('Merge adjacent retained turns assigned to the same speaker. Default true.'),
+    minSegmentMs: z
+      .number()
+      .int()
+      .min(0)
+      .max(NATIVE_INT_MAX)
+      .optional()
+      .describe(
+        'Minimum padded turn duration, in ms, before it is sent to ASR; `0` keeps short turns. Default 200.'
+      ),
+    padSegmentMs: z
+      .number()
+      .int()
+      .min(0)
+      .max(NATIVE_INT_MAX)
+      .optional()
+      .describe(
+        'Extend the ASR audio slice around each turn, in ms; returned timestamps still describe the diarized turn. Default 0.'
+      )
+  })
+  .strict()
+
+export type ParakeetSpeakerAttributionConfig = z.infer<
+  typeof parakeetSpeakerAttributionConfigSchema
+>
+
+const PARAKEET_BACKEND_DESCRIPTION =
+  'Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `opencl`, `metal`, or an exact ggml device name such as `CUDA0` or `MTL0`. An explicit selection overrides `useGPU` and the load fails if it is unavailable instead of falling back. Applies to the speaker-attribution diarization model too, and reaches `assessModelFit`.'
+
 export const parakeetRuntimeConfigSchema = z.object({
   maxThreads: z
     .number()
@@ -285,6 +331,12 @@ export const parakeetRuntimeConfigSchema = z.object({
     .optional()
     .describe('CPU threads; `0` defers to hardware concurrency. Default 4.'),
   useGPU: z.boolean().optional().describe('Enable the ggml GPU backend. Default false.'),
+  backend: z.string().optional().describe(PARAKEET_BACKEND_DESCRIPTION),
+  speakerAttribution: parakeetSpeakerAttributionConfigSchema
+    .optional()
+    .describe(
+      'Transcribe each speaker turn found by a separate diarization model, reporting `speakerId` per segment. Batch `transcribe()` only; cannot be combined with `streaming`.'
+    ),
   sampleRate: z.number().int().optional().describe('Input audio sample rate in Hz. Default 16000.'),
   channels: z.number().int().optional().describe('Input audio channel count. Default 1 (mono).'),
   captionEnabled: z
@@ -359,7 +411,7 @@ export const parakeetRuntimeConfigSchema = z.object({
     .regex(PARAKEET_LANGUAGE_PATTERN)
     .optional()
     .describe(
-      'Indic CTC language id or Nemotron locale alias (e.g. `hi`, `ta`, `en-US`, `hi-IN`, or `auto`). Empty selects `auto` for Nemotron and keeps full-vocabulary CTC decoding.'
+      'Indic CTC language id, Nemotron locale alias (e.g. `hi`, `ta`, `en-US`, `hi-IN`, or `auto`), or the TranscribePsy EU route: `en` for the English trunk, `other` for the non-English adapters, `auto` to route automatically. Empty selects `auto` for Nemotron and TranscribePsy EU and keeps full-vocabulary CTC decoding.'
     ),
 
   streamingSpeakerVad: z
@@ -514,9 +566,22 @@ const legacyParakeetOnnxFieldsShape = LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS.r
 // plugin's `resolveConfig` can raise a structured
 // `LegacyParakeetModelDeprecatedError` instead of a generic Zod error;
 // other unknown keys are still rejected by `.strict()`.
+// The refinement lives on the load schema only: the runtime schema is reused
+// with `.partial()` and `.passthrough()`, which zod refuses on a refined object.
 export const parakeetLoadConfigSchema = parakeetRuntimeConfigSchema
   .extend(legacyParakeetOnnxFieldsShape)
   .strict()
+  // Mirrors the addon's load-time check so the conflict is a structured input
+  // error instead of a failure once model loading starts.
+  .superRefine((config, ctx) => {
+    if (config.speakerAttribution !== undefined && config.streaming === true) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['speakerAttribution'],
+        message: 'speakerAttribution uses batch transcribe(); it cannot be combined with streaming'
+      })
+    }
+  })
 
 /** MOSS-Transcribe-Diarize processes a whole recording with speaker labels. */
 export const mossTranscribeConfigSchema = z

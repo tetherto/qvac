@@ -48,6 +48,8 @@ class VadEvent:
     probability: float
     timestamp: float | None = None
     """Parakeet: seconds from the start of the streaming session; whisper omits it."""
+    chunk_index: int | None = None
+    """Parakeet: native streaming chunk index; -1 when unavailable, None on whisper."""
     type: str = "vad"
 
 
@@ -55,6 +57,13 @@ class VadEvent:
 class EndOfTurnEvent:
     source: str
     silence_duration_ms: float | None = None
+    """Whisper: the measured silence window; parakeet omits it."""
+    timestamp: float | None = None
+    """Parakeet: native boundary time in seconds from the session start."""
+    chunk_index: int | None = None
+    """Parakeet: native streaming chunk index of the boundary; -1 when unknown."""
+    confidence: float | None = None
+    """Parakeet: native end-of-turn confidence reported by the EOU model."""
     type: str = "endOfTurn"
 
 
@@ -222,11 +231,17 @@ def _process_conversation(wants_metadata: bool) -> Callable[[dict[str, Any]], An
                 speaking=response.vad.speaking,
                 probability=response.vad.probability,
                 timestamp=response.vad.timestamp,
+                chunk_index=response.vad.chunk_index,
             )
         if response.end_of_turn is not None:
-            source = response.end_of_turn.source
-            silence = getattr(response.end_of_turn, "silence_duration_ms", None)
-            return EndOfTurnEvent(source=source, silence_duration_ms=silence)
+            end_of_turn = response.end_of_turn
+            return EndOfTurnEvent(
+                source=end_of_turn.source,
+                silence_duration_ms=getattr(end_of_turn, "silence_duration_ms", None),
+                timestamp=getattr(end_of_turn, "timestamp", None),
+                chunk_index=getattr(end_of_turn, "chunk_index", None),
+                confidence=getattr(end_of_turn, "confidence", None),
+            )
         if wants_metadata:
             if response.segment is not None:
                 return SegmentEvent(segment=response.segment)
