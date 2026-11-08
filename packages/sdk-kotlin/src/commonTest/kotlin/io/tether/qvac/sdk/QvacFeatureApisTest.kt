@@ -3,6 +3,9 @@ package io.tether.qvac.sdk
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromJsonElement
+import io.tether.qvac.sdk.generated.schema.EmbedRequest
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
@@ -173,10 +176,54 @@ class QvacFeatureApisTest {
         }
     }
 
+    @Test
+    fun embeddingsKeepTextOverloadsAndSerializeMediaInputs() = runTest {
+        val transport = FeatureTransport()
+        val client = QvacClient(transport)
+        try {
+            transport.reply = buildJsonObject {
+                put("type", "embed")
+                put("success", true)
+                put("embedding", buildJsonArray { add(JsonPrimitive(0.6)); add(JsonPrimitive(0.8)) })
+            }
+            assertEquals(listOf(0.6, 0.8), client.embeddings.embed("embedding", "hello"))
+            assertEquals("hello", transport.lastPayload?.get("text")?.jsonPrimitive?.content)
+            assertEquals(false, transport.lastPayload?.containsKey("inputs"))
+            transport.reply = buildJsonObject {
+                put("type", "embed")
+                put("success", true)
+                put("embedding", buildJsonArray {
+                    add(buildJsonArray { add(JsonPrimitive(0.6)); add(JsonPrimitive(0.8)) })
+                })
+            }
+            assertEquals(listOf(listOf(0.6, 0.8)), client.embeddings.embed("embedding", listOf("hello")))
+            val mediaRequest = Json.decodeFromJsonElement<EmbedRequest>(buildJsonObject {
+                put("type", "embed")
+                put("modelId", "embedding")
+                put("inputs", buildJsonArray {
+                    add(buildJsonArray {
+                        add(buildJsonObject {
+                            put("media", buildJsonObject { put("type", "base64"); put("value", "AQID") })
+                        })
+                    })
+                })
+            })
+            client.embed(mediaRequest)
+            assertEquals(false, transport.lastPayload?.containsKey("text"))
+            assertEquals(true, transport.lastPayload?.containsKey("inputs"))
+        } finally {
+            client.close()
+        }
+    }
+
     private class FeatureTransport : QvacTransport {
         var responses: Flow<JsonObject> = flowOf()
         var lastPayload: JsonObject? = null
-        override suspend fun call(payload: JsonObject): JsonObject = JsonObject(emptyMap())
+        var reply: JsonObject = JsonObject(emptyMap())
+        override suspend fun call(payload: JsonObject): JsonObject {
+            lastPayload = payload
+            return reply
+        }
         override fun stream(payload: JsonObject): Flow<JsonObject> {
             lastPayload = payload
             return responses

@@ -910,10 +910,11 @@ jobs:
           fi
 
           # Omitted when empty rather than passed as an empty value: a producer
-          # from a framework build that predates --include would reject it.
+          # from a framework build that predates --include-file would reject it.
           INCLUDE_ARG=""
           if [ -n "$INCLUDE_TESTS" ]; then
-            INCLUDE_ARG="--include=$INCLUDE_TESTS"
+            printf '%s\n' "$INCLUDE_TESTS" | tr ',' '\n' > include-tests.txt
+            INCLUDE_ARG="--include-file=include-tests.txt"
           fi
 
           # Word splitting is the point here, and the ids are restricted to

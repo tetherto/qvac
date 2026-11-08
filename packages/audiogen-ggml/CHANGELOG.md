@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- ACE-Step `backend`, `lmBackend`, and `dumpStagesDir` controls, with matching
+  backend selection in `assessFit()` and opt-in WebGPU source builds.
+- Apple Core ML VAE/conditioner support and MiniMax `coremlConditionerPath`
+  for generation and preflight; MiniMax Core ML memory projections remain `unknown`.
+
 ### Fixed
 
 - ACE-Step `normalizeLoudness: false` returns the engine's raw output. The
@@ -15,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   leaves outside `[-1, 1]` now saturate at int16 full scale on that path.
 - ACE-Step lego stems keep their mix gain relative to the source; the same
   rescale raised or lowered each stem to a 0.9 peak.
+- Include independent LM device pools in `assessFit()` when the primary
+  pipeline runs on CPU, counting the host peak once.
 
 ## [0.10.0] - 2026-11-05
 
