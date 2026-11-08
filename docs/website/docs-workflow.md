@@ -13,9 +13,7 @@ For general contribution guidelines (PR labels, changelog format), see the [root
 - [Local Development](#local-development)
   - [Quick Start](#quick-start)
   - [Generating API Docs Locally](#generating-api-docs-locally)
-  - [Where generated pages land](#where-generated-pages-land)
   - [Previewing the development line](#previewing-the-development-line)
-  - [Cutting a documentation line](#cutting-a-documentation-line)
   - [Full Generation (Orchestrated)](#full-generation-orchestrated)
 - [Versioning](#versioning)
 - [Branch Strategy and Deployment](#branch-strategy-and-deployment)
@@ -26,7 +24,7 @@ For general contribution guidelines (PR labels, changelog format), see the [root
 - [CI Workflows](#ci-workflows)
   - [PR Checks](#1-docs-website-pr-checks)
   - [Promote docs to production (manual)](#2-promote-docs-to-production-manual)
-  - [Documentation at the release cutoff (local, skill-driven)](#3-documentation-at-the-release-cutoff-local-skill-driven)
+  - [Documentation at a release](#3-documentation-at-a-release)
 - [Script Reference](#script-reference)
 - [Release-Notes Overrides (dormant)](#release-notes-overrides-dormant)
 - [Troubleshooting](#troubleshooting)
@@ -93,8 +91,9 @@ leaves undescribed.
 Release notes are not rendered
 into the site at all: `reference/meta.json` declares the sidebar entry as an
 external link to `https://github.com/tetherto/qvac/releases/tag/sdk-v<X.Y>.0`,
-so each line points at the GitHub release of its own minor. A cut rewrites that
-tag for the line it opens.
+so each line points at the GitHub release of its own minor. The tag is written
+in the package's `reference/meta.json`, so it must name the coming minor before
+that minor's release branch is cut.
 
 ---
 
@@ -160,187 +159,43 @@ written — see [Where generated pages land](#where-generated-pages-land).
 site publishes no release-notes pages. See
 [Retired tooling](#retired-tooling).
 
-### Where generated pages land
-
-The generator writes into the SDK's **development line** —
-`content/_unpublished/sdk/next/reference/` — and takes no target. A line that
-has been published is what the site already serves and is never regenerated.
-
-Because the destination is read rather than passed, it has to be checked. A
-version that has already shipped is refused, before the first write:
-
-```
-Refusing to write v0.20 pages into the development line of /sdk.
-  v0.22 is the line last cut, so v0.20 has shipped. A cut line is what the
-  site serves and is never regenerated. Edit
-  content/docs/sdk/(v0.22)/ directly to correct it.
-```
-
 ### Previewing the development line
 
-Nothing under `content/_unpublished/` is built, so the line being written does
-not appear in `npm run dev`. To read it in the browser, link it into the
-collection under a name that is not a version:
-
-```bash
-ln -s ../../_unpublished/sdk/next content/docs/sdk/preview
-npm run dev          # the line is at /sdk/preview/…
-rm content/docs/sdk/preview
-```
-
-`content/docs/*/preview` is gitignored, so the link cannot be committed by
-accident, and `tests/line-structure.test.ts` rejects a symlinked entry under a
-collection outright — which means the suite fails while the link is in place.
-Remove it before running the tests. Both guards exist because Fumadocs follows
-a link while the bijection between the folders and the manifest reads
-`isDirectory()`, which a link answers `false`: a committed link would publish a
-line that no check can see.
-
-### Cutting a documentation line
-
-A cut is what publishes a line. It happens at the **release cutoff** — step 6
-of [`docs/ci/RELEASE-TRAIN.md`](../ci/RELEASE-TRAIN.md) for a train, step 1 of
-the release flow in [`docs/gitflow.md`](../gitflow.md) for a single package —
-on the day the version's release branch is cut.
-
-```bash
-bun run scripts/cut-line.ts <collection> <version being released>
-
-bun run scripts/cut-line.ts sdk v0.21
-```
-
-It renames the outgoing group to its plain form, copies the development line
-in as the new group, updates the versions file (the preserved line's redirect
-rules follow from it at build), moves the currency marker from the preserved line's titles
-to the opened one's, and points the opened line's `Release Notes` sidebar link
-at its own minor's GitHub release tag. **The development line stays where it
-is**, and is now the next version's.
-
-Nothing is deleted, and the development line is never renamed. That is what
-makes the cutoff safe for the sprint's own work: a feature PR opened before it
-and merged after it writes to the same path either way, so its prose lands in
-the version whose sprint it belongs to — with no rename for git to replay it
-through. That replay is the defect QVAC-27286 fixed by hand.
-
-The outgoing group **is** renamed, and the group the cut opens is byte-identical
-to it wherever the sprint changed nothing. A PR that edits the group and merges
-after the cut therefore gives git two exact rename candidates for every page it
-touches, and git picks one — QVAC-27286 again, reachable at every cut. The
-`Documentation lines` job fails such a PR until it is rebased, and the cutoff
-lists the open PRs before cutting so the window is read rather than
-discovered. Both are described under "Docs website PR checks" below.
-
-It refuses a collection that is not versioned, a version that is not above the
-line last cut, a missing development line, a destination already on disk, and a
-working tree that already carries changes.
-
-The opened line keeps the API summary it copied, because the PR that
-regenerates it is reviewed as a diff: a summary diffed against the previous
-line shows only the surface that moved.
-
-The tag the opened line links at exists by the time readers reach that line:
-the release follows within days of the cutoff, and production is not promoted
-until it has.
-
-It is a convenience, never a dependency. The same cut made by hand is the same
-cut — the procedure is in [`README.md`](README.md) — and the build is what
-accepts either. The command does not build; run `npm run build` and `npm test`
-yourself and review the diff.
-
-Every documented software is declared by one file under `versions/`, which
-names the package, where it is documented, and the lines published for it;
-`src/lib/versions.ts` derives the manifest from those files (see the README,
-"Documentation lines and versions files"). An in-place line is two edits in one
-diff — the folder under `content/docs/`, and the entry in the versions file —
-and `tests/line-structure.test.ts` fails the build when the two disagree,
-naming the version at fault. A pinned line is one edit: the materializer
-writes its folder. `scripts/update-versions-list.ts`, which used to
-regenerate the file from disk, is retired and refuses to run.
-
----
+The line being written lives in each software's package —
+`packages/sdk/docs/users/`, `packages/cli/docs/users/` — and is not published.
+`npm run dev` materializes it with `--include-dev`, at `/<collection>/preview/`.
+The folder is written by the materializer and ignores itself in git; a
+symbolic link at that path is refused.
 
 ## Versioning
 
-Versioning is a property of a collection. A **versioned collection** — the SDK,
-the CLI — publishes one **documentation line** per minor release: one folder
-directly under the collection, holding a complete page tree for that release.
-The unversioned collections, Ecosystem and Resources, publish one copy of
-everything.
+Versioning is a property of a collection. A **versioned collection** — one per
+product, today the SDK and the CLI — publishes one **documentation line** per
+minor release. The unversioned collections, Ecosystem and Resources, publish one
+copy of everything.
 
-Every line under `content/docs/<collection>/` has been published. The newest
-one's folder is written in parentheses: Fumadocs reads that as a group and
-excludes it from the slug, so it answers the version-less paths. Every other
-line's folder is plain, so its pages carry the version.
-
-The line still being written is not under `content/docs/` at all. It lives at
-`content/_unpublished/<collection>/next/`, which nothing builds and no URL
-reaches, until the release cutoff copies it in:
-
-```
-content/
-├── _unpublished/
-│   ├── sdk/next/               -> being written, no URL
-│   └── cli/next/               -> being written, no URL
-└── docs/
-    ├── ecosystem/              -> not versioned
-    ├── resources/              -> not versioned
-    ├── sdk/
-    │   ├── (v0.20)/            -> last published, serves /sdk/…
-    │   │   ├── quickstart.mdx  ->               /sdk/quickstart
-    │   │   └── reference/
-    │   │       └── api.mdx     ->               /sdk/reference/api     (generated)
-    │   ├── v0.19/              -> published, serves /sdk/v0.19/…
-    │   └── v0.18/
-    └── cli/
-        ├── (v0.14)/
-        ├── v0.13/
-        └── v0.12/
-```
+Each product declares its lines in `versions/<software>.json` (see the README,
+"Documentation lines and versions files"). The first line is current and
+answers the version-less paths; every other line carries its version in the
+URL. A **pinned** line is materialized from the release commit it names into
+`content/docs/<collection>/<folder>/` before the build; an **in-place** line is
+one published before the migration, still served from that folder until it is
+retired.
 
 - **Line name**: `vX.Y`. A line represents every patch in its range, so a line
-  is never named for a patch. The development line is named `next` instead:
-  the name is fixed so the path a feature PR writes to does not move at a
-  cutoff.
-- **Currency**: stated once, by the parentheses. Nothing else records it, which
-  is why a cut is the only thing that changes it. The parenthesized line is the
-  **version last released**; every plain folder is an older release and
-  documents that release alone.
-- **Manifest**: the files under `versions/`, naming each published line in
-  order, the first being current; `src/lib/versions.ts` derives the folder
-  holding each. The development line is not in it — it is not
-  published. `tests/line-structure.test.ts` fails the build when the manifest
-  and the folders disagree.
-- **Permanence**: a published line is never removed. It is the only record of
-  how that release behaved, and the readers who need it are the ones pinned to
-  it.
+  is never named for a patch.
+- **Currency**: the order of `lines`. Promoting a line is putting it first.
+- **Retirement**: a line stays published until the team stops supporting its
+  version; retiring it is moving it to `retired`, and its addresses redirect to
+  the current line.
 - **Everything else is derived**: the switcher, the sidebars, the canonical
-  URLs, the agent artifacts, `versions.json`, the sitemap, and the retrieval
-  metadata are computed at build time from the manifest and the folders.
+  URLs, the agent artifacts, `versions.json`, the sitemap, the retrieval
+  metadata, and the line redirect rules.
 
-A version is published at the **release cutoff**, on `main`, by one PR — step
-6 of [`docs/ci/RELEASE-TRAIN.md`](../ci/RELEASE-TRAIN.md) for a train, step 1
-of the release flow in [`docs/gitflow.md`](../gitflow.md) for a single
-package. A release PR and its backmerge carry nothing under `docs/website`,
-and no CI workflow generates documentation.
-
-Collections are cut independently. A release that moves only the CLI cuts only
-`/cli`, and the SDK's lines are untouched — nothing in the model ties the two
-together.
-
-### Minor vs patch release behavior
-
-| Trigger | API summary |
-|---|---|
-| Minor (`X.Y.0`) | Re-run TypeDoc and render `api.mdx` into the development line, at the cutoff, just before that line is published. |
-| Patch (`X.Y.Z`, `Z >= 1`) | **Not touched.** The public API is frozen at the minor boundary, so a patch by definition adds nothing here. |
-
-A patch release therefore touches `docs/website` not at all. What a patch
-changes for readers is in its GitHub release, which the line's sidebar already
-links.
-
-A correction to a published line is an ordinary edit to that line's folder,
-merged to `main` and promoted like anything else: the generator only ever
-writes the development line.
+A release publishes its line by pinning the release commit — a minor adds a
+line, a patch moves its minor's pin. A correction to a released line is a
+documentation-only pull request into that line's release branch, then moving
+the pin to the merged commit.
 
 ### Retired tooling
 
@@ -368,10 +223,8 @@ carries a note at the top saying so. Do not call them:
   `release-notes-patch-section.njk`
 - `release-notes-overrides/`
 
-The SDK publishes a line by pinning its release commit in
-`versions/sdk.json`; its API data is already committed with the release. The
-CLI still publishes by a cut: `scripts/cut-line.ts` or the hand procedure in
-[`README.md`](README.md).
+The SDK and the CLI publish a line by pinning its release commit in their
+versions file; the SDK's API data is already committed with the release.
 
 ---
 
@@ -525,14 +378,14 @@ Two GitHub Actions workflows touch the docs: one validates docs PRs, one manuall
 **What it does:**
 - Installs dependencies with Bun
 - Runs `bun run build` to validate the site compiles
-- Runs Vitest tests (sidebar consistency, link integrity, materialization, API reference, the cut)
+- Runs Vitest tests (sidebar consistency, link integrity, materialization, API reference)
 - Runs `Documentation lines` in a second job, described below
 
 **Purpose:** Catches build errors and broken links in docs PRs before merge.
 
-The API summary page is committed to the repo, so PR checkouts always have it on disk — no placeholder step is needed. It is refreshed at the release cutoff, into the line being published.
+The SDK's generated API data and reference stubs are committed in its package, so PR checkouts always have them on disk.
 
-**Neither the build nor the tests cover the development line.** Nothing under `content/_unpublished/` is built, so a broken link or malformed MDX written during the sprint surfaces at the cutoff, on the PR that publishes it, rather than in the PR that wrote it. That is the price of keeping the line out of the site, and the cutoff is where it gets paid.
+**The tests cover the development line; the production build does not.** `tests/link-integrity.test.ts` resolves the links of each product's `packages/<pkg>/docs/users/`, and `npm run dev` renders it as `preview`. Building it in a PR check, with `--include-dev`, is part of the CI changes still to come.
 
 **`Documentation lines`** is the second job, and it runs two checks on where a
 PR writes.
@@ -602,66 +455,19 @@ now the check is what makes the window visible.
 
 > `docs-production` should stay branch-protected (no direct pushes, no PR merges); the promotion workflow's `PAT_TOKEN` account is the only identity allowed to push to it.
 
-### 3. Documentation at the release cutoff (local, skill-driven)
+### 3. Documentation at a release
 
-**Where:** step 6 of [`docs/ci/RELEASE-TRAIN.md`](../ci/RELEASE-TRAIN.md) for a train, step 1 of the release flow in [`docs/gitflow.md`](../gitflow.md) for a single package. There is no GitHub Actions documentation-release workflow, and a release PR carries no documentation.
+A release publishes its documentation by pinning it, in one pull request on
+`main`: the product's versions file gains the line (a minor) or moves its pin
+(a patch), with the release branch as `ref` and the release commit as `sha`.
+The documentation itself, and the SDK's generated API data, were already
+committed with the code that the release carries.
 
-**Who:** the release's **tech lead** runs `qv-docs-cutoff`, which opens one PR right after the release branch is cut. The **documentation engineer** reviews and merges it, then promotes it once the version is on npm.
-
-**When:** on the day the version's release branch is cut. Not when the release publishes, days later — though a cut run late is no longer a correctness problem, only a late one: the sprint's prose was going into the development line either way.
-
-**Off which commit:** the release base — `git merge-base <remote>/<release-branch> <remote>/main` — and not `main`'s tip. The tip carries whatever merged after the release branch came off, which ships in the version after this one. The PR still targets `main`; only its base commit is pinned.
-
-**What it checks before cutting:** the open PRs writing either line of the
-collection, listed with `gh pr list` and reported one by one. A PR writing the
-development line with documentation for **this** release has to merge before
-the cut, or the release ships without it; one writing the outgoing group has to
-be rebased after the cutoff merges, since until then its edits have two
-identical rename candidates. Cutting with PRs outstanding is a decision, not an
-error — the point is that it is made rather than discovered. The `Documentation
-lines` job then fails the ones writing the outgoing group, so that rebase is
-asked for on the PR itself rather than remembered; for the development line,
-this list is the only reading there is.
-
-**What the PR carries**, per collection the release moves:
-
-1. For the SDK, the pin of the release commit in `versions/sdk.json`. Its API
-   data and reference stubs are already committed with the release
-   (`npm run docs:sdk-api -- --check` keeps them fresh).
-
-2. For the CLI, the cut itself:
-
-   ```bash
-   bun run scripts/cut-line.ts <collection> v<X.Y>
-   npm run build
-   ```
-
-A patch release has neither. The public API is frozen at the minor boundary and no line is cut, so a patch touches `docs/website` not at all.
-
-Build and generation byproducts (`api-data.json`, `.next/`, `.source/`, `out/`, `dist/`) are gitignored, so `git status` shows only committable files.
-
-#### Reviewing the cutoff PR
-
-**This review is how the documentation side of a release is verified.** There is
-no other gate: no CI job asserts that the API summary matches the version being
-released, and once the commit is promoted it is what the public reads. It is
-also the first time the sprint's prose is built at all, since the development
-line is excluded from the build.
-
-Per collection:
-
-- **The published line is the sprint's work.** `diff -r content/_unpublished/<slug>/next 'content/docs/<slug>/(v<X.Y>)'` reports only the title line and the release-notes link. Anything else means content moved that should not have.
-- **The API summary's body actually changed.** A summary byte-identical to the previous line's, title aside, means TypeDoc did not re-extract — the page would advertise the new version while describing the old one. `--force-extract` exists for this.
-- The frontmatter title of the opened line names the version being released and carries `(latest)`; the preserved line's no longer does.
-- The opened line's `reference/meta.json` names the **opened** line's release tag; the preserved line keeps its own.
-- The preserved folder is recorded as a rename of the outgoing group at 100% similarity, relabelled pages aside. The opened folder is recorded as additions — it is a copy, and the development line it came from is still on disk.
-- **The development line is still there**, unchanged. A cut that moved it instead of copying it would take the next sprint's folder away.
-- The versions file moved, and `tests/line-structure.test.ts` passes — the build is what proves the manifest and the folders agree.
-- The base is `main`.
-
-After merging, **do not promote yet.** Production goes to this commit once the version is on npm — step 9 of [`docs/ci/RELEASE-TRAIN.md`](../ci/RELEASE-TRAIN.md), or after step 3 of the release flow in [`docs/gitflow.md`](../gitflow.md).
-
-If something is wrong, hand it back to the tech lead rather than fixing it in the PR. The PR is script output, and a cut commit must never be rebased — resetting and re-running is cheaper than repairing.
+Review it by building it: `npm run build` materializes the line from its
+commit, and the checks reject a pin without documentation or a malformed
+versions file. While earlier lines are still in place, the pull request that
+makes the first pinned line current also renames the in-place current folder
+from `(vX.Y)` to `vX.Y`.
 
 ---
 
@@ -679,11 +485,12 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 | `api-reference/check-sdk-parity.ts` | `docs:sdk-parity` | Fails naming each contract method a published language does not reach |
 | `api-reference/report-sdk-descriptions.ts` | `docs:sdk-descriptions` | Lists public request fields without a description; never fails |
 | `api-docs/extract.ts` | -- | TypeDoc analysis of the SDK's client functions, used by `generate-sdk-data.ts` |
+| `api-reference/generate-cli-data.ts` | `docs:cli-api` | Writes a Commander CLI's command tree (`cli.json`) and, with `--openapi`, its OpenAPI document (`openapi.json`) into its `_generated/`. Needs the CLI's dependencies installed. `--check` fails when stale. |
+| `api-reference/commander-walker.ts` | -- | Replays a Commander entry's `register*` calls without running it, run from the CLI package |
 | `write-schema-slices.ts` | -- | After `next build`: publishes each function's `<fn>.schema.json` beside its reference page |
 | `write-line-redirects.ts` | -- | After `next build`: expands the documentation-line markers of `out/_redirects` |
 | `materialize-lines.ts` | `docs:materialize` | Materializes every pinned line from its commit; `--override`, `--include-dev` |
 | `generate-release-notes.ts` | `docs:generate-release-notes` | **Dormant**, kept on disk. Rendered a release-notes page of the SDK's newest line; the site publishes no such page any more. Do not call it. |
-| `cut-line.ts` | -- | Publishes the line of the version being released: preserves the outgoing one, copies the development line in as the new one, and updates the manifest, the redirects, the currency marker, and the opened line's release-notes link. The development line stays in place. A convenience for the hand procedure in `README.md`, never a dependency. |
 | `update-versions-list.ts` | -- | **Retired**, kept for reference. Rebuilt `src/lib/versions.ts` from the series siblings on disk; that file is now hand-edited. |
 | `create-version-bundle.ts` | -- | **Retired**, kept for reference. Copied the current `index.mdx` of each versioned section to `v<X.Y>.x.mdx`. |
 | `lib/release-shared.ts` | -- | Shared helpers for the generators: version parsing, the manifest reader, `developmentLineDir`, and `referenceDirFor` / `apiPageFor` / `releaseNotesPageFor`, which resolve the development line's reference folder and refuse a version that has already shipped |
@@ -762,20 +569,6 @@ Version vX.Y.Z was not found
 
 **Fix:** For an in-place version declared in `versions/<software>.json`, create the folder the entry names, or drop the entry. The two must agree.
 
-### Refusing to write pages into the development line
-
-```
-Refusing to write v0.20 pages into the development line of /sdk.
-```
-
-**Cause:** the generator writes into the development line, which holds the
-version under development, and the version named has already shipped.
-
-**Fix:** edit that version's published folder directly to correct it. A line
-the site serves is never regenerated — a full render would replace the record
-of a release, and the tree that results still builds and still tests clean,
-which is why the refusal exists. Do not cut a line to make it go away.
-
 ### Build stops with no error and no log
 
 **Symptom:** the builder's output ends partway through `Creating an optimized production build` and nothing follows — no stack trace, no `JavaScript heap out of memory`, no failing step. The exit status is 137 or 143.
@@ -809,15 +602,11 @@ npm run docs:sdk-api
 
 ### Correct a published page without waiting for the next release
 
-Merge the correction to `main` through a normal PR, verify it on staging, then
-run the promotion workflow on **that merge commit**. Between two cutoffs `main`
-publishes the same lines production already shows, so the promotion carries the
-correction and whatever else merged up to that commit — which is why the commit
-is named rather than taken from the tip.
-
-The one window where this does not hold is between a cutoff and that version
-reaching npm: promoting then would publish a line for packages nobody can
-install. Wait for npm, or promote the correction with the release.
+For a pinned line, merge the correction into the line's release branch as a
+documentation-only pull request, then move the line's `sha` in its versions
+file to the merged commit. For an in-place line, correct its folder under
+`content/docs/<collection>/` on `main`. Either way, the change reaches
+production with the next promotion of `docs-production`.
 
 ### Generated MDX contains "undefined" or "[object Object]"
 

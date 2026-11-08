@@ -1,0 +1,3530 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "QVAC API",
+    "description": "Mounted surfaces: openai (OpenAI-compatible REST API).",
+    "version": "1.0.0"
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {}
+  },
+  "paths": {
+    "/v1/audio/transcriptions": {
+      "post": {
+        "summary": "Audio transcription",
+        "tags": [
+          "Audio"
+        ],
+        "description": "Speech-to-text via Whisper-cpp / Parakeet / MOSS. Multipart body with required\n`file` (audio bytes) and `model` (alias of a registered transcription\nmodel).\n\n**`response_format`** accepts `json` (default), `text`, `srt`, `vtt`,\nand `verbose_json`. `json` and `text` work with Whisper, Parakeet,\nand MOSS transcription aliases. SRT/VTT require Whisper or MOSS segment metadata.\nParakeet also supports `verbose_json`, including offline diarization turns.\n`verbose_json` exposes text, duration, segment id/start/end/text, available speaker/speaker_id labels,\nand the whisper language, no_speech_prob, speaker_turn_next and token_timestamps the engine reports.\nIts duration is the latest segment or speaker-turn end, not the submitted\naudio length.\nUnknown values return `400 invalid_response_format`.\n\n**MOSS options:** `hotwords` is a JSON array of up to 64 nonempty terms, each\nlimited to 64 UTF-8 bytes. Use it instead of `prompt`. `max_new_tokens` sets\nthe decoding limit (0 uses the model default).\n\n**`language`** is honored as a model-load-time config, not per request.\nSending it logs a warning and uses whatever language the model was loaded\nwith.\n\n**`temperature`** is logged as ignored.\n\n**Validation order**: `Content-Type` must be multipart → schema (file + model\nrequired) → known-format check → model resolution → engine capability check →\nSDK call.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "file": {},
+                  "response_format": {
+                    "type": "string"
+                  },
+                  "prompt": {
+                    "type": "string"
+                  },
+                  "hotwords": {
+                    "maxItems": 64,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "max_new_tokens": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 2147483647
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "temperature": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "model",
+                  "file"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/audio/translations": {
+      "post": {
+        "summary": "Audio translation (to English)",
+        "tags": [
+          "Audio"
+        ],
+        "description": "Speech-to-English-text via a Whisper translation model. Multipart body, same\nrequired fields as transcriptions.\n\n**Output is always English** — the underlying capability is fixed. Sending a\n`language` field returns `400 unsupported_param`.\n\nTranslation supports the same `json`, `text`, `srt`, `vtt`, and partial\n`verbose_json` response formats. Timed formats use Whisper segment metadata.\nPartial `verbose_json` duration is the end of the last transcribed segment,\nnot the submitted audio length.\n\nThe model must be registered with sdkType\n`whispercpp-audio-translation` (i.e. `endpointCategory: 'audio-translation'`)\n— a plain transcription model is rejected with `invalid_model_type`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "file": {},
+                  "response_format": {
+                    "type": "string"
+                  },
+                  "prompt": {
+                    "type": "string"
+                  },
+                  "language": {
+                    "type": "string"
+                  },
+                  "temperature": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "model",
+                  "file"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/audio/speech": {
+      "post": {
+        "summary": "Text-to-speech",
+        "tags": [
+          "Audio"
+        ],
+        "description": "Synthesize speech from `input` text. **The response is raw audio bytes**\n(not JSON) with the appropriate `Content-Type` (`audio/wav`,\n`audio/L16; rate=<sr>; channels=1`, `audio/mpeg`, etc.). The\n`X-Audio-Sample-Rate` / `X-Audio-Channels` / `X-Audio-Bits-Per-Sample`\nheaders are sent for the native `wav`/`pcm` bodies only.\n\n**Model lookup is voice-aware** (multi-stage): the server first checks the\n`serve.openai.audio.speech.voices` map (`voice → alias`), then a hyphen\nalias (`{model}-{voice}`), then the bare `model`. If no candidate\nresolves, the error message lists all three lookup keys it tried.\n\n**`voice`** is required unless `serve.openai.audio.speech.defaultVoice` is\nconfigured (default: `\"alloy\"`). It takes a built-in OpenAI voice name, any\nother string, or a custom voice reference `{ \"id\": \"...\" }`, which routes the\nsame way as its `id` string.\n\n**`input_too_long`** is returned when `input.length` exceeds\n`serve.openai.audio.speech.maxInputChars` (default 4096). Whitespace-only\ninput is rejected as `missing_input`.\n\n**`response_format`** accepts `wav` (default) and `pcm` natively, plus\n`mp3`, `opus`, `aac`, `flac` when `ffmpeg` is on the server's PATH.\nThose four return `503 transcode_unavailable` when ffmpeg is absent; unknown\nvalues return `400 invalid_response_format`.\n\n**`stream_format`** accepts `audio` (default, the audio body above) and\n`sse`. With `sse` the response is `text/event-stream`: one\n`speech.audio.delta` event per synthesized chunk (`audio` is base64), then\n`speech.audio.done`. `usage` token counts are always 0. `sse` supports\n`wav` (a streaming header with unknown length) and `pcm` only; other\nformats return `400 unsupported_response_format`. Unknown values return\n`400 invalid_stream_format`. MOSS-SoundEffect and MOSS-Speech aliases\n(`ttsEngine` `moss-sfx` / `moss-speech`) are batch-only and return\n`400 unsupported_stream_format` with `sse`. Errors before the first audio chunk return JSON\nas usual; a failure after it arrives as a final `{ \"error\": ... }` event.\n\n**Error codes:** `400` `missing_input`, `input_too_long`,\n`missing_voice`, `invalid_response_format`, `invalid_stream_format`,\n`unsupported_response_format`, `unsupported_stream_format`,\n`invalid_model_type`; `404`\n`model_not_found`; `502` `speech_empty`, `transcode_failed`; `503`\n`transcode_unavailable`, `model_not_ready`.\n\n**Ignored params** (logged, returned in `X-QVAC-Ignored-Params` header):\n`speed`, `instructions`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "input": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "voice": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "alloy",
+                          "ash",
+                          "ballad",
+                          "coral",
+                          "echo",
+                          "fable",
+                          "onyx",
+                          "nova",
+                          "sage",
+                          "shimmer",
+                          "verse",
+                          "marin",
+                          "cedar"
+                        ]
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "required": [
+                          "id"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "response_format": {
+                    "type": "string"
+                  },
+                  "speed": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "instructions": {
+                    "type": "string"
+                  },
+                  "stream_format": {
+                    "description": "`audio` (default) returns the audio body; `sse` streams `speech.audio.*` events.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "model",
+                  "input"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/audio/voices": {
+      "get": {
+        "summary": "List TTS voices",
+        "tags": [
+          "Audio"
+        ],
+        "description": "List the configured TTS voices. Returns the OpenAI `voice` names mapped under\n`serve.openai.audio.speech.voices` plus the configured `defaultVoice`.\n\nThe response carries both a flat `voices` array (consumed by clients such as\nOpen WebUI's voice selector) and an OpenAI-style `data` array. QVAC enforces no\nfixed voice catalog, so callers may also send any `voice` string that resolves\nvia a `{model}-{voice}` alias.",
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "list"
+                      ]
+                    },
+                    "voices": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "object": {
+                            "type": "string",
+                            "enum": [
+                              "audio.voice"
+                            ]
+                          },
+                          "model": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "`serve.models` alias the voice maps to, if any."
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "object",
+                          "model"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "object",
+                    "voices",
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/audio/models": {
+      "get": {
+        "summary": "List TTS models",
+        "tags": [
+          "Audio"
+        ],
+        "description": "List loaded (READY) text-to-speech models — the speech-capable subset of\n`/v1/models`. Same `{ object: \"list\", data: [...] }` shape, filtered to\nmodels whose endpoint category is `speech`.",
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/chat/completions": {
+      "post": {
+        "summary": "Chat completion",
+        "tags": [
+          "Chat"
+        ],
+        "description": "OpenAI-compatible chat completion. Accepts a chat-style `messages` array,\noptional `tools` for function-calling, an optional `tool_choice`, and an\noptional `response_format` (`text` / `json_object` / `json_schema`).\n\n**Streaming**: pass `stream: true` to receive Server-Sent Events. The stream\nends with `data: [DONE]\\n\\n` (OpenAI compatibility).\n\n**Tools + structured output**: combining `tools` with\n`response_format: { type: 'json_object' | 'json_schema' }` is rejected with\n`invalid_response_format`. A `tools` request for a model loaded without\n`config.tools: true` is rejected with `tools_not_enabled`.\n\n**`tool_choice`**: `\"auto\"` (default), `\"none\"`, `\"required\"`, or\n`{ type: 'function', function: { name } }` to force one tool. `required` and\na named tool constrain generation with the chat template's tool grammar. Both\nneed a matching entry in `tools`; anything else — including a bare tool name\nin place of the object form — is rejected with `invalid_tool_choice`. A tool\nthat sets `defer_loading` cannot be named: its schema is not in the prompt, so\nthere is nothing to constrain. Name `tool_search` instead.\n\n**`parallel_tool_calls`**: `true` (default) lets one response carry several\ntool calls; `false` limits it to one.\n\n**Deferred tools**: a `tools[]` entry may set `defer_loading: true` (and an\noptional `group`), keeping its parameter schema out of the prompt until the\nmodel asks for it. The model sees a compact catalog carried by a built-in\n`tool_search` tool; the server runs that search itself and asks the model\nagain, so the response only carries tool calls the client can execute.\n\n**Unparseable tool calls**: a tool call the model emits but that fails to parse\nor validate is dropped, so the response carries `finish_reason: \"stop\"` and no\n`tool_calls`. The server log records the count and error codes\n(`toolerrors=N (PARSE_ERROR)`); OpenAI has no response field for them.\n\n**Ignored params** (warned, not rejected): `logit_bias`, `n`, `user`,\n`seed`, `logprobs`, `top_logprobs`, `frequency_penalty`,\n`presence_penalty`, `stop`.\n\n**Reasoning**: models that emit `<think>` blocks (e.g. Qwen3.5) have their\nreasoning routed to `reasoning_content` (a `message.reasoning_content` field\non blocking responses, `delta.reasoning_content` chunks when streaming) so it\nnever appears in `content`.\n\n**Token accounting**: `usage.prompt_tokens` comes from `CompletionStats`\nwhen the SDK provides it. `completion_tokens` prefers `stats.emittedTokens` (non-empty\naddon stream pieces) over `stats.generatedTokens` (decode / `n_eval` count,\nwhich inline recovery can inflate toward the `max_tokens` / predict budget),\nand falls back to a whitespace split of the output. When streaming, `usage`\nis emitted only if `stream_options: { include_usage: true }` is set, as a\nfinal chunk with an empty `choices` array (OpenAI compatibility).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "messages": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "role": {
+                          "type": "string"
+                        },
+                        "content": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "text"
+                                        ]
+                                      },
+                                      "text": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "text"
+                                    ],
+                                    "additionalProperties": {}
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "enum": [
+                                          "image_url"
+                                        ]
+                                      },
+                                      "image_url": {
+                                        "anyOf": [
+                                          {
+                                            "type": "string"
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "url": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "url"
+                                            ],
+                                            "additionalProperties": {}
+                                          }
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "type",
+                                      "image_url"
+                                    ],
+                                    "additionalProperties": {}
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        "tool_calls": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "type": {
+                                "type": "string"
+                              },
+                              "function": {
+                                "type": "object",
+                                "properties": {
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "arguments": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "name",
+                                  "arguments"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "function"
+                            ]
+                          }
+                        },
+                        "tool_call_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "role"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "stream": {
+                    "type": "boolean"
+                  },
+                  "tools": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string"
+                        },
+                        "function": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "description": {
+                              "type": "string"
+                            },
+                            "parameters": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {}
+                            },
+                            "defer_loading": {
+                              "type": "boolean"
+                            },
+                            "group": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "name"
+                          ]
+                        },
+                        "defer_loading": {
+                          "type": "boolean"
+                        },
+                        "group": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "tool_choice": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string"
+                          },
+                          "function": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "name"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    ]
+                  },
+                  "parallel_tool_calls": {
+                    "type": "boolean"
+                  },
+                  "response_format": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "text"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "json_object"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "json_schema"
+                            ]
+                          },
+                          "json_schema": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "schema": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              }
+                            },
+                            "required": [
+                              "schema"
+                            ],
+                            "additionalProperties": {}
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "json_schema"
+                        ]
+                      }
+                    ]
+                  },
+                  "temperature": {
+                    "type": "number"
+                  },
+                  "top_p": {
+                    "type": "number"
+                  },
+                  "max_tokens": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "stream_options": {
+                    "type": "object",
+                    "properties": {
+                      "include_usage": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": {}
+                  }
+                },
+                "required": [
+                  "model",
+                  "messages"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/completions": {
+      "post": {
+        "summary": "Legacy text completion",
+        "tags": [
+          "Completions"
+        ],
+        "description": "Legacy text completion. `prompt` accepts a single string or an array of strings;\ntoken-id prompts (numeric arrays) are rejected with `invalid_prompt`.\n\n**Multi-prompt + `stream: true`** is rejected with `unsupported_streaming` —\neach prompt would need its own SSE stream which we don't support.\n\n**Implementation note**: under the hood this routes through the same SDK\n`completion()` capability as `/v1/chat/completions`, wrapping each prompt\nas a single `user` turn. The SDK chat template still applies, so legacy\nclients expecting raw completion semantics may see template-shaped output.\n\n**Ignored params** (warned, not rejected): `logit_bias`, `n` (>1),\n`user`, `seed`, `logprobs`, `best_of`, `echo`, `suffix`,\n`frequency_penalty`, `presence_penalty`, `stop`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "prompt": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {}
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "stream": {
+                    "type": "boolean"
+                  },
+                  "temperature": {
+                    "type": "number"
+                  },
+                  "top_p": {
+                    "type": "number"
+                  },
+                  "max_tokens": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "model"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/decisions": {
+      "post": {
+        "summary": "Create a decision",
+        "tags": [
+          "Decisions"
+        ],
+        "description": "Answer ordered predicate, choice, and score questions using a local decision model. Text inputs only. Returns JSON without streaming.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1048576
+                  },
+                  "input": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 10485760
+                      },
+                      {
+                        "minItems": 1,
+                        "type": "array",
+                        "items": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "message"
+                                  ]
+                                },
+                                "role": {
+                                  "type": "string",
+                                  "enum": [
+                                    "user",
+                                    "developer",
+                                    "system",
+                                    "assistant"
+                                  ]
+                                },
+                                "content": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "maxLength": 10485760
+                                    },
+                                    {
+                                      "type": "array",
+                                      "items": {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "input_text"
+                                                ]
+                                              },
+                                              "text": {
+                                                "type": "string",
+                                                "maxLength": 10485760
+                                              },
+                                              "prompt_cache_breakpoint": {
+                                                "description": "Prompt caching is unavailable for local decisions.",
+                                                "type": "null"
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "text"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "output_text"
+                                                ]
+                                              },
+                                              "text": {
+                                                "type": "string",
+                                                "maxLength": 10485760
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "text"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "type": "string",
+                                                "enum": [
+                                                  "refusal"
+                                                ]
+                                              },
+                                              "refusal": {
+                                                "type": "string",
+                                                "maxLength": 10485760
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "refusal"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  ]
+                                },
+                                "phase": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "commentary",
+                                        "final_answer"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "role",
+                                "content"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "call_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 64
+                                },
+                                "id": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "maxLength": 1048576
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "status": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "in_progress",
+                                        "completed",
+                                        "incomplete"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "namespace": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 64
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "function_call"
+                                  ]
+                                },
+                                "name": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 128
+                                },
+                                "arguments": {
+                                  "type": "string",
+                                  "maxLength": 1048576
+                                }
+                              },
+                              "required": [
+                                "call_id",
+                                "type",
+                                "name",
+                                "arguments"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "call_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 64
+                                },
+                                "id": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "maxLength": 1048576
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "status": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "in_progress",
+                                        "completed",
+                                        "incomplete"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "function_call_output"
+                                  ]
+                                },
+                                "output": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "maxLength": 10485760
+                                    },
+                                    {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "enum": [
+                                              "input_text"
+                                            ]
+                                          },
+                                          "text": {
+                                            "type": "string",
+                                            "maxLength": 10485760
+                                          },
+                                          "prompt_cache_breakpoint": {
+                                            "description": "Prompt caching is unavailable for local decisions.",
+                                            "type": "null"
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "text"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "call_id",
+                                "type",
+                                "output"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "call_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 64
+                                },
+                                "id": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "maxLength": 1048576
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "status": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "in_progress",
+                                        "completed",
+                                        "incomplete"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "namespace": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 64
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "custom_tool_call"
+                                  ]
+                                },
+                                "name": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 64
+                                },
+                                "input": {
+                                  "type": "string",
+                                  "maxLength": 1048576
+                                }
+                              },
+                              "required": [
+                                "call_id",
+                                "type",
+                                "name",
+                                "input"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "call_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 64
+                                },
+                                "id": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "maxLength": 1048576
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "status": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "in_progress",
+                                        "completed",
+                                        "incomplete"
+                                      ]
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "enum": [
+                                    "custom_tool_call_output"
+                                  ]
+                                },
+                                "output": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "maxLength": 10485760
+                                    },
+                                    {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "enum": [
+                                              "input_text"
+                                            ]
+                                          },
+                                          "text": {
+                                            "type": "string",
+                                            "maxLength": 10485760
+                                          },
+                                          "prompt_cache_breakpoint": {
+                                            "description": "Prompt caching is unavailable for local decisions.",
+                                            "type": "null"
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "text"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "call_id",
+                                "type",
+                                "output"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        }
+                      }
+                    ],
+                    "description": "Text or text conversation items. Images are unsupported by local decision models."
+                  },
+                  "questions": {
+                    "minItems": 1,
+                    "maxItems": 200,
+                    "type": "array",
+                    "items": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string",
+                              "maxLength": 1048576
+                            },
+                            "instructions": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 1048576,
+                              "description": "Local decision models require nonempty instructions."
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "predicate"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "instructions",
+                            "type"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string",
+                              "maxLength": 1048576
+                            },
+                            "instructions": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 1048576,
+                              "description": "Local decision models require nonempty instructions."
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "choice"
+                              ]
+                            },
+                            "choices": {
+                              "minItems": 2,
+                              "maxItems": 255,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "boolean"
+                                      }
+                                    ]
+                                  },
+                                  "description": {
+                                    "type": "string",
+                                    "maxLength": 1048576
+                                  }
+                                },
+                                "required": [
+                                  "value"
+                                ],
+                                "additionalProperties": false
+                              }
+                            }
+                          },
+                          "required": [
+                            "instructions",
+                            "type",
+                            "choices"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string",
+                              "maxLength": 1048576
+                            },
+                            "instructions": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 1048576,
+                              "description": "Local decision models require nonempty instructions."
+                            },
+                            "type": {
+                              "type": "string",
+                              "enum": [
+                                "score"
+                              ]
+                            },
+                            "levels": {
+                              "minItems": 2,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "label": {
+                                    "type": "string",
+                                    "maxLength": 1048576
+                                  },
+                                  "description": {
+                                    "type": "string",
+                                    "maxLength": 1048576
+                                  }
+                                },
+                                "required": [
+                                  "label"
+                                ],
+                                "additionalProperties": false
+                              }
+                            }
+                          },
+                          "required": [
+                            "instructions",
+                            "type",
+                            "levels"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  },
+                  "safety_identifier": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 128
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "prompt_cache_key": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 64
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "prompt_cache_options": {
+                    "description": "Prompt caching is unavailable for local decisions.",
+                    "type": "null"
+                  }
+                },
+                "required": [
+                  "model",
+                  "input",
+                  "questions"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "model": {
+                      "type": "string"
+                    },
+                    "answers": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "predicate"
+                                ]
+                              },
+                              "probability": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "type",
+                              "probability"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "choice"
+                                ]
+                              },
+                              "choice": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "boolean"
+                                  }
+                                ]
+                              },
+                              "confidence": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "probabilities": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "value": {
+                                      "anyOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "boolean"
+                                        }
+                                      ]
+                                    },
+                                    "probability": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 1
+                                    }
+                                  },
+                                  "required": [
+                                    "value",
+                                    "probability"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "type",
+                              "choice",
+                              "confidence",
+                              "probabilities"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "score"
+                                ]
+                              },
+                              "score": {
+                                "type": "number"
+                              },
+                              "confidence": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "probabilities": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "value": {
+                                      "type": "integer",
+                                      "minimum": -9007199254740991,
+                                      "maximum": 9007199254740991
+                                    },
+                                    "label": {
+                                      "type": "string"
+                                    },
+                                    "probability": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 1
+                                    }
+                                  },
+                                  "required": [
+                                    "value",
+                                    "label",
+                                    "probability"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "type",
+                              "score",
+                              "confidence",
+                              "probabilities"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "refusal"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "type"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      }
+                    },
+                    "usage": {
+                      "type": "object",
+                      "properties": {
+                        "input_tokens": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "input_tokens_details": {
+                          "type": "object",
+                          "properties": {
+                            "cached_tokens": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "cache_write_tokens": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "cached_tokens",
+                            "cache_write_tokens"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "output_tokens": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "output_tokens_details": {
+                          "type": "object",
+                          "properties": {
+                            "reasoning_tokens": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "reasoning_tokens"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "total_tokens": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "input_tokens",
+                        "input_tokens_details",
+                        "output_tokens",
+                        "output_tokens_details",
+                        "total_tokens"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "model",
+                    "answers",
+                    "usage"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/embeddings": {
+      "post": {
+        "summary": "Generate embeddings",
+        "tags": [
+          "Embeddings"
+        ],
+        "description": "Compute embeddings for a single string or an array of strings.\n\n**Output**: `data[]` always wraps each input's vector under\n`{ object: 'embedding', index, embedding: number[] }`, matching OpenAI.\n\n**Ignored params** (warned, not rejected): `encoding_format` (we always\nreturn float arrays), `dimensions` (no truncation/padding), `user`.\n\n**Token accounting**: `usage.prompt_tokens` and `total_tokens` are\nreported as 0 — the SDK `embed()` operation doesn't surface a token count.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "input": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    ]
+                  },
+                  "encoding_format": {
+                    "type": "string"
+                  },
+                  "dimensions": {
+                    "type": "number"
+                  },
+                  "user": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "model",
+                  "input"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/files": {
+      "post": {
+        "summary": "Upload an ephemeral file",
+        "tags": [
+          "Files"
+        ],
+        "description": "Upload bytes into an **ephemeral in-memory store**. The returned file id can\nbe used immediately with `POST /v1/vector_stores/{id}/files` to attach the\ncontent into a RAG workspace, at which point the file is removed from the\nstore. Files not attached within the configured TTL are evicted automatically.\n\n**Not durable**: contents do not survive process restarts. There is no quota\nbeyond the request's body limit.\n\n**`purpose`** is recorded verbatim from the multipart field; defaults to\n`\"assistants\"` if omitted.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {},
+                  "purpose": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "get": {
+        "summary": "List ephemeral files",
+        "tags": [
+          "Files"
+        ],
+        "description": "List files currently held in the ephemeral in-memory store. Files removed\nby a vector-store attach or by TTL eviction do not appear.",
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/files/{id}": {
+      "get": {
+        "summary": "Get an ephemeral file",
+        "tags": [
+          "Files"
+        ],
+        "description": "Fetch metadata for a single ephemeral file. 404 `file_not_found` if the\nfile has been attached/evicted or never existed.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/files/{id}/content": {
+      "get": {
+        "summary": "Get raw bytes of an ephemeral file",
+        "tags": [
+          "Files"
+        ],
+        "description": "Stream the raw bytes of an ephemeral file with the stored `Content-Type`.\nUsed by `/v1/images/generations` with `response_format=url` to back the\nminted download URLs.\n\n**`Cache-Control`** is set to `private, max-age=<remaining-ttl-seconds>`\nwhen the file has a TTL, otherwise `private, no-store`. Downstream proxies\nwill not serve stale bytes after the store has evicted the entry.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/images/generations": {
+      "post": {
+        "summary": "Image generation",
+        "tags": [
+          "Images"
+        ],
+        "description": "Generate one or more images from a text prompt via the Stable Diffusion-cpp backend.\n\n**Output**: PNG only. `output_format=jpeg`/`webp` are rejected with\n`unsupported_output_format` (the server has no JPEG encoder); `output_compression`\nand `background` are similarly rejected (no alpha-channel control). Only\n`response_format=b64_json` (default) or `url` are accepted.\n\n**`response_format=url`** requires the server to be started with\n`--public-base-url <origin>` so URLs can resolve back to `/v1/files/{id}/content`.\nWithout it, the request is rejected with `unsupported_response_format`.\n\n**Streaming**: pass `stream: true` to receive one\n`image_generation.completed` SSE event per generated image, then `[DONE]`.\nIntermediate `partial_image` events are not emitted (the underlying engine\nstreams step ticks, not image bytes).\n\n**Validation order**: schema → model resolution (`model_not_found` /\n`invalid_model_type` / `model_not_ready`) → param assertions\n(`unsupported_output_format`, `invalid_size`, `invalid_n`, etc.).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "n": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "size": {
+                    "type": "string"
+                  },
+                  "response_format": {
+                    "type": "string"
+                  },
+                  "stream": {
+                    "type": "boolean"
+                  },
+                  "seed": {
+                    "type": "number"
+                  },
+                  "steps": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "model",
+                  "prompt"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/images/edits": {
+      "post": {
+        "summary": "Image editing (img2img)",
+        "tags": [
+          "Images"
+        ],
+        "description": "Edit an input image conditioned on a text prompt (img2img) via Stable Diffusion-cpp.\n\n**Multipart body**. Required fields: `model`, `image` (or `image[]`).\nOptional: `prompt`, `size`, `response_format`, `n`, `strength`, `stream`.\n\n**Mask inpainting is not supported.** Sending a `mask` or `mask[]` field\nreturns 400 `mask_not_supported` — the underlying diffusion engine has no mask\nchannel. Use a prompt-only edit (full-image img2img) instead.\n\n**Multiple images** sent as repeated `image` or `image[]` files are forwarded\nin upload order as SDK `init_images`. Use a model with multi-reference support,\nsuch as FLUX.2 or Qwen-Image-2.1. A single file uses SDK `init_image`.\n\nSame output / `response_format=url` / streaming caveats as\n`POST /v1/images/generations`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "image": {},
+                  "image[]": {},
+                  "size": {
+                    "type": "string"
+                  },
+                  "response_format": {
+                    "type": "string"
+                  },
+                  "n": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
+                  },
+                  "strength": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
+                  },
+                  "stream": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "boolean"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "model"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/models/catalog": {
+      "get": {
+        "summary": "Browse available models",
+        "tags": [
+          "Model Catalog"
+        ],
+        "description": "Browse every model this server knows of, filterable by capability. Rows are\ncatalog entries (`object: \"model_catalog_entry\"`), NOT usable `model` objects:\na `not_configured` entry is a model the SDK provides but which is not in\n`serve.models`, so it cannot be called until it is configured. Configured models\ncarry their live load `state` (idle/loading/ready/error). Fully in-process — no\nmodel loads or downloads are triggered.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "description": "Substring match on the model id/name."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "role",
+            "required": false,
+            "description": "Endpoint category, e.g. chat, embedding, transcription, speech, image."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "addon",
+            "required": false,
+            "description": "SDK addon/category, e.g. llm, tts, whisper, diffusion."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "description": "Alias for `addon`."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "quantization",
+            "required": false,
+            "description": "Quantization, e.g. q4, q8_0 (case-insensitive)."
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "engine",
+            "required": false,
+            "description": "Inference engine, e.g. llamacpp-completion."
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "in": "query",
+            "name": "configured",
+            "required": false,
+            "description": "Restrict to configured (true) or catalog-only (false) models."
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "description": "Page size. Omit for no limit (returns all matching entries)."
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "description": "Rows to skip (default 0)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/models/catalog/{id}": {
+      "get": {
+        "summary": "Get a catalog model",
+        "tags": [
+          "Model Catalog"
+        ],
+        "description": "Fetch a single catalog entry by id (alias or SDK constant name). Same shape as a\nlist row. 404 `model_not_found` if the id is neither configured nor a known\nSDK constant.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "summary": "List configured models",
+        "tags": [
+          "Models"
+        ],
+        "description": "List every model configured under `serve.models`. Each is usable: a model that\nis not yet loaded is loaded on first request (unless `preload: true` loaded it\nat startup). `owned_by` is always `\"qvac\"`.",
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/models/{id}": {
+      "get": {
+        "summary": "Get a model",
+        "tags": [
+          "Models"
+        ],
+        "description": "Fetch a single model by alias. Returns 404 `model_not_found` only when the\nalias is not configured. A configured-but-not-yet-loaded alias is returned\nnormally; it loads on first inference request.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Unload a model",
+        "tags": [
+          "Models"
+        ],
+        "description": "Unload a model from the SDK and release its resources. The alias stays\nconfigured and reloadable: the next inference request targeting it loads it\nagain (lazy load).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/responses": {
+      "post": {
+        "summary": "Create a model response",
+        "tags": [
+          "Responses"
+        ],
+        "description": "OpenAI Responses API — stateful chat completion that can be retrieved /\ndeleted later via the returned `id`.\n\n**Storage is in-memory only.** Every `/v1/responses*` reply carries\n`X-QVAC-Stub: responses-volatile`. IDs expire on process restart (60-minute\nTTL, 256 max entries).\n\n**Conversation chaining** via `previous_response_id` walks the stored chain\n(up to 32 turns) and prepends prior turns into the SDK history. A missing or\nexpired `previous_response_id` returns `404 previous_response_not_found`.\n\n**`store: false`** opts out of storage — the response is returned but not\naddressable via GET / DELETE / input_items.\n\n**KV cache (opt-in)**: send `X-QVAC-KV-Cache-Key: <session-key>` (once), or\n`metadata.qvac_kv_cache_key`, or OpenAI's `prompt_cache_key`, in that order of\nprecedence. Keys must be nonempty strings of at most 512 UTF-8 bytes and are\nSHA-256 hashed before filesystem use. Reuse the key with the same conversation's\ngrowing history on every request; `previous_response_id` and `store` do not\nselect a cache session. Without a key, Responses remains uncached. These caches\nfollow the automatic cache's retention (24-hour idle TTL, 4 GiB LRU quota) and\n`DELETE /qvac/v1/kv_cache` reclaims them. On a keyed request, SDK cache\noccupancy is reported as `usage.qvac_cache_tokens` (also in the final SSE\nresponse); this is not a per-request count of reused tokens.\n\n**Rejections**:\n- `conversation` → `400 conversation_not_supported` (Conversation persistence not implemented)\n- `background: true` → `400 background_not_supported` (only synchronous responses)\n- structured output (`json_object`/`json_schema`) combined with non-empty `tools` → `400 invalid_response_format`\n- `tools` on a model loaded without `config.tools: true` → `400 tools_not_enabled`\n- `tool_choice` demanding a tool with no matching `tools` entry → `400 invalid_tool_choice`\n\n**Tools**: `function` tools, and the functions inside a `namespace` tool (the\nmodel sees them as `<namespace>__<name>`; calls come back with `name` and\n`namespace` split again; a malformed `namespace` → `400 invalid_tools`). Built-in tool types (`web_search`,\n`file_search`, …) are left out of the request and logged.\n\n**`tool_choice`**: `\"auto\"` (default), `\"none\"`, `\"required\"`, or\n`{ type: 'function', name }` to force one tool. `required` and a named tool\nconstrain generation with the chat template's tool grammar.\n\n**`parallel_tool_calls`**: `true` (default) lets one response carry several\ntool calls; `false` limits it to one.\n\n**Reasoning** from models that emit `<think>` blocks is returned in\n`reasoning` output items, not in `output_text`. Items keep the order the\nmodel produced them, so answer text after a later reasoning block starts a new\n`message` item.\n\n**Streaming** (`stream: true`) emits the OpenAI Responses SSE event sequence\n(`response.created` → `response.reasoning_text.delta` … →\n`response.output_text.delta` … → `response.completed`)\nand terminates **without** a `[DONE]` sentinel (per the spec).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "input": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {}
+                      }
+                    ]
+                  },
+                  "instructions": {
+                    "type": "string"
+                  },
+                  "stream": {
+                    "type": "boolean"
+                  },
+                  "store": {
+                    "type": "boolean"
+                  },
+                  "previous_response_id": {
+                    "type": "string"
+                  },
+                  "conversation": {},
+                  "background": {
+                    "type": "boolean"
+                  },
+                  "tools": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string"
+                        },
+                        "function": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "description": {
+                              "type": "string"
+                            },
+                            "parameters": {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string"
+                              },
+                              "additionalProperties": {}
+                            },
+                            "defer_loading": {
+                              "type": "boolean"
+                            },
+                            "group": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "name"
+                          ]
+                        },
+                        "defer_loading": {
+                          "type": "boolean"
+                        },
+                        "group": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ],
+                      "additionalProperties": {}
+                    }
+                  },
+                  "tool_choice": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string"
+                          },
+                          "function": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "name"
+                            ],
+                            "additionalProperties": {}
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ],
+                        "additionalProperties": {}
+                      }
+                    ]
+                  },
+                  "text": {},
+                  "response_format": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "text"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "json_object"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "json_schema"
+                            ]
+                          },
+                          "json_schema": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "schema": {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {}
+                              }
+                            },
+                            "required": [
+                              "schema"
+                            ],
+                            "additionalProperties": {}
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "json_schema"
+                        ]
+                      }
+                    ]
+                  },
+                  "temperature": {
+                    "type": "number"
+                  },
+                  "top_p": {
+                    "type": "number"
+                  },
+                  "max_output_tokens": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "max_tokens": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "metadata": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  },
+                  "parallel_tool_calls": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "model",
+                  "input"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/responses/{id}": {
+      "get": {
+        "summary": "Retrieve a stored response",
+        "tags": [
+          "Responses"
+        ],
+        "description": "Fetch a previously-created response. **In-memory only** — 404 once expired or after a restart. Reply carries `X-QVAC-Stub: responses-volatile`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a stored response",
+        "tags": [
+          "Responses"
+        ],
+        "description": "Remove a stored response from memory. Subsequent chains via `previous_response_id` that referenced this one will return `404 previous_response_not_found`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/responses/{id}/input_items": {
+      "get": {
+        "summary": "List input items for a stored response",
+        "tags": [
+          "Responses"
+        ],
+        "description": "Paginate over a stored response's normalized input items (the request that produced it). `limit` and `after` work as on the OpenAI cursor-paginated endpoints.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "after",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/vector_stores": {
+      "get": {
+        "summary": "List vector stores",
+        "tags": [
+          "Vector Stores"
+        ],
+        "description": "Merge of in-memory metadata records and live RAG workspaces. Workspaces with no local metadata appear as synthetics (`createdAt: 0`).",
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a vector store",
+        "tags": [
+          "Vector Stores"
+        ],
+        "description": "Create an in-memory metadata record for a new vector store. The RAG workspace\nitself is created lazily on the first `POST /v1/vector_stores/{id}/files`.\n\n**`file_ids`** on create is logged as ignored — attach files separately via\n`POST /v1/vector_stores/{id}/files` after uploading them through\n`POST /v1/files`.\n\n**`chunking_strategy`** is logged as ignored — chunking is configured via the\nSDK's ingest options, not per-request.\n\n`expires_after` accepts only `{ anchor: 'last_active_at', days: <positive int> }`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "expires_after": {},
+                  "metadata": {},
+                  "file_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "chunking_strategy": {}
+                },
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/vector_stores/{id}": {
+      "get": {
+        "summary": "Get a vector store",
+        "tags": [
+          "Vector Stores"
+        ],
+        "description": "Returns the merged view (local metadata + RAG workspace info). If only the workspace exists, a synthetic record is returned with `createdAt: 0`.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "post": {
+        "summary": "Update a vector store",
+        "tags": [
+          "Vector Stores"
+        ],
+        "description": "Patch `name` / `expires_after` / `metadata` on the in-memory metadata record. If the store exists only as a disk-only RAG workspace, a local metadata record is materialized first.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "expires_after": {},
+                  "metadata": {}
+                },
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a vector store",
+        "tags": [
+          "Vector Stores"
+        ],
+        "description": "Delete both the in-memory metadata record AND the underlying RAG workspace. If the RAG delete fails, the metadata is preserved so a retry sees the same state (avoids losing caller-supplied fields).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/vector_stores/{id}/search": {
+      "post": {
+        "summary": "Search a vector store",
+        "tags": [
+          "Vector Stores"
+        ],
+        "description": "Vector search over a workspace via SDK `ragSearch()`.\n\n**Requires an embedding model** configured under `serve.models`. Exactly one\ndefault embedding (or a single embedding alias) must resolve, or the request\nfails with `no_embedding_model_configured` / `ambiguous_embedding_model`.\n\n**Embedding-model mismatch**: if the store was ingested under a different\nembedding alias, requests are rejected with `embedding_model_mismatch` to\nprevent silent precision loss.\n\n**Ignored params** (logged, not rejected): `filters`, `ranking_options`,\n`rewrite_query`. Only `max_num_results` (mapped to SDK `topK`) is\nforwarded.\n\nHit attribution carries the original upload's `file_id` and `filename`\nwhen known (from the `POST /v1/vector_stores/{id}/files` step); falls back\nto the raw chunk id for workspaces ingested out-of-band.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "max_num_results": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "filters": {},
+                  "ranking_options": {},
+                  "rewrite_query": {}
+                },
+                "required": [
+                  "query"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/vector_stores/{id}/files": {
+      "post": {
+        "summary": "Attach a file to a vector store",
+        "tags": [
+          "Vector Stores"
+        ],
+        "description": "Ingest a previously-uploaded ephemeral file (`POST /v1/files`) into the\nRAG workspace.\n\n**UTF-8 text only.** Binary uploads are rejected with\n`unsupported_file_type` via a NUL-byte sniff over the first 8 KB\n(catches PDF/PNG/DOCX/etc.). Empty-after-trim text is rejected with\n`empty_file`.\n\n**Side effects**: on success the file is removed from the ephemeral-files\nstore, the store's `embeddingAlias` is recorded, and per-chunk attributions\nare stored so subsequent searches return the file's id / filename instead of\nopaque chunk ids.\n\nSame embedding-model resolution + mismatch rules as\n`POST /v1/vector_stores/{id}/search`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file_id": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "file_id"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    },
+    "/v1/videos": {
+      "post": {
+        "summary": "Create a video generation job",
+        "tags": [
+          "Videos"
+        ],
+        "description": "Async video generation. Returns immediately with `status: queued`; poll\n`GET /v1/videos/{id}` and fetch bytes from `GET /v1/videos/{id}/content`\nonce `status: completed`.\n\n**Text-to-video (txt2vid):** send a JSON body with `prompt`. No image needed.\n\n**Image-to-video (img2vid):** include `input_reference` as one of:\n- a multipart file field (OpenAI SDK `Uploadable` — the SDK sends this when you pass a local `File`/`Blob`)\n- JSON `{ image_url }` where `image_url` is a base64 data URI (`data:image/...;base64,...`) or a public HTTP(S) URL (100 MB / 30 s limit; loopback, private and link-local addresses are refused)\n- JSON `{ file_id }` to reference a file uploaded via `POST /v1/files`\n\nMode is inferred from the presence of `input_reference` — no explicit `mode` field needed.\nAdd `strength` (0–1) to control divergence from the first frame.\n\n**Job store is in-memory only.** IDs and rendered bytes are lost on restart.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "description": "Model alias declared under `serve.models`. OpenAI SDK sends `model: \"sora-2\"` by default.",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32000,
+                    "description": "Text prompt. 1..32000 characters."
+                  },
+                  "seconds": {
+                    "description": "Target duration in seconds. MiniMax-H3 uses 24 FPS and the nearest `17*k+5` frame count; other models use the existing nearest `4*k+1` mapping with the requested or default FPS, followed by normal model-specific validation.",
+                    "type": "string",
+                    "pattern": "^\\d+$"
+                  },
+                  "size": {
+                    "description": "\"WIDTHxHEIGHT\" with W,H multiples of 16. Accepts OpenAI's 4-value enum plus any sized WxH.",
+                    "type": "string"
+                  },
+                  "fps": {
+                    "description": "QVAC extension. 0 < fps ≤ 120, default 16. MiniMax-H3 requires exactly 24 and rejects any other value; its `seconds` mapping always uses 24 regardless of what is sent here.",
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 120
+                  },
+                  "steps": {
+                    "description": "QVAC extension. Diffusion sampler step count.",
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "seed": {
+                    "description": "QVAC extension. Random seed; SDK picks one when omitted.",
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "negative_prompt": {
+                    "description": "QVAC extension. Negative prompt for the diffusion sampler.",
+                    "type": "string"
+                  },
+                  "cfg_scale": {
+                    "description": "QVAC extension. Classifier-free guidance scale (Wan range 5-8).",
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "flow_shift": {
+                    "description": "QVAC extension. Flow-matching shift. Wan 2.1 T2V needs `flow_shift: 3.0` for visible motion.",
+                    "type": "number"
+                  },
+                  "input_reference": {
+                    "description": "OpenAI img2vid. Provide the reference image as a multipart file field (OpenAI SDK `Uploadable`), via `image_url` (data URI or public HTTP(S) URL), or via `file_id` (file uploaded via POST /v1/files). When present the job runs in img2vid mode; omit for txt2vid.",
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "image_url": {
+                            "description": "Base64 data URI (`data:image/...;base64,...`) or public HTTP(S) URL of the reference image.",
+                            "type": "string"
+                          },
+                          "file_id": {
+                            "description": "ID of a file previously uploaded via POST /v1/files.",
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "strength": {
+                    "description": "QVAC extension. img2vid denoise strength [0, 1]. Only meaningful when `input_reference` is provided.",
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "prompt"
+                ],
+                "additionalProperties": {}
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "description": "Model alias declared under `serve.models`. OpenAI SDK sends `model: \"sora-2\"` by default.",
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32000,
+                    "description": "Text prompt. 1..32000 characters."
+                  },
+                  "seconds": {
+                    "description": "Target duration in seconds. MiniMax-H3 uses 24 FPS and the nearest `17*k+5` frame count; other models use the existing nearest `4*k+1` mapping with the requested or default FPS, followed by normal model-specific validation.",
+                    "type": "string",
+                    "pattern": "^\\d+$"
+                  },
+                  "size": {
+                    "description": "\"WIDTHxHEIGHT\" with W,H multiples of 16. Accepts OpenAI's 4-value enum plus any sized WxH.",
+                    "type": "string"
+                  },
+                  "fps": {
+                    "description": "QVAC extension. 0 < fps ≤ 120, default 16. MiniMax-H3 requires exactly 24 and rejects any other value; its `seconds` mapping always uses 24 regardless of what is sent here.",
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 120
+                  },
+                  "steps": {
+                    "description": "QVAC extension. Diffusion sampler step count.",
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "seed": {
+                    "description": "QVAC extension. Random seed; SDK picks one when omitted.",
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "negative_prompt": {
+                    "description": "QVAC extension. Negative prompt for the diffusion sampler.",
+                    "type": "string"
+                  },
+                  "cfg_scale": {
+                    "description": "QVAC extension. Classifier-free guidance scale (Wan range 5-8).",
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "flow_shift": {
+                    "description": "QVAC extension. Flow-matching shift. Wan 2.1 T2V needs `flow_shift: 3.0` for visible motion.",
+                    "type": "number"
+                  },
+                  "input_reference": {
+                    "description": "OpenAI img2vid. Provide the reference image as a multipart file field (OpenAI SDK `Uploadable`), via `image_url` (data URI or public HTTP(S) URL), or via `file_id` (file uploaded via POST /v1/files). When present the job runs in img2vid mode; omit for txt2vid.",
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "image_url": {
+                            "description": "Base64 data URI (`data:image/...;base64,...`) or public HTTP(S) URL of the reference image.",
+                            "type": "string"
+                          },
+                          "file_id": {
+                            "description": "ID of a file previously uploaded via POST /v1/files.",
+                            "type": "string"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "strength": {
+                    "description": "QVAC extension. img2vid denoise strength [0, 1]. Only meaningful when `input_reference` is provided.",
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "prompt"
+                ],
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "video"
+                      ]
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "in_progress",
+                        "completed",
+                        "failed"
+                      ]
+                    },
+                    "progress": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "created_at": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "completed_at": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "expires_at": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "prompt": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "size": {
+                      "type": "string"
+                    },
+                    "seconds": {
+                      "type": "string"
+                    },
+                    "remixed_from_video_id": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "object",
+                    "model",
+                    "status",
+                    "progress",
+                    "created_at",
+                    "completed_at",
+                    "expires_at",
+                    "prompt",
+                    "size",
+                    "seconds",
+                    "remixed_from_video_id",
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List video generation jobs",
+        "tags": [
+          "Videos"
+        ],
+        "description": "List video jobs, newest first by default. Cursor pagination via `limit` / `order` / `after`. In-memory only.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 100
+            },
+            "in": "query",
+            "name": "limit",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            },
+            "in": "query",
+            "name": "order",
+            "required": false
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "after",
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "list"
+                      ]
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "object": {
+                            "type": "string",
+                            "enum": [
+                              "video"
+                            ]
+                          },
+                          "model": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "queued",
+                              "in_progress",
+                              "completed",
+                              "failed"
+                            ]
+                          },
+                          "progress": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 100
+                          },
+                          "created_at": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "completed_at": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "expires_at": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "prompt": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "size": {
+                            "type": "string"
+                          },
+                          "seconds": {
+                            "type": "string"
+                          },
+                          "remixed_from_video_id": {
+                            "type": "null"
+                          },
+                          "error": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "code": {
+                                    "type": "string"
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "code",
+                                  "message"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "object",
+                          "model",
+                          "status",
+                          "progress",
+                          "created_at",
+                          "completed_at",
+                          "expires_at",
+                          "prompt",
+                          "size",
+                          "seconds",
+                          "remixed_from_video_id",
+                          "error"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "first_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "last_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "has_more": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "object",
+                    "data",
+                    "first_id",
+                    "last_id",
+                    "has_more"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/videos/{id}": {
+      "get": {
+        "summary": "Retrieve a video generation job",
+        "tags": [
+          "Videos"
+        ],
+        "description": "`status` cycles `queued` → `in_progress` → `completed | failed`.\n`progress` plateaus during VAE-decode / AVI-mux phases after denoising.\n`expires_at` is a far-future sentinel — the bytes have their own TTL in\nthe ephemeral-file store, and `/content` returns `410 video_expired` once\nthey're gone.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "video"
+                      ]
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "queued",
+                        "in_progress",
+                        "completed",
+                        "failed"
+                      ]
+                    },
+                    "progress": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "created_at": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "completed_at": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "expires_at": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "prompt": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "size": {
+                      "type": "string"
+                    },
+                    "seconds": {
+                      "type": "string"
+                    },
+                    "remixed_from_video_id": {
+                      "type": "null"
+                    },
+                    "error": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "code": {
+                              "type": "string"
+                            },
+                            "message": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "code",
+                            "message"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "object",
+                    "model",
+                    "status",
+                    "progress",
+                    "created_at",
+                    "completed_at",
+                    "expires_at",
+                    "prompt",
+                    "size",
+                    "seconds",
+                    "remixed_from_video_id",
+                    "error"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a video generation job",
+        "tags": [
+          "Videos"
+        ],
+        "description": "Delete a job and its rendered assets. If still `queued` / `in_progress`, generation is aborted first.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "object": {
+                      "type": "string",
+                      "enum": [
+                        "video.deleted"
+                      ]
+                    },
+                    "deleted": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "object",
+                    "deleted"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/videos/{id}/content": {
+      "get": {
+        "summary": "Download a generated video",
+        "tags": [
+          "Videos"
+        ],
+        "description": "Default `Content-Type` is `video/mp4` (transcoded from the SDK's native\nMJPG-AVI via the system `ffmpeg` binary into fragmented MP4 — required\nbecause we pipe to a non-seekable stdout). Falls back to `video/avi` if\nffmpeg isn't on PATH at server start (warned once).\n\nThe transcode is lazy and cached: first request after `status: completed`\nmay take seconds; subsequent requests serve the cached MP4.\n\n`?format=mp4` or `?format=avi` force the container. `?format=mp4` with\nno ffmpeg → `503 transcode_unavailable`. `variant=thumbnail|spritesheet`\n→ `501 unsupported_variant` (not rendered). Failures: `404 video_not_found`,\n`409 video_not_ready` (with `Retry-After`), `410 video_expired`,\n`502 transcode_failed` (retry with `?format=avi`).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "query",
+            "name": "variant",
+            "required": false,
+            "description": "Asset variant. Only \"video\" is supported; \"thumbnail\" and \"spritesheet\" return 501 unsupported_variant because the server does not render them."
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "mp4",
+                "avi"
+              ]
+            },
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "description": "QVAC extension. Force the output container regardless of server defaults. Omit to receive video/mp4 when ffmpeg is on PATH, video/avi otherwise."
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Default Response"
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:0",
+      "description": "this server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Chat",
+      "description": "OpenAI-compatible chat completions backed by SDK `completion()`. Supports streaming SSE, tool calls, and JSON-schema response format."
+    },
+    {
+      "name": "Decisions",
+      "description": "Typed predicate, choice, and score answers via SDK `decide()`. Local decision models accept text only."
+    },
+    {
+      "name": "Completions",
+      "description": "Legacy text completions endpoint. Multi-prompt + streaming combinations are rejected."
+    },
+    {
+      "name": "Embeddings",
+      "description": "Text embeddings via SDK `embed()`. Single string or array of strings."
+    },
+    {
+      "name": "Responses",
+      "description": "OpenAI Responses API. **Server-side storage is in-memory only** — IDs expire on restart (60-minute TTL, 256 max entries). All `/v1/responses*` replies carry the `X-QVAC-Stub: responses-volatile` header."
+    },
+    {
+      "name": "Audio",
+      "description": "`/audio/transcriptions` and `/audio/translations` are multipart/form-data; `/audio/speech` returns raw audio bytes (wav/pcm/etc.) with `X-Audio-*` headers."
+    },
+    {
+      "name": "Images",
+      "description": "Stable Diffusion-style image generation. `response_format=url` requires the server to be started with `--public-base-url`."
+    },
+    {
+      "name": "Videos",
+      "description": "Async text-to-video generation backed by SDK `video({ mode: \"txt2vid\" })`. POST creates a job (returns immediately with `status: queued`); poll `GET /v1/videos/{id}` then fetch bytes from `GET /v1/videos/{id}/content`. **Job store is in-memory only** — jobs and rendered bytes are lost on restart."
+    },
+    {
+      "name": "Files",
+      "description": "**Ephemeral in-memory store.** Uploaded files are dropped from the store on successful attach to a vector store. Not durable across restarts."
+    },
+    {
+      "name": "Vector Stores",
+      "description": "**In-memory metadata; survives process lifetime only.** The underlying RAG workspace data persists via the SDK's RAG layer, but the OpenAI-shaped metadata (name, expires_after, etc.) is lost on restart."
+    },
+    {
+      "name": "Models",
+      "description": "Lifecycle for models configured under `serve.models`. GET lists every configured model; each loads on first request unless `preload: true` warmed it at startup. DELETE unloads a model but keeps the alias reloadable — the next request loads it again."
+    },
+    {
+      "name": "Model Catalog",
+      "description": "Discovery listing of models the SDK provides, filterable by capability (role, addon, quantization, engine, text). Rows are catalog entries, not callable endpoints — a `not_configured` model must be added to `serve.models` before it can be used."
+    }
+  ]
+}

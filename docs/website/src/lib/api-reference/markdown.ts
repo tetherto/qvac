@@ -6,9 +6,10 @@
  * same line data, so both renditions state the same facts.
  */
 import { functionCard, modelsAsMarkdown, modelsForEngines, shapeAsTypeScript } from './card'
-import { functionNames, functionReference, lineApiForUrl } from './data'
+import { cliAsMarkdown, openApiAsMarkdown, type CliData } from './cli'
+import { functionNames, functionReference, lineApiForUrl, lineGeneratedFile } from './data'
 
-const TAG = /<(FunctionReference|SchemaTable|ModelsTable|FunctionIndex|LanguageSwitch)\b([^>]*?)\/>/g
+const TAG = /<(FunctionReference|SchemaTable|ModelsTable|FunctionIndex|LanguageSwitch|CliReference|OpenApiReference)\b([^>]*?)\/>/g
 
 function attribute(attributes: string, name: string): string | null {
   return new RegExp(`${name}="([^"]*)"`).exec(attributes)?.[1] ?? null
@@ -26,6 +27,14 @@ export function renderDataComponentsAsMarkdown(text: string, url: string): strin
   const api = lineApiForUrl(url)
   return text.replace(TAG, (_match, component: string, attributes: string) => {
     if (component === 'LanguageSwitch') return ''
+    if (component === 'CliReference') {
+      const data = lineGeneratedFile<CliData>(url, 'cli.json')
+      return data ? cliAsMarkdown(data, attribute(attributes, 'command') ?? undefined, /\btablesOnly\b/.test(attributes)) : '_Command reference data is not available for this documentation line._'
+    }
+    if (component === 'OpenApiReference') {
+      const document = lineGeneratedFile<Record<string, unknown>>(url, 'openapi.json')
+      return document ? openApiAsMarkdown(document) : '_HTTP API reference data is not available for this documentation line._'
+    }
     if (!api) return '_API data is not available for this documentation line._'
     if (component === 'FunctionIndex') {
       return functionNames(api)

@@ -73,7 +73,7 @@ export class SchemaReader {
     let current = schema
     const visited = new Set(seen)
     while (current.$ref) {
-      const name = decodeURIComponent(current.$ref.replace(/^#\/\$defs\//, ''))
+      const name = decodeURIComponent(current.$ref.replace(/^#\/(\$defs|components\/schemas)\//, ''))
       if (visited.has(name)) break
       visited.add(name)
       const target = this.definition(name)

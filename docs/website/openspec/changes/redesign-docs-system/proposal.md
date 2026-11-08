@@ -78,4 +78,4 @@ The ecosystem is at version zero and still taking shape, so the redesign favours
   - a docs-only classifier in the release guards and publish triggers.
 - `.agents/skills`: the documentation-update skill becomes contract-driven and package-agnostic. A scaffold skill is added. The line-cut skills are retired.
 - Process documentation: `docs/gitflow.md`, `docs/ci/RELEASE-TRAIN.md`, `CONTRIBUTING.md`, the site's README and `docs-workflow.md`.
-- Dependencies: `fumadocs-openapi`. TypeDoc stays.
+- Dependencies: none added. TypeDoc stays; OpenAPI operations render through the same schema reader as the contract.

@@ -204,6 +204,20 @@ function wireOnlyFields(reader: SchemaReader, schema: JsonSchema, target: Contra
   return hidden
 }
 
+/**
+ * A generated data file of the line holding the page at `url`, read from the
+ * line's snapshot (`<docs root>/_generated/<file>`), or null when the line has
+ * none. Products without a contract — a command-line tool, an HTTP server —
+ * publish their facts this way.
+ */
+export function lineGeneratedFile<T>(url: string, file: string): T | null {
+  const line = lineOfUrl(url)
+  if (!line) return null
+  const declaration = declaredSoftware().find((entry) => entry.declaration.path === `/${line.slug}`)?.declaration
+  if (!declaration) return null
+  return readJson<T>(path.join(websiteRoot(), '.lines', line.slug, line.version, declaration.paths[0], '_generated', file))
+}
+
 /** Every client function of the line, in the order TypeDoc lists them. */
 export function functionNames(api: LineApi): string[] {
   return api.js.map((fn) => fn.name)

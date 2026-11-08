@@ -105,38 +105,14 @@ Run `qvac --help` to see all available commands and `qvac <command> --help` for 
 
 Generate a tree-shaken Bare worker bundle with selected plugins.
 
-| Option | Description |
-| --- | --- |
-| `-c, --config <path>` | Config file path (default: auto-detect `qvac.config.*`) |
-| `--sdk-path <path>` | Path to SDK package (default: auto-detect in node_modules) |
-| `--host <target>` | Target host (repeatable) |
-| `--defer <module>` | Defer a module (repeatable) |
-| `-q, --quiet` | Minimal output |
-| `-v, --verbose` | Detailed output |
+<CliReference command="qvac bundle sdk" tablesOnly />
 
 ### `qvac serve`
 
 Start the HTTP server. `qvac serve openai` is a deprecated alias for
 `qvac serve --openai --no-default`.
 
-| Option | Description |
-| --- | --- |
-| `--openai` | Mount the OpenAI-compatible REST API |
-| `--no-default` | Do not mount the QVAC surface |
-| `-c, --config <path>` | Config file path (default: auto-detect `qvac.config.*`) |
-| `-p, --port <number>` | Port to listen on (default: `11434`) |
-| `-H, --host <address>` | Host to bind to (default: `127.0.0.1`) |
-| `--model <alias>` | Model alias to preload (repeatable, must be in config) |
-| `--api-key <key>` | Require Bearer token authentication |
-| `--api-key-file <path>` | Read the Bearer token from a file instead of argv |
-| `--allow-unauthenticated` | Permit binding to a non-loopback host without a key |
-| `--cors` | Compatibility validation switch; fails unless `--cors-origin` or `serve.cors.origins` supplies an explicit origin |
-| `--cors-origin <origin>` | Trust an exact HTTP(S) CORS origin (repeatable; wildcard is not allowed) |
-| `--allowed-host <host>` | Accept this `Host` header besides loopback names, IP addresses and the bind host; `.example.com` also covers subdomains (repeatable) |
-| `--allow-any-host` | Accept any `Host` header, turning off DNS-rebinding protection |
-| `--public-base-url <url>` | Externally reachable origin (required for image `response_format=url`) |
-| `--docs` | Mount the Swagger UI at `/docs`. Off by default; adds same-port loopback origins to CORS, so it requires a fixed `--port`. |
-| `-v, --verbose` | Detailed output |
+<CliReference command="qvac serve" tablesOnly />
 
 A non-loopback `--host` requires `--api-key` or `--api-key-file`; the server refuses to start otherwise. Use `--allow-unauthenticated` to override that and start with a warning instead.
 
@@ -167,13 +143,7 @@ qvac configure --modality chat --modality image
 qvac configure --modality decision
 ```
 
-| Option | Description |
-| --- | --- |
-| `-c, --config <path>` | Config file to write (default: `./qvac.config.json`). JSON only. |
-| `-y, --yes` | Non-interactive: write a sensible default starter (chat + transcription). |
-| `--modality <name>` | Non-interactive: add a modality, repeatable. `chat` / `embedding` / `transcription` / `speech` / `image` / `decision`. |
-| `--force` | Re-add a model that is already configured (overwrites its existing entry in place). |
-| `-q, --quiet` | Suppress output. |
+<CliReference command="qvac configure" tablesOnly />
 
 The picker includes MOSS-SoundEffect and MOSS-Speech starters. MOSS-SoundEffect uses the model source URL with `ttsEngine: "moss-sfx"`; MOSS-Speech includes its codec source. Their conversation and sound-effect controls are available through the [SDK Text-to-Speech API](/sdk/ai-capabilities/text-to-speech); the OpenAI speech endpoint does not represent those controls.
 
@@ -187,10 +157,7 @@ See [HTTP server — Configuration](/cli/http-server#configuration) for the shap
 
 Emit the OpenAPI 3.1.0 spec for the OpenAI-compatible HTTP server to stdout or a file, without starting the server. Useful for piping into offline doc generators (Redocly, Widdershins, etc.) or wiring API clients.
 
-| Option | Description |
-| --- | --- |
-| `--yaml` | Emit YAML instead of JSON (default: JSON). |
-| `-o, --output <path>` | Write the spec to a file instead of stdout. |
+<CliReference command="qvac openai spec" tablesOnly />
 
 Examples:
 
@@ -205,7 +172,4 @@ qvac openai spec --yaml -o spec.yaml   # write YAML to file
 
 Run a preflight check of host system requirements.
 
-| Option | Description |
-| --- | --- |
-| `--json` | Emit a machine-readable `DoctorReport` JSON. |
-| `-q, --quiet` | Set the exit code only; suppress human-readable output. |
+<CliReference command="qvac doctor" tablesOnly />

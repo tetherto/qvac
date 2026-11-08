@@ -152,7 +152,7 @@ JSON Schema is the common shape of type facts, rendered by one nested, collapsib
 | Any other product | its strongest machine-readable surface; a Zod contract exported like the SDK's is the preferred shape | per source |
 | Internal packages | public `index.d.ts` → TypeDoc JSON → normalizer | `docs/users/_generated/api.json` |
 | CLI | Commander tree → walker | `docs/users/_generated/cli.json` |
-| `qvac serve` | fastify-swagger, exported without listening | `docs/users/_generated/openapi.json` |
+| `qvac serve` | fastify-swagger, exported without listening (`renderOpenApiSpec`) and rendered by the same schema table, since OpenAPI 3.1 schemas are JSON Schema | `docs/users/_generated/openapi.json` |
 | Models | `contract/models.json` | used as is |
 
 The normalizer expands interfaces, object aliases, literal unions, arrays, and overload lists. Every other type is shown as TypeDoc's own type text with a link to the declaration. It formats what TypeDoc resolved and interprets nothing, which keeps it from becoming an API-doc engine.

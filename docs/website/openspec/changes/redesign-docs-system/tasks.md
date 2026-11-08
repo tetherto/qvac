@@ -39,10 +39,10 @@ No other package is touched.
 
 ## 3. CLI migration
 
-- [ ] 3.1 Move `content/_unpublished/cli/next/` to `packages/cli/docs/users/`, and the CLI maintainer documentation to `docs/contributors/`
-- [ ] 3.2 Add the Commander walker that writes `packages/cli/docs/users/_generated/cli.json`, with a `--check` freshness gate
-- [ ] 3.3 Implement the CLI command reference component
-- [ ] 3.4 Export the `qvac serve` OpenAPI document to `_generated/openapi.json` without starting the server, with a `--check` gate, and render it with `fumadocs-openapi`. Any CLI source change: review case by case
+- [x] 3.1 Move `content/_unpublished/cli/next/` to `packages/cli/docs/users/`, and the CLI maintainer documentation to `docs/contributors/`
+- [x] 3.2 Add the Commander walker that writes `packages/cli/docs/users/_generated/cli.json`, with a `--check` freshness gate
+- [x] 3.3 Implement the CLI command reference component
+- [x] 3.4 Export the `qvac serve` OpenAPI document to `_generated/openapi.json` without starting the server, with a `--check` gate, and render its operations with the shared schema table. Any CLI source change: review case by case
 - [ ] 3.5 Render the configuration tables from the SDK's configuration schema
 - [ ] 3.6 Pin the CLI's first release after the migration as its first line, and delete `content/docs/cli/`
 - [ ] 3.7 Remove `scripts/cut-line.ts`, `content/_unpublished/`, and every README and `docs-workflow.md` passage on cutting lines

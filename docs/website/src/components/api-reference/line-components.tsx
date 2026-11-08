@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { formatSize, modelsForEngines } from '@/lib/api-reference/card';
-import { functionNames, functionReference, lineApiForUrl, type LineApi } from '@/lib/api-reference/data';
+import type { CliData } from '@/lib/api-reference/cli';
+import { functionNames, functionReference, lineApiForUrl, lineGeneratedFile, type LineApi } from '@/lib/api-reference/data';
+import { CliCommands, OpenApiOperations } from './cli-reference';
 import { LanguageSwitch } from './language-switch';
 import { ShapeTables } from './schema-table';
 
@@ -163,5 +165,17 @@ export function apiComponentsFor(url: string) {
     );
   }
 
-  return { SchemaTable, ModelsTable, FunctionReference, FunctionIndex, LanguageSwitch };
+  function CliReference({ command, tablesOnly }: { command?: string; tablesOnly?: boolean }) {
+    const data = lineGeneratedFile<CliData>(url, 'cli.json');
+    if (!data) return <Missing>Command reference data is not available for this documentation line.</Missing>;
+    return <CliCommands data={data} path={command} tablesOnly={tablesOnly} />;
+  }
+
+  function OpenApiReference() {
+    const document = lineGeneratedFile<Record<string, unknown>>(url, 'openapi.json');
+    if (!document) return <Missing>HTTP API reference data is not available for this documentation line.</Missing>;
+    return <OpenApiOperations document={document} />;
+  }
+
+  return { SchemaTable, ModelsTable, FunctionReference, FunctionIndex, LanguageSwitch, CliReference, OpenApiReference };
 }

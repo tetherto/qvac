@@ -111,99 +111,27 @@ unreleased line, read from the working tree, at `/<collection>/preview/` —
 once that software keeps its documentation in its package. Production builds
 never pass it.
 
-## Cutting a documentation line
+## Publishing a documentation line
 
-**Only the CLI is still cut.** The SDK keeps its documentation in
-`packages/sdk/docs/users/` and publishes a line by pinning its release commit
-in `versions/sdk.json` (see "Documentation lines and versions files");
-`cut-line.ts` refuses it. The CLI follows once it migrates.
+The SDK and the CLI keep their documentation in their packages:
+`packages/sdk/docs/users/` and `packages/cli/docs/users/`. That folder on
+`main` is the line being written; `npm run dev` previews it at
+`/<collection>/preview/`. No line is cut and no folder is copied.
 
-A versioned collection publishes one folder per line it has cut:
-the parenthesized one is a Fumadocs group, so its pages answer at the
-version-less paths, and every plain one carries its version in the URL. A
-cut adds a line and retires none; retiring a line is a separate edit to its
-versions file.
+A release publishes its line by pinning it: the software's versions file
+gains the line, first, with the release branch as `ref` and the release
+commit as `sha`. A patch release moves the pin of its minor's line. A
+correction to a released line is a documentation-only pull request into that
+line's release branch, followed by moving the pin to the merged commit. The
+build materializes every pinned line from its commit and generates its
+redirect rules; finish with `npm run build` and `bun run vitest run`.
 
-The line still being written is not among them. It lives at
-`content/_unpublished/<collection>/next/`, which nothing builds and no URL
-reaches, under a fixed name so the path a feature PR writes to does not move.
+The lines published before the migration are still declared `inPlace` and
+served from `content/docs/<collection>/`. When the first pinned line becomes
+current, rename the in-place current folder from `(vX.Y)` to `vX.Y` in the
+same pull request; retire the in-place lines as they age out.
 
-A cut publishes the line of the version being released. Cut at the **release
-cutoff** — step 6 of [`../ci/RELEASE-TRAIN.md`](../ci/RELEASE-TRAIN.md) for a
-train, step 1 of the release flow in [`../gitflow.md`](../gitflow.md) for a
-single package.
-
-One command does the whole thing, from `docs/website`:
-
-```bash
-bun run scripts/cut-line.ts sdk v0.18
-```
-
-It refuses a collection that is not versioned, a version that is not above the
-line last cut, a missing development line, a destination already on disk, and a
-working tree that already carries changes — the cut is reviewed as its own
-diff. Review what it did, then `npm run build` and `npm test`.
-
-The command is a convenience, not a dependency. What it does is the following,
-and doing it by hand is the same cut. For `@qvac/sdk` releasing `0.18`, with
-`0.17` the line last cut:
-
-```bash
-# 1. Preserve the outgoing line, which keeps serving what it served.
-git mv 'content/docs/sdk/(v0.17)' content/docs/sdk/v0.17
-
-# 2. Publish the line the sprint was written into — a copy, so the
-#    development line stays where it is and becomes v0.19's.
-cp -r content/_unpublished/sdk/next 'content/docs/sdk/(v0.18)'
-```
-
-Step 2 is a copy and not a move on purpose. Nothing is deleted and the
-development line is never renamed, so a feature PR opened before the cutoff and
-merged after it lands in the path it was written to — git has no deletion to
-pair its edits against.
-
-Step 1 **is** a rename, and the folder it opens in step 2 is byte-identical to
-it wherever the sprint changed nothing. A PR that edits the outgoing group and
-merges after the cut therefore gives git two exact rename candidates per page,
-and git picks one, which is QVAC-27286. The `Documentation lines` job in
-`.github/workflows/docs-website-pr-checks.yml` fails such a PR until it is
-rebased — it is not a required check, so it asks rather than withholds — and
-`qv-docs-cutoff` lists the PRs a cut will strand before making it.
-
-Then edit the one hand-maintained input:
-
-- `versions/sdk.json` — the SDK gains `{ "version": "v0.18", "inPlace": true }`
-  at the top, which makes it current; the older entries stay as they are. The
-  development line is not in this file; it is not published.
-
-The preserved line's redirect rules follow from that file at build. A page
-carried by both lines keeps resolving on its own, and a page the new line drops
-is the only case that needs a rule of its own in `public/_redirects`.
-
-Then retarget the new line's release-notes link. `reference/meta.json` carries
-the sidebar entry as an external link to that minor's GitHub release:
-
-```
-"external:[Release Notes](https://github.com/tetherto/qvac/releases/tag/sdk-v0.18.0)"
-```
-
-The copy brought the development line's tag with it, so rewrite it to the line
-being opened. The tag exists within days: the release follows the cutoff, and
-production is not promoted until it has.
-
-Everything else follows: the sidebars come from the `meta.json` files the copy
-brought with it, and the switcher, canonicals, agent artifacts, `versions.json`,
-sitemap, and retrieval metadata are computed from the manifest. `custom-tree.ts`
-is not edited by a cut.
-
-Either way, finish with `npm run build` and `bun run vitest run`. Between them they reject a
-cut that went wrong: a manifest that disagrees with the folders either way, a
-collection left with no group or two, a patch-shaped folder name, a line
-numbered above the group, a URL that stopped resolving, and an artifact that
-reaches into another line. The one thing they do not check is the preserved
-line's index pair — the broken-link check is told to ignore line indexes, and
-the redirect replay reads the built output rather than the CDN's matcher — so
-read that rule back yourself.
+### Software Inventory
 
 The Software Inventory is built but not published. Its pages wait under
 `content/_unpublished/ecosystem/inventory/`, the manifest lists no package, and
@@ -215,17 +143,6 @@ Once published, documenting a release is the same shape one level down from a
 line cut: add `content/docs/ecosystem/inventory/<pkg>/v<major>.<minor>/index.md`
 with the README as released, add the row to that package's index, add the
 manifest entry. The `:version` rules then already cover the new folder.
-
-The Kotlin SDK is documented but not published, because the package is not
-released yet. Its page waits under `content/_unpublished/sdk/kotlin-sdk.mdx`,
-and the pages that enumerate the clients name only JS/TS and Python.
-Publishing it is moving that page to `content/docs/sdk/(v0.20)/`, listing it in
-that folder's `meta.json`, prefixing its internal links with the line scope,
-and restoring the third client where the clients are counted. The Ecosystem
-overview holds its share of that already, commented beside what it replaces —
-the three-client paragraph and the Kotlin card, both line-scoped, so they go
-live by uncommenting. The SDK line's index was left at two clients and needs
-its five Kotlin passages written back by hand.
 
 ## CDN configuration (Sevalla)
 
