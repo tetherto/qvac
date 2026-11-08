@@ -4,6 +4,43 @@ icon: Server
 description: Run a local HTTP server exposing the QVAC API, with an optional OpenAI-compatible extension.
 schemaType: TechArticle
 tocMaxDepth: 3
+binds:
+  - "endpoint:DELETE /v1/models/{id}"
+  - "endpoint:DELETE /v1/responses/{id}"
+  - "endpoint:DELETE /v1/vector_stores/{id}"
+  - "endpoint:DELETE /v1/videos/{id}"
+  - "endpoint:GET /v1/audio/models"
+  - "endpoint:GET /v1/audio/voices"
+  - "endpoint:GET /v1/files"
+  - "endpoint:GET /v1/files/{id}"
+  - "endpoint:GET /v1/files/{id}/content"
+  - "endpoint:GET /v1/models"
+  - "endpoint:GET /v1/models/catalog"
+  - "endpoint:GET /v1/models/catalog/{id}"
+  - "endpoint:GET /v1/models/{id}"
+  - "endpoint:GET /v1/responses/{id}"
+  - "endpoint:GET /v1/responses/{id}/input_items"
+  - "endpoint:GET /v1/vector_stores"
+  - "endpoint:GET /v1/vector_stores/{id}"
+  - "endpoint:GET /v1/videos"
+  - "endpoint:GET /v1/videos/{id}"
+  - "endpoint:GET /v1/videos/{id}/content"
+  - "endpoint:POST /v1/audio/speech"
+  - "endpoint:POST /v1/audio/transcriptions"
+  - "endpoint:POST /v1/audio/translations"
+  - "endpoint:POST /v1/chat/completions"
+  - "endpoint:POST /v1/completions"
+  - "endpoint:POST /v1/decisions"
+  - "endpoint:POST /v1/embeddings"
+  - "endpoint:POST /v1/files"
+  - "endpoint:POST /v1/images/edits"
+  - "endpoint:POST /v1/images/generations"
+  - "endpoint:POST /v1/responses"
+  - "endpoint:POST /v1/vector_stores"
+  - "endpoint:POST /v1/vector_stores/{id}"
+  - "endpoint:POST /v1/vector_stores/{id}/files"
+  - "endpoint:POST /v1/vector_stores/{id}/search"
+  - "endpoint:POST /v1/videos"
 ---
 
 ## Overview

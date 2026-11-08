@@ -28,7 +28,7 @@ The ecosystem is at version zero and still taking shape, so the redesign favours
   They are rendered as nested tables for readers and as compact per-function cards and per-method schemas for agents. The polyglot SDK has one language-switchable reference.
 - **BREAKING (pipeline):** the Nunjucks-rendered API summary is retired. TSDoc stops being a documentation input except for function summaries, deprecation, throws, and status tags.
 - **One kind per software.** Every documented software declares one kind in its versions file: `product` (its own versioned root collection) or `platform` (a sub-collection of Ecosystem → Packages). The kind decides where the software appears, whether a line is current, what the docs contract requires, and how strictly pages bind to its API.
-- **Docs contract.** Every software's kind sets its required pages. Every page declares a type. The contract states what each must contain and is checked on pull requests, never at build.
+- **Docs contract, mechanical part.** Facts come from data and are checked: generated data stays fresh, data components render it, and bindings guard the prose that describes it. A `platform` package must provide a minimal set of pages. A `product` curates its own. The contract is checked on pull requests, never at build. Page types, required sections, and per-type scaffolds are deferred to a follow-up change.
 - **Bindings.** Hand-written pages declare the API symbols they describe. A lock records the surface they were reviewed against, so a surface change without a page review fails the pull request.
 - **SDK and CLI migrate fully.** This change touches only `sdk`, `sdk-python`, `sdk-kotlin`, and `cli`:
   - their `docs/` folders change freely;
@@ -42,7 +42,7 @@ The ecosystem is at version zero and still taking shape, so the redesign favours
 ### New Capabilities
 
 - `api-reference`: how API facts are sourced, generated, kept fresh, and rendered for readers and agents, per kind of software, including the polyglot SDK.
-- `docs-contract`: software kinds, page types, what each must contain, and when the contract is checked.
+- `docs-contract`: software kinds, the minimal pages of a platform package, and when the contract is checked.
 - `docs-bindings`: binding hand-written pages to API symbols, the surface lock, and the drift and coverage checks.
 - `ecosystem-packages`: the Packages section of Ecosystem — which packages it lists, how each is versioned, addressed, and entered.
 
@@ -76,6 +76,6 @@ The ecosystem is at version zero and still taking shape, so the redesign favours
   - pull-request checks cover package documentation;
   - a pin-update workflow;
   - a docs-only classifier in the release guards and publish triggers.
-- `.agents/skills`: the documentation-update skill becomes contract-driven and package-agnostic. A scaffold skill is added. The line-cut skills are retired.
+- `.agents/skills`: the documentation-update skill becomes package-agnostic and driven by the binding check. A scaffold for a platform package's pages is added. The line-cut skills are retired.
 - Process documentation: `docs/gitflow.md`, `docs/ci/RELEASE-TRAIN.md`, `CONTRIBUTING.md`, the site's README and `docs-workflow.md`.
 - Dependencies: none added. TypeDoc stays; OpenAPI operations render through the same schema reader as the contract.

@@ -3,6 +3,14 @@ title: VLA
 icon: Eye
 description: Vision-language-action inference — run a VLA policy that turns camera frames, robot state, and a natural-language instruction into an action chunk.
 schemaType: HowTo
+binds:
+  - fn:loadModel
+  - fn:unloadModel
+  - fn:vla
+  - fn:vlaHparams
+  - fn:vlaPadState
+  - fn:vlaPreprocessImage
+  - fn:vlaSetEmbodiment
 ---
 
 ## Overview

@@ -9,6 +9,8 @@
     "docs:sdk-api": "bun run scripts/api-reference/generate-sdk-data.ts",
     "docs:sdk-parity": "bun run scripts/api-reference/check-sdk-parity.ts",
     "docs:sdk-descriptions": "bun run scripts/api-reference/report-sdk-descriptions.ts",
+    "docs:bindings": "bun run scripts/bindings/check-bindings.ts",
+    "docs:lock": "bun run scripts/bindings/check-bindings.ts --write",
     "docs:cli-api": "bun run scripts/api-reference/generate-cli-data.ts cli --entry src/index.ts --openapi src/openai/spec.ts#renderOpenApiSpec",
     "build": "npm run docs:materialize && npm run prebuild:examples && next build && bun run scripts/write-line-redirects.ts && bun run scripts/write-schema-slices.ts && bun run scripts/generate-llm-md-files.ts && npx @vahor/next-broken-links --ignore '/**/v[0-9]*' && bun run scripts/check-redirects.ts && bun run scripts/check-artifacts.ts && bun run scripts/check-navbar-links.ts && bun run scripts/check-breadcrumb-row.ts",
     "build:static": "npm run docs:materialize && npm run prebuild:examples && next build && bun run scripts/write-line-redirects.ts && bun run scripts/write-schema-slices.ts && bun run scripts/generate-llm-md-files.ts && npx @vahor/next-broken-links --ignore '/**/v[0-9]*' && bun run scripts/check-redirects.ts && bun run scripts/check-artifacts.ts && bun run scripts/check-navbar-links.ts && bun run scripts/check-breadcrumb-row.ts",

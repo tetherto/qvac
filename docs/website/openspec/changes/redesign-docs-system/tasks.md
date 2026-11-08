@@ -49,15 +49,13 @@ No other package is touched.
 
 ## 4. Docs contract and bindings
 
-- [ ] 4.1 Agree the prose elements of each page type with the documentation owner, and update this change with them
-- [ ] 4.2 Write the software-kind and page-type definitions and the page scaffolds
-- [ ] 4.3 Implement the contract check over a pull request's authored documentation, and keep it out of the build
-- [ ] 4.4 Implement symbol identifiers, the projected-surface hash, `api-bindings.lock.json`, and `docs:lock`
-- [ ] 4.5 Implement the drift check and the product coverage check
-- [ ] 4.6 Add bindings and locks to the SDK and CLI pages
-- [ ] 4.7 Rewrite `qv-docs-update` as package-agnostic and contract-driven, fed by the binding check, and add a scaffold skill for `docs/users/`
-- [ ] 4.8 Retire `qv-docs-line-cut` and `qv-docs-cutoff`
-- [ ] 4.9 Sync the `docs-contract` and `docs-bindings` deltas into the main specs
+- [x] 4.1 Record the editorial contract (page types, the pages a product must provide, per-type scaffolds) as deferred to a follow-up change
+- [x] 4.2 Implement symbol identifiers, the projected-surface hash, `api-bindings.lock.json`, and `docs:lock`
+- [x] 4.3 Implement the drift check and the product coverage check
+- [x] 4.4 Add bindings and locks to the SDK and CLI pages
+- [ ] 4.5 Rewrite `qv-docs-update` as package-agnostic and driven by the binding check
+- [x] 4.6 Retire `qv-docs-line-cut` and `qv-docs-cutoff`
+- [ ] 4.7 Sync the `docs-bindings` delta into the main specs
 
 ## 5. CI and release automation
 
@@ -72,9 +70,11 @@ No other package is touched.
 
 - [ ] 6.1 Add the Packages section to Ecosystem, composed from `kind: platform` versions files, with the switcher, and hidden while no package is listed
 - [ ] 6.2 Add the TypeDoc normalizer and `docs:api`, which write `_generated/api.json` with a `--check` gate
-- [ ] 6.3 Add a fixture package and tests covering Packages composition, versioning, the switcher, and the normalizer
-- [x] 6.4 Delete the unpublished Software Inventory pages
-- [ ] 6.5 Sync the `ecosystem-packages` and `software-inventory-docs` deltas into the main specs
+- [ ] 6.3 Write the software-kind definitions, with a platform package's minimal pages, and a scaffold skill for them
+- [ ] 6.4 Implement the contract check of a platform package's minimal pages over a pull request's documentation, and keep it out of the build
+- [ ] 6.5 Add a fixture package and tests covering Packages composition, versioning, the switcher, the normalizer, and the contract check
+- [x] 6.6 Delete the unpublished Software Inventory pages
+- [ ] 6.7 Sync the `docs-contract`, `ecosystem-packages`, and `software-inventory-docs` deltas into the main specs
 
 ## 7. Close-out
 

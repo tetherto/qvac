@@ -36,13 +36,14 @@ the per-package flow in `docs/gitflow.md`.
   and leave it out of the backmerge.
 - Open both PRs with `qv-sdk-pr-create`: one release PR, one backmerge, for the
   whole train.
-- Invoke `qv-docs-cutoff` right after cutting the train branch, passing the new
-  version of each documented collection's package (`@qvac/sdk`, `@qvac/cli`),
-  not the train's anchor version, plus the train branch itself. The branch is
-  what gives it the release base, since the cutoff publishes the tree the train
-  was cut from rather than `main`'s tip. A train that moves neither collection
-  cuts nothing. It opens one documentation PR into `main` and reports its URL.
-  Nothing in steps 7 and 8 waits on it.
+- Right after cutting the train branch, open one documentation PR into `main`
+  that pins the line of each package the train moves that has a versions file
+  under `docs/website/versions/` (`@qvac/sdk`, `@qvac/cli`). Use the package's
+  own new version, not the train's anchor version. A minor release declares
+  `v<x.y>` first in `lines`, with `ref` the train branch and `sha` its head; a
+  patch release moves its minor's existing line there. Copy, move, or rename
+  no documentation folder. A train that moves neither package pins nothing.
+  Report the PR's URL. Nothing in steps 7 and 8 waits on it.
 - Do not approve or merge the documentation PR. The documentation engineer
   reviews it — that review is the only gate on the documentation side of the
   release.

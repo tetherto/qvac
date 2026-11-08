@@ -1,0 +1,226 @@
+{
+  "//": "Written by `npm run docs:lock` in docs/website. Each entry is the surface hash of a symbol a page binds, at the page's last review.",
+  "pages": {
+    "ai-capabilities/batch-processing.mdx": {
+      "fn:batchCompletion": "b7d974feb8a23520",
+      "fn:completion": "acb4a71704515694",
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:unloadModel": "cd0edd42e880459d"
+    },
+    "ai-capabilities/bci.mdx": {
+      "fn:bciTranscribe": "727ccf9625b5a35a",
+      "fn:bciTranscribeStream": "4c3d203d24f00fa1",
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:unloadModel": "cd0edd42e880459d"
+    },
+    "ai-capabilities/decisions.mdx": {
+      "fn:cancel": "f4654f3459c0ccc4",
+      "fn:decide": "58ebd69e0f181446",
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:unloadModel": "cd0edd42e880459d"
+    },
+    "ai-capabilities/fine-tuning.mdx": {
+      "fn:finetune": "969e63fa25773731",
+      "fn:getModelInfo": "440aecf8f85da8de",
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:unloadModel": "cd0edd42e880459d"
+    },
+    "ai-capabilities/image-classification.mdx": {
+      "fn:classify": "d81730002c315b6c",
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:unloadModel": "cd0edd42e880459d"
+    },
+    "ai-capabilities/image-generation.mdx": {
+      "fn:diffusion": "235a0fc585bb99ca",
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:unloadModel": "cd0edd42e880459d",
+      "fn:upscale": "f16a1a615f48d7da"
+    },
+    "ai-capabilities/multimodal-embeddings.mdx": {
+      "fn:cancel": "f4654f3459c0ccc4",
+      "fn:embed": "be3763464c723b1c",
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:unloadModel": "cd0edd42e880459d"
+    },
+    "ai-capabilities/multimodal.mdx": {
+      "fn:completion": "acb4a71704515694",
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:unloadModel": "cd0edd42e880459d"
+    },
+    "ai-capabilities/music-generation.mdx": {
+      "fn:audioEdit": "3e5966b31b7eb704",
+      "fn:audioGen": "0af57c93a7755b9f",
+      "fn:audioUnderstand": "7e5b5d906f4ef8b2",
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:unloadModel": "cd0edd42e880459d"
+    },
+    "ai-capabilities/ocr.mdx": {
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:ocr": "3a0990cd23a67863",
+      "fn:unloadModel": "cd0edd42e880459d"
+    },
+    "ai-capabilities/rag.mdx": {
+      "fn:completion": "acb4a71704515694",
+      "fn:createVectorIndex": "3bf99537dab8b7ac",
+      "fn:embed": "be3763464c723b1c",
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:loadVectorIndex": "d9e1098e9ae7644a",
+      "fn:ragChunk": "4442cb517770a61e",
+      "fn:ragCloseWorkspace": "5846845923dadddb",
+      "fn:ragDeleteEmbeddings": "0c720d497c75a062",
+      "fn:ragDeleteWorkspace": "f8a8d1bb0f3a8ac0",
+      "fn:ragIngest": "cb468c7ca688e72a",
+      "fn:ragListWorkspaces": "11db18fd26966636",
+      "fn:ragReindex": "0feb18704ffaab3e",
+      "fn:ragSaveEmbeddings": "3bc914c6defae2d5",
+      "fn:ragSearch": "a91a8f3939cdd0ed",
+      "fn:unloadModel": "cd0edd42e880459d"
+    },
+    "ai-capabilities/reranking.mdx": {
+      "fn:cancel": "f4654f3459c0ccc4",
+      "fn:embed": "be3763464c723b1c",
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:rerank": "1ee2c58192f781df",
+      "fn:unloadModel": "cd0edd42e880459d"
+    },
+    "ai-capabilities/text-embeddings.mdx": {
+      "fn:embed": "be3763464c723b1c",
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:unloadModel": "cd0edd42e880459d"
+    },
+    "ai-capabilities/text-generation.mdx": {
+      "fn:batchCompletion": "b7d974feb8a23520",
+      "fn:completion": "acb4a71704515694",
+      "fn:deleteCache": "d44a39b77efa4118",
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:unloadModel": "cd0edd42e880459d"
+    },
+    "ai-capabilities/text-to-speech.mdx": {
+      "fn:assessModelFit": "10eb0f303d64701a",
+      "fn:cancel": "f4654f3459c0ccc4",
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:textToSpeech": "dab327264245ea13",
+      "fn:textToSpeechStream": "4f2532a955e5a60b",
+      "fn:unloadModel": "cd0edd42e880459d"
+    },
+    "ai-capabilities/transcription.mdx": {
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:transcribe": "ac2b8b6a3ddffc90",
+      "fn:transcribeStream": "e610fb6f21ab48c4",
+      "fn:unloadModel": "cd0edd42e880459d"
+    },
+    "ai-capabilities/translation.mdx": {
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:translate": "843a73ed5eb35419",
+      "fn:unloadModel": "cd0edd42e880459d"
+    },
+    "ai-capabilities/video-generation.mdx": {
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:unloadModel": "cd0edd42e880459d",
+      "fn:video": "1ad502115ebc9074"
+    },
+    "ai-capabilities/vla.mdx": {
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:unloadModel": "cd0edd42e880459d",
+      "fn:vla": "59a910ffda3c9dfa",
+      "fn:vlaHparams": "4576b0260c5c5d1b",
+      "fn:vlaPadState": "5978a48740c095a6",
+      "fn:vlaPreprocessImage": "d9a821801daf5291",
+      "fn:vlaSetEmbodiment": "96ce8cda8f8c125e"
+    },
+    "ai-capabilities/voice-assistant.mdx": {
+      "fn:completion": "acb4a71704515694",
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:textToSpeech": "dab327264245ea13",
+      "fn:transcribeStream": "e610fb6f21ab48c4",
+      "fn:unloadModel": "cd0edd42e880459d"
+    },
+    "ai-capabilities/world-simulation.mdx": {
+      "fn:assessModelFit": "10eb0f303d64701a",
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:unloadModel": "cd0edd42e880459d",
+      "fn:worldCreateScene": "b5d8904973145a70",
+      "fn:worldStep": "81179477240c2a09"
+    },
+    "configuration/index.mdx": {
+      "fn:loadModel": "5d142740d6c776a6"
+    },
+    "index.mdx": {
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:modelRegistryGetModel": "ebf2723c4314318d",
+      "fn:modelRegistryList": "2a7503800930d8df",
+      "fn:modelRegistrySearch": "32ef9908e7247ad4"
+    },
+    "kotlin-sdk.mdx": {
+      "fn:heartbeat": "45d98c3c2e829472"
+    },
+    "models/assess-model-fit.mdx": {
+      "fn:assessModelFit": "10eb0f303d64701a",
+      "fn:downloadAsset": "4910b7a05761c7e3",
+      "fn:getLoadedModelInfo": "b1d3430685729a4f",
+      "fn:loadModel": "5d142740d6c776a6"
+    },
+    "models/download-lifecycle.mdx": {
+      "fn:cancel": "f4654f3459c0ccc4",
+      "fn:deleteCache": "d44a39b77efa4118",
+      "fn:downloadAsset": "4910b7a05761c7e3",
+      "fn:loadModel": "5d142740d6c776a6"
+    },
+    "models/sharded-models.mdx": {
+      "fn:completion": "acb4a71704515694",
+      "fn:embed": "be3763464c723b1c",
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:unloadModel": "cd0edd42e880459d"
+    },
+    "p2p-capabilities/rpc-servers.mdx": {
+      "fn:cancel": "f4654f3459c0ccc4",
+      "fn:discoverRpcServers": "8e2b8c7ba0f3fb2a",
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:startRpcServer": "fc0bc601cfdb5709",
+      "fn:stopRpcServer": "2900fcc5e5b6d2e8"
+    },
+    "runtime/cancellation.mdx": {
+      "fn:cancel": "f4654f3459c0ccc4",
+      "fn:completion": "acb4a71704515694",
+      "fn:decide": "58ebd69e0f181446",
+      "fn:downloadAsset": "4910b7a05761c7e3",
+      "fn:embed": "be3763464c723b1c",
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:rerank": "1ee2c58192f781df",
+      "fn:transcribe": "ac2b8b6a3ddffc90"
+    },
+    "runtime/lifecycle.mdx": {
+      "fn:resume": "db2208be69625f8b",
+      "fn:state": "3b82bd5b031cd11e",
+      "fn:suspend": "5a418101e3ee32f9"
+    },
+    "runtime/logging.mdx": {
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:loggingStream": "ef5d172def4637ae",
+      "fn:subscribeServerLogs": "d4fc271002e97d28"
+    },
+    "runtime/profiler.mdx": {
+      "fn:completion": "acb4a71704515694",
+      "fn:downloadAsset": "4910b7a05761c7e3",
+      "fn:embed": "be3763464c723b1c",
+      "fn:getSystemResources": "3a8a6d73e6f69251",
+      "fn:invokePlugin": "306ba4d34c4d9e17",
+      "fn:invokePluginStream": "480c7a6cfd3c0687",
+      "fn:loadModel": "5d142740d6c776a6",
+      "fn:ocr": "3a0990cd23a67863",
+      "fn:ragChunk": "4442cb517770a61e",
+      "fn:ragCloseWorkspace": "5846845923dadddb",
+      "fn:ragDeleteEmbeddings": "0c720d497c75a062",
+      "fn:ragDeleteWorkspace": "f8a8d1bb0f3a8ac0",
+      "fn:ragIngest": "cb468c7ca688e72a",
+      "fn:ragListWorkspaces": "11db18fd26966636",
+      "fn:ragReindex": "0feb18704ffaab3e",
+      "fn:ragSaveEmbeddings": "3bc914c6defae2d5",
+      "fn:ragSearch": "a91a8f3939cdd0ed",
+      "fn:textToSpeech": "dab327264245ea13",
+      "fn:transcribe": "ac2b8b6a3ddffc90",
+      "fn:transcribeStream": "e610fb6f21ab48c4",
+      "fn:translate": "843a73ed5eb35419"
+    }
+  }
+}

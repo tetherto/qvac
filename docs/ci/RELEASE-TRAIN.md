@@ -97,33 +97,25 @@ native addon's copy has no prebuilds, so the train never links one (see
    backmerge keeps `main`'s `pnpm-workspace.yaml` and regenerates
    `pnpm-lock.yaml` from it.
 
-   The documentation site has one step here. **Run `qv-docs-cutoff` right
-   after cutting the train branch**, passing the new version of each
-   collection's package and the train branch itself — `@qvac/sdk` and
-   `@qvac/cli` are the two documented today, and a train that moves neither
-   cuts nothing. The branch is what tells it the release base: the cutoff
-   publishes the tree the train was cut from, not `main`'s tip. It opens one PR
-   into `main` and reports its URL. The documentation engineer
-   reviews and merges it. That review is how the documentation side of the
-   release is verified — no CI check does it — so do not approve or merge it
-   yourself. The checks they run are in
-   [`docs/website/docs-workflow.md`](../website/docs-workflow.md), "Reviewing
-   the cutoff PR". It lands on `main`; the train branch is the release's
-   target, never documentation's. Nothing in steps 1 to 8 waits on it, and it
-   touches no package.
+   The documentation site has one step here. **Pin the documentation line
+   right after cutting the train branch**, for each package the train moves
+   that has a versions file under
+   [`docs/website/versions/`](../website/versions/) — `@qvac/sdk` and
+   `@qvac/cli` today. A train that moves neither pins nothing. Open one PR into
+   `main` that edits each of those files:
+   - a minor release declares its line, `v<x.y>`, first in `lines`, with `ref`
+     the train branch and `sha` its head;
+   - a patch release moves its minor's existing line to the train branch and
+     its head, and declares no line.
 
-   What the PR does, per collection the train moves: regenerate the API
-   summary of the version being released, publish that version's line — the
-   line the sprint was written into, which until now sat outside the site at
-   `content/_unpublished/<collection>/next/` — and preserve the previously
-   published line at its versioned URLs. The development line stays where it
-   is and is now the next version's, which is where the coming sprint's
-   feature PRs write. No folder is renamed across versions and none is
-   deleted.
-
-   Why here and not at step 7 or 8: the line has to be published from the tree
-   the release was cut from, and the development line has to be free for the
-   next sprint from the moment its development starts.
+   No documentation folder is copied, moved, or renamed: the site reads each
+   line's pages from its pinned commit at build, and the package's
+   documentation folder on `main` stays the next version's, where the coming
+   sprint's feature PRs write. The documentation engineer reviews and merges
+   the PR; that review is how the documentation side of the release is
+   verified, so do not approve or merge it yourself. It lands on `main`; the
+   train branch is the release's target, never documentation's. Nothing in
+   steps 1 to 8 waits on it, and it touches no package.
 
    Skipping this step is the one option that is not available: the version
    would ship with the previous version's documentation. If the documentation

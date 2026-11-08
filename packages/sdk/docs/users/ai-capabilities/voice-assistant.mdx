@@ -2,6 +2,12 @@
 title: Voice assistant
 icon: Mic
 description: Real-time voice conversation pipeline — microphone → transcription → LLM → text-to-speech → speakers.
+binds:
+  - fn:completion
+  - fn:loadModel
+  - fn:textToSpeech
+  - fn:transcribeStream
+  - fn:unloadModel
 ---
 
 ## Overview

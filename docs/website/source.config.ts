@@ -33,6 +33,9 @@ export const docs = defineDocs({
       ogImage: z.string().optional(),
       schemaType: z.enum(SCHEMA_TYPES).optional(),
       tocMaxDepth: z.number().int().min(2).max(5).optional(),
+      // The API symbols a hand-written page describes, checked against the
+      // package's `api-bindings.lock.json` (`npm run docs:bindings`).
+      binds: z.array(z.string()).optional(),
     }),
     postprocess: {
       includeProcessedMarkdown: true,

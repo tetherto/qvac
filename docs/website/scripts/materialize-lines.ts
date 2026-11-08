@@ -35,6 +35,10 @@ import { existsSync } from 'node:fs'
 import * as path from 'node:path'
 import { declaredSoftware } from '../src/lib/versions'
 import { isPinnedLine, type VersionsFile } from '../src/lib/versions-file'
+import { LOCK_FILE } from './bindings/bindings'
+
+/** Top-level entries of a documentation root that are not part of its page tree. */
+const SNAPSHOT_ONLY = new Set(['_generated', LOCK_FILE])
 
 export const WEBSITE_ROOT = path.resolve(import.meta.dirname, '..')
 export const MONOREPO_ROOT = path.resolve(WEBSITE_ROOT, '../..')
@@ -304,12 +308,13 @@ async function publishPageTree(line: PlannedLine, snapshot: string, websiteRoot:
   }
 
   await fs.mkdir(softwareDir, { recursive: true })
-  // Generated data stays in the snapshot, where the data components read it;
-  // the page tree carries pages and navigation only.
+  // Generated data stays in the snapshot, where the data components read it,
+  // and the bindings lock stays with the package's checks: the page tree
+  // carries pages and navigation only.
   const docsRoot = path.join(snapshot, line.software.paths[0])
   await fs.cp(docsRoot, target, {
     recursive: true,
-    filter: (source) => path.relative(docsRoot, source).split(path.sep)[0] !== '_generated',
+    filter: (source) => !SNAPSHOT_ONLY.has(path.relative(docsRoot, source).split(path.sep)[0]),
   })
   await fs.writeFile(path.join(target, MARKER), describe(line.source))
   await fs.writeFile(path.join(target, '.gitignore'), '*\n')

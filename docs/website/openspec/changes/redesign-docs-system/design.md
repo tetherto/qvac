@@ -32,7 +32,7 @@ The ecosystem is at version zero. The SDK ships a minor every two weeks, and a l
 - Document every QVAC software from one static site, with each software's documentation living, versioned, and reviewed with its code.
 - Render each line from the commit it documents, examples and generated data included.
 - Generate API facts deterministically, nested to primitive types, for readers and agents.
-- Make what a page must contain a checked contract, and make a stale page fail its pull request.
+- Make a stale page fail its pull request, and make a platform package's minimal pages a checked contract.
 - Keep the build trivially testable locally and in pull requests.
 - Migrate the SDK and the CLI fully, touching only `sdk`, `sdk-python`, `sdk-kotlin`, and `cli`.
 - Ship the Packages mechanism tested with a fixture, so internal packages can be added one at a time afterwards.
@@ -130,17 +130,19 @@ A package appears only when it has a versions file, so inclusion is an explicit 
 
 ### D7. The docs contract, unversioned
 
-The contract has five layers:
+This change ships the part of the contract that can be checked mechanically. It has three layers:
 
-1. the requirements of each software kind (`product`, `platform`), in YAML;
-2. page types, in YAML: required sections, frontmatter fields, data components;
-3. MDX scaffolds for new pages;
-4. data components that render facts;
-5. writing guidance in agent skills.
+1. the requirements of each software kind, in YAML:
+   - a `product` curates its own pages, and the contract requires none;
+   - a `platform` package provides an overview, installation, supported platforms or backends, and usage, close to what a package README holds, plus its generated API reference;
+2. data components that render facts;
+3. writing guidance in agent skills, and a scaffold for a platform package's pages.
 
-Facts come from data, prose comes from people and agents, and they never share a passage. The contract's checks run on pull requests over the content being authored, and the build only renders. A new contract rule therefore never fails the build of a line pinned before it. Nunjucks page rendering is retired. A generated page would overwrite prose, while a component reading data never does.
+Facts come from data, prose comes from people and agents, and they never share a passage. A product's completeness is guarded by the coverage check of its bindings (D11): every public symbol must be described by some page, without the contract dictating which. The contract's checks run on pull requests over the content being authored, and the build only renders. A new contract rule therefore never fails the build of a line pinned before it. Nunjucks page rendering is retired. A generated page would overwrite prose, while a component reading data never does.
 
-The data components (layer 4) are site code that every line renders, so a change to a component's interface can break an older line's build. For example, a component that gains a required prop breaks every page that still omits it. This is accepted at version zero. The contract is not versioned, and components are not kept backward compatible. When a component change breaks an older line, either the live lines are updated on their release branches and re-pinned, or the line is retired. Compatibility guarantees are revisited once older lines have a user base worth supporting.
+The data components (layer 2) are site code that every line renders, so a change to a component's interface can break an older line's build. For example, a component that gains a required prop breaks every page that still omits it. This is accepted at version zero. The contract is not versioned, and components are not kept backward compatible. When a component change breaks an older line, either the live lines are updated on their release branches and re-pinned, or the line is retired. Compatibility guarantees are revisited once older lines have a user base worth supporting.
+
+**Deferred: the editorial contract.** Page types, their required sections and frontmatter, the pages a product must provide, and per-type scaffolds are left to a later change. Product pages are curated case by case, and the pages needed today are the ones each product already has. A high-level taxonomy of product pages may generalize them later. Until then, the rule that a fact is never written as prose is applied by the documentation skill and by review, not by a check.
 
 ### D8. API facts are extracted, never written
 
@@ -280,6 +282,5 @@ It is built after the implementation and is not tracked by this change's tasks.
 
 ## Open Questions
 
-- The prose elements of each page type, to be agreed with the documentation owner and folded in through an update of this change.
 - The Packages inclusion list.
 - Whether `docs/website/.claude/skills` is tracked in git.
