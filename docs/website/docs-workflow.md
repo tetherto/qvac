@@ -63,7 +63,7 @@ The SDK API summary is **generated from TypeScript source** via [TypeDoc](https:
 
 The generation pipeline has two phases — TypeDoc extraction and Nunjucks
 rendering. Output is deterministic: identical SDK input always produces
-identical MDX. (AI-assisted authoring happens locally via Cursor skills,
+identical MDX. (AI-assisted authoring happens locally via agent skills,
 never inside this pipeline.)
 
 ```
@@ -689,7 +689,7 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 | `lib/link-validator.ts` | -- | Internal link extraction + resolution, for the docs tree and for the development line the build never renders (used by the link-integrity test) |
 
 > AI-assisted authoring (drafting descriptions or examples) happens
-> locally via Cursor skills — never inside this pipeline. Output of
+> locally via agent skills — never inside this pipeline. Output of
 > every script in this table is deterministic.
 >
 > For fully reproducible `api-data.json` set `SOURCE_DATE_EPOCH` to a
