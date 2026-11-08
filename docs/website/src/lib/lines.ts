@@ -56,7 +56,7 @@ function normalize(pathname: string): string {
 export function collectionLines(pageUrls: string[]): CollectionLines[] {
   const urls = pageUrls.map(normalize);
 
-  return documentedSoftwareOfKind('user-facing').map((software) => {
+  return documentedSoftwareOfKind('product').map((software) => {
     const current = getCurrentLine(software);
     const currentVersion = current ? versionOfFolder(current.folder) : null;
 
@@ -105,7 +105,7 @@ export function collectionLines(pageUrls: string[]): CollectionLines[] {
  * manifest and the folders to each other.
  */
 export function packageLines(): CollectionLines[] {
-  return documentedSoftwareOfKind('internal-machinery').map((software) => ({
+  return documentedSoftwareOfKind('platform').map((software) => ({
     path: software.path,
     lines: [
       {

@@ -64,7 +64,7 @@ manifest every version-shaped surface reads, and no other module reads them.
 ```jsonc
 {
   "package": "@qvac/sdk",
-  "kind": "user-facing",                 // user-facing | internal-machinery
+  "kind": "product",                 // product | platform
   "path": "/sdk",                        // where it is documented
   "paths": ["packages/sdk/docs/users",   // the documentation root, first
             "packages/sdk/examples"],    // then whatever it imports

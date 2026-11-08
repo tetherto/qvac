@@ -24,7 +24,7 @@ import { publishedLineRules, publishedRules } from '../src/lib/line-redirects';
 
 const WEBSITE = path.resolve(__dirname, '..');
 const sdk = DOCUMENTED_SOFTWARE.find(
-  (software) => software.path === '/sdk' && software.kind === 'user-facing',
+  (software) => software.path === '/sdk' && software.kind === 'product',
 )!;
 const CURRENT = sdk.versions.find((entry) => entry.folder.startsWith('('))!.version;
 /** The line a cut would open next, derived so a real cut never dates this. */
@@ -39,7 +39,7 @@ describe('the manifest edit', () => {
   const manifest = JSON.stringify(
     {
       package: '@qvac/sdk',
-      kind: 'user-facing',
+      kind: 'product',
       path: '/sdk',
       paths: ['packages/sdk/docs/users'],
       retired: [],

@@ -4,12 +4,12 @@
 
 Every documented software SHALL declare one kind, and the kind SHALL determine which pages its documentation must contain.
 
-- A `user-facing` software (today the SDK and the CLI) MUST provide an overview, installation, requirements and supported platforms, a quickstart, usage pages, configuration, an API reference, troubleshooting, and a link to its release notes.
-- An `internal-machinery` software MUST provide an overview, installation, supported platforms or backends, usage pages, and an API reference.
+- A `product` (today the SDK and the CLI) MUST provide an overview, installation, requirements and supported platforms, a quickstart, usage pages, configuration, an API reference, troubleshooting, and a link to its release notes.
+- A `platform` package MUST provide an overview, installation, supported platforms or backends, usage pages, and an API reference.
 
 #### Scenario: A missing required page fails the pull request
 
-- **WHEN** a pull request leaves a `user-facing` software without an installation page
+- **WHEN** a pull request leaves a `product` without an installation page
 - **THEN** the contract check fails and names the software and the missing page
 
 ### Requirement: Every page declares a type and satisfies it

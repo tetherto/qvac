@@ -44,13 +44,13 @@ export interface DocumentedVersion {
 }
 
 /**
- * `user-facing` — software a developer uses directly, with its own versioned
+ * `product` — software a developer uses directly, with its own versioned
  * root collection publishing a current line and the retained lines before it.
- * `internal-machinery` — a package documented as a sub-collection of
+ * `platform` — a package documented as a sub-collection of
  * Ecosystem → Packages, publishing one folder per retained version with no
  * current version.
  */
-export type DocumentedSoftwareKind = 'user-facing' | 'internal-machinery';
+export type DocumentedSoftwareKind = 'product' | 'platform';
 
 export interface DocumentedSoftware {
   /** The name the package publishes under, in its own registry. */
@@ -87,7 +87,7 @@ export function toDocumentedSoftware(declaration: VersionsFile): DocumentedSoftw
     path: declaration.path as `/${string}`,
     versions: declaration.lines.map((line, index): DocumentedVersion => {
       const version = line.version as VersionNumber;
-      const current = declaration.kind === 'user-facing' && index === 0;
+      const current = declaration.kind === 'product' && index === 0;
       return { version, folder: current ? `(${version})` : version };
     }),
     retired: declaration.retired as VersionNumber[],
@@ -184,7 +184,7 @@ export function getVersionForPath(pathname: string): {
 
 /** True when the pathname falls inside a collection published as lines. */
 export function isVersionedCollectionPath(pathname: string): boolean {
-  return getDocumentedSoftware(pathname)?.kind === 'user-facing';
+  return getDocumentedSoftware(pathname)?.kind === 'product';
 }
 
 /**
@@ -218,7 +218,7 @@ export function computeSectionVersionUrl(
  */
 export function getCurrentVersionOf(path: string): string | null {
   const software = getDocumentedSoftware(path);
-  if (!software || software.kind !== 'user-facing') return null;
+  if (!software || software.kind !== 'product') return null;
   const current = getCurrentLine(software);
   return current ? versionOfFolder(current.folder) : null;
 }

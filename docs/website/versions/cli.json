@@ -1,6 +1,6 @@
 {
   "package": "@qvac/cli",
-  "kind": "user-facing",
+  "kind": "product",
   "path": "/cli",
   "paths": [
     "packages/cli/docs/users"

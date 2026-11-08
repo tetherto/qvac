@@ -54,8 +54,8 @@ export function retiredLineRules(path: string, version: string): string[] {
 
 /**
  * Every published line not served at the version-less paths: every line but
- * the current one of a user-facing software, and every version of an
- * internal-machinery package, whose version-less path is its index.
+ * the current one of a product, and every version of an
+ * platform package, whose version-less path is its index.
  */
 export function publishedRules(software: readonly DocumentedSoftware[] = DOCUMENTED_SOFTWARE): string[] {
   return software.flatMap((entry) =>

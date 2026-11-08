@@ -181,7 +181,7 @@ describe('docs link integrity', () => {
 
 describe('the development line, which the build does not see', () => {
   const collections = DOCUMENTED_SOFTWARE.filter(
-    (software) => software.kind === 'user-facing',
+    (software) => software.kind === 'product',
   ).map((software) => software.path.slice(1))
 
   describe.each(collections)('%s', (slug) => {

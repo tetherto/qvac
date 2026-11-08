@@ -40,7 +40,7 @@ export function versionOfFile(filePath: string): ContentLine | null {
   if (!collection || !folder) return null
 
   const software = getDocumentedSoftware(`/${collection}`)
-  if (!software || software.kind !== 'user-facing') return null
+  if (!software || software.kind !== 'product') return null
 
   const version = software.versions.find((entry) => entry.folder === folder)
   if (!version) return null

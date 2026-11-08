@@ -114,7 +114,7 @@ function checkSoftware(
     }
   }
 
-  if (software.kind === 'user-facing') {
+  if (software.kind === 'product') {
     problems.push(...checkCollection(software, listing, versionFolders));
   } else {
     problems.push(...checkPackage(software, versionFolders));
@@ -189,7 +189,7 @@ export function checkIndexVersions(
   software: readonly DocumentedSoftware[] = DOCUMENTED_SOFTWARE,
 ): string[] {
   return software
-    .filter((entry) => entry.kind === 'internal-machinery')
+    .filter((entry) => entry.kind === 'platform')
     .flatMap((entry) => checkIndex(entry, indexes.get(entry.path) ?? null));
 }
 

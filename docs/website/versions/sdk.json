@@ -1,6 +1,6 @@
 {
   "package": "@qvac/sdk",
-  "kind": "user-facing",
+  "kind": "product",
   "path": "/sdk",
   "paths": [
     "packages/sdk/docs/users",

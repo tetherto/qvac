@@ -53,7 +53,7 @@ No other package is touched.
 - [ ] 4.2 Write the software-kind and page-type definitions and the page scaffolds
 - [ ] 4.3 Implement the contract check over a pull request's authored documentation, and keep it out of the build
 - [ ] 4.4 Implement symbol identifiers, the projected-surface hash, `api-bindings.lock.json`, and `docs:lock`
-- [ ] 4.5 Implement the drift check and the user-facing coverage check
+- [ ] 4.5 Implement the drift check and the product coverage check
 - [ ] 4.6 Add bindings and locks to the SDK and CLI pages
 - [ ] 4.7 Rewrite `qv-docs-update` as package-agnostic and contract-driven, fed by the binding check, and add a scaffold skill for `docs/users/`
 - [ ] 4.8 Retire `qv-docs-line-cut` and `qv-docs-cutoff`
@@ -70,7 +70,7 @@ No other package is touched.
 
 ## 6. Ecosystem packages mechanism
 
-- [ ] 6.1 Add the Packages section to Ecosystem, composed from `kind: internal-machinery` versions files, with the switcher, and hidden while no package is listed
+- [ ] 6.1 Add the Packages section to Ecosystem, composed from `kind: platform` versions files, with the switcher, and hidden while no package is listed
 - [ ] 6.2 Add the TypeDoc normalizer and `docs:api`, which write `_generated/api.json` with a `--check` gate
 - [ ] 6.3 Add a fixture package and tests covering Packages composition, versioning, the switcher, and the normalizer
 - [ ] 6.4 Delete the unpublished Software Inventory pages

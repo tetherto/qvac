@@ -26,14 +26,14 @@ Every published page MUST belong to exactly one collection.
 
 ### Requirement: Collections introduced by this change
 
-The site SHALL provide two unversioned collections, `ecosystem` and `resources`, and one versioned root collection per user-facing software, declared by a versions file of kind `user-facing`. Today the versioned collections are `sdk` and `cli`. The collection set MUST NOT depend on how many user-facing software exist.
+The site SHALL provide two unversioned collections, `ecosystem` and `resources`, and one versioned root collection per product, declared by a versions file of kind `product`. Today the versioned collections are `sdk` and `cli`. The collection set MUST NOT depend on how many products exist.
 
 Research and the assistant app MUST be reached as departures rather than as collections. A collection MUST be named after what it holds.
 
 #### Scenario: Only the agreed collections exist
 
 - **WHEN** the collections are listed
-- **THEN** they are exactly `ecosystem`, `resources`, and one collection per versions file of kind `user-facing`
+- **THEN** they are exactly `ecosystem`, `resources`, and one collection per versions file of kind `product`
 
 #### Scenario: Research and the assistant app are departures
 
@@ -51,7 +51,7 @@ The `ecosystem` collection SHALL hold what describes QVAC as a whole, entered fr
 
 #### Scenario: Packages is absent while no package is listed
 
-- **WHEN** no versions file of kind `internal-machinery` exists
+- **WHEN** no versions file of kind `platform` exists
 - **THEN** the `ecosystem` collection contains no Packages section, and no navigation entry names it
 
 #### Scenario: Product guidance stays in its collection

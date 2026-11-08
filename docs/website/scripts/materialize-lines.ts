@@ -93,7 +93,7 @@ export function planLines(options: MaterializeOptions = {}): PlannedLine[] {
       delete overrides[key]
       if (!override && !isPinnedLine(line)) return
 
-      const current = declaration.kind === 'user-facing' && index === 0
+      const current = declaration.kind === 'product' && index === 0
       const folder = current ? `(${line.version})` : line.version
       const source: LineSource = override
         ? resolveOverride(override, monorepoRoot, declaration.repo)
@@ -105,7 +105,7 @@ export function planLines(options: MaterializeOptions = {}): PlannedLine[] {
     // documentation in its package; until then there is nothing to preview.
     if (
       options.includeDev &&
-      declaration.kind === 'user-facing' &&
+      declaration.kind === 'product' &&
       declaration.repo === null &&
       existsSync(path.join(monorepoRoot, declaration.paths[0]))
     ) {

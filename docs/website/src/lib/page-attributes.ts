@@ -53,7 +53,7 @@ export function pageAttributes(url: string): PageAttributes {
   // releases catalogued page by page, not lines of documentation, and
   // retrieval must not scope a reader to one of them.
   const versioned = getVersionForPath(url);
-  if (versioned && versioned.software.kind === 'user-facing') {
+  if (versioned && versioned.software.kind === 'product') {
     attributes.package = versioned.software.package;
     attributes.line = versioned.version.version;
     attributes.currentLine = isCurrentLineFolder(versioned.version.folder);

@@ -6,7 +6,7 @@ import { declaredSoftware, toDocumentedSoftware } from '../src/lib/versions'
 
 const valid = {
   package: '@qvac/sdk',
-  kind: 'user-facing',
+  kind: 'product',
   path: '/sdk',
   paths: ['packages/sdk/docs/users'],
   lines: [
@@ -62,7 +62,7 @@ describe('the manifest derived from it', () => {
 
   it('makes no line of a package current', () => {
     const software = toDocumentedSoftware(
-      parseVersionsFile('demo.json', { ...valid, kind: 'internal-machinery', path: '/ecosystem/packages/demo' }),
+      parseVersionsFile('demo.json', { ...valid, kind: 'platform', path: '/ecosystem/packages/demo' }),
     )
     expect(software.versions.map((entry) => entry.folder)).toEqual(['v0.24', 'v0.23'])
   })

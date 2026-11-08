@@ -30,9 +30,9 @@ Each package SHALL keep a lock that records, per binding, the hash of the bound 
 
 ### Requirement: Binding rigor follows the software's kind
 
-A `user-facing` software SHALL bind per symbol, and a coverage check MUST fail when a public symbol is bound by no page. An `internal-machinery` software SHALL bind its whole public surface as one binding, with no coverage check.
+A `product` SHALL bind per symbol, and a coverage check MUST fail when a public symbol is bound by no page. A `platform` package SHALL bind its whole public surface as one binding, with no coverage check.
 
-#### Scenario: An unbound user-facing symbol fails coverage
+#### Scenario: An unbound product symbol fails coverage
 
 - **WHEN** an SDK function is exported and no page binds it
 - **THEN** the coverage check fails and names the function

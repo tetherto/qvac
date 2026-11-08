@@ -7,7 +7,7 @@ The Ecosystem collection SHALL hold a Packages section with one entry per listed
 #### Scenario: Only declared packages are listed
 
 - **WHEN** the Packages section is rendered
-- **THEN** it lists exactly the packages that have a versions file of kind `internal-machinery`
+- **THEN** it lists exactly the packages that have a versions file of kind `platform`
 
 #### Scenario: Entry points are not packages
 
@@ -28,11 +28,11 @@ Each listed package SHALL publish its declared lines, pinned to commits like a c
 - **WHEN** a reader on a package page selects another line
 - **THEN** the equivalent page of that line opens, or its index when the page is absent
 
-### Requirement: A package page points to the canonical user-facing software
+### Requirement: A package page points to the canonical product
 
-Every package's overview SHALL state which user-facing software is the canonical way to use its capability, and link to it.
+Every package's overview SHALL state which product is the canonical way to use its capability, and link to it.
 
-#### Scenario: A package overview names its user-facing software
+#### Scenario: A package overview names its product
 
 - **WHEN** a package overview is rendered
-- **THEN** it names and links the user-facing software that exposes the package's capability
+- **THEN** it names and links the product that exposes the package's capability

@@ -17,7 +17,7 @@ The ecosystem is at version zero and still taking shape, so the redesign favours
 - **BREAKING (process):** the manual line cut is removed. Publishing a line is updating its pin. `cut-line.ts`, the hand-renamed folder group, and `content/_unpublished/<collection>/next/` go away.
 - **Manual retirement.** No number of lines is imposed. A line stays published until the team stops supporting it. Retiring it is moving its version from `lines` to `retired` in its versions file, and its addresses then redirect to the current line. Every line's redirect rules are generated from the versions files. This replaces the rule that a published line is never withdrawn.
 - **Publication.** A documentation-only change to a release branch publishes no package and opens a pull request that moves the line's pin. Deployment is unchanged: production builds `docs-production`, which the existing manual promotion workflow advances.
-- **Collections.** Every user-facing software — a product a developer uses directly — has one versioned root collection. The site supports any number of them. Adding one is declaring its versions file and its slot in the collection order. Today they are the SDK and the CLI. Ecosystem gains a Packages section: one entry per internal package, each with its own versions. Research and the assistant app stay departures.
+- **Collections.** Every product — software a developer uses directly — has one versioned root collection. The site supports any number of them. Adding one is declaring its versions file and its slot in the collection order. Today they are the SDK and the CLI. Ecosystem gains a Packages section: one entry per internal package, each with its own versions. Research and the assistant app stay departures.
 - **API reference from contracts.** API facts are extracted deterministically from the strongest machine-readable source each software has:
   - the SDK's Zod contract;
   - the public `.d.ts` of internal packages;
@@ -27,7 +27,7 @@ The ecosystem is at version zero and still taking shape, so the redesign favours
 
   They are rendered as nested tables for readers and as compact per-function cards and per-method schemas for agents. The polyglot SDK has one language-switchable reference.
 - **BREAKING (pipeline):** the Nunjucks-rendered API summary is retired. TSDoc stops being a documentation input except for function summaries, deprecation, throws, and status tags.
-- **One kind per software.** Every documented software declares one kind in its versions file: `user-facing` (its own versioned root collection) or `internal-machinery` (a sub-collection of Ecosystem → Packages). The kind decides where the software appears, whether a line is current, what the docs contract requires, and how strictly pages bind to its API.
+- **One kind per software.** Every documented software declares one kind in its versions file: `product` (its own versioned root collection) or `platform` (a sub-collection of Ecosystem → Packages). The kind decides where the software appears, whether a line is current, what the docs contract requires, and how strictly pages bind to its API.
 - **Docs contract.** Every software's kind sets its required pages. Every page declares a type. The contract states what each must contain and is checked on pull requests, never at build.
 - **Bindings.** Hand-written pages declare the API symbols they describe. A lock records the surface they were reviewed against, so a surface change without a page review fails the pull request.
 - **SDK and CLI migrate fully.** This change touches only `sdk`, `sdk-python`, `sdk-kotlin`, and `cli`:
@@ -50,7 +50,7 @@ The ecosystem is at version zero and still taking shape, so the redesign favours
 
 - `docs-versioning`: lines come from pinned commits through materialization. The versions files replace the hand-edited manifest. Currency is read from manifest order. Lines are retired by hand, and their redirect rules are generated.
 - `docs-release-workflow`: publication is a pin update instead of a cut. Released lines are corrected on their release branch. Documentation-only release-branch changes publish no package.
-- `docs-collections`: the collection set is defined generically — Ecosystem and Resources, plus one versioned root collection per user-facing software. Versioned collections draw their content from packages. Ecosystem holds Packages instead of the Software Inventory.
+- `docs-collections`: the collection set is defined generically — Ecosystem and Resources, plus one versioned root collection per product. Versioned collections draw their content from packages. Ecosystem holds Packages instead of the Software Inventory.
 - `collection-navigation`: a line's navigation is declared in the package's own documentation folder. The Ecosystem sidebar reaches every versioned collection and Packages.
 - `versioned-urls`: a new line takes the version-less paths when its pin lands. A retired line's addresses redirect to the current line.
 - `software-inventory-docs`: every requirement is removed and superseded by `ecosystem-packages`.

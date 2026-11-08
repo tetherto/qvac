@@ -1,11 +1,11 @@
 ## Context
 
-QVAC is a public monorepo of more than thirty packages. Today two of them are user-facing — software a developer uses directly:
+QVAC is a public monorepo of more than thirty packages. Today two of them are products — software a developer uses directly:
 
 - the SDK: polyglot (JavaScript/TypeScript, Python, Kotlin, Swift soon), runs inference and fine-tuning;
 - the CLI: configures and bundles the SDK, and serves a local OpenAI-compatible model provider.
 
-More user-facing software will come. The remaining packages are internal machinery. Developers can use them directly, but the canonical path to each capability is a user-facing software.
+More products will come. The remaining packages are the platform the products are built on. Developers can use them directly, but the canonical path to each capability is a product.
 
 The site is a static Next.js + Fumadocs export served from a CDN. Its build host watches `docs-production` and can check out any number of commits. Today:
 
@@ -42,7 +42,7 @@ The ecosystem is at version zero. The SDK ships a minor every two weeks, and a l
 - A server runtime of any kind. The site stays a static export.
 - Long-term compatibility of old lines. An old line is retired when unsupported, or updated, rather than kept compatible.
 - Versioning the docs contract or keeping MDX components backward compatible.
-- Depending on which user-facing software exists, or how much. A future one is one more versioned collection, and nothing in this design names it.
+- Depending on which products exist, or how many. A future one is one more versioned collection, and nothing in this design names it.
 - The build host's capacity, which is handled outside this change.
 - Rewriting lines published before the migration. They age out.
 - Documenting any internal package. A proof-of-concept branch demonstrates three, and they are added after this change.
@@ -67,7 +67,7 @@ Alternatives rejected:
 ```jsonc
 {
   "package": "@qvac/sdk",
-  "kind": "user-facing",         // user-facing | internal-machinery
+  "kind": "product",         // product | platform
   "repo": null,                  // another repository, for software outside the monorepo
   "paths": ["packages/sdk/docs/users", "packages/sdk/examples",
             "packages/sdk-python/examples", "packages/sdk/contract"],
@@ -121,8 +121,8 @@ Alternative kept as a fallback: no corrections to released lines. A fix then wai
 
 ### D6. Collections
 
-- Ecosystem (unversioned) holds a Packages section: one entry per internal package, each versioned through `kind: internal-machinery`.
-- One versioned root collection per user-facing software, declared by a versions file of kind `user-facing`. Today these are the SDK and the CLI. The design does not depend on their number. Adding a user-facing software is adding its versions file and its slot in the collection order, with no other site change.
+- Ecosystem (unversioned) holds a Packages section: one entry per internal package, each versioned through `kind: platform`.
+- One versioned root collection per product, declared by a versions file of kind `product`. Today these are the SDK and the CLI. The design does not depend on their number. Adding a product is adding its versions file and its slot in the collection order, with no other site change.
 - Resources stays unversioned.
 - Research (Hugging Face) and the assistant app are departures.
 
@@ -132,7 +132,7 @@ A package appears only when it has a versions file, so inclusion is an explicit 
 
 The contract has five layers:
 
-1. the requirements of each software kind (`user-facing`, `internal-machinery`), in YAML;
+1. the requirements of each software kind (`product`, `platform`), in YAML;
 2. page types, in YAML: required sections, frontmatter fields, data components;
 3. MDX scaffolds for new pages;
 4. data components that render facts;
@@ -149,7 +149,7 @@ JSON Schema is the common shape of type facts, rendered by one nested, collapsib
 | Software | Source | Generated artifact |
 |---|---|---|
 | SDK | Zod schemas → `contract/` (exists) | used as is |
-| Any other user-facing software | its strongest machine-readable surface; a Zod contract exported like the SDK's is the preferred shape | per source |
+| Any other product | its strongest machine-readable surface; a Zod contract exported like the SDK's is the preferred shape | per source |
 | Internal packages | public `index.d.ts` → TypeDoc JSON → normalizer | `docs/users/_generated/api.json` |
 | CLI | Commander tree → walker | `docs/users/_generated/cli.json` |
 | `qvac serve` | fastify-swagger, exported without listening | `docs/users/_generated/openapi.json` |
@@ -203,8 +203,8 @@ On a pull request:
 
 Rigor depends on the kind:
 
-- `user-facing`: bindings per symbol, plus a coverage check that every public symbol is bound;
-- `internal-machinery`: one whole-surface binding, no coverage check.
+- `product`: bindings per symbol, plus a coverage check that every public symbol is bound;
+- `platform`: one whole-surface binding, no coverage check.
 
 Generated pages need no binding, because the freshness gate covers them.
 
@@ -273,7 +273,7 @@ Rollback before step 2 is reverting the site changes. After step 2, the previous
 
 The implementation lives on `docs/docs-system-redesign`. A proof-of-concept branch derived from it, never merged, demonstrates the result for review:
 
-- a mock versioned collection (`compose`) with dummy content inside `docs/website`, showing that one more user-facing software is one more collection;
+- a mock versioned collection (`compose`) with dummy content inside `docs/website`, showing that one more product is one more collection;
 - `llm-llamacpp`, `diffusion-cpp`, and `translation-nmtcpp` migrated to the new model under Ecosystem → Packages.
 
 It is built after the implementation and is not tracked by this change's tasks.

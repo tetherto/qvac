@@ -256,11 +256,11 @@ export async function cutLine(request: CutRequest): Promise<CutResult> {
   const collectionPath = `/${slug}`;
 
   const software = DOCUMENTED_SOFTWARE.find(
-    (entry) => entry.path === collectionPath && entry.kind === "user-facing",
+    (entry) => entry.path === collectionPath && entry.kind === "product",
   );
   if (!software) {
     const versioned = DOCUMENTED_SOFTWARE.filter(
-      (entry) => entry.kind === "user-facing",
+      (entry) => entry.kind === "product",
     ).map((entry) => entry.path.slice(1));
     throw new Error(
       `'${slug}' is not a versioned collection. Cuttable: ${versioned.join(", ")}.`,

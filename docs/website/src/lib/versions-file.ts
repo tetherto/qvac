@@ -49,14 +49,14 @@ export const versionsFileSchema = z
     /** The name the package publishes under, in its own registry. */
     package: z.string().min(1),
     /**
-     * `user-facing` — software a developer uses directly, with its own
-     * versioned root collection. `internal-machinery` — a package the
-     * user-facing software is built on, documented as a sub-collection of
+     * `product` — software a developer uses directly, with its own
+     * versioned root collection. `platform` — a package the products are
+     * built on, documented as a sub-collection of
      * Ecosystem → Packages. The kind decides where the software appears,
      * whether one line is current, what the docs contract requires, and how
      * strictly pages bind to its API.
      */
-    kind: z.enum(['user-facing', 'internal-machinery']),
+    kind: z.enum(['product', 'platform']),
     /** Where it is documented, absolute and without a trailing slash. */
     path: z.string().regex(/^(\/[a-z0-9-]+)+$/, 'an absolute path without a trailing slash'),
     /** Another repository (`owner/name`), for software outside the monorepo. */

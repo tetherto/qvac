@@ -41,7 +41,7 @@ function demoFile(lines: unknown[]) {
   return {
     'demo.json': {
       package: '@qvac/demo',
-      kind: 'user-facing',
+      kind: 'product',
       path: '/demo',
       paths: ['packages/demo/docs/users', 'packages/demo/examples'],
       lines,

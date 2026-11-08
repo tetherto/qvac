@@ -52,7 +52,7 @@ import { resolveIcon } from '@/lib/resolveIcon';
  * the index, and every README is addressed by its own segment.
  */
 function inventoryChildren(): Node[] {
-  return documentedSoftwareOfKind('internal-machinery').map((software) => ({
+  return documentedSoftwareOfKind('platform').map((software) => ({
     type: 'page',
     name: software.package,
     url: software.path,
@@ -98,7 +98,7 @@ const inventoryFolder: Node = {
  * they had gone.
  */
 function inventoryVersionRoots(): Node[] {
-  return documentedSoftwareOfKind('internal-machinery').flatMap((software) =>
+  return documentedSoftwareOfKind('platform').flatMap((software) =>
     software.versions.map(
       (version): Node => ({
         type: 'folder',

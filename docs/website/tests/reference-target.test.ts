@@ -25,7 +25,7 @@ import { DOCUMENTED_SOFTWARE, getCurrentLine } from '../src/lib/versions';
  */
 
 const sdk = DOCUMENTED_SOFTWARE.find(
-  (software) => software.path === '/sdk' && software.kind === 'user-facing',
+  (software) => software.path === '/sdk' && software.kind === 'product',
 )!;
 const current = getCurrentLine(sdk)!;
 

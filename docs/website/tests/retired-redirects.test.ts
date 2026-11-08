@@ -22,7 +22,7 @@ const fields = (text: string) =>
 
 const demo: DocumentedSoftware = {
   package: '@qvac/demo',
-  kind: 'user-facing',
+  kind: 'product',
   path: '/demo',
   versions: [
     { version: 'v1.2', folder: '(v1.2)' },
@@ -60,8 +60,8 @@ describe('the generated rules', () => {
     ])
   })
 
-  it('serve every version of an internal-machinery package, whose bare path is its index', () => {
-    const pkg: DocumentedSoftware = { ...demo, kind: 'internal-machinery', path: '/ecosystem/packages/demo',
+  it('serve every version of an platform package, whose bare path is its index', () => {
+    const pkg: DocumentedSoftware = { ...demo, kind: 'platform', path: '/ecosystem/packages/demo',
       versions: [{ version: 'v1.2', folder: 'v1.2' }], retired: [] }
     expect(fields(publishedRules([pkg]).join('\n'))[0][0]).toBe('/ecosystem/packages/demo/v1.2/')
   })

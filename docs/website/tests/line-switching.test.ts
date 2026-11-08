@@ -115,7 +115,7 @@ describe('switching versions inside an inventory package', () => {
   const published = new Set(contentUrls())
 
   it('offers one entry per package version, and the index besides', () => {
-    for (const software of documentedSoftwareOfKind('internal-machinery')) {
+    for (const software of documentedSoftwareOfKind('platform')) {
       const found = packages.find((entry) => entry.path === software.path)
       expect(found, `no switcher entries for ${software.path}`).toBeDefined()
       expect(found?.lines.map((line) => line.title)).toEqual([

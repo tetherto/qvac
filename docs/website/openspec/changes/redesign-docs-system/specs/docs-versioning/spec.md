@@ -2,7 +2,7 @@
 
 ### Requirement: Each versioned collection tracks one package
 
-Versioning SHALL be a property of a collection, not of the site. Every user-facing software — declared by a versions file of kind `user-facing` — SHALL have exactly one versioned collection, however many user-facing software there are. Ecosystem and Resources MUST NOT be versioned as collections. A versioned collection MUST track exactly one package, and its line numbers MUST be that package's major and minor. Today:
+Versioning SHALL be a property of a collection, not of the site. Every product — declared by a versions file of kind `product` — SHALL have exactly one versioned collection, however many products there are. Ecosystem and Resources MUST NOT be versioned as collections. A versioned collection MUST track exactly one package, and its line numbers MUST be that package's major and minor. Today:
 
 - the SDK tracks `@qvac/sdk`;
 - the CLI tracks `@qvac/cli`.
@@ -15,9 +15,9 @@ A versioned collection MUST be named after the package it tracks, so that the th
 - **THEN** every page of a versioned collection belongs to a documentation line
 - **AND** no Ecosystem or Resources page belongs to a collection line
 
-#### Scenario: Adding a user-facing software adds a collection
+#### Scenario: Adding a product adds a collection
 
-- **WHEN** a versions file of kind `user-facing` is added and its slot is declared in the collection order
+- **WHEN** a versions file of kind `product` is added and its slot is declared in the collection order
 - **THEN** a versioned collection is published with its lines and its switcher, and no other site code changes
 
 #### Scenario: A line number matches its package release
