@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.28.0] - 2026-11-08
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11739.0.0#1` -> `11739.1.1`. `common_params`
+  gains four `coreml_ffn*` fields mid-struct, so native consumers that use the
+  `common` library must rebuild against these headers.
+
+### Fixed
+
+- XDNA opens the NPU on first use instead of when devices are listed, contains
+  every exception during setup and falls back to the CPU, no longer loads
+  kernels from the working directory, and reports `MemAvailable` as free
+  memory.
+- OpenCL initializes before buffer-type queries, fixing a crash when a buffer
+  type is queried before the backend, and keeps non-contiguous ADD inputs off
+  the broadcast fast path.
+- Hexagon keeps canonical weight bytes across partial REPACK uploads and counts
+  the reserved space in allocation sizes.
+- WebGPU registers no device on Dawn's Null adapter.
+- mtmd keeps DeepSeek OCR SAM position tables in F32 when quantizing and
+  reports projector memory under the device that holds it.
+- Metal supports `DIAG_MASK_INF`.
+
+### Added
+
+- `ggml_backend_buft_get_buffer_alloc_size` returns the physical size of a
+  buffer for a payload without allocating.
+- `ggml_vec_index_load_with_flags` and `ggml_vec_index_from_bytes_with_flags`
+  accept `GGML_VEC_INDEX_LOAD_TURBOVEC_STAGED_OFF`, which skips building the
+  staged-search caches on load. Turning staged search off now frees the sign
+  planes.
+- Hexagon runtime memory information and optional F32 convolution taps.
+
+### Changed
+
+- Metal few-row MMA mat-mul covers up to 64 rows for F32, Q4_0, Q8_0 and Q4_K
+  (48 for F16 and Q5_K), speeding up concurrent speculative decoding.
+
 ## [0.27.0] - 2026-11-05
 
 ### Fixed
