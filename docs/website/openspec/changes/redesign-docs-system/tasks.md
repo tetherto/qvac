@@ -45,7 +45,7 @@ No other package is touched.
 - [x] 3.4 Export the `qvac serve` OpenAPI document to `_generated/openapi.json` without starting the server, with a `--check` gate, and render its operations with the shared schema table. Any CLI source change: review case by case
 - [ ] 3.5 Render the configuration tables from the SDK's configuration schema
 - [ ] 3.6 Pin the CLI's first release after the migration as its first line, and delete `content/docs/cli/`
-- [ ] 3.7 Remove `scripts/cut-line.ts`, `content/_unpublished/`, and every README and `docs-workflow.md` passage on cutting lines
+- [x] 3.7 Remove `scripts/cut-line.ts`, `content/_unpublished/`, and every README and `docs-workflow.md` passage on cutting lines
 
 ## 4. Docs contract and bindings
 
@@ -73,7 +73,7 @@ No other package is touched.
 - [ ] 6.1 Add the Packages section to Ecosystem, composed from `kind: platform` versions files, with the switcher, and hidden while no package is listed
 - [ ] 6.2 Add the TypeDoc normalizer and `docs:api`, which write `_generated/api.json` with a `--check` gate
 - [ ] 6.3 Add a fixture package and tests covering Packages composition, versioning, the switcher, and the normalizer
-- [ ] 6.4 Delete the unpublished Software Inventory pages
+- [x] 6.4 Delete the unpublished Software Inventory pages
 - [ ] 6.5 Sync the `ecosystem-packages` and `software-inventory-docs` deltas into the main specs
 
 ## 7. Close-out

@@ -40,30 +40,37 @@ const coming = (() => {
   return `${major}.${Number(minor) + 1}.0`;
 })();
 
-/** A root carrying the published lines, and the development line on request. */
+/**
+ * A tree laid out like the monorepo — `<base>/docs/website` beside
+ * `<base>/packages/sdk/docs/users` — carrying the published lines, and the
+ * development line on request. Returns the website root.
+ */
 function treeWith(development: boolean): string {
-  const root = mkdtempSync(join(tmpdir(), 'reference-target-'));
+  const base = mkdtempSync(join(tmpdir(), 'reference-target-'));
+  const root = join(base, 'docs', 'website');
   mkdirSync(join(root, 'content', 'docs', 'sdk', current.folder, 'reference'), {
     recursive: true,
   });
   if (development) {
-    mkdirSync(join(root, 'content', '_unpublished', 'sdk', 'next', 'reference'), {
+    mkdirSync(join(base, 'packages', 'sdk', 'docs', 'users', 'reference'), {
       recursive: true,
     });
   }
   return root;
 }
 
+const baseOf = (root: string) => join(root, '..', '..');
+
 describe('a collection with a development line', () => {
   let root: string;
   beforeAll(() => {
     root = treeWith(true);
   });
-  afterAll(() => rmSync(root, { recursive: true, force: true }));
+  afterAll(() => rmSync(baseOf(root), { recursive: true, force: true }));
 
   it('resolves the version being written to the development line', () => {
     expect(referenceDirFor(coming, root)).toBe(
-      join(root, 'content', '_unpublished', 'sdk', 'next', 'reference'),
+      join(baseOf(root), 'packages', 'sdk', 'docs', 'users', 'reference'),
     );
   });
 
@@ -121,7 +128,7 @@ describe('a collection with no development line', () => {
   beforeAll(() => {
     root = treeWith(false);
   });
-  afterAll(() => rmSync(root, { recursive: true, force: true }));
+  afterAll(() => rmSync(baseOf(root), { recursive: true, force: true }));
 
   it('refuses every version, since there is nowhere to write', () => {
     expect(() => referenceDirFor(coming, root)).toThrow(/no development line/);

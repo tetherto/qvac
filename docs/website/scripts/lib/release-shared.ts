@@ -25,27 +25,9 @@ const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const DOCS_WEBSITE_DIR = path.resolve(SCRIPT_DIR, "..", "..");
 
 /**
- * The folder holding the line a collection is still writing: the version under
- * development, outside the site, where nothing builds it and no URL reaches
- * it.
- *
- * It is addressed by a fixed name rather than by its number, which is what
- * keeps the path a feature PR writes to stable across a cutoff. A cut copies
- * this folder into the collection and leaves it in place, so a feature PR
- * opened before the cutoff and merged after it lands in the path it was
- * written to, with no rename for git to replay it through.
- *
- * That holds for this folder only. The outgoing group is renamed by the cut,
- * so a PR writing anywhere under `content/docs/` is still exposed to rename
- * detection — which is what the `Documentation lines` job fails on.
- */
-export const DEVELOPMENT_LINE = "next";
-
-/**
- * The development line of a collection. Once the software keeps its
- * documentation in its package, that is the documentation root its versions
- * file declares (`packages/<pkg>/docs/users`). Until then it is the legacy
- * `content/_unpublished/<collection>/next/`.
+ * The development line of a collection: the documentation root its versions
+ * file declares, `packages/<pkg>/docs/users`, where the version still being
+ * written lives. It is published only when a release pins it.
  */
 export function developmentLineDir(
   slug: string,
@@ -54,11 +36,10 @@ export function developmentLineDir(
   const declaration = declaredSoftware().find(
     (entry) => entry.declaration.path === `/${slug}`,
   )?.declaration;
-  if (declaration) {
-    const inPackage = path.join(root, "..", "..", declaration.paths[0]);
-    if (existsSync(inPackage)) return inPackage;
+  if (!declaration) {
+    throw new Error(`/${slug} has no versions file, so it has no development line.`);
   }
-  return path.join(root, "content", "_unpublished", slug, DEVELOPMENT_LINE);
+  return path.join(root, "..", "..", declaration.paths[0]);
 }
 
 /**

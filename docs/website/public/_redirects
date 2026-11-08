@@ -346,23 +346,6 @@
 # @generated retired-documentation-lines
 
 # ======================================================================
-# SOFTWARE INVENTORY VERSIONS
-# ----------------------------------------------------------------------
-# None, while the inventory is built but unpublished and its pages wait
-# under `content/_unpublished/ecosystem/inventory/`. A rule here would
-# rewrite to a file the export does not emit.
-#
-# Restore one pair per package when it is published. Every inventory
-# version is a dotted final segment, for the same reason a line index is:
-# the version-less path belongs to the package index, so no version is ever
-# served bare and all of them need these rules. Write them with a
-# placeholder rather than listed, which is the opposite of the choice
-# above. A line index is one URL per collection and a cut is worth seeing
-# in the diff; here the pattern is scoped to one package's folder, where
-# every first-level path IS a version, so it claims nothing it should not
-# — and documenting a release stays two edits.
-
-# ======================================================================
 # PERMANENT REDIRECTS DUE TO CONTENT MOVE
 # ----------------------------------------------------------------------
 # Everything above is pattern-based (wildcards / :placeholders).
@@ -395,8 +378,8 @@
 /sdk/tutorials/expo.md      /resources/tutorials/expo.md      301
 
 # Retired pages: the project's vision and its launch announcement documented
-# no distributable, so they left the published set and the writing is kept in
-# `content/_unpublished/`. Both URLs are served in production today, so each
+# no distributable, so they left the published set; their text survives in
+# git history. Both URLs were served in production, so each
 # answers with the overview of what QVAC publishes rather than a 404.
 /about/vision/            /ecosystem/      301
 /about/public-launch/     /ecosystem/      301

@@ -131,19 +131,6 @@ served from `content/docs/<collection>/`. When the first pinned line becomes
 current, rename the in-place current folder from `(vX.Y)` to `vX.Y` in the
 same pull request; retire the in-place lines as they age out.
 
-### Software Inventory
-
-The Software Inventory is built but not published. Its pages wait under
-`content/_unpublished/ecosystem/inventory/`, the manifest lists no package, and
-`public/_redirects` carries no `:version` rules for it. Everything the inventory
-needs is derived from the manifest, so publishing it is moving that folder back
-under `content/docs/`, listing its packages again, and restoring one pair of
-redirect rules per package — the comment in `_redirects` says how to write them.
-Once published, documenting a release is the same shape one level down from a
-line cut: add `content/docs/ecosystem/inventory/<pkg>/v<major>.<minor>/index.md`
-with the README as released, add the row to that package's index, add the
-manifest entry. The `:version` rules then already cover the new folder.
-
 ## CDN configuration (Sevalla)
 
 Next.js static export emits per-segment React Server Component prefetch

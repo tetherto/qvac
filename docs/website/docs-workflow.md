@@ -50,7 +50,7 @@ Content falls into two categories:
 | Category | Path | Committed? |
 |---|---|---|
 | Manual content (guides, tutorials, addons) | one collection folder per top level: `content/docs/ecosystem/`, `content/docs/sdk/`, `content/docs/cli/`, `content/docs/resources/` | Yes |
-| The line being written, per versioned collection | the software's `packages/<pkg>/docs/users/` (SDK), or `content/_unpublished/<collection>/next/` until the software migrates (CLI) | Yes, but not served in production |
+| The line being written, per versioned collection | the software's `packages/<pkg>/docs/users/` | Yes, but not served in production |
 | SDK API data (generated) | `packages/sdk/docs/users/_generated/` and the reference stubs in `packages/sdk/docs/users/reference/api/` | Yes, kept fresh by `npm run docs:sdk-api -- --check` |
 
 The SDK API reference is **rendered from data**, never written by hand. Field facts — types, nesting, constraints, descriptions — come from the SDK's exported contract (`packages/sdk/contract/`, generated from its Zod schemas). The client functions come from `packages/sdk/docs/users/_generated/`: `js-api.json`, extracted by TypeDoc, and `python-api.json`, read from the Python client's source. Each line renders the data of its own commit.
