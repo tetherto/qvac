@@ -249,7 +249,7 @@ class AssessModelFitRequestModelsItem(GeneratedBaseModel):
         AssessModelFitRequestModelsItemTranscriptionWorkload | None,
         Field(
             alias="transcriptionWorkload",
-            description="MOSS fit-only workload. Required for a native MOSS projection; does not configure loading.",
+            description="MOSS fit-only workload. Required for a MOSS verdict; does not configure loading.",
             title="AssessModelFitRequestModelsItemTranscriptionWorkload",
         ),
     ] = None
@@ -285,144 +285,144 @@ class AssessModelFitRequestModelsItem(GeneratedBaseModel):
     ] = None
 
 
-class AssessModelFitRequestExecution(Enum):
-    sequential = "sequential"
-    concurrent = "concurrent"
-
-
 class AssessModelFitRequest(GeneratedBaseModel):
     models: Annotated[
         list[AssessModelFitRequestModelsItem],
         Field(
-            description="Models to assess together under one memory budget.",
-            min_length=1,
+            description="Models to assess as if loaded at the same time.", min_length=1
         ),
     ]
-    execution: Annotated[
-        AssessModelFitRequestExecution | None,
-        Field(
-            description="Declared co-residency assumption for aggregation. Not a scheduling instruction: the SDK does not serialize, reserve, or enforce anything.",
-            title="AssessModelFitRequestExecution",
-        ),
-    ] = "sequential"
-    policy: Annotated[
-        Literal["interactive-v1"],
-        Field(
-            description="Headroom policy. `interactive-v1` withholds 20% of the memory available right now, capped at 2 GiB on desktop and 1 GiB on mobile."
-        ),
-    ] = "interactive-v1"
     type: Literal["assessModelFit"] = "assessModelFit"
 
 
 class AssessModelFitResponseVerdict(Enum):
-    likely_fits = "likely-fits"
-    likely_too_large = "likely-too-large"
+    fits = "fits"
+    does_not_fit = "does-not-fit"
     unknown = "unknown"
 
 
-class AssessModelFitResponseBasis(Enum):
-    system_memory = "system-memory"
-    process_memory = "process-memory"
-    device_memory = "device-memory"
-    device_budget = "device-budget"
-
-
-class AssessModelFitResponseExecution(Enum):
-    sequential = "sequential"
-    concurrent = "concurrent"
-
-
-class AssessModelFitResponseEvidence(Enum):
-    computed_only = "computed-only"
-    native_fit = "native-fit"
-
-
-class AssessModelFitResponseBudget(GeneratedBaseModel):
+class ModelFitPool(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    total_bytes: Annotated[
+    id: Annotated[
+        str,
+        Field(
+            description="`host` for the host's memory, the device's `id` for a GPU with its own memory."
+        ),
+    ]
+    unified: Annotated[bool, Field(description="Whether this is the host pool.")]
+    used_bytes: Annotated[
         float,
         Field(
+            alias="usedBytes", description="The sum of every model's rows in this pool."
+        ),
+    ]
+    free_bytes: Annotated[
+        float | None,
+        Field(
+            alias="freeBytes",
+            description="The lowest free figure reported for the pool.",
+        ),
+    ] = None
+    total_bytes: Annotated[
+        float | None,
+        Field(
             alias="totalBytes",
-            description="Total budgetable memory under the result’s basis: system RAM, or the process ceiling (allowance plus current footprint) under process-memory.",
+            description="The lowest total figure reported for the pool.",
+        ),
+    ] = None
+
+
+class ModelFitModelResultStatus(Enum):
+    fits = "fits"
+    does_not_fit = "does-not-fit"
+    unknown = "unknown"
+
+
+class ModelFitDevice(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    id: Annotated[
+        str,
+        Field(
+            description="The device's PCI bus ID when the backend reports one, its name otherwise."
+        ),
+    ]
+    name: Annotated[
+        str,
+        Field(
+            description="The backend's device name, such as `CPU`, `CUDA0` or `MTL0`."
+        ),
+    ]
+    unified: Annotated[
+        bool,
+        Field(
+            description="Memory the host owns: the CPU, and a GPU that shares the host's memory."
         ),
     ]
     used_bytes: Annotated[
         float,
         Field(
-            alias="usedBytes",
-            description="Memory in use at sample time under the same basis (system-wide, or this process).",
+            alias="usedBytes", description="The memory the load takes on this device."
         ),
     ]
-    available_bytes: Annotated[
-        float,
-        Field(
-            alias="availableBytes",
-            description="Headroom before the policy applies: total − used, or the process allowance under process-memory. The reserve is a share of this.",
-        ),
-    ]
-    reserved_bytes: Annotated[
-        float,
-        Field(alias="reservedBytes", description="Headroom withheld by the policy."),
-    ]
-    available_after_reserve_bytes: Annotated[
-        float,
-        Field(
-            alias="availableAfterReserveBytes",
-            description="Budget the estimate is compared against: available − reserved.",
-        ),
-    ]
+    free_bytes: Annotated[
+        float | None,
+        Field(alias="freeBytes", description="The free memory the device reported."),
+    ] = None
+    total_bytes: Annotated[
+        float | None,
+        Field(alias="totalBytes", description="The total memory the device reported."),
+    ] = None
 
 
-class AssessModelFitResponseModelsItemVerdict(Enum):
-    likely_fits = "likely-fits"
-    likely_too_large = "likely-too-large"
-    unknown = "unknown"
-
-
-class AssessModelFitResponseModelsItemEvidence(Enum):
-    computed_only = "computed-only"
-    native_fit = "native-fit"
-
-
-class AssessModelFitResponseModelsItem(GeneratedBaseModel):
+class LlamaFitStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    name: Annotated[str, Field(description="Catalog name of the assessed model.")]
-    verdict: Annotated[
-        AssessModelFitResponseModelsItemVerdict,
-        Field(title="AssessModelFitResponseModelsItemVerdict"),
+    ctx_size: Annotated[
+        int,
+        Field(
+            alias="ctxSize",
+            description="The context size the load resolves to.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
     ]
-    evidence: Annotated[
-        AssessModelFitResponseModelsItemEvidence | None,
+    gpu_layers: Annotated[
+        int,
         Field(
-            description="What the verdict rests on. Absent when nothing could be computed for this model, e.g. no catalog profile.",
-            title="AssessModelFitResponseModelsItemEvidence",
+            alias="gpuLayers",
+            description="The number of layers the load offloads to the GPU.",
+            ge=-9007199254740991,
+            le=9007199254740991,
         ),
-    ] = None
-    floor_bytes: Annotated[
-        float | None,
+    ]
+
+
+class ModelFitModelResult(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Annotated[
+        ModelFitModelResultStatus,
         Field(
-            alias="floorBytes",
-            description="Under computed-only evidence: the smallest resident footprint the catalog facts prove — artifact bytes, plus the KV cache for llama.cpp. A floor only; the true cost is above it by an unmeasured amount.",
+            description="The engine fitter's verdict for this model alone.",
+            title="ModelFitModelResultStatus",
         ),
-    ] = None
-    estimator_version: Annotated[
-        str | None,
+    ]
+    devices: Annotated[
+        list[ModelFitDevice],
         Field(
-            alias="estimatorVersion",
-            description="Estimator that produced the bounds, e.g. `llm-v1`, or `floor-v1` for a computed floor.",
+            description="One row per device the load uses, the host last. Empty when unknown."
         ),
-    ] = None
-    device: Annotated[
-        str | None,
-        Field(
-            description="Where this load resolved to execute, after the host’s own device defaults: `gpu` or `cpu`. The llama fitters read device memory alone and decline a `cpu` load, which then carries no `native-fit` evidence; the speech and voice fitters answer for one like any other. Absent for an engine that expresses no placement."
-        ),
-    ] = None
-    reasons: Annotated[list[str], Field(description="Why this model got this verdict.")]
+    ]
+    stats: Annotated[
+        LlamaFitStats | dict[str, Any],
+        Field(description="The resolved load of a llama.cpp verdict. Empty otherwise."),
+    ]
 
 
 class AssessModelFitResponse(GeneratedBaseModel):
@@ -432,57 +432,19 @@ class AssessModelFitResponse(GeneratedBaseModel):
     verdict: Annotated[
         AssessModelFitResponseVerdict,
         Field(
-            description="Combined verdict across every candidate.",
+            description="The verdict for every model loaded together.",
             title="AssessModelFitResponseVerdict",
         ),
     ]
-    basis: Annotated[
-        AssessModelFitResponseBasis,
+    pools: Annotated[
+        list[ModelFitPool],
         Field(
-            description="The evidence the budget was derived from — system RAM, the per-process ceiling on iOS, a discrete GPU’s own memory, or on Windows the GPU memory budget the OS grants this process. The two device bases also require the system-memory budget to hold.",
-            title="AssessModelFitResponseBasis",
+            description="The memory pools the verdict was judged on, with what the set takes from each."
         ),
     ]
-    execution: Annotated[
-        AssessModelFitResponseExecution,
-        Field(
-            description="The declared execution mode this result assumed.",
-            title="AssessModelFitResponseExecution",
-        ),
-    ]
-    evidence: Annotated[
-        AssessModelFitResponseEvidence | None,
-        Field(
-            description="The weakest evidence among the candidates: `computed-only` as soon as one model has only a floor, since the combined verdict can then never be `likely-fits`. Absent whenever any candidate could not be assessed at all, so an `unknown` that carries `evidence` is a near-miss or a floor, never a missing model.",
-            title="AssessModelFitResponseEvidence",
-        ),
-    ] = None
-    budget: Annotated[
-        AssessModelFitResponseBudget | None,
-        Field(
-            description="Absent when memory evidence was unusable.",
-            title="AssessModelFitResponseBudget",
-        ),
-    ] = None
-    floor_bytes: Annotated[
-        float | None,
-        Field(
-            alias="floorBytes",
-            description="Under computed-only evidence: the combined floor across every candidate, aggregated under `execution`. Compared against the budget for `likely-too-large`; never enough for `likely-fits`.",
-        ),
-    ] = None
     models: Annotated[
-        list[AssessModelFitResponseModelsItem],
-        Field(description="Per-candidate verdicts, in input order."),
-    ]
-    reasons: Annotated[
-        list[str], Field(description="Why the combined verdict came out this way.")
-    ]
-    assumptions: Annotated[
-        list[str],
-        Field(
-            description="Everything the result took for granted, including estimator defaults."
-        ),
+        list[ModelFitModelResult],
+        Field(description="One entry per model, in input order."),
     ]
     type: Literal["assessModelFit"] = "assessModelFit"
 
@@ -6034,6 +5996,17 @@ class DeleteCacheKvEntryRequest(GeneratedBaseModel):
     model_id: Annotated[str | None, Field(alias="modelId")] = None
 
 
+class DeleteCacheModelRequest(GeneratedBaseModel):
+    type: Literal["deleteCache"] = "deleteCache"
+    model_src: Annotated[
+        str,
+        Field(
+            alias="modelSrc",
+            description="registry:// source of the model whose cached download to delete",
+        ),
+    ]
+
+
 class DeleteCacheResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -6072,6 +6045,33 @@ class DiffusionStreamRequestScheduler(Enum):
     smoothstep = "smoothstep"
     kl_optimal = "kl_optimal"
     bong_tangent = "bong_tangent"
+
+
+class CustomSigma(RootModel[float]):
+    root: Annotated[float, Field(ge=0.0, le=3.4028234663852886e38)]
+
+
+class DiffusionVaeTileSize(RootModel[int]):
+    root: Annotated[
+        int,
+        Field(
+            description="VAE tile size in latent units, as a positive integer or a WxH string such as 64x32. Each dimension must be between 1 and 2147483647. For Qwen-Image-2.1 outputs at 2048x2048 or larger, use vae_tiling: true with vae_tile_size: 64 to bound decode memory.",
+            gt=0,
+            le=2147483647,
+            title="DiffusionVaeTileSize",
+        ),
+    ]
+
+
+class DiffusionVaeTileSizeSpec(RootModel[str]):
+    root: Annotated[
+        str,
+        Field(
+            description="VAE tile size in latent units, as a positive integer or a WxH string such as 64x32. Each dimension must be between 1 and 2147483647. For Qwen-Image-2.1 outputs at 2048x2048 or larger, use vae_tiling: true with vae_tile_size: 64 to bound decode memory.",
+            pattern="^[0-9]+x[0-9]+$",
+            title="DiffusionVaeTileSizeSpec",
+        ),
+    ]
 
 
 class InitImage(RootModel[str]):
@@ -6127,7 +6127,9 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     steps: Annotated[
         int | None,
         Field(
-            description="Number of sampling steps to run.", gt=0, le=9007199254740991
+            description="Number of sampling steps. Overridden by custom_sigmas.length - 1 when supplied.",
+            gt=0,
+            le=9007199254740991,
         ),
     ] = None
     cfg_scale: Annotated[
@@ -6158,8 +6160,16 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     scheduler: Annotated[
         DiffusionStreamRequestScheduler | None,
         Field(
-            description="Noise schedule to apply when sampling.",
+            description="Noise schedule to apply when sampling. Overridden by custom_sigmas when supplied.",
             title="DiffusionStreamRequestScheduler",
+        ),
+    ] = None
+    custom_sigmas: Annotated[
+        list[CustomSigma] | None,
+        Field(
+            description="Explicit noise schedule, including terminal zero. At least two finite, non-negative float values, strictly decreasing after conversion to float precision. Overrides scheduler and steps; the effective step count is length minus one. Qwen-Image-2.1-Turbo uses its fixed eight-step schedule with Euler and cfg_scale: 1.",
+            max_length=2147483647,
+            min_length=2,
         ),
     ] = None
     seed: Annotated[
@@ -6181,7 +6191,13 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     vae_tiling: Annotated[
         bool | None,
         Field(
-            description="Enable VAE tiling for large images on constrained VRAM (overrides model config)."
+            description="Enable VAE tiling for large images on constrained VRAM, overriding model config."
+        ),
+    ] = None
+    vae_tile_size: Annotated[
+        DiffusionVaeTileSize | DiffusionVaeTileSizeSpec | None,
+        Field(
+            description="VAE tile size in latent units, as a positive integer or a WxH string such as 64x32. Each dimension must be between 1 and 2147483647. For Qwen-Image-2.1 outputs at 2048x2048 or larger, use vae_tiling: true with vae_tile_size: 64 to bound decode memory."
         ),
     ] = None
     cache_preset: Annotated[
@@ -6498,7 +6514,7 @@ class Text(RootModel[str]):
     root: Annotated[
         str,
         Field(
-            description="The input text(s) to embed. A single string returns `number[]`; an array returns `number[][]`.",
+            description="Text to embed. A string returns one vector; an array returns one vector per string.",
             min_length=1,
         ),
     ]
@@ -6512,13 +6528,17 @@ class Text1(RootModel[list[Text1Item]]):
     root: Annotated[
         list[Text1Item],
         Field(
-            description="The input text(s) to embed. A single string returns `number[]`; an array returns `number[][]`.",
+            description="Text to embed. A string returns one vector; an array returns one vector per string.",
             min_length=1,
         ),
     ]
 
 
-class EmbedRequest(GeneratedBaseModel):
+class EmbedTextRequest(GeneratedBaseModel):
+    __forbidden_fields__ = frozenset({"inputs"})
+    __forbidden_field_guidance__ = {
+        "inputs": "This field is not allowed in this request shape."
+    }
     model_id: Annotated[
         str,
         Field(
@@ -6528,7 +6548,7 @@ class EmbedRequest(GeneratedBaseModel):
     text: Annotated[
         Text | Text1,
         Field(
-            description="The input text(s) to embed. A single string returns `number[]`; an array returns `number[][]`."
+            description="Text to embed. A string returns one vector; an array returns one vector per string."
         ),
     ]
     type: Literal["embed"] = "embed"
@@ -6536,7 +6556,89 @@ class EmbedRequest(GeneratedBaseModel):
         str | None,
         Field(
             alias="requestId",
-            description="Stable identifier for this in-flight embed, generated by the caller at call time. Surfaces on the registry so callers can target it with `cancel({ requestId })`. Optional — falls back to a generated id when the field is missing.",
+            description="Caller-generated identifier for cancellation with cancel({ requestId }).",
+            min_length=1,
+        ),
+    ] = None
+
+
+class EmbedInput1(RootModel[str]):
+    root: Annotated[str, Field(min_length=1, title="EmbedInput")]
+
+
+class EmbedMediaSourceBase64(GeneratedBaseModel):
+    type: Literal["base64"] = "base64"
+    value: Annotated[
+        str,
+        Field(
+            json_schema_extra={"contentEncoding": "base64"},
+            min_length=1,
+            pattern="^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+        ),
+    ]
+
+
+class EmbedMediaSourceFilePath(GeneratedBaseModel):
+    type: Literal["filePath"] = "filePath"
+    value: Annotated[str, Field(min_length=1)]
+
+
+class EmbedMediaSource(RootModel[EmbedMediaSourceBase64 | EmbedMediaSourceFilePath]):
+    root: Annotated[
+        EmbedMediaSourceBase64 | EmbedMediaSourceFilePath,
+        Field(
+            description="Image or WAV/MP3/FLAC bytes as base64, or a file path accessible to the inference worker.",
+            title="EmbedMediaSource",
+        ),
+    ]
+
+
+class EmbedMediaInputPart(GeneratedBaseModel):
+    media: Annotated[
+        EmbedMediaSource,
+        Field(
+            description="Image or WAV/MP3/FLAC bytes as base64, or a file path accessible to the inference worker.",
+            title="EmbedMediaSource",
+        ),
+    ]
+
+
+class EmbedInputPart(RootModel[str | EmbedMediaInputPart]):
+    root: Annotated[str | EmbedMediaInputPart, Field(title="EmbedInputPart")]
+
+
+class EmbedInput2(RootModel[list[EmbedInputPart]]):
+    root: Annotated[list[EmbedInputPart], Field(min_length=1, title="EmbedInput")]
+
+
+class EmbedInput(RootModel[EmbedInput1 | EmbedInput2]):
+    root: Annotated[EmbedInput1 | EmbedInput2, Field(title="EmbedInput")]
+
+
+class EmbedInputsRequest(GeneratedBaseModel):
+    __forbidden_fields__ = frozenset({"text"})
+    __forbidden_field_guidance__ = {
+        "text": "This field is not allowed in this request shape."
+    }
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId", description="The identifier of the embedding model to use"
+        ),
+    ]
+    inputs: Annotated[
+        list[EmbedInput],
+        Field(
+            description="One embedding per input. Each input is text or ordered text and media parts. Media requires projectionModelSrc at load time.",
+            min_length=1,
+        ),
+    ]
+    type: Literal["embed"] = "embed"
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Caller-generated identifier for cancellation with cancel({ requestId }).",
             min_length=1,
         ),
     ] = None
@@ -6584,7 +6686,7 @@ class EmbedResponse(GeneratedBaseModel):
     embedding: Annotated[
         list[float] | list[list[float]],
         Field(
-            description="The embedding vector(s). Single `number[]` when `text` is a string; `number[][]` when `text` is an array."
+            description="The embedding vector(s). Single `number[]` when `text` is a string; `number[][]` when `text` is an array or `inputs` is provided."
         ),
     ]
     stats: Annotated[
@@ -6921,193 +7023,159 @@ class LoadedModelInfoToolDialect(Enum):
     dsml = "dsml"
 
 
-class NativeProbeFitVerdict(Enum):
-    fit = "fit"
+class ModelFitProbeVerdict(Enum):
+    fits = "fits"
     does_not_fit = "does-not-fit"
     unknown = "unknown"
 
 
-class NativeProbeFitPlan(GeneratedBaseModel):
+class ModelFitProbePool(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    n_ctx: Annotated[
-        int,
+    id: Annotated[
+        str,
         Field(
-            alias="nCtx",
-            description="Context the probe resolved for this load, in tokens.",
-            ge=-9007199254740991,
-            le=9007199254740991,
+            description="`host` for the host's memory, the device's `id` for a GPU with its own memory."
         ),
     ]
-    n_gpu_layers: Annotated[
-        int,
+    unified: Annotated[bool, Field(description="Whether this is the host pool.")]
+    used_bytes: Annotated[
+        float,
         Field(
-            alias="nGpuLayers",
-            description="Layers the probe would offload.",
-            ge=-9007199254740991,
-            le=9007199254740991,
+            alias="usedBytes", description="The sum of every model's rows in this pool."
         ),
-    ]
-    n_gpu_devices: Annotated[
-        int,
-        Field(
-            alias="nGpuDevices",
-            description="GPU devices the offload would span.",
-            ge=-9007199254740991,
-            le=9007199254740991,
-        ),
-    ]
-
-
-class NativeProbeFitProjectionDevicesItem(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    name: Annotated[str, Field(description="Device name as the engine registered it.")]
-    total_bytes: Annotated[
-        float, Field(alias="totalBytes", description="Device memory installed.")
     ]
     free_bytes: Annotated[
-        float,
-        Field(alias="freeBytes", description="Device memory free when the probe ran."),
-    ]
-    weights_bytes: Annotated[
-        float,
-        Field(alias="weightsBytes", description="Model weights placed on this device."),
-    ]
-    context_bytes: Annotated[
-        float,
+        float | None,
         Field(
-            alias="contextBytes",
-            description="Context and KV cache placed on this device.",
+            alias="freeBytes",
+            description="The lowest free figure reported for the pool.",
         ),
-    ]
-    compute_bytes: Annotated[
-        float,
+    ] = None
+    total_bytes: Annotated[
+        float | None,
         Field(
-            alias="computeBytes", description="Compute buffers placed on this device."
+            alias="totalBytes",
+            description="The lowest total figure reported for the pool.",
         ),
-    ]
+    ] = None
 
 
-class NativeProbeFitProjection(GeneratedBaseModel):
+class ModelFitProbeModelStatus(Enum):
+    fits = "fits"
+    does_not_fit = "does-not-fit"
+    unknown = "unknown"
+
+
+class ModelFitProbeDevice(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    device_name: Annotated[
-        str | None,
+    id: Annotated[
+        str,
         Field(
-            alias="deviceName", description="Device the projection was made against."
+            description="The device's PCI bus ID when the backend reports one, its name otherwise."
         ),
-    ] = None
-    device_bytes: Annotated[
-        float | None,
+    ]
+    name: Annotated[
+        str,
         Field(
-            alias="deviceBytes",
-            description="Peak the load would place on the device, under the workload the probe assumed.",
+            description="The backend's device name, such as `CPU`, `CUDA0` or `MTL0`."
         ),
-    ] = None
-    host_bytes: Annotated[
-        float | None,
-        Field(alias="hostBytes", description="Peak the load would place in host RAM."),
-    ] = None
-    weights_bytes: Annotated[
-        float | None,
-        Field(alias="weightsBytes", description="Model weights, within `deviceBytes`."),
-    ] = None
-    context_bytes: Annotated[
-        float | None,
+    ]
+    unified: Annotated[
+        bool,
         Field(
-            alias="contextBytes",
-            description="Context, KV cache and decoder state, within `deviceBytes`.",
+            description="Memory the host owns: the CPU, and a GPU that shares the host's memory."
         ),
-    ] = None
-    compute_bytes: Annotated[
-        float | None,
+    ]
+    used_bytes: Annotated[
+        float,
         Field(
-            alias="computeBytes",
-            description="Compute buffers and graph arenas, within `deviceBytes`.",
+            alias="usedBytes", description="The memory the load takes on this device."
         ),
-    ] = None
-    device_free_bytes: Annotated[
+    ]
+    free_bytes: Annotated[
         float | None,
+        Field(alias="freeBytes", description="The free memory the device reported."),
+    ] = None
+    total_bytes: Annotated[
+        float | None,
+        Field(alias="totalBytes", description="The total memory the device reported."),
+    ] = None
+
+
+class ModelFitProbeLlamaStats(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    ctx_size: Annotated[
+        int,
         Field(
-            alias="deviceFreeBytes",
-            description="Device memory free when the probe ran.",
+            alias="ctxSize",
+            description="The context size the load resolves to.",
+            ge=-9007199254740991,
+            le=9007199254740991,
         ),
-    ] = None
-    device_total_bytes: Annotated[
-        float | None,
-        Field(alias="deviceTotalBytes", description="Device memory installed."),
-    ] = None
+    ]
+    gpu_layers: Annotated[
+        int,
+        Field(
+            alias="gpuLayers",
+            description="The number of layers the load offloads to the GPU.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ]
+
+
+class ModelFitProbeModel(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Annotated[
+        ModelFitProbeModelStatus,
+        Field(
+            description="The engine fitter's verdict for this model alone.",
+            title="ModelFitProbeModelStatus",
+        ),
+    ]
     devices: Annotated[
-        list[NativeProbeFitProjectionDevicesItem] | None,
+        list[ModelFitProbeDevice],
         Field(
-            description="One row per device the load was placed on, including the CPU backend, host excluded — `hostBytes` carries that. The flattened totals sum these rows, and `deviceName` names the first non-CPU row."
+            description="One row per device the load uses, the host last. Empty when unknown."
         ),
-    ] = None
-    report: Annotated[
-        str | None,
-        Field(
-            description="The engine's own per-module memory table, suitable for a log line."
-        ),
-    ] = None
+    ]
+    stats: Annotated[
+        ModelFitProbeLlamaStats | dict[str, Any],
+        Field(description="The resolved load of a llama.cpp verdict. Empty otherwise."),
+    ]
 
 
-class NativeProbeFit(GeneratedBaseModel):
+class ModelFitProbe(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     verdict: Annotated[
-        NativeProbeFitVerdict,
+        ModelFitProbeVerdict,
         Field(
-            description="Advisory outcome. `unknown` means no verdict was obtainable — the check was disabled, the load shape is unsupported, or the fitter produced no usable answer.",
-            title="NativeProbeFitVerdict",
+            description="The verdict for this load against free memory.",
+            title="ModelFitProbeVerdict",
         ),
     ]
-    basis: Annotated[
-        Literal["native-probe"],
+    pools: Annotated[
+        list[ModelFitProbePool],
         Field(
-            description="Evidence class: the engine's own fitter, run against the model file and the resolved load settings."
-        ),
-    ] = "native-probe"
-    engine: Annotated[
-        str | None,
-        Field(
-            description="Engine package whose fitter produced this outcome. Absent when none ran."
-        ),
-    ] = None
-    estimator_version: Annotated[
-        str,
-        Field(
-            alias="estimatorVersion",
-            description="Version of the probe integration that produced this outcome, covering the load-setting partitioning and the headroom policy. Under `native-probe-v2` the engine withholds 1024 MiB plus the on-disk bytes of every model already resident in this worker, and a `fit` is then judged against the same budget `assessModelFit` reports, under the basis that platform uses and less the `interactive-v1` reserve, counting device memory only where it comes out of system RAM.",
+            description="The memory pools the verdict was judged on, with what the load takes from each."
         ),
     ]
-    reason: Annotated[
-        str,
+    models: Annotated[
+        list[ModelFitProbeModel],
         Field(
-            description="Machine-readable reason for the verdict. Never parsed out of log text."
+            description="The load's own entry: the engine addon's `assessFit` result."
         ),
     ]
-    message: Annotated[
-        str | None, Field(description="Human-readable detail, when the reason has any.")
-    ] = None
-    plan: Annotated[
-        NativeProbeFitPlan | None,
-        Field(
-            description="Placement the probe projected. Present wherever the fitter resolved one.",
-            title="NativeProbeFitPlan",
-        ),
-    ] = None
-    projection: Annotated[
-        NativeProbeFitProjection | None,
-        Field(
-            description="What the fitter measured. Present on `fit` and `does-not-fit` alike, since a load that does not fit is where the figures matter most.",
-            title="NativeProbeFitProjection",
-        ),
-    ] = None
 
 
 class LoadedModelInfo(GeneratedBaseModel):
@@ -7127,11 +7195,11 @@ class LoadedModelInfo(GeneratedBaseModel):
         Field(alias="toolDialect", title="LoadedModelInfoToolDialect"),
     ] = None
     fit_probe: Annotated[
-        NativeProbeFit | None,
+        ModelFitProbe | None,
         Field(
             alias="fitProbe",
             description="Outcome of the engine fitter's check that ran ahead of this load. Absent when the load set `modelFitPolicy: 'off'`.",
-            title="NativeProbeFit",
+            title="ModelFitProbe",
         ),
     ] = None
 
@@ -11185,6 +11253,12 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
             min_length=1,
         ),
     ] = None
+    cache_share_across_keys: Annotated[
+        bool | None,
+        Field(
+            description="Let a request reuse the longest prompt prefix another conversation on this model holds. Default false: each request keeps to its own `kvCache` key, and a request without one starts cold. With `true`, callers can tell from prompt-token counts and timing whether another conversation shares their prompt."
+        ),
+    ] = None
     cache_ram_mib: Annotated[
         int | None,
         Field(
@@ -12977,6 +13051,117 @@ class LoadModelSrcRequestLlamacppEmbeddingModelFitPolicy(Enum):
     off = "off"
 
 
+class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon(Enum):
+    llamacpp_completion = "llamacpp-completion"
+    whispercpp_transcription = "whispercpp-transcription"
+    bci_whispercpp_transcription = "bci-whispercpp-transcription"
+    llamacpp_embedding = "llamacpp-embedding"
+    llamacpp_decision = "llamacpp-decision"
+    llamacpp_rerank = "llamacpp-rerank"
+    nmtcpp_translation = "nmtcpp-translation"
+    onnx_tts = "onnx-tts"
+    tts_ggml = "tts-ggml"
+    parakeet_transcription = "parakeet-transcription"
+    moss_transcribe = "moss-transcribe"
+    ggml_ocr = "ggml-ocr"
+    sdcpp_generation = "sdcpp-generation"
+    audiogen_ggml = "audiogen-ggml"
+    ggml_vla = "ggml-vla"
+    ggml_classification = "ggml-classification"
+    llm = "llm"
+    whisper = "whisper"
+    bci = "bci"
+    embeddings = "embeddings"
+    nmt = "nmt"
+    parakeet = "parakeet"
+    tts = "tts"
+    ocr = "ocr"
+    diffusion = "diffusion"
+    audiogen = "audiogen"
+    vla = "vla"
+    classification = "classification"
+
+
+class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc(
+    GeneratedBaseModel
+):
+    src: Annotated[
+        str,
+        Field(
+            description="Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+        ),
+    ]
+    name: Annotated[
+        str | None,
+        Field(
+            description="Display name for this model instance; overrides the name derived from the source."
+        ),
+    ] = None
+    model_id: Annotated[
+        str | None,
+        Field(
+            alias="modelId",
+            description="Unique identifier used to reference the model in QVAC calls.",
+        ),
+    ] = None
+    registry_path: Annotated[
+        str | None,
+        Field(
+            alias="registryPath",
+            description="Registry-relative path to the model (set for registry-backed models).",
+        ),
+    ] = None
+    registry_source: Annotated[
+        str | None,
+        Field(
+            alias="registrySource",
+            description="Registry source identifier, e.g. `huggingface`.",
+        ),
+    ] = None
+    blob_core_key: Annotated[
+        str | None,
+        Field(
+            alias="blobCoreKey",
+            description="Hyperdrive blob core key for the model file.",
+        ),
+    ] = None
+    blob_index: Annotated[
+        float | None,
+        Field(
+            alias="blobIndex",
+            description="Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+        ),
+    ] = None
+    engine: Annotated[
+        str | None,
+        Field(
+            description="Canonical inference engine identifier, e.g. `llamacpp-completion`."
+        ),
+    ] = None
+    expected_size: Annotated[
+        float | None,
+        Field(
+            alias="expectedSize",
+            description="Expected total size of the model file in bytes.",
+        ),
+    ] = None
+    sha256_checksum: Annotated[
+        str | None,
+        Field(
+            alias="sha256Checksum",
+            description="Expected SHA-256 checksum of the model file.",
+        ),
+    ] = None
+    addon: Annotated[
+        LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon
+        | Literal["vad"]
+        | None,
+        Field(
+            description="Inference addon / capability category this model belongs to."
+        ),
+    ] = None
+
+
 class LoadModelSrcRequestLlamacppEmbeddingModelConfigBackendItem(Enum):
     cuda = "cuda"
     vulkan = "vulkan"
@@ -13037,6 +13222,72 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfigVerbosity(Enum):
 
 
 class LoadModelSrcRequestLlamacppEmbeddingModelConfig(GeneratedBaseModel):
+    ctx_size: Annotated[
+        int | None,
+        Field(
+            alias="ctxSize",
+            description="Runtime context size in tokens. Unset uses the model trained context size. Lower it to bound memory for long-context models.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    projection_model_src: Annotated[
+        str | LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrc | None,
+        Field(
+            alias="projectionModelSrc",
+            description="Projection model for image and audio embeddings, such as EmbeddingGemma 2 mmproj. Omit for text-only use.",
+        ),
+    ] = None
+    image_max_tokens: Annotated[
+        int | None,
+        Field(
+            alias="imageMaxTokens",
+            description="Maximum image token budget. Unset keeps the projector default. Each input must fit in batchSize.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    image_min_tokens: Annotated[
+        int | None,
+        Field(
+            alias="imageMinTokens",
+            description="Minimum image token budget. Must not exceed imageMaxTokens.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    mmproj_no_audio: Annotated[
+        bool | None,
+        Field(
+            alias="mmprojNoAudio",
+            description="Skip the audio encoder. Defaults to false. Audio is rejected when enabled.",
+        ),
+    ] = None
+    mmproj_use_gpu: Annotated[
+        bool | None,
+        Field(
+            alias="mmprojUseGpu",
+            description="Projector GPU override. Unset follows the addon device policy; ignored when the model runs on CPU.",
+        ),
+    ] = None
+    image_max_megapixels: Annotated[
+        int | None,
+        Field(
+            alias="imageMaxMegapixels",
+            description="Maximum image size before decoding. Defaults to 50 megapixels.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    audio_max_seconds: Annotated[
+        int | None,
+        Field(
+            alias="audioMaxSeconds",
+            description="Maximum audio duration before decoding. Defaults to 600 seconds.",
+            gt=0,
+            le=9007199254740991,
+        ),
+    ] = None
     poll: Annotated[
         int | None,
         Field(
@@ -22695,11 +22946,16 @@ class ReloadConfigRequestModelConfig(GeneratedBaseModel):
 
 
 class ReloadConfigRequest(GeneratedBaseModel):
+    __forbidden_fields__ = frozenset(
+        {"modelSrc", "model_src", "seed", "withProgress", "with_progress"}
+    )
+    __forbidden_field_guidance__ = {
+        "model_src": "This field is not allowed in this request shape.",
+        "seed": "This field is not allowed in this request shape.",
+        "with_progress": "This field is not allowed in this request shape.",
+    }
     type: Literal["loadModel"] = "loadModel"
     model_id: Annotated[str, Field(alias="modelId", pattern="^[0-9a-f]{16}$")]
-    model_src: Annotated[Any | None, Field(alias="modelSrc")] = None
-    with_progress: Annotated[Any | None, Field(alias="withProgress")] = None
-    seed: Any | None = None
     model_type: Annotated[
         ReloadConfigRequestModelType,
         Field(
@@ -26688,16 +26944,26 @@ class Request_2(RootModel[DecideSingleRequest | DecideBatchRequest]):
 
 class Request_3(
     RootModel[
-        DeleteCacheAllRequest | DeleteCacheAutoRequest | DeleteCacheKvEntryRequest
+        DeleteCacheAllRequest
+        | DeleteCacheAutoRequest
+        | DeleteCacheKvEntryRequest
+        | DeleteCacheModelRequest
     ]
 ):
     root: Annotated[
-        DeleteCacheAllRequest | DeleteCacheAutoRequest | DeleteCacheKvEntryRequest,
+        DeleteCacheAllRequest
+        | DeleteCacheAutoRequest
+        | DeleteCacheKvEntryRequest
+        | DeleteCacheModelRequest,
         Field(title="DeleteCacheRequest"),
     ]
 
 
-class Request_4(
+class Request_4(RootModel[EmbedTextRequest | EmbedInputsRequest]):
+    root: Annotated[EmbedTextRequest | EmbedInputsRequest, Field(title="EmbedRequest")]
+
+
+class Request_5(
     RootModel[FinetuneRunRequest | FinetuneGetStateRequest | FinetuneStopRequest]
 ):
     root: Annotated[
@@ -26706,13 +26972,13 @@ class Request_4(
     ]
 
 
-class Request_5(RootModel[LoadModelSrcRequest | ReloadConfigRequest]):
+class Request_6(RootModel[LoadModelSrcRequest | ReloadConfigRequest]):
     root: Annotated[
         LoadModelSrcRequest | ReloadConfigRequest, Field(title="LoadModelRequest")
     ]
 
 
-class Request_6(
+class Request_7(
     RootModel[
         RagRequestChunk
         | RagRequestIngest
@@ -26766,13 +27032,13 @@ class Response_1(
     ]
 
 
-class Request_7(RootModel[TranslateNmtRequest | TranslateLlmRequest]):
+class Request_8(RootModel[TranslateNmtRequest | TranslateLlmRequest]):
     root: Annotated[
         TranslateNmtRequest | TranslateLlmRequest, Field(title="TranslateRequest")
     ]
 
 
-class Request_8(
+class Request_9(
     RootModel[
         VectorIndexRequestCreate
         | VectorIndexRequestLoad
@@ -26815,13 +27081,13 @@ class Request(
         | DiffusionStreamRequest
         | DiscoverRpcServersRequest
         | DownloadAssetRequest
-        | EmbedRequest
         | Request_4
+        | Request_5
         | GetLoadedModelInfoRequest
         | GetModelInfoRequest
         | GetSystemResourcesRequest
         | HeartbeatRequest
-        | Request_5
+        | Request_6
         | LoggingStreamRequest
         | ModelRegistryGetModelRequest
         | ModelRegistryListRequest
@@ -26829,7 +27095,7 @@ class Request(
         | OcrStreamRequest
         | PluginInvokeRequest
         | PluginInvokeStreamRequest
-        | Request_6
+        | Request_7
         | RerankRequest
         | ResumeRequest
         | StartRpcServerRequest
@@ -26840,10 +27106,10 @@ class Request(
         | TextToSpeechStreamRequest
         | TranscribeRequest
         | TranscribeStreamRequest
-        | Request_7
+        | Request_8
         | UnloadModelRequest
         | UpscaleStreamRequest
-        | Request_8
+        | Request_9
         | VideoStreamRequest
         | WorldSceneStreamRequest
         | WorldStepStreamRequest
@@ -26866,13 +27132,13 @@ class Request(
         | DiffusionStreamRequest
         | DiscoverRpcServersRequest
         | DownloadAssetRequest
-        | EmbedRequest
         | Request_4
+        | Request_5
         | GetLoadedModelInfoRequest
         | GetModelInfoRequest
         | GetSystemResourcesRequest
         | HeartbeatRequest
-        | Request_5
+        | Request_6
         | LoggingStreamRequest
         | ModelRegistryGetModelRequest
         | ModelRegistryListRequest
@@ -26880,7 +27146,7 @@ class Request(
         | OcrStreamRequest
         | PluginInvokeRequest
         | PluginInvokeStreamRequest
-        | Request_6
+        | Request_7
         | RerankRequest
         | ResumeRequest
         | StartRpcServerRequest
@@ -26891,10 +27157,10 @@ class Request(
         | TextToSpeechStreamRequest
         | TranscribeRequest
         | TranscribeStreamRequest
-        | Request_7
+        | Request_8
         | UnloadModelRequest
         | UpscaleStreamRequest
-        | Request_8
+        | Request_9
         | VideoStreamRequest
         | WorldSceneStreamRequest
         | WorldStepStreamRequest,
