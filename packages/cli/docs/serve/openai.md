@@ -301,6 +301,14 @@ order, into one leading system message, so chat templates that reject a
 `developer` role or a late system turn still render the tools. Chat
 completions does the same with `system` and `developer` messages.
 
+`usage.input_tokens` is the prompt size reported by the SDK, and
+`total_tokens` is input plus output. Reasoning from `<think>` models is
+returned in `reasoning` output items (`reasoning_text` content), never in
+`output_text`. Items, function calls included, follow the order the model
+produced them, buffered and streamed alike, so answer text after a later
+reasoning block or call starts a new `message` item; streaming finishes each item before adding the next and sends
+reasoning as `response.reasoning_text.delta` events.
+
 ### Examples
 
 ```bash

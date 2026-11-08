@@ -24,58 +24,65 @@ export const modelFitBody = z.strictObject({
     .array(fitCandidate)
     .min(1)
     .max(MAX_FIT_MODELS)
-    .describe('Models to assess together under one memory budget.'),
-  execution: z
-    .enum(['sequential', 'concurrent'])
-    .optional()
-    .describe(
-      '`sequential` (default) counts only the largest working-memory peak; `concurrent` counts every peak. A declared assumption, not a scheduling instruction.'
-    ),
-  policy: z
-    .literal('interactive-v1')
-    .optional()
-    .describe('Headroom policy. `interactive-v1` (default) withholds 20% of available memory.')
+    .describe('Models to assess as if loaded at the same time.')
 })
 
-const verdict = z.enum(['likely-fits', 'likely-too-large', 'unknown'])
+const verdict = z.enum(['fits', 'does-not-fit', 'unknown'])
 
 // Loose, so a field the SDK adds later still reaches the client through the
-// response serializer. Evidence and basis stay open strings for the same reason.
-const modelResult = z.looseObject({
-  model: z.string().describe('The alias or constant name as requested.'),
-  name: z.string().describe('Catalog name of the assessed model.'),
-  verdict,
-  evidence: z.string().optional(),
-  floorBytes: z.number().optional(),
-  estimatorVersion: z.string().optional(),
-  device: z.string().optional(),
-  reasons: z.array(z.string())
+// response serializer.
+const device = z.looseObject({
+  id: z
+    .string()
+    .describe("The device's PCI bus ID when the backend reports one, its name otherwise."),
+  name: z.string().describe("The backend's device name, such as `CPU`, `CUDA0` or `MTL0`."),
+  unified: z
+    .boolean()
+    .describe("Memory the host owns: the CPU, and a GPU that shares the host's memory."),
+  usedBytes: z.number().describe('The memory the load takes on this device.'),
+  freeBytes: z.number().optional().describe('The free memory the device reported.'),
+  totalBytes: z.number().optional().describe('The total memory the device reported.')
 })
 
-const budget = z.looseObject({
-  totalBytes: z.number(),
-  usedBytes: z.number(),
-  availableBytes: z.number(),
-  reservedBytes: z.number(),
-  availableAfterReserveBytes: z.number()
+const pool = z.looseObject({
+  id: z
+    .string()
+    .describe("`host` for the host's memory, the device's `id` for a GPU with its own memory."),
+  unified: z.boolean().describe('Whether this is the host pool.'),
+  usedBytes: z.number().describe("The sum of every model's rows in this pool."),
+  freeBytes: z.number().optional().describe('The lowest free figure reported for the pool.'),
+  totalBytes: z.number().optional().describe('The lowest total figure reported for the pool.')
+})
+
+const modelResult = z.looseObject({
+  model: z.string().describe('The alias or constant name as requested.'),
+  status: verdict.describe("The engine fitter's verdict for this model alone."),
+  devices: z
+    .array(device)
+    .describe('One row per device the load uses, the host last. Empty when unknown.'),
+  stats: z
+    .union([
+      z.object({
+        ctxSize: z.number().int().describe('The context size the load resolves to.'),
+        gpuLayers: z.number().int().describe('The number of layers the load offloads to the GPU.')
+      }),
+      z.object({}).strict()
+    ])
+    .describe('The resolved load of a llama.cpp verdict. Empty otherwise.')
 })
 
 export const modelFitResult = z.looseObject({
   object: z.literal('model_fit'),
-  verdict,
-  basis: z.string(),
-  execution: z.enum(['sequential', 'concurrent']),
-  evidence: z.string().optional(),
-  budget: budget.optional(),
-  floorBytes: z.number().optional(),
-  models: z.array(modelResult).describe('Per-model verdicts, in request order.'),
-  reasons: z.array(z.string()),
-  assumptions: z.array(z.string())
+  verdict: verdict.describe('The verdict for every model loaded together.'),
+  pools: z
+    .array(pool)
+    .describe('The memory pools the verdict was judged on, with what the set takes from each.'),
+  models: z
+    .array(modelResult)
+    .describe("One entry per model, in request order: the engine addon's own fit result.")
 })
 
 export const MODEL_FIT_FIELD_CODES: Record<string, string> = {
   models: 'invalid_models',
-  'models:too_big': 'too_many_models',
-  execution: 'invalid_execution',
-  policy: 'invalid_policy'
+  'models:too_big': 'too_many_models'
 }
