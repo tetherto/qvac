@@ -2,7 +2,7 @@
 
 ### Requirement: A cut changes which line the version-less paths serve, not the paths themselves
 
-When a new line becomes current, the version-less paths SHALL serve it, and the previous current line's pages SHALL become reachable at their versioned paths. A retired line's versioned paths MUST redirect to the same page in the current line, or to the collection's index when the current line lacks it. A reader's bookmark therefore always lands on documentation.
+When a new line becomes current, the version-less paths SHALL serve it, and the previous current line's pages SHALL become reachable at their versioned paths. A retired line's versioned paths MUST redirect to the same path in the current line, and its root to the collection's root, so a bookmark lands on the current documentation.
 
 #### Scenario: Version-less paths follow the current line
 

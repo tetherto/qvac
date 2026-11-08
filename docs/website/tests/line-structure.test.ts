@@ -23,7 +23,7 @@ const contentRoot = path.resolve(__dirname, '..', 'content', 'docs')
 
 const sdk: DocumentedSoftware = {
   package: '@qvac/sdk',
-  kind: 'collection',
+  kind: 'user-facing',
   path: '/sdk',
   versions: [
     { version: 'v0.17', folder: '(v0.17)' },
@@ -33,7 +33,7 @@ const sdk: DocumentedSoftware = {
 
 const cliPackage: DocumentedSoftware = {
   package: '@qvac/cli',
-  kind: 'package',
+  kind: 'internal-machinery',
   path: '/ecosystem/inventory/cli',
   versions: [
     { version: 'v0.9', folder: 'v0.9' },
@@ -255,7 +255,7 @@ describe('the manifest against the content tree', () => {
     const indexes = new Map<string, string | null>()
 
     for (const software of DOCUMENTED_SOFTWARE) {
-      if (software.kind !== 'package') continue
+      if (software.kind !== 'internal-machinery') continue
       const directory = path.join(contentRoot, software.path.replace(/^\//, ''))
       const found = ['index.mdx', 'index.md']
         .map((name) => path.join(directory, name))

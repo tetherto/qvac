@@ -3,26 +3,34 @@
  * than one version, the package it is, where it is documented, and the
  * versions published for it.
  *
- * Hand-edited. Publishing a version is two edits in one reviewable diff — the
- * folder under `content/docs/`, and the entry here — and the structure check
- * in `tests/line-structure.test.ts` fails the build when the two disagree.
+ * Derived, never hand-edited. Each software is declared by one file under
+ * `docs/website/versions/` (shape: `versions-file.ts`), which pins every line
+ * it publishes to the commit it documents. This module reads those files and
+ * presents them in the shape every version-shaped surface consumes — the
+ * switcher, the canonicals, `versions.json`, the page metadata, the retrieval
+ * filters — so none of them reads the files directly.
  *
- * A version records its number and the folder holding it, and nothing else.
- * Whether a versioned collection's line is the current one is read from the
- * folder: the current line is written `(v0.19)`, a Fumadocs folder group
- * excluded from the slug, and every other line `v0.18`. Currency is therefore
- * stated once, in the one place that also determines the URLs.
+ * Currency is read from line order: the first line a file declares is the
+ * current one, written as the Fumadocs folder group `(v<major>.<minor>)` so it
+ * keeps the collection's version-less paths. Every other line is written
+ * `v<major>.<minor>`. A package declares no current version: its version-less
+ * path belongs to its index, so none of its folders is a group.
  *
- * Inventory packages declare no current version. Their version-less path
- * belongs to the package index, so every README sits at a versioned path and
- * no folder group appears anywhere in the inventory.
- *
- * No package is listed below: the Software Inventory is built but not
- * published in this release, and its pages wait under
- * `content/_unpublished/ecosystem/inventory/`. Everything the inventory needs
- * is derived from the entries here, so publishing it is moving that folder
- * back and listing its packages again — no other edit.
+ * Adding a software is adding its versions file and importing it below. A
+ * versioned collection also needs its slot in the collection order of
+ * `custom-tree.ts`; nothing else in the site names it.
  */
+// Relative imports only: this module is part of `source.config.ts`'s import
+// graph, which the MDX config loader resolves outside the Next path aliases.
+import { parseVersionsFile, type VersionsFile } from './versions-file'
+import sdkVersions from '../../versions/sdk.json'
+import cliVersions from '../../versions/cli.json'
+
+/** Every versions file, by file name. */
+const VERSIONS_FILES: Readonly<Record<string, unknown>> = {
+  'sdk.json': sdkVersions,
+  'cli.json': cliVersions,
+}
 
 /** A documentation line or package version: major and minor, never a patch. */
 export type VersionNumber = `v${number}.${number}`;
@@ -36,12 +44,13 @@ export interface DocumentedVersion {
 }
 
 /**
- * `collection` — a product collection versioned as a whole, publishing its
- * current line and every line cut before it, however many that is. `package`
- * — an inventory entry publishing one page per release, with no current
- * version.
+ * `user-facing` — software a developer uses directly, with its own versioned
+ * root collection publishing a current line and the retained lines before it.
+ * `internal-machinery` — a package documented as a sub-collection of
+ * Ecosystem → Packages, publishing one folder per retained version with no
+ * current version.
  */
-export type DocumentedSoftwareKind = 'collection' | 'package';
+export type DocumentedSoftwareKind = 'user-facing' | 'internal-machinery';
 
 export interface DocumentedSoftware {
   /** The name the package publishes under, in its own registry. */
@@ -50,46 +59,47 @@ export interface DocumentedSoftware {
   /** Where it is documented, absolute and without a trailing slash. */
   path: `/${string}`;
   versions: readonly DocumentedVersion[];
+  /** Versions no longer published, whose addresses redirect to the current line. */
+  retired?: readonly VersionNumber[];
+}
+
+/** One versions file parsed and validated, keyed by its file name. */
+export interface DeclaredSoftware {
+  file: string;
+  declaration: VersionsFile;
+}
+
+/** Every versions file, parsed. Throws, naming the file, on a malformed one. */
+export function declaredSoftware(
+  files: Readonly<Record<string, unknown>> = VERSIONS_FILES,
+): readonly DeclaredSoftware[] {
+  return Object.entries(files).map(([file, raw]) => ({
+    file,
+    declaration: parseVersionsFile(file, raw),
+  }));
+}
+
+/** The manifest entry a versions file stands for. */
+export function toDocumentedSoftware(declaration: VersionsFile): DocumentedSoftware {
+  return {
+    package: declaration.package,
+    kind: declaration.kind,
+    path: declaration.path as `/${string}`,
+    versions: declaration.lines.map((line, index): DocumentedVersion => {
+      const version = line.version as VersionNumber;
+      const current = declaration.kind === 'user-facing' && index === 0;
+      return { version, folder: current ? `(${version})` : version };
+    }),
+    retired: declaration.retired as VersionNumber[],
+  };
 }
 
 /**
- * The SDK collection tracks `@qvac/sdk` and the CLI collection tracks
- * `@qvac/cli`. Each is named after the package its lines follow, so the thing
- * being versioned and the thing being named are the same.
- *
- * Only collections are listed while the inventory is unpublished. When a
- * package is listed again it publishes at least the two most recent releases
- * and never drops one it has published, so an entry only grows. The Python
- * client carries no version of its own — `pyproject.toml` stamps it from
- * `packages/sdk/package.json` — so it takes the SDK's numbers.
- *
- * Annotated rather than inferred, so which kinds exist stays a fact about the
- * type and not about today's list. Inferred, a list holding one kind would
- * narrow `kind` to it and make every test of the other a type error, and the
- * manifest would dictate the vocabulary instead of drawing on it.
+ * Every software the site documents at more than one version, in the order
+ * the versions files are listed above.
  */
-export const DOCUMENTED_SOFTWARE: readonly DocumentedSoftware[] = [
-  {
-    package: '@qvac/sdk',
-    kind: 'collection',
-    path: '/sdk',
-    versions: [
-      { version: 'v0.23', folder: '(v0.23)' },
-      { version: 'v0.22', folder: 'v0.22' },
-      { version: 'v0.21', folder: 'v0.21' },
-    ],
-  },
-  {
-    package: '@qvac/cli',
-    kind: 'collection',
-    path: '/cli',
-    versions: [
-      { version: 'v0.18', folder: '(v0.18)' },
-      { version: 'v0.17', folder: 'v0.17' },
-      { version: 'v0.16', folder: 'v0.16' },
-    ],
-  },
-];
+export const DOCUMENTED_SOFTWARE: readonly DocumentedSoftware[] =
+  declaredSoftware().map(({ declaration }) => toDocumentedSoftware(declaration));
 
 /** True when the folder is written as a Fumadocs folder group. */
 export function isCurrentLineFolder(folder: string): boolean {
@@ -174,7 +184,7 @@ export function getVersionForPath(pathname: string): {
 
 /** True when the pathname falls inside a collection published as lines. */
 export function isVersionedCollectionPath(pathname: string): boolean {
-  return getDocumentedSoftware(pathname)?.kind === 'collection';
+  return getDocumentedSoftware(pathname)?.kind === 'user-facing';
 }
 
 /**
@@ -208,7 +218,7 @@ export function computeSectionVersionUrl(
  */
 export function getCurrentVersionOf(path: string): string | null {
   const software = getDocumentedSoftware(path);
-  if (!software || software.kind !== 'collection') return null;
+  if (!software || software.kind !== 'user-facing') return null;
   const current = getCurrentLine(software);
   return current ? versionOfFolder(current.folder) : null;
 }

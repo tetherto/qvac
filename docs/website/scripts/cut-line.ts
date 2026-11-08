@@ -53,8 +53,6 @@ import { developmentLineDir } from "./lib/release-shared.js";
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DOCS_WEBSITE_DIR = path.resolve(SCRIPT_DIR, "..");
 
-/** How far each column of a `_redirects` rule is indented, in characters. */
-const REDIRECT_COLUMNS = { source: 19, destination: 29 };
 
 export interface CutRequest {
   /** Root to operate under. The real site, or a copy of it under test. */
@@ -104,12 +102,12 @@ function escapeForRegExp(value: string): string {
 }
 
 /**
- * Rewrite one collection's entry in the manifest: its current line's folder
- * loses the parentheses, and the line being opened is inserted above it.
+ * Rewrite one collection's versions file: the line being opened is declared
+ * first, which is what makes it current, and every line below it keeps its
+ * place. Nothing is retired: retiring a line is a separate, deliberate edit.
  *
- * The edit is scoped to the entry's own `versions` array — located by the
- * collection's `path`, which is unique across the manifest — so a collection
- * that happens to share a version number with another is never touched.
+ * `source` is the file's JSON text. The edit refuses a file documenting
+ * another path, and a cut whose preserved line is not the current one.
  */
 export function cutManifest(
   source: string,
@@ -117,85 +115,19 @@ export function cutManifest(
   preserved: string,
   opened: string,
 ): string {
-  const anchor = `    path: '${collectionPath}',\n    versions: [\n`;
-  const start = source.indexOf(anchor);
-  if (start === -1) {
+  const file = JSON.parse(source) as { path: string; lines: { version: string }[] };
+  if (file.path !== collectionPath) {
     throw new Error(
-      `The manifest has no entry at '${collectionPath}' in the expected shape.`,
+      `The versions file has no entry at '${collectionPath}': it documents '${file.path}'.`,
     );
   }
-  const from = start + anchor.length;
-  const end = source.indexOf("    ],\n", from);
-  const block = source.slice(from, end);
-
-  const currentEntry = `      { version: '${preserved}', folder: '(${preserved})' },\n`;
-  if (!block.includes(currentEntry)) {
+  if (file.lines[0]?.version !== preserved) {
     throw new Error(
       `'${collectionPath}' does not declare ${preserved} as its current line.`,
     );
   }
-
-  const cut = block.replace(
-    currentEntry,
-    `      { version: '${opened}', folder: '(${opened})' },\n` +
-      `      { version: '${preserved}', folder: '${preserved}' },\n`,
-  );
-  return source.slice(0, from) + cut + source.slice(end);
-}
-
-/**
- * Add the preserved line's rules to the redirects.
- *
- * Every line whose folder is plain needs them, because every URL of it carries
- * a dot and the CDN never normalizes the trailing slash of a dotted path. The
- * index pair serves the root, whose dot in the last segment also costs it the
- * directory resolution. The splat serves each page below it addressed without
- * the slash: on a bare dotted path, it is the only rule form the CDN matches.
- * The rules go at the head of their collection's existing ones, keeping the
- * block ordered newest first, which is the order a reader of the diff expects.
- */
-export function cutRedirects(source: string, slug: string, preserved: string): string {
-  const rule = (from: string, to: string, status: string) =>
-    from.padEnd(REDIRECT_COLUMNS.source) +
-    to.padEnd(REDIRECT_COLUMNS.destination) +
-    status;
-
-  const line = `/${slug}/${preserved}`;
-  const rules = [
-    rule(`${line}/`, `${line}/index.html`, "200"),
-    rule(line, `${line}/`, "301"),
-    rule(`${line}/*`, `${line}/:splat/index.html`, "200"),
-  ];
-
-  const lines = source.split("\n");
-  const isLineRule = (text: string) =>
-    /^\/\w[\w-]*\/v[\d.]+(\/\*?)?\s+\/\w[\w-]*\/v[\d.]+/.test(text);
-
-  let at = lines.findIndex(
-    (text) => text.startsWith(`/${slug}/v`) && isLineRule(text),
-  );
-  if (at === -1) {
-    // First cut for this collection: sit below the block rather than inside
-    // another collection's run of rules.
-    const last = lines.reduce(
-      (found, text, index) => (isLineRule(text) ? index : found),
-      -1,
-    );
-    if (last === -1) {
-      throw new Error(
-        "`public/_redirects` carries no line index rules, so there is no " +
-          "block to add this one to.",
-      );
-    }
-    at = last + 1;
-  }
-
-  if (lines.some((text) => text.startsWith(`${line}/ `))) {
-    throw new Error(`\`public/_redirects\` already carries ${line}.`);
-  }
-
-  lines.splice(at, 0, ...rules);
-  return lines.join("\n");
+  const lines = [{ version: opened, inPlace: true }, ...file.lines];
+  return JSON.stringify({ ...file, lines }, null, 2) + "\n";
 }
 
 /**
@@ -324,11 +256,11 @@ export async function cutLine(request: CutRequest): Promise<CutResult> {
   const collectionPath = `/${slug}`;
 
   const software = DOCUMENTED_SOFTWARE.find(
-    (entry) => entry.path === collectionPath && entry.kind === "collection",
+    (entry) => entry.path === collectionPath && entry.kind === "user-facing",
   );
   if (!software) {
     const versioned = DOCUMENTED_SOFTWARE.filter(
-      (entry) => entry.kind === "collection",
+      (entry) => entry.kind === "user-facing",
     ).map((entry) => entry.path.slice(1));
     throw new Error(
       `'${slug}' is not a versioned collection. Cuttable: ${versioned.join(", ")}.`,
@@ -378,18 +310,12 @@ export async function cutLine(request: CutRequest): Promise<CutResult> {
     }
   }
 
-  const manifestPath = path.join(root, "src", "lib", "versions.ts");
-  const redirectsPath = path.join(root, "public", "_redirects");
+  const manifestPath = path.join(root, "versions", `${slug}.json`);
   const manifest = cutManifest(
     await fs.readFile(manifestPath, "utf-8"),
     collectionPath,
     current.version,
     released,
-  );
-  const redirects = cutRedirects(
-    await fs.readFile(redirectsPath, "utf-8"),
-    slug,
-    current.version,
   );
 
   // Every refusal is behind us; from here the cut is applied.
@@ -412,8 +338,8 @@ export async function cutLine(request: CutRequest): Promise<CutResult> {
   );
   await fs.cp(development, openedDir, { recursive: true });
 
+  // The line rules of `_redirects` follow from the versions file at build.
   await fs.writeFile(manifestPath, manifest);
-  await fs.writeFile(redirectsPath, redirects);
 
   const relabelled = [
     ...(await relabelLine(preserved, current.version, null)),
@@ -431,7 +357,6 @@ export async function cutLine(request: CutRequest): Promise<CutResult> {
       path.relative(root, preserved),
       path.relative(root, openedDir),
       path.relative(root, manifestPath),
-      path.relative(root, redirectsPath),
       ...new Set(touched),
     ],
   };
@@ -478,7 +403,7 @@ if (import.meta.main) {
     console.log("");
     console.log("Cuts the line of the version being released: preserves the");
     console.log("line cut before it, opens this one as a copy of the");
-    console.log("development line, and updates the manifest, the redirects and");
+    console.log("development line, and updates the versions file and");
     console.log("the currency marker. The development line stays where it is.");
     process.exit(slug && version ? 1 : 0);
   }

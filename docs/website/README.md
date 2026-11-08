@@ -51,14 +51,73 @@ npm run serve
 
 - `src`: source code of docs website.
 - `content/docs`: docs website content.
+- `versions`: one versions file per documented software, pinning every line it publishes.
 - `scripts`: integration and automation between the codebase and automatic documentation generation.
+
+## Documentation lines and versions files
+
+Every software documented at more than one version is declared by one file
+under `versions/` — today `sdk.json` and `cli.json`. Its shape is enforced by
+`src/lib/versions-file.ts`; `src/lib/versions.ts` derives from these files the
+manifest every version-shaped surface reads, and no other module reads them.
+
+```jsonc
+{
+  "package": "@qvac/sdk",
+  "kind": "user-facing",                 // user-facing | internal-machinery
+  "path": "/sdk",                        // where it is documented
+  "paths": ["packages/sdk/docs/users",   // the documentation root, first
+            "packages/sdk/examples"],    // then whatever it imports
+  "retired": ["v0.20"],                  // lines whose addresses redirect
+  "lines": [
+    { "version": "v0.24", "ref": "release-sdk-0.24.1", "sha": "<commit>" },
+    { "version": "v0.23", "inPlace": true }
+  ]
+}
+```
+
+- **Line order is currency.** The first line is current and is served at the
+  version-less paths; no other field marks it.
+- **A pinned line** (`ref` + `sha`) is rendered from that commit.
+  `npm run docs:materialize` extracts its `paths` into a gitignored snapshot
+  under `.lines/<software>/<version>/`, transpiles its examples there, and
+  copies its documentation root to `content/docs/<path>/<folder>/`, written as
+  the folder group when the line is current. Its pages import their examples
+  from the snapshot, so a line shows the examples of the commit it documents.
+  A materialized folder carries a `.materialized` marker and ignores itself in
+  git; it is removed when its line stops being declared.
+- **An in-place line** (`inPlace: true`) is still held under `content/docs/`
+  from before its software kept documentation in its package. It is
+  transitional: the package migration replaces it with pinned lines.
+- **No number of lines is imposed.** A line stays published until the team
+  stops supporting it. Retiring it is one edit: move its version from `lines`
+  to `retired`. The materializer then removes its folder, and its addresses
+  redirect to the current line.
+- **The redirect rules of every line are generated.** `public/_redirects`
+  holds two `# @generated …` markers; after `next build`,
+  `scripts/write-line-redirects.ts` expands them in `out/_redirects` into the
+  rules of every published line that is not current and of every retired
+  line, read from the versions files. Never write a line's rules by hand.
+
+`npm run build` and `npm run dev` materialize before anything else. To preview
+another state of one line, override it with a commit or a checkout:
+
+```bash
+bun run scripts/materialize-lines.ts --override sdk@v0.24=<sha-or-directory>
+```
+
+`npm run dev` also passes `--include-dev`, which adds each collection's
+unreleased line, read from the working tree, at `/<collection>/preview/` —
+once that software keeps its documentation in its package. Production builds
+never pass it.
 
 ## Cutting a documentation line
 
 A versioned collection — SDK, CLI — publishes one folder per line it has cut:
 the parenthesized one is a Fumadocs group, so its pages answer at the
-version-less paths, and every plain one carries its version in the URL. A line
-is never retired: it is the only record of how that release behaved.
+version-less paths, and every plain one carries its version in the URL. A
+cut adds a line and retires none; retiring a line is a separate edit to its
+versions file.
 
 The line still being written is not among them. It lives at
 `content/_unpublished/<collection>/next/`, which nothing builds and no URL
@@ -106,22 +165,15 @@ and git picks one, which is QVAC-27286. The `Documentation lines` job in
 rebased — it is not a required check, so it asks rather than withholds — and
 `qv-docs-cutoff` lists the PRs a cut will strand before making it.
 
-Then edit the two hand-maintained inputs:
+Then edit the one hand-maintained input:
 
-- `src/lib/versions.ts` — the SDK gains `{ version: 'v0.18', folder: '(v0.18)' }`
-  at the top and its `v0.17` entry's folder becomes plain. The older entries stay
-  as they are. The development line is not in this file; it is not published.
-- `public/_redirects` — the line just preserved needs the pair every dotted
-  segment needs, because the CDN reads `v0.17` as a file request and so never
-  normalizes the trailing slash:
+- `versions/sdk.json` — the SDK gains `{ "version": "v0.18", "inPlace": true }`
+  at the top, which makes it current; the older entries stay as they are. The
+  development line is not in this file; it is not published.
 
-  ```
-  /sdk/v0.17/     /sdk/v0.17/index.html   200
-  /sdk/v0.17      /sdk/v0.17/             301
-  ```
-
-  Nothing else: a page carried by both lines keeps resolving on its own, and a
-  page the new line drops is the only other case that needs a rule.
+The preserved line's redirect rules follow from that file at build. A page
+carried by both lines keeps resolving on its own, and a page the new line drops
+is the only case that needs a rule of its own in `public/_redirects`.
 
 Then move the currency marker. A page that states in its own title which series
 it documents also states whether that series is current, and the parentheses

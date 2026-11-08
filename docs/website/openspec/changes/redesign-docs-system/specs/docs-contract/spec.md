@@ -4,12 +4,12 @@
 
 Every documented software SHALL declare one kind, and the kind SHALL determine which pages its documentation must contain.
 
-- An `entry-point` (SDK, CLI, Compose) MUST provide an overview, installation, requirements and supported platforms, a quickstart, usage pages, configuration, an API reference, troubleshooting, and a link to its release notes.
-- A `package` MUST provide an overview, installation, supported platforms or backends, usage pages, and an API reference.
+- A `user-facing` software (today the SDK and the CLI) MUST provide an overview, installation, requirements and supported platforms, a quickstart, usage pages, configuration, an API reference, troubleshooting, and a link to its release notes.
+- An `internal-machinery` software MUST provide an overview, installation, supported platforms or backends, usage pages, and an API reference.
 
 #### Scenario: A missing required page fails the pull request
 
-- **WHEN** a pull request leaves an `entry-point` without an installation page
+- **WHEN** a pull request leaves a `user-facing` software without an installation page
 - **THEN** the contract check fails and names the software and the missing page
 
 ### Requirement: Every page declares a type and satisfies it
@@ -34,7 +34,7 @@ A page MUST contain every required section of its type. A fact its type assigns 
 
 ### Requirement: The contract is checked on pull requests, never at build
 
-The contract SHALL be checked on the documentation a pull request authors. The site build MUST NOT check the contract, so a contract change never fails the build of a line pinned before it.
+The contract SHALL be checked on the documentation a pull request authors. The site build MUST NOT check the contract, so a new contract rule never fails the build of a line pinned before it. This guarantee covers the contract's rules only. A change to a data component's interface MAY break an older line's build, and no backward compatibility is guaranteed for components.
 
 #### Scenario: An older line builds under a newer contract
 

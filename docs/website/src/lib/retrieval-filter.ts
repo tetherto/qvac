@@ -80,11 +80,11 @@ export function allowedLines(pathname: string): AllowedLine[] {
   const readersCollection = collectionOf(pathname);
   const readersLine = getVersionForPath(pathname);
   const readersVersion =
-    readersLine?.software.kind === 'collection'
+    readersLine?.software.kind === 'user-facing'
       ? readersLine.version.version
       : null;
 
-  return documentedSoftwareOfKind('collection').flatMap((software) => {
+  return documentedSoftwareOfKind('user-facing').flatMap((software) => {
     const collection = collectionOf(software.path);
     if (!collection) return [];
 
@@ -130,7 +130,7 @@ export function retrievalFilter(pathname: string): RetrievalFilter {
 export function lineLabelOf(url: string): string | null {
   const path = url.replace(/^https?:\/\/[^/]+/, '').replace(/\/+$/, '');
   const versioned = getVersionForPath(path);
-  if (!versioned || versioned.software.kind !== 'collection') return null;
+  if (!versioned || versioned.software.kind !== 'user-facing') return null;
   if (isCurrentLineFolder(versioned.version.folder)) return null;
   return versioned.version.version;
 }

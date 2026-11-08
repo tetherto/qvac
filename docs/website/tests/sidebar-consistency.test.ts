@@ -29,7 +29,7 @@ const PAGE_EXTENSIONS = ['.mdx', '.md']
  */
 function linePageTree (): Root {
   const children: Node[] = DOCUMENTED_SOFTWARE
-    .filter((software) => software.kind === 'collection')
+    .filter((software) => software.kind === 'user-facing')
     .flatMap((software) =>
       software.versions.map((line) => ({
         type: 'folder' as const,
@@ -83,7 +83,7 @@ function contentPaths (url: string): string[] {
   const paths = [cleanUrl]
 
   const resolved = getVersionForPath('/' + cleanUrl)
-  if (resolved && resolved.software.kind === 'collection') {
+  if (resolved && resolved.software.kind === 'user-facing') {
     const { software, version } = resolved
     const collection = software.path.slice(1)
     const rest = cleanUrl
@@ -233,7 +233,7 @@ describe('sidebar-consistency', () => {
     // tree whose entries are composed rather than read from a `meta.json`.
     const tree = { $id: 'root', name: 'docs', children: buildCustomTree(linePageTree()) }
     const urls = DOCUMENTED_SOFTWARE
-      .filter((software) => software.kind === 'package')
+      .filter((software) => software.kind === 'internal-machinery')
       .flatMap((software) => [
         software.path,
         ...software.versions.map((version) => `${software.path}/${version.version}`),

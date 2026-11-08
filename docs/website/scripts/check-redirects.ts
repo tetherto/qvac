@@ -58,7 +58,9 @@ import type { UrlInventory } from "./capture-url-inventory.js";
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const DOCS_WEBSITE_DIR = path.resolve(SCRIPT_DIR, "..");
 const OUT_DIR = path.join(DOCS_WEBSITE_DIR, "out");
-const REDIRECTS_PATH = path.join(DOCS_WEBSITE_DIR, "public", "_redirects");
+// The exported file, where the build has expanded the documentation-line
+// markers of `public/_redirects` into rules (scripts/write-line-redirects.ts).
+const REDIRECTS_PATH = path.join(OUT_DIR, "_redirects");
 const FIXTURES_DIR = path.join(DOCS_WEBSITE_DIR, "tests", "fixtures");
 
 /** A redirect chain longer than this is treated as a loop. */

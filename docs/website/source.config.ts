@@ -13,8 +13,10 @@ import remarkMath from 'remark-math';
 import codeImport from 'remark-code-import';
 import { SCHEMA_TYPES } from './src/lib/docs-json-ld';
 import remarkLineLinks from './src/lib/remark-line-links';
+import remarkLineRoots from './src/lib/remark-line-roots';
 
-const monorepoRoot = resolve(process.cwd(), '../..');
+const websiteRoot = process.cwd();
+const monorepoRoot = resolve(websiteRoot, '../..');
 
 // You can customise Zod schemas for frontmatter and `meta.json` here
 // see https://fumadocs.dev/docs/mdx/collections#define-docs
@@ -49,6 +51,9 @@ export default defineConfig({
     remarkPlugins: [
       remarkMath,
       remarkMdxMermaid,
+      // Before `codeImport`: a materialized line imports its examples from its
+      // own snapshot, extracted from the commit it documents.
+      [remarkLineRoots, { websiteRoot, monorepoRoot }],
       [codeImport, { rootDir: monorepoRoot }],
       remarkLineLinks,
     ],

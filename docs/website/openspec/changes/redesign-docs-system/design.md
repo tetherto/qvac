@@ -1,12 +1,11 @@
 ## Context
 
-QVAC is a public monorepo of more than thirty packages. Three of them are developer entry points:
+QVAC is a public monorepo of more than thirty packages. Today two of them are user-facing — software a developer uses directly:
 
 - the SDK: polyglot (JavaScript/TypeScript, Python, Kotlin, Swift soon), runs inference and fine-tuning;
-- the CLI: configures and bundles the SDK, and serves a local OpenAI-compatible model provider;
-- Compose: higher-level AI primitives such as agents and harnesses, built on the SDK; not yet in the monorepo.
+- the CLI: configures and bundles the SDK, and serves a local OpenAI-compatible model provider.
 
-The remaining packages are internal machinery. Developers can use them directly, but the canonical paths are the SDK for inference and Compose for higher abstractions.
+More user-facing software will come. The remaining packages are internal machinery. Developers can use them directly, but the canonical path to each capability is a user-facing software.
 
 The site is a static Next.js + Fumadocs export served from a CDN. Its build host watches `docs-production` and can check out any number of commits. Today:
 
@@ -35,22 +34,25 @@ The ecosystem is at version zero. The SDK ships a minor every two weeks, and a l
 - Generate API facts deterministically, nested to primitive types, for readers and agents.
 - Make what a page must contain a checked contract, and make a stale page fail its pull request.
 - Keep the build trivially testable locally and in pull requests.
-- Migrate the SDK and the CLI fully. Add other packages one at a time.
+- Migrate the SDK and the CLI fully, touching only `sdk`, `sdk-python`, `sdk-kotlin`, and `cli`.
+- Ship the Packages mechanism tested with a fixture, so internal packages can be added one at a time afterwards.
 
 **Non-Goals:**
 
 - A server runtime of any kind. The site stays a static export.
-- Long-term retention or compatibility of old lines. Few lines are kept, and an old line is retired instead of maintained.
+- Long-term compatibility of old lines. An old line is retired when unsupported, or updated, rather than kept compatible.
 - Versioning the docs contract or keeping MDX components backward compatible.
-- Documenting Compose before it exists. Only the generic mechanisms it needs are specified.
+- Depending on which user-facing software exists, or how much. A future one is one more versioned collection, and nothing in this design names it.
 - The build host's capacity, which is handled outside this change.
 - Rewriting lines published before the migration. They age out.
+- Documenting any internal package. A proof-of-concept branch demonstrates three, and they are added after this change.
+- Changing any package other than `sdk`, `sdk-python`, `sdk-kotlin`, and `cli`. Completing the Zod field descriptions in `packages/inference` is therefore deferred.
 
 ## Decisions
 
 ### D1. Documentation lives in the package
 
-`packages/<pkg>/docs/users/` holds the published documentation and `packages/<pkg>/docs/contributors/` the maintainer documentation. The audience names follow open-source convention (`CONTRIBUTING.md`, "user guide"), include outside contributors, and avoid `consumers`, which collides with QVAC's consumer apps. The site reads only `docs/users/`. Its root `meta.json` carries the software's `kind`, so no extra file is needed. Examples stay in `packages/<pkg>/examples/`. Ecosystem and Resources stay in `docs/website/content/`.
+`packages/<pkg>/docs/users/` holds the published documentation and `packages/<pkg>/docs/contributors/` the maintainer documentation. The audience names follow open-source convention (`CONTRIBUTING.md`, "user guide"), include outside contributors, and avoid `consumers`, which collides with QVAC's consumer apps. The site reads only `docs/users/`. The software's `kind` is declared once, in its versions file (D2). Examples stay in `packages/<pkg>/examples/`. Ecosystem and Resources stay in `docs/website/content/`.
 
 Alternatives rejected:
 
@@ -65,11 +67,10 @@ Alternatives rejected:
 ```jsonc
 {
   "package": "@qvac/sdk",
-  "kind": "collection",          // collection | package
+  "kind": "user-facing",         // user-facing | internal-machinery
   "repo": null,                  // another repository, for software outside the monorepo
   "paths": ["packages/sdk/docs/users", "packages/sdk/examples",
             "packages/sdk-python/examples", "packages/sdk/contract"],
-  "retain": 3,
   "retired": ["v0.20"],
   "lines": [{ "version": "v0.24", "ref": "release-sdk-0.24.1", "sha": "<sha>" }]
 }
@@ -86,7 +87,9 @@ Alternatives rejected:
 
 ### D3. Materialization before the build
 
-`docs:materialize` runs `git archive <sha> -- <paths>` for every line into a gitignored `.content/<collection>/<folder>/` and writes the current line as the Fumadocs folder group `(vX.Y)`. Everything downstream — fumadocs-mdx, the custom tree, the switcher, the agent corpora, the sitemap — reads those folders as it reads `content/docs/` today. Examples are imported relative to the line's own root.
+`docs:materialize` runs `git archive <sha> -- <paths>` for every line into a gitignored snapshot, `.lines/<software>/<version>/`, which mirrors the repository layout and transpiles the line's examples there. It then copies the documentation root to `content/docs/<path>/<folder>/` and writes the current line as the Fumadocs folder group `(vX.Y)`. A materialized folder carries a `.materialized` marker and a `.gitignore` that ignores itself, and it is removed when its line is no longer declared. Materializing into `content/docs/` rather than a separate root means everything downstream — fumadocs-mdx, the custom tree, the switcher, the agent corpora, the sitemap, the checks — reads lines exactly as it reads them today. A remark plugin roots each materialized line's `file=<rootDir>/…` imports at its snapshot.
+
+A line still held under `content/docs/` from before its package migration is declared `inPlace` and left untouched. It is transitional: the migration replaces it with pinned lines.
 
 - `--override <software>@<line>=<path|sha>` substitutes one line. A pull request into `main` uses its working tree. A pull request into a release branch uses the site from `main` and its own head.
 - `--include-dev` adds the line under development, from `main`'s `docs/users/`, for staging only.
@@ -118,8 +121,8 @@ Alternative kept as a fallback: no corrections to released lines. A fix then wai
 
 ### D6. Collections
 
-- Ecosystem (unversioned) holds a Packages section: one entry per internal package, each versioned through `kind: package`.
-- SDK, CLI, and Compose are the versioned collections.
+- Ecosystem (unversioned) holds a Packages section: one entry per internal package, each versioned through `kind: internal-machinery`.
+- One versioned root collection per user-facing software, declared by a versions file of kind `user-facing`. Today these are the SDK and the CLI. The design does not depend on their number. Adding a user-facing software is adding its versions file and its slot in the collection order, with no other site change.
 - Resources stays unversioned.
 - Research (Hugging Face) and the assistant app are departures.
 
@@ -129,13 +132,15 @@ A package appears only when it has a versions file, so inclusion is an explicit 
 
 The contract has five layers:
 
-1. software kinds (`entry-point`, `package`), in YAML;
+1. the requirements of each software kind (`user-facing`, `internal-machinery`), in YAML;
 2. page types, in YAML: required sections, frontmatter fields, data components;
 3. MDX scaffolds for new pages;
 4. data components that render facts;
 5. writing guidance in agent skills.
 
-Facts come from data, prose comes from people and agents, and they never share a passage. The contract is checked on pull requests over the content being authored. The build only renders. A contract change therefore never breaks an older line's build, and the contract needs no versioning. Nunjucks page rendering is retired. A generated page would overwrite prose, while a component reading data never does.
+Facts come from data, prose comes from people and agents, and they never share a passage. The contract's checks run on pull requests over the content being authored, and the build only renders. A new contract rule therefore never fails the build of a line pinned before it. Nunjucks page rendering is retired. A generated page would overwrite prose, while a component reading data never does.
+
+The data components (layer 4) are site code that every line renders, so a change to a component's interface can break an older line's build. For example, a component that gains a required prop breaks every page that still omits it. This is accepted at version zero. The contract is not versioned, and components are not kept backward compatible. When a component change breaks an older line, either the live lines are updated on their release branches and re-pinned, or the line is retired. Compatibility guarantees are revisited once older lines have a user base worth supporting.
 
 ### D8. API facts are extracted, never written
 
@@ -144,7 +149,7 @@ JSON Schema is the common shape of type facts, rendered by one nested, collapsib
 | Software | Source | Generated artifact |
 |---|---|---|
 | SDK | Zod schemas → `contract/` (exists) | used as is |
-| Compose | Zod schemas → the SDK's exporter, reused | `contract/` |
+| Any other user-facing software | its strongest machine-readable surface; a Zod contract exported like the SDK's is the preferred shape | per source |
 | Internal packages | public `index.d.ts` → TypeDoc JSON → normalizer | `docs/users/_generated/api.json` |
 | CLI | Commander tree → walker | `docs/users/_generated/cli.json` |
 | `qvac serve` | fastify-swagger, exported without listening | `docs/users/_generated/openapi.json` |
@@ -169,7 +174,7 @@ Alternatives rejected:
 | `@throws` | `@example` | `examples/` |
 | status tags | narrative | the MDX page |
 
-About half of the contract's properties carry a description today, and a check requires every public request property to have one. Whether the SDK keeps `@param` for IDE hover is the SDK team's call. The documentation pipeline ignores it either way.
+This change trims the SDK client TSDoc to the left column. The trimming is essential: long TSDoc blocks bury the code they annotate, and every fact they repeat is a second copy that drifts. Field descriptions reach readers and agents through the site (D12), not through the source. About half of the contract's properties carry a description today. A check reports every public request property without one, but does not fail. The descriptions live in `packages/inference`, which this change does not touch. `@param` tags are removed. IDE hover is read by coding agents now, not by people writing code by hand, and agents get every field description from the function's card (D12). Verbose TSDoc is not a source of truth: it repeats facts that drift, it buries the code, and it can mislead a coding agent.
 
 ### D10. One polyglot reference, language-switchable
 
@@ -187,7 +192,7 @@ Alternative rejected: one reference per language, which would triplicate the sam
 
 A hand-written page declares `binds: [<symbol-id>, …]`. The package's `docs/users/api-bindings.lock.json` records each binding's surface hash at the last review. Hashing source files is rejected: refactors and comments produce false alarms, and transitive type changes go unnoticed. The projected surface is:
 
-- the contract definitions for the SDK and Compose;
+- the contract definitions for contract-based software such as the SDK;
 - the normalized TypeDoc projection for packages;
 - the command model and the OpenAPI document for the CLI.
 
@@ -198,18 +203,32 @@ On a pull request:
 
 Rigor depends on the kind:
 
-- `entry-point`: bindings per symbol, plus a coverage check that every public symbol is bound;
-- `package`: one whole-surface binding, no coverage check.
+- `user-facing`: bindings per symbol, plus a coverage check that every public symbol is bound;
+- `internal-machinery`: one whole-surface binding, no coverage check.
 
 Generated pages need no binding, because the freshness gate covers them.
 
 ### D12. Agent projections
 
-Each line's corpus gains one compact card per function: a TypeScript-style signature with expanded types and field descriptions. It is cheaper in tokens than JSON Schema and closer to what agents read well. Per-method JSON Schema slices are published alongside, because the whole `schema.json` is 1.2 MB.
+Each line gains one compact card per function: a TypeScript-style signature with expanded types and field descriptions. It is cheaper in tokens than JSON Schema and closer to what agents read well. Per-method JSON Schema slices are published alongside, because the whole `schema.json` is 1.2 MB.
 
-### D13. Retention
+The site is the single place where humans and agents find everything about using QVAC: prose, examples, API facts, for the version in use. The projections serve that goal:
 
-`retain` is at most the branch-retention window, so every pinned commit stays reachable without extra tags. Entry points keep 3 lines, packages keep 2. A retired version is recorded in `retired`. The build turns each one into a redirect of its versioned paths to the current line.
+- **Every agent channel carries them:** the line's `llms.txt` corpus, the Markdown twin of each reference page, and the MCP server. Whichever channel an agent enters by, it reaches the same complete content.
+- **The agent protocol page declares the site the reference source.** An agent that has found the site learns that the API, the prose, and the examples of its version are all there, and that the site takes precedence over package sources. A person pointing an agent at the site can therefore rely on it being covered.
+
+Cards are not shipped inside packages. A partial copy beside the code would compete with the site, and an agent satisfied by it would miss the prose and the other resources.
+
+### D13. Retirement
+
+No number of lines is imposed. Limiting lines only worked around the build host's capacity, which this change has to solve anyway. A line stays published until the team stops supporting its version. Retiring it is one edit to its versions file: moving the version from `lines` to `retired`. The materializer then removes its folder.
+
+The redirect rules of every line are generated from the versions files. `public/_redirects` carries two markers in the positions those rules must hold. After `next build`, `scripts/write-line-redirects.ts` expands them in `out/_redirects`:
+
+- every published line that is not current gets its rewrite, redirect, and splat;
+- every retired line gets three redirects to the same path in the current line.
+
+Neither publishing nor retiring a line edits `public/_redirects`.
 
 ### D14. Software outside the monorepo
 
@@ -223,33 +242,44 @@ These costs vanish if the software moves into the monorepo.
 
 ### D15. Migration scope
 
-The SDK and the CLI migrate completely. Their unreleased line moves from `content/_unpublished/<collection>/next/` to their packages, and the first release afterwards is the first pinned line. Lines published before the migration are not reconstructed. Every other package is added one at a time, starting with `translation-nmtcpp` and `llm-llamacpp`.
+The SDK and the CLI migrate completely. Their unreleased line moves from `content/_unpublished/<collection>/next/` to their packages, and the first release afterwards is the first pinned line. Lines published before the migration are not reconstructed.
+
+This change modifies only `sdk`, `sdk-python`, `sdk-kotlin`, and `cli`:
+
+- their `docs/` folders change freely;
+- their TSDoc is trimmed;
+- any other source or contract change is reviewed case by case.
+
+The client-function map that D10 needs is derived in `docs/website` from `contract/manifest.json` and TypeDoc wherever possible, rather than by extending the SDK's contract exporter. No internal package is documented by this change. The Packages mechanism is tested with a fixture package, and internal packages are added one at a time afterwards.
 
 ## Risks / Trade-offs
 
 - **[Old lines break when a component changes]** → Few lines are kept. Either an agent updates the live lines on their release branches, or the oldest line is retired.
-- **[The build host cannot hold all lines]** → This is handled outside this change. `retain` bounds the build in any case.
-- **[Pinned commits become unreachable]** → `retain` stays within the branch-retention window. Release tags back released commits.
+- **[The build host cannot hold all lines]** → This is handled outside this change. Retiring unsupported lines keeps the published set in check.
+- **[Pinned commits become unreachable]** → A release commit stays reachable through its release tag. A documentation-only fix committed after the tag is reachable only through its release branch. If branch retention deletes that branch while the line is still published, the commit can become unfetchable. Handling this is deferred as a future improvement of the docs system.
 - **[A docs-only commit on a release branch triggers a publish]** → One classifier is used by both the guards and the triggers. Its tests cover mixed diffs.
 - **[TypeDoc renders an exotic type poorly]** → Expansion is bounded, and the fallback shows the declared type text with a link.
-- **[Wire contract and client signature differ]** (client-only returns such as `tokenStream`, RPC options) → The exporter adds a client-function map.
-- **[Losing IDE hover for SDK parameters]** → The SDK team decides. Generating `.d.ts` field docs from the contract is a later option.
+- **[Wire contract and client signature differ]** (client-only returns such as `tokenStream`, RPC options) → `docs/website` derives a client-function map from the contract manifest and TypeDoc. An exporter change is a fallback, reviewed case by case.
 - **[Fewer published lines than today's promise]** → Accepted at version zero, and revisited when the user base needs it.
 
 ## Migration Plan
 
-1. Validate the design with a local proof of concept: the SDK, the CLI, and two internal packages, with two lines pinned to two commits, schema tables, the language switcher, and a failing-then-passing binding. It is not merged.
-2. Build the foundation: versions files, materializer, custom tree, examples per line, and derived manifest. The SDK and CLI content is still read in place through an override, so the site keeps working.
-3. Move the SDK and the CLI into their packages. Switch their versions files to pins. Remove the cut tooling and `_unpublished/`.
-4. Add the API reference, the contract, the bindings, and the CI automation, phase by phase.
-5. After each phase, sync this change's deltas into the main specs. Archive the change at the end.
+1. Build the foundation: versions files, materializer, custom tree, examples per line, and derived manifest. The SDK and CLI content is still read in place through an override, so the site keeps working.
+2. Move the SDK and the CLI into their packages. Switch their versions files to pins. Remove the cut tooling and `_unpublished/`.
+3. Add the API reference, the contract, the bindings, the CI automation, and the Packages mechanism, phase by phase.
+4. After each phase, sync this change's deltas into the main specs. Archive the change at the end.
 
-Rollback before step 3 is reverting the site changes. After step 3, the previous folder model can be restored from git history, because no package history is rewritten.
+Rollback before step 2 is reverting the site changes. After step 2, the previous folder model can be restored from git history, because no package history is rewritten.
+
+The implementation lives on `docs/docs-system-redesign`. A proof-of-concept branch derived from it, never merged, demonstrates the result for review:
+
+- a mock versioned collection (`compose`) with dummy content inside `docs/website`, showing that one more user-facing software is one more collection;
+- `llm-llamacpp`, `diffusion-cpp`, and `translation-nmtcpp` migrated to the new model under Ecosystem → Packages.
+
+It is built after the implementation and is not tracked by this change's tasks.
 
 ## Open Questions
 
 - The prose elements of each page type, to be agreed with the documentation owner and folded in through an update of this change.
 - The Packages inclusion list.
-- Whether the SDK keeps `@param` tags.
-- Where Compose will live: the monorepo or its own repository.
 - Whether `docs/website/.claude/skills` is tracked in git.

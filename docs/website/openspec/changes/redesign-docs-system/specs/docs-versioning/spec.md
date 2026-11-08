@@ -2,19 +2,23 @@
 
 ### Requirement: Each versioned collection tracks one package
 
-Versioning SHALL be a property of a collection, not of the site. The SDK, CLI, and Compose collections MUST be versioned. Ecosystem and Resources MUST NOT be versioned as collections. A versioned collection MUST track exactly one package, and its line numbers MUST be that package's major and minor:
+Versioning SHALL be a property of a collection, not of the site. Every user-facing software — declared by a versions file of kind `user-facing` — SHALL have exactly one versioned collection, however many user-facing software there are. Ecosystem and Resources MUST NOT be versioned as collections. A versioned collection MUST track exactly one package, and its line numbers MUST be that package's major and minor. Today:
 
 - the SDK tracks `@qvac/sdk`;
-- the CLI tracks `@qvac/cli`;
-- Compose tracks the Compose package.
+- the CLI tracks `@qvac/cli`.
 
 A versioned collection MUST be named after the package it tracks, so that the thing being versioned and the thing being named are the same.
 
 #### Scenario: Versioned collections carry a line, unversioned ones do not
 
 - **WHEN** the published site is enumerated
-- **THEN** every SDK, CLI, and Compose page belongs to a documentation line
+- **THEN** every page of a versioned collection belongs to a documentation line
 - **AND** no Ecosystem or Resources page belongs to a collection line
+
+#### Scenario: Adding a user-facing software adds a collection
+
+- **WHEN** a versions file of kind `user-facing` is added and its slot is declared in the collection order
+- **THEN** a versioned collection is published with its lines and its switcher, and no other site code changes
 
 #### Scenario: A line number matches its package release
 
@@ -70,7 +74,6 @@ The site SHALL carry one versions file per documented software under `docs/websi
 - its kind (collection or package);
 - the repository, when the software lives outside the monorepo;
 - the paths that make up a line;
-- how many lines are retained;
 - the versions retired;
 - every published line with its version, the ref it follows, and the commit it is pinned to.
 
@@ -153,19 +156,33 @@ Materialization SHALL accept an override that replaces one declared line with a 
 - **WHEN** the site is built with the unreleased-line option
 - **THEN** the unreleased line is rendered from `main` and never reaches production
 
-### Requirement: Each software retains a bounded number of lines
+### Requirement: A line is published until it is retired by hand
 
-Each versions file SHALL declare how many lines it retains, at most the branch-retention window. Adding a line beyond that number MUST retire the oldest, and a retired version MUST be recorded so its addresses can be redirected.
+No number of published lines SHALL be imposed. A line SHALL stay published until it is retired. Retiring a line MUST be one edit to its versions file: moving the version from `lines` to `retired`. The build MUST then stop publishing the line and redirect its addresses to the current line, with no other file edited.
 
-#### Scenario: A new line retires the oldest
+#### Scenario: A new line retires nothing
 
-- **WHEN** a software retaining three lines gains a fourth
-- **THEN** the oldest line is no longer published
-- **AND** its version is recorded as retired
+- **WHEN** a software publishing three lines gains a fourth
+- **THEN** all four lines are published
+
+#### Scenario: Retiring a line is one edit
+
+- **WHEN** a pull request moves `v0.16` from `lines` to `retired` in `versions/sdk.json`, and touches nothing else
+- **THEN** the build no longer publishes `v0.16`
+- **AND** every `/sdk/v0.16/…` address redirects to the same path in the current line
+
+### Requirement: Line redirect rules are generated from the versions files
+
+The redirect rules of every published line that is not current, and of every retired line, SHALL be generated from the versions files at build. No line's rules MUST be written by hand in `public/_redirects`. That file SHALL carry only the markers where the generated rules are expanded, so their position among the other rules is kept.
+
+#### Scenario: A pinned line gets its rules without a redirects edit
+
+- **WHEN** a line is added to a versions file
+- **THEN** the exported `_redirects` carries its rules, and `public/_redirects` is unchanged
 
 ## REMOVED Requirements
 
 ### Requirement: A versioned collection publishes every line it has cut
 
-**Reason**: Lines are now pinned to commits and retained up to a declared number. At version zero, old lines have no readers worth a maintenance cost, and the build host cannot hold an unbounded set.
-**Migration**: Use "Each software retains a bounded number of lines" and the retired-line redirect in `versioned-urls`.
+**Reason**: A line is now withdrawn when the team stops supporting its version, not kept forever.
+**Migration**: Use "A line is published until it is retired by hand" and the retired-line redirect in `versioned-urls`.

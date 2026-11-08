@@ -26,20 +26,14 @@ Every published page MUST belong to exactly one collection.
 
 ### Requirement: Collections introduced by this change
 
-The site SHALL provide exactly these collections:
-
-- `ecosystem`;
-- `sdk`;
-- `cli`;
-- `compose`, once its package publishes a release;
-- `resources`.
+The site SHALL provide two unversioned collections, `ecosystem` and `resources`, and one versioned root collection per user-facing software, declared by a versions file of kind `user-facing`. Today the versioned collections are `sdk` and `cli`. The collection set MUST NOT depend on how many user-facing software exist.
 
 Research and the assistant app MUST be reached as departures rather than as collections. A collection MUST be named after what it holds.
 
 #### Scenario: Only the agreed collections exist
 
 - **WHEN** the collections are listed
-- **THEN** they are exactly `ecosystem`, `sdk`, `cli`, `resources`, and `compose` when Compose has a published line
+- **THEN** they are exactly `ecosystem`, `resources`, and one collection per versions file of kind `user-facing`
 
 #### Scenario: Research and the assistant app are departures
 
@@ -48,12 +42,17 @@ Research and the assistant app MUST be reached as departures rather than as coll
 
 ### Requirement: Ecosystem collection composition
 
-The `ecosystem` collection SHALL hold what describes QVAC as a whole and the Packages section that documents the internal packages, entered from an overview. It MUST NOT hold a product collection's guidance. Where a subject is published elsewhere, the collection MUST reach it by a departure.
+The `ecosystem` collection SHALL hold what describes QVAC as a whole, entered from an overview. It SHALL also hold the Packages section that documents the internal packages, once at least one package is listed. It MUST NOT hold a product collection's guidance. Where a subject is published elsewhere, the collection MUST reach it by a departure.
 
 #### Scenario: Ecosystem holds the overview and Packages
 
-- **WHEN** the `ecosystem` collection is enumerated
+- **WHEN** the `ecosystem` collection is enumerated while at least one package is listed
 - **THEN** it contains an overview and the Packages section
+
+#### Scenario: Packages is absent while no package is listed
+
+- **WHEN** no versions file of kind `internal-machinery` exists
+- **THEN** the `ecosystem` collection contains no Packages section, and no navigation entry names it
 
 #### Scenario: Product guidance stays in its collection
 

@@ -44,7 +44,7 @@ export type UrlClass =
 
 /** The collections published as documentation lines, from the manifest. */
 export function collectionsFromManifest(): Collection[] {
-  return documentedSoftwareOfKind('collection').map(
+  return documentedSoftwareOfKind('user-facing').map(
     (software: DocumentedSoftware) => ({
       path: software.path,
       package: software.package,

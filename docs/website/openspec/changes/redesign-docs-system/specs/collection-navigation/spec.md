@@ -27,8 +27,8 @@ The navigation of every collection SHALL be declared explicitly rather than infe
 
 The Ecosystem sidebar SHALL present what the project publishes, grouped under separators. Above the groups it MUST offer the collection overview and the project's vision.
 
-- **Products** MUST reach the SDK, CLI, and Compose collections, the page inside the CLI that documents using it as a model provider, and the assistant app.
-- **Platform** MUST reach Fabric and the Packages section.
+- **Products** MUST reach every versioned collection, the page inside the CLI that documents using it as a model provider, and the assistant app.
+- **Platform** MUST reach Fabric, and the Packages section once at least one package is listed.
 - **Research** MUST reach the model family and the datasets.
 
 An entry whose subject this site does not document MUST be a departure.
@@ -36,11 +36,11 @@ An entry whose subject this site does not document MUST be a departure.
 #### Scenario: Products reaches the products
 
 - **WHEN** the Products group is read
-- **THEN** it offers the SDK, CLI, and Compose collections, the model-provider page, and the assistant app
+- **THEN** it offers every versioned collection, the model-provider page, and the assistant app
 
 #### Scenario: Platform reaches the packages
 
-- **WHEN** the Platform group is read
+- **WHEN** the Platform group is read while at least one package is listed
 - **THEN** it offers Fabric and the Packages section
 
 #### Scenario: An undocumented subject is linked, not written

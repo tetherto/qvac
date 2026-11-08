@@ -5,12 +5,13 @@ import { tmpdir } from 'node:os';
 import {
   cutLine,
   cutManifest,
-  cutRedirects,
   relabelTitle,
   retargetReleaseNotesLink,
 } from '../scripts/cut-line';
 import { DEVELOPMENT_LINE } from '../scripts/lib/release-shared';
-import { DOCUMENTED_SOFTWARE } from '../src/lib/versions';
+import { DOCUMENTED_SOFTWARE, toDocumentedSoftware } from '../src/lib/versions';
+import { parseVersionsFile } from '../src/lib/versions-file';
+import { publishedLineRules, publishedRules } from '../src/lib/line-redirects';
 
 /**
  * The cut, exercised against a copy of the tree.
@@ -23,7 +24,7 @@ import { DOCUMENTED_SOFTWARE } from '../src/lib/versions';
 
 const WEBSITE = path.resolve(__dirname, '..');
 const sdk = DOCUMENTED_SOFTWARE.find(
-  (software) => software.path === '/sdk' && software.kind === 'collection',
+  (software) => software.path === '/sdk' && software.kind === 'user-facing',
 )!;
 const CURRENT = sdk.versions.find((entry) => entry.folder.startsWith('('))!.version;
 /** The line a cut would open next, derived so a real cut never dates this. */
@@ -35,40 +36,41 @@ const developmentDir = (root: string, slug = 'sdk') =>
   path.join(root, 'content', '_unpublished', slug, DEVELOPMENT_LINE);
 
 describe('the manifest edit', () => {
-  const manifest = [
-    'export const DOCUMENTED_SOFTWARE = [',
-    '  {',
-    "    package: '@qvac/sdk',",
-    "    kind: 'collection',",
-    "    path: '/sdk',",
-    '    versions: [',
-    "      { version: 'v0.20', folder: '(v0.20)' },",
-    "      { version: 'v0.19', folder: 'v0.19' },",
-    '    ],',
-    '  },',
-    '] as const;',
-    '',
-  ].join('\n');
-
-  it('unwraps the preserved line and inserts the opened one above it', () => {
-    expect(cutManifest(manifest, '/sdk', 'v0.20', 'v0.21')).toContain(
-      [
-        '    versions: [',
-        "      { version: 'v0.21', folder: '(v0.21)' },",
-        "      { version: 'v0.20', folder: 'v0.20' },",
-        "      { version: 'v0.19', folder: 'v0.19' },",
-        '    ],',
-      ].join('\n'),
+  const manifest = JSON.stringify(
+    {
+      package: '@qvac/sdk',
+      kind: 'user-facing',
+      path: '/sdk',
+      paths: ['packages/sdk/docs/users'],
+      retired: [],
+      lines: [
+        { version: 'v0.20', inPlace: true },
+        { version: 'v0.19', inPlace: true },
+      ],
+    },
+    null,
+    2,
+  );
+  const linesOf = (text: string) =>
+    (JSON.parse(text) as { lines: { version: string }[] }).lines.map(
+      (line) => line.version,
     );
+
+  it('declares the opened line first, which makes it current', () => {
+    expect(linesOf(cutManifest(manifest, '/sdk', 'v0.20', 'v0.21'))).toEqual([
+      'v0.21',
+      'v0.20',
+      'v0.19',
+    ]);
   });
 
-  it('leaves the entries below it alone', () => {
-    expect(cutManifest(manifest, '/sdk', 'v0.20', 'v0.21')).toContain(
-      "{ version: 'v0.19', folder: 'v0.19' }",
-    );
+  it('retires nothing, however many lines the file declares', () => {
+    const twice = cutManifest(cutManifest(manifest, '/sdk', 'v0.20', 'v0.21'), '/sdk', 'v0.21', 'v0.22');
+    expect(linesOf(twice)).toEqual(['v0.22', 'v0.21', 'v0.20', 'v0.19']);
+    expect(JSON.parse(twice).retired).toEqual([]);
   });
 
-  it('refuses a collection the manifest does not carry', () => {
+  it('refuses a collection the file does not document', () => {
     expect(() => cutManifest(manifest, '/rag', 'v0.20', 'v0.21')).toThrow(
       /no entry at/,
     );
@@ -77,53 +79,6 @@ describe('the manifest edit', () => {
   it('refuses when the named line is not the current one', () => {
     expect(() => cutManifest(manifest, '/sdk', 'v0.19', 'v0.21')).toThrow(
       /does not declare v0\.19 as its current line/,
-    );
-  });
-});
-
-describe('the line rules', () => {
-  const redirects = [
-    '# a comment',
-    '/sdk/v0.19/        /sdk/v0.19/index.html        200',
-    '/sdk/v0.19         /sdk/v0.19/                  301',
-    '/sdk/v0.19/*       /sdk/v0.19/:splat/index.html 200',
-    '/cli/v0.13/        /cli/v0.13/index.html        200',
-    '/cli/v0.13         /cli/v0.13/                  301',
-    '/cli/v0.13/*       /cli/v0.13/:splat/index.html 200',
-    '',
-  ].join('\n');
-
-  it('go at the head of their own collection, in the block format', () => {
-    expect(cutRedirects(redirects, 'sdk', 'v0.20')).toContain(
-      [
-        '/sdk/v0.20/        /sdk/v0.20/index.html        200',
-        '/sdk/v0.20         /sdk/v0.20/                  301',
-        '/sdk/v0.20/*       /sdk/v0.20/:splat/index.html 200',
-        '/sdk/v0.19/        /sdk/v0.19/index.html        200',
-      ].join('\n'),
-    );
-  });
-
-  it('do not disturb another collection', () => {
-    expect(cutRedirects(redirects, 'sdk', 'v0.20')).toContain(
-      [
-        '/cli/v0.13/        /cli/v0.13/index.html        200',
-        '/cli/v0.13         /cli/v0.13/                  301',
-        '/cli/v0.13/*       /cli/v0.13/:splat/index.html 200',
-      ].join('\n'),
-    );
-  });
-
-  it("sit below every other collection's rules on a collection's first cut", () => {
-    const cut = cutRedirects(redirects, 'ecosystem', 'v1.0').split('\n');
-    expect(cut.indexOf('/ecosystem/v1.0/   /ecosystem/v1.0/index.html   200')).toBe(
-      cut.indexOf('/cli/v0.13/*       /cli/v0.13/:splat/index.html 200') + 1,
-    );
-  });
-
-  it('refuse to add a line that is already there', () => {
-    expect(() => cutRedirects(redirects, 'sdk', 'v0.19')).toThrow(
-      /already carries/,
     );
   });
 });
@@ -229,23 +184,21 @@ describe('a cut against a copy of the tree', () => {
     );
   });
 
-  it('declares both lines in the manifest, the released one as the group', async () => {
-    const manifest = await fs.readFile(
-      path.join(root, 'src', 'lib', 'versions.ts'),
-      'utf-8',
-    );
-    expect(manifest).toContain(`{ version: '${NEXT}', folder: '(${NEXT})' }`);
-    expect(manifest).toContain(`{ version: '${CURRENT}', folder: '${CURRENT}' }`);
+  it('declares the released line first in the versions file, the preserved one below it', async () => {
+    const file = JSON.parse(
+      await fs.readFile(path.join(root, 'versions', 'sdk.json'), 'utf-8'),
+    ) as { lines: { version: string }[] };
+    expect(file.lines.map((line) => line.version).slice(0, 2)).toEqual([NEXT, CURRENT]);
   });
 
-  it("adds the preserved line's rules", async () => {
-    const redirects = await fs.readFile(
-      path.join(root, 'public', '_redirects'),
-      'utf-8',
+  it("gives the preserved line its rules through the versions file, not the redirects", async () => {
+    const declaration = parseVersionsFile(
+      'sdk.json',
+      JSON.parse(await fs.readFile(path.join(root, 'versions', 'sdk.json'), 'utf-8')),
     );
-    expect(redirects).toContain(`/sdk/${CURRENT}/index.html`);
-    expect(redirects).toContain(`/sdk/${CURRENT}         /sdk/${CURRENT}/`);
-    expect(redirects).toContain(`/sdk/${CURRENT}/*       /sdk/${CURRENT}/:splat/index.html`);
+    const rules = publishedRules([toDocumentedSoftware(declaration)]);
+    expect(rules).toContain(publishedLineRules('/sdk', CURRENT)[0]);
+    expect(rules.some((rule) => rule.startsWith(`/sdk/${NEXT}`))).toBe(false);
   });
 
   it('moves the currency marker from the preserved line to the released one', async () => {
@@ -285,8 +238,8 @@ describe('a cut against a copy of the tree', () => {
   it('reports what it changed', () => {
     expect(result.released).toBe(NEXT);
     expect(result.preserved).toBe(CURRENT);
-    expect(result.changed).toContain(path.join('src', 'lib', 'versions.ts'));
-    expect(result.changed).toContain(path.join('public', '_redirects'));
+    expect(result.changed).toContain(path.join('versions', 'sdk.json'));
+    expect(result.changed).not.toContain(path.join('public', '_redirects'));
   });
 });
 
@@ -339,7 +292,7 @@ async function copyTree(root: string): Promise<void> {
   for (const relative of [
     path.join('content', 'docs', 'sdk'),
     path.join('content', '_unpublished', 'sdk', DEVELOPMENT_LINE),
-    path.join('src', 'lib', 'versions.ts'),
+    path.join('versions', 'sdk.json'),
     path.join('public', '_redirects'),
   ]) {
     const to = path.join(root, relative);

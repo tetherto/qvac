@@ -87,7 +87,7 @@ export function contentPathsOfLink(
   const [collection, ...rest] = cleaned.split("/");
 
   const software = getDocumentedSoftware(`/${collection}`);
-  if (!software || software.kind !== "collection") return [cleaned];
+  if (!software || software.kind !== "user-facing") return [cleaned];
   if (software.versions.some((entry) => entry.version === rest[0])) {
     return [cleaned];
   }

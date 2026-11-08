@@ -19,10 +19,10 @@ import {
  * every line, no other line of that page's own collection is reachable.
  */
 
-const SDK = documentedSoftwareOfKind('collection').find(
+const SDK = documentedSoftwareOfKind('user-facing').find(
   (software) => software.path === '/sdk',
 )!;
-const CLI = documentedSoftwareOfKind('collection').find(
+const CLI = documentedSoftwareOfKind('user-facing').find(
   (software) => software.path === '/cli',
 )!;
 

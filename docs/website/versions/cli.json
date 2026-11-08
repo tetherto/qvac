@@ -1,0 +1,28 @@
+{
+  "package": "@qvac/cli",
+  "kind": "user-facing",
+  "path": "/cli",
+  "paths": [
+    "packages/cli/docs/users"
+  ],
+  "retired": [
+    "v0.15",
+    "v0.14",
+    "v0.13",
+    "v0.12"
+  ],
+  "lines": [
+    {
+      "version": "v0.18",
+      "inPlace": true
+    },
+    {
+      "version": "v0.17",
+      "inPlace": true
+    },
+    {
+      "version": "v0.16",
+      "inPlace": true
+    }
+  ]
+}

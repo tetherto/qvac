@@ -20,7 +20,7 @@ import {
  */
 export function cutLineFolders(collectionPath: string, count = 1): string[] {
   const software = DOCUMENTED_SOFTWARE.find(
-    (entry) => entry.path === collectionPath && entry.kind === 'collection',
+    (entry) => entry.path === collectionPath && entry.kind === 'user-facing',
   );
   if (!software) {
     throw new Error(`'${collectionPath}' is not a versioned collection.`);

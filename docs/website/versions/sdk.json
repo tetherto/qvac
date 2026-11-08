@@ -1,0 +1,32 @@
+{
+  "package": "@qvac/sdk",
+  "kind": "user-facing",
+  "path": "/sdk",
+  "paths": [
+    "packages/sdk/docs/users",
+    "packages/sdk/examples",
+    "packages/sdk-python/examples",
+    "packages/sdk-kotlin/examples",
+    "packages/inference/examples",
+    "packages/sdk/contract"
+  ],
+  "retired": [
+    "v0.20",
+    "v0.19",
+    "v0.18"
+  ],
+  "lines": [
+    {
+      "version": "v0.23",
+      "inPlace": true
+    },
+    {
+      "version": "v0.22",
+      "inPlace": true
+    },
+    {
+      "version": "v0.21",
+      "inPlace": true
+    }
+  ]
+}

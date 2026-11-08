@@ -203,8 +203,8 @@ bun run scripts/cut-line.ts sdk v0.21
 ```
 
 It renames the outgoing group to its plain form, copies the development line
-in as the new group, updates the manifest, adds the preserved line's rules to
-`public/_redirects`, moves the currency marker from the preserved line's titles
+in as the new group, updates the versions file (the preserved line's redirect
+rules follow from it at build), moves the currency marker from the preserved line's titles
 to the opened one's, and points the opened line's `Release Notes` sidebar link
 at its own minor's GitHub release tag. **The development line stays where it
 is**, and is now the next version's.
@@ -240,12 +240,14 @@ cut — the procedure is in [`README.md`](README.md) — and the build is what
 accepts either. The command does not build; run `npm run build` and `npm test`
 yourself and review the diff.
 
-`src/lib/versions.ts` is hand-edited. It declares every documented software,
-the package it is, where it is documented, and the versions published for it.
-Publishing a version is two edits in one diff — the folder under
-`content/docs/`, and the entry in that file — and
-`tests/line-structure.test.ts` fails the build when the two disagree, naming
-the version at fault. `scripts/update-versions-list.ts`, which used to
+Every documented software is declared by one file under `versions/`, which
+names the package, where it is documented, and the lines published for it;
+`src/lib/versions.ts` derives the manifest from those files (see the README,
+"Documentation lines and versions files"). An in-place line is two edits in one
+diff — the folder under `content/docs/`, and the entry in the versions file —
+and `tests/line-structure.test.ts` fails the build when the two disagree,
+naming the version at fault. A pinned line is one edit: the materializer
+writes its folder. `scripts/update-versions-list.ts`, which used to
 regenerate the file from disk, is retired and refuses to run.
 
 ### Full Generation (Orchestrated)
@@ -306,8 +308,9 @@ content/
   is why a cut is the only thing that changes it. The parenthesized line is the
   **version last released**; every plain folder is an older release and
   documents that release alone.
-- **Manifest**: `src/lib/versions.ts`, hand-edited, naming each published line
-  and the folder holding it. The development line is not in it — it is not
+- **Manifest**: the files under `versions/`, naming each published line in
+  order, the first being current; `src/lib/versions.ts` derives the folder
+  holding each. The development line is not in it — it is not
   published. `tests/line-structure.test.ts` fails the build when the manifest
   and the folders disagree.
 - **Permanence**: a published line is never removed. It is the only record of
@@ -657,7 +660,7 @@ Per collection:
 - The opened line's `reference/meta.json` names the **opened** line's release tag; the preserved line keeps its own.
 - The preserved folder is recorded as a rename of the outgoing group at 100% similarity, relabelled pages aside. The opened folder is recorded as additions — it is a copy, and the development line it came from is still on disk.
 - **The development line is still there**, unchanged. A cut that moved it instead of copying it would take the next sprint's folder away.
-- The manifest and `public/_redirects` both moved, and `tests/line-structure.test.ts` passes — the build is what proves the manifest and the folders agree.
+- The versions file moved, and `tests/line-structure.test.ts` passes — the build is what proves the manifest and the folders agree.
 - The base is `main`.
 
 After merging, **do not promote yet.** Production goes to this commit once the version is on npm — step 9 of [`docs/ci/RELEASE-TRAIN.md`](../ci/RELEASE-TRAIN.md), or after step 3 of the release flow in [`docs/gitflow.md`](../gitflow.md).
@@ -758,7 +761,7 @@ Version vX.Y.Z was not found
 
 **Cause:** a version is recorded but its MDX file doesn't exist on disk. Only reachable through the retired release tooling; the equivalent failure today is `tests/line-structure.test.ts` reporting a declared version whose folder is missing.
 
-**Fix:** For a version declared in `src/lib/versions.ts`, create the folder the entry names, or drop the entry. The two must agree.
+**Fix:** For an in-place version declared in `versions/<software>.json`, create the folder the entry names, or drop the entry. The two must agree.
 
 ### Refusing to write pages into the development line
 
