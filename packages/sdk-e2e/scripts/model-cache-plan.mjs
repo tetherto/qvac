@@ -43,19 +43,20 @@ const FAMILIES = {
     platform: (os) => `electron-${os}`,
     resourcePlatform: (os) => `electron-${os}`
   },
-  // Registers as `desktop-python`, reads the table as `desktop` (qvac_e2e/resources.py).
+  // Reads the table under its QVAC_RESOURCE_PLATFORM, `desktop` when unset (qvac_e2e/resources.py).
   python: {
     consumer: 'desktop',
-    platform: (_os, config) => externalPlatform(config, 'python'),
-    resourcePlatform: () => 'desktop'
+    platform: (_os, config) => externalConsumer(config, 'python').platform,
+    resourcePlatform: (_os, config) =>
+      externalConsumer(config, 'python').env?.QVAC_RESOURCE_PLATFORM ?? 'desktop'
   },
   snap: { consumer: 'electron', platform: () => 'snap-linux', resourcePlatform: () => 'snap-linux' }
 }
 
-function externalPlatform(config, name) {
+function externalConsumer(config, name) {
   const entry = config.consumers?.external?.find((candidate) => candidate.name === name)
   if (!entry) throw new Error(`No external consumer named "${name}" in qvac-test.config.js`)
-  return entry.platform
+  return entry
 }
 
 // The `platform` @qvac/inference sees on each host, which picks its Core ML sets.
@@ -129,7 +130,7 @@ const constants = []
 for (const family of families) {
   const { consumer } = FAMILIES[family]
   const platform = FAMILIES[family].platform(values.os, config)
-  const resourcePlatform = FAMILIES[family].resourcePlatform(values.os)
+  const resourcePlatform = FAMILIES[family].resourcePlatform(values.os, config)
   const selection = testSuite.selectRunTests(catalog, { ...selectionOptions, platform })
   const deps = collectTestDeps(selection.tests)
 
