@@ -7,7 +7,10 @@
  * and overloads into one signature each. Every type is TypeDoc's own type
  * text.
  */
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import * as path from 'node:path'
+import ts from 'typescript'
 import { Application, ReflectionKind, type Comment, type DeclarationReflection, type ProjectReflection, type SignatureReflection, type SomeType } from 'typedoc'
 import type { PackageApi, PackageApiExport, PackageApiField, PackageApiSignature } from '../../src/lib/api-reference/package-api'
 
@@ -93,7 +96,8 @@ function normalize(reflection: DeclarationReflection, packageDir: string): Packa
   const kind = KINDS.get(reflection.kind)
   if (!kind) return null
   const base: PackageApiExport = {
-    name: reflection.name,
+    // A CommonJS `export =` is named after what it exports, not `export=`.
+    name: reflection.name === 'export=' ? String((reflection as { escapedName?: string }).escapedName ?? reflection.name) : reflection.name,
     kind,
     summary: summaryOf(reflection) || summaryOf(reflection.signatures?.[0] ?? {}),
     deprecated: deprecatedOf(reflection) ?? deprecatedOf(reflection.signatures?.[0] ?? {}),
@@ -142,8 +146,16 @@ export function normalizeProject(project: ProjectReflection, packageName: string
   const exports = (project.children ?? [])
     .map((reflection) => normalize(reflection, packageDir))
     .filter((entry): entry is PackageApiExport => entry !== null)
-    .sort((a, b) => a.name.localeCompare(b.name))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.kind.localeCompare(b.kind))
   return { package: packageName, exports }
+}
+
+/** The compiler options a `tsconfig.json` declares, `extends` resolved. */
+function compilerOptionsOf(tsconfig: string): Record<string, unknown> {
+  const read = ts.readConfigFile(tsconfig, ts.sys.readFile)
+  if (read.error) return {}
+  const { outDir: _outDir, rootDir: _rootDir, ...options } = (read.config as { compilerOptions?: Record<string, unknown> }).compilerOptions ?? {}
+  return options
 }
 
 /**
@@ -152,9 +164,31 @@ export function normalizeProject(project: ProjectReflection, packageName: string
  * resolve as they do for the package.
  */
 export async function packageApi(packageDir: string, entry: string, packageName: string, tsconfig: string | null): Promise<PackageApi> {
+  // A tsconfig of its own, listing exactly the entry: TypeDoc otherwise reads
+  // the tsconfig of the directory it runs in, and the package's own usually
+  // includes its sources rather than its public declarations. The package's
+  // compiler options carry over, so its dependencies resolve as they do for it.
+  const entryFile = path.join(packageDir, entry)
+  const scratch = mkdtempSync(path.join(tmpdir(), 'package-api-'))
+  const config = path.join(scratch, 'tsconfig.json')
+  writeFileSync(
+    config,
+    JSON.stringify({
+      compilerOptions: { skipLibCheck: true, strict: true, ...(tsconfig ? compilerOptionsOf(tsconfig) : {}), noEmit: true },
+      files: [entryFile],
+    }),
+  )
+  try {
+    return await convert(entryFile, config, packageName, packageDir)
+  } finally {
+    rmSync(scratch, { recursive: true, force: true })
+  }
+}
+
+async function convert(entryFile: string, tsconfig: string, packageName: string, packageDir: string): Promise<PackageApi> {
   const app = await Application.bootstrap({
-    entryPoints: [path.join(packageDir, entry)],
-    ...(tsconfig ? { tsconfig } : { compilerOptions: { skipLibCheck: true, strict: true } }),
+    entryPoints: [entryFile],
+    tsconfig,
     excludePrivate: true,
     excludeProtected: true,
     excludeExternals: true,
@@ -164,6 +198,6 @@ export async function packageApi(packageDir: string, entry: string, packageName:
     logLevel: 'Error',
   })
   const project = await app.convert()
-  if (!project) throw new Error(`TypeDoc could not convert ${path.join(packageDir, entry)}`)
+  if (!project) throw new Error(`TypeDoc could not convert ${entryFile}`)
   return normalizeProject(project, packageName, packageDir)
 }
