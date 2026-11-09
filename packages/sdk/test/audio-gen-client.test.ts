@@ -13,7 +13,7 @@ import {
   type AudioUnderstandStreamFactory
 } from '@/client/api/audio-gen-result'
 import { InvalidResponseError, RequestValidationFailedError } from '@/utils/errors-client'
-import { InferenceCancelledError } from '@/utils/errors-server'
+import { AudioEncodeFailedError, InferenceCancelledError } from '@/utils/errors-server'
 
 async function* mockResponses(responses: unknown[]): AsyncGenerator<unknown> {
   for (const response of responses) yield response
@@ -627,4 +627,236 @@ test('audioUnderstand client rejects invalid params before opening a stream', as
     RequestValidationFailedError
   )
   t.is(opened, 0, 'no RPC stream is opened for a rejected request')
+})
+
+const TERMINAL = {
+  type: 'audioGenStream',
+  done: true,
+  stopReason: 'completed',
+  stats: { audioDurationMs: 10, totalTimeMs: 5, realTimeFactor: 0.5 }
+}
+
+function pcmFrame(samples: number[]) {
+  const pcm = Int16Array.from(samples)
+  return {
+    type: 'audioGenStream',
+    data: Buffer.from(pcm.buffer, pcm.byteOffset, pcm.byteLength).toString('base64'),
+    sampleRate: 48000,
+    channels: 2,
+    bitsPerSample: 16
+  }
+}
+
+function createFormatRun(
+  responses: unknown[],
+  outputFormat?: AudioGenClientParams['outputFormat']
+) {
+  let request: AudioGenStreamRequest | undefined
+  const run = createAudioGenResult(
+    {
+      modelId: 'audio-model',
+      caption: 'ambient electronic music',
+      ...(outputFormat !== undefined && { outputFormat })
+    },
+    function (sent) {
+      request = sent
+      return mockResponses(responses)
+    }
+  )
+  return { run, request: () => request }
+}
+
+test('audioGen client yields one Int16Array per PCM frame on chunkStream', async (t) => {
+  const { run } = createFormatRun([pcmFrame([100, -200, 300, -400]), pcmFrame([5, -6]), TERMINAL])
+
+  const chunks = await collect(run.chunkStream)
+  t.is(chunks.length, 2)
+  t.ok(chunks.every((chunk) => chunk instanceof Int16Array))
+  t.alike(Array.from(chunks[0]!), [100, -200, 300, -400])
+  t.alike(Array.from(chunks[1]!), [5, -6])
+
+  // A caller may process a chunk in place without changing `audio`.
+  chunks[0]!.fill(0)
+  const { pcm } = await run.audio
+  t.alike(
+    Array.from(new Int16Array(pcm.buffer, pcm.byteOffset, pcm.byteLength / 2)),
+    [100, -200, 300, -400, 5, -6]
+  )
+  t.is(await run.encoded, undefined, 'no outputFormat, no file')
+})
+
+test('audioGen client keeps the chunks for a caller that awaits the PCM first', async (t) => {
+  const { run } = createFormatRun([pcmFrame([1, 2]), TERMINAL])
+  t.is((await run.audio).pcm.byteLength, 4)
+  t.alike(
+    (await collect(run.chunkStream)).map((chunk) => Array.from(chunk)),
+    [[1, 2]]
+  )
+})
+
+test('audioGen client rejects a PCM frame that is not whole int16 samples', async (t) => {
+  const { run } = createFormatRun([
+    { type: 'audioGenStream', data: 'AAEC', sampleRate: 48000, channels: 2, bitsPerSample: 16 },
+    TERMINAL
+  ])
+  await t.exception(collect(run.chunkStream), InvalidResponseError)
+})
+
+test('audioGen client forwards outputFormat and resolves the encoded file', async (t) => {
+  const file = Uint8Array.from([0x66, 0x4c, 0x61, 0x43, 1, 2, 3])
+  const { run, request } = createFormatRun(
+    [
+      pcmFrame([1, -1]),
+      {
+        type: 'audioGenStream',
+        encoded: {
+          data: Buffer.from(file).toString('base64'),
+          format: 'flac',
+          mimeType: 'audio/flac',
+          extension: 'flac'
+        }
+      },
+      TERMINAL
+    ],
+    'flac'
+  )
+
+  const encoded = await run.encoded
+  t.is(request()?.outputFormat, 'flac')
+  t.ok(encoded?.data instanceof Uint8Array)
+  t.alike(Array.from(encoded?.data ?? []), Array.from(file))
+  t.is(encoded?.format, 'flac')
+  t.is(encoded?.mimeType, 'audio/flac')
+  t.is(encoded?.extension, 'flac')
+  t.is((await run.audio).pcm.byteLength, 4, 'the PCM still arrives')
+})
+
+test('audioGen client rejects only the file when the worker reports a failed encode', async (t) => {
+  const { run } = createFormatRun(
+    [
+      pcmFrame([7, -7]),
+      {
+        type: 'audioGenStream',
+        encodeError: { format: 'flac', details: 'muxer rejected the stream' }
+      },
+      TERMINAL
+    ],
+    'flac'
+  )
+
+  let failure: unknown
+  try {
+    await run.encoded
+  } catch (error) {
+    failure = error
+  }
+  t.ok(failure instanceof AudioEncodeFailedError)
+  t.is((failure as AudioEncodeFailedError).format, 'flac')
+  t.is((failure as AudioEncodeFailedError).details, 'muxer rejected the stream')
+
+  const { pcm } = await run.audio
+  t.alike(Array.from(new Int16Array(pcm.buffer, pcm.byteOffset, pcm.byteLength / 2)), [7, -7])
+  t.alike(
+    (await collect(run.chunkStream)).map((chunk) => Array.from(chunk)),
+    [[7, -7]]
+  )
+  t.alike(await run.stats, TERMINAL.stats, 'stats still resolve')
+  t.is(await run.diagnostics, undefined, 'diagnostics settle rather than reject')
+})
+
+test('audioGen client reads late chunks out of the settled PCM', async (t) => {
+  const { run } = createFormatRun([pcmFrame([1, 2, 3, 4]), pcmFrame([5, 6]), TERMINAL])
+  const { pcm } = await run.audio
+  // After `audio` settles the chunks are views into its buffer, not a second
+  // copy of the run: an edit made to `pcm` shows in a chunk read afterwards.
+  new Int16Array(pcm.buffer, pcm.byteOffset, pcm.byteLength / 2)[4] = 50
+  t.alike(
+    (await collect(run.chunkStream)).map((chunk) => Array.from(chunk)),
+    [
+      [1, 2, 3, 4],
+      [50, 6]
+    ]
+  )
+})
+
+test('audioGen client rejects a run that named an outputFormat and received no file', async (t) => {
+  const { run } = createFormatRun([pcmFrame([1, -1]), TERMINAL], 'wav')
+  await t.exception(run.encoded, InvalidResponseError)
+  await t.exception(run.audio, InvalidResponseError)
+})
+
+test('audioGen client rejects an outputFormat the addon cannot encode', (t) => {
+  const open: AudioGenStreamFactory = function () {
+    t.fail('the stream must not open')
+    return mockResponses([])
+  }
+  for (const outputFormat of ['mp3', 'pcm']) {
+    t.exception(
+      () =>
+        createAudioGenResult(
+          {
+            modelId: 'audio-model',
+            caption: 'ambient electronic music',
+            outputFormat
+          } as unknown as AudioGenClientParams,
+          open
+        ),
+      RequestValidationFailedError,
+      outputFormat
+    )
+  }
+})
+
+test('audioGen client ends chunkStream on cancellation and throws on a broken stream', async (t) => {
+  const cancelled = createFormatRun([
+    pcmFrame([1, 2]),
+    { type: 'audioGenStream', done: true, stopReason: 'cancelled' }
+  ]).run
+  t.alike(
+    (await collect(cancelled.chunkStream)).map((chunk) => Array.from(chunk)),
+    [[1, 2]],
+    'what arrived is delivered, then the stream ends'
+  )
+  await t.exception(cancelled.audio, InferenceCancelledError)
+  await t.exception(cancelled.encoded, InferenceCancelledError)
+
+  const truncated = createFormatRun([pcmFrame([3, 4])]).run
+  const seen: number[][] = []
+  try {
+    for await (const chunk of truncated.chunkStream) seen.push(Array.from(chunk))
+    t.fail('expected the missing terminal frame to surface')
+  } catch (error) {
+    t.ok(error instanceof InvalidResponseError)
+  }
+  t.alike(seen, [[3, 4]])
+})
+
+test('audioEdit client forwards outputFormat and resolves the encoded file', async (t) => {
+  let request: AudioEditStreamRequest | undefined
+  const run = createAudioEditResult(
+    {
+      modelId: 'audio-model',
+      sourceAudio: '/path/to/song.wav',
+      operations: [{ type: 'repaint', caption: 'drum fill', start: 0 }],
+      outputFormat: 'wav'
+    },
+    function (sent) {
+      request = sent
+      return mockResponses([
+        { ...pcmFrame([9, -9]), type: 'audioEditStream' },
+        {
+          type: 'audioEditStream',
+          encoded: { data: 'UklGRg==', format: 'wav', mimeType: 'audio/wav', extension: 'wav' }
+        },
+        { ...TERMINAL, type: 'audioEditStream' }
+      ])
+    }
+  )
+
+  t.is(request?.outputFormat, 'wav')
+  t.is((await run.encoded)?.extension, 'wav')
+  t.alike(
+    (await collect(run.chunkStream)).map((chunk) => Array.from(chunk)),
+    [[9, -9]]
+  )
 })
