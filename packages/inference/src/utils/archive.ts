@@ -110,27 +110,39 @@ export async function extractTarStream(
   return new Promise((resolve, reject) => {
     let settled = false
     let readStream: ReturnType<typeof fs.createReadStream> | null = null
+    // Settles, with the write's error if any, when the current entry's file is
+    // closed. tar-stream can emit 'finish' before the last entry's write
+    // completes (an archive without end-of-archive blocks), so completion
+    // waits for it too.
+    let writeClosed: Promise<unknown> = Promise.resolve(undefined)
     let writeStream: ReturnType<typeof fs.createWriteStream> | null = null
-    let partPath: string | null = null
 
-    // Every failure tears the whole pipeline down and removes the partial file.
-    const fail = (error: unknown) => {
+    const settle = (error?: unknown) => {
       if (settled) return
       settled = true
       signal?.removeEventListener('abort', onAbort)
-      readStream?.destroy()
-      gunzip?.destroy()
-      extract.destroy()
-      writeStream?.destroy()
-      const done = () => reject(error)
-      if (partPath) fsPromises.rm(partPath, { force: true }).then(done, done)
-      else done()
+      if (error !== undefined) {
+        readStream?.destroy()
+        gunzip?.destroy()
+        extract.destroy()
+        writeStream?.destroy()
+      }
+      // Nothing is written after the caller sees the outcome.
+      void writeClosed.then((writeError) => {
+        const outcome = error ?? writeError
+        if (outcome === undefined) resolve()
+        else reject(outcome)
+      })
     }
-    const onAbort = () => fail(new DownloadCancelledError())
+    const onAbort = () => settle(new DownloadCancelledError())
+    if (signal?.aborted) {
+      settle(new DownloadCancelledError())
+      return
+    }
     signal?.addEventListener('abort', onAbort)
 
     extract.on('entry', (header, stream, next) => {
-      stream.on('error', fail)
+      stream.on('error', settle)
 
       if (settled) {
         stream.resume()
@@ -157,22 +169,20 @@ export async function extractTarStream(
         const dir = path.dirname(filePath)
         fs.mkdirSync(dir, { recursive: true })
 
-        // Write under a temporary name so an interrupted extraction never
-        // leaves a truncated file under its shard name.
-        const entryPartPath = `${filePath}.part`
-        partPath = entryPartPath
-        writeStream = fs.createWriteStream(entryPartPath)
-        stream.pipe(writeStream)
-
-        writeStream.on('finish', () => {
-          fsPromises.rename(entryPartPath, filePath).then(() => {
-            if (settled) return
-            partPath = null
-            writeStream = null
-            next()
-          }, fail)
+        const entryWriteStream = fs.createWriteStream(filePath)
+        writeStream = entryWriteStream
+        writeClosed = new Promise((resolveClose) => {
+          let writeError: unknown
+          entryWriteStream.on('error', (error) => {
+            writeError = error
+            settle(error)
+          })
+          entryWriteStream.on('close', () => resolveClose(writeError))
         })
-        writeStream.on('error', fail)
+        entryWriteStream.on('close', () => {
+          if (!settled) next()
+        })
+        stream.pipe(entryWriteStream)
       } else {
         stream.on('end', () => {
           if (!settled) next()
@@ -181,17 +191,12 @@ export async function extractTarStream(
       }
     })
 
-    extract.on('finish', () => {
-      if (settled) return
-      settled = true
-      signal?.removeEventListener('abort', onAbort)
-      resolve()
-    })
-    extract.on('error', fail)
-    gunzip?.on('error', fail)
+    extract.on('finish', () => settle())
+    extract.on('error', settle)
+    gunzip?.on('error', settle)
 
     readStream = fs.createReadStream(archivePath)
-    readStream.on('error', fail)
+    readStream.on('error', settle)
 
     // tar-stream's extract is a streamx Writable at runtime; cast past the
     // nominal private brand its shim can't carry (see types/tar-stream).
@@ -221,7 +226,8 @@ async function pathExists(filePath: string) {
 /**
  * An extracted sharded archive is complete when every shard exists and the
  * extraction that wrote them finished. Caches from earlier SDK versions have no
- * marker and are extracted again once.
+ * marker, so the first load after upgrading extracts the archive again, which
+ * downloads it again when it came over HTTP.
  */
 export async function isShardedExtractionComplete(extractDir: string, shardFilename: string) {
   return (
