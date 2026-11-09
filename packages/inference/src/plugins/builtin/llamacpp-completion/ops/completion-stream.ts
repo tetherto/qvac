@@ -51,6 +51,7 @@ interface CompletionResult {
   stats?: CompletionStats
   toolCalls: ToolCall[]
   stoppedAtContextBoundary: boolean
+  stopReason?: 'eos' | 'stopSequence'
 }
 
 interface ProcessModelResponseResult extends CompletionResult {
@@ -293,6 +294,8 @@ async function* processModelResponse(
     toolCalls: toolCallsResult,
     responseText: accumulatedText,
     producedTokens,
+    ...(stopReason === 'eos' && { stopReason: 'eos' as const }),
+    ...(stopReason === 'antiprompt' && { stopReason: 'stopSequence' as const }),
     stoppedAtContextBoundary: stopReason === 'contextOverflow'
   }
 }

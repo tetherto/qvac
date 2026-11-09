@@ -238,6 +238,12 @@ Notes:
 
 * Tools without `deferLoading` behave exactly as before.
 * `tool_search` is a reserved name and is added only when something defers.
+* A search ranks the deferred tools by where the query matches: an exact name
+  first, then words in the name, then in the description, then in the group.
+  An exact name loads that tool alone. Any other query loads the best match and
+  every match at least half as strong, up to the model's `limit`. A word that
+  only appears in another tool's description or group does not load it beside
+  a stronger match, while tools that match equally well load together.
 * `group` is the heading a tool is listed under in the catalog — a skill or an
   MCP server name.
 * To defer an MCP server's tools, set it on the client entry:
