@@ -2,7 +2,7 @@ import {
   definePlugin,
   defineHandler,
   ModelType,
-  ADDON_EMBEDDING,
+  ADDON_DECISION,
   decisionConfigSchema,
   decideRequestSchema,
   decideResponseSchema,
@@ -14,10 +14,11 @@ import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
 import { getModelShardFiles } from '@/utils/shard-utils'
 import { decide } from './ops/decide'
 import { transformDecisionConfig } from './helpers'
-import { DecisionModel } from './upstream'
+import { DecisionModel, isMissingDecisionAddon } from './upstream'
 
-// The engine is chosen at load from the GGUF: fabric-format Laya keeps using
-// LayaDecisions, upstream llama.cpp decision models use DecisionEngine.
+// The engine is chosen at load from the GGUF: fabric-format Laya uses
+// LayaDecisions, upstream llama.cpp decision models use DecisionEngine, both
+// from @qvac/decision-ggml (Laya falls back to embed-llamacpp without it).
 function createDecisionModel(params: CreateModelParams): DecisionModel {
   const validated = decisionConfigSchema.parse(params.modelConfig)
   const layaConfig = { ...transformDecisionConfig(validated) }
@@ -43,7 +44,7 @@ function createDecisionModel(params: CreateModelParams): DecisionModel {
 export const decisionPlugin = definePlugin({
   modelType: ModelType.llamacppDecision,
   displayName: 'Decisions (llama.cpp)',
-  addonPackage: ADDON_EMBEDDING,
+  addonPackage: ADDON_DECISION,
   loadConfigSchema: decisionConfigSchema,
   createModel: (params) => ({ model: createDecisionModel(params) }),
   handlers: {
@@ -56,7 +57,13 @@ export const decisionPlugin = definePlugin({
     })
   },
   logging: {
-    module: () => import('@qvac/embed-llamacpp/addonLogging'),
-    namespace: ModelType.llamacppEmbedding
+    // decision-ggml's native logs; embed's when only the Laya fallback is
+    // installed.
+    module: () =>
+      import('@qvac/decision-ggml/addonLogging').catch((error: unknown) => {
+        if (isMissingDecisionAddon(error)) return import('@qvac/embed-llamacpp/addonLogging')
+        throw error
+      }),
+    namespace: ModelType.llamacppDecision
   }
 })

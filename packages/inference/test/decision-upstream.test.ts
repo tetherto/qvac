@@ -2,10 +2,10 @@
 // depth guard, the decide op, and the adapter against the installed addon.
 //
 // MOCKED: the decide-op tests below register a stub engine whose responses
-// were recorded from @qvac/embed-llamacpp's DecisionEngine on
+// were recorded from DecisionEngine (then in embed-llamacpp, now in decision-ggml) on
 // ggml-org/tinyopenjev-for-testing-gguf. They exercise the plugin's
 // conversion and lifecycle, not native execution; that is covered by
-// embed-llamacpp's decision-engine.test.js and the prototype's end-to-end run.
+// decision-ggml's decision-engine.test.js and the prototype's end-to-end run.
 import test from 'brittle'
 import Buffer from 'bare-buffer'
 import fs from 'bare-fs'
@@ -17,6 +17,9 @@ import { decide } from '@/plugins/builtin/llamacpp-decision/ops/decide'
 import {
   DecisionModel,
   DECISION_INVALID_REQUEST,
+  isMissingDecisionAddon,
+  loadDecisionAddon,
+  type DecisionAddon,
   fromUpstreamResult,
   toUpstreamConfig,
   toUpstreamRequest,
@@ -456,7 +459,7 @@ test('upstream load: the plugin config, openclCacheDir included, reaches the eng
     files: [file],
     layaConfig: { device: 'gpu' },
     config: { device: 'gpu', gpu_layers: 99, openclCacheDir: '/data/user/0/app/cache' },
-    engineClass: Engine
+    loadAddon: () => Promise.resolve(stubAddon({ DecisionEngine: Engine }))
   })
   await model.load()
   t.is(model.kind, 'upstream')
@@ -469,12 +472,7 @@ test('upstream load: the plugin config, openclCacheDir included, reaches the eng
   ])
 })
 
-test('an addon without DecisionEngine: upstream models fail to load with a clear error', async (t) => {
-  const embed = (await import('@qvac/embed-llamacpp')) as unknown as Record<string, unknown>
-  if (typeof embed['DecisionEngine'] === 'function') {
-    t.comment('the installed addon has DecisionEngine; this case needs one without it')
-    return
-  }
+test('without @qvac/decision-ggml: upstream models fail to load with a clear error', async (t) => {
   const file = path.join(os.tmpdir(), `decision-adapter-${Date.now()}.gguf`)
   writeGguf(file, 'qwen35')
   t.teardown(() => fs.rmSync(file, { force: true }))
@@ -482,8 +480,67 @@ test('an addon without DecisionEngine: upstream models fail to load with a clear
     modelPath: file,
     files: [file],
     layaConfig: { device: 'cpu' },
-    config: { device: 'cpu' }
+    config: { device: 'cpu' },
+    loadAddon: () => Promise.resolve(undefined)
   })
-  await t.exception(model.load(), /needs @qvac\/embed-llamacpp with DecisionEngine/)
+  await t.exception(model.load(), /needs @qvac\/decision-ggml/)
   t.is(model.kind, undefined, 'nothing was loaded')
 })
+
+test('fabric-format Laya runs on decision-ggml when it is installed', async (t) => {
+  const file = path.join(os.tmpdir(), `decision-laya-${Date.now()}.gguf`)
+  writeGguf(file, 'laya')
+  t.teardown(() => fs.rmSync(file, { force: true }))
+  const seen: unknown[] = []
+  class Laya {
+    constructor(args: unknown) {
+      seen.push(args)
+    }
+    load = () => Promise.resolve()
+    unload = () => Promise.resolve()
+    cancel = () => Promise.resolve()
+  }
+  const model = new DecisionModel({
+    modelPath: file,
+    files: [file],
+    layaConfig: { device: 'cpu' },
+    config: { device: 'cpu' },
+    loadAddon: () => Promise.resolve(stubAddon({ LayaDecisions: Laya }))
+  })
+  await model.load()
+  t.is(model.kind, 'laya')
+  t.alike(seen, [{ files: { model: [file] }, config: { device: 'cpu' }, logger: undefined }])
+})
+
+test('loadDecisionAddon: the addon when installed, undefined when not', async (t) => {
+  const addon = await loadDecisionAddon()
+  if (addon === undefined) {
+    t.comment('@qvac/decision-ggml is not installed here')
+    t.pass()
+    return
+  }
+  t.is(typeof addon.DecisionEngine, 'function')
+  t.is(typeof addon.LayaDecisions, 'function')
+})
+
+test('isMissingDecisionAddon only matches decision-ggml itself', (t) => {
+  const missing = (message: string) =>
+    Object.assign(new Error(message), { code: 'MODULE_NOT_FOUND' })
+  t.ok(isMissingDecisionAddon(missing("Cannot find module '@qvac/decision-ggml'")))
+  t.ok(isMissingDecisionAddon(missing("Cannot find module '@qvac/decision-ggml/addonLogging'")))
+  t.absent(
+    isMissingDecisionAddon(missing("Cannot find module 'bare-path'")),
+    'a missing dependency of it'
+  )
+  t.absent(isMissingDecisionAddon(new Error("Cannot find module '@qvac/decision-ggml'")), 'no code')
+})
+
+/** A decision-ggml stand-in: classes the test does not use throw. */
+function stubAddon(overrides: Record<string, unknown>): DecisionAddon {
+  const unused = class {
+    constructor() {
+      throw new Error('not used by this test')
+    }
+  }
+  return { LayaDecisions: unused, DecisionEngine: unused, ...overrides } as unknown as DecisionAddon
+}
