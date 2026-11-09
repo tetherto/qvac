@@ -1,5 +1,11 @@
 import test from 'brittle'
-import { normalizeDocs, generateId, createLRUCache } from '../../src/utils/helper.js'
+import {
+  normalizeDocs,
+  generateId,
+  createLRUCache,
+  calculateTextScore,
+  scoreDocuments
+} from '../../src/utils/helper.js'
 import { QvacErrorRAG, ERR_CODES } from '../../src/errors.js'
 import cryptoShim from '../../src/shims/crypto.js'
 import type { PartialDoc } from '../../src/types.js'
@@ -386,4 +392,148 @@ test('createLRUCache: should handle complex values', (t) => {
   t.alike(cache.get('obj'), obj, 'Should store objects')
   t.alike(cache.get('arr'), arr, 'Should store arrays')
   t.is(cache.get('null'), null, 'Should store null')
+})
+
+const REFUND = 'Refund policy: you can return items within 30 days.'
+const SHIPPING = 'This page lists delivery times.'
+// "Refund policy: items can be returned within 30 days."
+const REFUND_ZH = '退款政策：30天内可以退货。'
+
+test('calculateTextScore: should match a word followed by punctuation', (t) => {
+  const score = calculateTextScore('refund policy?', REFUND)
+  t.is(score, calculateTextScore('refund policy', REFUND), 'Question mark should not count')
+  t.ok(score > 0.7, 'Both words should match')
+})
+
+test('calculateTextScore: should not match a word inside another word', (t) => {
+  t.is(calculateTextScore('is', SHIPPING), 0, '"is" should not match "This"')
+})
+
+test('calculateTextScore: should ignore leading and trailing whitespace', (t) => {
+  t.is(calculateTextScore(' refund policy ', 'Delivery takes three days.'), 0, 'No empty word')
+  t.is(
+    calculateTextScore(' refund policy', REFUND),
+    calculateTextScore('refund policy', REFUND),
+    'Leading space should not change the score'
+  )
+})
+
+test('calculateTextScore: should return 0 for a query without words', (t) => {
+  t.is(calculateTextScore('', REFUND), 0, 'Empty query should score 0')
+  t.is(calculateTextScore(' ?! ', REFUND), 0, 'Punctuation-only query should score 0')
+})
+
+test('calculateTextScore: should match words regardless of case', (t) => {
+  t.is(calculateTextScore('REFUND', REFUND), 0.7, 'Single matching word should score 0.7')
+})
+
+test('calculateTextScore: should match words in text written without spaces', (t) => {
+  t.ok(calculateTextScore('退款政策', REFUND_ZH) >= 0.7, 'Chinese query should match')
+})
+
+test('calculateTextScore: should split a query written without spaces into words', (t) => {
+  if (typeof Intl === 'undefined' || typeof Intl.Segmenter !== 'function') {
+    t.pass('Intl.Segmenter is not available')
+    return
+  }
+  // "What is the refund policy". The content has "refund" and "policy" but not "what is".
+  t.ok(calculateTextScore('退款政策是什么', REFUND_ZH) > 0, 'Partial match should count')
+})
+
+// Run fn with Intl.Segmenter removed, as on runtimes that lack it.
+function withoutSegmenter(fn: () => void): void {
+  const intl = (globalThis as { Intl?: { Segmenter?: unknown } }).Intl
+  const original = intl?.Segmenter
+  if (intl) intl.Segmenter = undefined
+  try {
+    fn()
+  } finally {
+    if (intl) intl.Segmenter = original
+  }
+}
+
+test('calculateTextScore: should fall back to substring matching without Intl.Segmenter', (t) => {
+  withoutSegmenter(() => {
+    t.is(calculateTextScore('退款政策', REFUND_ZH), 0.7, 'Chinese query should match')
+    t.is(calculateTextScore('is', SHIPPING), 0, '"is" should not match "This"')
+    t.is(
+      calculateTextScore('refund policy?', REFUND),
+      calculateTextScore('refund policy', REFUND),
+      'Question mark should not count'
+    )
+  })
+})
+
+test('calculateTextScore: should match Chinese characters outside the BMP', (t) => {
+  // 𠮷 (U+20BB7) takes two UTF-16 code units, as in the name 𠮷野家.
+  t.is(calculateTextScore('𠮷', '𠮷野家'), 0.7, 'Supplementary character should match')
+  withoutSegmenter(() => {
+    t.is(calculateTextScore('𠮷', '𠮷野家'), 0.7, 'Should match without Intl.Segmenter')
+  })
+})
+
+test('calculateTextScore: should match a word where the script changes', (t) => {
+  // "Refund API" against "Refund".
+  const full = calculateTextScore('退款API', '退款API')
+  t.ok(full > calculateTextScore('退款API', '退款'), 'English word should get credit')
+  t.ok(full > 0.7, 'Both words should match')
+  t.is(calculateTextScore('api', '退款apis'), 0, '"api" should not match inside "apis"')
+  withoutSegmenter(() => {
+    t.is(calculateTextScore('退款API', '退款API'), full, 'Should match without Intl.Segmenter')
+  })
+})
+
+test('scoreDocuments: should combine vector and text scores and skip incomplete documents', (t) => {
+  const query = 'refund policy?'
+  const contentMap = new Map([
+    ['policy', REFUND],
+    ['shipping', SHIPPING],
+    ['empty', '']
+  ])
+  const vectorMap = new Map([
+    ['policy', [1, 0]],
+    ['shipping', [1, 0]],
+    ['empty', [1, 0]]
+  ])
+  const ids = ['shipping', 'policy', 'empty', 'missing']
+  const results = scoreDocuments(query, [1, 0], ids, vectorMap, contentMap, 10)
+
+  t.alike(
+    results.map((r) => r.id),
+    ['policy', 'shipping'],
+    'Should rank the match first and skip incomplete documents'
+  )
+  t.is(results[0].score, 0.7 + calculateTextScore(query, REFUND) * 0.3, 'Policy score')
+  t.is(results[1].score, 0.7, 'Shipping score should have no text part')
+})
+
+test('scoreDocuments: should rank a whole-word match above a match inside another word', (t) => {
+  const contentMap = new Map([
+    ['inside', SHIPPING],
+    ['whole', 'Delivery is free.']
+  ])
+  const vectorMap = new Map([
+    ['inside', [1, 0]],
+    ['whole', [1, 0]]
+  ])
+  const results = scoreDocuments('is', [1, 0], ['inside', 'whole'], vectorMap, contentMap, 2)
+
+  t.is(results[0].id, 'whole', 'Document with the word should rank first')
+  t.ok(results[0].score > results[1].score, 'Scores should differ')
+})
+
+test('scoreDocuments: should rank a mixed-script match above a partial one', (t) => {
+  // "Refund API documentation" against "Refund documentation".
+  const contentMap = new Map([
+    ['partial', '退款文档'],
+    ['full', '退款API文档']
+  ])
+  const vectorMap = new Map([
+    ['partial', [1, 0]],
+    ['full', [1, 0]]
+  ])
+  const results = scoreDocuments('退款API', [1, 0], ['partial', 'full'], vectorMap, contentMap, 2)
+
+  t.is(results[0].id, 'full', 'Document with both words should rank first')
+  t.ok(results[0].score > results[1].score, 'Scores should differ')
 })
