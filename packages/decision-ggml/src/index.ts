@@ -18,25 +18,4 @@ export type {
   DecisionEngineArgs,
   DecisionPayload,
 } from "./decision";
-export { LayaDecisions, LayaInterface, mapLayaEvent } from "./laya";
-export type {
-  LayaConfig,
-  LayaRequest,
-  LayaSingleRequest,
-  LayaBatchRequest,
-  LayaQuestion,
-  LayaChoiceQuestion,
-  LayaScoreQuestion,
-  LayaNoulQuestion,
-  LayaState,
-  LayaCriterion,
-  LayaResponse,
-  LayaResult,
-  LayaAnswer,
-  LayaChoiceAnswer,
-  LayaScoreAnswer,
-  LayaNoulAnswer,
-  LayaUsage,
-  LayaDecisionsArgs,
-} from "./laya";
 export type { QvacResponse };

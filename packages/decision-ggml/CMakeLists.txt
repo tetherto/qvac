@@ -17,12 +17,8 @@ qvac_addon_use_fabric()
 # Sources shared by the addon and the unit-test executable.
 set(DECISION_GGML_SOURCES
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/utils.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/BackendSelection.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/logging.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaLazyInitializeBackend.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModelLoader.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LayaModel.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/DecisionContext.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/DecisionEngineModel.cpp
 )

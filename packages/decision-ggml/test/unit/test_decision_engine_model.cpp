@@ -153,6 +153,14 @@ TEST(DecisionEngineConfigTest, OpenclCacheDirIsAccepted) {
       "no error");
 }
 
+TEST(DecisionEngineConfigTest, ZeroThreadsLeavesUpstreamsDefault) {
+  const common_params defaults{};
+  EXPECT_EQ(
+      params({{"device", "cpu"}, {"threads", "0"}}).cpuparams.n_threads,
+      defaults.cpuparams.n_threads)
+      << "0 means every CPU, as in the other addons";
+}
+
 // Upstream does not check slot and batch counts: 0 slots leave every request
 // deferred forever, and a batch of 0 cannot hold a token.
 TEST(DecisionEngineConfigTest, RejectsBadOptions) {
@@ -170,7 +178,7 @@ TEST(DecisionEngineConfigTest, RejectsBadOptions) {
            {"parallel", "-1"},
            {"batch_size", "0"},
            {"ubatch_size", "0"},
-           {"threads", "0"}}) {
+           {"threads", "4k"}}) {
     EXPECT_EQ(
         codeOf([&key = key, &value = value] {
           params({{"device", "cpu"}, {key, value}});

@@ -1,7 +1,7 @@
 {
   "name": "@qvac/decision-ggml",
   "version": "0.1.0",
-  "description": "Decision models for QVAC: fabric-format Laya and upstream llama.cpp decision models (openjev, lev, kev, clef, ...)",
+  "description": "Decision models for QVAC: upstream llama.cpp decision models (laya, openjev, lev, kev, clef, ...)",
   "addon": true,
   "engines": {
     "bare": ">=1.24.0"
@@ -10,7 +10,7 @@
     "build": "npm run build:ts && npm run build:native",
     "build:native": "bare-make generate && bare-make build && bare-make install",
     "build:ts": "tsc -p tsconfig.build.json",
-    "check:generated": "npm run build:ts && git diff --exit-code -- index.mjs index.js addon.js addonLogging.js decision.js laya.js modelRunner.js index.d.ts addon.d.ts addonLogging.d.ts decision.d.ts laya.d.ts modelRunner.d.ts",
+    "check:generated": "npm run build:ts && git diff --exit-code -- index.mjs index.js addon.js addonLogging.js decision.js modelRunner.js index.d.ts addon.d.ts addonLogging.d.ts decision.d.ts modelRunner.d.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
     "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy decision-ggml prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy decision-ggml prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy decision-ggml prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
@@ -46,13 +46,11 @@
     "addon.js",
     "addonLogging.js",
     "decision.js",
-    "laya.js",
     "modelRunner.js",
     "index.d.ts",
     "addon.d.ts",
     "addonLogging.d.ts",
     "decision.d.ts",
-    "laya.d.ts",
     "modelRunner.d.ts",
     "prebuilds",
     "LICENSE",

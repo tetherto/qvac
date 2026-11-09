@@ -6,7 +6,8 @@ name: Mobile Integration Tests (Decision GGML)
 # Decision GGML uses single-pool scheduling (one Device Farm run per platform
 # against the embed addon's pool — no dual-flagship split, no sharding). It
 # reuses embed's Device Farm project and pools, and the mobile-pilot/embed/
-# model mirror: every model in its manifest is also in embed's.
+# prefix of the model mirror, which its seed-models job fills from this
+# package's own manifest.
 
 on:
   workflow_call:
@@ -79,7 +80,7 @@ on:
         options: [EQUALS, CONTAINS]
         default: EQUALS
       tests:
-        description: "Optional test filter: a mocha --grep regex matched by test NAME, not file name (e.g. 'runEmbedSmoke'; combine several with '|'). Empty = full mobile suite. Where to find valid names: docs/ci/MOBILE-ON-DEMAND.md."
+        description: "Optional test filter: a mocha --grep regex matched by test NAME, not file name (e.g. 'runDecisionEngineTest'; combine several with '|'). Empty = full mobile suite. Where to find valid names: docs/ci/MOBILE-ON-DEMAND.md."
         type: string
         required: false
         default: ""
@@ -335,30 +336,10 @@ jobs:
           output-map: ${{ runner.temp }}/decision-url-map.json
           mode: presign
 
-      # The Laya GGUF (laya.test.js) has no Hugging Face source, so it is not in
-      # the manifest above; presign its US-bucket object for the pre-stage steps
-      # below, as ocr-ggml presigns its S3-only models.
-      - name: Configure AWS credentials (us-west-2) for the Laya model
-        uses: aws-actions/configure-aws-credentials@8df5847569e6427dd6c4fb1cf565c83acfa8afa7 # 6.0.0
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: us-west-2
-          role-duration-seconds: 7200
-
-      - name: Presign Laya model (US bucket)
-        working-directory: addon/packages/decision-ggml
-        env:
-          MODEL_S3_BUCKET: tether-ai-dev-us
-          AWS_REGION: us-west-2
-          OUTPUT_DIR: ${{ runner.temp }}
-        run: |
-          chmod +x scripts/generate-laya-presigned-url.sh
-          ./scripts/generate-laya-presigned-url.sh
-
       # Generate the model pre-stage script. The Device Farm host has reliable
       # network; it downloads the decision models and pushes them to a platform-local
       # staging dir so the phone never fetches from huggingface.co
-      # (QVAC-21799). Embed is single-pool, so all models are staged (no shards).
+      # (QVAC-21799). decision-ggml is single-pool, so all models are staged (no shards).
       - name: Generate model pre-stage commands (Android)
         id: prestage
         if: matrix.platform == 'Android'
@@ -366,7 +347,6 @@ jobs:
         # Repoint staged models to the US-bucket presigned URLs from the seed step.
         env:
           PRESTAGE_URL_MAP: ${{ runner.temp }}/decision-url-map.json
-          PRESTAGE_S3_MODELS: ${{ runner.temp }}/laya-model-urls.json
         run: |
           node scripts/generate-prestage-block.js android > "$RUNNER_TEMP/prestage-block.txt"
           {
@@ -382,7 +362,6 @@ jobs:
         # Repoint staged models to the US-bucket presigned URLs from the seed step.
         env:
           PRESTAGE_URL_MAP: ${{ runner.temp }}/decision-url-map.json
-          PRESTAGE_S3_MODELS: ${{ runner.temp }}/laya-model-urls.json
         run: |
           node scripts/generate-prestage-block.js ios > "$RUNNER_TEMP/prestage-block.txt"
           {

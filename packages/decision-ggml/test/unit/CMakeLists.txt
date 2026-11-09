@@ -6,12 +6,9 @@ endif()
 
 add_executable(
   addon-test
-  test_backend_selection.cpp
-  test_laya_model.cpp
   test_decision_engine_model.cpp
   test_llama_lazy_init_backend.cpp
   test_logging.cpp
-  test_model_metadata.cpp
   test_utils.cpp
   backend_env.cpp
   ${DECISION_GGML_SOURCES}

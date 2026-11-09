@@ -3,7 +3,7 @@
 const test = require('brittle')
 const { ModelInterface, ModelRunner } = require('../../modelRunner.js')
 
-// The lifecycle LayaDecisions and Reranker share, driven through a fake
+// The ModelRunner lifecycle DecisionEngine runs on, driven through a fake
 // binding: no model and no native addon.
 
 const MODEL = '/models/test.gguf'

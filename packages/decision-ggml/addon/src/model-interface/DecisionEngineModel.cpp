@@ -1,6 +1,7 @@
 #include "DecisionEngineModel.hpp"
 
 #include <chrono>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
@@ -10,6 +11,7 @@
 #include <nlohmann/json.hpp>
 
 #include "addon/DecisionErrors.hpp"
+#include "logging.hpp"
 #include "utils.hpp"
 
 using namespace qvac_lib_inference_addon_decision::errors;
@@ -131,8 +133,13 @@ common_params DecisionEngineModel::loadParams(
       !v.empty()) {
     params.n_ubatch = toInt("ubatch_size", v, 1);
   }
+  // 0 or below leaves upstream's default, every CPU (checkLoadOptions has
+  // already checked the value).
   if (const std::string v = firstOf(config, {"threads"}); !v.empty()) {
-    params.cpuparams.n_threads = toInt("threads", v, 1);
+    if (const int n = toInt("threads", v, std::numeric_limits<int>::min());
+        n > 0) {
+      params.cpuparams.n_threads = n;
+    }
   }
   // Upstream creates one execution slot per n_parallel and does not check it:
   // with 0 slots every request would stay deferred forever.
@@ -151,12 +158,16 @@ DecisionEngineModel::DecisionEngineModel(
     const std::string& backendsDir)
     : backendsDir_(backendsDir),
       openclCacheDir_(firstOf(config, {"openclCacheDir"})) {
-  // Validate the options now, so a bad key fails at creation like LayaModel;
-  // the model itself loads on activate().
+  // Validate the options now, so a bad key fails at creation; the model
+  // itself loads on activate().
+  common_params params = loadParams(modelGgufPath, config);
+  // Before the backends register the log callback that reads it.
+  std::unordered_map<std::string, std::string> logConfig = config;
+  qvac_lib_inference_addon_decision::logging::setVerbosityLevel(logConfig);
   initLoader_.init(
       InitLoader::LOADER_TYPE::DELAYED,
-      [this](const common_params& params) { load(params); },
-      loadParams(modelGgufPath, config));
+      [this](const common_params& loaded) { load(loaded); },
+      std::move(params));
 }
 
 DecisionEngineModel::~DecisionEngineModel() {

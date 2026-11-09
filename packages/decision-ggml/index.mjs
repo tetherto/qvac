@@ -5,19 +5,13 @@ const {
   DecisionEngine,
   DecisionEngineInterface,
   mapDecisionEngineEvent,
-  DECISION_INVALID_REQUEST,
-  LayaDecisions,
-  LayaInterface,
-  mapLayaEvent
+  DECISION_INVALID_REQUEST
 } = decision
 
 export {
   DECISION_INVALID_REQUEST,
   DecisionEngine,
   DecisionEngineInterface,
-  LayaDecisions,
-  LayaInterface,
   mapDecisionEngineEvent,
-  mapLayaEvent,
   validateModelPath
 }

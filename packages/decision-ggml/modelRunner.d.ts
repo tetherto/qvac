@@ -75,7 +75,7 @@ export declare abstract class ModelRunner<Config, Request, Payload, Output, Addo
     private readonly _job;
     private readonly _run;
     private _hasActiveResponse;
-    /** Names the model in log messages, e.g. "Laya". */
+    /** Names the model in log messages, e.g. "DecisionEngine". */
     protected abstract readonly _modelName: string;
     constructor({ files, config, logger, opts }: ModelRunnerArgs<Config>);
     /** Creates the native instance from the package's binding. */

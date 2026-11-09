@@ -14,8 +14,3 @@ async function runDecisionEngineTest (options = {}) { // eslint-disable-line no-
   if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runDecisionEngineTest')) return __FILTERED
   return runIntegrationModule('../integration/decision-engine.test.js', options)
 }
-
-async function runLayaTest (options = {}) { // eslint-disable-line no-unused-vars
-  if (typeof __shouldRunTest === 'function' && !__shouldRunTest('runLayaTest')) return __FILTERED
-  return runIntegrationModule('../integration/laya.test.js', options)
-}

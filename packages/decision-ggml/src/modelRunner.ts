@@ -112,7 +112,7 @@ export abstract class ModelRunner<
   private readonly _run: RunExclusive;
   private _hasActiveResponse: boolean;
 
-  /** Names the model in log messages, e.g. "Laya". */
+  /** Names the model in log messages, e.g. "DecisionEngine". */
   protected abstract readonly _modelName: string;
 
   constructor({ files, config = {} as Config, logger = null, opts = {} }: ModelRunnerArgs<Config>) {

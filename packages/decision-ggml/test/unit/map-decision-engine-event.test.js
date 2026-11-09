@@ -50,7 +50,7 @@ test('Error event name maps to Error type carrying rawError', function (t) {
   t.is(result.error, err)
 })
 
-test('Laya and embedding events are not DecisionEngine events', function (t) {
+test('events of other output types are not DecisionEngine events', function (t) {
   t.is(mapDecisionEngineEvent('18LayaDecisionResult', '{"answers":{}}', undefined), null)
   t.is(mapDecisionEngineEvent('14BertEmbeddings', [[0.1]], undefined), null)
   t.is(mapDecisionEngineEvent('Stats', { forward_passes: 1 }, null), null)
@@ -75,7 +75,7 @@ test('DecisionEngineInterface.runJob resolves a boolean, whatever admission retu
   const { DecisionEngineInterface } = require('../../decision.js')
   let next
   const binding = {
-    createDecisionEngineInstance: () => ({ handle: true }),
+    createInstance: () => ({ handle: true }),
     runJob: () => Promise.resolve(next)
   }
   const engine = new DecisionEngineInterface(binding, { path: '/m.gguf', config: {} }, () => {})

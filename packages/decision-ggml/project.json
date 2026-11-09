@@ -56,15 +56,6 @@
               "warm": "true"
             }
           ],
-          "modelS3": [
-            {
-              "src": "qvac_models_compiled/ggml/laya/2026-10-01/laya-multilingual-Q8_0.gguf",
-              "dest": "models/laya/laya-multilingual-Q8_0.gguf"
-            }
-          ],
-          "modelEnv": {
-            "LAYA_TEST_MODEL": "{workspace}/{workdir}/models/laya/laya-multilingual-Q8_0.gguf"
-          },
           "platforms": [
             {
               "os": "ubuntu-22.04",
@@ -137,8 +128,7 @@
               "os": "ubuntu-24.04",
               "platform": "linux",
               "arch": "x64",
-              "runner": "qvac-ubuntu2404-x64",
-              "needsLayaS3Gguf": true
+              "runner": "qvac-ubuntu2404-x64"
             },
             {
               "os": "macos-14",

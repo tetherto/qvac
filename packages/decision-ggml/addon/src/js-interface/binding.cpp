@@ -22,9 +22,7 @@ qvacLibInferLlamacppDecisionExports(js_env_t* env, js_value_t* exports) {
     }                                                                          \
   }
 
-  V("createLayaInstance", qvac_lib_inference_addon_decision::createLayaInstance)
-  V("createDecisionEngineInstance",
-    qvac_lib_inference_addon_decision::createDecisionEngineInstance)
+  V("createInstance", qvac_lib_inference_addon_decision::createInstance)
   V("decisionInfo", qvac_lib_inference_addon_decision::decisionInfo)
   V("runJob", qvac_lib_inference_addon_decision::runJob)
 

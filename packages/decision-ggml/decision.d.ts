@@ -104,7 +104,7 @@ export interface DecisionEngineInfo {
 }
 export type DecisionEngineArgs = ModelRunnerArgs<DecisionEngineConfig>;
 export interface DecisionEngineBinding extends ModelBinding {
-    createDecisionEngineInstance(owner: DecisionEngineInterface, configurationParams: {
+    createInstance(owner: DecisionEngineInterface, configurationParams: {
         path: string;
         config: DecisionEngineConfig;
         backendsDir?: string;
@@ -144,10 +144,9 @@ export declare class DecisionEngineInterface extends ModelInterface<DecisionEngi
     info(): DecisionEngineInfo;
 }
 /**
- * Upstream llama.cpp decision models (openjev, lev, kev, clef, upstream-format
- * laya, ...) through upstream's server-context, run in-process by this addon.
- * Requests and results use upstream's /v1/systemone shapes, one state per run. Fabric-format Laya
- * checkpoints use {@link LayaDecisions} instead.
+ * Upstream llama.cpp decision models (laya, openjev, lev, kev, clef, ...)
+ * through upstream's server-context, run in-process by this addon. Requests
+ * and results use upstream's /v1/systemone shapes, one state per run.
  *
  * ```js
  * const engine = new DecisionEngine({ files: { model: [path] }, config: { device: 'gpu' } })

@@ -7,7 +7,6 @@
 #include <qvac-fabric.h>
 
 #include "logging.hpp"
-#include "utils.hpp"
 
 using namespace qvac_lib_inference_addon_decision::logging;
 using namespace qvac_lib_inference_addon_cpp::logger;

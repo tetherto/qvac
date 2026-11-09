@@ -67,7 +67,7 @@ using State = DecisionContext::State;
 }
 
 [[noreturn]] void failCancelled() {
-  // The job scheduler reports this as a cancellation, as with LayaModel.
+  // The job scheduler reports this message as a cancellation.
   throw std::runtime_error("Job cancelled");
 }
 

@@ -22,15 +22,14 @@
 /// @brief One upstream decision response, serialized as JSON.
 ///
 /// A distinct type so the JS side can recognize the output event by its type
-/// name, as with LayaDecisionResult.
+/// name.
 struct DecisionEngineResult {
   std::string json;
 };
 
-/// @brief Upstream llama.cpp decision models (openjev, lev, kev, clef, laya in
-/// upstream format, ...), run by upstream's server-context through this
-/// model's DecisionContext. Fabric-format Laya checkpoints keep using
-/// LayaModel.
+/// @brief Upstream llama.cpp decision models (laya, openjev, lev, kev, clef,
+/// ...), run by upstream's server-context through this model's
+/// DecisionContext.
 ///
 /// Structured like llm-llamacpp's LlamaModel: load options go straight into
 /// common_params, the DecisionContext owns the upstream objects, errors are
