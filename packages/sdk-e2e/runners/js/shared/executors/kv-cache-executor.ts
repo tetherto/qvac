@@ -981,9 +981,8 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
     }
   }
 
-  // `tool_choice: 'required'` on a warm turn forces a call: the grammar is armed
-  // from the tool block every turn carries, so a prompt that would otherwise be
-  // answered in prose calls the tool, and the turn still reuses the cache.
+  // `tool_choice: 'required'` on a warm turn arms the tool grammar from the tool
+  // block every turn carries, so the turn calls the tool and still reuses the cache.
   async warmToolChoiceRequired(
     params: {
       cacheKey: string
