@@ -23,12 +23,17 @@ import {
   type NamespaceRecord,
   type SpaceRecord
 } from './db/records.js'
+import { EMBED_BATCH_SIZE, chunkText, createEmbedder, type Embedder } from './embeddings.js'
 import {
   parseDelete,
   parseIngest,
+  parseIngestOptions,
   parseNamespaceName,
   parseSearch,
-  type ValidDocument
+  type ParsedDocument,
+  type ValidDocument,
+  type ValidSearch,
+  type ValidTextChunk
 } from './input.js'
 import { intersectScope, parseScope } from './scope.js'
 import { scanSearch, type SearchQuery } from './search.js'
@@ -45,6 +50,7 @@ import type {
   DeleteDocumentsParams,
   DeleteDocumentsResult,
   IngestedDocument,
+  IngestOptions,
   IngestParams,
   IngestResult,
   NamespaceInfo,
@@ -136,6 +142,7 @@ export function createRag(options: CreateRagOptions): Rag {
       adds: 'createRag needs a Corestore instance'
     })
   }
+  const embedder = createEmbedder(options.embeddings)
 
   let db: HyperDBInstance | null = null
   let release: (() => Promise<void>) | null = null
@@ -229,24 +236,93 @@ export function createRag(options: CreateRagOptions): Rag {
     })
   }
 
-  // Each document commits in its own batch. A failure leaves earlier documents
-  // committed and the failing one at its previous generation.
-  async function ingest(params: IngestParams): Promise<IngestResult> {
+  // Each document commits in its own batch, in input order, as soon as all of
+  // its chunks are embedded. A failure leaves earlier documents committed and
+  // the failing one at its previous generation; an abort skips the rest.
+  async function ingest(params: IngestParams, options?: IngestOptions): Promise<IngestResult> {
     const { namespace, documents } = parseIngest(params)
+    const { signal, onProgress } = parseIngestOptions(options)
     const instance = database()
-    const { space } = await withSnapshot(instance, (reader) => readNamespace(reader, namespace))
-    for (const document of documents) checkChunks(namespace, space, document)
+    const { ns, space } = await withSnapshot(instance, (reader) => readNamespace(reader, namespace))
+    const port = documents.some((entry) => entry.kind !== 'embedded')
+      ? requireEmbedder(namespace, space)
+      : null
+    for (const entry of documents) {
+      if (entry.kind === 'embedded') checkChunks(namespace, space, entry.document)
+    }
+
+    const jobs = prepareJobs(documents, onProgress)
+    const queue: Array<{ job: IngestJob; ordinal: number }> = []
+    for (const job of jobs) {
+      job.vectors.forEach((vector, ordinal) => {
+        if (!vector) queue.push({ job, ordinal })
+      })
+    }
 
     const results: IngestedDocument[] = []
-    let revision = 0
-    for (const document of documents) {
-      const committed = await withTransaction(instance, (tx) =>
-        commitDocument(tx, namespace, document)
-      )
-      results.push(committed.document)
-      revision = committed.revision
+    let revision = ns.revision
+    let next = 0
+    let cancelled = false
+
+    // Returns false once the signal has aborted.
+    async function commitReady(): Promise<boolean> {
+      while (next < jobs.length && jobs[next].missing === 0) {
+        if (signal?.aborted) return false
+        const committed = await withTransaction(instance, (tx) =>
+          commitDocument(tx, namespace, toValidDocument(jobs[next], space.spaceId))
+        )
+        results.push(committed.document)
+        revision = committed.revision
+        next++
+        onProgress?.({ stage: 'commit', done: next, total: jobs.length })
+      }
+      return true
     }
-    return { documents: results, revision }
+
+    try {
+      cancelled = !(await commitReady())
+      for (let start = 0; !cancelled && start < queue.length; start += EMBED_BATCH_SIZE) {
+        if (signal?.aborted) {
+          cancelled = true
+          break
+        }
+        const batch = queue.slice(start, start + EMBED_BATCH_SIZE)
+        const rows = await (port as Embedder).embedDocuments(
+          batch.map(({ job, ordinal }) => job.chunks[ordinal].content),
+          signal
+        )
+        batch.forEach(({ job, ordinal }, row) => {
+          job.vectors[ordinal] = rows[row]
+          job.missing--
+        })
+        onProgress?.({ stage: 'embed', done: start + batch.length, total: queue.length })
+        cancelled = !(await commitReady())
+      }
+    } catch (error) {
+      if (!(error instanceof QvacErrorRAG && error.code === ERR_CODES.OPERATION_CANCELLED)) {
+        throw error
+      }
+      cancelled = true
+    }
+
+    const skipped = jobs.slice(next).map((job) => job.id)
+    return { documents: results, skipped, cancelled, revision }
+  }
+
+  function requireEmbedder(namespace: string, space: SpaceRecord): Embedder {
+    if (!embedder) {
+      throw new QvacErrorRAG({
+        code: ERR_CODES.DEPENDENCY_REQUIRED,
+        adds: 'text ingest and query search need createRag({ embeddings })'
+      })
+    }
+    if (embedder.spaceId !== space.spaceId) {
+      throw new QvacErrorRAG({
+        code: ERR_CODES.EMBEDDING_SPACE_MISMATCH,
+        adds: `the embeddings port is in space ${embedder.spaceId}, namespace '${namespace}' is in ${space.spaceId}`
+      })
+    }
+    return embedder
   }
 
   async function deleteDocuments(params: DeleteDocumentsParams): Promise<DeleteDocumentsResult> {
@@ -273,8 +349,8 @@ export function createRag(options: CreateRagOptions): Rag {
 
   // A direct caller names documents explicitly, so an unknown one is an error.
   async function search(params: SearchParams): Promise<SearchHit[]> {
-    const { scope, vector, spaceId, k, signal } = parseSearch(params)
-    return await runSearch(parseScope(scope), { vector, spaceId }, k, { strict: true, signal })
+    const request = parseSearch(params)
+    return await runSearch(parseScope(request.scope), request, { strict: true })
   }
 
   // A handle's documents are granted, not chosen per request: an ID the
@@ -284,31 +360,30 @@ export function createRag(options: CreateRagOptions): Rag {
     const bound = parseScope(scope)
     return {
       async search(params: ScopedSearchParams): Promise<SearchHit[]> {
-        const {
-          scope: request,
-          vector,
-          spaceId,
-          k,
-          signal
-        } = parseSearch({
-          scope: undefined,
-          ...params
-        })
-        const query = { vector, spaceId }
-        return await runSearch(intersectScope(bound, request), query, k, { strict: false, signal })
+        const request = parseSearch({ scope: undefined, ...params })
+        return await runSearch(intersectScope(bound, request.scope), request, { strict: false })
       }
     }
   }
 
+  // A text query is embedded only after the namespace's space is known to
+  // match the port's, so a mismatch never costs an embedding call.
   function runSearch(
     scope: SearchScope,
-    query: SearchQuery,
-    k: number,
-    options: { strict: boolean; signal?: AbortSignal }
+    request: ValidSearch,
+    options: { strict: boolean }
   ): Promise<SearchHit[]> {
+    const { k, signal } = request
     return withSnapshot(database(), async (reader) => {
       const { space } = await readNamespace(reader, scope.namespace)
-      return scanSearch(reader, space, scope, query, k, options)
+      let query: SearchQuery
+      if (request.query !== undefined) {
+        const port = requireEmbedder(scope.namespace, space)
+        query = { vector: await port.embedQuery(request.query, signal), spaceId: port.spaceId }
+      } else {
+        query = { vector: request.vector, spaceId: request.spaceId }
+      }
+      return scanSearch(reader, space, scope, query, k, { strict: options.strict, signal })
     })
   }
 
@@ -316,13 +391,66 @@ export function createRag(options: CreateRagOptions): Rag {
     ready,
     close,
     createNamespace: (params) => track(() => createNamespace(params)),
-    ingest: (params) => track(() => ingest(params)),
+    ingest: (params, options) => track(() => ingest(params, options)),
     deleteDocuments: (params) => track(() => deleteDocuments(params)),
     search: (params) => track(() => search(params)),
     scoped: (scope) => {
       const handle = scoped(scope)
       return { search: (params) => track(() => handle.search(params)) }
     }
+  }
+}
+
+interface IngestJob {
+  id: string
+  metadata?: Record<string, unknown>
+  chunks: ValidTextChunk[]
+  // Precomputed vectors are set up front; the rest are filled by the port.
+  vectors: Array<Float32Array | undefined>
+  missing: number
+}
+
+// Chunks every text document before anything is written, so text that yields
+// no chunks fails the whole call.
+function prepareJobs(
+  documents: ParsedDocument[],
+  onProgress: IngestOptions['onProgress']
+): IngestJob[] {
+  const textTotal = documents.filter((entry) => entry.kind === 'text').length
+  let chunked = 0
+  return documents.map((entry): IngestJob => {
+    const { id, metadata } = entry.document
+    if (entry.kind === 'embedded') {
+      const vectors = entry.document.chunks.map((chunk) => chunk.embedding)
+      return { id, metadata, chunks: entry.document.chunks, vectors, missing: 0 }
+    }
+    let chunks = entry.kind === 'chunked' ? entry.document.chunks : []
+    if (entry.kind === 'text') {
+      chunks = entry.document.text.trim() === '' ? [] : chunkText(id, entry.document.text)
+      if (chunks.length === 0) {
+        throw new QvacErrorRAG({
+          code: ERR_CODES.INVALID_INPUT,
+          adds: `document '${id}' has no text to chunk`
+        })
+      }
+      chunked++
+      onProgress?.({ stage: 'chunk', done: chunked, total: textTotal })
+    }
+    return { id, metadata, chunks, vectors: chunks.map(() => undefined), missing: chunks.length }
+  })
+}
+
+function toValidDocument(job: IngestJob, spaceId: string): ValidDocument {
+  return {
+    id: job.id,
+    metadata: job.metadata,
+    chunks: job.chunks.map((chunk, ordinal) => ({
+      id: chunk.id,
+      content: chunk.content,
+      metadataJson: chunk.metadataJson,
+      embedding: job.vectors[ordinal] as Float32Array,
+      spaceId
+    }))
   }
 }
 

@@ -71,6 +71,7 @@
     "bare-crypto": "^1.13.4",
     "hyperdb": "^6.7.0",
     "hyperschema": "^1.13.0",
+    "rag-extract": "^0.2.2",
     "zod": "^4.1.13"
   }
 }
