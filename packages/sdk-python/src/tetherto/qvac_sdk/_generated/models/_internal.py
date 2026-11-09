@@ -25071,7 +25071,7 @@ class TextToSpeechRequest(GeneratedBaseModel):
         str | TextToSpeechRequestReferenceAudioSrc | None,
         Field(
             alias="referenceAudioSrc",
-            description="Audio8 only: reference recording to clone for this request, replacing the loaded voice; requires `referenceText` and a loaded codec encoder (`audio8CodecEncoderModelSrc`).",
+            description="Audio8 only: reference recording to clone for this request, replacing the loaded voice; requires `referenceText` and a loaded codec encoder (`audio8CodecEncoderModelSrc`). A remote source that is not cached yet downloads inside the request, which holds the model until it finishes: pre-fetch it with `downloadAsset()` or pass a local path.",
         ),
     ] = None
     reference_text: Annotated[
@@ -25724,7 +25724,7 @@ class TextToSpeechStreamRequest(GeneratedBaseModel):
         str | TextToSpeechStreamRequestReferenceAudioSrc | None,
         Field(
             alias="referenceAudioSrc",
-            description="Audio8 only: reference recording to clone for this request, replacing the loaded voice; requires `referenceText` and a loaded codec encoder (`audio8CodecEncoderModelSrc`).",
+            description="Audio8 only: reference recording to clone for this request, replacing the loaded voice; requires `referenceText` and a loaded codec encoder (`audio8CodecEncoderModelSrc`). A remote source that is not cached yet downloads inside the request, which holds the model until it finishes: pre-fetch it with `downloadAsset()` or pass a local path.",
         ),
     ] = None
     reference_text: Annotated[

@@ -297,15 +297,38 @@ describe('parseOpenAIOptions — audio.speech.maxInputChars', () => {
 })
 
 describe('speechInstructFor', () => {
-  it('forwards a trimmed instructions string to CosyVoice3 models', () => {
-    assert.equal(speechInstructFor('cosyvoice3', '  请用广东话表达。 '), '请用广东话表达。')
+  const cosyvoice3 = { ttsEngine: 'cosyvoice3' }
+
+  it('forwards a trimmed instructions string to a CosyVoice3 alias without conditioning', () => {
+    assert.equal(speechInstructFor(cosyvoice3, '  请用广东话表达。 '), '请用广东话表达。')
+    // `moderate` disengages the pace channel, so it is not a configured control.
+    assert.equal(
+      speechInstructFor({ ...cosyvoice3, pace: 'moderate' }, 'speak softly'),
+      'speak softly'
+    )
+  })
+
+  it('keeps the conditioning an operator configured on the alias', () => {
+    for (const configured of [
+      { instruct: { dialect: 'cantonese' } },
+      { instruct: '请用四川话表达。' },
+      { emotion: 'happy' },
+      { pace: 'fast' }
+    ]) {
+      assert.equal(
+        speechInstructFor({ ...cosyvoice3, ...configured }, 'speak in a cheerful tone'),
+        undefined,
+        JSON.stringify(configured)
+      )
+    }
   })
 
   it('returns undefined for other engines, blank text, and non-strings', () => {
-    assert.equal(speechInstructFor('chatterbox', 'speak softly'), undefined)
+    assert.equal(speechInstructFor({ ttsEngine: 'chatterbox' }, 'speak softly'), undefined)
     assert.equal(speechInstructFor(undefined, 'speak softly'), undefined)
-    assert.equal(speechInstructFor('cosyvoice3', '   '), undefined)
-    assert.equal(speechInstructFor('cosyvoice3', undefined), undefined)
-    assert.equal(speechInstructFor('cosyvoice3', 42), undefined)
+    assert.equal(speechInstructFor({}, 'speak softly'), undefined)
+    assert.equal(speechInstructFor(cosyvoice3, '   '), undefined)
+    assert.equal(speechInstructFor(cosyvoice3, undefined), undefined)
+    assert.equal(speechInstructFor(cosyvoice3, 42), undefined)
   })
 })

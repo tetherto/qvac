@@ -1460,7 +1460,7 @@ const ttsRequestVoiceFieldsShape = {
   referenceAudioSrc: modelSrcInputSchema
     .optional()
     .describe(
-      'Audio8 only: reference recording to clone for this request, replacing the loaded voice; requires `referenceText` and a loaded codec encoder (`audio8CodecEncoderModelSrc`).'
+      'Audio8 only: reference recording to clone for this request, replacing the loaded voice; requires `referenceText` and a loaded codec encoder (`audio8CodecEncoderModelSrc`). A remote source that is not cached yet downloads inside the request, which holds the model until it finishes: pre-fetch it with `downloadAsset()` or pass a local path.'
     ),
   // Trimmed like the load-time referenceText: a whitespace-only transcript
   // would reach the engine as a non-empty value.

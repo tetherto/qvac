@@ -141,13 +141,17 @@ as usual; a failure after it arrives as a final \`{ "error": ... }\` event.
 \`model_not_found\`; \`502\` \`speech_empty\`, \`transcode_failed\`; \`503\`
 \`transcode_unavailable\`, \`model_not_ready\`.
 
-**\`instructions\`** reaches CosyVoice3 aliases (\`ttsEngine\` \`cosyvoice3\`)
+**\`instructions\`** reaches a CosyVoice3 alias (\`ttsEngine\` \`cosyvoice3\`)
 as the engine's per-request \`instruct\` control, a raw natural-language
-instruction such as a Chinese dialect, emotion or speaking style. Other engines
-have no free-text voice control, so there it is an ignored param.
+instruction such as a Chinese dialect, emotion or speaking style, when the
+alias configures no conditioning of its own. An alias whose config sets
+\`instruct\`, \`emotion\` or a non-moderate \`pace\` keeps that choice, and
+other engines have no free-text voice control; in both cases it is an ignored
+param.
 
 **Ignored params** (logged, returned in \`X-QVAC-Ignored-Params\` header):
-\`speed\`; \`instructions\` on every engine but CosyVoice3.
+\`speed\`; \`instructions\` unless the alias is a CosyVoice3 one without
+configured conditioning.
 `.trim(),
   voices: `
 List the configured TTS voices. Returns the OpenAI \`voice\` names mapped under
@@ -471,8 +475,8 @@ const plugin: FastifyPluginAsyncZod = async (app) => {
       for (const key of SPEECH_UNSUPPORTED_PARAMS) {
         if ((body as Record<string, unknown>)[key] !== undefined) ignoredParams.push(key)
       }
-      const instruct = speechInstructFor(ttsEngine, body.instructions)
-      if (body.instructions !== undefined && ttsEngine !== 'cosyvoice3') {
+      const instruct = speechInstructFor(modelEntry.config, body.instructions)
+      if (body.instructions !== undefined && instruct === undefined) {
         ctx.logger.warn('Ignoring unsupported param: instructions')
         ignoredParams.push('instructions')
       }

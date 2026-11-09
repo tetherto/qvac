@@ -519,6 +519,16 @@ const result = textToSpeech({
 });
 ```
 
+<Callout type="warn">
+  A request-level `referenceAudioSrc` is resolved inside the request. A local
+  path or an already cached source costs nothing, but a remote source that is
+  not cached yet downloads first, with no progress events, while the request
+  holds the model: every other speech request for that model waits behind it.
+  Pre-fetch remote recordings with `downloadAsset({ assetSrc })`, which fills
+  the same cache, and pass the same source to the request afterwards.
+  `cancel()` stops a download that is already in flight.
+</Callout>
+
 Generation is sampled by default: `temperature` (default `0.7`), `topK`
 (`50`), and `topP` (`0.9`) tune it, `greedy: true` takes the argmax instead
 and ignores all three, and `maxFrames` caps generation in codec frames
