@@ -38,6 +38,8 @@ export interface OpenIndex {
   storage: IndexStorage
   // The index's revision now; commits move it on between awaits.
   revision(): number
+  // Drops an index whose native search failed; searches scan from then on.
+  fail(): void
 }
 
 interface Entry {
@@ -52,6 +54,9 @@ interface Entry {
   // Set while the index is loading, replaying or rebuilding; commits skip the
   // entry then and the next search replays them from `mutations`.
   syncing: Promise<void> | null
+  // Set when the index could not be built or searched. The index is derived,
+  // so searches scan instead of failing, until the RAG is reopened.
+  broken: boolean
   // The last snapshot write; writes share a sidecar temp file, so they chain.
   persisting: Promise<void>
   needsPrepare: boolean
@@ -62,12 +67,13 @@ export interface IndexRegistry {
   // Called inside a namespace's committing transaction, before its flush:
   // deletes the mutations a written snapshot no longer needs.
   prune(tx: HyperDBTransaction, namespace: string): Promise<void>
-  // Called after the commit's flush.
+  // Called after the commit's flush. `vectors` is only built when an open
+  // index takes the commit.
   apply(
     namespace: string,
     revision: number,
     added: bigint[],
-    vectors: Float32Array,
+    vectors: () => Float32Array,
     removed: bigint[]
   ): Promise<void>
   close(): Promise<void>
@@ -97,6 +103,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
         revision: 0,
         persistedRevision: 0,
         syncing: null,
+        broken: false,
         persisting: Promise.resolve(),
         needsPrepare: true
       }
@@ -111,7 +118,8 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     const entry = entryFor(namespace, config)
     // Another call's sync may finish below the revision this one needs.
     for (;;) {
-      while (entry.syncing) await entry.syncing
+      while (entry.syncing) await entry.syncing.catch(() => {})
+      if (entry.broken) return null
       const reader = db.snapshot()
       let target: number
       try {
@@ -126,6 +134,9 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       entry.syncing = syncing
       try {
         await syncing
+      } catch {
+        entry.broken = true
+        return null
       } finally {
         entry.syncing = null
       }
@@ -139,7 +150,11 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       native,
       normalize: entry.normalize,
       storage: entry.identity?.storage ?? DEFAULT_INDEX_STORAGE,
-      revision: () => entry.revision
+      revision: () => entry.revision,
+      fail: () => {
+        entry.broken = true
+        discard(entry)
+      }
     }
   }
 
@@ -173,7 +188,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       if (!entry.native) await rebuild(entry, module, reader, identity, ns.revision)
     } catch (error) {
       discard(entry)
-      throw toIndexError(error)
+      throw error
     } finally {
       await reader.close()
     }
@@ -282,15 +297,17 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
     namespace: string,
     revision: number,
     added: bigint[],
-    vectors: Float32Array,
+    vectors: () => Float32Array,
     removed: bigint[]
   ): Promise<void> {
+    let rows: Float32Array | null = null
     for (const entry of entries.values()) {
       if (entry.namespace !== namespace || !entry.native || entry.syncing) continue
       if (entry.revision !== revision - 1) continue
       try {
         for (const id of removed) entry.native.remove(id)
-        addRows(entry, entry.native, added, entry.normalize ? vectors.slice() : vectors)
+        rows ??= vectors()
+        addRows(entry, entry.native, added, entry.normalize ? rows.slice() : rows)
         entry.revision = revision
       } catch {
         // The commit is durable; the next search rebuilds from HyperDB.
@@ -446,13 +463,4 @@ async function getNamespace(reader: HyperDBReader, name: string): Promise<Namesp
   const ns = await reader.get<NamespaceRecord>(NAMESPACES, { name })
   if (!ns) throw new QvacErrorRAG({ code: ERR_CODES.NAMESPACE_NOT_FOUND, adds: name })
   return ns
-}
-
-function toIndexError(error: unknown): QvacErrorRAG {
-  if (error instanceof QvacErrorRAG) return error
-  return new QvacErrorRAG({
-    code: ERR_CODES.INDEX_OPERATION_FAILED,
-    adds: error instanceof Error ? error.message : String(error),
-    cause: error instanceof Error ? error : undefined
-  })
 }

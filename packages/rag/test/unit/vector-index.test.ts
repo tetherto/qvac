@@ -2,10 +2,16 @@ import test from 'brittle'
 import tmp from 'test-tmp'
 import Corestore from 'corestore'
 import fs from 'bare-fs'
+import { AbortController } from 'bare-abort-controller'
 
 import { ERR_CODES, createRag } from '../../src/index.js'
 import { MUTATIONS, type MutationRecord } from '../../src/db/records.js'
-import { loadNativeIndex, setNativeIndexLoader } from '../../src/vector-index/native.js'
+import {
+  loadNativeIndex,
+  setNativeIndexLoader,
+  type NativeIndex,
+  type NativeIndexModule
+} from '../../src/vector-index/native.js'
 import { SPACE, countNativeCalls, doc, inspect, rejectsWithCode, type Test } from './helpers.js'
 import type {
   EmbeddedDocumentInput,
@@ -365,6 +371,140 @@ for (const storage of ['f32', 'q8'] as const) {
       t.ok(drift < 1e-5, `exact scores (max drift ${drift})`)
     })
   }
+}
+
+test('tied scores rank as in the scan, past the candidate cutoff', async (t) => {
+  const handle = await openStore(t)
+  const documents: EmbeddedDocumentInput[] = []
+  // Reverse name order, so native IDs run opposite to document IDs.
+  for (let i = 30; i > 0; i--) {
+    const name = `d${String(i).padStart(2, '0')}`
+    documents.push(doc(name, '', [[name, [1, 0, 0]]]))
+  }
+  const queries: Array<[number[], number, string[] | undefined]> = [
+    [[0, 0, 0], 1, undefined],
+    [[1, 0, 0], 3, undefined],
+    [[0, 0, 0], 2, ['d17', 'd04', 'd25']],
+    [[1, 0, 0], 20, ['d30', 'd01']]
+  ]
+
+  async function run(rag: Rag, spaceId: string): Promise<string[][]> {
+    const results: string[][] = []
+    for (const [vector, k, documentIds] of queries) {
+      results.push(contents(await search(rag, spaceId, vector, k, documentIds)))
+    }
+    return results
+  }
+
+  setNativeIndexLoader(() => Promise.resolve(null))
+  t.teardown(() => setNativeIndexLoader(null))
+  const scan = await openOn(t, handle)
+  const { spaceId } = await scan.createNamespace({
+    name: 'ns',
+    space: SPACE,
+    index: { storage: 'f32' }
+  })
+  for (const document of documents) document.chunks[0].spaceId = spaceId
+  await scan.ingest({ namespace: 'ns', documents })
+  const expected = await run(scan, spaceId)
+  await scan.close()
+
+  setNativeIndexLoader(null)
+  const indexed = await openOn(t, handle)
+  t.alike(await run(indexed, spaceId), expected)
+  t.alike(expected[0], ['d01'], 'key order for a namespace')
+  t.alike(expected[2], ['d17', 'd04'], 'scope order for a document list')
+})
+
+test('an abort stops a search waiting for the index, and the rebuild still finishes', async (t) => {
+  const calls = await countNativeCalls(t)
+  const real = await loadNativeIndex()
+  const handle = await openStore(t)
+  const rag = await openOn(t, handle)
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+
+  let release = () => {}
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  let entered = () => {}
+  const reached = new Promise<void>((resolve) => (entered = resolve))
+  setNativeIndexLoader(() => {
+    entered()
+    return gate.then(() => real)
+  })
+  const controller = new AbortController()
+  const pending = rag.search({
+    scope: { namespace: 'ns' },
+    vector: [1, 0, 0],
+    spaceId,
+    k: 1,
+    signal: controller.signal
+  })
+  const settled = pending.then(
+    () => 'resolved',
+    (error: { code?: number }) => error.code
+  )
+  await reached
+  controller.abort(new Error('stop'))
+  // The gate stays shut, so only the abort can settle the search.
+  const outcome = await Promise.race([settled, delay(100).then(() => 'still waiting')])
+  t.is(outcome, ERR_CODES.OPERATION_CANCELLED, 'rejected while the index is still loading')
+
+  release()
+  t.alike(contents(await search(rag, spaceId, [1, 0, 0])), ['a'])
+  t.is(calls.creates, 1, 'one build: the next search reused the rebuild the abort left running')
+})
+
+const timers = globalThis as unknown as {
+  setTimeout: (callback: () => void, ms: number) => void
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => timers.setTimeout(resolve, ms))
+}
+
+// A native index whose method `broken` throws, standing in for an addon fault.
+function faultyLoader(real: NativeIndexModule, broken: 'addWithIds' | 'search') {
+  const counts = { creates: 0 }
+  const wrap = (native: NativeIndex): NativeIndex =>
+    new Proxy(native, {
+      get(target, key) {
+        if (key === broken) {
+          return () => {
+            throw new Error('addon fault')
+          }
+        }
+        const value = Reflect.get(target, key) as unknown
+        return typeof value === 'function' ? value.bind(target) : value
+      }
+    })
+  const module: NativeIndexModule = {
+    create(dim, storage) {
+      counts.creates++
+      return wrap(real.create(dim, storage))
+    },
+    load: (path) => wrap(real.load(path))
+  }
+  return { module, counts }
+}
+
+for (const broken of ['addWithIds', 'search'] as const) {
+  test(`a failing native ${broken} falls back to the scan`, async (t) => {
+    await countNativeCalls(t)
+    const real = (await loadNativeIndex()) as NativeIndexModule
+    const { module, counts } = faultyLoader(real, broken)
+    setNativeIndexLoader(() => Promise.resolve(module))
+    const handle = await openStore(t)
+    const rag = await openOn(t, handle)
+    const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+    await rag.ingest({
+      namespace: 'ns',
+      documents: [doc('a', spaceId, [['a', [1, 0, 0]]]), doc('b', spaceId, [['b', [0, 1, 0]]])]
+    })
+    t.alike(contents(await search(rag, spaceId, [0, 1, 0])), ['b', 'a'], 'the scan answered')
+    t.alike(contents(await search(rag, spaceId, [1, 0, 0])), ['a', 'b'], 'and keeps answering')
+    t.is(counts.creates, 1, 'without rebuilding on every search')
+  })
 }
 
 test('TurboVec storage is opt-in and needs dimensions divisible by 8 up to 1,024', async (t) => {

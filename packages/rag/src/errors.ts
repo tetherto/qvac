@@ -16,8 +16,7 @@ export const ERR_CODES = Object.freeze({
   INVALID_SCOPE: 14022,
   DOCUMENT_OUT_OF_SCOPE: 14023,
   EMBEDDING_SPACE_MISMATCH: 14024,
-  NATIVE_ID_EXHAUSTED: 14025,
-  INDEX_OPERATION_FAILED: 14026
+  NATIVE_ID_EXHAUSTED: 14025
 } as const)
 
 // Codes 0.9 raised and 0.10 does not. They stay registered: @qvac/error keeps
@@ -138,10 +137,6 @@ const definitions: ErrorCodesMap = {
   [ERR_CODES.NATIVE_ID_EXHAUSTED]: {
     name: 'NATIVE_ID_EXHAUSTED',
     message: (name) => `Native ID range exhausted for namespace: ${name}`
-  },
-  [ERR_CODES.INDEX_OPERATION_FAILED]: {
-    name: 'INDEX_OPERATION_FAILED',
-    message: (message) => `Vector index operation failed: ${message}`
   }
 }
 

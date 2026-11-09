@@ -63,30 +63,24 @@ export async function indexSearch(
 
   // Opened last: a rebuild started by another search may dispose the native
   // index it replaces, so nothing awaits between this and the native search.
-  const index = await openIndex()
+  const index = await untilAborted(openIndex(), options.signal)
   if (!index) return 'unavailable'
   if (index.revision() !== revision) return 'stale'
   if (index.storage.startsWith('turbovec-') && !index.normalize && !quantizable(query.vector)) {
     return 'unavailable'
   }
   const available = allowlist ? allowlist.length : index.native.length
-  const candidates = Math.min(available, k + Math.max(k, MIN_EXTRA_CANDIDATES))
-  if (candidates === 0) return []
+  if (available === 0) return []
 
   const dims = space.dimensions
   const vector = query.vector.slice()
   if (index.normalize) normalizeRows(vector, dims)
   let result: NativeSearchResult
   try {
-    result = allowlist
-      ? index.native.searchFiltered(vector, candidates, allowlist)
-      : index.native.search(vector, candidates)
-  } catch (error) {
-    throw new QvacErrorRAG({
-      code: ERR_CODES.INDEX_OPERATION_FAILED,
-      adds: error instanceof Error ? error.message : String(error),
-      cause: error instanceof Error ? error : undefined
-    })
+    result = searchCandidates(index, vector, k, available, allowlist)
+  } catch {
+    index.fail()
+    return 'unavailable'
   }
 
   const cosine = space.metric === 'cosine'
@@ -109,7 +103,10 @@ export async function indexSearch(
   }
   throwIfAborted(options.signal)
 
-  hits.sort(compareHits)
+  // Ties keep the scan's order: scope order for a document list, key order
+  // for a whole namespace.
+  const rank = new Map(scope.documentIds?.map((documentId, i) => [documentId, i]))
+  hits.sort((a, b) => compareHits(a, b, rank))
   if (hits.length > k) hits.length = k
   await attachDocumentMetadata(reader, namespace, hits)
   return hits
@@ -123,10 +120,55 @@ function quantizable(vector: Float32Array): boolean {
   return true
 }
 
-// Ties fall back to key order, as in a namespace scan.
-function compareHits(a: SearchHit, b: SearchHit): number {
+// Native results break ties by native ID, which is not the scan's order. When
+// the candidate cutoff ties with the k-th candidate, more rows may share that
+// score, so the window widens until it no longer cuts through the tie.
+function searchCandidates(
+  index: OpenIndex,
+  vector: Float32Array,
+  k: number,
+  available: number,
+  allowlist: BigUint64Array | null
+): NativeSearchResult {
+  let want = Math.min(available, k + Math.max(k, MIN_EXTRA_CANDIDATES))
+  for (;;) {
+    const result = allowlist
+      ? index.native.searchFiltered(vector, want, allowlist)
+      : index.native.search(vector, want)
+    let count = 0
+    while (count < result.k && result.ids[count] !== PADDING_ID) count++
+    if (count < want || want === available) return result
+    if (result.scores[count - 1] < result.scores[Math.min(k, count) - 1]) return result
+    want = Math.min(available, want * 2)
+  }
+}
+
+// Stops waiting for the index on abort; a rebuild already running finishes
+// for the next search.
+async function untilAborted<T>(pending: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return await pending
+  pending.catch(() => {})
+  throwIfAborted(signal)
+  let onAbort = () => {}
+  const aborted = new Promise<never>((resolve, reject) => {
+    onAbort = () => reject(new QvacErrorRAG({ code: ERR_CODES.OPERATION_CANCELLED }))
+    signal.addEventListener('abort', onAbort)
+  })
+  try {
+    return await Promise.race([pending, aborted])
+  } finally {
+    signal.removeEventListener('abort', onAbort)
+  }
+}
+
+function compareHits(a: SearchHit, b: SearchHit, rank: Map<string, number>): number {
   if (a.score !== b.score) return b.score - a.score
-  if (a.documentId !== b.documentId) return a.documentId < b.documentId ? -1 : 1
+  if (a.documentId !== b.documentId) {
+    const ra = rank.get(a.documentId)
+    const rb = rank.get(b.documentId)
+    if (ra !== undefined && rb !== undefined) return ra - rb
+    return a.documentId < b.documentId ? -1 : 1
+  }
   return a.ordinal - b.ordinal
 }
 

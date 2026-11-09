@@ -313,7 +313,7 @@ export function createRag(options: CreateRagOptions): Rag {
       const revision = await appendMutation(tx, ns, [], removed, ns.nextNativeId)
       await indexRegistry.prune(tx, namespace)
       await tx.flush()
-      await indexRegistry.apply(namespace, revision, [], new Float32Array(0), removed)
+      await indexRegistry.apply(namespace, revision, [], () => new Float32Array(0), removed)
       return { deleted, revision }
     })
   }
@@ -442,7 +442,7 @@ async function commitDocument(
   const revision = await appendMutation(tx, ns, added, removed, encodeNativeId(nextId))
   await indexes.prune(tx, namespace)
   await tx.flush()
-  await indexes.apply(namespace, revision, added, concatEmbeddings(document), removed)
+  await indexes.apply(namespace, revision, added, () => concatEmbeddings(document), removed)
 
   return {
     document: { id: document.id, generation, chunkCount: document.chunks.length },
