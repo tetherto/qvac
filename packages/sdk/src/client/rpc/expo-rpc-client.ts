@@ -91,11 +91,24 @@ async function readConfigBeforeStart(): Promise<{ config: QvacConfig | undefined
   }
 }
 
+/** bare-stow-host codes for a worker that ended before ready without reporting its exit. */
+const UNREPORTED_EXIT_CODES = new Set([
+  'WORKER_TIMEOUT',
+  'WORKER_CLOSED',
+  'WORKER_KILLED',
+  'TRANSPORT_ERROR'
+])
+
 async function startWorker(timeout: number): Promise<WorkerIPC> {
   const harness = loadHarness()
   try {
     return (await harness.start({ timeout, grace: WORKER_SHUTDOWN_GRACE_MS })).ipc
   } catch (error) {
+    // A start that fails hands back no IPC to watch, so its error code is the
+    // only sign of whether the worklet reported its exit.
+    if (UNREPORTED_EXIT_CODES.has((error as { code?: string } | undefined)?.code ?? '')) {
+      uncleanStop = true
+    }
     throw workerStartupFailed(error)
   }
 }

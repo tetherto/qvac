@@ -42,12 +42,19 @@ export class FakeWorklet extends Duplex {
  */
 export async function loadExpoClient() {
   const started: FakeWorklet[] = []
+  /** The error the next start rejects with, as bare-stow-host's `ready` does, instead of starting. */
+  const harness: { failNextStart: (Error & { code?: string }) | null } = { failNextStart: null }
 
   ;(globalThis as { require?: (id: string) => unknown }).require = (id: string) => {
     if (id !== '@qvac/sdk/worker.mobile') throw new Error(`unexpected require: ${id}`)
     return {
       default: {
         async start() {
+          const failure = harness.failNextStart
+          if (failure) {
+            harness.failNextStart = null
+            throw failure
+          }
           const ipc = new FakeWorklet()
           started.push(ipc)
           return { ipc }
@@ -70,7 +77,12 @@ export async function loadExpoClient() {
   })
 
   const client = await import('@/client/rpc/expo-rpc-client')
-  return { client, started }
+  return { client, started, harness }
+}
+
+/** A start failure carrying bare-stow-host's error `code`. */
+export function workerFailure(code: string, exitCode?: number) {
+  return Object.assign(new Error(`worker failed: ${code}`), { code, exitCode })
 }
 
 export const tick = () => new Promise((resolve) => setImmediate(resolve))
