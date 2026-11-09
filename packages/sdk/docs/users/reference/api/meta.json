@@ -1,7 +1,6 @@
 {
   "title": "API",
   "pages": [
-    "index",
     "assessModelFit",
     "audioEdit",
     "audioGen",
