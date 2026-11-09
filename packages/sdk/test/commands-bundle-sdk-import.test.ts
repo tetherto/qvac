@@ -246,7 +246,9 @@ describe('inference native dependency boundary', () => {
     )
     const bundlePath = path.join(projectRoot, 'index.bundle')
     const base = path.parse(fs.realpathSync(projectRoot)).root
-    const packBin = path.join(path.dirname(require.resolve('bare-pack/package')), 'bin.js')
+    // The SDK reaches bare-pack only through bare-stow, which declares it.
+    const bareStowRequire = createRequire(require.resolve('bare-stow/package'))
+    const packBin = path.join(path.dirname(bareStowRequire.resolve('bare-pack/package')), 'bin.js')
     execFileSync(
       packBin,
       ['--host', HOST, '--linked', '--base', base, '--out', bundlePath, entryPath],
