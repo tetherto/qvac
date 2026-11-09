@@ -91,6 +91,7 @@ def test_calc_tokens_rejects_attachments() -> None:
         CalcTokensRequest.model_validate(
             {
                 "modelId": "llm",
+                "text": "What is in this image?",
                 "history": [
                     {
                         "role": "user",
@@ -117,7 +118,7 @@ def test_calc_tokens_accepts_completion_compatible_empty_attachments() -> None:
         }
     )
 
-    history = request.root.history
+    history = request.history
     assert history is not None
     assert history[0].attachments == []
     assert "name" not in history[0].model_dump()

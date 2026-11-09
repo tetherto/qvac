@@ -306,7 +306,7 @@ const tokens = await calcTokens({
 
 `text` with no `history` field is counted as raw text. When `history` or enabled `tools` are present, the SDK renders the prompt with the loaded model's chat template, adds the model's configured system prompt when the history has none, and appends `text` as the final user turn. Load the model with `modelConfig: { tools: true }` for tool definitions to be counted; otherwise they are ignored and text-only input remains raw. Attachments are not supported. The call returns a number and can run while the model is generating.
 
-The count uses the reasoning setting from model load. If `completion()` overrides `generationParams.reasoning_budget` for one request, that request can render a different prompt and report a different `promptTokens` value.
+The count uses every supplied tool and the reasoning setting from model load. If `completion()` uses a named `generationParams.tool_choice` or overrides `generationParams.reasoning_budget` for one request, that request can render a different prompt and report a different `promptTokens` value.
 
 ### KV cache
 

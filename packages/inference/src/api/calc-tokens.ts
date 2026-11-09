@@ -19,11 +19,13 @@ export type CalcTokensClientParams = OmitTools<CalcTokensParams> & {
 /**
  * Counts tokens with a loaded language model without running generation.
  *
- * `text` with no `history` field is counted raw. Supplying `history` or enabled tools renders the conversation
- * with the model's chat template; `text`, when present, becomes its final user
- * turn. Tools are counted only when the model was loaded with `modelConfig.tools: true`.
+ * When neither `history` nor enabled tools are supplied, `text` is counted raw.
+ * Otherwise, the conversation is rendered with the model's chat template and
+ * `text`, when present, becomes its final user turn. Tools are counted only when
+ * the model was loaded with `modelConfig.tools: true`.
  * Attachments are not supported.
- * The count uses the load-time reasoning setting; a per-request reasoning override on
+ * The count uses every supplied tool and the load-time reasoning setting. A named
+ * `generationParams.tool_choice` or `generationParams.reasoning_budget` override on
  * `completion()` can render a different prompt.
  *
  * @param params - Loaded model ID and at least one prompt source: `text` or non-empty `history`.

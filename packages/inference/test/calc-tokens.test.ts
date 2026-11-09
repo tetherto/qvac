@@ -178,6 +178,23 @@ test('calcTokens accepts completion-compatible text histories', (t) => {
   if (!withAttachment.success) {
     t.ok(withAttachment.error.message.includes('use completion() for attachments'))
   }
+
+  const textWithAttachment = calcTokensRequestSchema.safeParse({
+    type: 'calcTokens',
+    modelId: 'llm',
+    text: 'What is in this image?',
+    history: [
+      {
+        role: 'user',
+        content: 'Describe this image',
+        attachments: [{ path: '/tmp/image.png' }]
+      }
+    ]
+  })
+  t.absent(textWithAttachment.success)
+  if (!textWithAttachment.success) {
+    t.ok(textWithAttachment.error.message.includes('use completion() for attachments'))
+  }
 })
 
 test('calcTokens drops tools without switching raw text to the chat template', async (t) => {
