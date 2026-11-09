@@ -6725,7 +6725,7 @@ class Text(RootModel[str]):
     root: Annotated[
         str,
         Field(
-            description="Text to embed. A string returns one vector; an array returns one vector per string.",
+            description="Legacy text input. A string returns one vector; an array returns one vector per string.",
             min_length=1,
         ),
     ]
@@ -6739,16 +6739,17 @@ class Text1(RootModel[list[Text1Item]]):
     root: Annotated[
         list[Text1Item],
         Field(
-            description="Text to embed. A string returns one vector; an array returns one vector per string.",
+            description="Legacy text input. A string returns one vector; an array returns one vector per string.",
             min_length=1,
         ),
     ]
 
 
 class EmbedTextRequest(GeneratedBaseModel):
-    __forbidden_fields__ = frozenset({"inputs"})
+    __forbidden_fields__ = frozenset({"input", "inputs"})
     __forbidden_field_guidance__ = {
-        "inputs": "This field is not allowed in this request shape."
+        "input": "This field is not allowed in this request shape.",
+        "inputs": "This field is not allowed in this request shape.",
     }
     model_id: Annotated[
         str,
@@ -6759,7 +6760,7 @@ class EmbedTextRequest(GeneratedBaseModel):
     text: Annotated[
         Text | Text1,
         Field(
-            description="Text to embed. A string returns one vector; an array returns one vector per string."
+            description="Legacy text input. A string returns one vector; an array returns one vector per string."
         ),
     ]
     type: Literal["embed"] = "embed"
@@ -6827,9 +6828,10 @@ class EmbedInput(RootModel[EmbedInput1 | EmbedInput2]):
 
 
 class EmbedInputsRequest(GeneratedBaseModel):
-    __forbidden_fields__ = frozenset({"text"})
+    __forbidden_fields__ = frozenset({"input", "text"})
     __forbidden_field_guidance__ = {
-        "text": "This field is not allowed in this request shape."
+        "input": "This field is not allowed in this request shape.",
+        "text": "This field is not allowed in this request shape.",
     }
     model_id: Annotated[
         str,
@@ -6840,7 +6842,7 @@ class EmbedInputsRequest(GeneratedBaseModel):
     inputs: Annotated[
         list[EmbedInput],
         Field(
-            description="One embedding per input. Each input is text or ordered text and media parts. Media requires projectionModelSrc at load time.",
+            description="Legacy batch input. One vector per text or ordered text/media input. Use embedBatch for images.",
             min_length=1,
         ),
     ]
@@ -6855,67 +6857,55 @@ class EmbedInputsRequest(GeneratedBaseModel):
     ] = None
 
 
-class EmbedResponseStatsBackendDevice(Enum):
-    cpu = "cpu"
-    gpu = "gpu"
-
-
-class EmbedResponseStats(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    total_time: Annotated[
-        float | None,
-        Field(alias="totalTime", description="Total embedding time in milliseconds"),
-    ] = None
-    tokens_per_second: Annotated[
-        float | None,
-        Field(alias="tokensPerSecond", description="Tokens processed per second"),
-    ] = None
-    total_tokens: Annotated[
-        float | None, Field(alias="totalTokens", description="Total tokens processed")
-    ] = None
-    backend_device: Annotated[
-        EmbedResponseStatsBackendDevice | None,
-        Field(
-            alias="backendDevice",
-            description="Compute backend used for inference",
-            title="EmbedResponseStatsBackendDevice",
-        ),
-    ] = None
-    context_size: Annotated[
-        float | None, Field(alias="contextSize", description="Context size in tokens")
-    ] = None
-
-
-class EmbedResponse(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    type: Literal["embed"] = "embed"
-    success: bool
-    embedding: Annotated[
-        list[float] | list[list[float]],
-        Field(
-            description="The embedding vector(s). Single `number[]` when `text` is a string; `number[][]` when `text` is an array or `inputs` is provided."
-        ),
-    ]
-    stats: Annotated[
-        EmbedResponseStats | None,
-        Field(description="Performance statistics", title="EmbedResponseStats"),
-    ] = None
-    error: str | None = None
-
-
-class EmbedImageRequest(GeneratedBaseModel):
-    model_id: Annotated[
+class EmbedSingleInputText(RootModel[str]):
+    root: Annotated[
         str,
         Field(
-            alias="modelId",
-            description="Identifier of a loaded MegaLoc model.",
+            description="One text, ordered text/media input, or image supported by the model.",
             min_length=1,
+            title="EmbedSingleInputText",
         ),
     ]
+
+
+class EmbedSingleInputPartsItemMediaBase64(GeneratedBaseModel):
+    type: Literal["base64"] = "base64"
+    value: Annotated[
+        str,
+        Field(
+            json_schema_extra={"contentEncoding": "base64"},
+            min_length=1,
+            pattern="^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+        ),
+    ]
+
+
+class EmbedSingleInputPartsItemMediaFilePath(GeneratedBaseModel):
+    type: Literal["filePath"] = "filePath"
+    value: Annotated[str, Field(min_length=1)]
+
+
+class EmbedSingleInputPartsItem(GeneratedBaseModel):
+    media: Annotated[
+        EmbedSingleInputPartsItemMediaBase64 | EmbedSingleInputPartsItemMediaFilePath,
+        Field(
+            description="Image or WAV/MP3/FLAC bytes as base64, or a file path accessible to the inference worker."
+        ),
+    ]
+
+
+class EmbedSingleInputParts(RootModel[list[str | EmbedSingleInputPartsItem]]):
+    root: Annotated[
+        list[str | EmbedSingleInputPartsItem],
+        Field(
+            description="One text, ordered text/media input, or image supported by the model.",
+            min_length=1,
+            title="EmbedSingleInputParts",
+        ),
+    ]
+
+
+class EmbedSingleInputImage(GeneratedBaseModel):
     width: Annotated[
         int | None,
         Field(
@@ -6942,30 +6932,100 @@ class EmbedImageRequest(GeneratedBaseModel):
             pattern="^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
         ),
     ]
-    type: Literal["embedImage"] = "embedImage"
+
+
+class EmbedSingleInput(
+    RootModel[EmbedSingleInputText | EmbedSingleInputParts | EmbedSingleInputImage]
+):
+    root: Annotated[
+        EmbedSingleInputText | EmbedSingleInputParts | EmbedSingleInputImage,
+        Field(
+            description="One text, ordered text/media input, or image supported by the model.",
+            title="EmbedSingleInput",
+        ),
+    ]
+
+
+class EmbedSingleRequest(GeneratedBaseModel):
+    __forbidden_fields__ = frozenset({"inputs", "text"})
+    __forbidden_field_guidance__ = {
+        "inputs": "This field is not allowed in this request shape.",
+        "text": "This field is not allowed in this request shape.",
+    }
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId", description="The identifier of the embedding model to use"
+        ),
+    ]
+    input: Annotated[
+        EmbedSingleInput,
+        Field(
+            description="One text, ordered text/media input, or image supported by the model.",
+            title="EmbedSingleInput",
+        ),
+    ]
+    type: Literal["embed"] = "embed"
     request_id: Annotated[
         str | None,
         Field(
             alias="requestId",
-            description="Request identifier for cancellation. Generated by the client when omitted.",
+            description="Caller-generated identifier for cancellation with cancel({ requestId }).",
             min_length=1,
         ),
     ] = None
 
 
-class EmbedImageResponseStats(GeneratedBaseModel):
+class EmbedResponseStatsBackendDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class EmbedResponseStats(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     total_time: Annotated[
         float | None,
-        Field(alias="totalTime", description="Native embedding time in milliseconds."),
+        Field(
+            alias="totalTime",
+            description="Total embedding time in milliseconds. For a MegaLoc batch, the sum of native times.",
+        ),
+    ] = None
+    tokens_per_second: Annotated[
+        float | None,
+        Field(
+            alias="tokensPerSecond",
+            description="Tokens processed per second. llama.cpp embedding models only.",
+        ),
+    ] = None
+    total_tokens: Annotated[
+        float | None,
+        Field(
+            alias="totalTokens",
+            description="Total tokens processed. llama.cpp embedding models only.",
+        ),
+    ] = None
+    backend_device: Annotated[
+        EmbedResponseStatsBackendDevice | None,
+        Field(
+            alias="backendDevice",
+            description="Compute backend used for inference. llama.cpp embedding models only.",
+            title="EmbedResponseStatsBackendDevice",
+        ),
+    ] = None
+    context_size: Annotated[
+        float | None,
+        Field(
+            alias="contextSize",
+            description="Context size in tokens. llama.cpp embedding models only.",
+        ),
     ] = None
     backend_id: Annotated[
         int | None,
         Field(
             alias="backendId",
-            description="Native backend ID: CPU=0, Metal=1, CUDA=2, Vulkan=3, OpenCL=4, other=99.",
+            description="Native backend ID: CPU=0, Metal=1, CUDA=2, Vulkan=3, OpenCL=4, other=99. MegaLoc only.",
             ge=-9007199254740991,
             le=9007199254740991,
         ),
@@ -6974,33 +7034,227 @@ class EmbedImageResponseStats(GeneratedBaseModel):
         int | None,
         Field(
             alias="cpuFallbackNodes",
-            description="Number of graph nodes scheduled on CPU fallback.",
+            description="Number of graph nodes scheduled on CPU fallback. MegaLoc only.",
             ge=0,
             le=9007199254740991,
         ),
     ] = None
     weight_bytes: Annotated[
         float | None,
-        Field(alias="weightBytes", description="Allocated model weight bytes.", ge=0.0),
+        Field(
+            alias="weightBytes",
+            description="Allocated model weight bytes. MegaLoc only.",
+            ge=0.0,
+        ),
     ] = None
 
 
-class EmbedImageResponse(GeneratedBaseModel):
+class EmbedResponse(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    type: Literal["embedImage"] = "embedImage"
+    type: Literal["embed"] = "embed"
+    success: bool
     embedding: Annotated[
-        list[float],
+        list[float] | list[list[float]],
         Field(
-            description="MegaLoc descriptor with 8448 L2-normalized values. Compare descriptors with a dot product for cosine similarity.",
-            max_length=8448,
-            min_length=8448,
+            description="One vector for input or a text string. One vector per item for legacy text arrays or inputs."
         ),
     ]
     stats: Annotated[
-        EmbedImageResponseStats | None, Field(title="EmbedImageResponseStats")
+        EmbedResponseStats | None,
+        Field(description="Performance statistics", title="EmbedResponseStats"),
     ] = None
+    error: str | None = None
+
+
+class EmbedBatchInputText(RootModel[str]):
+    root: Annotated[str, Field(min_length=1, title="EmbedBatchInputText")]
+
+
+class EmbedBatchInputPartsItemMediaBase64(GeneratedBaseModel):
+    type: Literal["base64"] = "base64"
+    value: Annotated[
+        str,
+        Field(
+            json_schema_extra={"contentEncoding": "base64"},
+            min_length=1,
+            pattern="^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+        ),
+    ]
+
+
+class EmbedBatchInputPartsItemMediaFilePath(GeneratedBaseModel):
+    type: Literal["filePath"] = "filePath"
+    value: Annotated[str, Field(min_length=1)]
+
+
+class EmbedBatchInputPartsItem(GeneratedBaseModel):
+    media: Annotated[
+        EmbedBatchInputPartsItemMediaBase64 | EmbedBatchInputPartsItemMediaFilePath,
+        Field(
+            description="Image or WAV/MP3/FLAC bytes as base64, or a file path accessible to the inference worker."
+        ),
+    ]
+
+
+class EmbedBatchInputParts(RootModel[list[str | EmbedBatchInputPartsItem]]):
+    root: Annotated[
+        list[str | EmbedBatchInputPartsItem],
+        Field(min_length=1, title="EmbedBatchInputParts"),
+    ]
+
+
+class EmbedBatchInputImage(GeneratedBaseModel):
+    width: Annotated[
+        int | None,
+        Field(
+            description="Packed RGB width in pixels. Supply with height and channels, or omit all three for JPEG/PNG.",
+            gt=0,
+            le=16384,
+        ),
+    ] = None
+    height: Annotated[
+        int | None,
+        Field(
+            description="Packed RGB height in pixels, from 1 to 16384.", gt=0, le=16384
+        ),
+    ] = None
+    channels: Annotated[
+        Literal[3] | None, Field(description="Packed RGB channel count. Must be 3.")
+    ] = None
+    image: Annotated[
+        str,
+        Field(
+            description="JPEG/PNG bytes, or packed RGB bytes, encoded as base64.",
+            json_schema_extra={"contentEncoding": "base64"},
+            min_length=1,
+            pattern="^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+        ),
+    ]
+
+
+class EmbedBatchInput(
+    RootModel[EmbedBatchInputText | EmbedBatchInputParts | EmbedBatchInputImage]
+):
+    root: Annotated[
+        EmbedBatchInputText | EmbedBatchInputParts | EmbedBatchInputImage,
+        Field(title="EmbedBatchInput"),
+    ]
+
+
+class EmbedBatchRequest(GeneratedBaseModel):
+    __forbidden_fields__ = frozenset({"input", "text"})
+    __forbidden_field_guidance__ = {
+        "input": "This field is not allowed in this request shape.",
+        "text": "This field is not allowed in this request shape.",
+    }
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId", description="The identifier of the embedding model to use"
+        ),
+    ]
+    inputs: Annotated[
+        list[EmbedBatchInput],
+        Field(description="One vector per input, in input order.", min_length=1),
+    ]
+    type: Literal["embedBatch"] = "embedBatch"
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Caller-generated identifier for cancellation with cancel({ requestId }).",
+            min_length=1,
+        ),
+    ] = None
+
+
+class EmbedBatchResponseStatsBackendDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class EmbedBatchResponseStats(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    total_time: Annotated[
+        float | None,
+        Field(
+            alias="totalTime",
+            description="Total embedding time in milliseconds. For a MegaLoc batch, the sum of native times.",
+        ),
+    ] = None
+    tokens_per_second: Annotated[
+        float | None,
+        Field(
+            alias="tokensPerSecond",
+            description="Tokens processed per second. llama.cpp embedding models only.",
+        ),
+    ] = None
+    total_tokens: Annotated[
+        float | None,
+        Field(
+            alias="totalTokens",
+            description="Total tokens processed. llama.cpp embedding models only.",
+        ),
+    ] = None
+    backend_device: Annotated[
+        EmbedBatchResponseStatsBackendDevice | None,
+        Field(
+            alias="backendDevice",
+            description="Compute backend used for inference. llama.cpp embedding models only.",
+            title="EmbedBatchResponseStatsBackendDevice",
+        ),
+    ] = None
+    context_size: Annotated[
+        float | None,
+        Field(
+            alias="contextSize",
+            description="Context size in tokens. llama.cpp embedding models only.",
+        ),
+    ] = None
+    backend_id: Annotated[
+        int | None,
+        Field(
+            alias="backendId",
+            description="Native backend ID: CPU=0, Metal=1, CUDA=2, Vulkan=3, OpenCL=4, other=99. MegaLoc only.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    cpu_fallback_nodes: Annotated[
+        int | None,
+        Field(
+            alias="cpuFallbackNodes",
+            description="Number of graph nodes scheduled on CPU fallback. MegaLoc only.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    weight_bytes: Annotated[
+        float | None,
+        Field(
+            alias="weightBytes",
+            description="Allocated model weight bytes. MegaLoc only.",
+            ge=0.0,
+        ),
+    ] = None
+
+
+class EmbedBatchResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["embedBatch"] = "embedBatch"
+    success: bool
+    embedding: list[list[float]]
+    stats: Annotated[
+        EmbedBatchResponseStats | None,
+        Field(description="Performance statistics", title="EmbedBatchResponseStats"),
+    ] = None
+    error: str | None = None
 
 
 class ErrorResponseTypedFields(RootModel[dict[str, Any]]):
@@ -28627,8 +28881,11 @@ class Request_3(
     ]
 
 
-class Request_4(RootModel[EmbedTextRequest | EmbedInputsRequest]):
-    root: Annotated[EmbedTextRequest | EmbedInputsRequest, Field(title="EmbedRequest")]
+class Request_4(RootModel[EmbedTextRequest | EmbedInputsRequest | EmbedSingleRequest]):
+    root: Annotated[
+        EmbedTextRequest | EmbedInputsRequest | EmbedSingleRequest,
+        Field(title="EmbedRequest"),
+    ]
 
 
 class Request_5(
@@ -28750,7 +29007,7 @@ class Request(
         | DiscoverRpcServersRequest
         | DownloadAssetRequest
         | Request_4
-        | EmbedImageRequest
+        | EmbedBatchRequest
         | Request_5
         | GetLoadedModelInfoRequest
         | GetModelInfoRequest
@@ -28802,7 +29059,7 @@ class Request(
         | DiscoverRpcServersRequest
         | DownloadAssetRequest
         | Request_4
-        | EmbedImageRequest
+        | EmbedBatchRequest
         | Request_5
         | GetLoadedModelInfoRequest
         | GetModelInfoRequest
@@ -28885,7 +29142,7 @@ class Response(
         | DiscoverRpcServersResponse
         | DownloadAssetResponse
         | EmbedResponse
-        | EmbedImageResponse
+        | EmbedBatchResponse
         | ErrorResponse
         | FinetuneResponse
         | FinetuneProgressResponse
@@ -28941,7 +29198,7 @@ class Response(
         | DiscoverRpcServersResponse
         | DownloadAssetResponse
         | EmbedResponse
-        | EmbedImageResponse
+        | EmbedBatchResponse
         | ErrorResponse
         | FinetuneResponse
         | FinetuneProgressResponse

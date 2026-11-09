@@ -4,9 +4,11 @@ import { MEGALOC_F16, MEGALOC_MIXED } from '@/models/registry'
 import { inferModelTypeFromModelSrc } from '@/schemas/model-src-utils'
 import {
   ModelType,
-  embedImageClientParamsSchema,
-  embedImageRequestSchema,
-  embedImageResponseSchema,
+  embedClientParamsSchema,
+  embedBatchClientParamsSchema,
+  embedBatchRequestSchema,
+  embedRequestSchema,
+  imageEmbeddingSchema,
   imageEmbeddingConfigSchema,
   loadModelOptionsBaseSchema,
   loadModelOptionsToRequestSchema,
@@ -61,15 +63,12 @@ test('registered MegaLoc constants infer the engine and preserve the registry so
 
 test('image inputs accept encoded bytes or a complete packed RGB description', (t) => {
   t.ok(
-    embedImageRequestSchema.safeParse({ type: 'embedImage', modelId: 'm', image: 'AQID' }).success
+    embedRequestSchema.safeParse({ type: 'embed', modelId: 'm', input: { image: 'AQID' } }).success
   )
   t.ok(
-    embedImageClientParamsSchema.safeParse({
+    embedClientParamsSchema.safeParse({
       modelId: 'm',
-      image: new Uint8Array([1, 2, 3]),
-      width: 1,
-      height: 1,
-      channels: 3
+      input: { image: new Uint8Array([1, 2, 3]), width: 1, height: 1, channels: 3 }
     }).success
   )
   for (const input of [
@@ -82,26 +81,40 @@ test('image inputs accept encoded bytes or a complete packed RGB description', (
     { image: new Uint8Array(2), width: 1, height: 1, channels: 3 }
   ]) {
     t.absent(
-      embedImageClientParamsSchema.safeParse({ modelId: 'm', image: new Uint8Array(3), ...input })
-        .success
+      embedClientParamsSchema.safeParse({
+        modelId: 'm',
+        input: { image: new Uint8Array(3), ...input }
+      }).success
     )
   }
   for (const image of ['', 'not base64!', 'A']) {
-    t.absent(embedImageRequestSchema.safeParse({ type: 'embedImage', modelId: 'm', image }).success)
+    t.absent(
+      embedRequestSchema.safeParse({ type: 'embed', modelId: 'm', input: { image } }).success
+    )
   }
+})
+
+test('images go through input or embedBatch, not the legacy inputs batch', (t) => {
+  const image = { image: 'AQID' }
+  t.absent(embedRequestSchema.safeParse({ type: 'embed', modelId: 'm', inputs: [image] }).success)
+  t.ok(embedBatchRequestSchema.safeParse({ type: 'embedBatch', modelId: 'm', inputs: [image] }).success)
+  const bytes = { image: new Uint8Array([1, 2, 3]) }
+  t.absent(embedClientParamsSchema.safeParse({ modelId: 'm', inputs: [bytes] }).success)
+  t.ok(embedBatchClientParamsSchema.safeParse({ modelId: 'm', inputs: [bytes] }).success)
 })
 
 test('image embeddings are registered unary messages with finite 8448-value descriptors', (t) => {
   t.ok(
     requestSchema.safeParse({
-      type: 'embedImage',
+      type: 'embed',
       modelId: 'm',
-      image: 'AQID',
+      input: { image: 'AQID' },
       requestId: 'image-call'
     }).success
   )
   const reply = {
-    type: 'embedImage',
+    type: 'embed',
+    success: true,
     embedding: [1, ...new Array(8447).fill(0)],
     stats: { backendId: 0, totalTime: 5, cpuFallbackNodes: 0, weightBytes: 1024 }
   }
@@ -113,6 +126,6 @@ test('image embeddings are registered unary messages with finite 8448-value desc
     [Number.NaN, ...new Array(8447).fill(0)],
     [Infinity, ...new Array(8447).fill(0)]
   ]) {
-    t.absent(embedImageResponseSchema.safeParse({ ...reply, embedding }).success)
+    t.absent(imageEmbeddingSchema.safeParse(embedding).success)
   }
 })

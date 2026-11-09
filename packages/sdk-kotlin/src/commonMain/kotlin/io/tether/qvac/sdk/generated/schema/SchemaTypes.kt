@@ -25,7 +25,7 @@ sealed class AnyRequest {
     data class DiscoverRpcServersRequest(val value: io.tether.qvac.sdk.generated.schema.DiscoverRpcServersRequest) : AnyRequest()
     data class DownloadAssetRequest(val value: io.tether.qvac.sdk.generated.schema.DownloadAssetRequest) : AnyRequest()
     data class EmbedRequest(val value: io.tether.qvac.sdk.generated.schema.EmbedRequest) : AnyRequest()
-    data class EmbedImageRequest(val value: io.tether.qvac.sdk.generated.schema.EmbedImageRequest) : AnyRequest()
+    data class EmbedBatchRequest(val value: io.tether.qvac.sdk.generated.schema.EmbedBatchRequest) : AnyRequest()
     data class FinetuneRequest(val value: io.tether.qvac.sdk.generated.schema.FinetuneRequest) : AnyRequest()
     data class GetLoadedModelInfoRequest(val value: io.tether.qvac.sdk.generated.schema.GetLoadedModelInfoRequest) : AnyRequest()
     data class GetModelInfoRequest(val value: io.tether.qvac.sdk.generated.schema.GetModelInfoRequest) : AnyRequest()
@@ -77,8 +77,8 @@ internal object AnyRequestSerializer : KSerializer<AnyRequest> {
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"prompt\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"prompt\":{\"type\":\"string\"},\"negative_prompt\":{\"type\":\"string\"},\"width\":{\"type\":\"integer\"},\"height\":{\"type\":\"integer\"},\"steps\":{\"type\":\"integer\"},\"cfg_scale\":{\"type\":\"number\"},\"img_cfg_scale\":{\"type\":\"number\"},\"guidance\":{\"type\":\"number\"},\"sampling_method\":{\"type\":\"string\",\"enum\":[\"euler\",\"euler_a\",\"heun\",\"dpm2\",\"dpm++2m\",\"dpm++2mv2\",\"dpm++2s_a\",\"lcm\",\"ipndm\",\"ipndm_v\",\"ddim_trailing\",\"tcd\",\"res_multistep\",\"res_2s\"]},\"scheduler\":{\"type\":\"string\",\"enum\":[\"discrete\",\"karras\",\"exponential\",\"ays\",\"gits\",\"sgm_uniform\",\"simple\",\"lcm\",\"smoothstep\",\"kl_optimal\",\"bong_tangent\"]},\"custom_sigmas\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}},\"seed\":{\"type\":\"integer\"},\"batch_count\":{\"type\":\"integer\"},\"vae_tiling\":{\"type\":\"boolean\"},\"vae_tile_size\":{\"anyOf\":[{\"type\":\"integer\"},{\"type\":\"string\"}]},\"cache_preset\":{\"type\":\"string\"},\"init_image\":{\"type\":\"string\"},\"init_images\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"increase_ref_index\":{\"type\":\"boolean\"},\"auto_resize_ref_image\":{\"type\":\"boolean\"},\"lora\":{\"type\":\"string\"},\"strength\":{\"type\":\"number\"},\"upscale\":{\"anyOf\":[{\"type\":\"boolean\"},{\"type\":\"object\",\"properties\":{\"repeats\":{\"type\":\"integer\"}}}]},\"type\":{\"type\":\"string\",\"const\":\"diffusionStream\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"topic\",\"type\"],\"properties\":{\"topic\":{\"type\":\"string\"},\"timeoutMs\":{\"type\":\"integer\"},\"type\":{\"type\":\"string\",\"const\":\"discoverRpcServers\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"assetSrc\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"downloadAsset\"},\"assetSrc\":{\"type\":\"string\"},\"withProgress\":{\"type\":\"boolean\"},\"seed\":{\"type\":\"boolean\"},\"requireHttpChecksum\":{\"type\":\"boolean\"},\"requireSecureTransport\":{\"type\":\"boolean\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"anyOf\":[{\"type\":\"object\",\"required\":[\"modelId\",\"text\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"text\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}]},\"inputs\":{\"not\":{}},\"type\":{\"type\":\"string\",\"const\":\"embed\"},\"requestId\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"modelId\",\"inputs\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"inputs\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"media\"]}]}}]}},\"text\":{\"not\":{}},\"type\":{\"type\":\"string\",\"const\":\"embed\"},\"requestId\":{\"type\":\"string\"}}}]}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"image\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"width\":{\"type\":\"integer\"},\"height\":{\"type\":\"integer\"},\"channels\":{\"type\":\"number\",\"const\":3},\"image\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"embedImage\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"anyOf\":[{\"type\":\"object\",\"required\":[\"modelId\",\"text\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"text\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}]},\"inputs\":{\"not\":{}},\"input\":{\"not\":{}},\"type\":{\"type\":\"string\",\"const\":\"embed\"},\"requestId\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"modelId\",\"inputs\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"inputs\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"media\"]}]}}]}},\"text\":{\"not\":{}},\"input\":{\"not\":{}},\"type\":{\"type\":\"string\",\"const\":\"embed\"},\"requestId\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"modelId\",\"input\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"input\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"media\"]}]}},{\"type\":\"object\",\"required\":[\"image\"],\"properties\":{\"width\":{\"type\":\"integer\"},\"height\":{\"type\":\"integer\"},\"channels\":{\"type\":\"number\",\"const\":3},\"image\":{\"type\":\"string\"}}}]},\"text\":{\"not\":{}},\"inputs\":{\"not\":{}},\"type\":{\"type\":\"string\",\"const\":\"embed\"},\"requestId\":{\"type\":\"string\"}}}]}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"inputs\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"inputs\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"media\"]}]}},{\"type\":\"object\",\"required\":[\"image\"]}]}},\"text\":{\"not\":{}},\"input\":{\"not\":{}},\"type\":{\"type\":\"string\",\"const\":\"embedBatch\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"anyOf\":[{\"type\":\"object\",\"required\":[\"modelId\",\"options\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"options\":{\"type\":\"object\",\"required\":[\"trainDatasetDir\",\"validation\",\"outputParametersDir\"],\"properties\":{\"trainDatasetDir\":{\"type\":\"string\"},\"validation\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\"]},{\"type\":\"object\",\"required\":[\"type\"]},{\"type\":\"object\",\"required\":[\"type\",\"path\"]}]},\"outputParametersDir\":{\"type\":\"string\"},\"numberOfEpochs\":{\"type\":\"integer\"},\"learningRate\":{\"type\":\"number\"},\"contextLength\":{\"type\":\"integer\"},\"batchSize\":{\"type\":\"integer\"},\"microBatchSize\":{\"type\":\"integer\"},\"assistantLossOnly\":{\"type\":\"boolean\"},\"loraRank\":{\"type\":\"integer\"},\"loraAlpha\":{\"type\":\"number\"},\"loraInitStd\":{\"type\":\"number\"},\"loraSeed\":{\"type\":\"integer\"},\"loraModules\":{\"type\":\"string\"},\"checkpointSaveDir\":{\"type\":\"string\"},\"checkpointSaveSteps\":{\"type\":\"integer\"},\"chatTemplatePath\":{\"type\":\"string\"},\"lrScheduler\":{\"type\":\"string\",\"enum\":[\"constant\",\"cosine\",\"linear\"]},\"lrMin\":{\"type\":\"number\"},\"warmupRatio\":{\"type\":\"number\"},\"warmupRatioSet\":{\"type\":\"boolean\"},\"warmupSteps\":{\"type\":\"integer\"},\"warmupStepsSet\":{\"type\":\"boolean\"},\"weightDecay\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"finetune\"},\"operation\":{\"type\":\"string\",\"enum\":[\"start\",\"resume\"]},\"withProgress\":{\"type\":\"boolean\"},\"requestId\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"modelId\",\"options\",\"type\",\"operation\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"options\":{\"type\":\"object\",\"required\":[\"trainDatasetDir\",\"validation\",\"outputParametersDir\"],\"properties\":{\"trainDatasetDir\":{\"type\":\"string\"},\"validation\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\"]},{\"type\":\"object\",\"required\":[\"type\"]},{\"type\":\"object\",\"required\":[\"type\",\"path\"]}]},\"outputParametersDir\":{\"type\":\"string\"},\"numberOfEpochs\":{\"type\":\"integer\"},\"learningRate\":{\"type\":\"number\"},\"contextLength\":{\"type\":\"integer\"},\"batchSize\":{\"type\":\"integer\"},\"microBatchSize\":{\"type\":\"integer\"},\"assistantLossOnly\":{\"type\":\"boolean\"},\"loraRank\":{\"type\":\"integer\"},\"loraAlpha\":{\"type\":\"number\"},\"loraInitStd\":{\"type\":\"number\"},\"loraSeed\":{\"type\":\"integer\"},\"loraModules\":{\"type\":\"string\"},\"checkpointSaveDir\":{\"type\":\"string\"},\"checkpointSaveSteps\":{\"type\":\"integer\"},\"chatTemplatePath\":{\"type\":\"string\"},\"lrScheduler\":{\"type\":\"string\",\"enum\":[\"constant\",\"cosine\",\"linear\"]},\"lrMin\":{\"type\":\"number\"},\"warmupRatio\":{\"type\":\"number\"},\"warmupRatioSet\":{\"type\":\"boolean\"},\"warmupSteps\":{\"type\":\"integer\"},\"warmupStepsSet\":{\"type\":\"boolean\"},\"weightDecay\":{\"type\":\"number\"}}},\"type\":{\"type\":\"string\",\"const\":\"finetune\"},\"operation\":{\"type\":\"string\",\"const\":\"getState\"}}},{\"type\":\"object\",\"required\":[\"modelId\",\"type\",\"operation\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"finetune\"},\"operation\":{\"type\":\"string\",\"enum\":[\"pause\",\"cancel\"]}}}]}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"getLoadedModelInfo\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"name\",\"type\"],\"properties\":{\"name\":{\"type\":\"string\"},\"type\":{\"type\":\"string\",\"const\":\"getModelInfo\"}}}").jsonObject,
@@ -132,7 +132,7 @@ internal object AnyRequestSerializer : KSerializer<AnyRequest> {
             14 -> AnyRequest.DiscoverRpcServersRequest(input.json.decodeFromJsonElement(serializer<DiscoverRpcServersRequest>(), element))
             15 -> AnyRequest.DownloadAssetRequest(input.json.decodeFromJsonElement(serializer<DownloadAssetRequest>(), element))
             16 -> AnyRequest.EmbedRequest(input.json.decodeFromJsonElement(serializer<EmbedRequest>(), element))
-            17 -> AnyRequest.EmbedImageRequest(input.json.decodeFromJsonElement(serializer<EmbedImageRequest>(), element))
+            17 -> AnyRequest.EmbedBatchRequest(input.json.decodeFromJsonElement(serializer<EmbedBatchRequest>(), element))
             18 -> AnyRequest.FinetuneRequest(input.json.decodeFromJsonElement(serializer<FinetuneRequest>(), element))
             19 -> AnyRequest.GetLoadedModelInfoRequest(input.json.decodeFromJsonElement(serializer<GetLoadedModelInfoRequest>(), element))
             20 -> AnyRequest.GetModelInfoRequest(input.json.decodeFromJsonElement(serializer<GetModelInfoRequest>(), element))
@@ -186,7 +186,7 @@ internal object AnyRequestSerializer : KSerializer<AnyRequest> {
             is AnyRequest.DiscoverRpcServersRequest -> encoder.encodeSerializableValue(serializer<DiscoverRpcServersRequest>(), value.value)
             is AnyRequest.DownloadAssetRequest -> encoder.encodeSerializableValue(serializer<DownloadAssetRequest>(), value.value)
             is AnyRequest.EmbedRequest -> encoder.encodeSerializableValue(serializer<EmbedRequest>(), value.value)
-            is AnyRequest.EmbedImageRequest -> encoder.encodeSerializableValue(serializer<EmbedImageRequest>(), value.value)
+            is AnyRequest.EmbedBatchRequest -> encoder.encodeSerializableValue(serializer<EmbedBatchRequest>(), value.value)
             is AnyRequest.FinetuneRequest -> encoder.encodeSerializableValue(serializer<FinetuneRequest>(), value.value)
             is AnyRequest.GetLoadedModelInfoRequest -> encoder.encodeSerializableValue(serializer<GetLoadedModelInfoRequest>(), value.value)
             is AnyRequest.GetModelInfoRequest -> encoder.encodeSerializableValue(serializer<GetModelInfoRequest>(), value.value)
@@ -2435,12 +2435,14 @@ data class DownloadAssetRequest(
 sealed class EmbedRequest {
     data class EmbedTextRequest(val value: io.tether.qvac.sdk.generated.schema.EmbedTextRequest) : EmbedRequest()
     data class EmbedInputsRequest(val value: io.tether.qvac.sdk.generated.schema.EmbedInputsRequest) : EmbedRequest()
+    data class EmbedSingleRequest(val value: io.tether.qvac.sdk.generated.schema.EmbedSingleRequest) : EmbedRequest()
 }
 internal object EmbedRequestSerializer : KSerializer<EmbedRequest> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("EmbedRequest")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"text\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"text\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}]},\"inputs\":{\"not\":{}},\"type\":{\"type\":\"string\",\"const\":\"embed\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"inputs\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"inputs\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"media\"]}]}}]}},\"text\":{\"not\":{}},\"type\":{\"type\":\"string\",\"const\":\"embed\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"text\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"text\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"array\",\"items\":{\"type\":\"string\"}}]},\"inputs\":{\"not\":{}},\"input\":{\"not\":{}},\"type\":{\"type\":\"string\",\"const\":\"embed\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"inputs\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"inputs\":{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"media\"]}]}}]}},\"text\":{\"not\":{}},\"input\":{\"not\":{}},\"type\":{\"type\":\"string\",\"const\":\"embed\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"modelId\",\"input\",\"type\"],\"properties\":{\"modelId\":{\"type\":\"string\"},\"input\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"media\"]}]}},{\"type\":\"object\",\"required\":[\"image\"],\"properties\":{\"width\":{\"type\":\"integer\"},\"height\":{\"type\":\"integer\"},\"channels\":{\"type\":\"number\",\"const\":3},\"image\":{\"type\":\"string\"}}}]},\"text\":{\"not\":{}},\"inputs\":{\"not\":{}},\"type\":{\"type\":\"string\",\"const\":\"embed\"},\"requestId\":{\"type\":\"string\"}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): EmbedRequest {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
@@ -2448,6 +2450,7 @@ internal object EmbedRequestSerializer : KSerializer<EmbedRequest> {
         return when (selectWireVariant(element, shapes)) {
             0 -> EmbedRequest.EmbedTextRequest(input.json.decodeFromJsonElement(serializer<EmbedTextRequest>(), element))
             1 -> EmbedRequest.EmbedInputsRequest(input.json.decodeFromJsonElement(serializer<EmbedInputsRequest>(), element))
+            2 -> EmbedRequest.EmbedSingleRequest(input.json.decodeFromJsonElement(serializer<EmbedSingleRequest>(), element))
             else -> throw SerializationException("No matching EmbedRequest variant")
         }
     }
@@ -2455,6 +2458,7 @@ internal object EmbedRequestSerializer : KSerializer<EmbedRequest> {
         when (value) {
             is EmbedRequest.EmbedTextRequest -> encoder.encodeSerializableValue(serializer<EmbedTextRequest>(), value.value)
             is EmbedRequest.EmbedInputsRequest -> encoder.encodeSerializableValue(serializer<EmbedInputsRequest>(), value.value)
+            is EmbedRequest.EmbedSingleRequest -> encoder.encodeSerializableValue(serializer<EmbedSingleRequest>(), value.value)
         }
     }
 }
@@ -2609,15 +2613,251 @@ data class EmbedMediaSourceFilePath(
 )
 
 @Serializable
-data class EmbedImageRequest(
+data class EmbedSingleRequest(
     @SerialName("modelId") val `modelId`: String,
+    @SerialName("input") val `input`: EmbedSingleInput,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("type") val `type`: String = "embed",
+    @SerialName("requestId") val `requestId`: String? = null,
+)
+
+@Serializable(with = EmbedSingleInputSerializer::class)
+sealed class EmbedSingleInput {
+    data class Text(val value: String) : EmbedSingleInput()
+    data class Parts(val value: List<EmbedSingleInputVariant2Item>) : EmbedSingleInput()
+    data class Image(val value: io.tether.qvac.sdk.generated.schema.EmbedSingleInputImage) : EmbedSingleInput()
+}
+internal object EmbedSingleInputSerializer : KSerializer<EmbedSingleInput> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("EmbedSingleInput")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"media\"],\"properties\":{\"media\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"value\"]},{\"type\":\"object\",\"required\":[\"type\",\"value\"]}]}}}]}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"image\"],\"properties\":{\"width\":{\"type\":\"integer\"},\"height\":{\"type\":\"integer\"},\"channels\":{\"type\":\"number\",\"const\":3},\"image\":{\"type\":\"string\"}}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): EmbedSingleInput {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> EmbedSingleInput.Text(input.json.decodeFromJsonElement(serializer<String>(), element))
+            1 -> EmbedSingleInput.Parts(input.json.decodeFromJsonElement(serializer<List<EmbedSingleInputVariant2Item>>(), element))
+            2 -> EmbedSingleInput.Image(input.json.decodeFromJsonElement(serializer<EmbedSingleInputImage>(), element))
+            else -> throw SerializationException("No matching EmbedSingleInput variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: EmbedSingleInput) {
+        when (value) {
+            is EmbedSingleInput.Text -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is EmbedSingleInput.Parts -> encoder.encodeSerializableValue(serializer<List<EmbedSingleInputVariant2Item>>(), value.value)
+            is EmbedSingleInput.Image -> encoder.encodeSerializableValue(serializer<EmbedSingleInputImage>(), value.value)
+        }
+    }
+}
+
+@Serializable(with = EmbedSingleInputVariant2ItemSerializer::class)
+sealed class EmbedSingleInputVariant2Item {
+    data class Variant1(val value: String) : EmbedSingleInputVariant2Item()
+    data class EmbedSingleInputPartsItem(val value: io.tether.qvac.sdk.generated.schema.EmbedSingleInputPartsItem) : EmbedSingleInputVariant2Item()
+}
+internal object EmbedSingleInputVariant2ItemSerializer : KSerializer<EmbedSingleInputVariant2Item> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("EmbedSingleInputVariant2Item")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"media\"],\"properties\":{\"media\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"base64\"},\"value\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"filePath\"},\"value\":{\"type\":\"string\"}}}]}}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): EmbedSingleInputVariant2Item {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> EmbedSingleInputVariant2Item.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
+            1 -> EmbedSingleInputVariant2Item.EmbedSingleInputPartsItem(input.json.decodeFromJsonElement(serializer<EmbedSingleInputPartsItem>(), element))
+            else -> throw SerializationException("No matching EmbedSingleInputVariant2Item variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: EmbedSingleInputVariant2Item) {
+        when (value) {
+            is EmbedSingleInputVariant2Item.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is EmbedSingleInputVariant2Item.EmbedSingleInputPartsItem -> encoder.encodeSerializableValue(serializer<EmbedSingleInputPartsItem>(), value.value)
+        }
+    }
+}
+
+@Serializable
+data class EmbedSingleInputPartsItem(
+    @SerialName("media") val `media`: EmbedSingleInputPartsItemMedia,
+)
+
+@Serializable(with = EmbedSingleInputPartsItemMediaSerializer::class)
+sealed class EmbedSingleInputPartsItemMedia {
+    data class Base64(val value: io.tether.qvac.sdk.generated.schema.EmbedSingleInputPartsItemMediaBase64) : EmbedSingleInputPartsItemMedia()
+    data class FilePath(val value: io.tether.qvac.sdk.generated.schema.EmbedSingleInputPartsItemMediaFilePath) : EmbedSingleInputPartsItemMedia()
+}
+internal object EmbedSingleInputPartsItemMediaSerializer : KSerializer<EmbedSingleInputPartsItemMedia> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("EmbedSingleInputPartsItemMedia")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"base64\"},\"value\":{\"type\":\"string\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"filePath\"},\"value\":{\"type\":\"string\"}}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): EmbedSingleInputPartsItemMedia {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> EmbedSingleInputPartsItemMedia.Base64(input.json.decodeFromJsonElement(serializer<EmbedSingleInputPartsItemMediaBase64>(), element))
+            1 -> EmbedSingleInputPartsItemMedia.FilePath(input.json.decodeFromJsonElement(serializer<EmbedSingleInputPartsItemMediaFilePath>(), element))
+            else -> throw SerializationException("No matching EmbedSingleInputPartsItemMedia variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: EmbedSingleInputPartsItemMedia) {
+        when (value) {
+            is EmbedSingleInputPartsItemMedia.Base64 -> encoder.encodeSerializableValue(serializer<EmbedSingleInputPartsItemMediaBase64>(), value.value)
+            is EmbedSingleInputPartsItemMedia.FilePath -> encoder.encodeSerializableValue(serializer<EmbedSingleInputPartsItemMediaFilePath>(), value.value)
+        }
+    }
+}
+
+@Serializable
+data class EmbedSingleInputPartsItemMediaBase64(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("type") val `type`: String = "base64",
+    @SerialName("value") val `value`: String,
+)
+
+@Serializable
+data class EmbedSingleInputPartsItemMediaFilePath(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("type") val `type`: String = "filePath",
+    @SerialName("value") val `value`: String,
+)
+
+@Serializable
+data class EmbedSingleInputImage(
     @SerialName("width") val `width`: Long? = null,
     @SerialName("height") val `height`: Long? = null,
     @SerialName("channels") val `channels`: Double? = null,
     @SerialName("image") val `image`: String,
+)
+
+@Serializable
+data class EmbedBatchRequest(
+    @SerialName("modelId") val `modelId`: String,
+    @SerialName("inputs") val `inputs`: List<EmbedBatchInput>,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "embedImage",
+    @SerialName("type") val `type`: String = "embedBatch",
     @SerialName("requestId") val `requestId`: String? = null,
+)
+
+@Serializable(with = EmbedBatchInputSerializer::class)
+sealed class EmbedBatchInput {
+    data class Text(val value: String) : EmbedBatchInput()
+    data class Parts(val value: List<EmbedBatchInputVariant2Item>) : EmbedBatchInput()
+    data class Image(val value: io.tether.qvac.sdk.generated.schema.EmbedBatchInputImage) : EmbedBatchInput()
+}
+internal object EmbedBatchInputSerializer : KSerializer<EmbedBatchInput> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("EmbedBatchInput")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"anyOf\":[{\"type\":\"string\"},{\"type\":\"object\",\"required\":[\"media\"],\"properties\":{\"media\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"value\"]},{\"type\":\"object\",\"required\":[\"type\",\"value\"]}]}}}]}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"image\"],\"properties\":{\"width\":{\"type\":\"integer\"},\"height\":{\"type\":\"integer\"},\"channels\":{\"type\":\"number\",\"const\":3},\"image\":{\"type\":\"string\"}}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): EmbedBatchInput {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> EmbedBatchInput.Text(input.json.decodeFromJsonElement(serializer<String>(), element))
+            1 -> EmbedBatchInput.Parts(input.json.decodeFromJsonElement(serializer<List<EmbedBatchInputVariant2Item>>(), element))
+            2 -> EmbedBatchInput.Image(input.json.decodeFromJsonElement(serializer<EmbedBatchInputImage>(), element))
+            else -> throw SerializationException("No matching EmbedBatchInput variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: EmbedBatchInput) {
+        when (value) {
+            is EmbedBatchInput.Text -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is EmbedBatchInput.Parts -> encoder.encodeSerializableValue(serializer<List<EmbedBatchInputVariant2Item>>(), value.value)
+            is EmbedBatchInput.Image -> encoder.encodeSerializableValue(serializer<EmbedBatchInputImage>(), value.value)
+        }
+    }
+}
+
+@Serializable(with = EmbedBatchInputVariant2ItemSerializer::class)
+sealed class EmbedBatchInputVariant2Item {
+    data class Variant1(val value: String) : EmbedBatchInputVariant2Item()
+    data class EmbedBatchInputPartsItem(val value: io.tether.qvac.sdk.generated.schema.EmbedBatchInputPartsItem) : EmbedBatchInputVariant2Item()
+}
+internal object EmbedBatchInputVariant2ItemSerializer : KSerializer<EmbedBatchInputVariant2Item> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("EmbedBatchInputVariant2Item")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"media\"],\"properties\":{\"media\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"base64\"},\"value\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"filePath\"},\"value\":{\"type\":\"string\"}}}]}}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): EmbedBatchInputVariant2Item {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> EmbedBatchInputVariant2Item.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
+            1 -> EmbedBatchInputVariant2Item.EmbedBatchInputPartsItem(input.json.decodeFromJsonElement(serializer<EmbedBatchInputPartsItem>(), element))
+            else -> throw SerializationException("No matching EmbedBatchInputVariant2Item variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: EmbedBatchInputVariant2Item) {
+        when (value) {
+            is EmbedBatchInputVariant2Item.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is EmbedBatchInputVariant2Item.EmbedBatchInputPartsItem -> encoder.encodeSerializableValue(serializer<EmbedBatchInputPartsItem>(), value.value)
+        }
+    }
+}
+
+@Serializable
+data class EmbedBatchInputPartsItem(
+    @SerialName("media") val `media`: EmbedBatchInputPartsItemMedia,
+)
+
+@Serializable(with = EmbedBatchInputPartsItemMediaSerializer::class)
+sealed class EmbedBatchInputPartsItemMedia {
+    data class Base64(val value: io.tether.qvac.sdk.generated.schema.EmbedBatchInputPartsItemMediaBase64) : EmbedBatchInputPartsItemMedia()
+    data class FilePath(val value: io.tether.qvac.sdk.generated.schema.EmbedBatchInputPartsItemMediaFilePath) : EmbedBatchInputPartsItemMedia()
+}
+internal object EmbedBatchInputPartsItemMediaSerializer : KSerializer<EmbedBatchInputPartsItemMedia> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("EmbedBatchInputPartsItemMedia")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"base64\"},\"value\":{\"type\":\"string\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"value\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"filePath\"},\"value\":{\"type\":\"string\"}}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): EmbedBatchInputPartsItemMedia {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> EmbedBatchInputPartsItemMedia.Base64(input.json.decodeFromJsonElement(serializer<EmbedBatchInputPartsItemMediaBase64>(), element))
+            1 -> EmbedBatchInputPartsItemMedia.FilePath(input.json.decodeFromJsonElement(serializer<EmbedBatchInputPartsItemMediaFilePath>(), element))
+            else -> throw SerializationException("No matching EmbedBatchInputPartsItemMedia variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: EmbedBatchInputPartsItemMedia) {
+        when (value) {
+            is EmbedBatchInputPartsItemMedia.Base64 -> encoder.encodeSerializableValue(serializer<EmbedBatchInputPartsItemMediaBase64>(), value.value)
+            is EmbedBatchInputPartsItemMedia.FilePath -> encoder.encodeSerializableValue(serializer<EmbedBatchInputPartsItemMediaFilePath>(), value.value)
+        }
+    }
+}
+
+@Serializable
+data class EmbedBatchInputPartsItemMediaBase64(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("type") val `type`: String = "base64",
+    @SerialName("value") val `value`: String,
+)
+
+@Serializable
+data class EmbedBatchInputPartsItemMediaFilePath(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("type") val `type`: String = "filePath",
+    @SerialName("value") val `value`: String,
+)
+
+@Serializable
+data class EmbedBatchInputImage(
+    @SerialName("width") val `width`: Long? = null,
+    @SerialName("height") val `height`: Long? = null,
+    @SerialName("channels") val `channels`: Double? = null,
+    @SerialName("image") val `image`: String,
 )
 
 @Serializable(with = FinetuneRequestSerializer::class)
@@ -12891,7 +13131,7 @@ sealed class AnyResponse {
     data class DiscoverRpcServersResponse(val value: io.tether.qvac.sdk.generated.schema.DiscoverRpcServersResponse) : AnyResponse()
     data class DownloadAssetResponse(val value: io.tether.qvac.sdk.generated.schema.DownloadAssetResponse) : AnyResponse()
     data class EmbedResponse(val value: io.tether.qvac.sdk.generated.schema.EmbedResponse) : AnyResponse()
-    data class EmbedImageResponse(val value: io.tether.qvac.sdk.generated.schema.EmbedImageResponse) : AnyResponse()
+    data class EmbedBatchResponse(val value: io.tether.qvac.sdk.generated.schema.EmbedBatchResponse) : AnyResponse()
     data class ErrorResponse(val value: io.tether.qvac.sdk.generated.schema.ErrorResponse) : AnyResponse()
     data class FinetuneResponse(val value: io.tether.qvac.sdk.generated.schema.FinetuneResponse) : AnyResponse()
     data class FinetuneProgressResponse(val value: io.tether.qvac.sdk.generated.schema.FinetuneProgressResponse) : AnyResponse()
@@ -12947,8 +13187,8 @@ internal object AnyResponseSerializer : KSerializer<AnyResponse> {
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"diffusionStream\"},\"step\":{\"type\":\"number\"},\"totalSteps\":{\"type\":\"number\"},\"elapsedMs\":{\"type\":\"number\"},\"data\":{\"type\":\"string\"},\"outputIndex\":{\"type\":\"number\"},\"done\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\",\"properties\":{\"modelLoadMs\":{\"type\":\"number\"},\"generationMs\":{\"type\":\"number\"},\"conditionerMs\":{\"type\":\"number\"},\"denoiseMs\":{\"type\":\"number\"},\"vaeMs\":{\"type\":\"number\"},\"postProcessMs\":{\"type\":\"number\"},\"stepsPerSecond\":{\"type\":\"number\"},\"totalGenerationMs\":{\"type\":\"number\"},\"totalWallMs\":{\"type\":\"number\"},\"totalSteps\":{\"type\":\"number\"},\"totalGenerations\":{\"type\":\"number\"},\"totalImages\":{\"type\":\"number\"},\"totalPixels\":{\"type\":\"number\"},\"width\":{\"type\":\"number\"},\"height\":{\"type\":\"number\"},\"seed\":{\"type\":\"number\"}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"servers\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"discoverRpcServers\"},\"servers\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"url\",\"rdmaAvailable\",\"devices\"]}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"downloadAsset\"},\"success\":{\"type\":\"boolean\"},\"assetId\":{\"type\":\"string\"},\"error\":{\"type\":\"string\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\",\"embedding\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"embed\"},\"success\":{\"type\":\"boolean\"},\"embedding\":{\"anyOf\":[{\"type\":\"array\",\"items\":{\"type\":\"number\"}},{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}}]},\"stats\":{\"type\":\"object\",\"properties\":{\"totalTime\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"totalTokens\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]},\"contextSize\":{\"type\":\"number\"}}},\"error\":{\"type\":\"string\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"embedding\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"embedImage\"},\"embedding\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}},\"stats\":{\"type\":\"object\",\"properties\":{\"totalTime\":{\"type\":\"number\"},\"backendId\":{\"type\":\"integer\"},\"cpuFallbackNodes\":{\"type\":\"integer\"},\"weightBytes\":{\"type\":\"number\"}}}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\",\"embedding\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"embed\"},\"success\":{\"type\":\"boolean\"},\"embedding\":{\"anyOf\":[{\"type\":\"array\",\"items\":{\"type\":\"number\"}},{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}}]},\"stats\":{\"type\":\"object\",\"properties\":{\"totalTime\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"totalTokens\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]},\"contextSize\":{\"type\":\"number\"},\"backendId\":{\"type\":\"integer\"},\"cpuFallbackNodes\":{\"type\":\"integer\"},\"weightBytes\":{\"type\":\"number\"}}},\"error\":{\"type\":\"string\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"success\",\"embedding\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"embedBatch\"},\"success\":{\"type\":\"boolean\"},\"embedding\":{\"type\":\"array\",\"items\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}}},\"stats\":{\"type\":\"object\",\"properties\":{\"totalTime\":{\"type\":\"number\"},\"tokensPerSecond\":{\"type\":\"number\"},\"totalTokens\":{\"type\":\"number\"},\"backendDevice\":{\"type\":\"string\",\"enum\":[\"cpu\",\"gpu\"]},\"contextSize\":{\"type\":\"number\"},\"backendId\":{\"type\":\"integer\"},\"cpuFallbackNodes\":{\"type\":\"integer\"},\"weightBytes\":{\"type\":\"number\"}}},\"error\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"message\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"error\"},\"message\":{\"type\":\"string\"},\"stack\":{\"type\":\"string\"},\"timestamp\":{\"type\":\"string\"},\"name\":{\"type\":\"string\"},\"code\":{\"type\":\"number\"},\"cause\":{},\"typedFields\":{\"type\":\"object\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"status\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"finetune\"},\"status\":{\"type\":\"string\",\"enum\":[\"IDLE\",\"RUNNING\",\"PAUSED\",\"CANCELLED\",\"COMPLETED\"]},\"stats\":{\"type\":\"object\",\"required\":[\"global_steps\",\"epochs_completed\"],\"properties\":{\"train_loss\":{\"type\":\"number\"},\"train_loss_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"val_loss\":{\"type\":\"number\"},\"val_loss_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"train_accuracy\":{\"type\":\"number\"},\"train_accuracy_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"val_accuracy\":{\"type\":\"number\"},\"val_accuracy_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"learning_rate\":{\"type\":\"number\"},\"global_steps\":{\"type\":\"integer\"},\"epochs_completed\":{\"type\":\"integer\"}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"is_train\",\"loss\",\"loss_uncertainty\",\"accuracy\",\"accuracy_uncertainty\",\"global_steps\",\"current_epoch\",\"current_batch\",\"total_batches\",\"elapsed_ms\",\"eta_ms\",\"type\",\"modelId\"],\"properties\":{\"is_train\":{\"type\":\"boolean\"},\"loss\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"loss_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"accuracy\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"accuracy_uncertainty\":{\"anyOf\":[{\"anyOf\":[{\"type\":\"number\"},{}]},{\"type\":\"null\"}]},\"global_steps\":{\"type\":\"integer\"},\"current_epoch\":{\"type\":\"integer\"},\"current_batch\":{\"type\":\"integer\"},\"total_batches\":{\"type\":\"integer\"},\"elapsed_ms\":{\"type\":\"number\"},\"eta_ms\":{\"type\":\"number\"},\"type\":{\"type\":\"string\",\"const\":\"finetune:progress\"},\"modelId\":{\"type\":\"string\"}}}").jsonObject,
@@ -13006,7 +13246,7 @@ internal object AnyResponseSerializer : KSerializer<AnyResponse> {
             14 -> AnyResponse.DiscoverRpcServersResponse(input.json.decodeFromJsonElement(serializer<DiscoverRpcServersResponse>(), element))
             15 -> AnyResponse.DownloadAssetResponse(input.json.decodeFromJsonElement(serializer<DownloadAssetResponse>(), element))
             16 -> AnyResponse.EmbedResponse(input.json.decodeFromJsonElement(serializer<EmbedResponse>(), element))
-            17 -> AnyResponse.EmbedImageResponse(input.json.decodeFromJsonElement(serializer<EmbedImageResponse>(), element))
+            17 -> AnyResponse.EmbedBatchResponse(input.json.decodeFromJsonElement(serializer<EmbedBatchResponse>(), element))
             18 -> AnyResponse.ErrorResponse(input.json.decodeFromJsonElement(serializer<ErrorResponse>(), element))
             19 -> AnyResponse.FinetuneResponse(input.json.decodeFromJsonElement(serializer<FinetuneResponse>(), element))
             20 -> AnyResponse.FinetuneProgressResponse(input.json.decodeFromJsonElement(serializer<FinetuneProgressResponse>(), element))
@@ -13064,7 +13304,7 @@ internal object AnyResponseSerializer : KSerializer<AnyResponse> {
             is AnyResponse.DiscoverRpcServersResponse -> encoder.encodeSerializableValue(serializer<DiscoverRpcServersResponse>(), value.value)
             is AnyResponse.DownloadAssetResponse -> encoder.encodeSerializableValue(serializer<DownloadAssetResponse>(), value.value)
             is AnyResponse.EmbedResponse -> encoder.encodeSerializableValue(serializer<EmbedResponse>(), value.value)
-            is AnyResponse.EmbedImageResponse -> encoder.encodeSerializableValue(serializer<EmbedImageResponse>(), value.value)
+            is AnyResponse.EmbedBatchResponse -> encoder.encodeSerializableValue(serializer<EmbedBatchResponse>(), value.value)
             is AnyResponse.ErrorResponse -> encoder.encodeSerializableValue(serializer<ErrorResponse>(), value.value)
             is AnyResponse.FinetuneResponse -> encoder.encodeSerializableValue(serializer<FinetuneResponse>(), value.value)
             is AnyResponse.FinetuneProgressResponse -> encoder.encodeSerializableValue(serializer<FinetuneProgressResponse>(), value.value)
@@ -14435,6 +14675,9 @@ data class EmbedResponseStats(
     @SerialName("totalTokens") val `totalTokens`: Double? = null,
     @SerialName("backendDevice") val `backendDevice`: EmbedResponseStatsBackendDevice? = null,
     @SerialName("contextSize") val `contextSize`: Double? = null,
+    @SerialName("backendId") val `backendId`: Long? = null,
+    @SerialName("cpuFallbackNodes") val `cpuFallbackNodes`: Long? = null,
+    @SerialName("weightBytes") val `weightBytes`: Double? = null,
 )
 
 @Serializable
@@ -14444,19 +14687,13 @@ enum class EmbedResponseStatsBackendDevice {
 }
 
 @Serializable
-data class EmbedImageResponse(
+data class EmbedBatchResponse(
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "embedImage",
-    @SerialName("embedding") val `embedding`: List<Double>,
-    @SerialName("stats") val `stats`: EmbedImageResponseStats? = null,
-)
-
-@Serializable
-data class EmbedImageResponseStats(
-    @SerialName("totalTime") val `totalTime`: Double? = null,
-    @SerialName("backendId") val `backendId`: Long? = null,
-    @SerialName("cpuFallbackNodes") val `cpuFallbackNodes`: Long? = null,
-    @SerialName("weightBytes") val `weightBytes`: Double? = null,
+    @SerialName("type") val `type`: String = "embedBatch",
+    @SerialName("success") val `success`: Boolean,
+    @SerialName("embedding") val `embedding`: List<List<Double>>,
+    @SerialName("stats") val `stats`: EmbedResponseStats? = null,
+    @SerialName("error") val `error`: String? = null,
 )
 
 @Serializable

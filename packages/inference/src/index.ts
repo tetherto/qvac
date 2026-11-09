@@ -18,7 +18,7 @@ export {
   bciTranscribe,
   bciTranscribeStream,
   embed,
-  embedImage,
+  embedBatch,
   finetune,
   translate,
   cancel,

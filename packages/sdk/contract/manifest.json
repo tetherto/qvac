@@ -107,10 +107,10 @@
       "responseSchema": "schema.json#/$defs/embed.response"
     },
     {
-      "name": "embedImage",
+      "name": "embedBatch",
       "callShape": "request-reply",
-      "requestSchema": "schema.json#/$defs/embedImage.request",
-      "responseSchema": "schema.json#/$defs/embedImage.response"
+      "requestSchema": "schema.json#/$defs/embedBatch.request",
+      "responseSchema": "schema.json#/$defs/embedBatch.response"
     },
     {
       "name": "finetune",

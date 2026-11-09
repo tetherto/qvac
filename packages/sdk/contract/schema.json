@@ -59,7 +59,7 @@
           "$ref": "#/$defs/embed.request"
         },
         {
-          "$ref": "#/$defs/embedImage.request"
+          "$ref": "#/$defs/embedBatch.request"
         },
         {
           "$ref": "#/$defs/finetune.request"
@@ -212,7 +212,7 @@
           "$ref": "#/$defs/embed.response"
         },
         {
-          "$ref": "#/$defs/embedImage.response"
+          "$ref": "#/$defs/embedBatch.response"
         },
         {
           "$ref": "#/$defs/error.response"
@@ -7748,9 +7748,12 @@
                   }
                 }
               ],
-              "description": "Text to embed. A string returns one vector; an array returns one vector per string."
+              "description": "Legacy text input. A string returns one vector; an array returns one vector per string."
             },
             "inputs": {
+              "not": {}
+            },
+            "input": {
               "not": {}
             },
             "type": {
@@ -7843,9 +7846,12 @@
                 ],
                 "title": "EmbedInput"
               },
-              "description": "One embedding per input. Each input is text or ordered text and media parts. Media requires projectionModelSrc at load time."
+              "description": "Legacy batch input. One vector per text or ordered text/media input. Use embedBatch for images."
             },
             "text": {
+              "not": {}
+            },
+            "input": {
               "not": {}
             },
             "type": {
@@ -7860,6 +7866,132 @@
           },
           "required": ["modelId", "inputs", "type"],
           "title": "EmbedInputsRequest"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "modelId": {
+              "type": "string",
+              "description": "The identifier of the embedding model to use"
+            },
+            "input": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "title": "EmbedSingleInputText"
+                },
+                {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "media": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "const": "base64"
+                                  },
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "format": "base64",
+                                    "contentEncoding": "base64",
+                                    "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$"
+                                  }
+                                },
+                                "required": ["type", "value"],
+                                "title": "EmbedSingleInputPartsItemMediaBase64"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "const": "filePath"
+                                  },
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                },
+                                "required": ["type", "value"],
+                                "title": "EmbedSingleInputPartsItemMediaFilePath"
+                              }
+                            ],
+                            "description": "Image or WAV/MP3/FLAC bytes as base64, or a file path accessible to the inference worker."
+                          }
+                        },
+                        "required": ["media"],
+                        "title": "EmbedSingleInputPartsItem"
+                      }
+                    ]
+                  },
+                  "title": "EmbedSingleInputParts"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "width": {
+                      "description": "Packed RGB width in pixels. Supply with height and channels, or omit all three for JPEG/PNG.",
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 16384
+                    },
+                    "height": {
+                      "description": "Packed RGB height in pixels, from 1 to 16384.",
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 16384
+                    },
+                    "channels": {
+                      "description": "Packed RGB channel count. Must be 3.",
+                      "type": "number",
+                      "const": 3
+                    },
+                    "image": {
+                      "type": "string",
+                      "minLength": 1,
+                      "format": "base64",
+                      "contentEncoding": "base64",
+                      "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+                      "description": "JPEG/PNG bytes, or packed RGB bytes, encoded as base64."
+                    }
+                  },
+                  "required": ["image"],
+                  "title": "EmbedSingleInputImage"
+                }
+              ],
+              "title": "EmbedSingleInput",
+              "description": "One text, ordered text/media input, or image supported by the model."
+            },
+            "text": {
+              "not": {}
+            },
+            "inputs": {
+              "not": {}
+            },
+            "type": {
+              "type": "string",
+              "const": "embed"
+            },
+            "requestId": {
+              "description": "Caller-generated identifier for cancellation with cancel({ requestId }).",
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": ["modelId", "input", "type"],
+          "title": "EmbedSingleRequest"
         }
       ]
     },
@@ -7876,7 +8008,7 @@
         },
         "embedding": {
           "default": [],
-          "description": "The embedding vector(s). Single `number[]` when `text` is a string; `number[][]` when `text` is an array or `inputs` is provided.",
+          "description": "One vector for input or a text string. One vector per item for legacy text arrays or inputs.",
           "anyOf": [
             {
               "type": "array",
@@ -7900,26 +8032,43 @@
           "type": "object",
           "properties": {
             "totalTime": {
-              "description": "Total embedding time in milliseconds",
+              "description": "Total embedding time in milliseconds. For a MegaLoc batch, the sum of native times.",
               "type": "number"
             },
             "tokensPerSecond": {
-              "description": "Tokens processed per second",
+              "description": "Tokens processed per second. llama.cpp embedding models only.",
               "type": "number"
             },
             "totalTokens": {
-              "description": "Total tokens processed",
+              "description": "Total tokens processed. llama.cpp embedding models only.",
               "type": "number"
             },
             "backendDevice": {
-              "description": "Compute backend used for inference",
+              "description": "Compute backend used for inference. llama.cpp embedding models only.",
               "type": "string",
               "enum": ["cpu", "gpu"],
               "title": "EmbedResponseStatsBackendDevice"
             },
             "contextSize": {
-              "description": "Context size in tokens",
+              "description": "Context size in tokens. llama.cpp embedding models only.",
               "type": "number"
+            },
+            "backendId": {
+              "description": "Native backend ID: CPU=0, Metal=1, CUDA=2, Vulkan=3, OpenCL=4, other=99. MegaLoc only.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "cpuFallbackNodes": {
+              "description": "Number of graph nodes scheduled on CPU fallback. MegaLoc only.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "weightBytes": {
+              "description": "Allocated model weight bytes. MegaLoc only.",
+              "type": "number",
+              "minimum": 0
             }
           },
           "additionalProperties": false,
@@ -7932,99 +8081,208 @@
       "required": ["type", "success", "embedding"],
       "additionalProperties": false
     },
-    "embedImage.request": {
-      "title": "EmbedImageRequest",
+    "embedBatch.request": {
+      "title": "EmbedBatchRequest",
       "type": "object",
       "properties": {
         "modelId": {
           "type": "string",
-          "minLength": 1,
-          "description": "Identifier of a loaded MegaLoc model."
+          "description": "The identifier of the embedding model to use"
         },
-        "width": {
-          "description": "Packed RGB width in pixels. Supply with height and channels, or omit all three for JPEG/PNG.",
-          "type": "integer",
-          "exclusiveMinimum": 0,
-          "maximum": 16384
+        "inputs": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "title": "EmbedBatchInputText"
+              },
+              {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "media": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "base64"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "format": "base64",
+                                  "contentEncoding": "base64",
+                                  "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$"
+                                }
+                              },
+                              "required": ["type", "value"],
+                              "title": "EmbedBatchInputPartsItemMediaBase64"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "filePath"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": ["type", "value"],
+                              "title": "EmbedBatchInputPartsItemMediaFilePath"
+                            }
+                          ],
+                          "description": "Image or WAV/MP3/FLAC bytes as base64, or a file path accessible to the inference worker."
+                        }
+                      },
+                      "required": ["media"],
+                      "title": "EmbedBatchInputPartsItem"
+                    }
+                  ]
+                },
+                "title": "EmbedBatchInputParts"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "width": {
+                    "description": "Packed RGB width in pixels. Supply with height and channels, or omit all three for JPEG/PNG.",
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 16384
+                  },
+                  "height": {
+                    "description": "Packed RGB height in pixels, from 1 to 16384.",
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 16384
+                  },
+                  "channels": {
+                    "description": "Packed RGB channel count. Must be 3.",
+                    "type": "number",
+                    "const": 3
+                  },
+                  "image": {
+                    "type": "string",
+                    "minLength": 1,
+                    "format": "base64",
+                    "contentEncoding": "base64",
+                    "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+                    "description": "JPEG/PNG bytes, or packed RGB bytes, encoded as base64."
+                  }
+                },
+                "required": ["image"],
+                "title": "EmbedBatchInputImage"
+              }
+            ],
+            "title": "EmbedBatchInput"
+          },
+          "description": "One vector per input, in input order."
         },
-        "height": {
-          "description": "Packed RGB height in pixels, from 1 to 16384.",
-          "type": "integer",
-          "exclusiveMinimum": 0,
-          "maximum": 16384
+        "text": {
+          "not": {}
         },
-        "channels": {
-          "description": "Packed RGB channel count. Must be 3.",
-          "type": "number",
-          "const": 3
-        },
-        "image": {
-          "type": "string",
-          "minLength": 1,
-          "format": "base64",
-          "contentEncoding": "base64",
-          "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
-          "description": "JPEG/PNG bytes, or packed RGB bytes, encoded as base64."
+        "input": {
+          "not": {}
         },
         "type": {
           "type": "string",
-          "const": "embedImage"
+          "const": "embedBatch"
         },
         "requestId": {
-          "description": "Request identifier for cancellation. Generated by the client when omitted.",
+          "description": "Caller-generated identifier for cancellation with cancel({ requestId }).",
           "type": "string",
           "minLength": 1
         }
       },
-      "required": ["modelId", "image", "type"]
+      "required": ["modelId", "inputs", "type"]
     },
-    "embedImage.response": {
-      "title": "EmbedImageResponse",
+    "embedBatch.response": {
+      "title": "EmbedBatchResponse",
       "type": "object",
       "properties": {
         "type": {
           "type": "string",
-          "const": "embedImage"
+          "const": "embedBatch"
+        },
+        "success": {
+          "type": "boolean"
         },
         "embedding": {
-          "minItems": 8448,
-          "maxItems": 8448,
           "type": "array",
           "items": {
-            "type": "number"
-          },
-          "description": "MegaLoc descriptor with 8448 L2-normalized values. Compare descriptors with a dot product for cosine similarity."
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
         },
         "stats": {
+          "description": "Performance statistics",
           "type": "object",
           "properties": {
             "totalTime": {
-              "description": "Native embedding time in milliseconds.",
+              "description": "Total embedding time in milliseconds. For a MegaLoc batch, the sum of native times.",
+              "type": "number"
+            },
+            "tokensPerSecond": {
+              "description": "Tokens processed per second. llama.cpp embedding models only.",
+              "type": "number"
+            },
+            "totalTokens": {
+              "description": "Total tokens processed. llama.cpp embedding models only.",
+              "type": "number"
+            },
+            "backendDevice": {
+              "description": "Compute backend used for inference. llama.cpp embedding models only.",
+              "type": "string",
+              "enum": ["cpu", "gpu"],
+              "title": "EmbedBatchResponseStatsBackendDevice"
+            },
+            "contextSize": {
+              "description": "Context size in tokens. llama.cpp embedding models only.",
               "type": "number"
             },
             "backendId": {
-              "description": "Native backend ID: CPU=0, Metal=1, CUDA=2, Vulkan=3, OpenCL=4, other=99.",
+              "description": "Native backend ID: CPU=0, Metal=1, CUDA=2, Vulkan=3, OpenCL=4, other=99. MegaLoc only.",
               "type": "integer",
               "minimum": -9007199254740991,
               "maximum": 9007199254740991
             },
             "cpuFallbackNodes": {
-              "description": "Number of graph nodes scheduled on CPU fallback.",
+              "description": "Number of graph nodes scheduled on CPU fallback. MegaLoc only.",
               "type": "integer",
               "minimum": 0,
               "maximum": 9007199254740991
             },
             "weightBytes": {
-              "description": "Allocated model weight bytes.",
+              "description": "Allocated model weight bytes. MegaLoc only.",
               "type": "number",
               "minimum": 0
             }
           },
           "additionalProperties": false,
-          "title": "EmbedImageResponseStats"
+          "title": "EmbedBatchResponseStats"
+        },
+        "error": {
+          "type": "string"
         }
       },
-      "required": ["type", "embedding"],
+      "required": ["type", "success", "embedding"],
       "additionalProperties": false
     },
     "error.response": {

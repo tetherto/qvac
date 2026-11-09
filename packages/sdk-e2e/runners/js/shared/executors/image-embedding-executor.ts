@@ -1,4 +1,4 @@
-import { embedImage } from '@qvac/sdk'
+import { embed, embedBatch } from '@qvac/sdk'
 import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import { imageEmbeddingTests } from '../../../../catalog/image-embedding-tests.js'
@@ -29,19 +29,27 @@ export class ImageEmbeddingExecutor extends AbstractModelExecutor<typeof imageEm
 
   async mixed(_params: unknown, expectation: Expectation): Promise<TestResult> {
     const modelId = await this.resources.ensureLoaded('image-embedding')
-    const request = { modelId, ...image(64, 48) }
-    const first = await embedImage(request)
-    const second = await embedImage({ modelId, ...image(640, 480) })
+    const request = { modelId, input: image(64, 48) }
+    const first = await embed({ modelId, input: image(64, 48) })
+    const batch = await embedBatch({ modelId, inputs: [image(64, 48), image(640, 480)] })
+    if (batch.embedding.length !== 2) throw new Error('Expected two batch descriptors')
+    const second = { embedding: batch.embedding[1]! }
+    if (
+      batch.embedding[0]!.some((value, index) => Math.abs(value - first.embedding[index]!) >= 1e-6)
+    ) {
+      return { passed: false, output: 'Single and batch image embeddings differ' }
+    }
     checkDescriptor(first.embedding)
     checkDescriptor(second.embedding)
 
-    const tiny = await embedImage({ modelId, ...image(1, 1) })
-    checkDescriptor(tiny.embedding)
+    const tiny = await embedBatch({ modelId, inputs: [image(1, 1)] })
+    if (tiny.embedding.length !== 1) throw new Error('Expected a one-item batch')
+    checkDescriptor(tiny.embedding[0]!)
 
     // Non-empty encoded bytes pass client validation and reach the native image decoder.
     let decodeError: unknown
     try {
-      await embedImage({ modelId, image: new Uint8Array([0, 1, 2, 3]) })
+      await embedBatch({ modelId, inputs: [{ image: new Uint8Array([0, 1, 2, 3]) }] })
     } catch (error) {
       decodeError = error
     }
@@ -52,7 +60,7 @@ export class ImageEmbeddingExecutor extends AbstractModelExecutor<typeof imageEm
       }
     }
 
-    const recovered = await embedImage(request)
+    const recovered = await embed(request)
     checkDescriptor(recovered.embedding)
     if (
       recovered.embedding.some((value, index) => Math.abs(value - first.embedding[index]!) >= 1e-6)

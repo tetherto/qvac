@@ -9,16 +9,18 @@ schemaType: HowTo
 
 Image embeddings use a GGML inference engine through [`@qvac/classification-ggml`](https://github.com/tetherto/qvac/tree/main/packages/classification-ggml). Load MegaLoc with `modelSrc: MEGALOC_F16` or `modelSrc: MEGALOC_MIXED`. For custom weights, use `modelType: "ggml-image-embedding"` with a GGUF URL or local file as `modelSrc`.
 
-Pass one JPEG or PNG as `image: Uint8Array` to [`embedImage()`](/sdk/reference/api#embedimage). For packed RGB bytes, also supply `width`, `height`, and `channels: 3`. Both dimensions must be integers from 1 to 16384, and the buffer must contain exactly `width * height * 3` bytes. Omit all three fields for encoded images. The addon converts the image to RGB and resizes it to 322 by 322 pixels without cropping or padding.
+Pass one JPEG or PNG as `input: { image: Uint8Array }` to [`embed()`](/sdk/reference/api#embed). Use [`embedBatch()`](/sdk/reference/api#embedbatch) with `inputs: [{ image: firstBytes }, { image: secondBytes }]` for multiple images. For packed RGB bytes, also supply `width`, `height`, and `channels: 3`. Both dimensions must be integers from 1 to 16384, and the buffer must contain exactly `width * height * 3` bytes. Omit all three fields for encoded images. The addon converts the image to RGB and resizes it to 322 by 322 pixels without cropping or padding.
 
-The result contains `embedding: number[]`, an L2-normalized descriptor with 8448 values, and optional `stats`. A dot product between two descriptors gives their cosine similarity. Use these descriptors to compare images of places or build an image retrieval index. Text embeddings and class labels use their own models and APIs.
+The result contains `embedding: number[]`, an L2-normalized descriptor with 8448 values, and optional `stats`. A dot product between two descriptors gives their cosine similarity. `embedBatch()` returns `embedding: number[][]` in input order, including batches with one image. Use these descriptors to compare images of places or build an image retrieval index. Text embeddings use the same `embed()` and `embedBatch()` functions with a text model. Class labels use `classify()`.
+
+MegaLoc also accepts one encoded image media part per input, using a base64 source or a file path accessible to the worker. It rejects text, audio, and inputs with multiple media parts.
 
 ## Functions
 
 Use the following sequence of function calls:
 
 1. [`loadModel()`](/sdk/reference/api#loadmodel)
-2. [`embedImage()`](/sdk/reference/api#embedimage)
+2. [`embed()`](/sdk/reference/api#embed) or [`embedBatch()`](/sdk/reference/api#embedbatch)
 3. [`unloadModel()`](/sdk/reference/api#unloadmodel)
 
 For how to use each function, see [SDK API reference](/sdk/reference/api/).
@@ -33,7 +35,7 @@ The original safetensors checkpoint cannot be loaded directly. See the addon's [
 
 Choose a device with `modelConfig.backend`, using its exact GGML name, such as `CPU`, `CUDA0`, `Vulkan0`, or `MTL0`. `Metal` and `Metal0` are aliases. If omitted, the addon selects a GPU, then CPU. An explicitly requested device must be available. `modelConfig.threads` accepts integers from 1 to 1024. `modelConfig.backendsDir` optionally selects a directory of GGML backend modules.
 
-`stats` exposes `totalTime` in milliseconds, `weightBytes`, `cpuFallbackNodes`, and `backendId`. Backend IDs are CPU=0, Metal=1, CUDA=2, Vulkan=3, OpenCL=4, and other=99. GPU support depends on the installed Fabric build.
+`stats` exposes `totalTime` in milliseconds, `weightBytes`, `cpuFallbackNodes`, and `backendId`. Backend IDs are CPU=0, Metal=1, CUDA=2, Vulkan=3, OpenCL=4, and other=99. GPU support depends on the installed Fabric build. For a batch, `totalTime` sums the native times; the other fields describe the final image.
 
 When bundling a plugin subset, include `@qvac/sdk/ggml-image-embedding/plugin` or `PLUGIN_IMAGE_EMBEDDING`. The default SDK worker includes it. The `ggml-classification` plugin continues to load MobileNet classifiers.
 
@@ -66,7 +68,7 @@ The following script compares two images using `MEGALOC_F16`. Pass the two JPEG 
 </Tabs>
 
 <Callout type="info">
-The Python client supports this capability through the same worker, using `embed_image()` with an `EmbedImageRequest` containing base64 image bytes. A dedicated Python example is not yet published. See the [Python SDK](/sdk/python-sdk) for the API.
+The Python client supports this capability through the same worker, using `embed()` or `embed_batch()` with a request containing base64 image bytes. A dedicated Python example is not yet published. See the [Python SDK](/sdk/python-sdk) for the API.
 </Callout>
 
 <Callout type="success">

@@ -5,11 +5,13 @@ import {
   ModelType,
   ADDON_CLASSIFICATION,
   imageEmbeddingConfigSchema,
-  embedImageRequestSchema,
-  embedImageResponseSchema
+  embedRequestSchema,
+  embedResponseSchema,
+  embedBatchRequestSchema,
+  embedBatchResponseSchema
 } from '@/schemas/index'
 import { createStreamLogger, registerAddonLogger } from '@/logging/index'
-import { embedImage } from './ops/embed-image'
+import { embed, embedBatch } from './ops/embed'
 
 export const imageEmbeddingPlugin = definePlugin({
   modelType: ModelType.ggmlImageEmbedding,
@@ -30,12 +32,19 @@ export const imageEmbeddingPlugin = definePlugin({
     return { model }
   },
   handlers: {
-    embedImage: defineHandler({
-      requestSchema: embedImageRequestSchema,
-      responseSchema: embedImageResponseSchema,
+    embed: defineHandler({
+      requestSchema: embedRequestSchema,
+      responseSchema: embedResponseSchema,
       streaming: false,
       cancel: { scope: 'none' },
-      handler: embedImage
+      handler: embed
+    }),
+    embedBatch: defineHandler({
+      requestSchema: embedBatchRequestSchema,
+      responseSchema: embedBatchResponseSchema,
+      streaming: false,
+      cancel: { scope: 'none' },
+      handler: embedBatch
     })
   }
 })
