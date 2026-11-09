@@ -84,23 +84,27 @@ export function contentPathsOfLink(
   sourcePath: string,
 ): string[] {
   const cleaned = linkPath.replace(/\/$/, "").replace(/^\//, "");
-  const [collection, ...rest] = cleaned.split("/");
 
-  const software = getDocumentedSoftware(`/${collection}`);
-  if (!software || software.kind !== "product") return [cleaned];
+  // The longest documented path the link lies under: a product's collection,
+  // or a package documented inside Ecosystem.
+  const software = getDocumentedSoftware(`/${cleaned}`);
+  if (!software) return [cleaned];
+  const base = software.path.slice(1);
+  const rest = cleaned === base ? [] : cleaned.slice(base.length + 1).split("/");
   if (software.versions.some((entry) => entry.version === rest[0])) {
     return [cleaned];
   }
 
-  const [sourceCollection, sourceFolder] = sourcePath.split("/");
-  const readersLine =
-    sourceCollection === collection
-      ? software.versions.find((entry) => entry.folder === sourceFolder)
-      : undefined;
+  const sourceFolder = sourcePath.startsWith(`${base}/`)
+    ? sourcePath.slice(base.length + 1).split("/")[0]
+    : undefined;
+  const readersLine = sourceFolder
+    ? software.versions.find((entry) => entry.folder === sourceFolder)
+    : undefined;
   const line = readersLine ?? getCurrentLine(software);
   if (!line) return [cleaned];
 
-  return [[collection, line.folder, ...rest].join("/"), cleaned];
+  return [[base, line.folder, ...rest].join("/"), cleaned];
 }
 
 /**
@@ -173,13 +177,14 @@ export async function validateDevelopmentLine(
 
     for (const linkPath of extractInternalLinks(content)) {
       const cleaned = linkPath.replace(/\/$/, "").replace(/^\//, "");
-      const [collection, ...rest] = cleaned.split("/");
+      const own = cleaned === slug || cleaned.startsWith(`${slug}/`);
+      const rest = own ? cleaned.slice(slug.length + 1).split("/").filter(Boolean) : [];
       const named = versions.some((entry) => entry.version === rest[0]);
 
       // The line's own pages are indexed from the line's root, so the
-      // collection segment the published path carries is dropped here.
+      // software's path the published path carries is dropped here.
       const resolved =
-        collection === slug && !named
+        own && !named
           ? hasPage(lineIndex, rest.join("/"))
           : // Prefixed with the collection so the reader counts as outside
             // every other one, which is how a cross-collection link resolves.
