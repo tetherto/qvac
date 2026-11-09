@@ -5743,14 +5743,6 @@
                           }
                         ]
                       },
-                      "optionOrder": {
-                        "type": "array",
-                        "items": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 9007199254740991
-                        }
-                      },
                       "type": {
                         "type": "string",
                         "const": "choice"
@@ -5847,14 +5839,6 @@
                           }
                         ]
                       },
-                      "optionOrder": {
-                        "type": "array",
-                        "items": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 9007199254740991
-                        }
-                      },
                       "type": {
                         "type": "string",
                         "const": "score"
@@ -5919,14 +5903,6 @@
                             "items": {}
                           }
                         ]
-                      },
-                      "optionOrder": {
-                        "type": "array",
-                        "items": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 9007199254740991
-                        }
                       },
                       "type": {
                         "type": "string",
@@ -6010,20 +5986,6 @@
                           }
                         ]
                       },
-                      "labels": {
-                        "type": "object",
-                        "properties": {
-                          "false": {
-                            "type": "string"
-                          },
-                          "true": {
-                            "type": "string"
-                          }
-                        },
-                        "required": ["false", "true"],
-                        "additionalProperties": false,
-                        "title": "DecideSingleRequestQuestionsValueNoulLabels"
-                      },
                       "requireProbability": {
                         "description": "Require the answer to be the probability that the statement holds. A model whose noul answer means something else (for example an expected rating) rejects the request.",
                         "type": "boolean"
@@ -6037,18 +5999,6 @@
               },
               "description": "Question ID to decision question.",
               "title": "DecideSingleRequestQuestions"
-            },
-            "maxLen": {
-              "description": "Token budget per sequence; unset uses the checkpoint budget.",
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 9007199254740991
-            },
-            "headMaxLen": {
-              "description": "Token budget for each question and its options; unset uses the checkpoint budget.",
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 9007199254740991
             },
             "state": {
               "anyOf": [
@@ -6129,14 +6079,6 @@
                             "items": {}
                           }
                         ]
-                      },
-                      "optionOrder": {
-                        "type": "array",
-                        "items": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 9007199254740991
-                        }
                       },
                       "type": {
                         "type": "string",
@@ -6234,14 +6176,6 @@
                           }
                         ]
                       },
-                      "optionOrder": {
-                        "type": "array",
-                        "items": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 9007199254740991
-                        }
-                      },
                       "type": {
                         "type": "string",
                         "const": "score"
@@ -6306,14 +6240,6 @@
                             "items": {}
                           }
                         ]
-                      },
-                      "optionOrder": {
-                        "type": "array",
-                        "items": {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 9007199254740991
-                        }
                       },
                       "type": {
                         "type": "string",
@@ -6397,20 +6323,6 @@
                           }
                         ]
                       },
-                      "labels": {
-                        "type": "object",
-                        "properties": {
-                          "false": {
-                            "type": "string"
-                          },
-                          "true": {
-                            "type": "string"
-                          }
-                        },
-                        "required": ["false", "true"],
-                        "additionalProperties": false,
-                        "title": "DecideBatchRequestQuestionsValueNoulLabels"
-                      },
                       "requireProbability": {
                         "description": "Require the answer to be the probability that the statement holds. A model whose noul answer means something else (for example an expected rating) rejects the request.",
                         "type": "boolean"
@@ -6424,18 +6336,6 @@
               },
               "description": "Question ID to decision question.",
               "title": "DecideBatchRequestQuestions"
-            },
-            "maxLen": {
-              "description": "Token budget per sequence; unset uses the checkpoint budget.",
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 9007199254740991
-            },
-            "headMaxLen": {
-              "description": "Token budget for each question and its options; unset uses the checkpoint budget.",
-              "type": "integer",
-              "exclusiveMinimum": 0,
-              "maximum": 9007199254740991
             },
             "states": {
               "type": "array",
@@ -6510,23 +6410,6 @@
                       {
                         "type": "object",
                         "properties": {
-                          "answerConfidence": {
-                            "description": "Deprecated. Probability of the reported answer; only some models report it.",
-                            "type": "number"
-                          },
-                          "action": {
-                            "description": "Deprecated. Only some models report it.",
-                            "type": "object",
-                            "properties": {
-                              "actProbability": {
-                                "type": "number",
-                                "description": "Currently unreliable; do not use to trigger actions."
-                              }
-                            },
-                            "required": ["actProbability"],
-                            "additionalProperties": false,
-                            "title": "DecideResponseResultAnswersValueChoiceAction"
-                          },
                           "confidence": {
                             "type": "number"
                           },
@@ -6565,23 +6448,6 @@
                       {
                         "type": "object",
                         "properties": {
-                          "answerConfidence": {
-                            "description": "Deprecated. Probability of the reported answer; only some models report it.",
-                            "type": "number"
-                          },
-                          "action": {
-                            "description": "Deprecated. Only some models report it.",
-                            "type": "object",
-                            "properties": {
-                              "actProbability": {
-                                "type": "number",
-                                "description": "Currently unreliable; do not use to trigger actions."
-                              }
-                            },
-                            "required": ["actProbability"],
-                            "additionalProperties": false,
-                            "title": "DecideResponseResultAnswersValueScoreAction"
-                          },
                           "confidence": {
                             "type": "number"
                           },
@@ -6620,23 +6486,6 @@
                       {
                         "type": "object",
                         "properties": {
-                          "answerConfidence": {
-                            "description": "Deprecated. Probability of the reported answer; only some models report it.",
-                            "type": "number"
-                          },
-                          "action": {
-                            "description": "Deprecated. Only some models report it.",
-                            "type": "object",
-                            "properties": {
-                              "actProbability": {
-                                "type": "number",
-                                "description": "Currently unreliable; do not use to trigger actions."
-                              }
-                            },
-                            "required": ["actProbability"],
-                            "additionalProperties": false,
-                            "title": "DecideResponseResultAnswersValueNoulAction"
-                          },
                           "confidence": {
                             "description": "Only some models report a confidence for noul answers; none is derived.",
                             "type": "number"
@@ -6665,52 +6514,6 @@
                     },
                     "outputTokens": {
                       "type": "number"
-                    },
-                    "stateTokens": {
-                      "type": "number"
-                    },
-                    "stateTokensDropped": {
-                      "type": "number"
-                    },
-                    "truncated": {
-                      "type": "boolean"
-                    },
-                    "truncatedQuestions": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      }
-                    },
-                    "options": {
-                      "type": "object",
-                      "propertyNames": {
-                        "type": "string"
-                      },
-                      "additionalProperties": {
-                        "type": "object",
-                        "properties": {
-                          "total": {
-                            "type": "number"
-                          },
-                          "distinct": {
-                            "type": "number"
-                          },
-                          "tokensPerOption": {
-                            "anyOf": [
-                              {
-                                "type": "number"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
-                          }
-                        },
-                        "required": ["total", "distinct", "tokensPerOption"],
-                        "additionalProperties": false,
-                        "title": "DecideResponseResultUsageOptionsValue"
-                      },
-                      "title": "DecideResponseResultUsageOptions"
                     }
                   },
                   "required": ["inputTokens", "outputTokens"],
@@ -6740,23 +6543,6 @@
                         {
                           "type": "object",
                           "properties": {
-                            "answerConfidence": {
-                              "description": "Deprecated. Probability of the reported answer; only some models report it.",
-                              "type": "number"
-                            },
-                            "action": {
-                              "description": "Deprecated. Only some models report it.",
-                              "type": "object",
-                              "properties": {
-                                "actProbability": {
-                                  "type": "number",
-                                  "description": "Currently unreliable; do not use to trigger actions."
-                                }
-                              },
-                              "required": ["actProbability"],
-                              "additionalProperties": false,
-                              "title": "DecideResponseResultItemAnswersValueChoiceAction"
-                            },
                             "confidence": {
                               "type": "number"
                             },
@@ -6795,23 +6581,6 @@
                         {
                           "type": "object",
                           "properties": {
-                            "answerConfidence": {
-                              "description": "Deprecated. Probability of the reported answer; only some models report it.",
-                              "type": "number"
-                            },
-                            "action": {
-                              "description": "Deprecated. Only some models report it.",
-                              "type": "object",
-                              "properties": {
-                                "actProbability": {
-                                  "type": "number",
-                                  "description": "Currently unreliable; do not use to trigger actions."
-                                }
-                              },
-                              "required": ["actProbability"],
-                              "additionalProperties": false,
-                              "title": "DecideResponseResultItemAnswersValueScoreAction"
-                            },
                             "confidence": {
                               "type": "number"
                             },
@@ -6850,23 +6619,6 @@
                         {
                           "type": "object",
                           "properties": {
-                            "answerConfidence": {
-                              "description": "Deprecated. Probability of the reported answer; only some models report it.",
-                              "type": "number"
-                            },
-                            "action": {
-                              "description": "Deprecated. Only some models report it.",
-                              "type": "object",
-                              "properties": {
-                                "actProbability": {
-                                  "type": "number",
-                                  "description": "Currently unreliable; do not use to trigger actions."
-                                }
-                              },
-                              "required": ["actProbability"],
-                              "additionalProperties": false,
-                              "title": "DecideResponseResultItemAnswersValueNoulAction"
-                            },
                             "confidence": {
                               "description": "Only some models report a confidence for noul answers; none is derived.",
                               "type": "number"
@@ -6895,52 +6647,6 @@
                       },
                       "outputTokens": {
                         "type": "number"
-                      },
-                      "stateTokens": {
-                        "type": "number"
-                      },
-                      "stateTokensDropped": {
-                        "type": "number"
-                      },
-                      "truncated": {
-                        "type": "boolean"
-                      },
-                      "truncatedQuestions": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      },
-                      "options": {
-                        "type": "object",
-                        "propertyNames": {
-                          "type": "string"
-                        },
-                        "additionalProperties": {
-                          "type": "object",
-                          "properties": {
-                            "total": {
-                              "type": "number"
-                            },
-                            "distinct": {
-                              "type": "number"
-                            },
-                            "tokensPerOption": {
-                              "anyOf": [
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
-                            }
-                          },
-                          "required": ["total", "distinct", "tokensPerOption"],
-                          "additionalProperties": false,
-                          "title": "DecideResponseResultItemUsageOptionsValue"
-                        },
-                        "title": "DecideResponseResultItemUsageOptions"
                       }
                     },
                     "required": ["inputTokens", "outputTokens"],
@@ -14503,28 +14209,16 @@
                       "title": "LoadModelSrcRequestLlamacppDecisionModelConfigDevice"
                     },
                     "gpu_layers": {
-                      "description": "Layers to offload. Unset lets the addon choose placement.",
+                      "description": "Layers to offload on the GPU. Unset lets the engine fit the model.",
                       "type": "integer",
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
                     "batch_size": {
-                      "description": "Tokens per forward pass. Default 2048; each sequence must fit.",
+                      "description": "Tokens per forward pass. Unset uses the engine's default.",
                       "type": "integer",
                       "exclusiveMinimum": 0,
                       "maximum": 9007199254740991
-                    },
-                    "poll": {
-                      "description": "CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.",
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 100
-                    },
-                    "pollBatch": {
-                      "description": "CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.",
-                      "type": "integer",
-                      "minimum": 0,
-                      "maximum": 100
                     },
                     "threads": {
                       "description": "CPU threads, at most the CPU count. Zero or below uses all logical CPUs.",
@@ -14532,48 +14226,11 @@
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
-                    "threads-batch": {
-                      "description": "Batch CPU threads. Unset uses threads; zero or below uses all logical CPUs.",
-                      "type": "integer",
-                      "minimum": -9007199254740991,
-                      "maximum": 9007199254740991
-                    },
-                    "flash_attn": {
-                      "description": "Flash attention mode. Default auto.",
-                      "type": "string",
-                      "enum": ["on", "off", "auto"],
-                      "title": "LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttn"
-                    },
                     "verbosity": {
                       "description": "Native log level: 0 error, 1 warn, 2 info, 3 debug.",
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 3
-                    },
-                    "main-gpu": {
-                      "description": "GPU index or device class.",
-                      "anyOf": [
-                        {
-                          "type": "integer",
-                          "minimum": 0,
-                          "maximum": 9007199254740991
-                        },
-                        {
-                          "type": "string",
-                          "enum": ["integrated", "dedicated"],
-                          "title": "LoadModelSrcRequestLlamacppDecisionModelConfigMainGpu"
-                        }
-                      ]
-                    },
-                    "split-mode": {
-                      "description": "Multi-GPU split mode.",
-                      "type": "string",
-                      "enum": ["none", "layer"],
-                      "title": "LoadModelSrcRequestLlamacppDecisionModelConfigSplitMode"
-                    },
-                    "tensor-split": {
-                      "description": "Per-GPU tensor split proportions.",
-                      "type": "string"
                     },
                     "openclCacheDir": {
                       "description": "Writable OpenCL kernel cache directory, required on Android.",
