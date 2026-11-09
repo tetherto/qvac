@@ -92,7 +92,8 @@ const inputsEmbedParamsSchema = z.object({
   text: absent,
   input: absent
 })
-const singleInputDescription = 'One text, ordered text/media input, or image supported by the model.'
+const singleInputDescription =
+  'One text, ordered text/media input, or image supported by the model.'
 const batchInputsDescription = 'One vector per input, in input order.'
 const singleEmbedParamsSchema = z.object({
   modelId,
@@ -159,17 +160,25 @@ export const embedStatsSchema = z.object({
   totalTime: z
     .number()
     .optional()
-    .describe('Total embedding time in milliseconds. For a MegaLoc batch, the sum of native times.'),
+    .describe(
+      'Total embedding time in milliseconds. For a MegaLoc batch, the sum of native times.'
+    ),
   tokensPerSecond: z
     .number()
     .optional()
     .describe('Tokens processed per second. llama.cpp embedding models only.'),
-  totalTokens: z.number().optional().describe('Total tokens processed. llama.cpp embedding models only.'),
+  totalTokens: z
+    .number()
+    .optional()
+    .describe('Total tokens processed. llama.cpp embedding models only.'),
   backendDevice: z
     .enum(['cpu', 'gpu'])
     .optional()
     .describe('Compute backend used for inference. llama.cpp embedding models only.'),
-  contextSize: z.number().optional().describe('Context size in tokens. llama.cpp embedding models only.'),
+  contextSize: z
+    .number()
+    .optional()
+    .describe('Context size in tokens. llama.cpp embedding models only.'),
   backendId: imageStats.backendId.describe(
     'Native backend ID: CPU=0, Metal=1, CUDA=2, Vulkan=3, OpenCL=4, other=99. MegaLoc only.'
   ),

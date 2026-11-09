@@ -97,7 +97,9 @@ test('image inputs accept encoded bytes or a complete packed RGB description', (
 test('images go through input or embedBatch, not the legacy inputs batch', (t) => {
   const image = { image: 'AQID' }
   t.absent(embedRequestSchema.safeParse({ type: 'embed', modelId: 'm', inputs: [image] }).success)
-  t.ok(embedBatchRequestSchema.safeParse({ type: 'embedBatch', modelId: 'm', inputs: [image] }).success)
+  t.ok(
+    embedBatchRequestSchema.safeParse({ type: 'embedBatch', modelId: 'm', inputs: [image] }).success
+  )
   const bytes = { image: new Uint8Array([1, 2, 3]) }
   t.absent(embedClientParamsSchema.safeParse({ modelId: 'm', inputs: [bytes] }).success)
   t.ok(embedBatchClientParamsSchema.safeParse({ modelId: 'm', inputs: [bytes] }).success)
