@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Platform packages ship upstream llama.cpp's `server-context` archive under
+  `prebuilds/<host>/server-context/`, built with the runtime, and the meta
+  package ships its headers under `prebuilds/include/llama/server-context`. It
+  is not linked into the runtime; `@qvac/decision-ggml` links it statically
+  through `qvac_addon_link_fabric_server_context()`.
+- The runtime exports libcommon's `jinja` engine (functions, vtables and
+  typeinfo), `fs_validate_filename` and `glob_match`, which `server-context`
+  uses, on ELF, Mach-O and Windows.
+
 ## [0.27.0] - 2026-11-05
 
 ### Fixed

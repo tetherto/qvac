@@ -78,6 +78,19 @@
     ggml_*;
     gguf_*;
 
+    # libcommon's jinja template engine, for upstream server-context, which the
+    # decision addon (@qvac/decision-ggml) links statically against this runtime.
+    # Matched here as *mangled* names because the vtable / typeinfo entries
+    # demangle with spaces ("vtable for jinja::..."), which an unquoted extern
+    # "C++" pattern cannot express and a quoted one would match literally:
+    # _ZN5jinja / _ZNK5jinja are the namespace's functions, _ZTVN5jinja its
+    # vtables, _ZTIN5jinja / _ZTSN5jinja its typeinfo and typeinfo names.
+    _ZN5jinja*;
+    _ZNK5jinja*;
+    _ZTVN5jinja*;
+    _ZTIN5jinja*;
+    _ZTSN5jinja*;
+
     # C++-linkage symbols consumed by the addons. Matched against *demangled*
     # names, so the patterns are the source-level names (no _Z mangling).
     # Patterns must stay unquoted: quoting would turn them into literal
@@ -105,6 +118,9 @@
       set_process_priority*;
       postprocess_cpu_params*;
       metadata_handle_deleter*;
+      # libcommon helpers upstream server-context uses (decision addon).
+      fs_validate_filename*;
+      glob_match*;
     };
 
     # When this module embeds libc++ it is also the process' one C++ runtime and
