@@ -107,6 +107,12 @@
       "responseSchema": "schema.json#/$defs/embed.response"
     },
     {
+      "name": "embedBatch",
+      "callShape": "request-reply",
+      "requestSchema": "schema.json#/$defs/embedBatch.request",
+      "responseSchema": "schema.json#/$defs/embedBatch.response"
+    },
+    {
       "name": "finetune",
       "callShape": "request-reply",
       "requestSchema": "schema.json#/$defs/finetune.request",
