@@ -222,6 +222,20 @@ const RULES: Rule[] = [
       platforms: ['mobile']
     }
   },
+  {
+    match: [
+      'tts-parler-emotion-conditioning',
+      'tts-parler-default-description',
+      'tts-parler-streaming',
+      'tts-parler-sentence-streaming',
+      'tts-parler-duplex-streaming'
+    ],
+    skip: {
+      reason:
+        'Parler Mini (English) is left off mobile; tts-parler-indic-multilingual covers Parler there',
+      platforms: ['mobile', 'kotlin-android']
+    }
+  },
 
   // ── the RPC server ───────────────────────────────────────────────────────
   {
