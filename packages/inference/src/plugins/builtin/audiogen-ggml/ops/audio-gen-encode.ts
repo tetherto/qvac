@@ -25,18 +25,40 @@ function encode(pcm: Uint8Array, format: AudioGenOutputFormat, layout: PcmLayout
   }
 }
 
+// The addon's FFmpeg build is fixed for the life of the process, so each
+// format is probed once: either the encoder is there, or the entry keeps what
+// the failed probe reported so the same error can be raised again.
+const probeResults = new Map<AudioGenOutputFormat, { details: string | undefined } | 'available'>()
+
 /**
  * Proves the host can encode `format` before a generation is admitted: the
  * FFmpeg build is the addon's, and a missing encoder would otherwise only
  * surface after the run had finished. `wav` is written in JS and needs no
- * probe.
+ * probe. The outcome is remembered per format, so only the first request for
+ * a format pays for the probe.
  */
 export function assertOutputFormatAvailable(format: AudioGenOutputFormat): void {
   if (format === 'wav') return
-  encode(new Uint8Array(PROBE_FRAMES * PROBE_CHANNELS * Int16Array.BYTES_PER_ELEMENT), format, {
-    sampleRate: PROBE_SAMPLE_RATE,
-    channels: PROBE_CHANNELS
-  })
+  const known = probeResults.get(format)
+  if (known === 'available') return
+  if (known !== undefined) throw new AudioEncodeFailedError(format, known.details)
+  try {
+    encode(new Uint8Array(PROBE_FRAMES * PROBE_CHANNELS * Int16Array.BYTES_PER_ELEMENT), format, {
+      sampleRate: PROBE_SAMPLE_RATE,
+      channels: PROBE_CHANNELS
+    })
+  } catch (error) {
+    probeResults.set(format, {
+      details: error instanceof AudioEncodeFailedError ? error.details : String(error)
+    })
+    throw error
+  }
+  probeResults.set(format, 'available')
+}
+
+/** Forgets every probe outcome. For tests that swap the encoder. */
+export function resetOutputFormatProbes(): void {
+  probeResults.clear()
 }
 
 /** Encodes a run's interleaved Int16 PCM into the frame field that carries it. */

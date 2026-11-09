@@ -27,7 +27,11 @@ import { stream } from '@/dispatch'
 import { parseClientInput } from '@/api/parse-input'
 import { generateRandomRequestId } from '@/runtime/request-id'
 import { decodeBase64 } from '@/utils/encoding'
-import { InvalidResponseError, InferenceCancelledError } from '@/errors/index'
+import {
+  AudioEncodeFailedError,
+  InvalidResponseError,
+  InferenceCancelledError
+} from '@/errors/index'
 
 /**
  * A queue one consumer drains as an async generator. It ends when the run
@@ -89,10 +93,11 @@ function toInt16Chunk(bytes: Uint8Array, wireType: string): Int16Array {
 }
 
 async function* int16Chunks(
-  source: AsyncGenerator<Uint8Array>,
+  indexes: AsyncGenerator<number>,
+  read: (index: number) => Uint8Array,
   wireType: string
 ): AsyncGenerator<Int16Array> {
-  for await (const bytes of source) yield toInt16Chunk(bytes, wireType)
+  for await (const index of indexes) yield toInt16Chunk(read(index), wireType)
 }
 
 function concatenateChunks(chunks: Uint8Array[]) {
@@ -337,7 +342,7 @@ function collectRun<TFrame extends RunFrame, TPayload>(
  * Consumes one generation or editing stream: PCM chunks accumulate into
  * `audio`, carrying the format reported alongside them, and are offered one
  * by one on `chunkStream`. The encoded file, when the request asked for one,
- * settles `encoded`.
+ * settles `encoded`; a failed encode rejects `encoded` and nothing else.
  */
 function collectAudioRun(
   request: AudioRunRequest,
@@ -350,9 +355,20 @@ function collectAudioRun(
   let channels: number | undefined
   let bitsPerSample: number | undefined
   let encoded: AudioGenEncodedAudio | undefined
-  // Holds the same arrays as `pcmChunks`; the Int16 copy is made as a chunk
-  // is read, so a caller that never iterates `chunkStream` pays nothing.
-  const chunks = createFeed<Uint8Array>()
+  let encodeFailure: AudioEncodeFailedError | undefined
+  // The PCM is held once. Until the run settles it is the received chunks;
+  // from then on it is `audio.pcm` alone, and the chunks are views into it.
+  // `chunkStream` queues chunk indexes rather than bytes, so an unread
+  // stream keeps no second copy of the audio alive.
+  let settledPcm: Uint8Array | undefined
+  const chunkEnds: number[] = []
+  const chunks = createFeed<number>()
+
+  function chunkBytes(index: number): Uint8Array {
+    if (settledPcm === undefined) return pcmChunks[index] ?? new Uint8Array(0)
+    const start = index > 0 ? (chunkEnds[index - 1] ?? 0) : 0
+    return settledPcm.subarray(start, chunkEnds[index] ?? start)
+  }
 
   const { progressStream, payload, stats, diagnostics } = collectRun(
     request,
@@ -363,10 +379,17 @@ function collectAudioRun(
         if (frame.encoded !== undefined) {
           encoded = { ...frame.encoded, data: decodeBase64(frame.encoded.data) }
         }
+        if (frame.encodeError !== undefined) {
+          encodeFailure = new AudioEncodeFailedError(
+            frame.encodeError.format,
+            frame.encodeError.details
+          )
+        }
         if (frame.data === undefined) return
         const bytes = decodeBase64(frame.data)
+        chunks.push(pcmChunks.length)
         pcmChunks.push(bytes)
-        chunks.push(bytes)
+        chunkEnds.push((chunkEnds.at(-1) ?? 0) + bytes.byteLength)
         sampleRate = frame.sampleRate
         channels = frame.channels
         bitsPerSample = frame.bitsPerSample
@@ -375,17 +398,24 @@ function collectAudioRun(
         if (sampleRate === undefined || channels === undefined || bitsPerSample === undefined) {
           throw new InvalidResponseError(`${wireType} audio chunk`)
         }
-        if (request.outputFormat !== undefined && encoded === undefined) {
+        if (
+          request.outputFormat !== undefined &&
+          encoded === undefined &&
+          encodeFailure === undefined
+        ) {
           throw new InvalidResponseError(`${wireType} encoded audio`)
         }
+        settledPcm = concatenateChunks(pcmChunks)
+        pcmChunks.length = 0
         return {
           audio: {
-            pcm: concatenateChunks(pcmChunks),
+            pcm: settledPcm,
             sampleRate,
             channels,
             bitsPerSample
           } satisfies AudioGenAudio,
-          encoded
+          encoded,
+          encodeFailure
         }
       },
       close(error) {
@@ -395,14 +425,18 @@ function collectAudioRun(
   )
 
   const audio = payload.then((settled) => settled.audio)
-  const encodedAudio = payload.then((settled) => settled.encoded)
+  // A failed encode rejects the file alone; the run itself completed.
+  const encodedAudio = payload.then((settled) => {
+    if (settled.encodeFailure !== undefined) throw settled.encodeFailure
+    return settled.encoded
+  })
   audio.catch(() => {})
   encodedAudio.catch(() => {})
 
   return {
     requestId,
     progressStream,
-    chunkStream: int16Chunks(chunks.stream, wireType),
+    chunkStream: int16Chunks(chunks.stream, chunkBytes, wireType),
     audio,
     encoded: encodedAudio,
     stats,

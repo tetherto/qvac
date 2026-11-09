@@ -13,7 +13,7 @@ import {
   type AudioUnderstandStreamFactory
 } from '@/client/api/audio-gen-result'
 import { InvalidResponseError, RequestValidationFailedError } from '@/utils/errors-client'
-import { InferenceCancelledError } from '@/utils/errors-server'
+import { AudioEncodeFailedError, InferenceCancelledError } from '@/utils/errors-server'
 
 async function* mockResponses(responses: unknown[]): AsyncGenerator<unknown> {
   for (const response of responses) yield response
@@ -729,6 +729,54 @@ test('audioGen client forwards outputFormat and resolves the encoded file', asyn
   t.is(encoded?.mimeType, 'audio/flac')
   t.is(encoded?.extension, 'flac')
   t.is((await run.audio).pcm.byteLength, 4, 'the PCM still arrives')
+})
+
+test('audioGen client rejects only the file when the worker reports a failed encode', async (t) => {
+  const { run } = createFormatRun(
+    [
+      pcmFrame([7, -7]),
+      {
+        type: 'audioGenStream',
+        encodeError: { format: 'flac', details: 'muxer rejected the stream' }
+      },
+      TERMINAL
+    ],
+    'flac'
+  )
+
+  let failure: unknown
+  try {
+    await run.encoded
+  } catch (error) {
+    failure = error
+  }
+  t.ok(failure instanceof AudioEncodeFailedError)
+  t.is((failure as AudioEncodeFailedError).format, 'flac')
+  t.is((failure as AudioEncodeFailedError).details, 'muxer rejected the stream')
+
+  const { pcm } = await run.audio
+  t.alike(Array.from(new Int16Array(pcm.buffer, pcm.byteOffset, pcm.byteLength / 2)), [7, -7])
+  t.alike(
+    (await collect(run.chunkStream)).map((chunk) => Array.from(chunk)),
+    [[7, -7]]
+  )
+  t.alike(await run.stats, TERMINAL.stats, 'stats still resolve')
+  t.is(await run.diagnostics, undefined, 'diagnostics settle rather than reject')
+})
+
+test('audioGen client reads late chunks out of the settled PCM', async (t) => {
+  const { run } = createFormatRun([pcmFrame([1, 2, 3, 4]), pcmFrame([5, 6]), TERMINAL])
+  const { pcm } = await run.audio
+  // After `audio` settles the chunks are views into its buffer, not a second
+  // copy of the run: an edit made to `pcm` shows in a chunk read afterwards.
+  new Int16Array(pcm.buffer, pcm.byteOffset, pcm.byteLength / 2)[4] = 50
+  t.alike(
+    (await collect(run.chunkStream)).map((chunk) => Array.from(chunk)),
+    [
+      [1, 2, 3, 4],
+      [50, 6]
+    ]
+  )
 })
 
 test('audioGen client rejects a run that named an outputFormat and received no file', async (t) => {

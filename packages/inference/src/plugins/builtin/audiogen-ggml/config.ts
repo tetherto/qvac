@@ -18,9 +18,10 @@ async function resolveMinimaxConfig(parsed: MinimaxAudioGenConfig, ctx: ResolveC
     throw new ModelLoadFailedError('MiniMax-Music3 is available on desktop only')
   }
   // Refused before the model pair is resolved: the addon would only say so
-  // once several gigabytes had been downloaded.
+  // once several gigabytes had been downloaded. Only the platform is known
+  // here; the addon still checks the macOS version at load.
   if (parsed.coremlProfileDir !== undefined && ctx.platform !== 'darwin') {
-    throw new ModelLoadFailedError('MiniMax Core ML requires macOS 15 or later')
+    throw new ModelLoadFailedError('MiniMax Core ML is available on macOS only')
   }
 
   const { lmModelSrc, synthModelSrc, ...runtimeConfig } = parsed

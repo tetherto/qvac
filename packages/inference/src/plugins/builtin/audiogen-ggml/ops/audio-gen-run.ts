@@ -17,7 +17,7 @@ import { attachBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import { getModel } from '@/runtime/model-registry'
 import { getRequestRegistry, withRequestContext, type RequestContext } from '@/runtime/index'
 import { generateRequestId } from '@/runtime/request-id'
-import { ModelOperationNotSupportedError } from '@/errors/index'
+import { AudioEncodeFailedError, ModelOperationNotSupportedError } from '@/errors/index'
 import {
   assertOutputFormatAvailable,
   encodeRunAudio,
@@ -71,8 +71,9 @@ export interface AudioGenRunOptions<TType extends AudioGenRunType> {
 
 /**
  * Runs one AudioGen job under the request registry and streams it as
- * `TType` frames: progress ticks, PCM chunks, the encoded file when the
- * request named an `outputFormat`, then the terminal frame with stats and
+ * `TType` frames: progress ticks, PCM chunks, the encoded file (or the reason
+ * it could not be encoded) when the request named an `outputFormat`, then the
+ * terminal frame with stats and
  * backend diagnostics. Owns admission (`kind: 'audiogen'`, one
  * active job per model), abort-to-cancel wiring, and the cancelled terminal.
  */
@@ -159,7 +160,9 @@ export async function* streamAudioGenRun<TType extends AudioGenRunType>(
           chunk.outputArray.byteLength
         )
         if (request.outputFormat !== undefined) {
-          encodeChunks.push(pcm)
+          // Copied: the view is over the addon's buffer, which is held here
+          // until the run ends and must not change under a later chunk.
+          encodeChunks.push(pcm.slice())
           encodeLayout = { sampleRate: chunk.sampleRate, channels: chunk.channels }
         }
         yield {
@@ -182,9 +185,11 @@ export async function* streamAudioGenRun<TType extends AudioGenRunType>(
   }
 
   if (request.outputFormat !== undefined && encodeLayout !== undefined) {
+    // The PCM is already with the caller. A failure here costs only the file:
+    // it is reported on its own frame and the run still ends as completed.
     yield {
       type,
-      encoded: encodeRunAudio(encodeChunks, request.outputFormat, encodeLayout),
+      ...encodeOutcome(encodeChunks, request.outputFormat, encodeLayout, logger),
       done: false
     } as AudioGenRunFrame<TType>
   }
@@ -207,6 +212,32 @@ export async function* streamAudioGenRun<TType extends AudioGenRunType>(
     ...(diagnostics && { diagnostics })
   } as AudioGenRunFrame<TType>
   yield diagnostics ? attachBackendDiagnostics(terminal, diagnostics) : terminal
+}
+
+type EncodeOutcome =
+  | { encoded: ReturnType<typeof encodeRunAudio> }
+  | { encodeError: { format: AudioGenOutputFormat; details?: string } }
+
+function encodeOutcome(
+  chunks: readonly Uint8Array[],
+  format: AudioGenOutputFormat,
+  layout: PcmLayout,
+  logger: Logger
+): EncodeOutcome {
+  try {
+    return { encoded: encodeRunAudio(chunks, format, layout) }
+  } catch (error) {
+    const details =
+      error instanceof AudioEncodeFailedError
+        ? error.details
+        : error instanceof Error
+          ? error.message
+          : String(error)
+    logger.warn(
+      `[audiogen] encoding the finished run as ${format} failed; delivering PCM only: ${details ?? 'no detail'}`
+    )
+    return { encodeError: { format, ...(details !== undefined && { details }) } }
+  }
 }
 
 /**

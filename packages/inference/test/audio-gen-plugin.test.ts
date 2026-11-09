@@ -636,6 +636,90 @@ test('audioGen sends the encoded file after the PCM and before the terminal fram
   t.is(frames[3]?.encoded, undefined)
 })
 
+test('audioGen reports a failed encode on its own frame and still completes the run', async (t) => {
+  const modelId = 'audio-gen-operation-encode-fails'
+  const model = createModel(
+    createResponse([{ outputArray: new Int16Array([1, -1]), sampleRate: 44100, channels: 1 }], {
+      audioDurationMs: 10,
+      totalTimeMs: 5,
+      realTimeFactor: 0.5,
+      backendDevice: 0,
+      backendId: 0
+    })
+  )
+  registerAudioGenModel(modelId, model)
+  // `wav` is not probed, so the first encode this request makes is the real one.
+  const encode = AudioGen.encode
+  AudioGen.encode = function () {
+    throw new Error('disk full')
+  } as typeof AudioGen.encode
+  t.teardown(() => {
+    AudioGen.encode = encode
+    unregisterModel(modelId)
+  })
+
+  const frames = []
+  for await (const frame of audioGenStream({
+    type: 'audioGenStream',
+    requestId: 'audio-gen-request-encode-fails',
+    modelId,
+    caption: 'ambient electronic music',
+    outputFormat: 'wav'
+  })) {
+    frames.push(frame)
+  }
+
+  t.is(frames.length, 3)
+  t.ok(frames[0]?.data !== undefined, 'the PCM went out first')
+  t.is(frames[1]?.done, false)
+  t.is(frames[1]?.encoded, undefined)
+  t.alike(frames[1]?.encodeError, { format: 'wav', details: 'disk full' })
+  t.is(frames[2]?.done, true)
+  t.is(frames[2]?.stopReason, 'completed', 'the run is not failed by its file')
+  t.is(frames[2]?.stats?.audioDurationMs, 10)
+  t.is(readBackendDiagnostics(frames[2])?.selectedBackend, 'cpu')
+  t.is(getRequestRegistry().get('audio-gen-request-encode-fails'), null)
+})
+
+test('audioGen encodes its own copy of a buffer the engine reuses across chunks', async (t) => {
+  const modelId = 'audio-gen-operation-encode-reused-buffer'
+  const shared = new Int16Array(2)
+  const model = createModel({
+    async *iterate() {
+      shared.set([1, -1])
+      yield { outputArray: shared, sampleRate: 44100, channels: 1 }
+      shared.set([2, -2])
+      yield { outputArray: shared, sampleRate: 44100, channels: 1 }
+    },
+    async await() {
+      return { audioDurationMs: 10, totalTimeMs: 5, realTimeFactor: 0.5 }
+    }
+  } as unknown as AudioGenResponse)
+  registerAudioGenModel(modelId, model)
+  t.teardown(() => {
+    unregisterModel(modelId)
+  })
+
+  let file: Buffer | undefined
+  for await (const frame of audioGenStream({
+    type: 'audioGenStream',
+    requestId: 'audio-gen-request-encode-reused-buffer',
+    modelId,
+    caption: 'ambient electronic music',
+    outputFormat: 'wav'
+  })) {
+    if (frame.encoded !== undefined) file = Buffer.from(frame.encoded.data, 'base64')
+  }
+
+  t.ok(file)
+  const wav = file!
+  t.alike(
+    [44, 46, 48, 50].map((offset) => wav.readInt16LE(offset)),
+    [1, -1, 2, -2],
+    'the first chunk is not overwritten by the second'
+  )
+})
+
 test('audioGen sends no encoded frame for a cancelled run', async (t) => {
   const modelId = 'audio-gen-operation-encoded-cancel'
   const requestId = 'audio-gen-request-encoded-cancel'
