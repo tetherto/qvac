@@ -179,3 +179,78 @@ test('parakeet duplex handler forwards native end-of-turn and VAD chunk detail',
     'the boundary detail is forwarded only when the engine sent it'
   )
 })
+
+// The native streaming session closes a chunk with a text-less segment whose
+// only payload is `isFinal: true`. It is the caller's finality signal, so it
+// must survive the empty-text filter in metadata mode, on both handlers.
+const EMPTY_FINAL_MARKER = {
+  text: '',
+  start: 2.25,
+  end: 2.25,
+  toAppend: true,
+  isFinal: true,
+  chunkIndex: 6
+}
+const EMPTY_PARTIAL = {
+  text: '',
+  start: 2.25,
+  end: 2.25,
+  toAppend: true,
+  isFinal: false,
+  chunkIndex: 7
+}
+
+test('parakeet duplex handler delivers an empty final marker in metadata mode', async (t) => {
+  const modelId = 'parakeet-empty-final-duplex'
+  register(t, modelId, [EMPTY_FINAL_MARKER, EMPTY_PARTIAL, { text: '' }])
+
+  const frames = await collect(
+    parakeetPlugin.handlers.transcribeStream.handler(
+      { type: 'transcribeStream', modelId, metadata: true },
+      emptyInput()
+    ) as unknown as AsyncIterable<TranscribeStreamResponse>
+  )
+
+  const segments = frames.filter((frame) => frame.segment).map((frame) => frame.segment)
+  t.is(segments.length, 1, 'only the final marker passes; other empty segments stay dropped')
+  t.is(segments[0]?.text, '', 'the marker keeps its empty text')
+  t.is(segments[0]?.isFinal, true, 'isFinal reaches the caller')
+  t.is(segments[0]?.chunkIndex, 6, 'the marker names its chunk')
+})
+
+test('parakeet duplex handler emits no text for an empty final marker without metadata', async (t) => {
+  const modelId = 'parakeet-empty-final-text'
+  register(t, modelId, [EMPTY_FINAL_MARKER])
+
+  const frames = await collect(
+    parakeetPlugin.handlers.transcribeStream.handler(
+      { type: 'transcribeStream', modelId },
+      emptyInput()
+    ) as unknown as AsyncIterable<TranscribeStreamResponse>
+  )
+
+  t.is(frames.filter((frame) => frame.segment).length, 0, 'no segment frames without metadata')
+  t.is(
+    frames.filter((frame) => frame.text !== undefined && frame.text !== '').length,
+    0,
+    'no text frames'
+  )
+})
+
+test('parakeet unary handler delivers an empty final marker in metadata mode', async (t) => {
+  const modelId = 'parakeet-empty-final-unary'
+  register(t, modelId, [[EMPTY_FINAL_MARKER, EMPTY_PARTIAL]])
+
+  const frames = await collect(
+    parakeetPlugin.handlers.transcribe.handler({
+      type: 'transcribe',
+      modelId,
+      audioChunk: AUDIO,
+      metadata: true
+    }) as unknown as AsyncIterable<TranscribeResponse>
+  )
+
+  const segments = frames.filter((frame) => frame.segment).map((frame) => frame.segment)
+  t.is(segments.length, 1, 'only the final marker passes')
+  t.is(segments[0]?.isFinal, true, 'isFinal reaches the caller')
+})
