@@ -1,3 +1,5 @@
+import { readdirSync } from 'node:fs'
+import * as path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parseVersionsFile } from '../src/lib/versions-file'
 import { declaredSoftware, toDocumentedSoftware } from '../src/lib/versions'
@@ -68,6 +70,8 @@ describe('the manifest derived from it', () => {
   })
 
   it('parses every file shipped under versions/', () => {
-    expect(declaredSoftware().map(({ file }) => file).sort()).toEqual(['cli.json', 'sdk.json'])
+    expect(declaredSoftware().map(({ file }) => file).sort()).toEqual(
+      readdirSync(path.resolve(import.meta.dirname, '..', 'versions')).filter((name) => name.endsWith('.json')).sort(),
+    )
   })
 })

@@ -42,6 +42,8 @@ Read the rest from the package: its `package.json` name, its public declarations
 
    Add any other folder the pages import from (`packages/<name>/examples`) to `paths`, after the documentation root.
 
+   Register the file in `docs/website/src/lib/versions.ts`: one `import` and one entry in `VERSIONS_FILES`. The manifest is bundled into client code, so it cannot read the folder at run time; `tests/versions-file.test.ts` fails when a file under `versions/` is not registered.
+
 3. Copy every file of `docs/website/contract/scaffolds/platform/` into `packages/<name>/docs/users/`. They are the pages `docs/website/contract/kinds.json` requires of a `platform` package, except the API reference, which step 5 generates.
 
 4. Fill every `{{…}}` placeholder from the package's README and declarations:

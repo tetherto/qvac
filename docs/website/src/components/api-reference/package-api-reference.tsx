@@ -110,7 +110,7 @@ export function PackageApiExports({ api }: { api: PackageApi }) {
           <Fragment key={kind}>
             <h2 id={exportAnchor(heading)}>{heading}</h2>
             {entries.map((entry) => (
-              <Export key={entry.name} entry={entry} />
+              <Export key={`${entry.kind}:${entry.name}`} entry={entry} />
             ))}
           </Fragment>
         );

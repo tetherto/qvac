@@ -45,7 +45,12 @@ export function projectSurface({ root, paths }: SurfaceSource): Surface {
   const api = readJson<PackageApi>(path.join(generated, 'api.json'))
   if (api) {
     // `source` is where the declaration sits, which a move changes and a reader never relies on.
-    for (const { source: _source, ...entry } of api.exports) surface.set(`export:${entry.name}`, entry)
+    for (const { source: _source, ...entry } of api.exports) {
+      // An interface and a value can share a name (`export =` of a merged
+      // declaration); the second is told apart by its kind.
+      const id = surface.has(`export:${entry.name}`) ? `export:${entry.name}:${entry.kind}` : `export:${entry.name}`
+      surface.set(id, entry)
+    }
   }
   return surface
 }
