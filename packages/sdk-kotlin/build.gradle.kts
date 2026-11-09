@@ -88,6 +88,7 @@ signing {
 
 val generateContract = tasks.register<Exec>("generateContract") {
     inputs.files(fileTree("scripts") { include("*.py") })
+    inputs.file("scripts/schema-type-names.json")
     commandLine("python3", "$projectDir/scripts/generate-contract.py")
     inputs.dir(projectDir.parentFile.resolve("sdk/contract"))
     inputs.file(projectDir.parentFile.resolve("sdk/package.json"))
@@ -96,6 +97,7 @@ val generateContract = tasks.register<Exec>("generateContract") {
 
 val checkContract = tasks.register<Exec>("checkContract") {
     inputs.files(fileTree("scripts") { include("*.py") })
+    inputs.file("scripts/schema-type-names.json")
     commandLine("python3", "$projectDir/scripts/generate-contract.py", "--check")
     inputs.dir(projectDir.parentFile.resolve("sdk/contract"))
     inputs.file(projectDir.parentFile.resolve("sdk/package.json"))
