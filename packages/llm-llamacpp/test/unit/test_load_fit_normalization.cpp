@@ -2508,8 +2508,9 @@ TEST_F(LoadFitNormalizationTest, TensorSplitRejectsXdna) {
   }
 }
 
-// The mock names later fail fabric's --device parse, so only the XDNA check is
-// under test: it must not refuse a layer split.
+// No device is registered in the unit tests, so fabric's --device parser
+// refuses the list. Failing there, on its first name, shows normalization
+// accepted the layer split and handed the whole list to fabric.
 TEST_F(LoadFitNormalizationTest, LayerSplitAcceptsXdna) {
   auto config = baseConfig();
   config["devices"] = "local,XDNA0";
@@ -2524,10 +2525,13 @@ TEST_F(LoadFitNormalizationTest, LayerSplitAcceptsXdna) {
   try {
     static_cast<void>(lfn::normalizeLoadForFit(
         "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies));
-  } catch (const std::exception& error) {
+    FAIL() << "fabric's --device parser must refuse the unregistered names";
+  } catch (const qvac_errors::StatusError& error) {
     EXPECT_THAT(
         error.what(),
-        ::testing::Not(::testing::HasSubstr("does not support the XDNA")));
+        ::testing::HasSubstr(
+            "error while handling argument \"--device\": invalid device: "
+            "local"));
   }
 }
 
