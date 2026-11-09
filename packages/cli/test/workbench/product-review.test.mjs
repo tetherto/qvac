@@ -44,6 +44,34 @@ test('the management pages open from anywhere: devices, workspaces, status, help
   assert.equal(app.page, 'overview')
 })
 
+test('/ opens the palette, which runs a command by name and closes on esc', async () => {
+  const { app } = await boot()
+  press(app, '/')
+  assert.ok(app.picker)
+  assert.match(screen(app), /Commands\s+type to filter/)
+  assert.match(screen(app), /\/status\s+Peers, models loaded/)
+  assert.match(screen(app), /▸ 1 Overview\s+2 Device\s+3 Models/)
+  for (const key of 'stat') {
+    press(app, key)
+  }
+  assert.doesNotMatch(screen(app), /\/overview/)
+  press(app, 'return')
+  assert.equal(app.picker, null)
+  assert.equal(app.page, 'status')
+  press(app, '/')
+  press(app, 'escape')
+  assert.equal(app.picker, null)
+  assert.equal(app.page, 'status')
+})
+
+test('setup keeps the slash: a form takes it as text', async () => {
+  const { app } = await boot()
+  app.page = 'name'
+  press(app, '/')
+  assert.equal(app.picker, null)
+  assert.equal(app.form, '/')
+})
+
 test('a model is loaded or unloaded from the Models page, never chosen for a chat', async () => {
   const { app, engine } = await boot({
     startPage: 'models',
@@ -105,5 +133,14 @@ test('frames fit the terminal at every size on every page', async () => {
         assert.ok(app.measure(row) <= width, `${page} at ${width}x${height}: ${row}`)
       }
     }
+
+    press(app, '/')
+    const rows = screen(app).split('\n')
+    assert.equal(rows.length, height, `palette at ${width}x${height}`)
+    for (const row of rows) {
+      assert.ok(app.measure(row) <= width, `palette at ${width}x${height}: ${row}`)
+    }
+
+    press(app, 'escape')
   }
 })

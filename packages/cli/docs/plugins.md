@@ -2,9 +2,9 @@
 
 A plugin adds tools, hooks or services to the harness: the part of QV.AC that runs the model and
 its tools on your device. `qvac` loads plugins when Core starts, so turning one on means a restart.
-The `/plugins` screen does that for you in place. To change the terminal app itself (commands,
-footer, keys, colours), write an [extension](extensions.md). With a 9B or larger model, QV.AC can
-write a plugin for you: ask it, and its [`qvac-plugins` skill](skills.md) takes over.
+duck's `/plugins` screen does that for you in place. To change duck itself (commands, footer,
+keys, colours), write an [extension](../../duck/docs/extensions.md). With a 9B or larger model,
+QV.AC can write a plugin for you: ask it, and its [`qvac-plugins` skill](skills.md) takes over.
 
 In a project, `coding`, the platform sandbox and `lsp` are on by default. See
 [Configuration](config.md) for the defaults, how they layer with `qvac.config` and `plugins.json`,
