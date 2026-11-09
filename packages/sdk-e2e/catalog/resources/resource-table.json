@@ -110,6 +110,24 @@
     },
     "type": "llamacpp-embedding"
   },
+  "embeddinggemma2": {
+    "constant": {
+      "$const": "EMBEDDINGGEMMA_2_Q8_0"
+    },
+    "type": "llamacpp-embedding",
+    "config": {
+      "projectionModelSrc": {
+        "$const": "MMPROJ_EMBEDDINGGEMMA_2_Q8_0"
+      },
+      "ctxSize": 2048,
+      "batchSize": 2048
+    },
+    "configOn": {
+      "mobile-android": {
+        "flashAttention": "off"
+      }
+    }
+  },
   "rerank": {
     "modelSrc": "https://huggingface.co/ggml-org/models/resolve/499bc8821c6b12b4e53c5bffcb21ec206f212d81/jina-reranker-v1-tiny-en/ggml-model-f16.gguf",
     "type": "llamacpp-rerank"

@@ -14,6 +14,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-05
+
 ### Breaking
 
 - `assessFit` returns `{ status, devices, stats }`: the device the load
@@ -25,6 +27,11 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Added
 
+- Full TranscribePsy-250M-EU support through the Parakeet engine: a 25-language
+  GGUF embeds its CAFE adapters and language gate. `parakeetConfig.language`
+  selects the English trunk (`"en"`), non-English adapters (`"other"`), or
+  automatic routing (`"auto"`, also the default when omitted)
+  ([#5590](https://github.com/tetherto/qvac/pull/5590)).
 - Parakeet backend selection through `parakeetConfig.backend` and `assessFit`.
 - Native speaker-attributed batch transcription with a separate diarization
   model and merge, minimum-duration and padding options.
@@ -34,6 +41,9 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ### Changed
 
+- Update the shared `speech-cpp` native dependency to `2026-11-04#1` for full
+  TranscribePsy EU support ([#5590](https://github.com/tetherto/qvac/pull/5590)).
+- Update `@qvac/decoder-audio` to `^0.9.0` to include the FFmpeg resource cleanup fix.
 - Update the shared `speech-cpp` native dependency to `2026-10-29`
   ([#5420](https://github.com/tetherto/qvac/pull/5420),
   [#5447](https://github.com/tetherto/qvac/pull/5447)).
