@@ -35,6 +35,8 @@ export {
   type ImageEmbeddingStats,
   VERBOSITY,
   type Attachment,
+  type HistoryContent,
+  type HistoryContentPart,
   type TranscribeStreamSession,
   type TranscribeStreamMetadataSession,
   type TranscribeStreamConversationSession,

@@ -120,6 +120,8 @@ export {
   type TranscribeStats,
   VERBOSITY,
   type Attachment,
+  type HistoryContent,
+  type HistoryContentPart,
   type TranscribeStreamSession,
   type TranscribeStreamMetadataSession,
   type TranscribeStreamConversationSession,

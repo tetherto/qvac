@@ -806,11 +806,81 @@ data class BatchCompletionStreamRequestPromptsItem(
 @Serializable
 data class BatchCompletionStreamRequestPromptsItemHistoryItem(
     @SerialName("role") val `role`: String,
-    @SerialName("content") val `content`: String? = null,
+    @SerialName("content") val `content`: BatchCompletionStreamRequestPromptsItemHistoryItemContent? = null,
     @SerialName("attachments") val `attachments`: List<BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem>? = null,
     @SerialName("toolCalls") val `toolCalls`: List<BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItem>? = null,
     @SerialName("toolCallId") val `toolCallId`: String? = null,
     @SerialName("toolName") val `toolName`: String? = null,
+)
+
+@Serializable(with = BatchCompletionStreamRequestPromptsItemHistoryItemContentSerializer::class)
+sealed class BatchCompletionStreamRequestPromptsItemHistoryItemContent {
+    data class Variant1(val value: String) : BatchCompletionStreamRequestPromptsItemHistoryItemContent()
+    data class Variant2(val value: List<BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item>) : BatchCompletionStreamRequestPromptsItemHistoryItemContent()
+}
+internal object BatchCompletionStreamRequestPromptsItemHistoryItemContentSerializer : KSerializer<BatchCompletionStreamRequestPromptsItemHistoryItemContent> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("BatchCompletionStreamRequestPromptsItemHistoryItemContent")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"text\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"},\"text\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"path\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"media\"},\"path\":{\"type\":\"string\"}}}]}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): BatchCompletionStreamRequestPromptsItemHistoryItemContent {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> BatchCompletionStreamRequestPromptsItemHistoryItemContent.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
+            1 -> BatchCompletionStreamRequestPromptsItemHistoryItemContent.Variant2(input.json.decodeFromJsonElement(serializer<List<BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item>>(), element))
+            else -> throw SerializationException("No matching BatchCompletionStreamRequestPromptsItemHistoryItemContent variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: BatchCompletionStreamRequestPromptsItemHistoryItemContent) {
+        when (value) {
+            is BatchCompletionStreamRequestPromptsItemHistoryItemContent.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is BatchCompletionStreamRequestPromptsItemHistoryItemContent.Variant2 -> encoder.encodeSerializableValue(serializer<List<BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item>>(), value.value)
+        }
+    }
+}
+
+@Serializable(with = BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2ItemSerializer::class)
+sealed class BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item {
+    data class BatchCompletionStreamRequestPromptsItemHistoryItemContentItemText(val value: io.tether.qvac.sdk.generated.schema.BatchCompletionStreamRequestPromptsItemHistoryItemContentItemText) : BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item()
+    data class BatchCompletionStreamRequestPromptsItemHistoryItemContentItemMedia(val value: io.tether.qvac.sdk.generated.schema.BatchCompletionStreamRequestPromptsItemHistoryItemContentItemMedia) : BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item()
+}
+internal object BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2ItemSerializer : KSerializer<BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"text\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"},\"text\":{\"type\":\"string\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"path\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"media\"},\"path\":{\"type\":\"string\"}}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item.BatchCompletionStreamRequestPromptsItemHistoryItemContentItemText(input.json.decodeFromJsonElement(serializer<BatchCompletionStreamRequestPromptsItemHistoryItemContentItemText>(), element))
+            1 -> BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item.BatchCompletionStreamRequestPromptsItemHistoryItemContentItemMedia(input.json.decodeFromJsonElement(serializer<BatchCompletionStreamRequestPromptsItemHistoryItemContentItemMedia>(), element))
+            else -> throw SerializationException("No matching BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item) {
+        when (value) {
+            is BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item.BatchCompletionStreamRequestPromptsItemHistoryItemContentItemText -> encoder.encodeSerializableValue(serializer<BatchCompletionStreamRequestPromptsItemHistoryItemContentItemText>(), value.value)
+            is BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item.BatchCompletionStreamRequestPromptsItemHistoryItemContentItemMedia -> encoder.encodeSerializableValue(serializer<BatchCompletionStreamRequestPromptsItemHistoryItemContentItemMedia>(), value.value)
+        }
+    }
+}
+
+@Serializable
+data class BatchCompletionStreamRequestPromptsItemHistoryItemContentItemText(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("type") val `type`: String = "text",
+    @SerialName("text") val `text`: String,
+)
+
+@Serializable
+data class BatchCompletionStreamRequestPromptsItemHistoryItemContentItemMedia(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("type") val `type`: String = "media",
+    @SerialName("path") val `path`: String,
 )
 
 @Serializable
@@ -1102,11 +1172,81 @@ data class CompletionOrchestrateRequest(
 @Serializable
 data class CompletionStreamRequestHistoryItem(
     @SerialName("role") val `role`: String,
-    @SerialName("content") val `content`: String? = null,
+    @SerialName("content") val `content`: CompletionStreamRequestHistoryItemContent? = null,
     @SerialName("attachments") val `attachments`: List<CompletionStreamRequestHistoryItemAttachmentsItem>? = null,
     @SerialName("toolCalls") val `toolCalls`: List<CompletionStreamRequestHistoryItemToolCallsItem>? = null,
     @SerialName("toolCallId") val `toolCallId`: String? = null,
     @SerialName("toolName") val `toolName`: String? = null,
+)
+
+@Serializable(with = CompletionStreamRequestHistoryItemContentSerializer::class)
+sealed class CompletionStreamRequestHistoryItemContent {
+    data class Variant1(val value: String) : CompletionStreamRequestHistoryItemContent()
+    data class Variant2(val value: List<CompletionStreamRequestHistoryItemContentVariant2Item>) : CompletionStreamRequestHistoryItemContent()
+}
+internal object CompletionStreamRequestHistoryItemContentSerializer : KSerializer<CompletionStreamRequestHistoryItemContent> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("CompletionStreamRequestHistoryItemContent")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"text\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"},\"text\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"path\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"media\"},\"path\":{\"type\":\"string\"}}}]}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): CompletionStreamRequestHistoryItemContent {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> CompletionStreamRequestHistoryItemContent.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
+            1 -> CompletionStreamRequestHistoryItemContent.Variant2(input.json.decodeFromJsonElement(serializer<List<CompletionStreamRequestHistoryItemContentVariant2Item>>(), element))
+            else -> throw SerializationException("No matching CompletionStreamRequestHistoryItemContent variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: CompletionStreamRequestHistoryItemContent) {
+        when (value) {
+            is CompletionStreamRequestHistoryItemContent.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is CompletionStreamRequestHistoryItemContent.Variant2 -> encoder.encodeSerializableValue(serializer<List<CompletionStreamRequestHistoryItemContentVariant2Item>>(), value.value)
+        }
+    }
+}
+
+@Serializable(with = CompletionStreamRequestHistoryItemContentVariant2ItemSerializer::class)
+sealed class CompletionStreamRequestHistoryItemContentVariant2Item {
+    data class CompletionStreamRequestHistoryItemContentItemText(val value: io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContentItemText) : CompletionStreamRequestHistoryItemContentVariant2Item()
+    data class CompletionStreamRequestHistoryItemContentItemMedia(val value: io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContentItemMedia) : CompletionStreamRequestHistoryItemContentVariant2Item()
+}
+internal object CompletionStreamRequestHistoryItemContentVariant2ItemSerializer : KSerializer<CompletionStreamRequestHistoryItemContentVariant2Item> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("CompletionStreamRequestHistoryItemContentVariant2Item")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"text\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"},\"text\":{\"type\":\"string\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"path\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"media\"},\"path\":{\"type\":\"string\"}}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): CompletionStreamRequestHistoryItemContentVariant2Item {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> CompletionStreamRequestHistoryItemContentVariant2Item.CompletionStreamRequestHistoryItemContentItemText(input.json.decodeFromJsonElement(serializer<CompletionStreamRequestHistoryItemContentItemText>(), element))
+            1 -> CompletionStreamRequestHistoryItemContentVariant2Item.CompletionStreamRequestHistoryItemContentItemMedia(input.json.decodeFromJsonElement(serializer<CompletionStreamRequestHistoryItemContentItemMedia>(), element))
+            else -> throw SerializationException("No matching CompletionStreamRequestHistoryItemContentVariant2Item variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: CompletionStreamRequestHistoryItemContentVariant2Item) {
+        when (value) {
+            is CompletionStreamRequestHistoryItemContentVariant2Item.CompletionStreamRequestHistoryItemContentItemText -> encoder.encodeSerializableValue(serializer<CompletionStreamRequestHistoryItemContentItemText>(), value.value)
+            is CompletionStreamRequestHistoryItemContentVariant2Item.CompletionStreamRequestHistoryItemContentItemMedia -> encoder.encodeSerializableValue(serializer<CompletionStreamRequestHistoryItemContentItemMedia>(), value.value)
+        }
+    }
+}
+
+@Serializable
+data class CompletionStreamRequestHistoryItemContentItemText(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("type") val `type`: String = "text",
+    @SerialName("text") val `text`: String,
+)
+
+@Serializable
+data class CompletionStreamRequestHistoryItemContentItemMedia(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("type") val `type`: String = "media",
+    @SerialName("path") val `path`: String,
 )
 
 @Serializable

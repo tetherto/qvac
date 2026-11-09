@@ -2260,6 +2260,34 @@ class AudioUnderstandResponse(GeneratedBaseModel):
     ] = None
 
 
+class BatchCompletionStreamRequestPromptsItemHistoryItemContentItemText(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["text"] = "text"
+    text: Annotated[
+        str, Field(description="Text rendered at this position in the turn.")
+    ]
+
+
+class BatchCompletionStreamRequestPromptsItemHistoryItemContentItemMedia(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["media"] = "media"
+    path: Annotated[
+        str,
+        Field(
+            description="Absolute or resolvable path to the media file (e.g., image for multimodal models).",
+            min_length=1,
+        ),
+    ]
+
+
 class BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem(
     GeneratedBaseModel
 ):
@@ -2310,9 +2338,14 @@ class BatchCompletionStreamRequestPromptsItemHistoryItem(GeneratedBaseModel):
         ),
     ]
     content: Annotated[
-        str | None,
+        str
+        | list[
+            BatchCompletionStreamRequestPromptsItemHistoryItemContentItemText
+            | BatchCompletionStreamRequestPromptsItemHistoryItemContentItemMedia
+        ]
+        | None,
         Field(
-            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
+            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string. A user turn may instead pass an ordered array of text/media parts, so each image keeps its position in the turn."
         ),
     ] = None
     attachments: Annotated[
@@ -3828,6 +3861,30 @@ class ClassifyResponse(GeneratedBaseModel):
     done: bool | None = None
 
 
+class CompletionOrchestrateRequestHistoryItemContentItemText(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["text"] = "text"
+    text: Annotated[
+        str, Field(description="Text rendered at this position in the turn.")
+    ]
+
+
+class CompletionOrchestrateRequestHistoryItemContentItemMedia(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["media"] = "media"
+    path: Annotated[
+        str,
+        Field(
+            description="Absolute or resolvable path to the media file (e.g., image for multimodal models).",
+            min_length=1,
+        ),
+    ]
+
+
 class CompletionOrchestrateRequestHistoryItemAttachmentsItem(GeneratedBaseModel):
     path: Annotated[
         str,
@@ -3874,9 +3931,14 @@ class CompletionOrchestrateRequestHistoryItem(GeneratedBaseModel):
         ),
     ]
     content: Annotated[
-        str | None,
+        str
+        | list[
+            CompletionOrchestrateRequestHistoryItemContentItemText
+            | CompletionOrchestrateRequestHistoryItemContentItemMedia
+        ]
+        | None,
         Field(
-            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
+            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string. A user turn may instead pass an ordered array of text/media parts, so each image keeps its position in the turn."
         ),
     ] = None
     attachments: Annotated[
@@ -4492,6 +4554,30 @@ class CompletionOrchestrateResponse(GeneratedBaseModel):
     ] = None
 
 
+class CompletionStreamRequestHistoryItemContentItemText(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["text"] = "text"
+    text: Annotated[
+        str, Field(description="Text rendered at this position in the turn.")
+    ]
+
+
+class CompletionStreamRequestHistoryItemContentItemMedia(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["media"] = "media"
+    path: Annotated[
+        str,
+        Field(
+            description="Absolute or resolvable path to the media file (e.g., image for multimodal models).",
+            min_length=1,
+        ),
+    ]
+
+
 class CompletionStreamRequestHistoryItemAttachmentsItem(GeneratedBaseModel):
     path: Annotated[
         str,
@@ -4538,9 +4624,14 @@ class CompletionStreamRequestHistoryItem(GeneratedBaseModel):
         ),
     ]
     content: Annotated[
-        str | None,
+        str
+        | list[
+            CompletionStreamRequestHistoryItemContentItemText
+            | CompletionStreamRequestHistoryItemContentItemMedia
+        ]
+        | None,
         Field(
-            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
+            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string. A user turn may instead pass an ordered array of text/media parts, so each image keeps its position in the turn."
         ),
     ] = None
     attachments: Annotated[
