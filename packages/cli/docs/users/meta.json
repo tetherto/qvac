@@ -4,6 +4,7 @@
   "root": true,
   "pages": [
     "index",
+    "reference",
     "...http-server"
   ]
 }
