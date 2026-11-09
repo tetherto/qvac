@@ -166,6 +166,7 @@ export async function extractTarStream(
 
         writeStream.on('finish', () => {
           fsPromises.rename(entryPartPath, filePath).then(() => {
+            if (settled) return
             partPath = null
             writeStream = null
             next()
@@ -173,7 +174,9 @@ export async function extractTarStream(
         })
         writeStream.on('error', fail)
       } else {
-        stream.on('end', next)
+        stream.on('end', () => {
+          if (!settled) next()
+        })
         stream.resume()
       }
     })
