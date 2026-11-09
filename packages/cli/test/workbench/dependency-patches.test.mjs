@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { patchDependencies, planPackagePatch } from '../../scripts/patch-dependencies.mjs'
+import { patchDependencies, planPackagePatch } from '@qvac/cli-kit/build'
 
 test('patch planning preserves pristine inputs and includes new runtime files', (t) => {
   const target = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-dependency-patch-'))

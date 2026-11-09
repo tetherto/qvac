@@ -46,7 +46,7 @@
   },
   "homepage": "https://qvac.tether.io",
   "scripts": {
-    "prepublishOnly": "node scripts/check-publish-ready.cjs",
+    "prepublishOnly": "node scripts/check-publish-ready.mjs",
     "build": "rm -rf dist && tsc && tsc-alias -p tsconfig.alias.json && node scripts/copy-vendor.mjs",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",

@@ -18,17 +18,23 @@ function fixture(t) {
       filter: (file) => !file.split(path.sep).includes('node_modules')
     })
   }
+  // the scripts call the kit, which the copy finds where the package does
+  fs.mkdirSync(path.join(dir, 'node_modules/@qvac'), { recursive: true })
+  fs.symlinkSync(
+    path.join(root, 'node_modules/@qvac/cli-kit'),
+    path.join(dir, 'node_modules/@qvac/cli-kit')
+  )
   return dir
 }
 
 function check(dir) {
-  return spawnSync(process.execPath, [path.join(dir, 'scripts/check-publish-ready.cjs')], {
+  return spawnSync(process.execPath, [path.join(dir, 'scripts/check-publish-ready.mjs')], {
     encoding: 'utf8'
   })
 }
 
 test('publish check accepts the committed manifest and distribution lock', () => {
-  execFileSync(process.execPath, [path.join(root, 'scripts/check-publish-ready.cjs')])
+  execFileSync(process.execPath, [path.join(root, 'scripts/check-publish-ready.mjs')])
 })
 
 test('publish check rejects a stale npm dependency lock', (t) => {

@@ -12,10 +12,12 @@
     "./config": "./dist/config.js",
     "./launch": "./dist/launch.js",
     "./testing": "./test/workbench/helpers/vt.mjs",
+    "./build": "./build/index.mjs",
     "./package.json": "./package.json"
   },
   "files": [
     "dist/**/*",
+    "build",
     "skills",
     "LICENSE",
     "NOTICE"
