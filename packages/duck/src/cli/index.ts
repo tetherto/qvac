@@ -51,7 +51,7 @@ export function tree({ version = '' } = {}) {
     ),
     arg('[message]', 'Your first message'),
     sloppy({ args: true }),
-    ...flags([...DEVICE, ...CHAT, 'version']),
+    ...flags([...DEVICE, ...CHAT, 'yes', 'version']),
     footer('Every flag also reads DUCK_<FLAG_NAME>, e.g. DUCK_DATA_DIR.'),
     bail(rethrow)
   )
