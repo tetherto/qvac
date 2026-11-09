@@ -176,6 +176,7 @@ jobs:
             echo "tschecks=$(echo "$M" | jq -c '[.[] | select(.hasTsChecks == true) | {package, tsCheckName: (
               {
                 "classification-ggml": "classification-ggml-pr-head-ts-checks / ts-checks",
+                "decision-ggml":       "decision-ggml-pr-head-ts-checks / ts-checks",
                 "diffusion-cpp":       "diffusion-pr-head-ts-checks",
                 "embed-llamacpp":      "embed-pr-head-ts-checks / ts-checks",
                 "ggml-rpc-server":     "ggml-rpc-server-pr-head-ts-checks / ts-checks",

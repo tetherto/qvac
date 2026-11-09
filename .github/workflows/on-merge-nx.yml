@@ -17,6 +17,7 @@ on:
       - "packages/audiogen-ggml/**"
       - "packages/bci-whispercpp/**"
       - "packages/classification-ggml/**"
+      - "packages/decision-ggml/**"
       - "packages/decoder-audio/**"
       - "packages/diffusion-cpp/**"
       - "packages/embed-llamacpp/**"
@@ -39,6 +40,7 @@ on:
           - audiogen-ggml
           - bci-whispercpp
           - classification-ggml
+          - decision-ggml
           - decoder-audio
           - diffusion-cpp
           - embed-llamacpp
@@ -104,6 +106,7 @@ jobs:
             audiogen-ggml: packages/audiogen-ggml/**
             bci-whispercpp: packages/bci-whispercpp/**
             classification-ggml: packages/classification-ggml/**
+            decision-ggml: packages/decision-ggml/**
             decoder-audio: packages/decoder-audio/**
             diffusion-cpp: packages/diffusion-cpp/**
             embed-llamacpp: packages/embed-llamacpp/**
