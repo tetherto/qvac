@@ -72,6 +72,10 @@ program
       'Ids match exactly; an id the catalog does not contain fails the run'
   )
   .option(
+    '--include-file <path>',
+    'Like --include, with the testIds read from this file, one per line'
+  )
+  .option(
     '--report-dir <dir>',
     'Directory to write reports + read device-mem.ndjson from (used by run:local; producer also writes test-timeline.ndjson here)'
   )
@@ -248,6 +252,10 @@ const addLocalOpts = (cmd: Command) =>
     .option(
       '--include <testIds>',
       'Exact testIds to run on top of the suite/filter selection (forwarded to producer)'
+    )
+    .option(
+      '--include-file <path>',
+      'Like --include, with the testIds read from this file, one per line (forwarded to producer)'
     )
     .option('--report-dir <dir>', 'Custom report directory')
 

@@ -78,7 +78,26 @@ function pinpointRequestError(request: unknown, fallback: z.ZodError): z.ZodErro
   for (const option of requestSchema.options) {
     if (memberDiscriminator(option as RequestMemberIntrospect) !== type) continue
     const result = (option as z.ZodType).safeParse(request)
-    return result.success ? fallback : result.error
+    if (result.success) return fallback
+    // A method can itself accept several input shapes. Preserve field errors
+    // shared by every shape, such as an invalid modelId on either embed arm.
+    const union = result.error.issues.find(
+      (issue) => issue.code === 'invalid_union' && issue.path.length === 0
+    )
+    if (union?.code === 'invalid_union' && union.errors.length > 0) {
+      const shared = union.errors[0]!.filter((issue) =>
+        union.errors.every((branch) =>
+          branch.some(
+            (other) =>
+              other.code === issue.code &&
+              other.message === issue.message &&
+              JSON.stringify(other.path) === JSON.stringify(issue.path)
+          )
+        )
+      )
+      if (shared.length > 0) return new z.ZodError(shared)
+    }
+    return result.error
   }
   return fallback
 }
@@ -461,6 +480,7 @@ async function* streamBase<T extends Request>(
     }
   } finally {
     stopDestroyOnAbort()
+    responseStream.destroy()
   }
 }
 
@@ -476,6 +496,7 @@ async function* streamProfiled<T extends Request>(
   const timings = createClientStreamTimings(profileId, requestType)
   let profilingMeta: ReturnType<typeof extractProfilingMeta> = undefined
   let stopDestroyOnAbort = () => {}
+  let responseStream: RPC.IncomingStream | undefined
 
   try {
     const zodStart = nowMs()
@@ -495,7 +516,7 @@ async function* streamProfiled<T extends Request>(
     timings.sendStart = nowMs()
     req.send(payload, 'utf-8')
 
-    const responseStream = req.createResponseStream({ encoding: 'utf-8' })
+    responseStream = req.createResponseStream({ encoding: 'utf-8' })
     stopDestroyOnAbort = destroyOnAbort(responseStream, options.signal)
     let buffer = ''
 
@@ -554,6 +575,7 @@ async function* streamProfiled<T extends Request>(
     throw error
   } finally {
     stopDestroyOnAbort()
+    responseStream?.destroy()
     if (timings.chunkCount > 0) {
       timings.requestEnd = nowMs()
       recordClientStreamEvents(timings, profilingMeta)
