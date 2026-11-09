@@ -1,23 +1,29 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 
-export function cliArchivePath (directory, index) {
-  const file = index['@qvac/cli']
+// A package that packs its own validated archive from a clean install of its
+// shrinkwrap, through the kit's pack: the CLI and duck.
+export function packsArchive (root, dir) {
+  return existsSync(join(root, dir, 'scripts/pack-distribution.mjs'))
+}
+
+export function archivePath (directory, index, name) {
+  const file = index[name]
   if (typeof file !== 'string' || basename(file) !== file || !file.endsWith('.tgz')) {
-    throw new Error('The CLI release requires its validated train tarball')
+    throw new Error(`The ${name} release requires its validated train tarball`)
   }
   return resolve(directory, file)
 }
 
-export function validateCliArchive (manifest, { version, head }) {
-  if (manifest.name !== '@qvac/cli' || manifest.version !== version || manifest.gitHead !== head) {
-    throw new Error('CLI archive name/version/gitHead does not match this release')
+export function validateArchive (manifest, { name, version, head }) {
+  if (manifest.name !== name || manifest.version !== version || manifest.gitHead !== head) {
+    throw new Error(`${name} archive name/version/gitHead does not match this release`)
   }
 }
 
-// Keep CLI in the existing Nx dependency graph, replacing only its publish action.
+// Keep the package in the existing Nx dependency graph, replacing only its publish action.
 // No archive path or release metadata is interpolated into shell command text.
-export function withCliArchiveTarget (root, dir, action) {
+export function withArchiveTarget (root, dir, action) {
   const file = join(root, dir, 'project.json')
   const original = readFileSync(file, 'utf8')
   const project = JSON.parse(original)
@@ -28,7 +34,7 @@ export function withCliArchiveTarget (root, dir, action) {
     dependsOn: ['^nx-release-publish'],
     options: {
       cwd: root,
-      commands: [{ command: 'node .github/scripts/release-train.mjs publish-cli-archive', forwardAllArgs: false }],
+      commands: [{ command: 'node .github/scripts/release-train.mjs publish-archive', forwardAllArgs: false }],
     },
   }
   try {
@@ -37,4 +43,9 @@ export function withCliArchiveTarget (root, dir, action) {
   } finally {
     writeFileSync(file, original)
   }
+}
+
+// Every archive package's publish action replaced at once, innermost first.
+export function withArchiveTargets (root, dirs, action) {
+  return dirs.reduceRight((run, dir) => () => withArchiveTarget(root, dir, run), action)()
 }

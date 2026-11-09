@@ -39,7 +39,7 @@ import {
   stageManifest,
 } from './lib/release-train.mjs'
 
-import { cliArchivePath, validateCliArchive, withCliArchiveTarget } from './lib/cli-release.mjs'
+import { archivePath, packsArchive, validateArchive, withArchiveTargets } from './lib/cli-release.mjs'
 
 const CATALOG = '.github/release-trains.json'
 const TARBALL_INDEX = 'tarballs.json'
@@ -247,7 +247,7 @@ function packTrain ([name, dest]) {
     const before = new Set(readdirSync(out))
     const restore = stampGitHead(dir, head)
     try {
-      if (project === '@qvac/cli') {
+      if (packsArchive(repoRoot, dir)) {
         capture(process.execPath, ['scripts/pack-distribution.mjs', out], { cwd: join(repoRoot, dir) })
       } else {
         capture('pnpm', ['pack', '--pack-destination', out], { cwd: join(repoRoot, dir), env: { ...process.env, PNPM_CONFIG_IGNORE_SCRIPTS: 'true' } })
@@ -265,17 +265,20 @@ function packTrain ([name, dest]) {
 }
 
 
-function publishCliArchive () {
-  const archive = process.env.QVAC_RELEASE_CLI_ARCHIVE
-  const version = process.env.QVAC_RELEASE_CLI_VERSION
-  const head = process.env.QVAC_RELEASE_CLI_HEAD
-  if (!archive || !version || !head) throw new Error('CLI archive publishing must run inside a validated release train')
-  validateCliArchive(JSON.parse(capture('tar', ['-xOf', archive, 'package/package.json'])), { version, head })
-  const args = ['publish', archive, '--ignore-scripts', '--tag=latest', '--access=public']
-  const dryRun = process.env.QVAC_RELEASE_CLI_DRY_RUN === 'true'
+// nx names the project whose publish target runs; the train validated its archive.
+function publishArchive () {
+  const name = process.env.NX_TASK_TARGET_PROJECT
+  const archives = process.env.QVAC_RELEASE_ARCHIVES
+  const head = process.env.QVAC_RELEASE_HEAD
+  if (!name || !archives || !head) throw new Error('Archive publishing must run inside a validated release train')
+  const entry = JSON.parse(archives)[name]
+  if (!entry) throw new Error(`${name} has no validated archive in this release`)
+  validateArchive(JSON.parse(capture('tar', ['-xOf', entry.archive, 'package/package.json'])), { name, version: entry.version, head })
+  const args = ['publish', entry.archive, '--ignore-scripts', '--tag=latest', '--access=public']
+  const dryRun = process.env.QVAC_RELEASE_DRY_RUN === 'true'
   if (dryRun) args.push('--dry-run')
   else if (process.env.PNPM_CONFIG_PROVENANCE === 'true') args.push('--provenance')
-  if (run('npm', args, { stdio: 'inherit' }).status !== 0) throw new Error('CLI archive publication failed')
+  if (run('npm', args, { stdio: 'inherit' }).status !== 0) throw new Error(`${name} archive publication failed`)
 }
 
 function stagePackage ([dir, tarballDir]) {
@@ -320,25 +323,28 @@ function publishTrain ([movedJson], options) {
       `--projects=${pending.map((project) => project.name).join(',')}`,
       '--exclude-task-dependencies', '--tag=latest', '--access=public']
     if (options['dry-run']) args.push('--dry-run')
-    const cli = pending.find((project) => project.name === '@qvac/cli')
+    const archived = pending.filter((project) => packsArchive(repoRoot, project.dir))
     const env = { ...process.env }
-    if (cli) {
-      if (!options.tarballs) throw new Error('CLI publishing requires --tarballs from the validated build')
+    if (archived.length) {
+      if (!options.tarballs) throw new Error('Archive publishing requires --tarballs from the validated build')
       const index = JSON.parse(readFileSync(join(options.tarballs, TARBALL_INDEX), 'utf8'))
-      env.QVAC_RELEASE_CLI_ARCHIVE = cliArchivePath(options.tarballs, index)
-      env.QVAC_RELEASE_CLI_VERSION = cli.version
-      env.QVAC_RELEASE_CLI_HEAD = head
-      env.QVAC_RELEASE_CLI_DRY_RUN = String(options['dry-run'])
-      // Validate before publishing any member of the train.
-      validateCliArchive(JSON.parse(capture('tar', ['-xOf', env.QVAC_RELEASE_CLI_ARCHIVE, 'package/package.json'])), { version: cli.version, head })
+      const archives = {}
+      for (const { name, version } of archived) {
+        const archive = archivePath(options.tarballs, index, name)
+        // Validate before publishing any member of the train.
+        validateArchive(JSON.parse(capture('tar', ['-xOf', archive, 'package/package.json'])), { name, version, head })
+        archives[name] = { archive, version }
+      }
+      env.QVAC_RELEASE_ARCHIVES = JSON.stringify(archives)
+      env.QVAC_RELEASE_HEAD = head
+      env.QVAC_RELEASE_DRY_RUN = String(options['dry-run'])
     }
     const publish = () => {
       if (run('pnpm', args, { stdio: 'inherit', env }).status !== 0) {
         throw new Error('Publish failed. Re-run the workflow: versions already on npm are skipped.')
       }
     }
-    if (cli) withCliArchiveTarget(repoRoot, cli.dir, publish)
-    else publish()
+    withArchiveTargets(repoRoot, archived.map((project) => project.dir), publish)
   } finally {
     restores.forEach((restore) => restore())
   }
@@ -420,7 +426,7 @@ const commands = {
   pack: packTrain,
   stage: stagePackage,
   publish: publishTrain,
-  'publish-cli-archive': publishCliArchive,
+  'publish-archive': publishArchive,
   wait: waitServed,
   tag: tagTrain,
 }

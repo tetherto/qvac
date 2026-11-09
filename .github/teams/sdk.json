@@ -18,6 +18,8 @@
     "packages/sdk/",
     "packages/sdk-e2e/",
     "packages/cli/",
+    "packages/cli-kit/",
+    "packages/duck/",
     "packages/rag/",
     "packages/logging/",
     "packages/error/",

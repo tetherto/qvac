@@ -15,6 +15,8 @@ on:
       - "packages/sdk-e2e/**"
       - "packages/sdk-kotlin/**"
       - "packages/cli/**"
+      - "packages/cli-kit/**"
+      - "packages/duck/**"
       - "packages/rag/**"
       - "packages/logging/**"
       - "packages/error/**"

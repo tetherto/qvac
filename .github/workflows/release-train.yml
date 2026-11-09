@@ -171,12 +171,12 @@ jobs:
           TRAIN_PROJECTS: ${{ needs.train.outputs.projects }}
         run: pnpm exec nx run-many -t build --projects="$TRAIN_PROJECTS" --exclude-task-dependencies
 
-      # The CLI's publish check runs inside pack-distribution below.
+      # The CLI's and duck's publish checks run inside pack-distribution below.
       # Other packages retain their workspace prepublishOnly checks.
       - name: Run prepublishOnly checks
         env:
           TRAIN_PROJECTS: ${{ needs.train.outputs.projects }}
-        run: pnpm exec nx run-many -t prepublishOnly --projects="$TRAIN_PROJECTS" --exclude=@qvac/cli
+        run: pnpm exec nx run-many -t prepublishOnly --projects="$TRAIN_PROJECTS" --exclude=@qvac/cli,@qvac/duck
 
       # The publish job compares what npm stores against these tarballs. Packing
       # also fails on a package whose dist/ is empty.
