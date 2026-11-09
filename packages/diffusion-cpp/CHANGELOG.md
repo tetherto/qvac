@@ -2,13 +2,16 @@
 
 ## [Unreleased]
 
-### Features
+## [0.35.1] - 2026-11-09
+
+### Fixes
 
 - Windows x64 prebuilds enable CUDA and ship `qvac-diffusion-ggml-cuda.dll`
   alongside the Vulkan backend. CUDA requires the NVIDIA driver and CUDA 13
   runtime/cuBLAS DLLs on the host. The addon retains CPU-only loading support.
 - Validate Windows CUDA DLL packaging and imports, and require explicit CUDA
-  image generation on the Windows GPU integration runner.
+  image generation on the Windows GPU integration runner
+  ([#5583](https://github.com/tetherto/qvac/pull/5583)).
 
 ## [0.35.0] - 2026-11-06
 
