@@ -205,10 +205,10 @@ function optionsOf(leaf: Command | null) {
   return options as LaunchOptions
 }
 
-export function readEnv(env: Record<string, string | undefined>): LaunchOptions {
+export function readEnv(env: Record<string, string | undefined>, prefix = 'QVAC'): LaunchOptions {
   const options: Record<string, string | boolean | undefined> = {}
   for (const f of FLAGS) {
-    const value = env[envName(f)]
+    const value = env[envName(f, prefix)]
     if (value === undefined || NO_ENV.has(f.name) || f.key in options) {
       continue
     }

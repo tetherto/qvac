@@ -1,4 +1,10 @@
-import type { LaunchOptions, LoadedConfig, CoreConfig, ParsedCommand } from '../lib/types.js'
+import type {
+  CommandTree,
+  LaunchOptions,
+  LoadedConfig,
+  CoreConfig,
+  ParsedCommand
+} from '../lib/types.js'
 // Runtime-agnostic: bin/qvac.mjs runs it on Node, bin/qvac-bare.mjs on Bare; each starts the app.
 import fs from '#fs'
 import path from '#path'
@@ -8,7 +14,6 @@ import { AbortController } from '#abort-controller'
 import { fileURLToPath } from '#url'
 import { loadConfig } from '../lib/runtime/config.js'
 import { runtimeJson } from '../lib/runtime/config-json.js'
-import { find, parseArgs } from './index.js'
 import { packageVersion, versionText } from './version.js'
 import type { ChildProcess } from 'node:child_process'
 
@@ -17,19 +22,29 @@ const root = import.meta.url.startsWith('file:')
   : path.dirname(fileURLToPath(import.meta.asset('../../package.json')))
 const version = packageVersion(root)
 
+// tree: the product's commands; name: the bin, as usage errors say it;
 // launcher: how the app calls back; runApp starts it
 export async function launch(
   args: string[],
   {
+    tree,
+    name,
     launcher,
     runApp,
     node = process.execPath
   }: {
+    tree: CommandTree
+    name: string
     launcher: LaunchOptions['launcher'] | null
     runApp(options: LaunchOptions, env: NodeJS.ProcessEnv): Promise<void> | void
     node?: string
   }
 ) {
+  const usage: (message: string) => never = (message) => {
+    console.error(`${name}: ${message}`)
+    process.exit(2)
+  }
+
   // The app asks for this when Core restarts, so a plugin added to qvac.config since launch loads.
   if (args[0] === '__runtime-config') {
     await rewriteRuntimeConfig(args[1]!, args[2])
@@ -38,13 +53,13 @@ export async function launch(
 
   let parsed: ParsedCommand
   try {
-    parsed = parseArgs(args, { env: process.env })
+    parsed = tree.parseArgs(args, { env: process.env })
   } catch (error) {
     usage(error instanceof Error ? error.message : String(error))
   }
 
   const app = async (options: LaunchOptions) => {
-    const env = await prepare(options)
+    const env = await prepare(options, name)
     options.launcher = launcher ?? undefined
     await runApp(options, env)
   }
@@ -67,14 +82,14 @@ export async function launch(
     node,
     app,
     usage,
-    loadConfig: config,
+    loadConfig: (file?: string) => config(file, name),
     dataDir,
     supervise,
     fs,
     process,
     AbortController
   }
-  const route = find(command, action)
+  const route = tree.find(command, action)
   if (route.where !== 'launcher' && route.where !== 'app') {
     throw new Error(`Invalid launcher command: ${command}`)
   }
@@ -93,25 +108,20 @@ async function rewriteRuntimeConfig(file: string, configFile?: string) {
 }
 
 // fills options in place and returns the env the app runs with
-async function prepare(options: LaunchOptions) {
+async function prepare(options: LaunchOptions, name: string) {
   options.version = version
 
-  return applyConfig(options, { loaded: await config(options.configFile) })
+  return applyConfig(options, { loaded: await config(options.configFile, name) })
 }
 
 // a config that is missing or does not load is the user's to fix, so it gets a line, not a stack
-async function config(file?: string) {
+async function config(file: string | undefined, name: string) {
   try {
     return await loadConfig({ file })
   } catch (error) {
-    console.error(`qvac: ${error instanceof Error ? error.message : String(error)}`)
+    console.error(`${name}: ${error instanceof Error ? error.message : String(error)}`)
     process.exit(1)
   }
-}
-
-function usage(message: string): never {
-  console.error(`qvac: ${message}`)
-  process.exit(2)
 }
 
 function dataDir(options: LaunchOptions, core: CoreConfig) {

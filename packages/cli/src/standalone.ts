@@ -2,6 +2,7 @@ import type { LaunchOptions } from './lib/types.js'
 // The Pear entry: the same launcher as qvac-bare, with Core and the harness bundled as assets.
 import process from 'bare-process'
 import { launch } from './cli/launch.js'
+import { find, parseArgs } from './cli/index.js'
 
 // Child bundles resolve native addons and skills beside themselves on disk.
 // Mark the entire staged tree as assets, not only the four entry files.
@@ -16,6 +17,8 @@ const entries = {
 }
 
 await launch(Bare.argv.slice(1), {
+  tree: { parseArgs, find },
+  name: 'qvac',
   launcher: null,
   node: 'node',
   async runApp(options: LaunchOptions, env) {

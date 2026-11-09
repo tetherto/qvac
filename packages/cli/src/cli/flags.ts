@@ -1,5 +1,5 @@
 import type { LaunchOptions } from '../lib/types.js'
-// Every flag qvac takes, once: commands name the ones they use, and each reads QVAC_<NAME> too.
+// Every flag qvac takes, once: commands name the ones they use, and each reads an env var too.
 import { flag } from 'paparam'
 
 // [name, option key, short, takes a value, what it does]
@@ -85,8 +85,9 @@ export function flags(names: string[]) {
 export const paramKey = (f: FlagDefinition) => camel(f.name.replace(/^no-/, ''))
 const camel = (name: string) => name.replace(/-(.)/g, (_, c: string) => c.toUpperCase())
 
-export function envName(f: FlagDefinition) {
-  return `QVAC_${f.name.toUpperCase().replaceAll('-', '_')}`
+// the env var a flag also reads: <PREFIX>_<FLAG_NAME>
+export function envName(f: FlagDefinition, prefix = 'QVAC') {
+  return `${prefix}_${f.name.toUpperCase().replaceAll('-', '_')}`
 }
 
 export type FlagDefinition = (typeof FLAGS)[number]

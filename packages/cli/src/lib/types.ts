@@ -2,6 +2,7 @@ import type { AccessPolicy } from '@qvac/harness'
 import type { AgentTargetConfig } from '@qvac/harness/plugins/external-agents'
 import type { Client, Capabilities } from '@qvac/core/client'
 import type { HarnessPlugin } from '@qvac/harness/plugins'
+import type { CommandRoute } from '../cli/commands/command.js'
 
 export type Agent = NonNullable<Awaited<ReturnType<Capabilities['listAgents']>>['agents']>[number]
 export type AgentProfile = Partial<
@@ -154,6 +155,11 @@ export interface CoreHost {
   logFile: string
   connectMs: number
   configure(): Promise<void>
+}
+// A product's commands: what the launcher parses, and the runner for a command it names.
+export interface CommandTree {
+  parseArgs(argv: string[], options?: { env?: Record<string, string | undefined> }): ParsedCommand
+  find(command: string, action?: string | null): CommandRoute
 }
 export interface ParsedCommand {
   command: string

@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { launch, supervise } from './cli/launch.js'
+import { find, parseArgs } from './cli/index.js'
 import { sdkArguments } from './cli/commands/sdk/arguments.js'
 
 const require = createRequire(import.meta.url)
@@ -18,6 +19,8 @@ if (sdkWords) {
 } else {
   // Node launches, and the app runs in a Bare child it supervises.
   await launch(process.argv.slice(2), {
+    tree: { parseArgs, find },
+    name: 'qvac',
     launcher: { runtime: process.execPath, script: fileURLToPath(import.meta.url) },
     runApp(options: LaunchOptions, env) {
       const bare = require('bare-runtime')()
