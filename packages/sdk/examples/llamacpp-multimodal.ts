@@ -3,7 +3,8 @@ import {
   loadModel,
   SMOLVLM2_500M_MULTIMODAL_Q8_0,
   MMPROJ_SMOLVLM2_500M_MULTIMODAL_Q8_0,
-  unloadModel
+  unloadModel,
+  type HistoryContentPart
 } from '@qvac/sdk'
 
 if (process.argv.length < 3) {
@@ -83,20 +84,16 @@ try {
   console.log('▸ --------------------------------')
 
   // Ordered text and media: each image keeps its position in the turn, so the
-  // text can sit next to the picture it refers to. Attachments cannot do this
-  // — they are all sent before the text.
-  const history3 = [
-    {
-      role: 'user',
-      content: [
-        { type: 'text', text: 'Image A: ' },
-        { type: 'media', path: imageFilePath },
-        { type: 'text', text: '\nImage B: ' },
-        { type: 'media', path: imageFilePath2 },
-        { type: 'text', text: '\nWhich image is a newspaper?' }
-      ]
-    }
-  ] satisfies Parameters<typeof completion>[0]['history']
+  // text can sit next to the picture it refers to. Attachments can't do this,
+  // because they are all sent before the text.
+  const content: HistoryContentPart[] = [
+    { type: 'text', text: 'Image A: ' },
+    { type: 'media', path: imageFilePath },
+    { type: 'text', text: '\nImage B: ' },
+    { type: 'media', path: imageFilePath2 },
+    { type: 'text', text: '\nWhich image is a newspaper?' }
+  ]
+  const history3 = [{ role: 'user', content }]
 
   const result3 = completion({ modelId, history: history3, stream: true })
 

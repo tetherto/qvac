@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto'
 import { writeFile, unlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { CompletionParams, Tool } from '@qvac/sdk'
+import type { HistoryContent, HistoryContentPart, Tool } from '@qvac/sdk'
 import {
   chatMessage,
   responseFormat,
@@ -86,15 +86,11 @@ interface PartsHistoryItem extends ToolTurnFields {
 
 type ChatHistoryItem = TextHistoryItem | PartsHistoryItem
 
-// Taken from the SDK so the parts we build stay in step with what it validates.
-type SdkHistoryContent = CompletionParams['history'][number]['content']
-type SdkContentPart = Extract<SdkHistoryContent, unknown[]>[number]
-
 // The SDK `completion` history reads images from disk by path; writeChatImages turns the
 // decoded bytes into these just-in-time at the inference call (mirrors routes/audio.ts).
 interface SdkHistoryItem extends ToolTurnFields {
   role: string
-  content: SdkHistoryContent
+  content: HistoryContent
   attachments?: Array<{ path: string }>
 }
 
@@ -241,8 +237,8 @@ export async function writeChatImages(
 async function writeMediaParts(
   parts: DecodedContentPart[],
   writeImage: (image: ImageAttachment) => Promise<string>
-): Promise<SdkContentPart[]> {
-  const written: SdkContentPart[] = []
+): Promise<HistoryContentPart[]> {
+  const written: HistoryContentPart[] = []
   for (const part of parts) {
     written.push(
       part.type === 'text' ? part : { type: 'media', path: await writeImage(part.image) }
