@@ -1,0 +1,16 @@
+{
+  "ios": {
+    "core": [
+      "runLayaTest",
+      "runDecisionEngineTest"
+    ],
+    "multi": []
+  },
+  "android": {
+    "core": [
+      "runLayaTest",
+      "runDecisionEngineTest"
+    ],
+    "multi": []
+  }
+}

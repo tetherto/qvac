@@ -49,7 +49,11 @@ string(REPLACE "|" ";" _inputs "${INPUTS}")
 set(_allow
   "llama_" "llava_" "mtmd_" "ggml_" "gguf_"
   "common_" "json_schema_to_grammar" "string_"
-  "set_process_priority" "postprocess_cpu_params" "metadata_handle_deleter")
+  "set_process_priority" "postprocess_cpu_params" "metadata_handle_deleter"
+  # For upstream server-context in the decision addon: libcommon's jinja engine
+  # (MSVC decorates its members, vtables and RTTI with "@jinja@@") and two
+  # libcommon helpers.
+  "@jinja@@" "fs_validate_filename" "glob_match")
 string(JOIN "|" _alt ${_allow})
 set(_pattern "(${_alt})")
 

@@ -21,3 +21,10 @@ __Z*string_*
 *set_process_priority*
 *postprocess_cpu_params*
 *metadata_handle_deleter*
+__ZN5jinja*
+__ZNK5jinja*
+__ZTVN5jinja*
+__ZTIN5jinja*
+__ZTSN5jinja*
+__Z*fs_validate_filename*
+__Z*glob_match*

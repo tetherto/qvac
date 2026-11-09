@@ -79,6 +79,13 @@ jobs:
     with:
       workdir: packages/classification-ggml
 
+  decision-ggml-pr-head-ts-checks:
+    needs: matrix
+    if: contains(fromJSON(needs.matrix.outputs.tspackages), 'decision-ggml')
+    uses: ./.github/workflows/reusable-ts-checks.yml
+    with:
+      workdir: packages/decision-ggml
+
   embed-pr-head-ts-checks:
     needs: matrix
     if: contains(fromJSON(needs.matrix.outputs.tspackages), 'embed-llamacpp')

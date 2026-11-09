@@ -148,6 +148,48 @@ test('fabric exports its own C API on every platform', () => {
   )
 })
 
+test('the runtime exports what server-context needs, and ships its archive', () => {
+  // The decision addon links upstream server-context statically and resolves
+  // its libcommon references (the jinja engine, two helpers) from this runtime.
+  const map = read('symbols.map')
+  for (const pattern of [
+    '_ZN5jinja*',
+    '_ZNK5jinja*',
+    '_ZTVN5jinja*',
+    '_ZTIN5jinja*',
+    '_ZTSN5jinja*'
+  ]) {
+    assert.match(map, new RegExp('^\\s*' + pattern.replace('*', '\\*') + ';', 'm'), pattern)
+  }
+  assert.match(map, /^\s*fs_validate_filename\*;/m)
+  assert.match(map, /^\s*glob_match\*;/m)
+  const exportsTxt = read('exports.txt').split(/\r?\n/)
+  for (const pattern of [
+    '__ZN5jinja*',
+    '__ZNK5jinja*',
+    '__ZTVN5jinja*',
+    '__ZTIN5jinja*',
+    '__ZTSN5jinja*',
+    '__Z*fs_validate_filename*',
+    '__Z*glob_match*'
+  ]) {
+    assert.ok(exportsTxt.includes(pattern), pattern)
+  }
+  const def = read('cmake/generate-windows-def.cmake')
+  for (const fragment of ['"@jinja@@"', '"fs_validate_filename"', '"glob_match"']) {
+    assert.ok(def.includes(fragment), fragment)
+  }
+  assert.ok(
+    vcpkgJson.dependencies.some(
+      (dep) => dep.name === 'qvac-fabric' && (dep.features || []).includes('server-context')
+    )
+  )
+  assert.match(
+    read('CMakeLists.txt'),
+    /install\(FILES \$<TARGET_FILE:llama::server-context>\s+DESTINATION \$\{_fabric_host\}\/server-context\)/
+  )
+})
+
 test('the Mach-O export list does not re-export host symbols', () => {
   const imports = new Set()
   for (const file of fs.readdirSync(path.join(packageRoot, 'addon'))) {

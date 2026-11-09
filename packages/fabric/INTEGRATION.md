@@ -242,6 +242,23 @@ A standard consumer map exports only `bare_*` / `napi_*`:
 The large `llama_* / ggml_* / common_*` export surface lives in `@qvac/fabric`'s
 own `symbols.map` / `exports.txt`, not in the consumer.
 
+### Upstream server-context (decision addon only)
+
+Fabric builds upstream llama.cpp's `server-context` (decision execution without
+the HTTP server) but does not link it into the runtime. It ships the archive in
+each platform package under `prebuilds/<host>/server-context/`, from the same
+build as the runtime, and its headers under `prebuilds/include/llama/server-context`.
+An addon that needs it links it statically after `qvac_addon_use_fabric()`:
+
+```cmake
+qvac_addon_link_fabric_server_context(${my-addon})
+```
+
+Its `llama` / `common` / `mtmd` references resolve from the shared runtime. For
+that, the runtime also exports libcommon's `jinja` engine, `fs_validate_filename`
+and `glob_match` (in `symbols.map`, `exports.txt` and
+`cmake/generate-windows-def.cmake`). `@qvac/decision-ggml` is the only consumer.
+
 ---
 
 ## Step 4 — Pre-loading and binding @qvac/fabric

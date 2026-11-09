@@ -5,7 +5,7 @@
 # pass `secrets: inherit` so the reusable can read AWS_OIDC_ROLE_ARN
 # and MODEL_S3_BUCKET.
 #
-# Coverage today: bci-whispercpp, diffusion-cpp, embed-llamacpp,
+# Coverage today: bci-whispercpp, decision-ggml, diffusion-cpp, embed-llamacpp,
 # ggml-rpc-server, llm-llamacpp, nmtcpp, parakeet, tts-ggml,
 # turbovec-ggml, whispercpp. All prebuild workflows in the monorepo
 # now route through this reusable.

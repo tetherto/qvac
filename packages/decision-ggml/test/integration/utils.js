@@ -1,0 +1,621 @@
+'use strict'
+
+const fs = require('bare-fs')
+const path = require('bare-path')
+const https = require('bare-https')
+const os = require('bare-os')
+const crypto = require('bare-crypto')
+
+const TRANSIENT_ERROR_CODES = new Set([
+  // DNS / name resolution
+  'EAI_NODATA',
+  'EAI_AGAIN',
+  'EAI_FAIL',
+  'ENOTFOUND',
+  // connectivity — these dominate mobile Device Farm flakiness: a transient
+  // network drop surfaces as ENETUNREACH/EHOSTUNREACH and MUST be retried.
+  'ENETUNREACH',
+  'EHOSTUNREACH',
+  'ECONNREFUSED',
+  // mid-transfer / timeout
+  'ETIMEDOUT',
+  'ECONNRESET',
+  'EPIPE',
+  'ECONNABORTED',
+  'ESIZE',
+  // post-transfer: request "resolved" but the .part is missing/short or could
+  // not be finalized (truncated/interrupted) — retry instead of hard-failing.
+  'EINCOMPLETE'
+])
+
+function isTransientError(err) {
+  if (err.code && TRANSIENT_ERROR_CODES.has(err.code)) return true
+  if (err.statusCode) {
+    const s = err.statusCode
+    return s === 408 || s === 429 || s >= 500
+  }
+  return false
+}
+
+function urlHost(url) {
+  try {
+    return new URL(url).host
+  } catch (_) {
+    return url
+  }
+}
+
+async function downloadFileOnce(url, dest, opts = {}) {
+  const { timeoutMs = 30_000, idleTimeoutMs = 30_000, maxRedirects = 10, _redirectCount = 0 } = opts
+  return new Promise((resolve, reject) => {
+    let resolved = false
+    const safeResolve = () => {
+      if (!resolved) {
+        resolved = true
+        resolve()
+      }
+    }
+    const safeReject = (err) => {
+      if (!resolved) {
+        resolved = true
+        reject(err)
+      }
+    }
+
+    const file = fs.createWriteStream(dest)
+    file.on('error', (err) => {
+      file.destroy()
+      fs.unlink(dest, () => safeReject(err))
+    })
+
+    const reqTimer = setTimeout(() => {
+      req.destroy(
+        Object.assign(new Error(`Request timeout after ${timeoutMs}ms from ${urlHost(url)}`), {
+          code: 'ETIMEDOUT'
+        })
+      )
+    }, timeoutMs)
+
+    const req = https.request(url, (response) => {
+      clearTimeout(reqTimer)
+
+      if ([301, 302, 307, 308].includes(response.statusCode)) {
+        file.destroy()
+        if (_redirectCount >= maxRedirects) {
+          fs.unlink(dest, () =>
+            safeReject(new Error(`Too many redirects (max ${maxRedirects}) from ${urlHost(url)}`))
+          )
+          return
+        }
+        fs.unlink(dest, (unlinkErr) => {
+          if (unlinkErr && unlinkErr.code !== 'ENOENT') return safeReject(unlinkErr)
+          const redirectUrl = new URL(response.headers.location, url).href
+          downloadFileOnce(redirectUrl, dest, { ...opts, _redirectCount: _redirectCount + 1 })
+            .then(safeResolve)
+            .catch(safeReject)
+        })
+        return
+      }
+
+      if (response.statusCode !== 200) {
+        const err = Object.assign(
+          new Error(`Download failed: HTTP ${response.statusCode} from ${urlHost(url)}`),
+          { statusCode: response.statusCode }
+        )
+        file.destroy()
+        fs.unlink(dest, () => safeReject(err))
+        return
+      }
+
+      let idleTimer = null
+      const resetIdle = () => {
+        if (idleTimer) clearTimeout(idleTimer)
+        idleTimer = setTimeout(() => {
+          response.destroy(
+            Object.assign(
+              new Error(`Response idle timeout after ${idleTimeoutMs}ms from ${urlHost(url)}`),
+              { code: 'ETIMEDOUT' }
+            )
+          )
+        }, idleTimeoutMs)
+      }
+      resetIdle()
+      response.on('data', resetIdle)
+      response.on('error', (err) => {
+        if (idleTimer) clearTimeout(idleTimer)
+        file.destroy()
+        fs.unlink(dest, () => safeReject(err))
+      })
+
+      response.pipe(file)
+      file.on('close', () => {
+        if (idleTimer) clearTimeout(idleTimer)
+        safeResolve()
+      })
+    })
+
+    req.on('error', (err) => {
+      clearTimeout(reqTimer)
+      file.destroy()
+      fs.unlink(dest, () => safeReject(err))
+    })
+    req.end()
+  })
+}
+
+async function downloadFileWithRetries(urls, dest, opts = {}) {
+  const { retries = 3, minBytes = 1, ...downloadOpts } = opts
+  const urlList = Array.isArray(urls) ? urls : [urls]
+  const partPath = dest + '.part'
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const url = urlList[attempt % urlList.length]
+    const host = urlHost(url)
+    try {
+      await downloadFileOnce(url, partPath, downloadOpts)
+
+      // A "resolved" download whose .part is missing or short means the
+      // transfer was truncated/interrupted — surface it as EINCOMPLETE so the
+      // loop RETRIES instead of hard-failing on a fatal ENOENT from statSync.
+      let size = -1
+      try {
+        size = fs.statSync(partPath).size
+      } catch (_) {
+        size = -1
+      }
+      if (size < minBytes) {
+        throw Object.assign(
+          new Error(
+            `Incomplete download from ${host} (${size < 0 ? 'missing .part' : size + ' bytes'})`
+          ),
+          { code: 'EINCOMPLETE' }
+        )
+      }
+
+      try {
+        fs.renameSync(partPath, dest)
+      } catch (err) {
+        throw Object.assign(
+          new Error(`Failed to finalize download from ${host}: ${err.code || err.message}`),
+          { code: 'EINCOMPLETE' }
+        )
+      }
+      return
+    } catch (err) {
+      try {
+        fs.unlinkSync(partPath)
+      } catch (_) {}
+
+      const attemptsLeft = retries - attempt
+      if (!isTransientError(err) || attemptsLeft === 0) {
+        console.error(
+          `[download] Failed after ${attempt + 1} attempt(s) from ${host}: ${err.code || err.message}`
+        )
+        throw err
+      }
+
+      const delay = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 500, 30_000)
+      console.log(
+        `[download] Attempt ${attempt + 1}/${retries + 1} failed (${err.code || err.statusCode}) from ${host}, retrying in ${Math.round(delay)}ms...`
+      )
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+  }
+}
+
+const downloadFile = downloadFileWithRetries
+
+const DEFAULT_MANIFEST_PATH = path.resolve(__dirname, 'models.manifest.json')
+let _manifestCache
+
+// Loads and caches the model manifest (single source of truth for model URLs +
+// sha256/bytes integrity). The default manifest is mandatory so packaging or
+// parsing errors cannot silently disable integrity checks.
+//
+// The default path is loaded via a literal require() rather than fs.readFileSync.
+// Mobile builds pack this file into a single bundle via bare-pack, which follows
+// static require()/import calls. A dynamic fs.readFileSync call is invisible to
+// that traversal and drops the manifest from the bundle, so model lookup fails
+// on-device even though the file was present at build time.
+function validateManifest(manifest, source) {
+  if (!manifest || typeof manifest !== 'object' || !manifest.models) {
+    throw new Error(`Required model manifest is invalid (${source}): missing models object`)
+  }
+  return manifest
+}
+
+function loadManifest(manifestPath = DEFAULT_MANIFEST_PATH) {
+  if (manifestPath === DEFAULT_MANIFEST_PATH) {
+    if (_manifestCache !== undefined) return _manifestCache
+    try {
+      _manifestCache = validateManifest(
+        require('./models.manifest.json'),
+        'test/integration/models.manifest.json'
+      )
+    } catch (err) {
+      throw new Error(`Failed to load required model manifest: ${err.message}`)
+    }
+    return _manifestCache
+  }
+  try {
+    return validateManifest(JSON.parse(fs.readFileSync(manifestPath, 'utf8')), manifestPath)
+  } catch (err) {
+    throw new Error(`Failed to load required model manifest "${manifestPath}": ${err.message}`)
+  }
+}
+
+function resolveModelEntry(modelName, { manifest } = {}) {
+  const m = manifest !== undefined ? manifest : loadManifest()
+  validateManifest(m, manifest !== undefined ? 'explicit manifest override' : 'default manifest')
+  const entry = m.models[modelName]
+  if (!entry) {
+    throw new Error(`Model "${modelName}" is missing from required models.manifest.json`)
+  }
+  if (!Array.isArray(entry.urls) || entry.urls.length === 0) {
+    throw new Error(`Model "${modelName}" has no source URL in models.manifest.json`)
+  }
+  if (typeof entry.sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(entry.sha256)) {
+    throw new Error(`Model "${modelName}" has no valid SHA-256 pin in models.manifest.json`)
+  }
+  if (!Number.isInteger(entry.bytes) || entry.bytes <= 0) {
+    throw new Error(`Model "${modelName}" has no valid byte-size pin in models.manifest.json`)
+  }
+  return entry
+}
+
+// Streaming sha256 via the package's direct bare-crypto dependency.
+async function sha256File(filePath) {
+  return await new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256')
+    const stream = fs.createReadStream(filePath)
+    stream.on('data', (chunk) => hash.update(chunk))
+    stream.on('error', reject)
+    stream.on('end', () => resolve(hash.digest('hex').toLowerCase()))
+  })
+}
+
+// Verifies a model file against a manifest entry. Byte-length is checked first
+// (cheap) so a size mismatch fails fast before hashing a multi-GB file.
+// { ok: true } when it passes (or when no integrity value is pinned yet).
+async function verifyModelFile(filePath, entry, hashFile = sha256File) {
+  let stats
+  try {
+    stats = fs.statSync(filePath)
+  } catch (err) {
+    return { ok: false, reason: `stat failed: ${err.message}` }
+  }
+  if (stats.size === 0) return { ok: false, reason: 'zero-byte file' }
+
+  if (entry && Number.isInteger(entry.bytes) && stats.size !== entry.bytes) {
+    return { ok: false, reason: `size ${stats.size} != expected ${entry.bytes}` }
+  }
+
+  const hasSha = entry && typeof entry.sha256 === 'string' && entry.sha256.length === 64
+  if (hasSha) {
+    let got
+    try {
+      got = await hashFile(filePath)
+    } catch (err) {
+      return { ok: false, reason: `sha256 failed: ${err.message}` }
+    }
+    if (typeof got !== 'string' || !/^[0-9a-f]{64}$/i.test(got)) {
+      return { ok: false, reason: 'sha256 failed: no valid digest returned' }
+    }
+    if (got !== entry.sha256.toLowerCase()) {
+      return { ok: false, reason: `sha256 ${got} != expected ${entry.sha256}` }
+    }
+    return { ok: true }
+  }
+
+  return { ok: true, skipped: true }
+}
+
+const _verificationCache = new Map()
+
+function verificationKey(filePath, entry) {
+  const stats = fs.statSync(filePath)
+  const mtimeMs =
+    typeof stats.mtimeMs === 'number'
+      ? stats.mtimeMs
+      : stats.mtime && typeof stats.mtime.getTime === 'function'
+        ? stats.mtime.getTime()
+        : 0
+  return [
+    filePath,
+    stats.dev,
+    stats.ino,
+    stats.size,
+    mtimeMs,
+    entry.sha256.toLowerCase(),
+    entry.bytes
+  ].join(':')
+}
+
+async function verifyModelFileOnce(filePath, entry, hashFile = sha256File) {
+  let key
+  try {
+    key = verificationKey(filePath, entry)
+  } catch (err) {
+    return { ok: false, reason: `stat failed: ${err.message}` }
+  }
+
+  let verification = _verificationCache.get(key)
+  if (!verification) {
+    verification = verifyModelFile(filePath, entry, hashFile)
+    _verificationCache.set(key, verification)
+  }
+  const result = await verification
+  if (!result.ok) _verificationCache.delete(key)
+  return result
+}
+
+function resetVerificationCache() {
+  _verificationCache.clear()
+}
+
+// Counts real download attempts so warm-vs-cold behaviour is unit-testable.
+let _downloadCount = 0
+function getDownloadCount() {
+  return _downloadCount
+}
+function resetDownloadCount() {
+  _downloadCount = 0
+}
+
+/**
+ * Model configurations for testing
+ */
+const MODEL_CONFIGS = {
+  // An encoder-only model with no decision metadata, for decision-engine.test.js
+  // to check it is rejected from its GGUF header: loading it with server
+  // defaults would abort the process.
+  'jina-reranker-v1-tiny-en-f16.gguf': {
+    downloadUrl:
+      'https://huggingface.co/ggml-org/models/resolve/main/jina-reranker-v1-tiny-en/ggml-model-f16.gguf',
+    reranker: true,
+    maxContextSize: 8192
+  },
+  // Upstream decision models for decision-engine.test.js: the tiny fixtures
+  // llama-server's own /v1/systemone tests use. A laya (non-causal, marker
+  // readout) and an openjev (label logits, shared prefixes) with its image
+  // projector.
+  'tinylaya-for-testing-Q8_0.gguf': {
+    downloadUrl:
+      'https://huggingface.co/ggml-org/tinylaya-for-testing-gguf/resolve/main/tinylaya-for-testing-Q8_0.gguf',
+    decision: true
+  },
+  'tinyopenjev-for-testing-Q8_0.gguf': {
+    downloadUrl:
+      'https://huggingface.co/ggml-org/tinyopenjev-for-testing-gguf/resolve/main/tinyopenjev-for-testing-Q8_0.gguf',
+    decision: true
+  },
+  'mmproj-tinyopenjev-for-testing-Q8_0.gguf': {
+    downloadUrl:
+      'https://huggingface.co/ggml-org/tinyopenjev-for-testing-gguf/resolve/main/mmproj-tinyopenjev-for-testing-Q8_0.gguf',
+    projector: true
+  }
+}
+
+/**
+ * Gets model configuration by name
+ * @param {string} modelName - The model name
+ * @returns {Object|null} The model configuration or null if not found
+ */
+function getModelConfig(modelName) {
+  return MODEL_CONFIGS[modelName] || null
+}
+
+// Mobile Device Farm pre-staging: the device's network to huggingface.co is
+// unreliable, but the Device Farm HOST has solid network. The test-spec
+// pre_test phase downloads each model on the host and pushes it to a
+// platform-readable staging dir; when a model is already staged we skip the
+// on-device download entirely.
+//
+// Android uses /data/local/tmp because it is both adb-writable from the host AND
+// readable by the app process. iOS uses global.testDir, which maps to the test
+// app's Documents directory where pymobiledevice3 apps push places files.
+const PRESTAGED_MODEL_DIR = '/data/local/tmp/prestaged-models'
+
+function iosPrestagedModelDir() {
+  const dir = global.testDir
+  return typeof dir === 'string' && dir.length > 0 ? dir : null
+}
+
+function prestagedModelDir(modelName) {
+  const platform = os.platform()
+  let stagedDir = null
+  if (platform === 'android') stagedDir = PRESTAGED_MODEL_DIR
+  else if (platform === 'ios') stagedDir = iosPrestagedModelDir()
+  if (!stagedDir) return null
+
+  try {
+    const p = path.join(stagedDir, modelName)
+    if (fs.existsSync(p) && fs.statSync(p).size > 0) return stagedDir
+  } catch (_) {}
+  return null
+}
+
+// iOS kills an app that dirties more than 4 GiB in 24h, and there the staged
+// file already sits in the app's own writable Documents dir — so copying it
+// into modelDir spends that whole budget for nothing. Hardlink instead: same
+// inode, zero bytes. On Android the staging dir is a different filesystem, so
+// link() fails EXDEV and we fall back to the copy that has always run there.
+// `link`/`copy` are injectable so that fallback is unit-testable.
+function linkOrCopySync({ src, dest, link = fs.linkSync, copy = fs.copyFileSync }) {
+  // Same path in and out — the staged file IS the destination (a caller whose
+  // model dir is testDir itself). Deleting first would destroy the staged model
+  // and leave both link() and copy() failing ENOENT; the copy this replaced was
+  // a harmless no-op here.
+  if (path.resolve(src) === path.resolve(dest)) return 'link'
+
+  try {
+    fs.unlinkSync(dest)
+  } catch (_) {}
+
+  try {
+    link(src, dest)
+    return 'link'
+  } catch (err) {
+    console.log(
+      `[prestage] hardlink failed on ${os.platform()} (${err.message}); ` +
+        'falling back to a byte copy'
+    )
+  }
+
+  copy(src, dest)
+  return 'copy'
+}
+
+async function copyPrestagedModel({ stagedDir, modelName, modelPath, entry }) {
+  const how = linkOrCopySync({ src: path.join(stagedDir, modelName), dest: modelPath })
+  const res = await verifyModelFileOnce(modelPath, entry)
+  if (!res.ok) {
+    try {
+      fs.unlinkSync(modelPath)
+    } catch (_) {}
+    const verb = how === 'link' ? 'hardlinked' : 'copied'
+    throw new Error(`[prestage] ${verb} model ${modelName} failed integrity: ${res.reason}`)
+  }
+  return how
+}
+
+// The Laya GGUF laya.test.js runs. It has no Hugging Face source, so it is not
+// in models.manifest.json: desktop CI points LAYA_TEST_MODEL at a copy staged
+// from S3 (project.json modelS3), and the mobile run pre-stages it from a
+// presigned URL (scripts/generate-laya-presigned-url.sh). Pinned here so the
+// staged copy is verified as a manifest model is.
+const LAYA_TEST_GGUF = {
+  name: 'laya-multilingual-Q8_0.gguf',
+  sha256: '59a61f840e6f125c25037f7cc0363efafee1aeea3394b504d25551b4bda5a219',
+  bytes: 348425664
+}
+
+// Mobile: the pre-staged Laya GGUF, verified in the writable model dir (as
+// _benchmark-perf.js places its models). Throws when it was not staged: a
+// mobile run that skipped the Laya tests would pass without testing anything.
+async function ensurePrestagedLayaModel() {
+  const { name } = LAYA_TEST_GGUF
+  const stagedDir = prestagedModelDir(name)
+  if (!stagedDir) {
+    throw new Error(`[prestage] ${name} was not pre-staged on this device`)
+  }
+  const modelDir = path.join(global.testDir || os.tmpdir(), 'test', 'model')
+  fs.mkdirSync(modelDir, { recursive: true })
+  const modelPath = path.join(modelDir, name)
+  if (fs.existsSync(modelPath) && (await verifyModelFileOnce(modelPath, LAYA_TEST_GGUF)).ok) {
+    return modelPath
+  }
+  await copyPrestagedModel({ stagedDir, modelName: name, modelPath, entry: LAYA_TEST_GGUF })
+  return modelPath
+}
+
+/**
+ * Ensures the model file exists, downloading it if necessary
+ * @param {Object} opts
+ * @param {string} opts.modelName - The model name to ensure
+ * @returns {Promise<[string, string]>} Returns [modelName, modelDir]
+ */
+// The standalone default modelDir assignment is patched by the mobile test
+// packager to point at a writable app directory. Keep this shape stable.
+async function ensureModel({ modelName, modelDir: modelDirOverride, manifest, download } = {}) {
+  const modelDir = path.resolve(__dirname, '../model')
+  const dir = modelDirOverride || modelDir
+  const modelConfig = getModelConfig(modelName)
+
+  // Model URL + sha256/bytes come exclusively from models.manifest.json (by
+  // modelName). The manifest is also the cache key for
+  // .github/actions/cache-models. `modelDir`, `manifest`, and `download`
+  // overrides exist for unit testing, but still require a fully pinned entry.
+  const entry = resolveModelEntry(modelName, manifest !== undefined ? { manifest } : {})
+
+  if (!modelConfig) {
+    throw new Error(`Unknown model: ${modelName}`)
+  }
+
+  const modelPath = path.join(dir, modelName)
+  const doDownload = download || downloadFileWithRetries
+  const urls = entry.urls
+
+  if (fs.existsSync(modelPath)) {
+    const res = await verifyModelFileOnce(modelPath, entry)
+    if (res.ok) {
+      console.log(`[download] ${modelName}: cached copy verified, skipping download`)
+      return [modelName, dir]
+    }
+    console.log(
+      `[download] ${modelName}: cached copy failed integrity (${res.reason}); deleting and re-downloading`
+    )
+    try {
+      fs.unlinkSync(modelPath)
+    } catch (_) {}
+  }
+
+  // Pre-staged path: materialise the host-staged model in the normal (writable)
+  // modelDir, then return. Returning a writable dir matters — load() writes
+  // sibling files next to the model (e.g. openclCacheDir) — which is why we
+  // don't just hand back Android's read-only /data/local/tmp staging dir.
+  const staged = prestagedModelDir(modelName)
+  if (staged) {
+    fs.mkdirSync(dir, { recursive: true })
+    const how = await copyPrestagedModel({ stagedDir: staged, modelName, modelPath, entry })
+    console.log(
+      `[prestage] Using pre-staged model ${modelName} (` +
+        `${how === 'link' ? 'hardlinked' : 'copied'} into writable modelDir)`
+    )
+    return [modelName, dir]
+  }
+
+  fs.mkdirSync(dir, { recursive: true })
+  console.log(`[download] Downloading test model: ${modelName}...`)
+  _downloadCount++
+
+  await doDownload(urls, modelPath)
+
+  const res = await verifyModelFileOnce(modelPath, entry)
+  if (!res.ok) {
+    try {
+      fs.unlinkSync(modelPath)
+    } catch (_) {}
+    throw new Error(
+      `[download] ${modelName}: freshly downloaded file failed integrity: ${res.reason}`
+    )
+  }
+
+  const stat = fs.statSync(modelPath)
+  console.log(`[download] Model ready: ${(stat.size / 1024 / 1024).toFixed(1)}MB`)
+
+  return [modelName, dir]
+}
+
+const test = require('brittle')
+
+function safeTest(name, opts, fn) {
+  test(name, opts, async (t) => {
+    try {
+      await fn(t)
+    } catch (err) {
+      console.error(err)
+      t.fail(`${name}: ${err.message}`)
+    }
+  })
+}
+
+module.exports = {
+  downloadFile,
+  ensureModel,
+  ensurePrestagedLayaModel,
+  LAYA_TEST_GGUF,
+  loadManifest,
+  resolveModelEntry,
+  verifyModelFile,
+  verifyModelFileOnce,
+  sha256File,
+  resetVerificationCache,
+  copyPrestagedModel,
+  linkOrCopySync,
+  getDownloadCount,
+  resetDownloadCount,
+  getModelConfig,
+  MODEL_CONFIGS,
+  safeTest
+}
