@@ -52,6 +52,7 @@ add_executable(
   test_multi_request_batcher.cpp
   test_speculative.cpp
   test_continuous_batching_integration.cpp
+  test_forced_open_reasoning_families.cpp
   test_concurrent_process_by_id.cpp
   test_single_path_cancel_ownership.cpp
   test_concurrent_prefill.cpp
