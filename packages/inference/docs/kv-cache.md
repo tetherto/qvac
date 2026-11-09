@@ -26,6 +26,11 @@ KV-cache behavior is owned by the llama.cpp completion plugin under
   dropped, and the addon's copy of the conversation goes with the file.
 - Use `deleteCache({ auto: true })` to reclaim inactive auto caches without
   deleting caller-owned named caches; active cache keys remain protected.
+- Prompt-prefix sharing across cache identities is opt-in at model load. The SDK
+  sends `cache_share_across_keys: false` when it is omitted, so a keyed request
+  reuses only its own state and a keyless request starts cold and resets. Set it
+  to `true` to let any request reuse the longest prefix held by another
+  conversation; keyless state then remains available in model memory.
 
 Implementation and focused tests are authoritative for the current cache format.
 
