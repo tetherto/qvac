@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "inference-addon-cpp/Errors.hpp"
+#include "js-interface/FabricOptionParse.hpp"
 #include "js-interface/NumberConversion.hpp"
 #include "js-interface/TtsConfigParse.hpp"
 #include "model-interface/supertonic/SupertonicEngineOptions.hpp"
@@ -124,6 +125,28 @@ std::string readOptionalString(
 std::optional<bool> readOptionalBool(
     js::Object obj, js_env_t* env, const char* key) {
   return obj.getOptionalPropertyAs<js::Boolean, bool>(env, key);
+}
+
+std::optional<bool>
+readOptionalStrictBool(js::Object obj, js_env_t* env, const char* key) {
+  js_value_t* raw = obj.getProperty(env, key);
+  if (js::is<js::Undefined>(env, raw))
+    return std::nullopt;
+  if (js::is<js::Boolean>(env, raw))
+    return js::Boolean::fromValue(raw).as<bool>(env);
+  throw qvac_errors::StatusError(
+      general_error::InvalidArgument,
+      std::string("Property '") + key + "' must be a boolean");
+}
+
+void assertNoParlerCoreml(js::Object obj, js_env_t* env, const char* message) {
+  for (const char* key :
+       {"coremlDecoder", "coremlComputeUnits", "coremlStrict"}) {
+    if (!js::is<js::Undefined>(env, obj.getProperty(env, key))) {
+      throw qvac_errors::StatusError(
+          general_error::InvalidArgument, std::string(key) + message);
+    }
+  }
 }
 
 std::string readArrayString(
@@ -319,6 +342,7 @@ EngineType JSAdapter::readEngineType(
 
 chatterbox::ChatterboxConfig JSAdapter::buildChatterboxConfig(
     js::Object configurationParams, js_env_t* env) {
+  assertNoParlerCoreml(configurationParams, env, " is a parler-only option");
   chatterbox::ChatterboxConfig cfg;
   cfg.t3ModelPath    = readOptionalString(configurationParams, env, "t3ModelPath");
   cfg.s3genModelPath = readOptionalString(configurationParams, env, "s3genModelPath");
@@ -362,6 +386,7 @@ chatterbox::ChatterboxConfig JSAdapter::buildChatterboxConfig(
   // conflicts, and toEngineOptions translates explicit-false into
   // n_gpu_layers=0 so CPU is actually forced.
   cfg.useGpu                  = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backend = readOptionalString(configurationParams, env, "backend");
   cfg.backendsDir    = readOptionalString(configurationParams, env, "backendsDir");
   cfg.openclCacheDir = readOptionalString(configurationParams, env, "openclCacheDir");
   cfg.mecabDictPath  = readOptionalString(configurationParams, env, "mecabDictPath");
@@ -374,6 +399,14 @@ chatterbox::ChatterboxConfig JSAdapter::buildChatterboxConfig(
   // qvac-fabric-speech.cpp PR #78 (activates once the pinned tts-cpp has it).
   cfg.denoiserGgufPath =
       readOptionalString(configurationParams, env, "lavasrDenoiserPath");
+  cfg.enhancerCoreml.model_path = readOptionalString(
+      configurationParams, env, "lavasrEnhancerCoremlModelPath");
+  cfg.enhancerCoreml.compute_units = readOptionalString(
+      configurationParams, env, "lavasrEnhancerCoremlComputeUnits");
+  cfg.denoiserCoreml.model_path = readOptionalString(
+      configurationParams, env, "lavasrDenoiserCoremlModelPath");
+  cfg.denoiserCoreml.compute_units = readOptionalString(
+      configurationParams, env, "lavasrDenoiserCoremlComputeUnits");
   return cfg;
 }
 
@@ -412,9 +445,34 @@ void JSAdapter::assertNoPerCallSupertonicControls(
       readOptionalString(obj, env, "pace"));
 }
 
+void JSAdapter::assertNoPerCallParlerCoreml(js::Object obj, js_env_t* env) {
+  assertNoParlerCoreml(
+      obj, env, " must be set in the constructor or reload(), not per call");
+}
+
 parler::ParlerConfig
 JSAdapter::buildParlerConfig(js::Object configurationParams, js_env_t* env) {
   parler::ParlerConfig cfg;
+  cfg.coremlDecoder =
+      readOptionalStrictBool(configurationParams, env, "coremlDecoder");
+  cfg.coremlStrict =
+      readOptionalStrictBool(configurationParams, env, "coremlStrict");
+  js_value_t* units =
+      configurationParams.getProperty(env, "coremlComputeUnits");
+  if (!js::is<js::Undefined>(env, units)) {
+    if (!js::is<js::String>(env, units)) {
+      throw qvac_errors::StatusError(
+          general_error::InvalidArgument,
+          "coremlComputeUnits must be a string");
+    }
+    cfg.coremlComputeUnits = js::String::fromValue(units).as<std::string>(env);
+    if (cfg.coremlComputeUnits.empty()) {
+      throw qvac_errors::StatusError(
+          general_error::InvalidArgument,
+          "coremlComputeUnits must not be empty");
+    }
+    parler::validateCoremlComputeUnits(cfg.coremlComputeUnits);
+  }
   cfg.modelGgufPath =
       readOptionalString(configurationParams, env, "parlerModelPath");
   cfg.desc = readParlerDescriptionFields(configurationParams, env);
@@ -435,11 +493,20 @@ JSAdapter::buildParlerConfig(js::Object configurationParams, js_env_t* env) {
       readOptionalInt(configurationParams, env, "streamFirstChunkTokens");
   cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
   cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backend = readOptionalString(configurationParams, env, "backend");
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   cfg.enhancerGgufPath =
       readOptionalString(configurationParams, env, "lavasrEnhancerPath");
   cfg.denoiserGgufPath =
       readOptionalString(configurationParams, env, "lavasrDenoiserPath");
+  cfg.enhancerCoreml.model_path = readOptionalString(
+      configurationParams, env, "lavasrEnhancerCoremlModelPath");
+  cfg.enhancerCoreml.compute_units = readOptionalString(
+      configurationParams, env, "lavasrEnhancerCoremlComputeUnits");
+  cfg.denoiserCoreml.model_path = readOptionalString(
+      configurationParams, env, "lavasrDenoiserCoremlModelPath");
+  cfg.denoiserCoreml.compute_units = readOptionalString(
+      configurationParams, env, "lavasrDenoiserCoremlComputeUnits");
   return cfg;
 }
 
@@ -453,6 +520,7 @@ JSAdapter::readAudio8Voice(js::Object obj, js_env_t* env) {
 
 audio8::Audio8Config
 JSAdapter::buildAudio8Config(js::Object configurationParams, js_env_t* env) {
+  assertNoParlerCoreml(configurationParams, env, " is a parler-only option");
   audio8::Audio8Config cfg;
   cfg.lmModelPath =
       readOptionalString(configurationParams, env, "audio8LmPath");
@@ -474,12 +542,14 @@ JSAdapter::buildAudio8Config(js::Object configurationParams, js_env_t* env) {
       readOptionalInt(configurationParams, env, "outputSampleRate");
   cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
   cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backend = readOptionalString(configurationParams, env, "backend");
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   return cfg;
 }
 
 moss::MossConfig
 JSAdapter::buildMossConfig(js::Object configurationParams, js_env_t* env) {
+  assertNoParlerCoreml(configurationParams, env, " is a parler-only option");
   moss::MossConfig cfg;
   cfg.backbonePath =
       readOptionalString(configurationParams, env, "mossBackbonePath");
@@ -494,18 +564,34 @@ JSAdapter::buildMossConfig(js::Object configurationParams, js_env_t* env) {
   cfg.language = readOptionalString(configurationParams, env, "language");
   cfg.durationTokens =
       readOptionalInt(configurationParams, env, "durationTokens");
+  cfg.nCtx = readOptionalInt(configurationParams, env, "nCtx");
+  cfg.maxNewTokens =
+      detail::readExactInt(configurationParams, env, "maxNewTokens");
+  cfg.textTemperature =
+      readOptionalFiniteFloat(configurationParams, env, "textTemperature");
+  cfg.textTopP = readOptionalFiniteFloat(configurationParams, env, "textTopP");
+  cfg.textTopK = detail::readExactInt(configurationParams, env, "textTopK");
+  cfg.audioTemperature =
+      readOptionalFiniteFloat(configurationParams, env, "audioTemperature");
+  cfg.audioTopP =
+      readOptionalFiniteFloat(configurationParams, env, "audioTopP");
+  cfg.audioTopK = detail::readExactInt(configurationParams, env, "audioTopK");
+  cfg.audioRepetitionPenalty = readOptionalFiniteFloat(
+      configurationParams, env, "audioRepetitionPenalty");
   cfg.seed = readOptionalInt(configurationParams, env, "seed");
   cfg.threads = readOptionalInt(configurationParams, env, "threads");
   cfg.streamChunkFrames =
       readOptionalInt(configurationParams, env, "streamChunkTokens");
   cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
   cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backend = readOptionalString(configurationParams, env, "backend");
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   return cfg;
 }
 
 moss::MossSoundEffectConfig JSAdapter::buildMossSoundEffectConfig(
     js::Object configurationParams, js_env_t* env) {
+  assertNoParlerCoreml(configurationParams, env, " is a parler-only option");
   moss::MossSoundEffectConfig cfg;
   cfg.modelPath =
       readOptionalString(configurationParams, env, "mossSoundEffectPath");
@@ -513,6 +599,7 @@ moss::MossSoundEffectConfig JSAdapter::buildMossSoundEffectConfig(
   cfg.threads = readOptionalInt(configurationParams, env, "threads");
   cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
   cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backend = readOptionalString(configurationParams, env, "backend");
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   return cfg;
 }
@@ -530,6 +617,7 @@ JSAdapter::readMossSoundEffectCall(js::Object job, js_env_t* env) {
 
 moss::MossSpeechConfig JSAdapter::buildMossSpeechConfig(
     js::Object configurationParams, js_env_t* env) {
+  assertNoParlerCoreml(configurationParams, env, " is a parler-only option");
   moss::MossSpeechConfig cfg;
   cfg.modelPath =
       readOptionalString(configurationParams, env, "mossSpeechModelPath");
@@ -539,6 +627,7 @@ moss::MossSpeechConfig JSAdapter::buildMossSpeechConfig(
   cfg.threads = readOptionalInt(configurationParams, env, "threads");
   cfg.nGpuLayers = readOptionalInt(configurationParams, env, "nGpuLayers");
   cfg.useGpu = readOptionalBool(configurationParams, env, "useGPU");
+  cfg.backend = readOptionalString(configurationParams, env, "backend");
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   return cfg;
 }
@@ -561,11 +650,24 @@ JSAdapter::readMossSpeechCall(js::Object job, js_env_t* env) {
 
 supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
     js::Object configurationParams, js_env_t* env) {
+  assertNoParlerCoreml(configurationParams, env, " is a parler-only option");
   supertonic::SupertonicConfig cfg;
   cfg.modelGgufPath = readOptionalString(configurationParams, env, "supertonicModelPath");
   cfg.voice         = readOptionalString(configurationParams, env, "voice");
   cfg.voiceJsonPath =
       readOptionalString(configurationParams, env, "voiceJsonPath");
+  cfg.voiceStyleTtl =
+      detail::readOptionArray<float>(configurationParams, env, "voiceStyleTtl");
+  cfg.voiceStyleDp =
+      detail::readOptionArray<float>(configurationParams, env, "voiceStyleDp");
+  cfg.precision = readOptionalString(configurationParams, env, "precision");
+  cfg.f16Attn = detail::readExactInt(configurationParams, env, "f16Attn");
+  cfg.f16Weights = detail::readExactInt(configurationParams, env, "f16Weights");
+  cfg.f16WeightsDenyList =
+      readOptionalStringArray(configurationParams, env, "f16WeightsDenyList");
+  cfg.kvAttnType = detail::readExactInt(configurationParams, env, "kvAttnType");
+  cfg.vulkanEnvOverrides =
+      detail::readStringMap(configurationParams, env, "vulkanEnvOverrides");
   {
     auto lang = readOptionalString(configurationParams, env, "language");
     if (!lang.empty()) cfg.language = std::move(lang);
@@ -579,6 +681,7 @@ supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
   cfg.outputSampleRate  = readOptionalInt(configurationParams, env, "outputSampleRate");
   cfg.useGpu            = readOptionalBool(configurationParams, env, "useGPU");
   cfg.noiseNpyPath      = readOptionalString(configurationParams, env, "noiseNpyPath");
+  cfg.backend = readOptionalString(configurationParams, env, "backend");
   cfg.backendsDir       = readOptionalString(configurationParams, env, "backendsDir");
   cfg.openclCacheDir    = readOptionalString(configurationParams, env, "openclCacheDir");
   cfg.vulkanCacheDir =
@@ -601,12 +704,24 @@ supertonic::SupertonicConfig JSAdapter::buildSupertonicConfig(
   // qvac-fabric-speech.cpp PR #78 (activates once the pinned tts-cpp has it).
   cfg.denoiserGgufPath =
       readOptionalString(configurationParams, env, "lavasrDenoiserPath");
+  cfg.enhancerCoreml.model_path = readOptionalString(
+      configurationParams, env, "lavasrEnhancerCoremlModelPath");
+  cfg.enhancerCoreml.compute_units = readOptionalString(
+      configurationParams, env, "lavasrEnhancerCoremlComputeUnits");
+  cfg.denoiserCoreml.model_path = readOptionalString(
+      configurationParams, env, "lavasrDenoiserCoremlModelPath");
+  cfg.denoiserCoreml.compute_units = readOptionalString(
+      configurationParams, env, "lavasrDenoiserCoremlComputeUnits");
   return cfg;
 }
 
 cosyvoice::CosyvoiceConfig
 JSAdapter::buildCosyvoiceConfig(js::Object configurationParams, js_env_t* env) {
+  assertNoParlerCoreml(configurationParams, env, " is a parler-only option");
   cosyvoice::CosyvoiceConfig cfg;
+  cfg.greedy = readOptionalBool(configurationParams, env, "greedy");
+  cfg.forceSpeechTokens = detail::readOptionArray<int>(
+      configurationParams, env, "forceSpeechTokens");
   cfg.modelDir =
       readOptionalString(configurationParams, env, "cosyvoiceModelDir");
   cfg.llmModelPath =
@@ -653,6 +768,7 @@ JSAdapter::buildCosyvoiceConfig(js::Object configurationParams, js_env_t* env) {
       readOptionalInt(configurationParams, env, "streamFirstChunkTokens");
   cfg.streamLeftContextTokens =
       readOptionalInt(configurationParams, env, "streamLeftContextTokens");
+  cfg.backend = readOptionalString(configurationParams, env, "backend");
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   cfg.openclCacheDir =
       readOptionalString(configurationParams, env, "openclCacheDir");
@@ -660,11 +776,20 @@ JSAdapter::buildCosyvoiceConfig(js::Object configurationParams, js_env_t* env) {
       readOptionalString(configurationParams, env, "lavasrEnhancerPath");
   cfg.denoiserGgufPath =
       readOptionalString(configurationParams, env, "lavasrDenoiserPath");
+  cfg.enhancerCoreml.model_path = readOptionalString(
+      configurationParams, env, "lavasrEnhancerCoremlModelPath");
+  cfg.enhancerCoreml.compute_units = readOptionalString(
+      configurationParams, env, "lavasrEnhancerCoremlComputeUnits");
+  cfg.denoiserCoreml.model_path = readOptionalString(
+      configurationParams, env, "lavasrDenoiserCoremlModelPath");
+  cfg.denoiserCoreml.compute_units = readOptionalString(
+      configurationParams, env, "lavasrDenoiserCoremlComputeUnits");
   return cfg;
 }
 
 pocket::PocketConfig
 JSAdapter::buildPocketConfig(js::Object params, js_env_t* env) {
+  assertNoParlerCoreml(params, env, " is a parler-only option");
   pocket::PocketConfig cfg;
   auto& o = cfg.options;
   o.flow_lm_path = readOptionalString(params, env, "pocketFlowModelPath");
@@ -706,12 +831,20 @@ JSAdapter::buildPocketConfig(js::Object params, js_env_t* env) {
   o.eos_threshold = number(
       "eosThreshold", o.eos_threshold, -3.402823466e38, 3.402823466e38, false);
   const auto language = readOptionalString(params, env, "language");
-  if ((!language.empty() && language != "en") ||
-      readOptionalBool(params, env, "useGPU").value_or(false) ||
-      number("nGpuLayers", 0, 0, 0) != 0)
+  if (!language.empty() && language != "en")
     throw qvac_errors::StatusError(
         general_error::InvalidArgument,
-        "Pocket currently supports English on CPU");
+        "Pocket currently supports English only");
+  const auto layers = detail::readExactInt(params, env, "nGpuLayers");
+  const auto useGpu = readOptionalBool(params, env, "useGPU");
+  if (layers && useGpu && (*useGpu != (*layers != 0))) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        "Pocket useGPU conflicts with nGpuLayers");
+  }
+  o.use_gpu = layers ? *layers != 0 : useGpu.value_or(false);
+  o.backend = readOptionalString(params, env, "backend");
+  o.backends_dir = readOptionalString(params, env, "backendsDir");
   return cfg;
 }
 }

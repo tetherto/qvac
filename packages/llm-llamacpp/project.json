@@ -19,7 +19,11 @@
           "perfReportExtraArgs": "--addon-type vision --device-details",
           "perfReportMediaDir": "packages/llm-llamacpp/media"
         }
-      }
+      },
+      "inputs": [
+        "default",
+        "{workspaceRoot}/.github/bare-toolchain/package-lock.json"
+      ]
     },
     "build": {
       "executor": "nx:run-commands",

@@ -89,8 +89,23 @@ export default {
           // result can only have come from the client. The Bare runtime is
           // resolved by the framework and injected as QVAC_BARE_PATH, so it
           // stays out of this file.
-          QVAC_WORKER_PATH: '../../qvac/worker.entry.mjs'
+          QVAC_WORKER_PATH: '../../qvac/worker.entry.mjs',
+          QVAC_RESOURCE_PLATFORM: 'desktop-python'
         }
+      },
+      {
+        // The Kotlin SDK on an Android device. An app cannot be driven over
+        // stdin, so it speaks the consumer protocol itself (mqtt mode).
+        // See runners/kotlin/README.md.
+        name: 'kotlin-android',
+        platform: 'kotlin-android',
+        mode: 'mqtt',
+        prepare: {
+          interpreter: 'node',
+          args: ['runners/kotlin/scripts/device.mjs', 'prepare']
+        },
+        interpreter: 'node',
+        args: ['runners/kotlin/scripts/device.mjs', 'run']
       }
     ],
     mobile: {

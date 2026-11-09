@@ -40,8 +40,7 @@ const FINETUNE_MODELS = [
   },
   {
     id: 'bitnet-b1_58-large-tq2_0',
-    name: 'bitnet_b1_58-large-TQ2_0.gguf',
-    url: 'https://huggingface.co/gianni-cor/bitnet_b1_58-large-TQ2_0/resolve/main/bitnet_b1_58-large-TQ2_0.gguf'
+    name: 'bitnet_b1_58-large-TQ2_0.gguf'
   }
 ]
 

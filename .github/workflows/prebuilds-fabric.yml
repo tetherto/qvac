@@ -9,6 +9,11 @@ on:
         required: false
         type: string
         default: "packages/fabric"
+      linux-x64-only:
+        description: "Build only Linux x64 (including the XDNA backend and NPU kernels)"
+        required: false
+        type: boolean
+        default: false
       cuda-platforms-only:
         description: >-
           Build only the platforms that compile a CUDA backend (linux-x64,
@@ -33,6 +38,11 @@ on:
         required: false
         type: string
         default: "packages/fabric"
+      linux-x64-only:
+        description: "Build only Linux x64 (including the XDNA backend and NPU kernels)"
+        required: false
+        type: boolean
+        default: false
       cuda-platforms-only:
         description: >-
           Build only the platforms that compile a CUDA backend (linux-x64,
@@ -63,6 +73,7 @@ jobs:
       # main, so linux-x64 would otherwise hard-fail the hip port. setup-rocm
       # prefers /opt/rocm when the host stamp matches; otherwise downloads.
       include-rocm: true
+      include-xdna: true
       # QVAC-23763: build CUDA beside Vulkan and HIP. The arm64 job first builds
       # the CUDA 13 server module, then adds the CUDA 12 Jetson module.
       include-cuda: true
@@ -70,5 +81,6 @@ jobs:
       include-cuda-arm64: true
       include-cuda-arm64-jetson: true
       verify-linux-x64-cuda-module: true
-      matrix-include: ${{ inputs.cuda-platforms-only == true && '[{"os":"ubuntu-22.04","runner_key":"linux_ubuntu2204_x64","platform":"linux","arch":"x64"},{"os":"ubuntu-22.04-arm","runner_key":"ubuntu_2204_arm","platform":"linux","arch":"arm64"},{"os":"windows-2025","runner_key":"win_2025_x64","platform":"win32","arch":"x64"}]' || 'default' }}
+      verify-linux-module-cxx-runtime: true
+      matrix-include: ${{ inputs.linux-x64-only == true && '[{"os":"ubuntu-22.04","runner_key":"linux_ubuntu2204_x64","platform":"linux","arch":"x64"}]' || inputs.cuda-platforms-only == true && '[{"os":"ubuntu-22.04","runner_key":"linux_ubuntu2204_x64","platform":"linux","arch":"x64"},{"os":"ubuntu-22.04-arm","runner_key":"ubuntu_2204_arm","platform":"linux","arch":"arm64"},{"os":"windows-2025","runner_key":"win_2025_x64","platform":"win32","arch":"x64"}]' || 'default' }}
     secrets: inherit

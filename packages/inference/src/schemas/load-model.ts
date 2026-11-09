@@ -57,6 +57,7 @@ import {
 import { sdcppConfigSchema, type SdcppConfig } from './sdcpp-config'
 import { vlaConfigSchema } from './vla'
 import { decisionConfigBaseSchema } from './decision'
+import { rerankConfigBaseSchema } from './rerank'
 import { classificationConfigSchema } from './classification'
 import { audioGenConfigSchema } from '@/schemas/audio-gen'
 
@@ -109,6 +110,7 @@ const modelConfigKeysByModelType = new Map<string, Set<string>>([
   [ModelType.mossTranscribe, configKeys(mossTranscribeConfigSchema)],
   [ModelType.llamacppEmbedding, configKeys(embedConfigBaseSchema)],
   [ModelType.llamacppDecision, configKeys(decisionConfigBaseSchema)],
+  [ModelType.llamacppRerank, configKeys(rerankConfigBaseSchema)],
   [ModelType.nmtcppTranslation, configKeys(...nmtConfigBaseSchema.options)],
   [
     ModelType.ttsGgml,
@@ -171,6 +173,13 @@ export const loadBuiltinModelOptionsBaseSchema = z.union([
       ...loadModelCommonFields,
       modelType: z.literal(ModelType.llamacppDecision),
       modelConfig: decisionConfigBaseSchema.optional()
+    })
+    .strict(),
+  z
+    .object({
+      ...loadModelCommonFields,
+      modelType: z.literal(ModelType.llamacppRerank),
+      modelConfig: rerankConfigBaseSchema.optional()
     })
     .strict(),
   z
@@ -536,6 +545,23 @@ export const loadBuiltinToRequestSchema = z.discriminatedUnion('modelType', [
   z
     .object({
       ...loadModelRequestCommonFields,
+      modelType: z.literal(ModelType.llamacppRerank),
+      modelConfig: rerankConfigBaseSchema.optional()
+    })
+    .strict()
+    .transform((data) => ({
+      type: 'loadModel' as const,
+      modelType: ModelType.llamacppRerank,
+      modelSrc: modelInputToSrcSchema.parse(data.modelSrc),
+      modelName: modelInputToNameSchema.parse(data.modelSrc),
+      modelConfig: data.modelConfig,
+      seed: data.seed ?? false,
+      withProgress: data.withProgress ?? !!data.onProgress,
+      ...optionalRequestFields(data)
+    })),
+  z
+    .object({
+      ...loadModelRequestCommonFields,
       modelType: vlaModelTypeSchema,
       modelConfig: vlaConfigSchema.strict().optional()
     })
@@ -681,6 +707,13 @@ export const loadDecisionModelRequestSchema = commonModelConfigSchema
   })
   .strict()
 
+export const loadRerankModelRequestSchema = commonModelConfigSchema
+  .extend({
+    modelType: z.literal(ModelType.llamacppRerank),
+    modelConfig: rerankConfigBaseSchema.optional()
+  })
+  .strict()
+
 export const loadEmbeddingsModelRequestSchema = commonModelConfigSchema
   .extend({
     modelType: z.literal(ModelType.llamacppEmbedding),
@@ -757,6 +790,7 @@ export const loadModelSrcRequestSchema = z
     loadMossTranscribeModelRequestSchema,
     loadEmbeddingsModelRequestSchema,
     loadDecisionModelRequestSchema,
+    loadRerankModelRequestSchema,
     loadNmtModelRequestSchema,
     loadTtsModelRequestSchema,
     loadOcrModelRequestSchema,

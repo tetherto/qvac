@@ -68,6 +68,7 @@ type CompletionParams = Omit<CompletionClientParams, 'tools'> & {
  *   validation must encode it explicitly in `schema`.
  *
  *   Cannot be combined with `tools` (tools already constrain output via their parameter schema).
+ * @param params.prefill - Evaluate the prompt and tools without generating an answer. Requires an enabled kvCache; cannot force tool_choice. Await final before sending the question with the same prefix.
  * @param params.kvCache - Optional KV cache configuration. Cache files are organized hierarchically:
  *   - Structure: `{kvCacheKey}/{modelId}/{configHash}.bin`
  *   - The configHash includes model config + system prompt to ensure cache isolation
@@ -219,6 +220,7 @@ export function completion(params: CompletionParams): CompletionRun {
         modelId: params.modelId,
         history: params.history.map((message) => ({ ...message, content: message.content ?? '' })),
         kvCache: params.kvCache,
+        prefill: params.prefill,
         tools: allTools.length > 0 ? allTools : undefined,
         stream: params.stream ?? true,
         generationParams: params.generationParams,

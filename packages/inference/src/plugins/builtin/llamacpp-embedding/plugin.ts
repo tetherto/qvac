@@ -6,32 +6,51 @@ import {
   embedRequestSchema,
   embedResponseSchema,
   ModelType,
-  embedConfigBaseSchema,
+  embedLoadConfigSchema,
   ADDON_EMBEDDING,
   type CreateModelParams,
   type PluginModelResult,
-  type EmbedConfig
+  type EmbedConfig,
+  type EmbedConfigInput,
+  type ResolveContext
 } from '@/schemas/index'
 import { createStreamLogger, registerAddonLogger, getEngineLogger } from '@/logging/index'
 import { getFirstShardPath } from '@/utils/index'
-import { embed } from '@/plugins/ops/embed'
+import { embed, markEmbeddingProjector } from '@/plugins/ops/embed'
 import { forwardModelExecution } from '@/profiling/model-execution'
 import { isMobile } from '@/runtime/state'
 import { stripMultiGpuKeys } from '@/utils/multi-gpu-mobile'
 import { transformEmbedConfig } from '@/plugins/builtin/llamacpp-embedding/transform'
-import { getIdMapIndex } from '@/plugins/builtin/llamacpp-embedding/turbovec.cjs'
+import { embedFitRequest } from '@/plugins/builtin/llamacpp-embedding/fit'
 
-const turbovecIndexProvider: TurboVecIndexProvider = {
-  create(options) {
-    const IdMapIndex = getIdMapIndex()
-    return new IdMapIndex(options)
-  },
-  load(snapshotPath) {
-    return getIdMapIndex().load(snapshotPath)
+async function getIdMapIndex() {
+  try {
+    return (await import('@qvac/turbovec-ggml')).IdMapIndex
+  } catch (err) {
+    throw new Error(
+      'Vector indexing requires the optional peer dependency @qvac/turbovec-ggml; install it to create or load an index',
+      { cause: err }
+    )
   }
 }
 
-function createEmbeddingsModel(modelId: string, modelPath: string, embedConfig: EmbedConfig) {
+const turbovecIndexProvider: TurboVecIndexProvider = {
+  async create(options) {
+    const IdMapIndex = await getIdMapIndex()
+    return new IdMapIndex(options)
+  },
+  async load(snapshotPath) {
+    const IdMapIndex = await getIdMapIndex()
+    return IdMapIndex.load(snapshotPath)
+  }
+}
+
+function createEmbeddingsModel(
+  modelId: string,
+  modelPath: string,
+  embedConfig: EmbedConfig,
+  projectionModelPath?: string
+) {
   const logger = createStreamLogger(modelId, ModelType.llamacppEmbedding)
   registerAddonLogger(modelId, ModelType.llamacppEmbedding, logger)
 
@@ -47,11 +66,15 @@ function createEmbeddingsModel(modelId: string, modelPath: string, embedConfig: 
   }
 
   const model = new EmbedLlamacpp({
-    files: { model: [getFirstShardPath(modelPath)] },
+    files: {
+      model: [getFirstShardPath(modelPath)],
+      ...(projectionModelPath && { projectionModel: projectionModelPath })
+    },
     config,
     logger,
     opts: { stats: true }
   })
+  if (projectionModelPath) markEmbeddingProjector(model)
 
   return { model }
 }
@@ -60,13 +83,26 @@ export const embeddingsPlugin = definePlugin({
   modelType: ModelType.llamacppEmbedding,
   displayName: 'Embeddings (llama.cpp)',
   addonPackage: ADDON_EMBEDDING,
-  loadConfigSchema: embedConfigBaseSchema,
+  loadConfigSchema: embedLoadConfigSchema,
+  fitRequest: embedFitRequest,
   assessFit: embedAssessFit,
+
+  async resolveConfig(cfg: EmbedConfigInput, ctx: ResolveContext) {
+    const { projectionModelSrc, ...config } = cfg
+    if (!projectionModelSrc) return { config }
+    const projectionModelPath = await ctx.resolveModelPath(projectionModelSrc)
+    return { config, artifacts: { projectionModelPath } }
+  },
 
   createModel(params: CreateModelParams): PluginModelResult {
     const embedConfig = (params.modelConfig ?? {}) as EmbedConfig
 
-    const { model } = createEmbeddingsModel(params.modelId, params.modelPath, embedConfig)
+    const { model } = createEmbeddingsModel(
+      params.modelId,
+      params.modelPath,
+      embedConfig,
+      params.artifacts?.['projectionModelPath']
+    )
 
     return { model }
   },
@@ -82,10 +118,9 @@ export const embeddingsPlugin = definePlugin({
 
       handler: async function (request) {
         const embedResult = await embed(
-          {
-            modelId: request.modelId,
-            text: request.text
-          },
+          request.inputs !== undefined
+            ? { modelId: request.modelId, inputs: request.inputs }
+            : { modelId: request.modelId, text: request.text },
           request.requestId
         )
 

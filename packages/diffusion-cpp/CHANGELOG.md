@@ -1,5 +1,108 @@
 # Changelog
 
+## [Unreleased]
+
+## [0.35.0] - 2026-11-06
+
+### Features
+
+- Add Open-MOSS image generation support, external tokenizer loading, and a
+  model download script ([#5550](https://github.com/tetherto/qvac/pull/5550)).
+- Add FLUX.3 Image Klein model downloads, generation examples, and single- and
+  multiple-reference image editing
+  ([#5560](https://github.com/tetherto/qvac/pull/5560)).
+
+### Fixes
+
+- Preserve latent-unit VAE tile sizes and correctly shrink tiles during
+  allocation-failure retries; handle integer LoRA alpha tensors in the native
+  engine ([#5550](https://github.com/tetherto/qvac/pull/5550)).
+- Prefer dedicated GPUs during automatic compute placement instead of choosing
+  an integrated GPU solely for its larger shared-memory budget. Explicit
+  backend selections remain respected
+  ([#5550](https://github.com/tetherto/qvac/pull/5550)).
+- Validate required video companion files before native loading and map verbose
+  native logs to debug output
+  ([#5550](https://github.com/tetherto/qvac/pull/5550)).
+- Support Bash 3.2 in the FLUX.3 downloader and verify resumed downloads
+  ([#5560](https://github.com/tetherto/qvac/pull/5560)).
+
+### Changed
+
+- Require GGML and stable-diffusion-cpp `2026-11-01` from the merged QVAC
+  registry ports, retaining the existing registry baseline
+  ([registry #475](https://github.com/tetherto/qvac-registry-vcpkg/pull/475)).
+- Temporarily skip all seven ABot-World integration tests while CUDA streaming
+  parity and initial KV-capture failures are investigated; test assertions
+  remain intact ([#5550](https://github.com/tetherto/qvac/pull/5550),
+  [#5560](https://github.com/tetherto/qvac/pull/5560)).
+
+## [0.34.0] - 2026-11-04
+
+### Features
+
+- Windows loads the Vulkan backend at runtime from
+  `qvac-diffusion-ggml-vulkan.dll`, shipped next to the addon, as Android and
+  Linux already do. The addon no longer imports `vulkan-1.dll`, so it loads on
+  a Windows host without a Vulkan runtime
+  ([#5382](https://github.com/tetherto/qvac/pull/5382)).
+- Requires ggml `2026-08-11#4` from the QVAC registry.
+
+## [0.33.0] - 2026-10-30
+
+### Breaking
+
+- `assessFit` returns `{ status, devices, stats }`: the GPU devices the
+  placement uses, then the host. `status` is `fits`, `does-not-fit` or
+  `unknown`; a placement the fitter had to change is `does-not-fit`. An
+  invalid request or a load the engine cannot measure rejects
+  ([#5477](https://github.com/tetherto/qvac/pull/5477)).
+
+### CUDA Support
+
+- Add CUDA acceleration on Linux ARM64 and x64, including DGX Spark and RTX 5090.
+- Automatically fall back to Vulkan or CPU when CUDA is unavailable.
+- Add a FLUX.2 Klein 4B CUDA example and setup instructions.
+
+## [0.32.1] - 2026-10-29
+
+This patch moves the addon to stable-diffusion-cpp `2026-08-11#8`. It retains
+the existing model support and JavaScript API.
+
+### Bug Fixes
+
+Memory fitting plans on the integrated GPUs when there is no discrete GPU,
+caps the free memory of a GPU that shares host memory at the host's, and on an
+iOS device plans against the app's own memory limit.
+
+The addon requires stable-diffusion-cpp `2026-08-11#8` from the QVAC registry
+while retaining the existing registry baseline
+([#5446](https://github.com/tetherto/qvac/pull/5446)).
+
+## [0.32.0] - 2026-10-29
+
+### Features
+
+- Add optional `GenerationParams.custom_sigmas` for explicit image sampling
+  schedules. Values must be finite, non-negative, strictly decreasing at float
+  precision, and end in zero. The schedule overrides `scheduler` and `steps`;
+  its length minus one determines the step count.
+- Add a Qwen-Image-2.1-Turbo recipe using Euler, CFG 1, and the model's fixed
+  eight-step schedule. Set `QWEN_TURBO=1` and provide `QWEN_TURBO_MODEL` to use
+  Turbo weights with the existing Qwen examples and shared components.
+
+### Fixes
+
+- Enable VAE tiling with `vae_tile_size: 64` in the Qwen example for output
+  areas of at least 2048×2048 pixels, avoiding the full-frame CUDA decode
+  assertion observed during 2K validation. Tile sizes use native latent units.
+
+Existing requests without `custom_sigmas` retain ordinary sampling behavior.
+
+### Pull Requests
+
+- [#5415](https://github.com/tetherto/qvac/pull/5415) - QVAC-27530 feat: support Qwen-Image-2.1-Turbo sampling.
+
 ## [0.31.0] - 2026-10-21
 
 This release adds Qwen-Image-2.1 generation and reference editing, including

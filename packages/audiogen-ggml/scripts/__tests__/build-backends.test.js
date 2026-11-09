@@ -40,6 +40,12 @@ function overridesOf(port) {
   return namedDependencies(vcpkgManifest.overrides ?? [], port)
 }
 
+function pinnedVersion(port) {
+  const override = overridesOf(port)[0]
+  const revision = override['port-version'] ?? 0
+  return revision === 0 ? override.version : `${override.version}#${revision}`
+}
+
 test('the CUDA build remains opt-in', () => {
   assert.match(cmakeSource, new RegExp(`option\\(${CUDA_OPTION} "[^"]+" OFF\\)`))
   assert.match(
@@ -71,7 +77,11 @@ test('the hybrid backend dependencies take the versions the overrides pin', () =
   assert.equal(overridesOf(GGML_PORT).length, 1)
   assert.equal(overridesOf(SPEECH_PORT).length, 1)
   assert.equal(
-    pinnedDependencies.every((dependency) => dependency['version>='] === undefined),
+    pinnedDependencies.every(
+      (dependency) =>
+        dependency['version>='] === undefined ||
+        dependency['version>='] === pinnedVersion(dependency.name)
+    ),
     true
   )
 })
@@ -85,4 +95,38 @@ test('the Windows CUDA build stages runtime-loaded backend modules', () => {
 test('the published linux-x64 prebuild builds the CUDA backend', () => {
   assert.equal(publishBuildCi().includeCuda, true)
   assert.match(platformDefines(PUBLISHED_CUDA_HOST), new RegExp(`-D ${CUDA_OPTION}=ON`))
+})
+
+test('Apple builds enable native Core ML VAE and conditioner support', () => {
+  const speech = namedDependencies(vcpkgManifest.dependencies, SPEECH_PORT)
+  const apple = speech.find((dependency) => dependency.platform === 'osx | ios')
+  assert.ok(apple)
+  assert.ok(apple.features.includes('audiogen'))
+  for (const dependency of speech) {
+    assert.equal(dependency.features.includes('minimax-coreml'), false)
+    assert.equal(dependency.features.includes('coreml'), dependency === apple)
+  }
+})
+
+test('WebGPU is opt-in and resolves the compatible Dawn feature', () => {
+  assert.match(cmakeSource, /option\(AUDIOGEN_WEBGPU "[^"]+" OFF\)/)
+  assert.match(
+    cmakeSource,
+    /if\(AUDIOGEN_WEBGPU\)\s+list\(APPEND VCPKG_MANIFEST_FEATURES "webgpu"\)/
+  )
+  const feature = vcpkgManifest.features.webgpu
+  assert.deepEqual(namedDependencies(feature.dependencies, SPEECH_PORT)[0].features, ['webgpu'])
+  assert.equal(namedDependencies(feature.dependencies, 'dawn')[0]['default-features'], false)
+  assert.deepEqual(overridesOf('dawn'), [{ name: 'dawn', version: '20260410.140140' }])
+  const registries = JSON.parse(
+    fs.readFileSync(path.join(packageRoot, 'vcpkg-configuration.json'))
+  ).registries
+  const official = registries.find(
+    (registry) => registry.repository === 'https://github.com/microsoft/vcpkg'
+  )
+  for (const name of ['dawn', 'vulkan-utility-libraries', 'vcpkg-get-python-packages']) {
+    assert.ok(official.packages.includes(name))
+  }
+  assert.equal(/HEXAGON|hexagon/.test(cmakeSource), false)
+  assert.equal(vcpkgManifest.features.hexagon, undefined)
 })

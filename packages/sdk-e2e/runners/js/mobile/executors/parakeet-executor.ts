@@ -84,7 +84,12 @@ export class MobileParakeetExecutor extends ModelAssetExecutor<typeof parakeetTe
       const text = await operation
       const trimmedText = text.trim()
 
-      if (testId === 'parakeet-unified-coreml-ios') {
+      // Both Core ML checks: the Unified encoder sidecar and the TranscribePsy
+      // distribution, whose encoder-less GGUF only loads with its bundles.
+      if (
+        testId === 'parakeet-unified-coreml-ios' ||
+        testId.startsWith('parakeet-transcribepsy-coreml-')
+      ) {
         const stats = await operation.stats
         if (stats?.encoderOnCoreml !== 1 || stats.encoderUsedCoreml !== 1) {
           return {
@@ -112,6 +117,9 @@ export class MobileParakeetExecutor extends ModelAssetExecutor<typeof parakeetTe
     if (testId.startsWith('parakeet-ctc-')) return 'parakeet-ctc'
     if (testId.startsWith('parakeet-unified-')) return 'parakeet-unified'
     if (testId.startsWith('parakeet-sortformer-')) return 'parakeet-sortformer'
+    if (testId.startsWith('parakeet-transcribepsy-coreml-')) return 'parakeet-transcribepsy-coreml'
+    if (testId === 'parakeet-transcribepsy-windowed') return 'parakeet-transcribepsy-windowed'
+    if (testId.startsWith('parakeet-transcribepsy-')) return 'parakeet-transcribepsy'
     return 'parakeet-tdt'
   }
 }

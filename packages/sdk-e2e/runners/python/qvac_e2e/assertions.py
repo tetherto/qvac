@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import math
 import re
-
 from collections.abc import Callable
 from typing import Any
-
-import json
 
 from .result import StepResult, js_string
 
@@ -19,6 +18,83 @@ def _is_integer(value: Any) -> bool:
     if isinstance(value, int):
         return True
     return isinstance(value, float) and value.is_integer()
+
+
+def _vector(value: Any) -> bool:
+    return (
+        isinstance(value, list)
+        and len(value) > 0
+        and all(type(x) in (int, float) and math.isfinite(x) for x in value)
+    )
+
+
+def _cosine(left: Any, right: Any) -> float | None:
+    if not _vector(left) or not _vector(right) or len(left) != len(right):
+        return None
+    norm_a, norm_b = math.hypot(*left), math.hypot(*right)
+    if (
+        not math.isfinite(norm_a)
+        or not math.isfinite(norm_b)
+        or norm_a == 0
+        or norm_b == 0
+    ):
+        return None
+    similarity = math.fsum((x / norm_a) * (y / norm_b) for x, y in zip(left, right))
+    return similarity if math.isfinite(similarity) else None
+
+
+def unit_vectors(value: Any, args: dict[str, Any]) -> StepResult:
+    """Each vector has the expected size and unit norm; a bare vector is one."""
+    dimensions, tolerance = args.get("dimensions"), args.get("tolerance")
+    if (
+        not _is_integer(dimensions)
+        or dimensions <= 0
+        or type(tolerance) not in (int, float)
+        or not math.isfinite(tolerance)
+        or not 0 < tolerance < 1
+    ):
+        return StepResult.fail(
+            "expected positive dimensions and a tolerance between 0 and 1"
+        )
+    vectors = [value] if _vector(value) else value
+    if not isinstance(vectors, list) or not vectors:
+        return StepResult.fail("expected a vector or a non-empty array of vectors")
+    for index, item in enumerate(vectors):
+        if not _vector(item) or len(item) != dimensions:
+            return StepResult.fail(
+                f"vector {index}: expected {dimensions} finite numbers"
+            )
+        squared_norm = math.fsum(x * x for x in item)
+        if not math.isfinite(squared_norm) or abs(squared_norm - 1) >= tolerance:
+            return StepResult.fail(f"vector {index}: squared norm {squared_norm}")
+    return StepResult.ok(f"{len(vectors)} unit vectors, {dimensions} dimensions")
+
+
+def cosine_at_least(left: Any, right: Any, args: dict[str, Any]) -> StepResult:
+    """The cosine similarity of the two vectors is at least `min`."""
+    minimum = args.get("min")
+    if (
+        type(minimum) not in (int, float)
+        or not math.isfinite(minimum)
+        or not -1 <= minimum <= 1
+    ):
+        return StepResult.fail("expected a cosine minimum between -1 and 1")
+    similarity = _cosine(left, right)
+    if similarity is None:
+        return StepResult.fail("expected finite, nonzero vectors of the same length")
+    if similarity < minimum:
+        return StepResult.fail(f"cosine {similarity}, minimum {minimum}")
+    return StepResult.ok(f"cosine {similarity}, minimum {minimum}")
+
+
+def more_similar_than(left: Any, right: Any, args: dict[str, Any]) -> StepResult:
+    """The left vector is strictly closer by cosine to the right one than to `than`."""
+    near, far = _cosine(left, right), _cosine(left, args.get("than"))
+    if near is None or far is None:
+        return StepResult.fail("expected finite, nonzero vectors of the same length")
+    if near <= far:
+        return StepResult.fail(f"cosine to match {near}, to other {far}")
+    return StepResult.ok(f"cosine to match {near}, to other {far}")
 
 
 def length_is(value: Any, args: dict[str, Any]) -> StepResult:
@@ -702,6 +778,19 @@ def fields_present(value: Any, args: dict[str, Any]) -> StepResult:
     return StepResult.ok(f"{len(fields)} field(s) present")
 
 
+def fields_absent(value: Any, args: dict[str, Any]) -> StepResult:
+    """None of the named fields is present on the value."""
+    if not isinstance(value, dict):
+        return StepResult.fail(f"expected an object, got {type(value).__name__}")
+    fields: list[str] = args.get("fields") or []
+    # Value, not key: pydantic dumps every unset optional field as None, while JS
+    # sees the wire object, where an unreported field is simply missing.
+    present = [field for field in fields if value.get(field) is not None]
+    if present:
+        return StepResult.fail(f"unexpected fields: {', '.join(present)}")
+    return StepResult.ok(f"{len(fields)} field(s) absent")
+
+
 def fields_match(value: Any, args: dict[str, Any]) -> StepResult:
     """Two records agree on the named fields."""
     left = value if isinstance(value, dict) else {}
@@ -917,6 +1006,7 @@ def loaded_model_info_shape(value: Any, args: dict[str, Any]) -> StepResult:
 
 
 ASSERTIONS: dict[str, Callable[[Any, dict[str, Any]], StepResult]] = {
+    "unitVectors": unit_vectors,
     "lengthIs": length_is,
     "lengthAtLeast": length_at_least,
     "anyFieldPresent": any_field_present,
@@ -949,6 +1039,7 @@ ASSERTIONS: dict[str, Callable[[Any, dict[str, Any]], StepResult]] = {
     "streamedEachId": streamed_each_id,
     "noToolCallsFor": no_tool_calls_for,
     "fieldsPresent": fields_present,
+    "fieldsAbsent": fields_absent,
     "fieldsMatch": fields_match,
     "errorIsStructured": error_is_structured,
     "nonEmptyText": non_empty_text,
@@ -989,6 +1080,17 @@ def greater_than(left: Any, right: Any, _args: dict[str, Any]) -> StepResult:
     if left <= right:
         return StepResult.fail(f"expected {left} > {right}")
     return StepResult.ok(f"{left} > {right}")
+
+
+def prefill_reuse(left: Any, right: Any, args: dict[str, Any]) -> StepResult:
+    primed = args.get("primedTokens")
+    values = (left, right, primed)
+    message = f"cold={left}, warm={right}, primed={primed}"
+    if not all(isinstance(value, (int, float)) for value in values):
+        return StepResult.fail(message)
+    if primed <= 0 or right <= 0 or left - right != primed:
+        return StepResult.fail(message)
+    return StepResult.ok(message)
 
 
 def equal_strings(left: Any, right: Any, _args: dict[str, Any]) -> StepResult:
@@ -1086,8 +1188,11 @@ def length_ratio_at_least(left: Any, right: Any, args: dict[str, Any]) -> StepRe
 #: Checks that take two bound values rather than one. Kept beside the
 #: assertions so both clients read one list.
 COMPARISONS: dict[str, Any] = {
+    "cosineAtLeast": cosine_at_least,
+    "moreSimilarThan": more_similar_than,
     "equalStrings": equal_strings,
     "greaterThan": greater_than,
+    "prefillReuse": prefill_reuse,
     "identicalBytes": identical_bytes,
     "differentBytes": different_bytes,
     "lengthRatioAtLeast": length_ratio_at_least,

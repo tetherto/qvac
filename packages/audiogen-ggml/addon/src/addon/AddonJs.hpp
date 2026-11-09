@@ -4,6 +4,7 @@
 #include <any>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <limits>
 #include <memory>
@@ -15,10 +16,18 @@
 #include <utility>
 #include <vector>
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
+#include <os/proc.h>
+#endif
+#endif
+
 #include <audiogen-cpp/acestep/fit.h>
 #ifdef AUDIOGEN_HAS_MINIMAX
 #include <audiogen-cpp/minimax/fit.h>
 #endif
+#include <ggml-backend.h>
 #include <inference-addon-cpp/JsInterface.hpp>
 #include <inference-addon-cpp/JsUtils.hpp>
 #include <inference-addon-cpp/ModelInterfaces.hpp>
@@ -28,7 +37,10 @@
 #include <inference-addon-cpp/queue/OutputCallbackJs.hpp>
 #include <js.h>
 
+#include "addon/AppMemoryBudget.hpp"
+#include "addon/FitResult.hpp"
 #include "js-interface/JSAdapter.hpp"
+#include "js-interface/RuntimeOptions.hpp"
 #include "model-interface/AudioGenProgress.hpp"
 #include "model-interface/BackendUtils.hpp"
 #include "model-interface/acestep/AcestepModel.hpp"
@@ -672,8 +684,10 @@ JSCATCH
 // carrying the engine, its model files and the generation to accommodate.
 // Returns a Promise of the result.
 //
-// Takes no instance and loads nothing: the fitters read GGUF metadata only. A
-// model they cannot read is an "error" status carrying the engine's own reason.
+// Takes no instance and loads nothing: the fitters read GGUF metadata only.
+// Resolves to "fits" or "does-not-fit" with the memory the load takes on each
+// device, or "unknown" for a load the fitter cannot size. A model they cannot
+// read, or an invalid request, rejects.
 //
 // The request is read into owned C++ values on the JS thread, the fitter runs
 // on a worker thread with no JS access, and the result object is built back on
@@ -695,6 +709,10 @@ public:
   std::string text(const char* name) {
     auto value = request_.getOptionalProperty<js::String>(env_, name);
     return value.has_value() ? value->as<std::string>(env_) : std::string();
+  }
+
+  std::string runtimeText(const char* name) {
+    return readRuntimeString(request_, env_, name);
   }
 
   std::optional<double> count(const char* name) {
@@ -747,69 +765,24 @@ private:
   js::Object request_;
 };
 
-inline js_value_t*
-fitResultObject(js_env_t* env, const tts_cpp::acestep::FitResult& fit) {
-  const char* status = "error";
-  if (fit.status == tts_cpp::acestep::FitStatus::Success) {
-    status = "fits";
-  } else if (fit.status == tts_cpp::acestep::FitStatus::Failure) {
-    status = "does-not-fit";
-  }
-
+inline js_value_t* fitResultObject(js_env_t* env, const FitResult& fit) {
   auto result = js::Object::create(env);
-  auto setText = [&](const char* name, const std::string& value) {
-    result.setProperty(env, name, js::String::create(env, value));
-  };
-  auto bytes = [&](const char* name, uint64_t value) {
-    result.setProperty(
-        env, name, js::Number::create(env, static_cast<double>(value)));
-  };
-
-  setText("status", status);
-  setText("reason", fit.reason);
-  setText("modelName", fit.model_name);
-  setText("deviceName", fit.device_name);
-  setText("report", fit.report);
-  result.setProperty(env, "isTurbo", js::Boolean::create(env, fit.is_turbo));
-  result.setProperty(
-      env, "deviceIsCpu", js::Boolean::create(env, fit.device_is_cpu));
-  result.setProperty(
-      env,
-      "deviceSharesHostMemory",
-      js::Boolean::create(env, fit.device_shares_host_memory));
-  result.setProperty(
-      env, "stagesResident", js::Boolean::create(env, fit.stages_resident));
-  bytes("deviceFreeBytes", fit.device_free_bytes);
-  bytes("deviceTotalBytes", fit.device_total_bytes);
-  bytes("deviceBytes", fit.peak_device_bytes);
-  bytes("hostBytes", fit.peak_host_bytes);
-  // Where the device does not share the host pool, host memory is a budget of
-  // its own, so a caller cannot weigh `hostBytes` without these.
-  bytes("hostFreeBytes", fit.host_free_bytes);
-  bytes("hostTotalBytes", fit.host_total_bytes);
-
-  // `deviceBytes` is a peak across the pipeline's phases, so it never divides
-  // into the parts a caller can act on. The per-stage rows carry that split.
-  auto stages = js::Array::create(env);
-  for (size_t i = 0; i < fit.stages.size(); ++i) {
-    const auto& stage = fit.stages[i];
+  result.setProperty(env, "status", js::String::create(env, fit.status));
+  auto devices = js::Array::create(env);
+  for (size_t i = 0; i < fit.devices.size(); ++i) {
+    const auto& row = fit.devices[i];
     auto entry = js::Object::create(env);
-    entry.setProperty(env, "name", js::String::create(env, stage.name));
+    entry.setProperty(env, "id", js::String::create(env, row.id));
+    entry.setProperty(env, "name", js::String::create(env, row.name));
+    entry.setProperty(env, "unified", js::Boolean::create(env, row.unified));
+    entry.setProperty(env, "usedBytes", js::Number::create(env, row.usedBytes));
+    entry.setProperty(env, "freeBytes", js::Number::create(env, row.freeBytes));
     entry.setProperty(
-        env, "deviceName", js::String::create(env, stage.device_name));
-    entry.setProperty(env, "onGpu", js::Boolean::create(env, stage.on_gpu));
-    auto stageBytes = [&](const char* name, uint64_t value) {
-      entry.setProperty(
-          env, name, js::Number::create(env, static_cast<double>(value)));
-    };
-    stageBytes("weightsBytes", stage.weights_bytes);
-    stageBytes("weightsMmapBytes", stage.weights_mmap_bytes);
-    stageBytes("stateBytes", stage.state_bytes);
-    stageBytes("computeBytes", stage.compute_bytes);
-    stageBytes("hostBytes", stage.host_bytes);
-    stages.set(env, static_cast<uint32_t>(i), entry);
+        env, "totalBytes", js::Number::create(env, row.totalBytes));
+    devices.set(env, static_cast<uint32_t>(i), entry);
   }
-  result.setProperty(env, "stages", stages);
+  result.setProperty(env, "devices", devices);
+  result.setProperty(env, "stats", js::Object::create(env));
   return result;
 }
 
@@ -820,6 +793,12 @@ inline tts_cpp::acestep::FitOptions acestepFitOptions(FitRequest& request) {
   options.lm_model_path = request.text("lmPath");
   options.dit_model_path = request.text("ditPath");
   options.vae_model_path = request.text("vaePath");
+  const auto backend = request.runtimeText("backend");
+  const auto lmBackend = request.runtimeText("lmBackend");
+  if (!backend.empty())
+    options.backend = backend;
+  if (!lmBackend.empty())
+    options.lm_backend = lmBackend;
   options.backends_dir =
       resolveBackendsDir(request.text("backendsDir")).string();
   request.readInt("gpuLayers", options.n_gpu_layers);
@@ -853,6 +832,10 @@ inline tts_cpp::minimax::EngineOptions minimaxFitOptions(FitRequest& request) {
   options.model_dir = request.text("modelsDir");
   options.lm_model_path = request.text("lmPath");
   options.synth_model_path = request.text("synthPath");
+  options.coreml_conditioner_path =
+      request.runtimeText("coremlConditionerPath");
+  options.coreml_profile_dir = request.text("coremlProfileDir");
+  options.coreml_compute_units = request.text("coremlComputeUnits");
   options.device = minimaxFitDevice(request);
   options.backends_dir =
       resolveBackendsDir(request.text("backendsDir")).string();
@@ -892,47 +875,56 @@ inline tts_cpp::minimax::FitWorkload minimaxFitWorkload(FitRequest& request) {
 }
 #endif
 
-using FitWork = std::function<tts_cpp::acestep::FitResult()>;
-
-/// An engine the addon loads and audiogen-cpp cannot project. The shape
-/// matches a fit so a caller reads the verdict the same way for every engine.
-inline tts_cpp::acestep::FitResult
-unsupportedEngineResult(const std::string& engine) {
-  tts_cpp::acestep::FitResult result;
-  result.status = tts_cpp::acestep::FitStatus::Error;
-  result.reason = "unsupported-engine";
-  result.model_name = engine;
-  return result;
-}
+/// One engine's fit, bound to values copied out of the request, and the margin
+/// it holds back.
+struct FitWork {
+  std::function<tts_cpp::acestep::FitResult()> run;
+  uint64_t marginBytes;
+};
 
 /// Reads the request on the JS thread. The returned work owns every value it
 /// needs; an invalid request throws here, before any thread starts.
 inline FitWork fitWork(FitRequest& request) {
   std::string engine = request.text("engine");
   if (engine.empty() || engine == K_FIT_ENGINE_ACESTEP) {
-    return [options = acestepFitOptions(request)]() {
-      return tts_cpp::acestep::fit_params(options);
-    };
+    auto options = acestepFitOptions(request);
+    return {
+        [options]() { return tts_cpp::acestep::fit_params(options); },
+        options.margin_bytes};
   }
 #ifdef AUDIOGEN_HAS_MINIMAX
   if (engine == K_FIT_ENGINE_MINIMAX) {
-    return [options = minimaxFitOptions(request),
-            workload = minimaxFitWorkload(request)]() {
-      return tts_cpp::minimax::fit_params(options, workload);
-    };
+    auto options = minimaxFitOptions(request);
+    auto workload = minimaxFitWorkload(request);
+    return {
+        [options, workload]() {
+          return tts_cpp::minimax::fit_params(options, workload);
+        },
+        workload.margin_bytes};
   }
 #endif
-  return [engine = std::move(engine)]() {
-    return unsupportedEngineResult(engine);
-  };
+  throw qvac_errors::StatusError(
+      qvac_errors::general_error::InvalidArgument,
+      "assessFit: " + engine + " has no fitter in this build");
 }
 
 // The fitters register the ggml backends on first use, process-wide state two
-// concurrent fits would race, so fits run one at a time.
-inline tts_cpp::acestep::FitResult runFit(const FitWork& work) {
+// concurrent fits would race, so fits run one at a time. The rows read the
+// devices those backends registered.
+inline FitResult runFit(const FitWork& work) {
   static std::mutex fitMutex;
   const std::lock_guard<std::mutex> lock(fitMutex);
-  return work();
+  FitResult result = toFitResult(work.run());
+#if defined(__APPLE__) && TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
+  // The margin the fitter held back on the device is held back from the app's
+  // limit too.
+  result.status = applyAppMemoryBudget(
+      result.status,
+      result.devices,
+      static_cast<double>(os_proc_available_memory()),
+      static_cast<double>(work.marginBytes));
+#endif
+  return result;
 }
 
 inline js_value_t* assessFit(js_env_t* env, js_callback_info_t* info) try {

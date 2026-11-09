@@ -1,4 +1,4 @@
-"""Unit tests for tetherto.qvac_sdk.api.load_model's client-side behavior (type
+"""Unit tests for tetherto.qvac_sdk._api.load_model's client-side behavior (type
 inference, alias normalization, mismatch validation, requestId threading,
 progress streaming) and the tetherto.qvac_sdk.model_types helpers -- all against a fake
 transport, mirroring the JS load-model unit coverage."""
@@ -8,8 +8,10 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 from tetherto.qvac_sdk import _api as api
+from tetherto.qvac_sdk._generated.models._internal import ReloadConfigRequest
 from tetherto.qvac_sdk.errors import (
     ModelLoadFailedError,
     ModelSrcTypeMismatchError,
@@ -26,6 +28,22 @@ from tetherto.qvac_sdk.model_types import (
 from tetherto.qvac_sdk.models import LAYA_MULTILINGUAL_322M_Q8_0, QWEN3_600M_INST_Q4
 
 OK = {"type": "loadModel", "success": True, "modelId": "m-1"}
+
+
+@pytest.mark.parametrize(
+    "key", ["modelSrc", "model_src", "withProgress", "with_progress", "seed"]
+)
+@pytest.mark.parametrize("value", [True, None])
+def test_reload_config_rejects_forbidden_fields(key: str, value: bool | None) -> None:
+    payload = {
+        "type": "loadModel",
+        "modelId": "0123456789abcdef",
+        "modelType": "whisper",
+        "modelConfig": {"language": "es"},
+    }
+    assert ReloadConfigRequest.model_validate(payload)
+    with pytest.raises(ValidationError, match=key):
+        ReloadConfigRequest.model_validate({**payload, key: value})
 
 
 class FakeTransport:
@@ -128,8 +146,11 @@ async def test_load_model_requires_type_for_plain_string_src():
 
 async def test_load_model_alias_warns_and_normalizes():
     transport = FakeTransport(response=OK)
-    with pytest.warns(DeprecationWarning, match='alias.*"llamacpp-completion"'):
+    with pytest.warns(
+        DeprecationWarning, match='alias.*"llamacpp-completion"'
+    ) as record:
         await api.load_model(transport, model_src="/models/x.gguf", model_type="llm")
+    assert record[0].filename == __file__
     assert transport.sent["modelType"] == "llamacpp-completion"
 
 
@@ -154,6 +175,30 @@ async def test_load_model_threads_explicit_request_id():
     transport = FakeTransport(response=OK)
     await api.load_model(transport, model_src=QWEN3_600M_INST_Q4, request_id="req-42")
     assert transport.sent["requestId"] == "req-42"
+
+
+async def test_load_model_threads_model_fit_policy():
+    transport = FakeTransport(response=OK)
+    await api.load_model(
+        transport, model_src=QWEN3_600M_INST_Q4, model_fit_policy="refuse"
+    )
+    assert transport.sent["modelFitPolicy"] == "refuse"
+
+
+async def test_load_model_omits_model_fit_policy_when_unset():
+    transport = FakeTransport(response=OK)
+    await api.load_model(transport, model_src=QWEN3_600M_INST_Q4)
+    assert "modelFitPolicy" not in transport.sent
+
+
+async def test_load_model_rejects_an_unknown_model_fit_policy():
+    transport = FakeTransport(response=OK)
+    policy: Any = "strict"
+    with pytest.raises(RequestValidationError, match="modelFitPolicy"):
+        await api.load_model(
+            transport, model_src=QWEN3_600M_INST_Q4, model_fit_policy=policy
+        )
+    assert transport.sent is None
 
 
 async def test_load_model_failure_raises_typed_error():

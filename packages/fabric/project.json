@@ -23,6 +23,7 @@
           "artifactNamePrefix": "fabric-",
           "includeVulkanSdk": true,
           "includeRocm": true,
+          "includeXdna": true,
           "includeCuda": true,
           "includeCudaWin32": true,
           "includeCudaArm64": true,
@@ -68,6 +69,8 @@
     }
   },
   "implicitDependencies": [
-    "lint-cpp"
+    "lint-cpp",
+    "!@qvac/llm-llamacpp",
+    "!@qvac/embed-llamacpp"
   ]
 }

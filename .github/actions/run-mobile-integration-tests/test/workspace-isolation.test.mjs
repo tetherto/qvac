@@ -45,8 +45,7 @@ const PERF_ENV = {
 }
 
 const deviceFarmLogcat = (job) => join(DEVICE_FARM_LOGS, PLATFORM, job, SUITE, LOGCAT)
-const consoleLogcatName = (job) => `${job}_${LOGCAT}`
-const consoleLogcat = (job) => join(CONSOLE_LOGS, PLATFORM, consoleLogcatName(job))
+const consoleLogcat = (job) => join(CONSOLE_LOGS, PLATFORM, job, SUITE, LOGCAT)
 const previousPerfReport = () => join(PERF_REPORT, PLATFORM, `${PREVIOUS_JOB}_perf-report.json`)
 const previousPerfResult = () => join(PERF_RESULTS, PLATFORM, PREVIOUS_JOB, PERF_REPORT_FILE)
 const exists = (workspace, relativePath) => existsSync(join(workspace, relativePath))
@@ -56,6 +55,7 @@ test('an earlier job\'s Device Farm logs are not uploaded as this run\'s console
   const { workspace } = context
   writeFixture(workspace, deviceFarmLogcat(PREVIOUS_JOB))
   writeFixture(workspace, consoleLogcat(PREVIOUS_JOB))
+  writeFixture(workspace, join(CONSOLE_LOGS, PLATFORM, `${PREVIOUS_JOB}_${LOGCAT}`))
   writeFixture(workspace, previousPerfReport())
   writeFixture(workspace, ADDON_FILE)
 
@@ -63,7 +63,9 @@ test('an earlier job\'s Device Farm logs are not uploaded as this run\'s console
   writeFixture(workspace, deviceFarmLogcat(CURRENT_JOB))
   runStep(COLLECT_ACTION, EXTRACT_LOGS_STEP, { ...context, env: { PLATFORM } })
 
-  assert.deepEqual(readdirSync(join(workspace, CONSOLE_LOGS, PLATFORM)), [consoleLogcatName(CURRENT_JOB)])
+  assert.deepEqual(readdirSync(join(workspace, CONSOLE_LOGS, PLATFORM)), [CURRENT_JOB])
+  assert.deepEqual(readdirSync(join(workspace, CONSOLE_LOGS, PLATFORM, CURRENT_JOB)), [SUITE])
+  assert.deepEqual(readdirSync(join(workspace, CONSOLE_LOGS, PLATFORM, CURRENT_JOB, SUITE)), [LOGCAT])
   assert.equal(exists(workspace, previousPerfReport()), false)
   assert.equal(exists(workspace, ADDON_FILE), true)
 })

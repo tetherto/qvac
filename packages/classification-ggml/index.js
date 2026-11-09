@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ImageClassifier = exports.MegaLoc = void 0;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
 const fs = require("bare-fs");
-const path = require("bare-path");
 const env = require("bare-env");
 const QvacLogger = require("@qvac/logging");
 /* eslint-enable @typescript-eslint/no-require-imports */
@@ -12,13 +11,11 @@ const megaloc_1 = require("./megaloc");
 var megaloc_2 = require("./megaloc");
 Object.defineProperty(exports, "MegaLoc", { enumerable: true, get: function () { return megaloc_2.MegaLoc; } });
 const addon_1 = require("./addon");
-const DEFAULT_WEIGHTS_FILENAME = "mobilenetv3_3class_v3_fp16.gguf";
 const RUN_BUSY_ERROR_MESSAGE = "Cannot set new job: a job is already set or being processed";
-function resolveDefaultModelPath() {
-    if (env.QVAC_CLASSIFICATION_MODEL_PATH) {
-        return env.QVAC_CLASSIFICATION_MODEL_PATH;
-    }
-    return path.join(__dirname, "weights", DEFAULT_WEIGHTS_FILENAME);
+const MODEL_PATH_REQUIRED = "MobileNet GGUF modelPath is required. Pass modelPath or set QVAC_CLASSIFICATION_MODEL_PATH.";
+function resolveConfiguredModelPath() {
+    const fromEnv = env.QVAC_CLASSIFICATION_MODEL_PATH;
+    return typeof fromEnv === "string" && fromEnv.length > 0 ? fromEnv : undefined;
 }
 function getErrorMessage(error, fallback) {
     if (error && typeof error === "object" && "message" in error) {
@@ -32,7 +29,7 @@ function getErrorMessage(error, fallback) {
  * High-level classifier for MobileNetV3-Small 3-class image triage.
  *
  * ```js
- * const classifier = new ImageClassifier()
+ * const classifier = new ImageClassifier({ modelPath })
  * await classifier.load()
  * const result = await classifier.classify(jpegBuffer)
  * // [ { label: 'food', confidence: 0.93 }, ... ]
@@ -50,7 +47,7 @@ class ImageClassifier {
     state;
     constructor(opts = {}) {
         const { modelPath, logger = undefined, nativeLogger = false } = opts;
-        this.modelPath = modelPath ?? resolveDefaultModelPath();
+        this.modelPath = modelPath ?? resolveConfiguredModelPath() ?? "";
         this.logger = new QvacLogger(logger);
         // Off by default: see `addon.js::_ensureLoggerInstalled` for the
         // process-wide JsLogger lifecycle that opt-in unlocks.
@@ -75,6 +72,9 @@ class ImageClassifier {
         });
     }
     async loadInternal() {
+        if (!this.modelPath) {
+            throw new Error(MODEL_PATH_REQUIRED);
+        }
         if (!fs.existsSync(this.modelPath)) {
             throw new Error(`MobileNet GGUF weights not found at: ${this.modelPath}`);
         }

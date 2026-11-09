@@ -74,8 +74,8 @@ async function runCleanup(): Promise<void> {
   cleanupPromise = (async () => {
     destroyResourceCollector()
     clearRegistries()
-    disposeAllVectorIndexes()
     await Promise.allSettled([
+      disposeAllVectorIndexes(),
       closeAllRagInstances(),
       cleanupDownloads(),
       unloadAllModels(),

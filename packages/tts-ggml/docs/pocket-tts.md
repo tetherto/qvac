@@ -1,8 +1,10 @@
 # Pocket TTS
 
 Pocket is an English TTS engine implemented in the Fabric speech library.
-The native library supports CPU, Metal, CUDA, Vulkan and OpenCL; the
-`@qvac/tts-ggml` JavaScript API currently accepts CPU inference only.
+The native library and `@qvac/tts-ggml` addon support CPU, Metal, CUDA,
+Vulkan and OpenCL. CPU remains the default; set `config.useGPU: true`
+or a nonzero `nGpuLayers` to request GPU inference. `config.backend`
+can select an exact registered device such as `MTL0`.
 It streams PCM16 audio through the addon. Python
 is used only to convert weights and benchmark the upstream reference; it is
 not needed for native synthesis. Inference plugin and public SDK integration
@@ -71,12 +73,38 @@ chunk with `isLast: true`; other engines may omit this metadata.
 
 ## Supported controls
 
-English only; CPU only; `threads` defaults to one per worker (two workers).
+English only; `threads` defaults to one per worker (two workers).
 `seed` accepts unsigned 32-bit integers. `temperature`, `steps`, `nCtx`,
 `maxTokens`, `noiseClamp`, `eosThreshold`, `framesAfterEos` and
 `outputSampleRate` are validated before native loading. Output resampling
-supports 8–192 kHz. Other engines' sampling, emotional, speed, GPU and
+supports 8–192 kHz. Other engines' sampling, emotional, speed and
 LavaSR settings are rejected instead of silently ignored.
+
+`config.useGPU` and `nGpuLayers` must agree when supplied together.
+Reloading preserves the selected backend unless it is explicitly changed.
+
+### Memory preflight
+
+`assessFit()` reads GGUF metadata and frontend/voice metadata without loading
+weights. Pass the same backend and workload that synthesis will use:
+
+```js
+const fit = await TTSGgml.assessFit({
+  engineType: 'pocket',
+  pocketFlowModelPath: '/models/pocket/flow-lm.gguf',
+  pocketMimiModelPath: '/models/pocket/mimi.gguf',
+  pocketFrontendPath: '/models/pocket/frontend.json',
+  pocketVoicePath: '/models/pocket/voice.gguf',
+  text: 'Hello from Pocket.',
+  useGPU: true
+})
+```
+
+`marginBytes` leaves the requested memory headroom. Optional
+`memoryBudgetBytes` applies an application ceiling to each memory pool;
+zero or omission retains the native telemetry-based budget. Results use
+the common `fits`, `does-not-fit` and `error` statuses. The projection
+does not load a model or change a synthesis setting.
 
 Fabric defaults to one sampling step, matching the native CLI and upstream
 reference. An explicit `steps: 4` (or

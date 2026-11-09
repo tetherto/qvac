@@ -61,6 +61,7 @@ from .sessions import (  # noqa: F401
 # the same name pulled in by `from .methods import *` above.
 from ._api import (  # noqa: F401
     TranslateRun,
+    assess_model_fit,
     cancel,
     delete_cache,
     generate_client_request_id,
@@ -95,6 +96,7 @@ _ERGONOMIC = [
     "Client",
     "WorkerNotFoundError",
     "load_model",
+    "assess_model_fit",
     "unload_model",
     "cancel",
     "delete_cache",

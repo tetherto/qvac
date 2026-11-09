@@ -38,6 +38,7 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { cutLineFolders } from './lib/sample-lines.js';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -99,6 +100,13 @@ interface Label {
 }
 
 /**
+ * The cut lines these checks draw their samples from, read from the manifest
+ * so a cut or a retirement does not have to edit the lists below.
+ */
+const [SDK_LINE, SDK_OLDER_LINE] = cutLineFolders('/sdk', 2);
+const [CLI_LINE] = cutLineFolders('/cli');
+
+/**
  * Pages whose trail must lead to a named collection index, at several depths,
  * including a page of each cut documentation line — the line is what the
  * collection entry has to get right.
@@ -111,10 +119,18 @@ const EXPECTED_TRAILS: { page: string; leadsTo: string; depth: number }[] = [
     leadsTo: '/sdk/',
     depth: 4,
   },
-  { page: 'sdk/v0.18/configuration/plugins', leadsTo: '/sdk/v0.18', depth: 3 },
-  { page: 'sdk/v0.19/configuration/plugins', leadsTo: '/sdk/v0.19', depth: 3 },
+  {
+    page: `sdk/${SDK_LINE}/configuration/plugins`,
+    leadsTo: `/sdk/${SDK_LINE}`,
+    depth: 3,
+  },
+  {
+    page: `sdk/${SDK_OLDER_LINE}/configuration/plugins`,
+    leadsTo: `/sdk/${SDK_OLDER_LINE}`,
+    depth: 3,
+  },
   { page: 'cli/http-server', leadsTo: '/cli/', depth: 2 },
-  { page: 'cli/v0.12/http-server', leadsTo: '/cli/v0.12', depth: 2 },
+  { page: `cli/${CLI_LINE}/http-server`, leadsTo: `/cli/${CLI_LINE}`, depth: 2 },
   { page: 'ecosystem/addons/llm-llamacpp', leadsTo: '/ecosystem/', depth: 3 },
   { page: 'resources/tutorials/electron', leadsTo: '/resources/', depth: 2 },
 ];
@@ -130,8 +146,8 @@ const TRAILLESS = [
   'cli',
   'ecosystem',
   'resources',
-  'sdk/v0.18',
-  'cli/v0.12',
+  `sdk/${SDK_LINE}`,
+  `cli/${CLI_LINE}`,
 ];
 
 /** The span of a built page between its article and its heading. */

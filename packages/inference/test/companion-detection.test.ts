@@ -1,12 +1,10 @@
 import test from 'brittle'
 import { groupCompanionSets } from '@/models/update-models/companions'
-import { buildResourceProfile } from '@/models/update-models/profiles'
 import {
   TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0,
   TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0,
   getModelByPath
 } from '@/models/registry'
-import { getModelResourceProfile } from '@/models/registry/resource-profiles'
 import type { ProcessedModel } from '@/models/update-models/types'
 
 function makeModel(overrides: Partial<ProcessedModel> & { registryPath: string }): ProcessedModel {
@@ -420,7 +418,6 @@ test('groupCompanionSets: cosyvoice Q4 pairs lighter weights with compatible sha
     set.files.map((file) => file.sha256Checksum),
     light.map((file) => file.sha256Checksum)
   )
-  t.is(buildResourceProfile(result[0]!).artifactBytes, 6000, 'profile includes all six artifacts')
   t.ok(result[6]!.companionSet, 'original Q8/F32 set still resolves')
   t.not(set.setKey, result[6]!.companionSet!.setKey, 'variants have independent cache directories')
   const reversed = groupCompanionSets([...original.reverse(), ...makeLightCosyvoiceSet().reverse()])
@@ -459,7 +456,7 @@ test('groupCompanionSets: cosyvoice Q4 rejects assets from other releases or sou
   }
 })
 
-test('generated CosyVoice3 constants expose complete sets and matching resource profiles', (t) => {
+test('generated CosyVoice3 constants expose complete sets', (t) => {
   for (const model of [TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0, TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0]) {
     const set = getModelByPath(model.registryPath)!.companionSet!
     t.ok(set, `${model.name} has a companion set`)
@@ -474,10 +471,6 @@ test('generated CosyVoice3 constants expose complete sets and matching resource 
       t.ok(file.expectedSize > 0)
       t.ok(file.blobCoreKey)
     }
-    t.is(
-      getModelResourceProfile(model.sha256Checksum)?.artifactBytes,
-      set.files.reduce((sum, file) => sum + file.expectedSize, 0)
-    )
   }
 })
 
@@ -522,4 +515,24 @@ test('groupCompanionSets: Audio8 Core ML bundle components are companion-only', 
   t.is(result[1]!.isCompanionOnly, true)
   t.is(result[2]!.isCompanionOnly, true)
   t.absent(result[3]!.isCompanionOnly)
+})
+
+test('groupCompanionSets: Core ML source packages are companion-only and archives stay standalone', (t) => {
+  const components = [
+    'vae-decoder.mlpackage/Manifest.json',
+    'vae-decoder.mlpackage/Data/com.apple.CoreML/model.mlmodel',
+    'vae-decoder.mlpackage/Data/com.apple.CoreML/weights/weight.bin'
+  ]
+  const standalone = ['model.gguf', 'encoder.mlmodelc.zip', 'vae-decoder.mlpackage.zip']
+  for (const prefix of ['', 'acestep/']) {
+    const result = groupCompanionSets(
+      [...components, ...standalone].map((path) => makeModel({ registryPath: prefix + path }))
+    )
+    for (const entry of result.slice(0, components.length)) {
+      t.is(entry.isCompanionOnly, true, entry.registryPath)
+    }
+    for (const entry of result.slice(components.length)) {
+      t.absent(entry.isCompanionOnly, entry.registryPath)
+    }
+  }
 })

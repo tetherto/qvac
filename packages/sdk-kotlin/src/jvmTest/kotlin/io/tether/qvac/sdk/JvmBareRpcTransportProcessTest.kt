@@ -1,8 +1,8 @@
 package io.tether.qvac.sdk
 
-import io.tether.qvac.sdk.rpc.BareRpcCodec
-import io.tether.qvac.sdk.rpc.BareRpcMessage
 import kotlinx.coroutines.runBlocking
+import to.holepunch.barerpc.Message
+import to.holepunch.barerpc.Messages
 import java.io.InputStream
 import java.net.Socket
 import java.nio.file.Path
@@ -110,8 +110,8 @@ private object FakeJvmWorker {
 
         socket.use { connection ->
             while (true) {
-                val request = assertIs<BareRpcMessage.Request>(
-                    BareRpcCodec.decodeFrame(readProcessFrame(connection.getInputStream())),
+                val request = assertIs<Message.Request>(
+                    Messages.decode(readProcessFrame(connection.getInputStream())).message,
                 )
                 val body = request.data?.decodeToString() ?: ""
                 val reply = when {
@@ -125,7 +125,7 @@ private object FakeJvmWorker {
                     else -> "{\"type\":\"heartbeat\",\"number\":9}"
                 }
                 connection.getOutputStream().write(
-                    BareRpcCodec.encodeResponse(request.id, reply.encodeToByteArray()),
+                    Messages.encode(Message.Response(request.id, 0u, reply.encodeToByteArray(), null)),
                 )
                 if (body.contains("__shutdown__")) break
             }

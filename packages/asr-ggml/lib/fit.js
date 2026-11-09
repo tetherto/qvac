@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.assessFit = assessFit;
 const driver_1 = require("../engines/moss/driver");
+const options_1 = require("../engines/parakeet/options");
 /**
  * Projects one model against the memory free right now, reading model metadata
  * and never weight data. Parakeet is GGUF, so the registry's weightless copy of
@@ -17,8 +18,7 @@ const driver_1 = require("../engines/moss/driver");
  * each load does. `marginBytes` defaults to the engine's own headroom, which
  * is 256 MiB for parakeet.
  *
- * A model the fitter cannot read resolves with `status: "error"` and the
- * engine's reason. Only a broken request rejects.
+ * A model the fitter cannot read, or an invalid request, rejects.
  *
  * Concurrent calls run one at a time.
  */
@@ -32,6 +32,9 @@ async function assessFit(request) {
             hotwords: request.hotwords,
             maxNewTokens: request.maxNewTokens
         });
+    }
+    else if (request.engine === 'parakeet' || request.engine === undefined) {
+        (0, options_1.validateParakeetBackend)(request.backend);
     }
     return await binding.assessFit(request);
 }

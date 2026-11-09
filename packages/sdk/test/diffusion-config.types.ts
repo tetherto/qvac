@@ -20,3 +20,26 @@ acceptConfig({ control_net_cpu: true })
 acceptConfig({ max_vram: true })
 // @ts-expect-error streaming requires a boolean
 acceptConfig({ stream_layers: 'true' })
+
+acceptConfig({
+  mode: 'diffusion',
+  llmModelSrc: '/models/encoder.gguf',
+  projectionModelSrc: '/models/projector.gguf',
+  vaeModelSrc: '/models/vae.safetensors'
+})
+// @ts-expect-error the projector uses the shared model-source type
+acceptConfig({ projectionModelSrc: true })
+
+function acceptGeneration(_params: import('@qvac/inference/surface').DiffusionClientParams) {}
+
+acceptGeneration({
+  modelId: 'qwen-turbo',
+  prompt: 'A red teapot.',
+  custom_sigmas: [1, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0],
+  cfg_scale: 1,
+  sampling_method: 'euler',
+  vae_tiling: true,
+  vae_tile_size: 64
+})
+// @ts-expect-error custom sigma schedules contain numbers
+acceptGeneration({ modelId: 'qwen-turbo', prompt: 'A teapot.', custom_sigmas: ['1', '0'] })

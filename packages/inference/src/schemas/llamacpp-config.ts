@@ -149,6 +149,12 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       "Writable directory for checkpoint files, required with `cache_checkpoint_storage: 'disk'` and rejected without it. The addon writes in a private directory it creates inside it (on Windows, in the directory itself). On mobile, pass the app's cache directory."
     ),
+  cache_share_across_keys: z
+    .boolean()
+    .optional()
+    .describe(
+      'Let a request reuse the longest prompt prefix another conversation on this model holds. Default false: each request keeps to its own `kvCache` key, and a request without one starts cold. With `true`, callers can tell from prompt-token counts and timing whether another conversation shares their prompt.'
+    ),
   cache_ram_mib: z
     .number()
     .int()
@@ -376,10 +382,47 @@ export const llmConfigBaseSchema = z.object({
     .describe(
       'Reasoning-channel token budget. `-1` (default) unrestricted, `0` disables it, any positive integer caps the reasoning channel at that many tokens (the closing think tag is force-emitted once the budget is spent).'
     ),
+  spec_type: z
+    .enum(['none', 'draft-mtp', 'draft-dflash'])
+    .optional()
+    .describe(
+      "Speculative decoding, as llama-server's `--spec-type`. `'draft-mtp'` drafts with the model's own multi-token-prediction head, or with an external MTP head given as `draftModelSrc`; the head, when given, otherwise the model, must ship MTP layers, and a head must match the model, or the load fails. `'draft-dflash'` drafts with the DFlash model given as `draftModelSrc`, which it requires. The model verifies every draft, so output keeps the distribution of plain decoding. `'none'` (default) decodes one token per step. Works with multimodal prompts, `parallel` and `kvCache`. Completion stats then report `draftTokens` and `draftAcceptedTokens`."
+    ),
+  spec_draft_n_max: z
+    .number()
+    .int()
+    .min(1)
+    .max(64)
+    .optional()
+    .describe(
+      "Longest draft per step (1–64, default 3). Lowered at load, with a warning, to fit one `ubatch-size` and each sequence’s share of `batch-size`. Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`."
+    ),
+  spec_draft_n_min: z
+    .number()
+    .int()
+    .min(0)
+    .max(64)
+    .optional()
+    .describe(
+      "Shortest draft worth verifying (0–64, default 0, at most `spec_draft_n_max`); shorter drafts are dropped. Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`."
+    ),
+  spec_draft_p_min: z
+    .number()
+    .min(0)
+    .max(1)
+    .optional()
+    .describe(
+      "Minimum draft-head probability for a token to extend the draft (0–1, default 0). Requires `spec_type` `'draft-mtp'` or `'draft-dflash'`."
+    ),
   projectionModelSrc: modelSrcInputSchema
     .optional()
     .describe(
       'Multimodal projection (mmproj / vision encoder) model source; multimodal models only.'
+    ),
+  draftModelSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      "Draft model source, as llama-server's `--spec-draft-model`: the DFlash model, required by `spec_type: 'draft-dflash'`, or an external MTP head for `spec_type: 'draft-mtp'`, such as the MTP quantization of the same model or a Gemma 4 assistant for its Gemma 4 model. Placed like the model (`device`, `gpu_layers`). Model fit checks count an MTP head's memory but not a DFlash model's or a Gemma 4 assistant's, so leave room for those."
     ),
   image_tile_mode: z
     .enum(['disabled', 'batched', 'sequential'])
@@ -413,19 +456,80 @@ export const LLM_CONFIG_DEFAULTS = {
   ctx_size: 1024,
   device: 'gpu',
   system_prompt: 'You are a helpful assistant.',
-  image_tile_mode: 'sequential'
+  image_tile_mode: 'sequential',
+  cache_share_across_keys: false
 } as const satisfies Partial<LlmConfigInput>
 
 // Full schema - applies defaults via transform (no duplication)
-export const llmConfigSchema = llmConfigBaseSchema.transform((data) => ({
-  ...LLM_CONFIG_DEFAULTS,
-  ...data
-}))
+// Checked on the config merged with device defaults, before the draft model is downloaded.
+export const llmConfigSchema = llmConfigBaseSchema
+  .superRefine((data, ctx) => {
+    if (data.draftModelSrc !== undefined && (data.spec_type ?? 'none') === 'none') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['draftModelSrc'],
+        message: "draftModelSrc requires spec_type 'draft-mtp' or 'draft-dflash'."
+      })
+    }
+  })
+  .transform((data) => ({
+    ...LLM_CONFIG_DEFAULTS,
+    ...data
+  }))
 
 export type LlmConfig = z.infer<typeof llmConfigSchema>
 
 // Base schema - validates types, all fields optional (for input validation)
 export const embedConfigBaseSchema = z.object({
+  ctxSize: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      'Runtime context size in tokens. Unset uses the model trained context size. Lower it to bound memory for long-context models.'
+    ),
+  projectionModelSrc: modelSrcInputSchema
+    .optional()
+    .describe(
+      'Projection model for image and audio embeddings, such as EmbeddingGemma 2 mmproj. Omit for text-only use.'
+    ),
+  imageMaxTokens: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      'Maximum image token budget. Unset keeps the projector default. Each input must fit in batchSize.'
+    ),
+  imageMinTokens: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe('Minimum image token budget. Must not exceed imageMaxTokens.'),
+  mmprojNoAudio: z
+    .boolean()
+    .optional()
+    .describe('Skip the audio encoder. Defaults to false. Audio is rejected when enabled.'),
+  mmprojUseGpu: z
+    .boolean()
+    .optional()
+    .describe(
+      'Projector GPU override. Unset follows the addon device policy; ignored when the model runs on CPU.'
+    ),
+  imageMaxMegapixels: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe('Maximum image size before decoding. Defaults to 50 megapixels.'),
+  audioMaxSeconds: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe('Maximum audio duration before decoding. Defaults to 600 seconds.'),
   poll: z
     .number()
     .int()
@@ -522,6 +626,40 @@ export const embedConfigBaseSchema = z.object({
 })
 
 export type EmbedConfigInput = z.infer<typeof embedConfigBaseSchema>
+
+function refineEmbedLoadConfig(config: EmbedConfigInput, ctx: z.RefinementCtx) {
+  if (
+    config.imageMinTokens !== undefined &&
+    config.imageMaxTokens !== undefined &&
+    config.imageMinTokens > config.imageMaxTokens
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['imageMinTokens'],
+      message: 'imageMinTokens must not exceed imageMaxTokens.'
+    })
+  }
+
+  if (config.projectionModelSrc) return
+  for (const key of [
+    'imageMinTokens',
+    'imageMaxTokens',
+    'imageMaxMegapixels',
+    'audioMaxSeconds',
+    'mmprojNoAudio',
+    'mmprojUseGpu'
+  ] as const) {
+    if (config[key] !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [key],
+        message: `${key} requires projectionModelSrc.`
+      })
+    }
+  }
+}
+
+export const embedLoadConfigSchema = embedConfigBaseSchema.superRefine(refineEmbedLoadConfig)
 
 // Default values - typed as partial of the config
 export const EMBED_CONFIG_DEFAULTS = {

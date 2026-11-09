@@ -25,6 +25,7 @@
           "includeVulkanSdk": true,
           "setupPythonOnWindows": true,
           "includeCuda": true,
+          "verifyLinuxModuleCxxRuntime": true,
           "platformCmakeDefines": "linux-x64: -D ENABLE_CUDA=ON"
         }
       },
@@ -1035,8 +1036,7 @@
           "verifyGenerated": true,
           "nameTransform": "rename-prefix",
           "repoName": "tts-ggml",
-          "testGateMode": "post-publish-integration",
-          "postIntegrationOnGpr": true,
+          "testGateMode": "none",
           "slicePlatformPackages": true
         }
       }

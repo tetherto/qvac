@@ -793,6 +793,107 @@ TEST_F(
   EXPECT_FALSE(outputs[1].empty());
 }
 
+namespace {
+/// Qwen3.5 with thinking on ends the prompt with `<think>\n`, so the model
+/// never generates the opener. Both paths must stream it exactly once, first,
+/// or a consumer that splits reasoning on the tags reads it as content.
+void expectForcedOpenerStreamedOnce(LlamaModel& model) {
+  ASSERT_NE(LlamaModelTestPeer::scheduler(model), nullptr)
+      << "test requires the continuous-batching scheduler";
+  const auto hasTextFrom = [](const std::string& text, size_t from) {
+    return text.find_first_not_of(" \t\r\n", from) != std::string::npos;
+  };
+  const auto opensOnceThenGenerates = [&hasTextFrom](const std::string& text) {
+    const std::string opener = "<think>";
+    return text.rfind(opener, 0) == 0 &&
+           text.find(opener, 1) == std::string::npos &&
+           hasTextFrom(text, opener.size());
+  };
+  const auto makePrompt = [](const char* input, std::string* streamed) {
+    LlamaModel::Prompt prompt;
+    prompt.input = input;
+    if (streamed != nullptr) {
+      prompt.outputCallback = [streamed](const std::string& piece) {
+        *streamed += piece;
+      };
+    }
+    return prompt;
+  };
+  const char* first = R"([{"role":"user","content":"What is 17 * 23?"}])";
+  const char* second = R"([{"role":"user","content":"What is 12 * 11?"}])";
+
+  const std::string single = model.processPrompt(makePrompt(first, nullptr));
+  EXPECT_TRUE(opensOnceThenGenerates(single)) << single;
+
+  // A single `run()` with `parallel >= 2` reaches the scheduler as a
+  // one-prompt batch.
+  std::string streamedAlone;
+  const auto alone = model.processPromptBatch(
+      std::vector<LlamaModel::Prompt>{makePrompt(first, &streamedAlone)});
+  ASSERT_EQ(alone.size(), 1u);
+  EXPECT_TRUE(opensOnceThenGenerates(alone[0])) << alone[0];
+  EXPECT_EQ(streamedAlone, alone[0]);
+
+  std::string streamed;
+  const auto outputs = model.processPromptBatch(
+      std::vector<LlamaModel::Prompt>{
+          makePrompt(first, &streamed), makePrompt(second, nullptr)});
+  ASSERT_EQ(outputs.size(), 2u);
+  EXPECT_TRUE(opensOnceThenGenerates(outputs[0])) << outputs[0];
+  EXPECT_TRUE(opensOnceThenGenerates(outputs[1])) << outputs[1];
+  EXPECT_EQ(streamed, outputs[0]);
+
+  // The opener is owed per request: a sibling with thinking off gets none.
+  std::string streamedOn;
+  std::string streamedOff;
+  auto thinkingOff = makePrompt(second, &streamedOff);
+  thinkingOff.generationParams.reasoning_budget = 0;
+  const auto mixed = model.processPromptBatch(
+      std::vector<LlamaModel::Prompt>{
+          makePrompt(first, &streamedOn), std::move(thinkingOff)});
+  ASSERT_EQ(mixed.size(), 2u);
+  EXPECT_TRUE(opensOnceThenGenerates(mixed[0])) << mixed[0];
+  EXPECT_TRUE(hasTextFrom(mixed[1], 0)) << mixed[1];
+  EXPECT_EQ(mixed[1].find("<think>"), std::string::npos) << mixed[1];
+  EXPECT_EQ(streamedOn, mixed[0]);
+  EXPECT_EQ(streamedOff, mixed[1]);
+}
+} // namespace
+
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchStreamsForcedOpenReasoningOpenerLikeSinglePrompt) {
+  REQUIRE_MODEL(qwen35HybridModel_);
+  config_["ctx_size"] = "4096";
+  config_["parallel"] = "2";
+  config_["n_predict"] = "8";
+  auto model = loadModel(qwen35HybridModel_);
+  expectForcedOpenerStreamedOnce(*model);
+}
+
+TEST_F(
+    ContinuousBatchingIntegrationTest,
+    BatchMtmdStreamsForcedOpenReasoningOpenerLikeSinglePrompt) {
+  const std::string vlmPath =
+      test_common::BaseTestModelPath::get("Qwen3.5-0.8B-Q8_0.gguf");
+  const std::string mmprojPath =
+      test_common::BaseTestModelPath::get("mmproj-Qwen3.5-0.8B-F16.gguf");
+  if (!fs::exists(vlmPath) || !fs::exists(mmprojPath)) {
+    GTEST_SKIP() << "Qwen3.5 M-RoPE fixture not found";
+  }
+  std::string path = vlmPath;
+  std::string projection = mmprojPath;
+  auto cfg = config_;
+  cfg["ctx_size"] = "4096";
+  cfg["parallel"] = "2";
+  cfg["n_predict"] = "8";
+  auto model = std::make_unique<LlamaModel>(
+      std::move(path), std::move(projection), std::move(cfg));
+  model->waitForLoadInitialization();
+  ASSERT_TRUE(model->isLoaded());
+  expectForcedOpenerStreamedOnce(*model);
+}
+
 TEST_F(
     ContinuousBatchingIntegrationTest,
     Qwen35HybridSequenceLimitMidReasoningRollsBackAndKeepsSibling) {
@@ -1329,8 +1430,9 @@ TEST_F(
       << "test setup: no token was emitted, so cancel never fired";
 }
 
-/// A keyless prefill inside a batch has no product that survives the slot
-/// teardown: the lane's KV is wiped and nothing is kept. The same policy that
+/// A keyless prefill inside a batch has no conversation that survives the
+/// slot teardown: the lane keeps its state at most anonymously, first to be
+/// evicted. The same policy that
 /// rejects it on the single tagged path must reject it per batch item, before
 /// anything is scheduled.
 TEST_F(

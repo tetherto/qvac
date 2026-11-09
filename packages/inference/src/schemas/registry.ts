@@ -31,6 +31,7 @@ export const modelRegistryEngineSchema = z.enum([
   ModelType.bciWhispercppTranscription,
   ModelType.llamacppEmbedding,
   ModelType.llamacppDecision,
+  ModelType.llamacppRerank,
   ModelType.nmtcppTranslation,
   ModelType.onnxTts,
   ModelType.ttsGgml,
@@ -41,6 +42,7 @@ export const modelRegistryEngineSchema = z.enum([
   ModelType.audiogenGgml,
   ModelType.ggmlVla,
   ModelType.ggmlClassification,
+  'ggml-image-embedding',
   'onnx-vad'
 ])
 

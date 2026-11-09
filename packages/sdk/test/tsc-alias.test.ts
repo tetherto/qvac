@@ -135,3 +135,35 @@ await test('alias rewriting is limited to the internal "@/" alias', () => {
   // bypass the exports map.
   assert.deepEqual(Object.keys(config.compilerOptions.paths), ['@/*'])
 })
+
+await test('SDK commands self-import resolves from source after branch publishing renames the package', () => {
+  const configPath = join(sdkRoot, 'tsconfig.json')
+  const { config, error } = ts.readConfigFile(configPath, ts.sys.readFile)
+  assert.equal(error, undefined)
+  const { options, errors } = ts.parseJsonConfigFileContent(config, ts.sys, sdkRoot)
+  assert.deepEqual(errors, [])
+
+  const manifestPath = join(sdkRoot, 'package.json')
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  for (const name of ['@qvac/sdk', '@tetherto/sdk-feature-test']) {
+    const host: ts.ModuleResolutionHost = {
+      ...ts.sys,
+      readFile: (path) =>
+        resolve(path) === manifestPath
+          ? JSON.stringify({ ...manifest, name })
+          : ts.sys.readFile(path)
+    }
+    const { resolvedModule } = ts.resolveModuleName(
+      '@qvac/sdk/commands',
+      join(sdkRoot, 'examples', 'plugins.ts'),
+      options,
+      host
+    )
+    assert.ok(resolvedModule, name)
+    assert.equal(
+      resolve(resolvedModule.resolvedFileName),
+      join(sdkRoot, 'src', 'commands', 'index.ts'),
+      name
+    )
+  }
+})

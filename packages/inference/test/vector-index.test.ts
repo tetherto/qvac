@@ -50,7 +50,7 @@ async function withProvider(
     await run(calls, failures, failRemoveId)
   } finally {
     failures.dispose = false
-    disposeAllVectorIndexes()
+    await disposeAllVectorIndexes()
     await close()
     clearPlugins()
   }
@@ -289,10 +289,10 @@ test('vector index: worker cleanup disposes every open index', async (t) => {
     await createVectorIndex({ dim: 2 })
     await createVectorIndex({ dim: 2 })
     t.is(getOpenVectorIndexCount(), 2)
-    disposeAllVectorIndexes()
+    await disposeAllVectorIndexes()
     t.is(getOpenVectorIndexCount(), 0)
     t.is(calls.dispose, 2)
-    disposeAllVectorIndexes()
+    await disposeAllVectorIndexes()
     t.is(calls.dispose, 2, 'a second cleanup is a no-op')
   })
 })
@@ -335,7 +335,7 @@ test('vector index: an index whose dispose failed is still released at shutdown'
     )
 
     failures.dispose = false
-    disposeAllVectorIndexes()
+    await disposeAllVectorIndexes()
     t.is(calls.dispose, 2, 'shutdown disposes the index the failed call left behind')
     t.is(getOpenVectorIndexCount(), 0)
   })
@@ -452,7 +452,7 @@ test('vector index: shutdown clears the registry even when dispose throws', asyn
     await createVectorIndex({ dim: 2 })
     failures.dispose = true
 
-    disposeAllVectorIndexes()
+    await disposeAllVectorIndexes()
     t.is(calls.dispose, 2, 'every index is attempted')
     t.is(getOpenVectorIndexCount(), 0, 'shutdown clears the registry regardless')
   })
@@ -479,3 +479,105 @@ test('vector index: Symbol.asyncDispose releases the index', async (t) => {
     t.is(getOpenVectorIndexCount(), 0)
   })
 })
+
+for (const operation of ['create', 'load'] as const) {
+  test(`vector index: awaits an async ${operation} provider`, async (t) => {
+    const { provider, calls } = observableIndexProvider()
+    clearPlugins()
+    registerProviderPlugin('test-async-provider', {
+      async create(options) {
+        return provider.create(options)
+      },
+      async load(snapshotPath) {
+        return provider.load(snapshotPath)
+      }
+    })
+    try {
+      const index =
+        operation === 'create'
+          ? await createVectorIndex({ dim: 8 })
+          : await loadVectorIndex({ path: 'async.qvi' })
+      t.is(index.dim, 8)
+      await index.add({ ids: ['1'], vectors: [[1, 0, 0, 0, 0, 0, 0, 0]] })
+      t.is(calls.addWithIds, 1)
+      await index.dispose()
+      t.is(calls.dispose, 1)
+    } finally {
+      await close()
+      clearPlugins()
+    }
+  })
+}
+
+function deferred() {
+  let resolve = () => {}
+  const promise = new Promise<void>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
+for (const operation of ['create', 'load'] as const) {
+  for (const fails of [false, true]) {
+    test(`vector index: shutdown waits for pending ${operation}, failure=${fails}`, async (t) => {
+      const { provider, calls } = observableIndexProvider()
+      const started = deferred()
+      const gate = deferred()
+      const cause = new Error('async dependency failed')
+      const dependencyError = new Error('optional dependency unavailable', { cause })
+      const wait = async () => {
+        started.resolve()
+        await gate.promise
+        if (fails) throw dependencyError
+      }
+      clearPlugins()
+      registerProviderPlugin('test-pending-provider', {
+        async create(options) {
+          await wait()
+          return provider.create(options)
+        },
+        async load(snapshotPath) {
+          await wait()
+          return provider.load(snapshotPath)
+        }
+      })
+      const opening =
+        operation === 'create'
+          ? createVectorIndex({ dim: 8 })
+          : loadVectorIndex({ path: 'pending.qvi' })
+      const outcome = opening.then(
+        () => undefined,
+        (error: unknown) => error
+      )
+      let shutdown: Promise<void> | undefined
+      try {
+        await started.promise
+        t.is(getOpenVectorIndexCount(), 0, 'an unresolved provider is not registered')
+        let closed = false
+        shutdown = close().then(() => {
+          closed = true
+        })
+        await Promise.resolve()
+        t.absent(closed, 'shutdown waits for the provider')
+        gate.resolve()
+        const error = await outcome
+        await shutdown
+        if (fails) {
+          t.ok(error instanceof VectorIndexFailedError)
+          t.is((error as Error).cause, dependencyError, 'the provider rejection is preserved')
+          t.is(((error as Error).cause as Error).cause, cause, 'the dependency cause is preserved')
+        } else {
+          t.absent(error)
+        }
+        t.is(calls.dispose, fails ? 0 : 1, 'every completed index is disposed once')
+        t.is(getOpenVectorIndexCount(), 0, 'no index survives shutdown')
+      } finally {
+        gate.resolve()
+        await outcome
+        if (shutdown) await shutdown
+        await close()
+        clearPlugins()
+      }
+    })
+  }
+}

@@ -249,7 +249,11 @@ jobs:
           node-version: 22
           package-manager-cache: false
       - name: Install Bare tooling
-        run: npm install -g --force bare bare-make@1.8.0
+        run: npm install -g --force bare
+
+      - name: Install the locked bare toolchain
+        run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
+
       - name: Build and test on host
         working-directory: ${{ env.ADDON_WORKDIR }}
         run: |
@@ -320,7 +324,10 @@ jobs:
           package-manager-cache: false
 
       - name: Install Bare tooling
-        run: npm install -g --force bare bare-make@1.8.0
+        run: npm install -g --force bare
+
+      - name: Install the locked bare toolchain
+        run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
 
       - name: Build Android prebuild
         working-directory: ${{ env.ADDON_WORKDIR }}
@@ -351,7 +358,7 @@ jobs:
     # a bad/empty device selection. validate-devices is skipped on workflow_call.
     needs: [runner_names, host-test, validate-devices]
     if: ${{ !cancelled() && needs.runner_names.result == 'success' && needs.host-test.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') && (inputs.platform == '' || inputs.platform == 'iOS') }}
-    runs-on: ${{ needs.runner_names.outputs.macos_ios }}
+    runs-on: ${{ needs.runner_names.outputs.macos_15 }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -370,7 +377,10 @@ jobs:
           package-manager-cache: false
 
       - name: Install Bare tooling
-        run: npm install -g --force bare bare-make@1.8.0
+        run: npm install -g --force bare
+
+      - name: Install the locked bare toolchain
+        run: node "${{ github.workspace }}/.github/bare-toolchain/install.mjs"
 
       # No CMake install step on purpose: bare-make spawns its OWN bundled CMake
       # (lib/generate.js -> require('cmake-runtime/spawn') -> cmake-runtime-darwin-universal)
@@ -426,7 +436,7 @@ jobs:
     # requires both prebuilds. NOTE: matrix.* is unavailable in a job-level if
     # (evaluated pre-fan-out), so the discriminator is inputs.platform, not matrix.
     if: ${{ !cancelled() && needs.runner_names.result == 'success' && needs.resolve-framework.result == 'success' && (needs.validate-devices.result == 'success' || needs.validate-devices.result == 'skipped') && ((inputs.platform == 'Android' && needs.prebuild-android.result == 'success') || (inputs.platform == 'iOS' && needs.prebuild-ios.result == 'success') || (inputs.platform == '' && needs.prebuild-android.result == 'success' && needs.prebuild-ios.result == 'success')) }}
-    runs-on: ${{ matrix.platform == 'iOS' && needs.runner_names.outputs.macos_ios || needs.runner_names.outputs.linux_ubuntu2204_x64 }}
+    runs-on: ${{ matrix.platform == 'iOS' && needs.runner_names.outputs.macos_15 || needs.runner_names.outputs.linux_ubuntu2204_x64 }}
     environment: release
     # Exceeds the 30m default: npm install + expo prebuild + Gradle/xcodebuild.
     timeout-minutes: 90
@@ -454,6 +464,7 @@ jobs:
         with:
           sparse-checkout: |
             .github/actions/run-mobile-integration-tests
+            .github/bare-toolchain
           sparse-checkout-cone-mode: false
           persist-credentials: false
 

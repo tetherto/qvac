@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { logLevelSchema } from '@/schemas/logging-stream'
 import { decisionConfigBaseSchema } from '@/schemas/decision'
+import { rerankConfigBaseSchema } from '@/schemas/rerank'
 import { ModelType } from '@/schemas/model-types'
 import { llmConfigBaseSchema, embedConfigBaseSchema } from '@/schemas/llamacpp-config'
 import {
@@ -55,6 +56,7 @@ export const deviceConfigDefaultsSchema = z
     [ModelType.llamacppCompletion]: llmConfigBaseSchema.optional(),
     [ModelType.llamacppEmbedding]: embedConfigBaseSchema.optional(),
     [ModelType.llamacppDecision]: decisionConfigBaseSchema.optional(),
+    [ModelType.llamacppRerank]: rerankConfigBaseSchema.optional(),
     [ModelType.whispercppTranscription]: whisperConfigSchema.partial().optional(),
     [ModelType.parakeetTranscription]: parakeetConfigSchema.partial().optional(),
     [ModelType.mossTranscribe]: mossTranscribeConfigSchema.optional(),
@@ -210,8 +212,8 @@ export const qvacConfigSchema = z.object({
   /**
    * Budget in milliseconds for the registry fetch of a model's weightless
    * description during `assessModelFit`. One budget covers the lookup and the
-   * whole companion set; past it the assessment falls back to the computed
-   * floor. Raise this on slow or high-latency connections.
+   * whole companion set; past it that model's verdict is `unknown`. Raise this
+   * on slow or high-latency connections.
    * Defaults to 40000 (40 seconds).
    */
   fitStubBudgetMs: z.number().int().positive().optional(),

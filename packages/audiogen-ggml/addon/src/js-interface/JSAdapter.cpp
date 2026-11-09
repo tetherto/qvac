@@ -5,6 +5,7 @@
 
 #include "inference-addon-cpp/Errors.hpp"
 #include "js-interface/AudiogenConfigParse.hpp"
+#include "js-interface/RuntimeOptions.hpp"
 
 namespace qvac::audiogenggml {
 
@@ -122,6 +123,10 @@ JSAdapter::buildAcestepConfig(js::Object configurationParams, js_env_t* env) {
       readOptionalString(configurationParams, env, "ditModelPath");
   cfg.vaeModelPath =
       readOptionalString(configurationParams, env, "vaeModelPath");
+  cfg.backend = readRuntimeString(configurationParams, env, "backend");
+  cfg.lmBackend = readRuntimeString(configurationParams, env, "lmBackend");
+  cfg.dumpStagesDir =
+      readRuntimeString(configurationParams, env, "dumpStagesDir");
   cfg.inferenceSteps =
       readRequiredInt(configurationParams, env, "inferenceSteps");
   if (cfg.inferenceSteps < 0 ||
@@ -161,6 +166,24 @@ JSAdapter::buildMinimaxConfig(js::Object configurationParams, js_env_t* env) {
     throw qvac_errors::StatusError(
         general_error::InvalidArgument,
         "device must be 'cpu', 'gpu' or 'auto' (got '" + cfg.device + "')");
+  }
+  cfg.coremlConditionerPath =
+      readRuntimeString(configurationParams, env, "coremlConditionerPath");
+  cfg.coremlProfileDir =
+      readOptionalString(configurationParams, env, "coremlProfileDir");
+  cfg.coremlComputeUnits =
+      readOptionalString(configurationParams, env, "coremlComputeUnits");
+  const bool coremlRequested =
+      !cfg.coremlProfileDir.empty() || !cfg.coremlComputeUnits.empty();
+  if (coremlRequested && (cfg.coremlProfileDir.empty() ||
+                          (cfg.coremlComputeUnits != "CPU_ONLY" &&
+                           cfg.coremlComputeUnits != "CPU_AND_GPU" &&
+                           cfg.coremlComputeUnits != "CPU_AND_NE" &&
+                           cfg.coremlComputeUnits != "ALL"))) {
+    throw qvac_errors::StatusError(
+        general_error::InvalidArgument,
+        "MiniMax Core ML requires coremlProfileDir and coremlComputeUnits "
+        "(CPU_ONLY, CPU_AND_GPU, CPU_AND_NE or ALL)");
   }
   cfg.backendsDir = readOptionalString(configurationParams, env, "backendsDir");
   return cfg;

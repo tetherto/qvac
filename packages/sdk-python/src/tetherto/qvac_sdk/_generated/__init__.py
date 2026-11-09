@@ -41,7 +41,6 @@ from .models import (
     DiscoverRpcServersResponse,
     DownloadAssetRequest,
     DownloadAssetResponse,
-    EmbedRequest,
     EmbedResponse,
     FinetuneProgressResponse,
     FinetuneResponse,
@@ -72,6 +71,8 @@ from .models import (
     PluginInvokeStreamRequest,
     PluginInvokeStreamResponse,
     RagProgressResponse,
+    RerankRequest,
+    RerankResponse,
     ResumeRequest,
     ResumeResponse,
     StartRpcServerRequest,
@@ -118,6 +119,7 @@ from .models import (
 from .models.cancel import Request as CancelRequest
 from .models.decide import Request as DecideRequest
 from .models.deleteCache import Request as DeleteCacheRequest
+from .models.embed import Request as EmbedRequest
 from .models.finetune import Request as FinetuneRequest
 from .models.loadModel import Request as LoadModelRequest
 from .models.rag import Request as RagRequest
@@ -199,6 +201,8 @@ __all__ = [
     "RagProgressResponse",
     "RagRequest",
     "RagResponse",
+    "RerankRequest",
+    "RerankResponse",
     "ResumeRequest",
     "ResumeResponse",
     "StartRpcServerRequest",

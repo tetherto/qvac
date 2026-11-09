@@ -35,6 +35,12 @@ const INT32_MAX = 2147483647;
 const FLOAT32_MAX = 3.4028234663852886e38;
 const FLOAT32_MIN_POSITIVE = 1.401298464324817e-45;
 const MINIMAX_DEVICES = ['cpu', 'gpu', 'auto'];
+const MINIMAX_COREML_COMPUTE_UNITS = [
+    'CPU_ONLY',
+    'CPU_AND_GPU',
+    'CPU_AND_NE',
+    'ALL'
+];
 /** `AudiogenStats.backendId` codes, named. Codes match @qvac/tts-ggml. */
 exports.AUDIOGEN_BACKEND_NAMES = {
     0: 'cpu',
@@ -42,6 +48,7 @@ exports.AUDIOGEN_BACKEND_NAMES = {
     2: 'cuda',
     3: 'vulkan',
     4: 'opencl',
+    5: 'webgpu',
     99: 'other'
 };
 /** `undefined` for an unset or unrecognised id, never a guessed name. */
@@ -359,8 +366,43 @@ function validateAcestepOptions(files, config) {
     if (config.device !== undefined) {
         throw invalidInput('ACE-Step does not accept device (use useGPU and nGpuLayers)');
     }
+    validateRuntimeStrings(config);
+    if (config.coremlConditionerPath !== undefined ||
+        config.coremlProfileDir !== undefined ||
+        config.coremlComputeUnits !== undefined) {
+        throw invalidInput('coremlConditionerPath, coremlProfileDir and coremlComputeUnits are MiniMax-only options');
+    }
+}
+function validateRuntimeStrings(config) {
+    for (const key of ['backend', 'lmBackend', 'dumpStagesDir', 'coremlConditionerPath']) {
+        const value = config[key];
+        if (value !== undefined && (typeof value !== 'string' || value.includes('\0'))) {
+            throw invalidInput(`${key} must be a string without NUL characters`);
+        }
+    }
+}
+function validateMinimaxCoreMLConfig(config) {
+    if (config.coremlProfileDir === undefined && config.coremlComputeUnits === undefined)
+        return;
+    if (typeof config.coremlProfileDir !== 'string' ||
+        config.coremlProfileDir.length === 0 ||
+        config.coremlProfileDir.includes('\0') ||
+        typeof config.coremlComputeUnits !== 'string' ||
+        !MINIMAX_COREML_COMPUTE_UNITS.includes(config.coremlComputeUnits)) {
+        throw invalidInput('MiniMax Core ML requires coremlProfileDir and coremlComputeUnits (CPU_ONLY, CPU_AND_GPU, CPU_AND_NE or ALL)');
+    }
+    if (os.platform() !== 'darwin') {
+        throw invalidInput('MiniMax Core ML requires macOS 15 or later');
+    }
 }
 function validateMinimaxConfig(config) {
+    validateRuntimeStrings(config);
+    if (config.backend !== undefined ||
+        config.lmBackend !== undefined ||
+        config.dumpStagesDir !== undefined) {
+        throw invalidInput('MiniMax does not accept backend, lmBackend or dumpStagesDir');
+    }
+    validateMinimaxCoreMLConfig(config);
     if (config.useGPU !== undefined && typeof config.useGPU !== 'boolean') {
         throw invalidInput('useGPU must be a boolean');
     }
@@ -586,6 +628,9 @@ class AudioGen {
                 threads,
                 useGPU: config.useGPU ?? false,
                 device: config.device,
+                coremlConditionerPath: config.coremlConditionerPath,
+                coremlProfileDir: config.coremlProfileDir,
+                coremlComputeUnits: config.coremlComputeUnits,
                 backendsDir
             };
         }
@@ -608,6 +653,9 @@ class AudioGen {
                 inferenceSteps: this._defaultInferenceSteps,
                 shift: requireAcestepShift(config.shift ?? 0),
                 useGPU: config.useGPU ?? false,
+                backend: config.backend,
+                lmBackend: config.lmBackend,
+                dumpStagesDir: config.dumpStagesDir,
                 nGpuLayers: requireFiniteNumber(config.nGpuLayers ?? 99, 'nGpuLayers', true),
                 threads,
                 backendsDir

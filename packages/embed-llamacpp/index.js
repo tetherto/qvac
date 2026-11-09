@@ -1,8 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.GGMLBert = exports.assessFit = exports.mapRerankEvent = exports.RerankInterface = exports.Reranker = exports.mapLayaEvent = exports.LayaInterface = exports.LayaDecisions = exports.pickPrimaryGgufPath = exports.BertInterface = void 0;
+exports.GGMLBert = exports.assessFit = exports.mapRerankEvent = exports.RerankInterface = exports.Reranker = exports.mapLayaEvent = exports.LayaInterface = exports.LayaDecisions = exports.validateModelPath = exports.BertInterface = void 0;
 /* eslint-disable @typescript-eslint/no-require-imports -- Bare modules and @qvac/logging expose CommonJS export shapes. */
-const fs = require("bare-fs");
 const path = require("bare-path");
 const QvacLogger = require("@qvac/logging");
 const fit_1 = require("./fit");
@@ -13,7 +12,7 @@ const laya_1 = require("./laya");
 const rerank_1 = require("./rerank");
 var addon_2 = require("./addon");
 Object.defineProperty(exports, "BertInterface", { enumerable: true, get: function () { return addon_2.BertInterface; } });
-Object.defineProperty(exports, "pickPrimaryGgufPath", { enumerable: true, get: function () { return addon_2.pickPrimaryGgufPath; } });
+Object.defineProperty(exports, "validateModelPath", { enumerable: true, get: function () { return addon_2.validateModelPath; } });
 var laya_2 = require("./laya");
 Object.defineProperty(exports, "LayaDecisions", { enumerable: true, get: function () { return laya_2.LayaDecisions; } });
 Object.defineProperty(exports, "LayaInterface", { enumerable: true, get: function () { return laya_2.LayaInterface; } });
@@ -31,24 +30,23 @@ class GGMLBert {
     logger;
     opts;
     state;
-    _files;
+    _modelPath;
+    _projectionModelPath;
     _config;
     _job;
     _run;
     _hasActiveResponse;
     constructor({ files, config = {}, logger = null, opts = {} }) {
-        if (!files || !Array.isArray(files.model) || files.model.length === 0) {
-            throw new TypeError("files.model must be a non-empty array of absolute paths");
-        }
-        for (const [i, entry] of files.model.entries()) {
-            if (typeof entry !== "string" || entry.length === 0) {
-                throw new TypeError(`files.model[${i}] must be an absolute path string`);
+        this._modelPath = (0, addon_1.validateModelPath)(files?.model);
+        if (files.projectionModel !== undefined) {
+            if (typeof files.projectionModel !== "string" || files.projectionModel.length === 0) {
+                throw new TypeError("files.projectionModel must be an absolute path string");
             }
-            if (!path.isAbsolute(entry)) {
-                throw new TypeError(`files.model[${i}] must be an absolute path (got: ${entry})`);
+            if (!path.isAbsolute(files.projectionModel)) {
+                throw new TypeError(`files.projectionModel must be an absolute path (got: ${files.projectionModel})`);
             }
         }
-        this._files = files.model;
+        this._projectionModelPath = files.projectionModel ?? "";
         this._config = config;
         this.logger = new QvacLogger(logger);
         this.opts = opts;
@@ -69,17 +67,14 @@ class GGMLBert {
     }
     async _load() {
         this.logger.info("Starting model load");
-        const primaryGgufPath = (0, addon_1.pickPrimaryGgufPath)(this._files);
         const configurationParams = {
-            path: primaryGgufPath,
+            path: this._modelPath,
             config: this._config,
+            projectionPath: this._projectionModelPath,
         };
         this.logger.info("Creating addon with configuration:", configurationParams);
         try {
             this.addon = this._createAddon(configurationParams);
-            if (this._files.length > 1) {
-                await this._streamShards();
-            }
             this.logger.info("Activating addon");
             await this.addon.activate();
         }
@@ -95,32 +90,30 @@ class GGMLBert {
         }
         this.logger.info("Model load completed successfully");
     }
-    async _streamShards() {
-        for (const filePath of this._files) {
-            const filename = path.basename(filePath);
-            const stream = fs.createReadStream(filePath);
-            for await (const chunk of stream) {
-                await this.addon.loadWeights({ filename, chunk, completed: false });
-            }
-            await this.addon.loadWeights({ filename, chunk: null, completed: true });
-            this.logger.info(`Streamed weights for ${filename}`);
-        }
-    }
+    /**
+     * Embed text, or text mixed with images and audio when the model was given
+     * `files.projectionModel`. See {@link EmbedRunInput} for the input shapes.
+     */
     async run(input) {
         return this._run(() => this._runInternal(input));
     }
-    async _runInternal(text) {
+    async _runInternal(input) {
         if (!this.addon) {
             throw new Error("Addon not initialized. Call load() first.");
         }
         if (this._hasActiveResponse) {
             throw new Error(RUN_BUSY_ERROR_MESSAGE);
         }
-        this.logger.info("Starting inference embeddings for text:", text);
-        // Array input → type: 'sequences' (batched pass); string input → type: 'text'.
-        const inputData = Array.isArray(text)
-            ? { type: "sequences", input: text }
-            : { type: "text", input: text };
+        const inputData = (0, addon_1.toBertJobInput)(input);
+        if (inputData.type === "multimodal") {
+            if (!this._projectionModelPath) {
+                throw new TypeError("media input needs files.projectionModel");
+            }
+            this.logger.info(`Starting inference embeddings for ${inputData.input?.length ?? 0} multimodal input(s)`);
+        }
+        else {
+            this.logger.info("Starting inference embeddings for text:", input);
+        }
         const response = this._job.start();
         // addon-cpp guarantees no output events until runJob is fully accepted.
         // If runJob throws or returns false, no events will fire for this job.
@@ -211,7 +204,7 @@ exports.GGMLBert = GGMLBert;
 exports.default = GGMLBert;
 const cjsExports = GGMLBert;
 cjsExports.default = GGMLBert;
-cjsExports.pickPrimaryGgufPath = addon_1.pickPrimaryGgufPath;
+cjsExports.validateModelPath = addon_1.validateModelPath;
 cjsExports.GGMLBert = GGMLBert;
 cjsExports.BertInterface = addon_1.BertInterface;
 cjsExports.LayaDecisions = laya_1.LayaDecisions;

@@ -60,7 +60,7 @@ const run = completion({ modelId, history: [{ role: 'user', content: 'Hi' }] })
 Model operations require a registered model plugin. RPC discovery needs no model plugin or server provider; serving requires an explicitly registered server provider.
 
 The [Bare serving example](examples/rpc-server.ts)
-shows explicit registration and cleanup with `@qvac/ggml-rpc-server@0.5.1`.
+shows explicit registration and cleanup with `@qvac/ggml-rpc-server`.
 
 ## Capability to addon package
 
@@ -111,7 +111,7 @@ projections. Add `ttsWorkload` beside `modelConfig` on the assessment candidate:
 decoder; reference encoding also needs the codec encoder. Prompt rows must
 cover the complete native prompt, including dialogue and reference rows.
 Missing workloads return an unknown assessment rather than guessing.
-MOSS-Speech has no native fitter and assesses as unknown. Workloads are
+MOSS-Speech has no fitter and assesses as unknown. Workloads are
 fit-only: loading a MOSS model does not accept them, so the fit check before a
 MOSS load is unknown.
 

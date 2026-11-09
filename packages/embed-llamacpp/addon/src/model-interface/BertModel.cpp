@@ -12,9 +12,9 @@
 
 #include "ModelMetadata.hpp"
 #include "addon/BertErrors.hpp"
-#include "inference-addon-cpp/GGUFShards.hpp"
 #include "logging.hpp"
 #include "utils.hpp"
+#include "utils/LlamaBatch.hpp"
 
 using namespace qvac_lib_infer_llamacpp_embed::errors;
 using namespace qvac_lib_infer_llamacpp_embed::logging;
@@ -26,8 +26,7 @@ void batchAddSeq(
     llama_seq_id seqId) {
   size_t numTokens = tokens.size();
   for (size_t i = 0; i < numTokens; i++) {
-    common_batch_add(
-        batch, tokens[i], static_cast<llama_pos>(i), {seqId}, true);
+    llamaBatchAdd(batch, tokens[i], static_cast<llama_pos>(i), {seqId}, true);
   }
 }
 
@@ -312,6 +311,16 @@ rankPoolingUnsupported(const char* func, const std::string& scores) {
           scores.c_str()));
 }
 
+/// @brief A copy of @p config without the projector options, which are
+/// stored in @p options: llama.cpp's argument parser rejects them for an
+/// embedding load. They need a projection model (see takeMultimodalOptions).
+std::unordered_map<std::string, std::string> withoutMultimodalOptions(
+    std::unordered_map<std::string, std::string> config,
+    const std::string& projectionPath, MultimodalOptions& options) {
+  options = takeMultimodalOptions(config, !projectionPath.empty());
+  return config;
+}
+
 } // namespace
 
 BertEmbeddings::BertEmbeddings(
@@ -331,20 +340,19 @@ std::size_t BertEmbeddings::embeddingSize() const { return embeddingSize_; }
 BertModel::BertModel(
     const std::string& modelGgufPath,
     const std::unordered_map<std::string, std::string>& config,
-    const std::string& backendsDir)
+    const std::string& backendsDir, const std::string& projectionPath)
     : model_(nullptr), ctx_(nullptr), vocab_(nullptr), batch_{},
       pooling_type(LLAMA_POOLING_TYPE_NONE), n_embd(0),
-      loader_("BertModel", loadHooks(), modelGgufPath, config, backendsDir) {}
+      projectionPath_(projectionPath),
+      loader_(
+          loadHooks(), modelGgufPath,
+          withoutMultimodalOptions(config, projectionPath, multimodalOptions_),
+          backendsDir) {}
 
 BertModel::BertModel(BertModelSetup& setup)
     : model_(nullptr), ctx_(nullptr), vocab_(nullptr), batch_{},
       pooling_type(LLAMA_POOLING_TYPE_NONE), n_embd(0),
-      loader_("BertModel", loadHooks(), setup) {}
-
-void BertModel::resolveShardPaths(
-    GGUFShards& shards, const std::string& modelPath) {
-  LlamaModelLoader::resolveShardPaths(shards, modelPath);
-}
+      loader_(loadHooks(), setup) {}
 
 LlamaModelLoader::Hooks BertModel::loadHooks() {
   return {
@@ -421,7 +429,9 @@ void BertModel::onLoaded(llama_model* model, llama_context* ctx) {
   pooling_type = llama_pooling_type(ctx_);
   vocab_ = llama_model_get_vocab(model_);
   batch_ = llama_batch_init(loader_.params().n_batch, 0, 1);
-  n_embd = llama_model_n_embd(model_);
+  // The pooled embedding has the output size, which differs from the hidden
+  // size on models with an output projection (e.g. EmbeddingGemma 2).
+  n_embd = llama_model_n_embd_out(model_);
 
   // Abort a pass in llama_decode once cancel() is requested.
   abortDecodeWhen(ctx_, stopCancelled_);
@@ -433,9 +443,32 @@ void BertModel::onLoaded(llama_model* model, llama_context* ctx) {
     throw qvac_errors::StatusError(
         ADDON_ID, toString(UnsupportedEmbeddings), msg);
   }
+
+  if (!projectionPath_.empty()) {
+    // A multimodal input yields one pooled embedding (RANK is rejected above).
+    if (pooling_type == LLAMA_POOLING_TYPE_NONE) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(UnsupportedEmbeddings),
+          string_format(
+              "%s: a projection model needs mean, cls or last pooling",
+              __func__));
+    }
+    multimodal_ = std::make_unique<MultimodalEmbedder>(
+        projectionPath_,
+        model_,
+        ctx_,
+        loader_.params(),
+        loader_.runtimeBackendDevice() == 1,
+        multimodalOptions_);
+  }
 }
 
-BertModel::~BertModel() { llama_batch_free(batch_); }
+BertModel::~BertModel() {
+  // The projector refers to the text model, which loader_ frees.
+  multimodal_.reset();
+  llama_batch_free(batch_);
+}
 
 const llama_context* BertModel::getCtx() const { return ctx_; };
 
@@ -468,6 +501,11 @@ std::any BertModel::process(const std::any& input) {
     BertEmbeddings result = encodeHostF32Sequences(sequences);
     return result;
   }
+  if (input.type() == typeid(std::vector<MultimodalInput>)) {
+    const auto& inputs =
+        std::any_cast<const std::vector<MultimodalInput>&>(input);
+    return encodeHostF32Multimodal(inputs);
+  }
   throw qvac_errors::StatusError(
       qvac_errors::general_error::InvalidArgument,
       "BertModel::process: unsupported input type");
@@ -481,7 +519,7 @@ void BertModel::initializeBackend(
 void BertModel::reset() {
   stopCancelled_.store(false);
   // Clear the batch state - this is the most important part
-  common_batch_clear(batch_);
+  llamaBatchClear(batch_);
 
   // Clear memory and KV cache (llama_memory_clear handles both)
   if (ctx_ != nullptr) {
@@ -588,7 +626,7 @@ BertEmbeddings BertModel::processBatched(
           (pooling_type == LLAMA_POOLING_TYPE_NONE ? batch_.n_tokens
                                                    : numPromptsInBatch);
       numPromptsInBatch = 0;
-      common_batch_clear(batch_);
+      llamaBatchClear(batch_);
     }
 
     // add to batch
@@ -689,6 +727,35 @@ BertEmbeddings BertModel::encodeHostF32Sequences(
 
   // Process tokenized sequences directly (avoids re-tokenization)
   return processBatched(inputTokens, sequenceArray.size());
+}
+
+BertEmbeddings
+BertModel::encodeHostF32Multimodal(const std::vector<MultimodalInput>& inputs) {
+  loader_.waitForLoadInitialization();
+  if (!multimodal_) {
+    throw qvac_errors::StatusError(
+        ADDON_ID,
+        toString(InvalidRequest),
+        "media input needs a projection model (files.projectionModel)");
+  }
+
+  const auto embeddingSize = static_cast<std::size_t>(n_embd);
+  std::vector<float> embeddings(inputs.size() * embeddingSize, 0.0F);
+  std::span<float> embSpan{embeddings};
+  for (std::size_t i = 0; i < inputs.size(); ++i) {
+    if (stopCancelled_.load()) {
+      throw std::runtime_error("Job cancelled");
+    }
+    multimodal_->embed(
+        inputs[i],
+        embSpan.subspan(i * embeddingSize, embeddingSize),
+        loader_.params().embd_normalize,
+        stopCancelled_);
+  }
+  return BertEmbeddings(
+      std::move(embeddings),
+      BertEmbeddings::Layout{
+          .embeddingCount = inputs.size(), .embeddingSize = embeddingSize});
 }
 
 qvac_lib_inference_addon_cpp::RuntimeStats BertModel::runtimeStats() const {

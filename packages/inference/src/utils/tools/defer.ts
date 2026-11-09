@@ -10,8 +10,9 @@ export const TOOL_SEARCH_NAME = 'tool_search'
 
 const DEFAULT_SEARCH_LIMIT = 3
 const MAX_SEARCH_LIMIT = 8
+const EXACT_NAME_SCORE = 1000
 
-// Ceiling on the definitions one search may append. A query matching a dozen
+// Ceiling on the definitions one search may declare. A query matching a dozen
 // large schemas would otherwise undo the saving the catalog just made.
 const MAX_DEFINITION_BYTES = 8 * 1024
 
@@ -23,9 +24,12 @@ export type HistoryMessage = {
 /**
  * Envelope written as the `tool` result of a `tool_search` call. It is also
  * what a later turn reads back to learn which definitions this conversation
- * already carries, so the field order is fixed and the shape is stable across
- * versions: the same search on the same inventory must produce byte-identical
- * content or the KV prefix diverges.
+ * has loaded, so the field order is fixed: the same search on the same
+ * inventory must produce byte-identical content or the KV prefix diverges.
+ *
+ * It names the loaded tools but carries no schemas; those are declared in the
+ * tools block. Results from earlier versions also carried a `tools` array,
+ * which is ignored.
  */
 type ToolSearchResult = {
   tool_search: {
@@ -34,7 +38,6 @@ type ToolSearchResult = {
     already_loaded: string[]
     hint?: string
   }
-  tools: Tool[]
 }
 
 // Fixed text, so a repeated no-match search stays byte-identical and cannot
@@ -153,7 +156,7 @@ function scoreTool(tool: Tool, query: string, tokens: readonly string[]): number
 
   // Exact name wins outright: the model asking for a tool by name is not a
   // capability search and must not be outranked by a wordier description.
-  if (name === normalizedQuery) return 1000
+  if (name === normalizedQuery) return EXACT_NAME_SCORE
 
   let score = 0
   if (normalizedQuery.length > 2 && name.includes(normalizedQuery)) score += 100
@@ -169,9 +172,23 @@ function scoreTool(tool: Tool, query: string, tokens: readonly string[]): number
   return score
 }
 
+type Scored = { tool: Tool; score: number }
+
+// Names score case-insensitively, so `GetWeather` and `getWeather` both score as
+// exact; the one spelled as asked wins, and with neither, both load.
+function namedBy(scored: readonly Scored[], query: string): Scored[] {
+  const exact = scored.filter(({ score }) => score === EXACT_NAME_SCORE)
+  const literal = exact.filter(({ tool }) => tool.name === query.trim())
+  return literal.length > 0 ? literal : exact
+}
+
 /**
  * Rank the deferred inventory against a query. Exact name first, then text
  * match. Ties keep registration order so repeated searches are deterministic.
+ *
+ * An exact name loads that tool alone. Otherwise a match scoring under half of
+ * the best is left out: one query word in a description or group is not enough
+ * to load a tool beside a strong match, while tools tied at the top load together.
  */
 export function searchDeferredTools(
   deferred: readonly Tool[],
@@ -183,12 +200,17 @@ export function searchDeferredTools(
     .map((tool, index) => ({ tool, index, score: scoreTool(tool, query, tokens) }))
     .filter((entry) => entry.score > 0)
     .sort((a, b) => b.score - a.score || a.index - b.index)
+  const best = scored[0]?.score ?? 0
+  const matches =
+    best === EXACT_NAME_SCORE
+      ? namedBy(scored, query)
+      : scored.filter(({ score }) => score >= best / 2)
 
   const cap = Math.min(Math.max(Math.trunc(limit ?? DEFAULT_SEARCH_LIMIT), 1), MAX_SEARCH_LIMIT)
 
   const picked: Tool[] = []
   let bytes = 0
-  for (const { tool } of scored) {
+  for (const { tool } of matches) {
     if (picked.length >= cap) break
     const size = JSON.stringify(toWireTool(tool)).length
     // Always let the top match through, however large; past that, stop rather
@@ -214,8 +236,7 @@ export function buildToolSearchResult(
       // Without this the model reads an empty result as "try again" and burns
       // rounds rephrasing the same query.
       ...(loaded.length === 0 && alreadyLoaded.length === 0 ? { hint: NO_MATCH_HINT } : {})
-    },
-    tools: matches.map(toWireTool)
+    }
   }
   return JSON.stringify(result)
 }
@@ -258,23 +279,55 @@ export function loadedToolNames(history: readonly HistoryMessage[]): Set<string>
   return loaded
 }
 
+// `tool_choice` mode words and the empty name: the addon rejects a prompt that
+// declares a tool under one of these, since it could never be selected by name.
+const UNSELECTABLE_NAMES = new Set(['', 'auto', 'none', 'required'])
+
+// The rule name a tool's call grammar is built under: fabric's `rule_name()`
+// turns every run of characters outside [A-Za-z0-9-] into one '-'.
+function grammarRuleName(name: string): string {
+  return name.replace(/[^A-Za-z0-9-]+/g, '-')
+}
+
+/**
+ * The deferred tools the prompt could declare once loaded. The addon rejects a
+ * prompt whose tool names it cannot select or whose names fold to one grammar
+ * rule, so a deferred tool with such a name, or one whose rule an always-loaded
+ * tool, `tool_search` or an earlier deferred tool already holds, is left out of
+ * the catalog and the search: the model is never pointed at a tool it cannot
+ * call, and the block does not depend on the order tools were loaded in.
+ */
+function declarableDeferred(alwaysLoaded: readonly Tool[], deferred: readonly Tool[]): Tool[] {
+  const taken = new Set(
+    [...alwaysLoaded.map((tool) => tool.name), TOOL_SEARCH_NAME].map(grammarRuleName)
+  )
+  return deferred.filter((tool) => {
+    const rule = grammarRuleName(tool.name)
+    if (UNSELECTABLE_NAMES.has(tool.name) || taken.has(rule)) return false
+    taken.add(rule)
+    return true
+  })
+}
+
 export type DeferredResolution = {
-  /** Definitions that go into the prompt: always-loaded tools plus `tool_search`. */
+  /**
+   * Definitions that go into the prompt and the parser: always-loaded tools,
+   * `tool_search`, and whatever history has loaded.
+   */
   toolsToRender: Tool[]
-  /** Names the model may call now: rendered tools plus whatever history has loaded. */
-  callableTools: Tool[]
-  /** The full deferred inventory, for `tool_search` to search over. */
+  /** The deferred tools `tool_search` searches over. */
   deferred: Tool[]
 }
 
 /**
- * Split a registered tool list into what the prompt carries and what the
- * parser accepts.
+ * Split a registered tool list into what the prompt carries and what
+ * `tool_search` searches over.
  *
- * Loaded definitions stay out of `toolsToRender` on purpose. They live in the
- * history as tool results, which appends to the prefix instead of rewriting
- * the block at the front of it — a tool loaded mid-conversation must not cost
- * a re-prefill of everything before it.
+ * A loaded definition is declared in the tools block like any other tool, in
+ * registration order. A schema that sits only in a `tool` result, outside the
+ * block and the tool-call grammar, is not reliably called by small models: they
+ * search for it again instead. Declaring it changes the block at the front of
+ * the prompt, so the turn after a search re-prefills from there.
  *
  * Returns `null` when nothing defers, so the existing path is untouched.
  */
@@ -283,41 +336,20 @@ export function resolveDeferredTools(
   history: readonly HistoryMessage[]
 ): DeferredResolution | null {
   if (!tools || tools.length === 0) return null
-  const { alwaysLoaded, deferred } = partitionTools(tools)
-  if (deferred.length === 0) return null
+  const partitioned = partitionTools(tools)
+  if (partitioned.deferred.length === 0) return null
+  const { alwaysLoaded } = partitioned
+  const deferred = declarableDeferred(alwaysLoaded, partitioned.deferred)
 
   const loaded = loadedToolNames(history)
-  const rendered = [...alwaysLoaded.map(toWireTool), buildToolSearchTool(deferred)]
   return {
-    toolsToRender: rendered,
-    callableTools: [
-      ...rendered,
+    toolsToRender: [
+      ...alwaysLoaded.map(toWireTool),
+      buildToolSearchTool(deferred),
       ...deferred.filter((tool) => loaded.has(tool.name)).map(toWireTool)
     ],
-    deferred: [...deferred]
+    deferred
   }
-}
-
-/**
- * Generation params for a turn whose history may have loaded deferred definitions.
- *
- * The addon builds its tool-call grammar from the rendered tools only, and a
- * loaded definition lives in the history rather than that block, so under the
- * default grammar the model can never produce the name it just loaded. Unless
- * the caller asked for more than the default, those turns run with the grammar
- * off and the parser, which does accept loaded names, validates the call.
- */
-export function withDeferredToolChoice<T extends { tool_choice?: string | undefined }>(
-  generationParams: T | undefined,
-  resolution: DeferredResolution | null
-): T | undefined {
-  const toolChoice = generationParams?.tool_choice
-  // An explicit "auto" is the default, which is exactly the grammar that cannot reach a loaded tool.
-  if (toolChoice !== undefined && toolChoice !== 'auto') return generationParams
-  if (!resolution || resolution.callableTools.length === resolution.toolsToRender.length) {
-    return generationParams
-  }
-  return { ...(generationParams ?? ({} as T)), tool_choice: 'none' }
 }
 
 /**
@@ -325,9 +357,9 @@ export function withDeferredToolChoice<T extends { tool_choice?: string | undefi
  * result. Pure over the history it is given; the caller appends the message.
  *
  * Takes either wire `Tool`s or the Zod-schema `ToolInput` form, because what a
- * caller holds is whatever they passed to `completion()`. A `ToolInput` whose
- * `parameters` is still a Zod object would otherwise be serialised as Zod
- * internals and reach the model as a definition it cannot call.
+ * caller holds is whatever they passed to `completion()`. Both are converted
+ * to wire form first, so the size cap measures the JSON schemas the prompt
+ * will declare, not Zod objects.
  */
 export function executeToolSearch(
   tools: readonly Tool[] | readonly ToolInput[],
@@ -335,14 +367,15 @@ export function executeToolSearch(
   history: readonly HistoryMessage[]
 ): string {
   const { tools: wire } = validateTools([...tools] as Tool[] | ToolInput[])
-  const { deferred } = partitionTools(wire)
+  const { alwaysLoaded, deferred: registered } = partitionTools(wire)
+  const deferred = declarableDeferred(alwaysLoaded, registered)
   const query = typeof args['query'] === 'string' ? args['query'] : ''
   const limit = typeof args['limit'] === 'number' ? args['limit'] : undefined
 
   const loaded = loadedToolNames(history)
   const matches = searchDeferredTools(deferred, query, limit)
 
-  // A definition already in the history is not appended a second time; naming
+  // A tool the history already loaded is not reported as loaded again; naming
   // it back tells the model it can call the tool without searching again.
   const alreadyLoaded = matches.filter((tool) => loaded.has(tool.name)).map((tool) => tool.name)
   const fresh = matches.filter((tool) => !loaded.has(tool.name))

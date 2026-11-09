@@ -4,10 +4,13 @@
  * or applies a reload reads (and, for reloadable fields, writes) one of these
  * groups instead of the wrapper instance itself.
  */
+import type { ParlerCoremlFields } from "./engines/parler";
 import type { EngineType } from "./engineIds";
+import type { FabricOptions } from "./fabricOptions";
 import type { NormalizedFiles } from "./modelFiles";
 import type { TTSConfigurationParams } from "../tts";
 export interface TTSGgmlRuntimeConfig {
+    backend?: string;
     /**
      * Language code; default "en". Chatterbox MTL accepts
      * es/fr/de/pt/it/zh/ja/ko/... CosyVoice3: reserved / not yet effective — the
@@ -73,7 +76,7 @@ export interface ModelPaths {
  * CosyVoice3 instruct rendered to its string. Reload rewrites the reloadable
  * subset in place and rolls the whole object back when a reload is rejected.
  */
-export interface SynthesisSettings {
+export interface SynthesisSettings extends FabricOptions, ParlerCoremlFields {
     referenceAudio?: string;
     referenceText?: string;
     greedy?: boolean;
@@ -132,6 +135,10 @@ export interface SynthesisSettings {
 export interface BackendPaths {
     enhancerGgufPath?: string;
     denoiserGgufPath?: string;
+    enhancerCoremlModelPath?: string;
+    enhancerCoremlComputeUnits?: string;
+    denoiserCoremlModelPath?: string;
+    denoiserCoremlComputeUnits?: string;
     backendsDir?: string;
     openclCacheDir?: string;
     vulkanCacheDir?: string;

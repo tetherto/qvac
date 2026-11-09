@@ -19,6 +19,26 @@
       "ctx_size": 512
     }
   },
+  "llm-mtp": {
+    "constant": {
+      "$const": "QWEN3_5_0_8B_MTP_Q4_K_M"
+    },
+    "type": "llamacpp-completion",
+    "config": {
+      "verbosity": 0,
+      "ctx_size": 2048
+    }
+  },
+  "llm-no-mtp": {
+    "constant": {
+      "$const": "QWEN3_5_0_8B_MULTIMODAL_Q4_K_M"
+    },
+    "type": "llamacpp-completion",
+    "config": {
+      "verbosity": 0,
+      "ctx_size": 2048
+    }
+  },
   "llm-batch": {
     "constant": {
       "$const": "LLAMA_3_2_1B_INST_Q4_0"
@@ -90,6 +110,28 @@
     },
     "type": "llamacpp-embedding"
   },
+  "embeddinggemma2": {
+    "constant": {
+      "$const": "EMBEDDINGGEMMA_2_Q8_0"
+    },
+    "type": "llamacpp-embedding",
+    "config": {
+      "projectionModelSrc": {
+        "$const": "MMPROJ_EMBEDDINGGEMMA_2_Q8_0"
+      },
+      "ctxSize": 2048,
+      "batchSize": 2048
+    },
+    "configOn": {
+      "mobile-android": {
+        "flashAttention": "off"
+      }
+    }
+  },
+  "rerank": {
+    "modelSrc": "https://huggingface.co/ggml-org/models/resolve/499bc8821c6b12b4e53c5bffcb21ec206f212d81/jina-reranker-v1-tiny-en/ggml-model-f16.gguf",
+    "type": "llamacpp-rerank"
+  },
   "whisper": {
     "constant": {
       "$const": "WHISPER_TINY"
@@ -128,6 +170,28 @@
       "tools": true
     }
   },
+  "prefill-llm": {
+    "constant": {
+      "$const": "QWEN3_5_0_8B_MULTIMODAL_Q4_K_M"
+    },
+    "type": "llamacpp-completion",
+    "config": {
+      "ctx_size": 4096,
+      "tools": true,
+      "parallel": 1
+    }
+  },
+  "prefill-llm-parallel": {
+    "constant": {
+      "$const": "QWEN3_5_0_8B_MULTIMODAL_Q4_K_M"
+    },
+    "type": "llamacpp-completion",
+    "config": {
+      "ctx_size": 4096,
+      "tools": true,
+      "parallel": 2
+    }
+  },
   "tools-qwen35": {
     "on": [
       "desktop",
@@ -145,7 +209,8 @@
   },
   "tools-gemma4": {
     "on": [
-      "desktop"
+      "desktop-linux",
+      "desktop-python"
     ],
     "constant": {
       "$const": "GEMMA4_2B_MULTIMODAL_Q4_K_M"
@@ -244,7 +309,7 @@
       "desktop"
     ],
     "constant": {
-      "$const": "GROOT_Q5_VF16"
+      "$const": "GROOT_MULTI_Q5_VF16"
     },
     "type": "ggml-vla",
     "config": {
@@ -268,17 +333,10 @@
     }
   },
   "classification": {
-    "type": "ggml-classification",
-    "configOn": {
-      "mobile": {
-        "modelPath": {
-          "$packageAsset": {
-            "package": "@qvac/classification-ggml",
-            "file": "weights/mobilenetv3_3class_v3_fp16.gguf"
-          }
-        }
-      }
-    }
+    "constant": {
+      "$const": "MOBILENETV3_3CLASS_V3_FP16"
+    },
+    "type": "ggml-classification"
   },
   "echo": {
     "type": "echo",
@@ -455,7 +513,7 @@
   },
   "tts-moss-sfx": {
     "on": [
-      "desktop"
+      "desktop-linux"
     ],
     "constant": {
       "$const": "AUDIOGEN_MOSS_SFX_V2_Q8_0"
@@ -623,6 +681,35 @@
     "type": "parakeet-transcription",
     "config": {}
   },
+  "parakeet-transcribepsy": {
+    "constant": {
+      "$const": "PARAKEET_TRANSCRIBEPSY_250M_Q8_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {}
+  },
+  "parakeet-transcribepsy-windowed": {
+    "constant": {
+      "$const": "PARAKEET_TRANSCRIBEPSY_250M_Q8_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {
+      "longFormWindowFrames": 188,
+      "longFormContextFrames": 16
+    }
+  },
+  "parakeet-transcribepsy-coreml": {
+    "on": [
+      "desktop-macos",
+      "electron-macos",
+      "mobile-ios"
+    ],
+    "constant": {
+      "$const": "PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0"
+    },
+    "type": "parakeet-transcription",
+    "config": {}
+  },
   "bci": {
     "skipPreDownloadOn": [
       "mobile"
@@ -707,7 +794,8 @@
   },
   "world": {
     "on": [
-      "desktop"
+      "desktop-linux",
+      "desktop-python"
     ],
     "constant": {
       "$const": "ABOT_WORLD_0_5B_Q8_0"
@@ -801,14 +889,46 @@
       "desktop"
     ],
     "constant": {
-      "$const": "SD_V2_1_1B_Q8_0"
+      "$const": "FLUX_2_KLEIN_4B_Q4_0"
     },
     "type": "sdcpp-generation",
     "config": {
       "device": "gpu",
       "threads": 4,
-      "prediction": "v",
-      "params_backend": "vae=cpu",
+      "prediction": "flux2_flow",
+      "llmModelSrc": {
+        "$const": "QWEN3_4B_Q4_K_M"
+      },
+      "vaeModelSrc": {
+        "$const": "FLUX_2_KLEIN_4B_VAE"
+      },
+      "upscaler": {
+        "type": "esrgan",
+        "model_src": {
+          "$const": "REALESRGAN_X4PLUS_ANIME_6B"
+        },
+        "tile_size": 128
+      }
+    }
+  },
+  "diffusion-esrgan-fit-probe": {
+    "on": [
+      "desktop"
+    ],
+    "constant": {
+      "$const": "FLUX_2_KLEIN_4B_Q4_0"
+    },
+    "type": "sdcpp-generation",
+    "config": {
+      "device": "gpu",
+      "threads": 4,
+      "prediction": "flux2_flow",
+      "llmModelSrc": {
+        "$const": "QWEN3_4B_Q4_K_M"
+      },
+      "vaeModelSrc": {
+        "$const": "FLUX_2_KLEIN_4B_VAE"
+      },
       "upscaler": {
         "type": "esrgan",
         "model_src": {

@@ -147,6 +147,7 @@ TEST(SpeculativeConfigTest, AnMtpHeadIsReadAtTheWidthItDraftsFrom) {
   const std::string gemma = writeHeadHeader(
       "gemma4-assistant.gguf", "gemma4-assistant", 1024, 5376, 8, 4);
   const GgufShape gemmaShape = readGgufShape(gemma);
+  EXPECT_EQ(gemmaShape.arch, "gemma4-assistant");
   EXPECT_EQ(gemmaShape.width, 5376);
   EXPECT_EQ(gemmaShape.mtpLayers, 4);
   EXPECT_EQ(mtpHeadMismatch(gemmaShape.width, 5376, gemmaShape.vocab, 8), "");
@@ -163,31 +164,6 @@ TEST(SpeculativeConfigTest, AnMtpHeadIsReadAtTheWidthItDraftsFrom) {
 
   std::filesystem::remove(qwen);
   std::filesystem::remove(gemma);
-}
-
-TEST(SpeculativeConfigTest, AFitLeavesOutOnlyAGemma4Assistant) {
-  // fabric cannot measure a Gemma 4 assistant on its own, but it loads.
-  const std::string gemma = writeHeadHeader(
-      "gemma4-assistant.gguf", "gemma4-assistant", 1024, 5376, 8, 4);
-  // Any other MTP draft that cannot be measured fails the load.
-  const std::string qwen =
-      writeHeadHeader("qwen35-head.gguf", "qwen35", 1024, 0, 8, 1);
-  const std::string noLayers =
-      writeHeadHeader("qwen35-no-mtp.gguf", "qwen35", 1024, 0, 8);
-  const std::string gemmaNoLayers = writeHeadHeader(
-      "gemma4-assistant-no-mtp.gguf", "gemma4-assistant", 1024, 5376, 8);
-
-  EXPECT_EQ(readGgufShape(gemma).arch, "gemma4-assistant");
-  EXPECT_TRUE(fitLeavesOutMtpDraft(readGgufShape(gemma)));
-  EXPECT_FALSE(fitLeavesOutMtpDraft(readGgufShape(qwen)));
-  EXPECT_FALSE(fitLeavesOutMtpDraft(readGgufShape(noLayers)));
-  EXPECT_FALSE(fitLeavesOutMtpDraft(readGgufShape(gemmaNoLayers)));
-  EXPECT_FALSE(fitLeavesOutMtpDraft(
-      readGgufShape(absoluteModelPath("no-such-head.gguf"))));
-
-  for (const std::string& path : {gemma, qwen, noLayers, gemmaNoLayers}) {
-    std::filesystem::remove(path);
-  }
 }
 
 TEST(SpeculativeConfigTest, DflashNeedsAnAbsoluteDraftModel) {

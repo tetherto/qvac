@@ -1,5 +1,5 @@
 import type { TTSConfigurationParams } from "../../tts";
-import { ENGINE_AUDIO8 } from "../engineIds";
+import { ENGINE_AUDIO8, ENGINE_COSYVOICE3 } from "../engineIds";
 import type { EngineSetup, ModelPaths } from "../engineSetup";
 import {
   findQuantRankedGguf,
@@ -214,7 +214,7 @@ export function assertAudio8Options(setup: EngineSetup): void {
   }
   const audio8Only = setOptionNames({
     referenceText: setup.settings.referenceText,
-    greedy: setup.settings.greedy,
+    greedy: setup.engineType === ENGINE_COSYVOICE3 ? undefined : setup.settings.greedy,
   });
   if (audio8Only.length > 0) {
     throw new Error(

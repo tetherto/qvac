@@ -15,6 +15,7 @@ import {
   extractToolChoice,
   withToolChoice,
   parseToolCallArguments,
+  hoistInstructions,
   nameToolResults,
   withParallelToolCalls,
   UnsupportedImageContentError,
@@ -95,22 +96,24 @@ export function openaiMessagesToHistory(messages: OpenAIMessage[]): ChatHistoryI
   // Pure: decode + validate image parts to bytes (an unsupported image throws → 400). No file I/O —
   // writeChatImages materializes the bytes at the inference call, like routes/audio.ts.
   return nameToolResults(
-    messages.map((msg) => {
-      const decoded = decodeMessage(msg)
-      const item: ChatHistoryItem = { role: decoded.role, content: decoded.content }
-      if (decoded.images.length > 0) item.attachments = decoded.images
-      if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
-        item.toolCalls = msg.tool_calls.map((call) => ({
-          id: call.id,
-          name: call.function.name,
-          arguments: parseToolCallArguments(call.function.arguments)
-        }))
-      }
-      if (msg.role === 'tool' && msg.tool_call_id !== undefined) {
-        item.toolCallId = msg.tool_call_id
-      }
-      return item
-    })
+    hoistInstructions(
+      messages.map((msg) => {
+        const decoded = decodeMessage(msg)
+        const item: ChatHistoryItem = { role: decoded.role, content: decoded.content }
+        if (decoded.images.length > 0) item.attachments = decoded.images
+        if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+          item.toolCalls = msg.tool_calls.map((call) => ({
+            id: call.id,
+            name: call.function.name,
+            arguments: parseToolCallArguments(call.function.arguments)
+          }))
+        }
+        if (msg.role === 'tool' && msg.tool_call_id !== undefined) {
+          item.toolCallId = msg.tool_call_id
+        }
+        return item
+      })
+    )
   )
 }
 
@@ -233,8 +236,7 @@ export function toSdkChatArgs(body: ChatCompletionsBody): SdkChatArgs {
         extractGenerationParams(body as Record<string, unknown>, 'max_completion_tokens'),
         extractToolChoice(body as Record<string, unknown>, tools)
       ),
-      body.parallel_tool_calls,
-      tools
+      body.parallel_tool_calls
     ),
     responseFormat: responseFmt,
     stream: Boolean(body.stream)
