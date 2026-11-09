@@ -786,7 +786,7 @@ importers:
         specifier: ^3.6.2
         version: 3.6.2
       bare-cpu-info:
-        specifier: 0.1.1
+        specifier: ^0.1.1
         version: 0.1.1
       bare-crypto:
         specifier: ^1.15.3
@@ -798,8 +798,8 @@ importers:
         specifier: ^4.8.4
         version: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-gpu-info:
-        specifier: 0.1.1
-        version: 0.1.1
+        specifier: ^0.1.3
+        version: 0.1.3
       bare-http1:
         specifier: ^4.6.2
         version: 4.6.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
@@ -974,8 +974,8 @@ importers:
   packages/llm-llamacpp:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.26.0
-        version: 0.26.0(@qvac/fabric-android-arm64@0.26.0)(@qvac/fabric-ios@0.26.0)
+        specifier: ^0.28.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -990,11 +990,11 @@ importers:
         version: 3.1.1
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.26.0
-        version: 0.26.0
+        specifier: ^0.28.0
+        version: 0.28.0
       '@qvac/fabric-ios':
-        specifier: ^0.26.0
-        version: 0.26.0
+        specifier: ^0.28.0
+        version: 0.28.0
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
@@ -1054,20 +1054,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.26.0
-        version: 0.26.0
+        specifier: ^0.28.0
+        version: 0.28.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.26.0
-        version: 0.26.0
+        specifier: ^0.28.0
+        version: 0.28.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.26.0
-        version: 0.26.0
+        specifier: ^0.28.0
+        version: 0.28.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.26.0
-        version: 0.26.0
+        specifier: ^0.28.0
+        version: 0.28.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.26.0
-        version: 0.26.0
+        specifier: ^0.28.0
+        version: 0.28.0
 
   packages/logging:
     dependencies:
@@ -1633,7 +1633,7 @@ importers:
         specifier: ^3.4.2
         version: 3.6.2
       bare-cpu-info:
-        specifier: 0.1.1
+        specifier: ^0.1.1
         version: 0.1.1
       bare-crypto:
         specifier: ^1.15.0
@@ -1648,8 +1648,8 @@ importers:
         specifier: ^4.8.4
         version: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-gpu-info:
-        specifier: 0.1.1
-        version: 0.1.1
+        specifier: ^0.1.3
+        version: 0.1.3
       bare-link:
         specifier: ^4.0.1
         version: 4.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -5701,8 +5701,8 @@ packages:
       bare-buffer:
         optional: true
 
-  bare-gpu-info@0.1.1:
-    resolution: {integrity: sha512-qI/WZiBuJ4ETcfwinUOBI/GZ43oO/L2tgstXLmXeIA6qCSFmfeBkj+VPijg9xZf28UcOFjnSritAMXMqp5qzbg==}
+  bare-gpu-info@0.1.3:
+    resolution: {integrity: sha512-07MtOL76BV4v0F3bP12w5URR/4ZiXAg1YiW8SmLRnQ08GWcvuiCO8CeUTxSY4M/VUqZZzMMxhHDGC7n333iGDA==}
     engines: {bare: '>=1.14.0'}
 
   bare-hrtime@2.1.1:
@@ -15484,7 +15484,7 @@ snapshots:
       - bare-abort-controller
       - react-native-b4a
 
-  bare-gpu-info@0.1.1: {}
+  bare-gpu-info@0.1.3: {}
 
   bare-hrtime@2.1.1: {}
 

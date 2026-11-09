@@ -121,7 +121,10 @@ export const gpuResourceCapabilitiesSchema = z.object({
   driverVersion: resourceMetricSchema(z.string()),
   drivers: graphicsDriverCapabilitiesSchema,
   unifiedMemory: resourceMetricSchema(z.boolean()),
-  memoryTotalBytes: resourceMetricSchema(nonnegativeNumberSchema)
+  memoryTotalBytes: resourceMetricSchema(nonnegativeNumberSchema),
+  dedicatedMemoryTotalBytes: resourceMetricSchema(nonnegativeNumberSchema).describe(
+    'Memory reserved for this GPU alone. All of a discrete GPU’s memory; for an integrated GPU, the carve-out the firmware sets aside for it, which the OS does not count as system memory (0 when there is none, as on Apple silicon).'
+  )
 })
 
 export const systemResourceCapabilitiesSchema = z.object({
@@ -139,6 +142,9 @@ export const gpuResourceSampleSchema = z.object({
   decode: resourceMetricSchema(utilizationSchema),
   memoryUsedBytes: resourceMetricSchema(nonnegativeNumberSchema),
   memoryTotalBytes: resourceMetricSchema(nonnegativeNumberSchema),
+  dedicatedMemoryUsedBytes: resourceMetricSchema(nonnegativeNumberSchema).describe(
+    'The part of memoryUsedBytes held in dedicated memory (dedicatedMemoryTotalBytes).'
+  ),
   powerWatts: resourceMetricSchema(nonnegativeNumberSchema),
   temperatureCelsius: resourceMetricSchema(z.number())
 })

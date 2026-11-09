@@ -9,7 +9,7 @@ export { subscribeServerLogs, type ServerLogHandler } from '@/api/subscribe-logs
 export { heartbeat } from '@/api/heartbeat'
 export { transcribe, transcribeStream } from '@/api/transcribe'
 export { bciTranscribe, bciTranscribeStream } from '@/api/bci-transcribe'
-export { embed } from '@/api/embed'
+export { embed, embedBatch } from '@/api/embed'
 export { finetune, type FinetuneHandle } from '@/api/finetune'
 export { translate } from '@/api/translate'
 export { cancel } from '@/api/cancel'
