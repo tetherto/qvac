@@ -974,8 +974,8 @@ importers:
   packages/llm-llamacpp:
     dependencies:
       '@qvac/fabric':
-        specifier: ^0.26.0
-        version: 0.26.0(@qvac/fabric-android-arm64@0.26.0)(@qvac/fabric-ios@0.26.0)
+        specifier: ^0.28.0
+        version: link:../fabric
       '@qvac/infer-base':
         specifier: ^0.8.0
         version: 0.8.0
@@ -990,11 +990,11 @@ importers:
         version: 3.1.1
     devDependencies:
       '@qvac/fabric-android-arm64':
-        specifier: ^0.26.0
-        version: 0.26.0
+        specifier: ^0.28.0
+        version: 0.28.0
       '@qvac/fabric-ios':
-        specifier: ^0.26.0
-        version: 0.26.0
+        specifier: ^0.28.0
+        version: 0.28.0
       '@types/node':
         specifier: ^24.2.1
         version: 24.13.3
@@ -1054,20 +1054,20 @@ importers:
         version: 8.65.0(eslint@9.39.5(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
     optionalDependencies:
       '@qvac/fabric-darwin-arm64':
-        specifier: ^0.26.0
-        version: 0.26.0
+        specifier: ^0.28.0
+        version: 0.28.0
       '@qvac/fabric-darwin-x64':
-        specifier: ^0.26.0
-        version: 0.26.0
+        specifier: ^0.28.0
+        version: 0.28.0
       '@qvac/fabric-linux-arm64':
-        specifier: ^0.26.0
-        version: 0.26.0
+        specifier: ^0.28.0
+        version: 0.28.0
       '@qvac/fabric-linux-x64':
-        specifier: ^0.26.0
-        version: 0.26.0
+        specifier: ^0.28.0
+        version: 0.28.0
       '@qvac/fabric-win32-x64':
-        specifier: ^0.26.0
-        version: 0.26.0
+        specifier: ^0.28.0
+        version: 0.28.0
 
   packages/logging:
     dependencies:
