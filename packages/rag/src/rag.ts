@@ -36,7 +36,7 @@ import {
   type ValidTextChunk
 } from './input.js'
 import { intersectScope, parseScope } from './scope.js'
-import { scanSearch, type SearchQuery } from './search.js'
+import { scanSearch, throwIfAborted, type SearchQuery } from './search.js'
 import { computeSpaceId, parseEmbeddingSpace } from './space.js'
 import type {
   Hypercore,
@@ -383,7 +383,10 @@ export function createRag(options: CreateRagOptions): Rag {
       let query: SearchQuery
       if (request.query !== undefined) {
         const port = requireEmbedder(scope.namespace, space)
-        if (scope.documentIds?.length === 0) return []
+        if (scope.documentIds?.length === 0) {
+          throwIfAborted(signal)
+          return []
+        }
         query = { vector: await port.embedQuery(request.query, signal), spaceId: port.spaceId }
       } else {
         query = { vector: request.vector, spaceId: request.spaceId }

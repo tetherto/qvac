@@ -167,7 +167,7 @@ const timers = globalThis as unknown as {
   setTimeout: (callback: () => void, ms: number) => unknown
 }
 
-function throwIfAborted(signal: AbortSignal | undefined): void {
+export function throwIfAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted) throw new QvacErrorRAG({ code: ERR_CODES.OPERATION_CANCELLED })
 }
 
