@@ -81,7 +81,7 @@ function failingFetch(): (url: string) => Promise<string> {
   return () => Promise.reject(new Error('unexpected network request'))
 }
 
-/** GitHub CMakeLists.txt files for bindings newer than the built-in tables. */
+/** GitHub CMakeLists.txt files for bindings missing from the built-in tables. */
 function fakeGitHub(files: Record<string, string>, requested: string[] = []) {
   return (url: string) => {
     requested.push(url)
@@ -273,14 +273,36 @@ describe('resolveBareKitRuntime', () => {
     })
   })
 
-  it('does not query GitHub for a binding older than the newest table entry', async () => {
+  it('looks up a binding older than the newest table entry that the table lacks', async () => {
+    await withTempDir(async (dir) => {
+      const requested: string[] = []
+      const resolution = await resolveBareKitRuntime({
+        platform: 'android',
+        bareStowDir: writeBareStow(dir, { kotlin: '0.0.1' }),
+        fetchText: fakeGitHub(
+          { '/bare-kit-kotlin/v0.0.1/': 'fetch_package("github:holepunchto/bare-kit@3.0.1")' },
+          requested
+        )
+      })
+      assert.ok(resolution.resolved)
+      assert.equal(resolution.runtime.version, '1.36.2')
+      assert.match(resolution.runtime.detail, /bare-kit 3\.0\.1, looked up on GitHub/)
+      assert.equal(requested.length, 1)
+    })
+  })
+
+  it('reports an older binding the table lacks as not in the table when offline', async () => {
     await withTempDir(async (dir) => {
       const resolution = await resolveBareKitRuntime({
         platform: 'android',
         bareStowDir: writeBareStow(dir, { kotlin: '0.0.1' }),
+        network: false,
         fetchText: failingFetch()
       })
       assert.equal(resolution.resolved, false)
+      if (!resolution.resolved) {
+        assert.match(resolution.error.reason, /bare-kit-kotlin@0\.0\.1 is not in the built-in/)
+      }
     })
   })
 

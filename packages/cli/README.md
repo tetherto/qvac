@@ -281,7 +281,7 @@ parsed as bare-pack bundles, directories are walked as `node_modules` trees.
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--addons-source <path>` | Required. Path to a worker bundle in `qvac/worker/` or a `node_modules` directory.                                                                                    |
 | `--host <target>`        | Repeatable. At least one host required. Examples: `android-arm64`, `ios-arm64`, `ios-arm64-simulator`, `ios-x64-simulator`, `darwin-arm64`, `linux-x64`, `win32-x64`. |
-| `--offline`              | Optional. Make no network requests: no GitHub lookup for a Bare Kit release newer than the built-in tables, and no npm registry lookup for override suggestions.      |
+| `--offline`              | Optional. Make no network requests: no GitHub lookup for a Bare Kit release missing from the built-in tables, and no npm registry lookup for override suggestions.    |
 | `--project-root <path>`  | Optional. Project root used to resolve bundle resolutions and detect the package manager for override suggestions (default: cwd).                                     |
 | `--json`                 | Optional. Output the verification result as JSON instead of the human-readable summary. Useful for CI scripts and downstream tooling.                                 |
 | `--quiet, -q`            | Suppress the success summary; failures and warnings are always printed. Ignored when `--json` is set.                                                                 |
@@ -346,15 +346,18 @@ the project's own `@qvac/sdk`, then finds the Bare version in this order, and
 says so before any step that uses the network:
 
 1. Built-in tables of binding → bare-kit versions and bare-kit → Bare
-   versions, read from each release's `CMakeLists.txt`.
-2. For a release newer than its table's newest entry: the binding's
-   `CMakeLists.txt` and the matching bare-kit `CMakeLists.txt` on
-   `raw.githubusercontent.com` (up to two requests, 5 s timeout each). Skipped
-   with `--offline`.
+   versions, read from each release's `CMakeLists.txt`. The tables also list
+   the releases whose `CMakeLists.txt` names no version; those are reported
+   as unknown without a lookup.
+2. For a release missing from the tables: the binding's `CMakeLists.txt` and
+   the matching bare-kit `CMakeLists.txt` on `raw.githubusercontent.com` (up
+   to two requests, 5 s timeout each). Skipped with `--offline`.
 
 The tables are regenerated with `npm run bare-kit-runtimes:generate` in
-`packages/sdk`, which only probes releases newer than their newest entries
-(`npm run bare-kit-runtimes:generate -- --full` rebuilds them).
+`packages/sdk`, which reads every tag of each repository and probes the
+releases the tables do not list yet. A failed request stops the run without
+writing the tables. `npm run bare-kit-runtimes:generate -- --full` rebuilds
+them from every release.
 
 **Fix suggestions:** on an `abi-mismatch` or `engines-mismatch`, the summary
 prints one fix per affected platform. For each failing package it fetches the

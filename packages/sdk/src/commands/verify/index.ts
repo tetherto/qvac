@@ -48,8 +48,8 @@ export interface VerifyBundleOptions {
   desktopRuntime?: 'bare-sidecar' | 'pear-runtime' | 'bare-kit-kotlin'
   /**
    * Allow GitHub and npm registry requests: GitHub for a Bare Kit binding or
-   * bare-kit release newer than the built-in tables, the registry only after a
-   * mismatch is found, to suggest an override. Defaults to true.
+   * bare-kit release missing from the built-in tables, the registry only after
+   * a mismatch is found, to suggest an override. Defaults to true.
    */
   network?: boolean
   /** Called before any step that waits on the network. */
