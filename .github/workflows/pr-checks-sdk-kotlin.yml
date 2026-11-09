@@ -26,12 +26,12 @@ permissions:
   contents: read
   packages: read
 
-# Literal prefix, not github.workflow: under workflow_call that resolves to the
-# caller's name, so every workflow Merge Guard calls would share one group and
-# cancel each other. event_name keeps the direct pull_request run and the Merge
-# Guard (pull_request_target) call in separate groups.
+# Literal prefix: under workflow_call github.workflow resolves to the caller's
+# name, so without it every workflow Merge Guard calls would share one group and
+# cancel each other. github.workflow keeps the direct pull_request run and the
+# Merge Guard call (also pull_request) in separate groups.
 concurrency:
-  group: pr-checks-sdk-kotlin-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  group: pr-checks-sdk-kotlin-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -141,7 +141,7 @@ jobs:
         run: sdkmanager 'ndk;29.0.14206865'
 
       # Build the in-repo @qvac/sdk and run every Kotlin check in one step. This
-      # workflow is reachable from pr-gate-merge.yml (pull_request_target) via
+      # workflow is reachable from pr-gate-merge.yml (pull_request) via
       # workflow_call, so each step that builds the checked-out PR code is a
       # cache-poisoning "poisonable step" to CodeQL. Collapsing the build into a
       # single step keeps that to one reviewable, dismissed finding, matching

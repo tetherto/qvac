@@ -1,7 +1,11 @@
 name: Merge Guard
 
 on:
-  pull_request_target:
+  # Not pull_request_target (banned org-wide): this YAML loads from the PR merge
+  # ref, so a PR can edit its own gate. CODEOWNERS review on every path is what
+  # stops that. Fork PRs get a read-only token, cannot record qvac/fork-verified,
+  # and so fail closed at authorize.
+  pull_request:
     types:
       - opened
       - synchronize
@@ -58,7 +62,7 @@ jobs:
           github-token: ${{ github.token }}
 
   changes:
-    if: github.event_name == 'pull_request_target'
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     outputs:
       packages: ${{ steps.pkglist.outputs.packages }}

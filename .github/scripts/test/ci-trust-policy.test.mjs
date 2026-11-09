@@ -1696,12 +1696,6 @@ function pullRequestTargetWorkflows() {
  */
 const FORK_CI_EXEMPT = new Map([
   [
-    ".github/workflows/check-approvals.yml",
-    "No checkout: runs the published @qvac/ci against PR metadata over the API. " +
-      "Also a required status check on main/release — gating it on fork-ci would " +
-      "deadlock fork PRs, since approval cannot complete until the check reports.",
-  ],
-  [
     ".github/workflows/on-pr-community-label.yml",
     "No checkout: actions/github-script applies a label via the API only.",
   ],
@@ -1924,7 +1918,7 @@ test('ggml-rpc-server npm Fabric triggers activate with the server package layer
 
   assert.match(
     rpcPr,
-    /pull_request_target:[\s\S]*?paths:\n(?:\s+- .+\n)*?\s+- "packages\/\*\*"\n/,
+    /^ {2}pull_request:[\s\S]*?paths:\n(?:\s+- .+\n)*?\s+- "packages\/\*\*"\n/m,
     'fabric changes must run RPC server PR checks once the package exists',
   )
   const rpcMergeTrigger = rpcMerge.match(/^on:\n[\s\S]*?^permissions:/m)?.[0];

@@ -19,7 +19,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: error-code-ranges-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  group: error-code-ranges-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
