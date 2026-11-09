@@ -9,11 +9,25 @@ import type {
   Tui
 } from '../app-types.js'
 import { plain } from '../theme.js'
-import { dashboardView, FORMS } from '../dashboard-view.js'
-import { dashboardKey } from '../dashboard-keys.js'
+import { renderDashboard } from './frame.js'
+import { PAGES as DASHBOARD_PAGES } from './pages.js'
+import { PAGES as DASHBOARD_KEYS, SHORTCUTS, dashboardKey } from './keys.js'
+import { FORMS, SETUP_PAGES, PAGES as ONBOARDING_PAGES } from '../onboarding/pages.js'
+import { MODAL as ONBOARDING_MODAL, ENTER as ONBOARDING_ENTER } from '../onboarding/keys.js'
+import { PAGES as MANAGEMENT_PAGES } from '../management/pages.js'
+import { PAGES as MANAGEMENT_KEYS, SHORTCUTS as MANAGEMENT_SHORTCUTS } from '../management/keys.js'
 import { RECEIVERS } from './receive.js'
 import { ChatApp } from '../chat/app.js'
 import { pageKey } from '../shell.js'
+
+// qvac's dashboard: setup, the shared pages, and the host's own
+const PAGES = { ...ONBOARDING_PAGES, ...DASHBOARD_PAGES, ...MANAGEMENT_PAGES }
+const KEYS = {
+  modal: ONBOARDING_MODAL,
+  enter: ONBOARDING_ENTER,
+  shortcuts: [...SHORTCUTS, ...MANAGEMENT_SHORTCUTS],
+  pages: new Map([...DASHBOARD_KEYS, ...MANAGEMENT_KEYS])
+}
 
 export function productApp(tui: Tui) {
   return class extends ProductApp {
@@ -140,7 +154,7 @@ export class ProductApp extends ChatApp {
       return this.showPage(jump)
     }
 
-    return dashboardKey(this, msg)
+    return dashboardKey(this, msg, KEYS)
   }
 
   override pasted(text: string): void {
@@ -170,19 +184,9 @@ export class ProductApp extends ChatApp {
       return super.pageView(f)
     }
 
-    return dashboardView(this, f)
+    return renderDashboard(this, f, PAGES)
   }
 }
-
-const SETUP_PAGES = new Set([
-  'welcome',
-  'name',
-  'device-name',
-  'join',
-  'join-confirm',
-  'joining',
-  'download'
-])
 
 function pageChoices(app: ProductApp) {
   if (app.page === 'workspaces') {
