@@ -7,7 +7,7 @@ after the model arguments go in order through `init_images` for editing.
 
 The defaults download pinned Hugging Face weights. Model overrides accept local
 paths or URLs.
-FLUX.3 model terms: https://huggingface.co/black-forest-labs/flux-3-image-klein
+FLUX.3 model terms: https://huggingface.co/black-forest-labs/flux-3-image-klein/blob/09561231f44e41381c461caf53d5452005a60ac9/LICENSE.md
 
 TypeScript's `diffusion()` takes each reference as raw bytes and base64-encodes
 them on the way to the worker. Python calls the worker directly through

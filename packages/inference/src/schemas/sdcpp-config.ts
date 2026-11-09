@@ -835,7 +835,7 @@ export const diffusionRequestSchema = z
       .optional()
       .describe(
         'img2img denoising strength for SD/SDXL SDEdit. ' +
-          'Does not control reference-editing strength for FLUX.2 or Qwen-Image-2.1; ' +
+          'Does not control reference-editing strength for FLUX.2, FLUX.3 or Qwen-Image-2.1; ' +
           'these models start the target from noise.'
       ),
     upscale: z

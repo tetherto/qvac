@@ -5,7 +5,7 @@ import path from 'path'
 // FLUX.3 Image Klein text-to-image, or reference editing when reference images are passed.
 // FLUX.3 pairs its diffusion model with a Qwen3-VL 4B text encoder and the FLUX.2 VAE.
 // Defaults download pinned Hugging Face weights; overrides accept paths or URLs.
-// FLUX.3 model terms: https://huggingface.co/black-forest-labs/flux-3-image-klein
+// FLUX.3 model terms: https://huggingface.co/black-forest-labs/flux-3-image-klein/blob/09561231f44e41381c461caf53d5452005a60ac9/LICENSE.md
 
 const HF = 'https://huggingface.co'
 const prompt = process.argv[2] || "A lovely cat holding a sign that says 'FLUX3'"
