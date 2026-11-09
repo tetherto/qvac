@@ -30,7 +30,7 @@ const questions = [
 ]
 const payload = { model: ' laya ', input: 'Ticket', questions }
 const body = decisionsBody.parse(payload)
-const base = { answerConfidence: 0.9, confidence: 0.6, action: { actProbability: 0.1 } }
+const base = { confidence: 0.6 }
 const result: DecisionResult = {
   model: 'checkpoint',
   answers: {
@@ -49,14 +49,7 @@ const result: DecisionResult = {
       probabilities: { '0': 0.2, '1': 0.8 }
     }
   },
-  usage: {
-    inputTokens: 42,
-    outputTokens: 3,
-    stateTokens: 12,
-    stateTokensDropped: 2,
-    truncated: true,
-    truncatedQuestions: ['question_2']
-  }
+  usage: { inputTokens: 42, outputTokens: 3 }
 }
 
 describe('OpenAI Decisions adapter', () => {
@@ -66,7 +59,7 @@ describe('OpenAI Decisions adapter', () => {
       modelId: 'sdk-model',
       state: 'Ticket',
       questions: {
-        question_0: { type: 'noul', instructions: 'Urgent?' },
+        question_0: { type: 'noul', instructions: 'Urgent?', requireProbability: true },
         question_1: {
           type: 'choice',
           instructions: 'Which?',

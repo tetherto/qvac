@@ -2,6 +2,8 @@ import { describe, it, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   RequestRejectedByPolicyError,
+  RequestValidationFailedError,
+  SDK_CLIENT_ERROR_CODES,
   LAYA_MULTILINGUAL_322M_Q8_0,
   type DecisionResult
 } from '@qvac/sdk'
@@ -28,7 +30,7 @@ const questions = [
   },
   { type: 'predicate' as const, name: 'urgent', instructions: 'Does this need a human now?' }
 ]
-const base = { answerConfidence: 0.9, confidence: 0.6, action: { actProbability: 0.1 } }
+const base = { confidence: 0.6 }
 const result: DecisionResult = {
   model: 'native-checkpoint-name',
   answers: {
@@ -47,15 +49,7 @@ const result: DecisionResult = {
     },
     question_2: { ...base, type: 'noul', noul: 0.7 }
   },
-  usage: {
-    inputTokens: 42,
-    outputTokens: 0,
-    stateTokens: 12,
-    stateTokensDropped: 0,
-    truncated: false,
-    truncatedQuestions: [],
-    options: { question_0: { total: 2, distinct: 2, tokensPerOption: null } }
-  }
+  usage: { inputTokens: 42, outputTokens: 0 }
 }
 const httpResult = {
   model: 'native-checkpoint-name',
@@ -209,7 +203,11 @@ describe('OpenAI Decisions HTTP API', () => {
             criteria: { billing: 'Payments', technical: 'Bugs' }
           },
           question_1: { type: 'score', instructions: 'How severe?', criteria: ['Minor', 'Major'] },
-          question_2: { type: 'noul', instructions: 'Does this need a human now?' }
+          question_2: {
+            type: 'noul',
+            instructions: 'Does this need a human now?',
+            requireProbability: true
+          }
         }
       })
     }
@@ -451,7 +449,9 @@ describe('OpenAI Decisions HTTP API', () => {
       {
         modelId: 'sdk-laya-id',
         state: 'Help!',
-        questions: { question_0: { type: 'noul', instructions: 'Urgent?' } }
+        questions: {
+          question_0: { type: 'noul', instructions: 'Urgent?', requireProbability: true }
+        }
       }
     ])
     assert.deepEqual(response.json(), {
@@ -496,5 +496,47 @@ describe('OpenAI Decisions HTTP API', () => {
     })
     assert.equal(response.statusCode, 500)
     assert.equal(response.json().error.code, 'internal_error')
+  })
+
+  it('answers a request the model rejects with 400 and its message', async (t) => {
+    const message =
+      'questions.question_0: this lev model answers noul with an expected rating, not a probability'
+    const { app } = await server(t, {
+      decideOverride: () =>
+        Object.assign(Promise.reject(new RequestValidationFailedError(message)), {
+          requestId: 'decision-id'
+        })
+    })
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/decisions',
+      payload: { model: 'laya', input: 'a', questions }
+    })
+    assert.equal(response.statusCode, 400, response.body)
+    assert.equal(response.json().error.code, 'invalid_request')
+    assert.match(response.json().error.message, /expected rating, not a probability/)
+  })
+
+  it('answers a worker-side rejection, which arrives over RPC as a coded error, with 400', async (t) => {
+    // What the SDK client reconstructs for the worker's RequestValidationFailedError.
+    const remote = Object.assign(
+      new Error(
+        'Invalid request:\nquestions.question_0: too many options (60), this model supports at most 52'
+      ),
+      {
+        name: 'REQUEST_VALIDATION_FAILED',
+        code: SDK_CLIENT_ERROR_CODES.REQUEST_VALIDATION_FAILED
+      }
+    )
+    const { app } = await server(t, {
+      decideOverride: () => Object.assign(Promise.reject(remote), { requestId: 'decision-id' })
+    })
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/decisions',
+      payload: { model: 'laya', input: 'a', questions }
+    })
+    assert.equal(response.statusCode, 400, response.body)
+    assert.match(response.json().error.message, /too many options/)
   })
 })

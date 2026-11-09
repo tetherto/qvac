@@ -1,29 +1,52 @@
 import { z } from 'zod'
 
-// Nested JSON stays inline in the wire contract. The refinement rejects values
-// that JSON serialization would discard or change before reaching the model.
-function isJson(value: unknown, ancestors = new Set<object>()): boolean {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') return true
-  if (typeof value === 'number') return Number.isFinite(value)
-  if (typeof value !== 'object' || ancestors.has(value)) return false
-  if (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype) return false
+/**
+ * How deep a state, instruction or description may nest. The native decision
+ * engines walk these values recursively in-process, where a stack overflow
+ * cannot be caught; upstream llama.cpp applies the same limit (#30242).
+ */
+export const DECISION_MAX_JSON_DEPTH = 128
+
+const NESTED_TOO_DEEP = `JSON is nested more than ${DECISION_MAX_JSON_DEPTH} levels deep`
+
+type JsonCheck = 'ok' | 'invalid' | 'too-deep'
+
+// Nested JSON stays inline in the wire contract. The check rejects values that
+// JSON serialization would discard or change before reaching the model, and
+// stops at DECISION_MAX_JSON_DEPTH, so a hostile value cannot exhaust the stack
+// here or in the engine.
+function checkJson(value: unknown, depth = 1, ancestors = new Set<object>()): JsonCheck {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return 'ok'
+  if (typeof value === 'number') return Number.isFinite(value) ? 'ok' : 'invalid'
+  if (typeof value !== 'object' || ancestors.has(value)) return 'invalid'
+  if (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype) return 'invalid'
+  if (depth > DECISION_MAX_JSON_DEPTH) return 'too-deep'
   ancestors.add(value)
-  const valid = Object.values(value).every((child) => isJson(child, ancestors))
+  let result: JsonCheck = 'ok'
+  for (const child of Object.values(value)) {
+    result = checkJson(child, depth + 1, ancestors)
+    if (result !== 'ok') break
+  }
   ancestors.delete(value)
-  return valid
+  return result
+}
+
+function refineJson(value: unknown, ctx: z.RefinementCtx): void {
+  const result = checkJson(value)
+  if (result === 'too-deep') ctx.addIssue({ code: 'custom', message: NESTED_TOO_DEEP })
+  else if (result === 'invalid') ctx.addIssue({ code: 'custom', message: 'Expected JSON values' })
 }
 
 export const decisionStateSchema = z.union([
   z.string(),
   z.number(),
   z.boolean(),
-  z.record(z.string(), z.unknown()).refine(isJson, 'Expected JSON values'),
-  z.array(z.unknown()).refine(isJson, 'Expected JSON values')
+  z.record(z.string(), z.unknown()).superRefine(refineJson),
+  z.array(z.unknown()).superRefine(refineJson)
 ])
 
 const questionBase = {
-  instructions: decisionStateSchema.refine((value) => value !== '', 'Instructions cannot be empty'),
-  optionOrder: z.array(z.number().int().nonnegative()).optional()
+  instructions: decisionStateSchema.refine((value) => value !== '', 'Instructions cannot be empty')
 }
 
 export const decisionQuestionSchema = z.discriminatedUnion('type', [
@@ -56,7 +79,12 @@ export const decisionQuestionSchema = z.discriminatedUnion('type', [
         .strict()
         .nullable()
         .optional(),
-      labels: z.object({ false: z.string(), true: z.string() }).strict().optional()
+      requireProbability: z
+        .boolean()
+        .optional()
+        .describe(
+          'Require the answer to be the probability that the statement holds. A model whose noul answer means something else (for example an expected rating) rejects the request.'
+        )
     })
     .strict()
 ])
@@ -64,19 +92,7 @@ export const decisionQuestionSchema = z.discriminatedUnion('type', [
 const decisionFields = {
   questions: z
     .record(z.string(), decisionQuestionSchema)
-    .describe('Question ID to decision question.'),
-  maxLen: z
-    .number()
-    .int()
-    .positive()
-    .optional()
-    .describe('Token budget per sequence; unset uses the checkpoint budget.'),
-  headMaxLen: z
-    .number()
-    .int()
-    .positive()
-    .optional()
-    .describe('Token budget for each question and its options; unset uses the checkpoint budget.')
+    .describe('Question ID to decision question.')
 }
 
 export const decisionSingleRequestSchema = z
@@ -105,28 +121,28 @@ export const decideRequestSchema = z.union([
   decisionBatchRequestSchema.extend(wireEnvelope).meta({ title: 'DecideBatchRequest' })
 ])
 
-const answerBase = {
-  answerConfidence: z.number(),
-  confidence: z.number(),
-  action: z.object({
-    actProbability: z.number().describe('Currently unreliable; do not use to trigger actions.')
-  })
-}
 export const decisionAnswerSchema = z.discriminatedUnion('type', [
   z.object({
-    ...answerBase,
+    confidence: z.number(),
     type: z.literal('choice'),
     choice: z.union([z.string(), z.number(), z.boolean()]),
     probabilities: z.record(z.string(), z.number())
   }),
   z.object({
-    ...answerBase,
+    confidence: z.number(),
     type: z.literal('score'),
     score: z.number(),
     legend: z.record(z.string(), z.string()),
     probabilities: z.record(z.string(), z.number())
   }),
-  z.object({ ...answerBase, type: z.literal('noul'), noul: z.number() })
+  z.object({
+    confidence: z
+      .number()
+      .optional()
+      .describe('Only some models report a confidence for noul answers; none is derived.'),
+    type: z.literal('noul'),
+    noul: z.number()
+  })
 ])
 
 export const decisionResultSchema = z.object({
@@ -134,21 +150,7 @@ export const decisionResultSchema = z.object({
   answers: z.record(z.string(), decisionAnswerSchema),
   usage: z.object({
     inputTokens: z.number(),
-    outputTokens: z.number(),
-    stateTokens: z.number(),
-    stateTokensDropped: z.number(),
-    truncated: z.boolean(),
-    truncatedQuestions: z.array(z.string()),
-    options: z
-      .record(
-        z.string(),
-        z.object({
-          total: z.number(),
-          distinct: z.number(),
-          tokensPerOption: z.number().nullable()
-        })
-      )
-      .optional()
+    outputTokens: z.number()
   })
 })
 export const decisionResponseSchema = z.union([decisionResultSchema, z.array(decisionResultSchema)])
@@ -164,45 +166,18 @@ export const decisionConfigBaseSchema = z
       .number()
       .int()
       .optional()
-      .describe('Layers to offload. Unset lets the addon choose placement.'),
+      .describe('Layers to offload on the GPU. Unset lets the engine fit the model.'),
     batch_size: z
       .number()
       .int()
       .positive()
       .optional()
-      .describe('Tokens per forward pass. Default 2048; each sequence must fit.'),
-    poll: z
-      .number()
-      .int()
-      .min(0)
-      .max(100)
-      .optional()
-      .describe(
-        'CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.'
-      ),
-    pollBatch: z
-      .number()
-      .int()
-      .min(0)
-      .max(100)
-      .optional()
-      .describe(
-        'CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.'
-      ),
+      .describe("Tokens per forward pass. Unset uses the engine's default."),
     threads: z
       .number()
       .int()
       .optional()
       .describe('CPU threads, at most the CPU count. Zero or below uses all logical CPUs.'),
-    'threads-batch': z
-      .number()
-      .int()
-      .optional()
-      .describe('Batch CPU threads. Unset uses threads; zero or below uses all logical CPUs.'),
-    flash_attn: z
-      .enum(['on', 'off', 'auto'])
-      .optional()
-      .describe('Flash attention mode. Default auto.'),
     verbosity: z
       .number()
       .int()
@@ -210,12 +185,6 @@ export const decisionConfigBaseSchema = z
       .max(3)
       .optional()
       .describe('Native log level: 0 error, 1 warn, 2 info, 3 debug.'),
-    'main-gpu': z
-      .union([z.number().int().nonnegative(), z.enum(['integrated', 'dedicated'])])
-      .optional()
-      .describe('GPU index or device class.'),
-    'split-mode': z.enum(['none', 'layer']).optional().describe('Multi-GPU split mode.'),
-    'tensor-split': z.string().optional().describe('Per-GPU tensor split proportions.'),
     openclCacheDir: z
       .string()
       .optional()

@@ -26,7 +26,6 @@ export type DecisionState = string | number | boolean | Record<string, unknown> 
 
 interface DecisionQuestionBase {
   instructions: DecisionState
-  optionOrder?: number[]
 }
 
 export type DecisionQuestion =
@@ -38,13 +37,11 @@ export type DecisionQuestion =
   | (DecisionQuestionBase & {
       type: 'noul'
       criteria?: { true?: DecisionState | null; false?: DecisionState | null } | null
-      labels?: { false: string; true: string }
+      requireProbability?: boolean
     })
 
 interface DecisionFields {
   questions: Record<string, DecisionQuestion>
-  maxLen?: number
-  headMaxLen?: number
 }
 
 /** `decide.request` for one state, without the `modelId` a client adds. */
@@ -53,25 +50,21 @@ export type DecisionSingleRequest = DecisionFields & { state: DecisionState }
 /** `decide.request` for a batch of states, without the `modelId` a client adds. */
 export type DecisionBatchRequest = DecisionFields & { states: DecisionState[] }
 
-interface DecisionAnswerBase {
-  answerConfidence: number
-  confidence: number
-  action: { actProbability: number }
-}
-
 export type DecisionAnswer =
-  | (DecisionAnswerBase & {
+  | {
       type: 'choice'
+      confidence: number
       choice: string | number | boolean
       probabilities: Record<string, number>
-    })
-  | (DecisionAnswerBase & {
+    }
+  | {
       type: 'score'
+      confidence: number
       score: number
       legend: Record<string, string>
       probabilities: Record<string, number>
-    })
-  | (DecisionAnswerBase & { type: 'noul'; noul: number })
+    }
+  | { type: 'noul'; confidence?: number; noul: number }
 
 /** One result of `decide.response`. */
 export interface DecisionResult {
@@ -80,10 +73,5 @@ export interface DecisionResult {
   usage: {
     inputTokens: number
     outputTokens: number
-    stateTokens: number
-    stateTokensDropped: number
-    truncated: boolean
-    truncatedQuestions: string[]
-    options?: Record<string, { total: number; distinct: number; tokensPerOption: number | null }>
   }
 }

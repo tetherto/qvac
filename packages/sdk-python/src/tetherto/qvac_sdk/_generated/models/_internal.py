@@ -5188,10 +5188,6 @@ class DecideSingleRequestQuestionsValueChoiceInstructions(RootModel[dict[str, An
     ]
 
 
-class OptionOrderItem(RootModel[int]):
-    root: Annotated[int, Field(ge=0, le=9007199254740991)]
-
-
 class DecideSingleRequestQuestionsValueChoiceCriteriaValue(RootModel[dict[str, Any]]):
     root: Annotated[
         dict[str, Any],
@@ -5237,9 +5233,6 @@ class DecideSingleRequestQuestionsValueChoice(GeneratedBaseModel):
         | DecideSingleRequestQuestionsValueChoiceInstructions
         | list[Any]
     )
-    option_order: Annotated[
-        list[OptionOrderItem] | None, Field(alias="optionOrder")
-    ] = None
     type: Literal["choice"] = "choice"
     criteria: list[str | float | bool] | DecideSingleRequestQuestionsValueChoiceCriteria
 
@@ -5269,9 +5262,6 @@ class DecideSingleRequestQuestionsValueScore(GeneratedBaseModel):
         | DecideSingleRequestQuestionsValueScoreInstructions
         | list[Any]
     )
-    option_order: Annotated[
-        list[OptionOrderItem] | None, Field(alias="optionOrder")
-    ] = None
     type: Literal["score"] = "score"
     criteria: list[
         str
@@ -5323,14 +5313,6 @@ class DecideSingleRequestQuestionsValueNoulCriteria(GeneratedBaseModel):
     ) = None
 
 
-class DecideSingleRequestQuestionsValueNoulLabels(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    false: str
-    true: str
-
-
 class DecideSingleRequestQuestionsValueNoul(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -5342,14 +5324,14 @@ class DecideSingleRequestQuestionsValueNoul(GeneratedBaseModel):
         | DecideSingleRequestQuestionsValueNoulInstructions
         | list[Any]
     )
-    option_order: Annotated[
-        list[OptionOrderItem] | None, Field(alias="optionOrder")
-    ] = None
     type: Literal["noul"] = "noul"
     criteria: DecideSingleRequestQuestionsValueNoulCriteria | None = None
-    labels: Annotated[
-        DecideSingleRequestQuestionsValueNoulLabels | None,
-        Field(title="DecideSingleRequestQuestionsValueNoulLabels"),
+    require_probability: Annotated[
+        bool | None,
+        Field(
+            alias="requireProbability",
+            description="Require the answer to be the probability that the statement holds. A model whose noul answer means something else (for example an expected rating) rejects the request.",
+        ),
     ] = None
 
 
@@ -5392,24 +5374,6 @@ class DecideSingleRequest(GeneratedBaseModel):
             title="DecideSingleRequestQuestions",
         ),
     ]
-    max_len: Annotated[
-        int | None,
-        Field(
-            alias="maxLen",
-            description="Token budget per sequence; unset uses the checkpoint budget.",
-            gt=0,
-            le=9007199254740991,
-        ),
-    ] = None
-    head_max_len: Annotated[
-        int | None,
-        Field(
-            alias="headMaxLen",
-            description="Token budget for each question and its options; unset uses the checkpoint budget.",
-            gt=0,
-            le=9007199254740991,
-        ),
-    ] = None
     state: str | float | bool | DecideSingleRequestState | list[Any]
     model_id: Annotated[str, Field(alias="modelId", min_length=1)]
     type: Literal["decide"] = "decide"
@@ -5468,9 +5432,6 @@ class DecideBatchRequestQuestionsValueChoice(GeneratedBaseModel):
         | DecideBatchRequestQuestionsValueChoiceInstructions
         | list[Any]
     )
-    option_order: Annotated[
-        list[OptionOrderItem] | None, Field(alias="optionOrder")
-    ] = None
     type: Literal["choice"] = "choice"
     criteria: list[str | float | bool] | DecideBatchRequestQuestionsValueChoiceCriteria
 
@@ -5498,9 +5459,6 @@ class DecideBatchRequestQuestionsValueScore(GeneratedBaseModel):
         | DecideBatchRequestQuestionsValueScoreInstructions
         | list[Any]
     )
-    option_order: Annotated[
-        list[OptionOrderItem] | None, Field(alias="optionOrder")
-    ] = None
     type: Literal["score"] = "score"
     criteria: list[
         str
@@ -5551,14 +5509,6 @@ class DecideBatchRequestQuestionsValueNoulCriteria(GeneratedBaseModel):
     ) = None
 
 
-class DecideBatchRequestQuestionsValueNoulLabels(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    false: str
-    true: str
-
-
 class DecideBatchRequestQuestionsValueNoul(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -5570,14 +5520,14 @@ class DecideBatchRequestQuestionsValueNoul(GeneratedBaseModel):
         | DecideBatchRequestQuestionsValueNoulInstructions
         | list[Any]
     )
-    option_order: Annotated[
-        list[OptionOrderItem] | None, Field(alias="optionOrder")
-    ] = None
     type: Literal["noul"] = "noul"
     criteria: DecideBatchRequestQuestionsValueNoulCriteria | None = None
-    labels: Annotated[
-        DecideBatchRequestQuestionsValueNoulLabels | None,
-        Field(title="DecideBatchRequestQuestionsValueNoulLabels"),
+    require_probability: Annotated[
+        bool | None,
+        Field(
+            alias="requireProbability",
+            description="Require the answer to be the probability that the statement holds. A model whose noul answer means something else (for example an expected rating) rejects the request.",
+        ),
     ] = None
 
 
@@ -5620,41 +5570,10 @@ class DecideBatchRequest(GeneratedBaseModel):
             title="DecideBatchRequestQuestions",
         ),
     ]
-    max_len: Annotated[
-        int | None,
-        Field(
-            alias="maxLen",
-            description="Token budget per sequence; unset uses the checkpoint budget.",
-            gt=0,
-            le=9007199254740991,
-        ),
-    ] = None
-    head_max_len: Annotated[
-        int | None,
-        Field(
-            alias="headMaxLen",
-            description="Token budget for each question and its options; unset uses the checkpoint budget.",
-            gt=0,
-            le=9007199254740991,
-        ),
-    ] = None
     states: list[str | float | bool | DecideBatchRequestStatesItem | list[Any]]
     model_id: Annotated[str, Field(alias="modelId", min_length=1)]
     type: Literal["decide"] = "decide"
     request_id: Annotated[str | None, Field(alias="requestId", min_length=1)] = None
-
-
-class DecideResponseResultAnswersValueChoiceAction(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    act_probability: Annotated[
-        float,
-        Field(
-            alias="actProbability",
-            description="Currently unreliable; do not use to trigger actions.",
-        ),
-    ]
 
 
 class DecideResponseResultAnswersValueChoiceProbabilities(RootModel[dict[str, float]]):
@@ -5668,30 +5587,12 @@ class DecideResponseResultAnswersValueChoice(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
     confidence: float
-    action: Annotated[
-        DecideResponseResultAnswersValueChoiceAction,
-        Field(title="DecideResponseResultAnswersValueChoiceAction"),
-    ]
     type: Literal["choice"] = "choice"
     choice: str | float | bool
     probabilities: Annotated[
         DecideResponseResultAnswersValueChoiceProbabilities,
         Field(title="DecideResponseResultAnswersValueChoiceProbabilities"),
-    ]
-
-
-class DecideResponseResultAnswersValueScoreAction(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    act_probability: Annotated[
-        float,
-        Field(
-            alias="actProbability",
-            description="Currently unreliable; do not use to trigger actions.",
-        ),
     ]
 
 
@@ -5712,12 +5613,7 @@ class DecideResponseResultAnswersValueScore(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
     confidence: float
-    action: Annotated[
-        DecideResponseResultAnswersValueScoreAction,
-        Field(title="DecideResponseResultAnswersValueScoreAction"),
-    ]
     type: Literal["score"] = "score"
     score: float
     legend: Annotated[
@@ -5730,29 +5626,16 @@ class DecideResponseResultAnswersValueScore(GeneratedBaseModel):
     ]
 
 
-class DecideResponseResultAnswersValueNoulAction(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    act_probability: Annotated[
-        float,
-        Field(
-            alias="actProbability",
-            description="Currently unreliable; do not use to trigger actions.",
-        ),
-    ]
-
-
 class DecideResponseResultAnswersValueNoul(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
-    confidence: float
-    action: Annotated[
-        DecideResponseResultAnswersValueNoulAction,
-        Field(title="DecideResponseResultAnswersValueNoulAction"),
-    ]
+    confidence: Annotated[
+        float | None,
+        Field(
+            description="Only some models report a confidence for noul answers; none is derived."
+        ),
+    ] = None
     type: Literal["noul"] = "noul"
     noul: float
 
@@ -5778,38 +5661,12 @@ class DecideResponseResultAnswers(
     ]
 
 
-class DecideResponseResultUsageOptionsValue(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    total: float
-    distinct: float
-    tokens_per_option: Annotated[float | None, Field(alias="tokensPerOption")]
-
-
-class DecideResponseResultUsageOptions(
-    RootModel[dict[str, DecideResponseResultUsageOptionsValue]]
-):
-    root: Annotated[
-        dict[str, DecideResponseResultUsageOptionsValue],
-        Field(title="DecideResponseResultUsageOptions"),
-    ]
-
-
 class DecideResponseResultUsage(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     input_tokens: Annotated[float, Field(alias="inputTokens")]
     output_tokens: Annotated[float, Field(alias="outputTokens")]
-    state_tokens: Annotated[float, Field(alias="stateTokens")]
-    state_tokens_dropped: Annotated[float, Field(alias="stateTokensDropped")]
-    truncated: bool
-    truncated_questions: Annotated[list[str], Field(alias="truncatedQuestions")]
-    options: Annotated[
-        DecideResponseResultUsageOptions | None,
-        Field(title="DecideResponseResultUsageOptions"),
-    ] = None
 
 
 class DecideResponseResult(GeneratedBaseModel):
@@ -5822,19 +5679,6 @@ class DecideResponseResult(GeneratedBaseModel):
     ]
     usage: Annotated[
         DecideResponseResultUsage, Field(title="DecideResponseResultUsage")
-    ]
-
-
-class DecideResponseResultItemAnswersValueChoiceAction(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    act_probability: Annotated[
-        float,
-        Field(
-            alias="actProbability",
-            description="Currently unreliable; do not use to trigger actions.",
-        ),
     ]
 
 
@@ -5851,30 +5695,12 @@ class DecideResponseResultItemAnswersValueChoice(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
     confidence: float
-    action: Annotated[
-        DecideResponseResultItemAnswersValueChoiceAction,
-        Field(title="DecideResponseResultItemAnswersValueChoiceAction"),
-    ]
     type: Literal["choice"] = "choice"
     choice: str | float | bool
     probabilities: Annotated[
         DecideResponseResultItemAnswersValueChoiceProbabilities,
         Field(title="DecideResponseResultItemAnswersValueChoiceProbabilities"),
-    ]
-
-
-class DecideResponseResultItemAnswersValueScoreAction(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    act_probability: Annotated[
-        float,
-        Field(
-            alias="actProbability",
-            description="Currently unreliable; do not use to trigger actions.",
-        ),
     ]
 
 
@@ -5897,12 +5723,7 @@ class DecideResponseResultItemAnswersValueScore(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
     confidence: float
-    action: Annotated[
-        DecideResponseResultItemAnswersValueScoreAction,
-        Field(title="DecideResponseResultItemAnswersValueScoreAction"),
-    ]
     type: Literal["score"] = "score"
     score: float
     legend: Annotated[
@@ -5915,29 +5736,16 @@ class DecideResponseResultItemAnswersValueScore(GeneratedBaseModel):
     ]
 
 
-class DecideResponseResultItemAnswersValueNoulAction(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    act_probability: Annotated[
-        float,
-        Field(
-            alias="actProbability",
-            description="Currently unreliable; do not use to trigger actions.",
-        ),
-    ]
-
-
 class DecideResponseResultItemAnswersValueNoul(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    answer_confidence: Annotated[float, Field(alias="answerConfidence")]
-    confidence: float
-    action: Annotated[
-        DecideResponseResultItemAnswersValueNoulAction,
-        Field(title="DecideResponseResultItemAnswersValueNoulAction"),
-    ]
+    confidence: Annotated[
+        float | None,
+        Field(
+            description="Only some models report a confidence for noul answers; none is derived."
+        ),
+    ] = None
     type: Literal["noul"] = "noul"
     noul: float
 
@@ -5963,38 +5771,12 @@ class DecideResponseResultItemAnswers(
     ]
 
 
-class DecideResponseResultItemUsageOptionsValue(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    total: float
-    distinct: float
-    tokens_per_option: Annotated[float | None, Field(alias="tokensPerOption")]
-
-
-class DecideResponseResultItemUsageOptions(
-    RootModel[dict[str, DecideResponseResultItemUsageOptionsValue]]
-):
-    root: Annotated[
-        dict[str, DecideResponseResultItemUsageOptionsValue],
-        Field(title="DecideResponseResultItemUsageOptions"),
-    ]
-
-
 class DecideResponseResultItemUsage(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     input_tokens: Annotated[float, Field(alias="inputTokens")]
     output_tokens: Annotated[float, Field(alias="outputTokens")]
-    state_tokens: Annotated[float, Field(alias="stateTokens")]
-    state_tokens_dropped: Annotated[float, Field(alias="stateTokensDropped")]
-    truncated: bool
-    truncated_questions: Annotated[list[str], Field(alias="truncatedQuestions")]
-    options: Annotated[
-        DecideResponseResultItemUsageOptions | None,
-        Field(title="DecideResponseResultItemUsageOptions"),
-    ] = None
 
 
 class DecideResponseResultItem(GeneratedBaseModel):
@@ -13503,28 +13285,6 @@ class LoadModelSrcRequestLlamacppDecisionModelConfigDevice(Enum):
     gpu = "gpu"
 
 
-class LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttn(Enum):
-    on = "on"
-    off = "off"
-    auto = "auto"
-
-
-class MainGpu4(RootModel[int]):
-    root: Annotated[
-        int, Field(description="GPU index or device class.", ge=0, le=9007199254740991)
-    ]
-
-
-class LoadModelSrcRequestLlamacppDecisionModelConfigMainGpu(Enum):
-    integrated = "integrated"
-    dedicated = "dedicated"
-
-
-class LoadModelSrcRequestLlamacppDecisionModelConfigSplitMode(Enum):
-    none = "none"
-    layer = "layer"
-
-
 class LoadModelSrcRequestLlamacppDecisionModelConfig(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -13539,7 +13299,7 @@ class LoadModelSrcRequestLlamacppDecisionModelConfig(GeneratedBaseModel):
     gpu_layers: Annotated[
         int | None,
         Field(
-            description="Layers to offload. Unset lets the addon choose placement.",
+            description="Layers to offload on the GPU. Unset lets the engine fit the model.",
             ge=-9007199254740991,
             le=9007199254740991,
         ),
@@ -13547,26 +13307,9 @@ class LoadModelSrcRequestLlamacppDecisionModelConfig(GeneratedBaseModel):
     batch_size: Annotated[
         int | None,
         Field(
-            description="Tokens per forward pass. Default 2048; each sequence must fit.",
+            description="Tokens per forward pass. Unset uses the engine's default.",
             gt=0,
             le=9007199254740991,
-        ),
-    ] = None
-    poll: Annotated[
-        int | None,
-        Field(
-            description="CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.",
-            ge=0,
-            le=100,
-        ),
-    ] = None
-    poll_batch: Annotated[
-        int | None,
-        Field(
-            alias="pollBatch",
-            description="CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.",
-            ge=0,
-            le=100,
         ),
     ] = None
     threads: Annotated[
@@ -13577,22 +13320,6 @@ class LoadModelSrcRequestLlamacppDecisionModelConfig(GeneratedBaseModel):
             le=9007199254740991,
         ),
     ] = None
-    threads_batch: Annotated[
-        int | None,
-        Field(
-            alias="threads-batch",
-            description="Batch CPU threads. Unset uses threads; zero or below uses all logical CPUs.",
-            ge=-9007199254740991,
-            le=9007199254740991,
-        ),
-    ] = None
-    flash_attn: Annotated[
-        LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttn | None,
-        Field(
-            description="Flash attention mode. Default auto.",
-            title="LoadModelSrcRequestLlamacppDecisionModelConfigFlashAttn",
-        ),
-    ] = None
     verbosity: Annotated[
         int | None,
         Field(
@@ -13600,22 +13327,6 @@ class LoadModelSrcRequestLlamacppDecisionModelConfig(GeneratedBaseModel):
             ge=0,
             le=3,
         ),
-    ] = None
-    main_gpu: Annotated[
-        MainGpu4 | LoadModelSrcRequestLlamacppDecisionModelConfigMainGpu | None,
-        Field(alias="main-gpu", description="GPU index or device class."),
-    ] = None
-    split_mode: Annotated[
-        LoadModelSrcRequestLlamacppDecisionModelConfigSplitMode | None,
-        Field(
-            alias="split-mode",
-            description="Multi-GPU split mode.",
-            title="LoadModelSrcRequestLlamacppDecisionModelConfigSplitMode",
-        ),
-    ] = None
-    tensor_split: Annotated[
-        str | None,
-        Field(alias="tensor-split", description="Per-GPU tensor split proportions."),
     ] = None
     opencl_cache_dir: Annotated[
         str | None,
@@ -13712,6 +13423,12 @@ class LoadModelSrcRequestLlamacppRerankModelConfigFlashAttn(Enum):
     on = "on"
     off = "off"
     auto = "auto"
+
+
+class MainGpu4(RootModel[int]):
+    root: Annotated[
+        int, Field(description="GPU index or device class.", ge=0, le=9007199254740991)
+    ]
 
 
 class LoadModelSrcRequestLlamacppRerankModelConfigMainGpu(Enum):
@@ -19160,7 +18877,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigDevice(Enum):
     cpu = "cpu"
 
 
-class MainGpu6(RootModel[int]):
+class MainGpu5(RootModel[int]):
     root: Annotated[
         int,
         Field(
@@ -20959,7 +20676,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         ),
     ] = None
     main_gpu: Annotated[
-        MainGpu6 | LoadModelSrcRequestSdcppGenerationModelConfigMainGpu | None,
+        MainGpu5 | LoadModelSrcRequestSdcppGenerationModelConfigMainGpu | None,
         Field(
             alias="main-gpu",
             description='GPU to pin when `device` is "gpu": a GPU-device index, "integrated", or "dedicated" (the discrete GPU with the most VRAM). Omit to let the backend choose the first enumerated device. Resolved against the addon\'s own ggml device enumeration, so it cannot desync from the device list the backend actually uses. If an explicit request cannot be satisfied (e.g. "integrated" with no integrated GPU, "dedicated" with no discrete GPU, or an out-of-range index) the addon falls back to CPU rather than substituting a different GPU. Stripped on mobile (single-GPU devices).',
@@ -22532,7 +22249,7 @@ class ReloadConfigRequestModelConfigAudioFormat(Enum):
     s16le = "s16le"
 
 
-class MainGpu7(RootModel[int]):
+class MainGpu6(RootModel[int]):
     root: Annotated[
         int,
         Field(
@@ -22543,7 +22260,7 @@ class MainGpu7(RootModel[int]):
     ]
 
 
-class MainGpu8(RootModel[str]):
+class MainGpu7(RootModel[str]):
     root: Annotated[
         str,
         Field(
@@ -22576,7 +22293,7 @@ class ReloadConfigRequestModelConfigContextParams(GeneratedBaseModel):
         ),
     ] = None
     main_gpu: Annotated[
-        MainGpu7 | MainGpu8 | ReloadConfigRequestModelConfigContextParamsMainGpu | None,
+        MainGpu6 | MainGpu7 | ReloadConfigRequestModelConfigContextParamsMainGpu | None,
         Field(
             alias="main-gpu",
             description="GPU to run on once `use_gpu` is true: a ggml device-registry index (non-negative 32-bit integer, as a number or digit string), `'dedicated'`, or `'integrated'`. A class selector is strict and falls back to CPU when that class is absent. Cannot be combined with `gpu_device`.",

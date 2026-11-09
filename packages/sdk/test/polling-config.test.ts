@@ -2,15 +2,13 @@ import test from 'brittle'
 import {
   llamacppCompletionConfigSchema,
   llamacppEmbeddingConfigSchema,
-  llamacppDecisionConfigSchema,
   configSchemaForModelType
 } from '@/schemas/public'
 
 test('public polling schemas expose described numeric controls for CLI and SDK users', (t) => {
   for (const [modelType, schema] of [
     ['llamacpp-completion', llamacppCompletionConfigSchema],
-    ['llamacpp-embedding', llamacppEmbeddingConfigSchema],
-    ['llamacpp-decision', llamacppDecisionConfigSchema]
+    ['llamacpp-embedding', llamacppEmbeddingConfigSchema]
   ] as const) {
     t.is(configSchemaForModelType(modelType), schema)
     const config = { poll: 100, pollBatch: 0 }
