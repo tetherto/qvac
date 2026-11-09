@@ -138,7 +138,9 @@ typealias QvacToolHandler = suspend (JsonObject) -> JsonElement
  *
  * With [deferLoading] only the name and description reach the prompt, listed
  * under [group] in the catalog of the built-in `tool_search`; the schema is
- * declared once the model has searched for it.
+ * declared once the model has searched for it. Use deferred tools with
+ * [orchestrate], where the worker runs the search: [run] has no `tool_search`
+ * handler, so a search there ends the run as an unanswerable tool call.
  */
 data class QvacTool(
     val name: String,
@@ -287,6 +289,10 @@ class QvacCompletionRun internal constructor(
     }
 }
 
+/**
+ * Runs one completion turn. Deferred tools need [orchestrate] instead: a
+ * `tool_search` call returned here has no handler.
+ */
 fun QvacCompletion.run(
     modelId: String,
     history: List<QvacMessage>,

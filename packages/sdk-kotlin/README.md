@@ -417,6 +417,13 @@ A tool describes flat parameters with `parameters` and `required`, or passes a
 complete JSON Schema object as `parametersSchema` for nested `properties`,
 `items`, `anyOf` or `$defs`; that object is sent as written.
 
+A tool with `deferLoading = true` stays out of the prompt until the model loads
+it through the built-in `tool_search`. Use `orchestrate()` for deferred tools:
+the worker runs the search there. With `run()` the search comes back as an
+ordinary tool call that no handler can answer, because the Kotlin SDK has no
+`tool_search` implementation. `QvacCompletionOptions(toolSearch = ...)` sets how
+many definitions one search loads; keep it the same for the whole conversation.
+
 `run()` intentionally accumulates the complete result, including streams not
 collected by the caller. Its memory usage grows with output. Use the cold
 `completion.stream(...)` or generated stream methods for incremental processing
