@@ -5,7 +5,7 @@ import {
   decisionTests,
   type DecisionSingleParams,
   type DecisionBatchParams,
-  type DecisionInvalidBudgetParams
+  type DecisionInvalidRequestParams
 } from '../../../../catalog/decision-tests.js'
 
 export class DecisionExecutor extends AbstractModelExecutor<typeof decisionTests> {
@@ -15,7 +15,7 @@ export class DecisionExecutor extends AbstractModelExecutor<typeof decisionTests
     'decision-concurrent-queued': this.concurrent.bind(this),
     'decision-structured-batch': this.batch.bind(this),
     'decision-structured-batch-parity': this.batchParity.bind(this),
-    'decision-invalid-budget': this.invalidBudget.bind(this)
+    'decision-invalid-request': this.invalidRequest.bind(this)
   }
 
   async ticket(params: DecisionSingleParams, expectation: Expectation): Promise<TestResult> {
@@ -51,8 +51,8 @@ export class DecisionExecutor extends AbstractModelExecutor<typeof decisionTests
     return ValidationHelpers.validate({ results, reference }, expectation)
   }
 
-  async invalidBudget(
-    params: DecisionInvalidBudgetParams,
+  async invalidRequest(
+    params: DecisionInvalidRequestParams,
     expectation: Expectation
   ): Promise<TestResult> {
     const modelId = await this.resources.ensureLoaded('decision')
@@ -63,7 +63,7 @@ export class DecisionExecutor extends AbstractModelExecutor<typeof decisionTests
     } catch (error) {
       rejected = error instanceof RequestValidationFailedError
     }
-    if (!rejected) throw new Error('Invalid token budget did not produce a validation error')
+    if (!rejected) throw new Error('An invalid request did not produce a validation error')
     const results = [await decide({ ...params.recovery, modelId })]
     return ValidationHelpers.validate({ results, reference }, expectation)
   }

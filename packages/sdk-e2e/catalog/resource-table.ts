@@ -62,8 +62,8 @@ export const RESOURCE_TABLE: ResourceTable = {
   'decision-parity': {
     constant: { $const: 'LAYA_MULTILINGUAL_322M_Q8_0' },
     type: 'llamacpp-decision',
-    // Keep these short question/state sequences in separate forward passes for numerical parity.
-    config: { device: 'cpu', flash_attn: 'off', batch_size: 64 }
+    // The same model on the CPU, for numerical parity with the GPU run.
+    config: { device: 'cpu' }
   },
 
   embeddings: {

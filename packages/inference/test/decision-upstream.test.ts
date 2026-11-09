@@ -19,6 +19,7 @@ import {
   DECISION_INVALID_REQUEST,
   isMissingDecisionAddon,
   loadDecisionAddon,
+  loadDecisionAddonLogging,
   type DecisionAddon,
   fromUpstreamResult,
   toUpstreamConfig,
@@ -205,22 +206,6 @@ test('score levels outside the model range are rejected', (t) => {
   }
 })
 
-test('controls upstream engines do not support are rejected', (t) => {
-  const cases = [
-    { questions: { q: { type: 'noul' as const, instructions: '?', optionOrder: [1, 0] } } },
-    {
-      questions: {
-        q: { type: 'noul' as const, instructions: '?', labels: { false: 'no', true: 'yes' } }
-      }
-    },
-    { questions, maxLen: 64 },
-    { questions, headMaxLen: 32 }
-  ]
-  for (const request of cases) {
-    t.exception(() => toUpstreamRequest(request, 's', openjev), RequestValidationFailedError)
-  }
-})
-
 test('requireProbability: lev is rejected, openjev passes and the flag stays in QVAC', (t) => {
   const request = {
     questions: { q: { type: 'noul' as const, instructions: '?', requireProbability: true } }
@@ -234,13 +219,12 @@ test('requireProbability: lev is rejected, openjev passes and the flag stays in 
   )
 })
 
-test('upstream load options: supported keys map, others fail the load', (t) => {
-  t.alike(toUpstreamConfig({ device: 'gpu', gpu_layers: 99, threads: 4 }), {
+test('upstream load options become the addon strings; device stays as is', (t) => {
+  t.alike(toUpstreamConfig({ device: 'gpu', gpu_layers: 99, threads: 4, verbosity: undefined }), {
     device: 'gpu',
     gpu_layers: '99',
     threads: '4'
   })
-  t.exception(() => toUpstreamConfig({ device: 'cpu', flash_attn: 'on' }), ModelLoadFailedError)
 })
 
 // --- result conversion -----------------------------------------------------
@@ -301,9 +285,8 @@ function upstreamFixture(
     info: () => info
   }
   const model = {
-    kind: 'upstream',
     info,
-    upstream: engine,
+    engine,
     cancel: () => engine.cancel()
   }
   registerModel(id, {
@@ -457,12 +440,11 @@ test('upstream load: the plugin config, openclCacheDir included, reaches the eng
   const model = new DecisionModel({
     modelPath: file,
     files: [file],
-    layaConfig: { device: 'gpu' },
     config: { device: 'gpu', gpu_layers: 99, openclCacheDir: '/data/user/0/app/cache' },
     loadAddon: () => Promise.resolve(stubAddon({ DecisionEngine: Engine }))
   })
   await model.load()
-  t.is(model.kind, 'upstream')
+  t.is(model.info, openjev)
   t.alike(seen, [
     {
       files: { model: [file] },
@@ -472,44 +454,39 @@ test('upstream load: the plugin config, openclCacheDir included, reaches the eng
   ])
 })
 
-test('without @qvac/decision-ggml: upstream models fail to load with a clear error', async (t) => {
+test('without @qvac/decision-ggml: a decision model fails to load with a clear error', async (t) => {
   const file = path.join(os.tmpdir(), `decision-adapter-${Date.now()}.gguf`)
   writeGguf(file, 'qwen35')
   t.teardown(() => fs.rmSync(file, { force: true }))
   const model = new DecisionModel({
     modelPath: file,
     files: [file],
-    layaConfig: { device: 'cpu' },
     config: { device: 'cpu' },
     loadAddon: () => Promise.resolve(undefined)
   })
-  await t.exception(model.load(), /needs @qvac\/decision-ggml/)
-  t.is(model.kind, undefined, 'nothing was loaded')
+  await t.exception(model.load(), ModelLoadFailedError)
+  await t.exception(model.load(), /run on @qvac\/decision-ggml; install it/)
+  t.is(model.info, undefined, 'nothing was loaded')
 })
 
-test('fabric-format Laya runs on decision-ggml when it is installed', async (t) => {
+test('a fabric-format Laya file fails to load and names the conversion', async (t) => {
   const file = path.join(os.tmpdir(), `decision-laya-${Date.now()}.gguf`)
   writeGguf(file, 'laya')
   t.teardown(() => fs.rmSync(file, { force: true }))
-  const seen: unknown[] = []
-  class Laya {
-    constructor(args: unknown) {
-      seen.push(args)
-    }
-    load = () => Promise.resolve()
-    unload = () => Promise.resolve()
-    cancel = () => Promise.resolve()
-  }
+  let loaded = false
   const model = new DecisionModel({
     modelPath: file,
     files: [file],
-    layaConfig: { device: 'cpu' },
     config: { device: 'cpu' },
-    loadAddon: () => Promise.resolve(stubAddon({ LayaDecisions: Laya }))
+    loadAddon: () => {
+      loaded = true
+      return Promise.resolve(stubAddon({}))
+    }
   })
-  await model.load()
-  t.is(model.kind, 'laya')
-  t.alike(seen, [{ files: { model: [file] }, config: { device: 'cpu' }, logger: undefined }])
+  await t.exception(model.load(), ModelLoadFailedError)
+  await t.exception(model.load(), /fabric-format Laya file.*convert_hf_to_gguf/)
+  t.absent(loaded, 'decision-ggml is not loaded for it')
+  t.is(model.info, undefined)
 })
 
 test('loadDecisionAddon: the addon when installed, undefined when not', async (t) => {
@@ -520,7 +497,16 @@ test('loadDecisionAddon: the addon when installed, undefined when not', async (t
     return
   }
   t.is(typeof addon.DecisionEngine, 'function')
-  t.is(typeof addon.LayaDecisions, 'function')
+})
+
+test("loadDecisionAddonLogging: decision-ggml's module, or a load error naming it", async (t) => {
+  if ((await loadDecisionAddon()) === undefined) {
+    await t.exception(loadDecisionAddonLogging(), ModelLoadFailedError)
+    await t.exception(loadDecisionAddonLogging(), /run on @qvac\/decision-ggml; install it/)
+    return
+  }
+  const logging = (await loadDecisionAddonLogging()) as { setLogger?: unknown; default?: unknown }
+  t.ok(typeof logging.setLogger === 'function' || typeof logging.default === 'object')
 })
 
 test('isMissingDecisionAddon only matches decision-ggml itself', (t) => {
@@ -542,5 +528,5 @@ function stubAddon(overrides: Record<string, unknown>): DecisionAddon {
       throw new Error('not used by this test')
     }
   }
-  return { LayaDecisions: unused, DecisionEngine: unused, ...overrides } as unknown as DecisionAddon
+  return { DecisionEngine: unused, ...overrides } as unknown as DecisionAddon
 }

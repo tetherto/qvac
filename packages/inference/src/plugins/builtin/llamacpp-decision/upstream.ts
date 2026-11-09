@@ -1,4 +1,3 @@
-import * as embed from '@qvac/embed-llamacpp'
 import { ModelLoadFailedError, RequestValidationFailedError } from '@/errors/index'
 import type {
   DecisionAnswer,
@@ -8,13 +7,11 @@ import type {
 } from '@/schemas/index'
 import { readGgufArchitecture } from '@/utils/gguf-architecture'
 
-// Decision models through @qvac/decision-ggml (QVAC-26667): fabric-format Laya
-// (LayaDecisions) and upstream llama.cpp decision models (DecisionEngine).
-// decision-ggml is loaded when a model loads, never at import: without it this
-// module still imports, fabric-format Laya runs on @qvac/embed-llamacpp's
-// LayaDecisions as before, and an upstream model fails to load with an
-// actionable error. The boundary types live here rather than being imported
-// from the addon.
+// Decision models (QVAC-26667): upstream llama.cpp decision models, Laya
+// included, run on @qvac/decision-ggml's DecisionEngine. decision-ggml is
+// loaded when a model loads, never at import: without it this module still
+// imports, and a load fails with an actionable error. The boundary types live
+// here rather than being imported from the addon.
 //
 // It is not yet declared in package.json. It is unpublished, and with
 // linkWorkspacePackages any declared range (even an optional peer) links the
@@ -92,11 +89,8 @@ export type UpstreamEngineConstructor = new (args: {
   logger?: unknown
 }) => UpstreamEngine
 
-type LayaConstructor = typeof embed.LayaDecisions
-
 /** What DecisionModel uses from @qvac/decision-ggml. */
 export interface DecisionAddon {
-  LayaDecisions: LayaConstructor
   DecisionEngine: UpstreamEngineConstructor
 }
 
@@ -124,25 +118,28 @@ export async function loadDecisionAddon(): Promise<DecisionAddon | undefined> {
   }
 }
 
-/** Load options the upstream engine accepts, from the plugin's decision config. */
-const UPSTREAM_CONFIG_KEYS = new Set([
-  'device',
-  'gpu_layers',
-  'batch_size',
-  'threads',
-  'verbosity',
-  'openclCacheDir'
-])
-
-export function toUpstreamConfig(config: Record<string, unknown>): Record<string, unknown> {
-  const unsupported = Object.keys(config).filter(
-    (key) => config[key] !== undefined && !UPSTREAM_CONFIG_KEYS.has(key)
+function missingAddonError(): ModelLoadFailedError {
+  return new ModelLoadFailedError(
+    `decision models run on ${DECISION_ADDON}; install it to load one`
   )
-  if (unsupported.length > 0) {
-    throw new ModelLoadFailedError(
-      `${unsupported.join(', ')} ${unsupported.length === 1 ? 'is' : 'are'} not supported by upstream decision models; supported: ${[...UPSTREAM_CONFIG_KEYS].join(', ')}`
-    )
+}
+
+/**
+ * decision-ggml's native logging module, which the plugin registry wires before
+ * a decision model loads. Without decision-ggml the load fails here, with an
+ * actionable error; any other load failure is thrown as is.
+ */
+export async function loadDecisionAddonLogging(): Promise<unknown> {
+  try {
+    return await import('@qvac/decision-ggml/addonLogging')
+  } catch (error) {
+    if (isMissingDecisionAddon(error)) throw missingAddonError()
+    throw error
   }
+}
+
+/** DecisionEngine's load options, from the validated plugin config. */
+export function toUpstreamConfig(config: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(config)
       .filter(([, value]) => value !== undefined)
@@ -153,9 +150,7 @@ export function toUpstreamConfig(config: Record<string, unknown>): Record<string
 interface DecisionModelOptions {
   modelPath: string
   files: string[]
-  /** The Laya addon config (already transformed for LayaDecisions). */
-  layaConfig: Record<string, string | undefined>
-  /** The validated plugin config, for the upstream engine. */
+  /** The validated plugin config. */
   config: Record<string, unknown>
   logger?: unknown
   /** Loads @qvac/decision-ggml; loadDecisionAddon by default (tests stub it). */
@@ -163,15 +158,13 @@ interface DecisionModelOptions {
 }
 
 /**
- * A decision model that picks its engine at load: fabric-format Laya
- * (`general.architecture` "laya") uses LayaDecisions; every other GGUF goes to
- * the upstream engine, which rejects one without decision metadata. Both come
- * from @qvac/decision-ggml; without it, Laya falls back to embed's copy.
+ * A decision model on decision-ggml's DecisionEngine. A GGUF without upstream
+ * decision metadata fails to load; a fabric-format Laya file
+ * (`general.architecture` "laya") gets an error that names the conversion.
  */
 export class DecisionModel {
-  kind: 'laya' | 'upstream' | undefined
   info: UpstreamDecisionInfo | undefined
-  private inner: embed.LayaDecisions | UpstreamEngine | undefined
+  private inner: UpstreamEngine | undefined
   private readonly options: DecisionModelOptions
 
   constructor(options: DecisionModelOptions) {
@@ -180,51 +173,27 @@ export class DecisionModel {
 
   async load(): Promise<void> {
     if (this.inner) return
-    const arch = await readGgufArchitecture(this.options.modelPath)
-    const addon = await (this.options.loadAddon ?? loadDecisionAddon)()
-    if (arch === 'laya') {
-      const Laya = addon?.LayaDecisions ?? embed.LayaDecisions
-      const laya = new Laya({
-        files: { model: this.options.files },
-        config: this.options.layaConfig,
-        logger: this.options.logger
-      } as unknown as ConstructorParameters<typeof embed.LayaDecisions>[0])
-      await laya.load()
-      this.inner = laya
-      this.kind = 'laya'
-      return
-    }
-    const Engine = addon?.DecisionEngine
-    if (!Engine) {
+    if ((await readGgufArchitecture(this.options.modelPath)) === 'laya') {
       throw new ModelLoadFailedError(
-        `this decision model (architecture '${arch ?? 'unknown'}') is an upstream llama.cpp decision model and needs ${DECISION_ADDON}; install it to run it (without it only fabric-format Laya runs, on @qvac/embed-llamacpp)`
+        "this is a fabric-format Laya file (general.architecture 'laya'), which decision models no longer load; use the upstream-format conversion of its Hugging Face checkpoint (convert_hf_to_gguf.py)"
       )
     }
-    const engine = new Engine({
+    const addon = await (this.options.loadAddon ?? loadDecisionAddon)()
+    if (!addon) throw missingAddonError()
+    const engine = new addon.DecisionEngine({
       files: { model: this.options.files },
       config: toUpstreamConfig(this.options.config),
       logger: this.options.logger
     })
     await engine.load()
     this.inner = engine
-    this.kind = 'upstream'
     this.info = engine.info()
   }
 
-  get laya(): embed.LayaDecisions {
-    if (this.kind !== 'laya') throw new Error('not a Laya decision model')
-    return this.inner as embed.LayaDecisions
-  }
-
-  get upstream(): UpstreamEngine {
-    if (this.kind !== 'upstream') throw new Error('not an upstream decision model')
-    return this.inner as UpstreamEngine
-  }
-
-  // The legacy path calls run() directly on the model (and tests register
-  // plain { run, cancel } objects), so run() forwards to Laya.
-  run(...args: Parameters<embed.LayaDecisions['run']>): ReturnType<embed.LayaDecisions['run']> {
-    return this.laya.run(...args)
+  /** The loaded engine. */
+  get engine(): UpstreamEngine {
+    if (!this.inner) throw new Error('the decision model is not loaded')
+    return this.inner
   }
 
   async cancel(): Promise<void> {
@@ -234,7 +203,6 @@ export class DecisionModel {
   async unload(): Promise<void> {
     const inner = this.inner
     this.inner = undefined
-    this.kind = undefined
     this.info = undefined
     await inner?.unload()
   }
@@ -260,9 +228,6 @@ function convertQuestion(
   info: UpstreamDecisionInfo,
   keyMaps: ChoiceKeyMaps
 ): UpstreamRequest['questions'][string] {
-  if (question.optionOrder !== undefined) {
-    reject(`questions.${id}: optionOrder is not supported by upstream decision models`)
-  }
   if (question.type === 'choice') {
     if (Array.isArray(question.criteria)) {
       const keys = new Map<string, string | number | boolean>()
@@ -296,9 +261,6 @@ function convertQuestion(
     }
     return { type: 'score', instructions: question.instructions, criteria: question.criteria }
   }
-  if (question.labels !== undefined) {
-    reject(`questions.${id}: labels are not supported by upstream decision models`)
-  }
   if (question.requireProbability === true && info.noul !== 'probability') {
     reject(
       `questions.${id}: this ${info.decision_type} model answers noul with an ${info.noul.replace('_', ' ')}, not a probability`
@@ -321,17 +283,10 @@ function convertQuestion(
 
 /** Builds upstream's request for one state, and the keys to map answers back. */
 export function toUpstreamRequest(
-  request: {
-    questions: Record<string, DecisionQuestion>
-    maxLen?: number | undefined
-    headMaxLen?: number | undefined
-  },
+  request: { questions: Record<string, DecisionQuestion> },
   state: DecisionState,
   info: UpstreamDecisionInfo
 ): { body: UpstreamRequest; keyMaps: ChoiceKeyMaps } {
-  if (request.maxLen !== undefined || request.headMaxLen !== undefined) {
-    reject('maxLen and headMaxLen are not supported by upstream decision models')
-  }
   const keyMaps: ChoiceKeyMaps = new Map()
   const questions = Object.fromEntries(
     Object.entries(request.questions).map(([id, question]) => [

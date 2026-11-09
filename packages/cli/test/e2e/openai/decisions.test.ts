@@ -30,7 +30,7 @@ const questions = [
   },
   { type: 'predicate' as const, name: 'urgent', instructions: 'Does this need a human now?' }
 ]
-const base = { answerConfidence: 0.9, confidence: 0.6, action: { actProbability: 0.1 } }
+const base = { confidence: 0.6 }
 const result: DecisionResult = {
   model: 'native-checkpoint-name',
   answers: {
@@ -49,15 +49,7 @@ const result: DecisionResult = {
     },
     question_2: { ...base, type: 'noul', noul: 0.7 }
   },
-  usage: {
-    inputTokens: 42,
-    outputTokens: 0,
-    stateTokens: 12,
-    stateTokensDropped: 0,
-    truncated: false,
-    truncatedQuestions: [],
-    options: { question_0: { total: 2, distinct: 2, tokensPerOption: null } }
-  }
+  usage: { inputTokens: 42, outputTokens: 0 }
 }
 const httpResult = {
   model: 'native-checkpoint-name',
