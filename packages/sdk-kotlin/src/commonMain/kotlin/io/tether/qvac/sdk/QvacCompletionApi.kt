@@ -91,7 +91,10 @@ data class QvacMessage(
         fun system(content: String) = QvacMessage("system", content)
         fun user(content: String, attachments: List<QvacAttachment> = emptyList()) =
             QvacMessage("user", content, attachments)
-        fun user(parts: List<QvacContentPart>) = QvacMessage("user", "", parts = parts)
+        fun user(parts: List<QvacContentPart>): QvacMessage {
+            require(parts.isNotEmpty()) { "parts must not be empty" }
+            return QvacMessage("user", "", parts = parts)
+        }
         fun assistant(content: String, toolCalls: List<QvacToolCall> = emptyList()) =
             QvacMessage("assistant", content, toolCalls = toolCalls)
         fun tool(content: String, toolCallId: String? = null, toolName: String? = null) =

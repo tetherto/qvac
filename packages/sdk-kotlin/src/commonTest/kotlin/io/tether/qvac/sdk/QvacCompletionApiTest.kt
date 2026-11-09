@@ -505,6 +505,7 @@ class QvacCompletionApiTest {
         assertFailsWith<IllegalArgumentException> {
             QvacMessage("user", "", attachments = listOf(QvacAttachment("/a.jpg")), parts = parts)
         }
+        assertFailsWith<IllegalArgumentException> { QvacMessage.user(emptyList()) }
     }
 
     private suspend fun sentPayload(history: List<QvacMessage>, tools: List<QvacTool> = emptyList()): JsonObject {

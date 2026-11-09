@@ -70,7 +70,8 @@ interface ProcessModelResponseResult extends CompletionResult {
  * carries its path in `content`, so a caller's `{ type: 'media', path }` is
  * translated here.
  */
-type ChatHistoryContentPart = { type: 'text'; text: string } | { type: 'media'; content: string }
+export type ChatHistoryContentPart =
+  { type: 'text'; text: string } | { type: 'media'; content: string }
 
 interface ChatHistory {
   role?: string

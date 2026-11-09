@@ -1,10 +1,11 @@
 import { getEngineLogger } from '@/logging/index'
+import type { ChatHistoryContentPart } from '@/plugins/builtin/llamacpp-completion/ops/completion-stream'
 
 const logger = getEngineLogger()
 
 interface ChatMessage {
   role?: string
-  content?: string | { type: string; text?: string; path?: string; content?: string }[]
+  content?: string | ChatHistoryContentPart[]
   type?: string
   name?: string
 }
@@ -14,9 +15,7 @@ function summarizeContent(content: ChatMessage['content']): string {
   if (!content) return ''
   if (typeof content === 'string') return content
   return content
-    .map((part) =>
-      part.type === 'text' ? (part.text ?? '') : `<media ${part.path ?? part.content ?? ''}>`
-    )
+    .map((part) => (part.type === 'text' ? part.text : `<media ${part.content}>`))
     .join('')
 }
 
