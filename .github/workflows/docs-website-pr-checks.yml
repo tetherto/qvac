@@ -144,10 +144,6 @@ jobs:
         # review the named pages, then `npm run docs:lock`.
         run: bun run docs:bindings
 
-      - name: Check language parity of the SDK
-        if: hashFiles('docs/website/scripts/bindings/check-bindings.ts') != ''
-        run: bun run docs:sdk-parity
-
       - name: Check the Python surface is fresh
         if: hashFiles('docs/website/scripts/bindings/check-bindings.ts') != ''
         run: bun run docs:sdk-api --check --python-only

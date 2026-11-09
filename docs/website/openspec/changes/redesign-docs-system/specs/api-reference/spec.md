@@ -69,17 +69,17 @@ The SDK reference SHALL be one reference for every language. Its parts:
 - **field tables** are language-agnostic, and the reader's chosen language renames fields by that language's naming rule;
 - **signature cards and examples** are shown per language, from each language's real public surface.
 
-A parity check MUST fail when a contract method is missing from a published language.
+The reference SHALL document each language's public surface as it is. No documentation check MAY require a contract method to exist in every language: whether the clients expose the same methods is the SDK's concern.
 
 #### Scenario: Field names follow the chosen language
 
 - **WHEN** a reader switches the SDK reference from JavaScript to Python
 - **THEN** `modelId` reads `model_id`, and the field set and descriptions are unchanged
 
-#### Scenario: A missing method fails parity
+#### Scenario: A method one language lacks fails no check
 
 - **WHEN** a contract method has no counterpart in a published language
-- **THEN** the parity check fails and names the method and the language
+- **THEN** no documentation check fails
 
 ### Requirement: Agents receive compact API projections
 

@@ -186,7 +186,7 @@ This change trims the SDK client TSDoc to the left column. The trimming is essen
 | signature card | per language | each language's real surface: TypeDoc for JavaScript, griffe for Python, Kotlin and Swift when published |
 | examples | per-language tabs | each language's examples |
 
-A parity check requires every contract method to exist in every published language.
+The reference documents each language's surface as it is. Whether the clients expose the same methods is the SDK's concern, and no documentation check enforces it. The reference's entries come from the JavaScript surface, so a function only another language exposes has no entry yet: an edge case left to a follow-up.
 
 Alternative rejected: one reference per language, which would triplicate the same semantics.
 

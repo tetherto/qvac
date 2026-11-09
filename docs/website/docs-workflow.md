@@ -84,10 +84,8 @@ Markdown twins    ── the same components rendered as cards
 - `<FunctionReference fn>` renders a function's whole reference page.
 
 In a page's Markdown twin, each component renders as a card: a TypeScript
-type for fields, a list for models. `npm run docs:sdk-parity` checks that every
-contract method is reachable from JavaScript and Python, and
-`npm run docs:sdk-descriptions` lists the public request fields the contract
-leaves undescribed.
+type for fields, a list for models. `npm run docs:sdk-descriptions` lists the
+public request fields the contract leaves undescribed.
 
 Release notes are not rendered
 into the site at all: `reference/meta.json` declares the sidebar entry as an
@@ -392,7 +390,7 @@ previewed. The Vitest suite runs after the build.
 
 **Contract, bindings and generated data.** Reads the pull request's tree:
 `docs:contract` (a platform package's required pages), `docs:bindings`
-(drift, removed symbols, product coverage), `docs:sdk-parity`,
+(drift, removed symbols, product coverage),
 and the freshness of the SDK's Python surface, which needs no installed
 package. The JavaScript and CLI data need their packages' dependencies, so
 they are checked fresh by the SDK pod's checks (`docs_data` in
@@ -466,7 +464,6 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 | `release-version-patch.ts` | -- | **Retired**, kept for reference. Was the patch (X.Y.Z, Z>=1) orchestrator, inserting `## v<X.Y.Z>` after the existing minor block. |
 | `api-reference/generate-sdk-data.ts` | `docs:sdk-api` | Writes the SDK's generated surface data (`js-api.json`, `python-api.json`) and its reference stubs. Needs the SDK's dependencies installed. `--check` fails when they are stale; `--python-only` handles `python-api.json` alone, with no installed package. |
 | `api-reference/python-surface.py` | -- | Reads the Python client's public functions from source, standard library only |
-| `api-reference/check-sdk-parity.ts` | `docs:sdk-parity` | Fails naming each contract method a published language does not reach |
 | `api-reference/report-sdk-descriptions.ts` | `docs:sdk-descriptions` | Lists public request fields without a description; never fails |
 | `api-docs/extract.ts` | -- | TypeDoc analysis of the SDK's client functions, used by `generate-sdk-data.ts` |
 | `api-reference/generate-cli-data.ts` | `docs:cli-api` | Writes a Commander CLI's command tree (`cli.json`) and, with `--openapi`, its OpenAPI document (`openapi.json`) into its `_generated/`. Needs the CLI's dependencies installed. `--check` fails when stale. |

@@ -5,7 +5,6 @@ import { contractTargetOf } from '../src/lib/api-reference/client-map'
 import { functionReference, lineOfUrl, loadLineApi, type LineApi } from '../src/lib/api-reference/data'
 import { toSnakeCase } from '../src/lib/api-reference/names'
 import { SchemaReader } from '../src/lib/api-reference/schema'
-import { parityGaps } from '../scripts/api-reference/check-sdk-parity'
 import { inline } from '../scripts/write-schema-slices'
 
 const MONOREPO = path.resolve(import.meta.dirname, '..', '..', '..')
@@ -154,16 +153,5 @@ describe('the SDK reference, read from the working tree', () => {
     const models = modelsForEngines(api, ['llamacpp-decision'])
     expect(models.length).toBeGreaterThan(0)
     expect(models.every((model) => model.engine === 'llamacpp-decision')).toBe(true)
-  })
-})
-
-describe('language parity', () => {
-  it('names a method no language reaches', () => {
-    const api = {
-      methods: new Map([['embed', {} as never], ['orphan', {} as never]]),
-      js: [{ name: 'embed' }],
-      python: [{ name: 'embed' }],
-    } as unknown as LineApi
-    expect(parityGaps(api)).toEqual(['orphan: no JavaScript function calls it', 'orphan: no Python function `orphan`'])
   })
 })

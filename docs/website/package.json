@@ -7,7 +7,6 @@
     "prebuild:examples": "npx tsc --noCheck --noResolve --skipLibCheck --module ESNext --target ESNext --rootDir ../../packages/sdk/examples --outDir ../../packages/sdk/dist/examples ../../packages/sdk/examples/*.ts ../../packages/sdk/examples/*/*.ts ../../packages/sdk/examples/*/*/*.ts && bun run scripts/copy-example-assets.ts",
     "docs:materialize": "bun run scripts/materialize-lines.ts",
     "docs:sdk-api": "bun run scripts/api-reference/generate-sdk-data.ts",
-    "docs:sdk-parity": "bun run scripts/api-reference/check-sdk-parity.ts",
     "docs:sdk-descriptions": "bun run scripts/api-reference/report-sdk-descriptions.ts",
     "docs:api": "bun run scripts/api-reference/generate-package-api.ts",
     "docs:contract": "bun run scripts/contract/check-contract.ts",
