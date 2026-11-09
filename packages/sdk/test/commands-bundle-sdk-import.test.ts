@@ -481,6 +481,23 @@ describe('bundleSdk', () => {
     assert.equal(result.bundlePath, path.join(outputDir, 'index.bundle'))
   })
 
+  it('resolves a relative output folder against the project root', async (t) => {
+    const { projectRoot, configPath } = fakeBundleSdkProject(t)
+    const cwd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-bundle-cwd-')))
+    const originalCwd = process.cwd()
+    process.chdir(cwd)
+    t.after(() => {
+      process.chdir(originalCwd)
+      fs.rmSync(cwd, { recursive: true, force: true })
+    })
+
+    const result = await bundleSdk({ projectRoot, configPath, outputDir: 'out', quiet: true })
+
+    assert.equal(result.outputDir, path.join(projectRoot, 'out'))
+    assert.ok(fs.existsSync(path.join(projectRoot, 'out', 'index.js')))
+    assert.deepEqual(fs.readdirSync(cwd), [])
+  })
+
   it('bundles a PCM-only audio plugin without linking bare-ffmpeg', async (t) => {
     const { projectRoot, sdkPath, configPath } = fakeBundleSdkProject(t)
     addAddon(path.join(sdkPath, 'node_modules', 'bare-ffmpeg'), 'bare-ffmpeg')

@@ -78,7 +78,8 @@ export interface BundleSdkOptions {
   languageOptions?: Record<string, string> | undefined
   /**
    * The folder bare-stow writes the harness package to, which must be empty or
-   * not exist yet. Defaults to `qvac/worker/`, which each bundle replaces.
+   * not exist yet. A relative path resolves against `projectRoot`. Defaults to
+   * `qvac/worker/`, which each bundle replaces.
    */
   outputDir?: string | undefined
   /**
@@ -419,7 +420,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
 
   const projectRoot = path.resolve(options.projectRoot ?? process.cwd())
   const qvacDir = path.join(projectRoot, 'qvac')
-  const outputDir = path.resolve(options.outputDir ?? path.join(qvacDir, 'worker'))
+  const outputDir = path.resolve(projectRoot, options.outputDir ?? path.join(qvacDir, 'worker'))
   const entryPath = path.join(qvacDir, 'worker.entry.mjs')
   if (options.outputDir !== undefined) await assertOutputDirEmpty(outputDir, entryPath)
   const entryFromOutput = path.relative(outputDir, entryPath)
