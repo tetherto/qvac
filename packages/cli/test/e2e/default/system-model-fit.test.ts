@@ -72,6 +72,15 @@ describe('qvac models/fit: validation', () => {
     }
   })
 
+  it('treats every *Src key as a companion source', async () => {
+    for (const key of ['tokenizerSrc', 'sceneSrc', 'srcVocabSrc', 'referenceAudioSrc']) {
+      const res = await fit({
+        models: [{ model: 'chat-model', modelConfig: { [key]: '/etc/passwd' } }]
+      })
+      assertStatusAndError(res, 400, 'invalid_model_src')
+    }
+  })
+
   it('looks for companion sources in nested config too', async () => {
     const res = await fit({
       models: [{ model: 'chat-model', modelConfig: { upscaler: { model_src: './esrgan.bin' } } }]

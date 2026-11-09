@@ -220,6 +220,17 @@ describe('resolveNestedModelSrcConstants', () => {
     assert.equal(out['steps'], 20)
   })
 
+  it('treats every *Src key as a model source', () => {
+    const out = resolveNestedModelSrcConstants({
+      srcVocabSrc: 'WHISPER_EN_TINY_Q8_0',
+      tokenizerSrc: './models/tokenizer.json',
+      referenceAudioSrc: 'voice.wav'
+    })
+    assert.equal(out['srcVocabSrc'], WHISPER_EN_TINY_Q8_0)
+    assert.equal(out['tokenizerSrc'], './models/tokenizer.json')
+    assert.equal(out['referenceAudioSrc'], 'voice.wav')
+  })
+
   it('rewrites nested objects and upscaler.model_src', () => {
     const out = resolveNestedModelSrcConstants({
       whisperConfig: { vadModelSrc: 'WHISPER_EN_TINY_Q8_0' },

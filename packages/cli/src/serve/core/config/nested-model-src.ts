@@ -6,8 +6,9 @@ import { loadModelConstants } from '@/serve/core/config/constants'
  * constant name into the full `ModelConstant` object (same treatment as
  * top-level `serve.models[*].model` / `.src`).
  *
- * Matches keys ending in `ModelSrc` (e.g. `s3genModelSrc`, `llmModelSrc`,
- * `vaeModelSrc`) and the ESRGAN `upscaler.model_src` snake_case field.
+ * Matches every source key: keys ending in `Src` (e.g. `llmModelSrc`,
+ * `tokenizerSrc`, `sceneSrc`, `srcVocabSrc`, `referenceAudioSrc`) and the
+ * ESRGAN `upscaler.model_src` snake_case field.
  * Recurses into plain nested objects so whisper/nmt nested configs are covered.
  *
  * Bare identifiers are looked up as constants; values with `/` or a leading
@@ -45,7 +46,7 @@ function walk(
 }
 
 export function isModelSrcKey(key: string): boolean {
-  return key.endsWith('ModelSrc') || key === 'model_src'
+  return key.endsWith('Src') || key === 'model_src'
 }
 
 function resolveModelSrcString(
