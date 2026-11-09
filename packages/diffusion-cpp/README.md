@@ -50,6 +50,7 @@ The package exposes four JS entry points:
 | SDXL                         | image                                  | All-in-one checkpoints or split encoders when required                            |
 | SD3                          | image                                  | Supports split CLIP-L / CLIP-G / T5-XXL inputs                                    |
 | FLUX.2 [klein]               | image, img2img, multi-reference fusion | Split diffusion + Qwen3 LLM + VAE                                                 |
+| FLUX.3 Image Klein          | image, reference editing              | Split diffusion + Qwen3-VL 4B + FLUX.2 VAE; see [FLUX.3 setup](docs/flux3.md) |
 | Wan 2.1                      | text-to-video, image-to-video          | Single diffusion expert; I2V requires CLIP vision                                 |
 | Wan 2.2 TI2V-5B Turbo Q5_K_S | text-to-video                          | Community-distilled GGUF with Wan 2.2 VAE; use `scripts/download-model-wan2.2.sh` |
 | LTX-2 / LTXAV                | text-to-video + audio                  | Gemma text encoder, video VAE, audio VAE, embedding connectors                    |
@@ -61,6 +62,38 @@ The package exposes four JS entry points:
 
 See [Qwen-Image-2.1](docs/qwen-image-21.md) for the native registry port,
 pinned downloads, text-to-image, ordered reference editing, and RGBA handling.
+
+## FLUX.3 setup
+
+See [FLUX.3 Image Klein](docs/flux3.md) for pinned, checksum-verified downloads,
+the shared MOSS registry baseline, and text-to-image and reference-editing examples.
+
+## MOSS-Image setup
+
+Download the pinned SFT diffusion model, Qwen3.5 encoder, small FLUX.2 VAE,
+and external tokenizer with checksum verification:
+
+```bash
+bash scripts/download-model-moss.sh
+```
+
+The default directory is `models/moss-image`; override it with
+`MOSS_MODELS_DIR`. Pass absolute paths to the image constructor:
+
+```js
+const files = {
+  model: '/absolute/models/moss-image/moss_image_sft_bf16.safetensors',
+  llm: '/absolute/models/moss-image/Qwen3.5-9B-Q4_K_M.gguf',
+  vae: '/absolute/models/moss-image/flux2-vae_small.safetensors',
+  tokenizer: '/absolute/models/moss-image/tokenizer.json'
+}
+```
+
+`files.tokenizer` is passed to the native engine for both loading and fit
+assessment. Use Euler sampling, the discrete scheduler, CFG 3, and 50 steps
+as the initial SFT settings. Layout prompts can be supplied as a JSON string.
+This requires a native addon rebuilt with the `2026-11-01` registry ports;
+previously published native binaries do not expose the tokenizer option.
 
 ## Supported Platforms
 
@@ -173,7 +206,11 @@ compiler version warn and continue; nvcc rejects unsupported architectures.
 which the shared `setup-cuda` action exports.
 
 With automatic backend selection, CUDA devices whose code cannot run are
-skipped, allowing Vulkan or ultimately CPU to be selected. Set
+skipped, allowing Vulkan or ultimately CPU to be selected. Auto-fit prefers
+a dedicated GPU with a positive memory budget, falling back to integrated
+GPUs when none is available. Within each class, the largest available budget
+wins; shared system memory does not make an integrated GPU outrank a dedicated
+GPU. Explicit backend assignments remain unchanged. Set
 `GGML_DISABLE_CUDA=1` before starting the process to disable CUDA, or use
 `backend: 'vulkan0'` to select Vulkan explicitly. An explicit
 `backend: 'cuda0'` requires that CUDA device and fails if it is unavailable.
@@ -517,7 +554,7 @@ expected graph-cut, streaming, CPU RAM, or disk behavior.
 | `lora`                        | string            | Absolute path to a LoRA adapter                                     |
 | `upscale`                     | boolean \| object | Post-generation ESRGAN upscale; requires `files.esrgan`             |
 | `vae_tiling`                  | boolean           | Per-job VAE tiling                                                  |
-| `vae_tile_size`               | number \| string  | VAE tile size, e.g. `512` or `'512x512'`                            |
+| `vae_tile_size`               | number \| string  | VAE tile size in latent pixels, e.g. `64` or `'64x64'`                            |
 | `vae_tile_overlap`            | number            | Tile overlap fraction                                               |
 | `cache_mode`                  | string            | Step-caching algorithm                                              |
 | `cache_preset`                | string            | Cache preset: `slow`, `medium`, `fast`, `ultra`                     |

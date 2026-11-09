@@ -10,6 +10,41 @@
 - Validate Windows CUDA DLL packaging and imports, and require explicit CUDA
   image generation on the Windows GPU integration runner.
 
+## [0.35.0] - 2026-11-06
+
+### Features
+
+- Add Open-MOSS image generation support, external tokenizer loading, and a
+  model download script ([#5550](https://github.com/tetherto/qvac/pull/5550)).
+- Add FLUX.3 Image Klein model downloads, generation examples, and single- and
+  multiple-reference image editing
+  ([#5560](https://github.com/tetherto/qvac/pull/5560)).
+
+### Fixes
+
+- Preserve latent-unit VAE tile sizes and correctly shrink tiles during
+  allocation-failure retries; handle integer LoRA alpha tensors in the native
+  engine ([#5550](https://github.com/tetherto/qvac/pull/5550)).
+- Prefer dedicated GPUs during automatic compute placement instead of choosing
+  an integrated GPU solely for its larger shared-memory budget. Explicit
+  backend selections remain respected
+  ([#5550](https://github.com/tetherto/qvac/pull/5550)).
+- Validate required video companion files before native loading and map verbose
+  native logs to debug output
+  ([#5550](https://github.com/tetherto/qvac/pull/5550)).
+- Support Bash 3.2 in the FLUX.3 downloader and verify resumed downloads
+  ([#5560](https://github.com/tetherto/qvac/pull/5560)).
+
+### Changed
+
+- Require GGML and stable-diffusion-cpp `2026-11-01` from the merged QVAC
+  registry ports, retaining the existing registry baseline
+  ([registry #475](https://github.com/tetherto/qvac-registry-vcpkg/pull/475)).
+- Temporarily skip all seven ABot-World integration tests while CUDA streaming
+  parity and initial KV-capture failures are investigated; test assertions
+  remain intact ([#5550](https://github.com/tetherto/qvac/pull/5550),
+  [#5560](https://github.com/tetherto/qvac/pull/5560)).
+
 ## [0.34.0] - 2026-11-04
 
 ### Features
