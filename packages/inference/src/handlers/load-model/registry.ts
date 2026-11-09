@@ -7,7 +7,6 @@ import {
   detectShardedModel,
   getShardedModelCacheDir,
   getShardPath,
-  extractTensorsFromShards,
   calculatePercentage
 } from '@/utils/index'
 import { getSingleFileCachePath } from '@/utils/cache/paths'
@@ -247,9 +246,6 @@ async function downloadShardedFilesFromRegistry(
     logger.info(`✅ Shard ${i + 1}/${shards.length} downloaded`)
   }
 
-  const firstShardFilename = shards[0]!.filename
-  await extractTensorsFromShards(shardDir, firstShardFilename)
-
   if (progressCallback) {
     const lastShard = shards[shards.length - 1]!
     progressCallback({
@@ -269,7 +265,7 @@ async function downloadShardedFilesFromRegistry(
     })
   }
 
-  return getShardPath(cacheKey, firstShardFilename)
+  return getShardPath(cacheKey, shards[0]!.filename)
 }
 
 export async function downloadModelFromRegistry(

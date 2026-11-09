@@ -1,0 +1,149 @@
+import test from 'brittle'
+import env from 'bare-env'
+import fs from 'bare-fs'
+import os from 'bare-os'
+import path from 'bare-path'
+import tarStream from 'tar-stream'
+import Buffer from 'bare-buffer'
+import { z } from 'zod'
+
+import { ModelFileNotFoundError } from '@/errors/index'
+import { loadModel } from '@/plugins/ops/load-model'
+import { registerPlugin, unregisterPlugin } from '@/plugins/registry'
+import { isModelLoaded, unregisterModel } from '@/runtime/model-registry'
+import { ModelType } from '@/schemas/index'
+import type { QvacPlugin } from '@/schemas/plugin'
+import { extractAndValidateShardedArchive } from '@/utils/archive'
+
+env['HOME'] = path.join(os.tmpdir(), `qvac-sharded-disk-load-${os.pid()}`)
+
+function tempDir(t: { teardown: (fn: () => void) => void }) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-sharded-disk-load-'))
+  t.teardown(() => fs.rmSync(dir, { recursive: true, force: true }))
+  return dir
+}
+
+function registerRecordingPlugin(t: { teardown: (fn: () => void) => void }) {
+  const created: string[] = []
+  const plugin = {
+    modelType: ModelType.llamacppCompletion,
+    displayName: 'Sharded disk load',
+    addonPackage: '@qvac/llm-llamacpp',
+    loadConfigSchema: z.looseObject({}),
+    createModel: (params: { modelPath: string }) => {
+      created.push(params.modelPath)
+      return { model: { load: async () => {}, unload: async () => {} } }
+    },
+    handlers: {}
+  } as unknown as QvacPlugin
+  registerPlugin(plugin)
+  t.teardown(() => unregisterPlugin(plugin.modelType))
+  return created
+}
+
+function load(modelId: string, modelPath: string) {
+  return loadModel({
+    modelId,
+    modelPath,
+    options: {
+      type: 'loadModel',
+      modelSrc: modelPath,
+      modelType: ModelType.llamacppCompletion,
+      modelConfig: {}
+    }
+  } as never)
+}
+
+test('loadModel: a sharded model loads with only its shards on disk', async (t) => {
+  const created = registerRecordingPlugin(t)
+  const dir = tempDir(t)
+  fs.writeFileSync(path.join(dir, 'model-00001-of-00002.gguf'), '')
+  fs.writeFileSync(path.join(dir, 'model-00002-of-00002.gguf'), '')
+  const modelPath = path.join(dir, 'model-00001-of-00002.gguf')
+
+  await load('sharded-disk-only', modelPath)
+  t.teardown(() => unregisterModel('sharded-disk-only'))
+
+  t.alike(created, [modelPath])
+  t.ok(isModelLoaded('sharded-disk-only'))
+  t.absent(fs.existsSync(path.join(dir, 'model.tensors.txt')), 'no tensors.txt is written')
+})
+
+test('loadModel: a sharded model with a missing shard is rejected', async (t) => {
+  const created = registerRecordingPlugin(t)
+  const dir = tempDir(t)
+  fs.writeFileSync(path.join(dir, 'model-00001-of-00002.gguf'), '')
+  fs.writeFileSync(path.join(dir, 'model.tensors.txt'), 'token_embd.weight\n')
+
+  let thrown: unknown
+  try {
+    await load('sharded-missing-shard', path.join(dir, 'model-00001-of-00002.gguf'))
+  } catch (error) {
+    thrown = error
+  }
+
+  t.ok(thrown instanceof ModelFileNotFoundError)
+  t.ok((thrown as Error).message.includes('Missing shards. Expected 2 shard files'))
+  t.is(created.length, 0, 'the addon never loads')
+})
+
+async function writeTar(archivePath: string, entries: Record<string, string>) {
+  const pack = tarStream.pack()
+  const chunks: Buffer[] = []
+  const done = new Promise<void>((resolve, reject) => {
+    pack.on('data', (chunk) => chunks.push(chunk as Buffer))
+    pack.on('end', () => resolve())
+    pack.on('error', (error) => reject(error))
+  })
+  for (const [name, content] of Object.entries(entries)) pack.entry({ name }, content)
+  pack.finalize()
+  await done
+  fs.writeFileSync(archivePath, Buffer.concat(chunks))
+}
+
+test('extractAndValidateShardedArchive: extracts only the shards and returns the first', async (t) => {
+  const dir = tempDir(t)
+  const archivePath = path.join(dir, 'model.tar')
+  const extractDir = path.join(dir, 'out')
+  await writeTar(archivePath, {
+    'model-00001-of-00002.gguf': 'a',
+    'model-00002-of-00002.gguf': 'b',
+    'model.tensors.txt': 'token_embd.weight\n'
+  })
+
+  const firstShard = await extractAndValidateShardedArchive(archivePath, extractDir)
+
+  t.is(firstShard, path.join(extractDir, 'model-00001-of-00002.gguf'))
+  t.alike(fs.readdirSync(extractDir).sort(), [
+    'model-00001-of-00002.gguf',
+    'model-00002-of-00002.gguf'
+  ])
+  t.is(
+    await extractAndValidateShardedArchive(archivePath, extractDir),
+    firstShard,
+    'an extracted archive is reused'
+  )
+})
+
+test('extractAndValidateShardedArchive: an interrupted extraction leaves no partial shard', async (t) => {
+  const dir = tempDir(t)
+  const archivePath = path.join(dir, 'model.tar')
+  const extractDir = path.join(dir, 'out')
+  await writeTar(archivePath, {
+    'model-00001-of-00002.gguf': 'first',
+    'model-00002-of-00002.gguf': 'x'.repeat(4096)
+  })
+  // Cut the archive inside the second shard's data: 512-byte header + 512-byte
+  // block for the first shard, 512-byte header for the second, then 1 KiB of data.
+  fs.writeFileSync(
+    archivePath,
+    (fs.readFileSync(archivePath) as Buffer).subarray(0, 512 * 3 + 1024)
+  )
+
+  await t.exception(extractAndValidateShardedArchive(archivePath, extractDir))
+
+  t.absent(
+    fs.existsSync(path.join(extractDir, 'model-00002-of-00002.gguf')),
+    'the truncated shard is not left under its shard name'
+  )
+})

@@ -7,8 +7,7 @@ import type { AbortSignal } from 'bare-abort-controller'
 import {
   detectShardedModel,
   generateShardFilenames,
-  extractTensorsFromShards,
-  validateShardedModelCache
+  checkAllShardsExist
 } from '@/utils/shard-utils'
 import {
   ModelLoadFailedError,
@@ -38,7 +37,7 @@ export function isArchiveUrl(url: string) {
 }
 
 // Whitelist of model file extensions to extract from archives
-const ALLOWED_MODEL_EXTENSIONS = ['.gguf', '.tensors.txt']
+const ALLOWED_MODEL_EXTENSIONS = ['.gguf']
 
 function isModelFile(entryName: string) {
   const basename = path.basename(entryName)
@@ -152,10 +151,16 @@ export async function extractTarStream(
         const dir = path.dirname(filePath)
         fs.mkdirSync(dir, { recursive: true })
 
-        const writeStream = fs.createWriteStream(filePath)
+        // Write under a temporary name so an interrupted extraction never
+        // leaves a truncated file under its shard name.
+        const partPath = `${filePath}.part`
+        const writeStream = fs.createWriteStream(partPath)
+        stream.on('error', reject)
         stream.pipe(writeStream)
 
-        writeStream.on('finish', next)
+        writeStream.on('finish', () => {
+          fsPromises.rename(partPath, filePath).then(() => next(), reject)
+        })
         writeStream.on('error', reject)
       } else {
         stream.on('end', next)
@@ -200,7 +205,7 @@ export async function extractAndValidateShardedArchive(
     const existingShard = existingFiles.find((f) => detectShardedModel(String(f)).isSharded)
 
     if (existingShard) {
-      const isComplete = await validateShardedModelCache(extractDir, String(existingShard))
+      const isComplete = await checkAllShardsExist(extractDir, String(existingShard))
 
       if (isComplete) {
         logger.info(`✅ Archive already extracted: ${extractDir}`)
@@ -249,9 +254,6 @@ export async function extractAndValidateShardedArchive(
       throw new ArchiveMissingShardsError(shardFilename)
     }
   }
-
-  // Generate tensors.txt if it doesn't exist
-  await extractTensorsFromShards(extractDir, shardedFileName)
 
   logger.info(`Archive extracted to ${extractDir} successfully: ${files.length} files`)
 
