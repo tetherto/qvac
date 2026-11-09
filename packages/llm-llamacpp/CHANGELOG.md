@@ -13,12 +13,12 @@
 
 ### Changed
 
-- `@qvac/fabric` dependency bumped `^0.26.0` -> `^0.27.0`, whose Linux x64
+- `@qvac/fabric` dependency bumped `^0.26.0` -> `^0.28.0`, whose Linux x64
   package ships the XDNA backend and its NPU kernels (system XRT 2.25 or newer
   required to load it). A caret on a `0.x` version locks the minor, so
-  `^0.26.0` would not have resolved `0.27.0`. The mobile dev and peer
+  `^0.26.0` would not have resolved `0.28.0`. The mobile dev and peer
   dependencies `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to
-  `^0.27.0` with it.
+  `^0.28.0` with it.
 
 ### Fixed
 
