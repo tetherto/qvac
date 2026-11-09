@@ -29,6 +29,7 @@ import { readBundle } from '@/commands/bundle/read-bundle'
 import {
   discardScratch,
   discardStaged,
+  removeStaleScratch,
   replaceAll,
   scratchFolderFor,
   type Staged
@@ -500,6 +501,9 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
   if (target === 'react-native') await assertReactNativeBareKitSupported(projectRoot, sdkPath)
 
   await fsp.mkdir(qvacDir, { recursive: true })
+  const scanOutputDir = path.join(qvacDir, 'worker-scan')
+  await removeStaleScratch(outputDir)
+  await removeStaleScratch(scanOutputDir)
 
   const stowOptions = {
     projectRoot,
@@ -521,7 +525,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
         ),
       hosts,
       scan: async (extraDefer) => {
-        const scanDir = await scratchFolderFor(path.join(qvacDir, 'worker-scan'))
+        const scanDir = await scratchFolderFor(scanOutputDir)
         try {
           const bundlePath = await stowBundle({
             ...stowOptions,

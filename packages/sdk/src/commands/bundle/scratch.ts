@@ -29,6 +29,41 @@ export async function discardScratch(scratch: string) {
   await fsp.rm(path.dirname(scratch), { recursive: true, force: true })
 }
 
+const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+
+/**
+ * Removes the scratch folders `scratchFolderFor(dir)` made in runs that never
+ * discarded them, such as a killed one. A folder that holds `dir`'s old content
+ * stays, since that content may be the only copy left.
+ */
+export async function removeStaleScratch(dir: string) {
+  const parent = path.dirname(dir)
+  const name = path.basename(dir)
+  const pattern = new RegExp(`^\\.${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-${UUID}$`)
+  let entries: string[]
+  try {
+    entries = await fsp.readdir(parent)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+    throw error
+  }
+  for (const entry of entries) {
+    if (!pattern.test(entry)) continue
+    const owned = path.join(parent, entry)
+    if (await exists(previousOf(path.join(owned, name)))) continue
+    await fsp.rm(owned, { recursive: true, force: true })
+  }
+}
+
+async function exists(file: string) {
+  try {
+    await fsp.access(file)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** Discards the scratch folder of each staged folder, except one that holds kept content. */
 export async function discardStaged(staged: Staged[]) {
   for (const entry of staged) {
@@ -97,13 +132,7 @@ async function restorePrevious(entry: Staged, cause: unknown) {
   try {
     await fsp.rename(previous, entry.dir)
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      try {
-        await fsp.access(previous)
-      } catch {
-        return
-      }
-    }
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT' && !(await exists(previous))) return
     entry.kept = previous
     const reason = cause instanceof Error ? cause.message : String(cause)
     throw new Error(

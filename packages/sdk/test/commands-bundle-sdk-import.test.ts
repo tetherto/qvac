@@ -881,6 +881,22 @@ describe('bundleSdk', () => {
     assert.ok(error.message.includes(backup), error.message)
   })
 
+  it('removes scratch folders an interrupted bundle left behind', async (t) => {
+    const { projectRoot, configPath, workerDir } = fakeBundleSdkProject(t)
+    const qvacDir = path.dirname(workerDir)
+    const uuid = '0f8e6c2a-3b1d-4e5f-9a7b-1c2d3e4f5a6b'
+    const stale = [`.worker-${uuid}`, `.worker-scan-${uuid}`]
+    writeFile(path.join(qvacDir, stale[0]!, 'worker', 'index.js'), 'half-written bundle')
+    writeFile(path.join(qvacDir, stale[1]!, 'worker-scan', 'index.js'), 'half-written scan')
+    const holdingBackup = `.worker-1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d`
+    writeFile(path.join(qvacDir, holdingBackup, 'worker.previous', 'index.js'), 'last good bundle')
+
+    await bundleSdk({ projectRoot, configPath, quiet: true })
+
+    const left = fs.readdirSync(qvacDir).filter((name) => name.startsWith('.'))
+    assert.deepEqual(left, [holdingBackup])
+  })
+
   it('leaves folders next to the output folder alone', async (t) => {
     const { projectRoot, configPath, workerDir } = fakeBundleSdkProject(t)
     const neighbours = [`${workerDir}.staging`, path.join(path.dirname(workerDir), 'worker-scan')]
