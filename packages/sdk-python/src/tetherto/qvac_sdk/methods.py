@@ -11,12 +11,11 @@ from __future__ import annotations
 # `from tetherto.qvac_sdk.methods import *` downstream still respects it -- the
 # __all__ import looks unused to a linter but is what makes that work.
 from collections.abc import AsyncIterable, AsyncIterator
-from typing import Any, TypeVar
 
 from ._generated import methods as _generated
 from ._generated.methods import *  # noqa: F403
 from ._generated.methods import __all__  # noqa: F401
-from ._streams import tts_samples
+from ._streams import tts_frame_with_samples
 from ._transport import Transport
 from .schemas import (
     TextToSpeechRequest,
@@ -31,24 +30,15 @@ from .schemas import (
 # read `response.buffer`. Same calling convention, frames decoded on the way.
 
 
-_Frame = TypeVar("_Frame", bound=Any)
-
-
-def _with_decoded_pcm(frame: _Frame) -> _Frame:
-    if frame.pcm:
-        return frame.model_copy(update={"buffer": tts_samples(frame), "pcm": None})
-    return frame
-
-
 async def text_to_speech(  # type: ignore[no-redef]  # noqa: F811
     transport: Transport, params: TextToSpeechRequest
 ) -> AsyncIterator[TextToSpeechResponse]:
     async for frame in _generated.text_to_speech(transport, params):
-        yield _with_decoded_pcm(frame)
+        yield tts_frame_with_samples(frame)
 
 
 async def text_to_speech_stream(  # type: ignore[no-redef]  # noqa: F811
     transport: Transport, params: TextToSpeechStreamRequest, up: AsyncIterable[bytes]
 ) -> AsyncIterator[TextToSpeechStreamResponse]:
     async for frame in _generated.text_to_speech_stream(transport, params, up):
-        yield _with_decoded_pcm(frame)
+        yield tts_frame_with_samples(frame)

@@ -45,7 +45,12 @@ export function encodeTtsPcm(samples: ArrayLike<number>, Buffer = bufferCtor()):
   return btoa(binary)
 }
 
-/** The samples a `pcm` field carries, as a typed little-endian int16 view. */
+/**
+ * The samples a `pcm` field carries, as little-endian int16. The result always
+ * owns its bytes (`byteOffset` 0, buffer exactly its size): runtimes hand small
+ * decodes back as a view into a shared Buffer pool, and a caller doing
+ * `new Int16Array(result.buffer)` on such a view would read the pool.
+ */
 export function decodeTtsPcm(pcm: string, Buffer = bufferCtor()): Int16Array {
   let bytes: Uint8Array
   if (Buffer) {
@@ -57,7 +62,9 @@ export function decodeTtsPcm(pcm: string, Buffer = bufferCtor()): Int16Array {
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
   }
   const even = bytes.byteLength - (bytes.byteLength % 2)
-  if (bytes.byteOffset % 2 !== 0) bytes = bytes.slice(0, even)
+  // Copy only when the view does not own its bytes (pooled, offset or odd tail).
+  const ownsBytes = bytes.byteOffset === 0 && bytes.buffer.byteLength === even
+  if (!ownsBytes) bytes = bytes.slice(0, even)
   return new Int16Array(bytes.buffer, bytes.byteOffset, even / 2)
 }
 

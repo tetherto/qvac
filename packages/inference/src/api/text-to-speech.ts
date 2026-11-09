@@ -11,7 +11,8 @@ import {
   type TextToSpeechStreamResult,
   type TtsSentenceChunkUpdate,
   type TtsStats,
-  withDecodedTtsPcm
+  withDecodedTtsPcm,
+  decodeTtsPcm
 } from '@/schemas/index'
 import Buffer from 'bare-buffer'
 import { stream as streamRpc, duplex, type DuplexReadable } from '@/dispatch'
@@ -477,12 +478,15 @@ async function* plainTtsChunkStream(
       if (raw.type !== 'textToSpeech') continue
       // See TtsMulticast.pump — skip per-frame Zod validation; the engine is
       // the source of truth for this response shape.
-      const response = withDecodedTtsPcm(raw)
-      side.observe(response)
-      if (response.buffer.length > 0) {
-        yield Int16Array.from(response.buffer)
+      // The side channel reads text, rate, stats and stopReason, never the
+      // audio, so a `pcm` frame is decoded straight to the typed array callers
+      // get instead of through an intermediate `number[]`.
+      side.observe(raw)
+      const chunk = raw.pcm !== undefined ? decodeTtsPcm(raw.pcm) : Int16Array.from(raw.buffer)
+      if (chunk.length > 0) {
+        yield chunk
       }
-      if (response.done) {
+      if (raw.done) {
         settled = true
         resolveDone(true)
       }

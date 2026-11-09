@@ -29,6 +29,24 @@ test('encodeTtsPcm accepts a plain number[] and the two codec paths agree', (t) 
   t.alike(Array.from(decodeTtsPcm(b, NO_BUFFER)), plain, 'Buffer-encoded, atob-decoded')
 })
 
+test('decodeTtsPcm returns an array that owns its bytes, even for pool-sized frames', (t) => {
+  // Small decodes come back from Buffer as a view into the shared pool; the
+  // exported function must not leak that view to `new Int16Array(x.buffer)`.
+  for (const n of [1, 7, 64, 4096]) {
+    const samples = Int16Array.from({ length: n }, (_, i) => (i * 37) % 2000)
+    for (const buf of [NO_BUFFER, WITH_BUFFER]) {
+      const decoded = decodeTtsPcm(encodeTtsPcm(samples, buf), buf)
+      t.is(decoded.byteOffset, 0, `${n} samples: no offset into a shared buffer`)
+      t.is(
+        decoded.buffer.byteLength,
+        decoded.byteLength,
+        `${n} samples: buffer is exactly the audio`
+      )
+      t.alike(Array.from(new Int16Array(decoded.buffer)), Array.from(samples))
+    }
+  }
+})
+
 test('withDecodedTtsPcm fills buffer from pcm and leaves plain frames alone', (t) => {
   const pcm = encodeTtsPcm([1, 2, 3])
   const decoded = withDecodedTtsPcm({ type: 'textToSpeech', buffer: [], pcm, done: false })

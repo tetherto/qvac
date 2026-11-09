@@ -183,6 +183,18 @@ def tts_samples(chunk: Any) -> list[int] | list[float]:
     return list(chunk.buffer or ())
 
 
+_Frame = TypeVar("_Frame", bound=Any)
+
+
+def tts_frame_with_samples(frame: _Frame) -> _Frame:
+    """The frame with its samples in `buffer` whatever the wire carried: a
+    `pcm` frame gets the decoded samples and loses the field, any other frame
+    is returned as is. The one decode every public TTS path shares."""
+    if frame.pcm:
+        return frame.model_copy(update={"buffer": tts_samples(frame), "pcm": None})
+    return frame
+
+
 def _tick(chunk: Any) -> Iterable[dict[str, Any]]:
     """JS's progress shape: `{ step, totalSteps, elapsedMs }`."""
     step = getattr(chunk, "step", None)

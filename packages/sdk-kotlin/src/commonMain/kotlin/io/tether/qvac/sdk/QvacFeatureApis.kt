@@ -658,11 +658,6 @@ private fun OcrStreamResponseBlocksItem.toOcrBlock() = QvacOcrBlock(
 )
 
 /**
- * The PCM of a TTS frame. The worker sends it as base64 little-endian signed
- * 16-bit bytes in `pcm` with `buffer` empty; a frame without `pcm` carries
- * its samples in `buffer`.
- */
-/**
  * The frame with its samples in `buffer` whatever the wire carried. Applied by
  * the generated `QvacClient.textToSpeech` / `textToSpeechStream` methods, so
  * every public typed path returns decoded audio.
@@ -673,6 +668,11 @@ internal fun TextToSpeechResponse.withDecodedPcm(): TextToSpeechResponse =
 internal fun TextToSpeechStreamResponse.withDecodedPcm(): TextToSpeechStreamResponse =
     if (pcm.isNullOrEmpty()) this else copy(buffer = ttsSamples(buffer, pcm), pcm = null)
 
+/**
+ * The PCM of a TTS frame. The worker sends it as base64 little-endian signed
+ * 16-bit bytes in `pcm` with `buffer` empty; a frame without `pcm` carries
+ * its samples in `buffer`.
+ */
 @OptIn(ExperimentalEncodingApi::class)
 internal fun ttsSamples(buffer: List<Double>, pcm: String?): List<Double> {
     if (pcm.isNullOrEmpty()) return buffer
