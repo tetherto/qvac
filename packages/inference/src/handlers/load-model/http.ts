@@ -14,7 +14,7 @@ import {
   isArchiveUrl,
   sanitizePathComponent,
   extractAndValidateShardedArchive,
-  checkAllShardsExist,
+  isShardedExtractionComplete,
   generateShardFilenames,
   hasValidGGUFHeader
 } from '@/utils/index'
@@ -799,10 +799,8 @@ async function downloadShardedModelFromArchive(
         }
 
         const shardFilename = String(shardedFile)
-        const allShardsExist = await checkAllShardsExist(extractDir, shardFilename)
-
-        if (!allShardsExist) {
-          logger.warn(`⚠️ Incomplete shards found, re-downloading archive`)
+        if (!(await isShardedExtractionComplete(extractDir, shardFilename))) {
+          logger.warn(`⚠️ Incomplete extraction found, re-downloading archive`)
           hooks?.markCacheMiss?.()
           ctx.setCacheHit(false)
           return downloadAndExtractArchive()

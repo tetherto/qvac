@@ -206,6 +206,27 @@ export async function extractTarStream(
   })
 }
 
+const EXTRACTION_COMPLETE_MARKER = '.extraction-complete'
+
+async function pathExists(filePath: string) {
+  return fsPromises.access(filePath).then(
+    () => true,
+    () => false
+  )
+}
+
+/**
+ * An extracted sharded archive is complete when every shard exists and the
+ * extraction that wrote them finished. Caches from earlier SDK versions have no
+ * marker and are extracted again once.
+ */
+export async function isShardedExtractionComplete(extractDir: string, shardFilename: string) {
+  return (
+    (await checkAllShardsExist(extractDir, shardFilename)) &&
+    (await pathExists(path.join(extractDir, EXTRACTION_COMPLETE_MARKER)))
+  )
+}
+
 // Concurrent loads of one archive share an extract directory, so they share
 // one extraction instead of writing the same files at the same time. A joining
 // caller shares the first caller's abort signal.
@@ -236,7 +257,7 @@ async function extractAndValidateShardedArchiveOnce(
     const existingShard = existingFiles.find((f) => detectShardedModel(String(f)).isSharded)
 
     if (existingShard) {
-      const isComplete = await checkAllShardsExist(extractDir, String(existingShard))
+      const isComplete = await isShardedExtractionComplete(extractDir, String(existingShard))
 
       if (isComplete) {
         logger.info(`✅ Archive already extracted: ${extractDir}`)
@@ -252,6 +273,7 @@ async function extractAndValidateShardedArchiveOnce(
 
   logger.info(`Extracting archive: ${path.basename(archivePath)}`)
 
+  await fsPromises.rm(path.join(extractDir, EXTRACTION_COMPLETE_MARKER), { force: true })
   try {
     await extractArchive(archivePath, extractDir, signal)
   } catch (error) {
@@ -286,6 +308,7 @@ async function extractAndValidateShardedArchiveOnce(
     }
   }
 
+  await fsPromises.writeFile(path.join(extractDir, EXTRACTION_COMPLETE_MARKER), '')
   logger.info(`Archive extracted to ${extractDir} successfully: ${files.length} files`)
 
   return path.join(extractDir, shardFilenames[0]!)

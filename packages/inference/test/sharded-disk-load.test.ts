@@ -15,6 +15,7 @@ import { ModelType } from '@/schemas/index'
 import type { QvacPlugin } from '@/schemas/plugin'
 import { extractAndValidateShardedArchive } from '@/utils/archive'
 import { checkAllShardsExist } from '@/utils/shard-utils'
+import { selectDeclaredShards } from '@/handlers/load-model/registry'
 
 env['HOME'] = path.join(os.tmpdir(), `qvac-sharded-disk-load-${os.pid()}`)
 
@@ -142,6 +143,7 @@ test('extractAndValidateShardedArchive: extracts only the shards and returns the
 
   t.is(firstShard, path.join(extractDir, 'model-00001-of-00002.gguf'))
   t.alike(fs.readdirSync(extractDir).sort(), [
+    '.extraction-complete',
     'model-00001-of-00002.gguf',
     'model-00002-of-00002.gguf'
   ])
@@ -230,7 +232,89 @@ test('extractAndValidateShardedArchive: concurrent extractions of one archive bo
   ])
   t.is(fs.readFileSync(path.join(extractDir, 'model-00002-of-00002.gguf'), 'utf8'), second)
   t.alike(fs.readdirSync(extractDir).sort(), [
+    '.extraction-complete',
     'model-00001-of-00002.gguf',
     'model-00002-of-00002.gguf'
   ])
+})
+
+async function seedExtraction(t: { teardown: (fn: () => void) => void }) {
+  const dir = tempDir(t)
+  const archivePath = path.join(dir, 'model.tar')
+  const extractDir = path.join(dir, 'out')
+  await writeTar(archivePath, {
+    'model-00001-of-00002.gguf': 'first',
+    'model-00002-of-00002.gguf': 'second'
+  })
+  // All shard names present, the last one truncated, as an extraction
+  // interrupted by an earlier SDK version leaves it.
+  fs.mkdirSync(extractDir)
+  fs.writeFileSync(path.join(extractDir, 'model-00001-of-00002.gguf'), 'first')
+  fs.writeFileSync(path.join(extractDir, 'model-00002-of-00002.gguf'), 'se')
+  return { archivePath, extractDir }
+}
+
+test('extractAndValidateShardedArchive: shards without a completion marker are extracted again', async (t) => {
+  const { archivePath, extractDir } = await seedExtraction(t)
+
+  await extractAndValidateShardedArchive(archivePath, extractDir)
+
+  t.is(fs.readFileSync(path.join(extractDir, 'model-00002-of-00002.gguf'), 'utf8'), 'second')
+  t.ok(fs.existsSync(path.join(extractDir, '.extraction-complete')))
+})
+
+test('extractAndValidateShardedArchive: an earlier SDK cache with tensors.txt is extracted again', async (t) => {
+  const { archivePath, extractDir } = await seedExtraction(t)
+  // Earlier SDKs could write tensors.txt over an interrupted extraction, so it
+  // does not prove the shards are complete.
+  fs.writeFileSync(path.join(extractDir, 'model.tensors.txt'), 'token_embd.weight\n')
+
+  await extractAndValidateShardedArchive(archivePath, extractDir)
+
+  t.is(fs.readFileSync(path.join(extractDir, 'model-00002-of-00002.gguf'), 'utf8'), 'second')
+})
+
+function registryShard(name: string) {
+  return { path: `qvac_models_compiled/ggml/m/2026-01-01/${name}` }
+}
+
+test('selectDeclaredShards: keeps exactly the shards the filename declares', (t) => {
+  const listing = [
+    registryShard('model-00001-of-00002.gguf'),
+    registryShard('model-00002-of-00002.gguf'),
+    registryShard('model-00001-of-00003.gguf')
+  ]
+  t.alike(
+    selectDeclaredShards(
+      'qvac_models_compiled/ggml/m/2026-01-01/model-00001-of-00002.gguf',
+      listing
+    ),
+    listing.slice(0, 2)
+  )
+})
+
+test('selectDeclaredShards: returns the shards in order and ignores other directories', (t) => {
+  const listing = [
+    registryShard('model-00002-of-00002.gguf'),
+    { path: 'qvac_models_compiled/ggml/m/2026-01-01/x/model-00002-of-00002.gguf' },
+    registryShard('model-00001-of-00002.gguf')
+  ]
+  t.alike(
+    selectDeclaredShards(
+      'qvac_models_compiled/ggml/m/2026-01-01/model-00002-of-00002.gguf',
+      listing
+    ),
+    [listing[2], listing[0]]
+  )
+})
+
+test('selectDeclaredShards: a shard missing from the registry fails the download', (t) => {
+  t.exception(
+    () =>
+      selectDeclaredShards('qvac_models_compiled/ggml/m/2026-01-01/model-00001-of-00003.gguf', [
+        registryShard('model-00001-of-00003.gguf'),
+        registryShard('model-00003-of-00003.gguf')
+      ]),
+    /Expected 3 shards .* but the registry has 2/
+  )
 })
