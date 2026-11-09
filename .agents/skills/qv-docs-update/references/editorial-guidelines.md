@@ -2,11 +2,32 @@
 
 Every rule below is a pattern the current pages already follow. Obey them and the patch reads like the page it lands in.
 
+The sections up to "SDK conventions" apply to every software. The sections from there on describe the SDK's pages; for any other software, follow its own pages the same way: read the closest sibling of the page you are writing, and match it.
+
 Where the corpus is inconsistent, this file says so. Match the page you are editing. Never normalise a neighbour.
 
-Page paths below are relative to the SDK's development line, `content/_unpublished/sdk/next/` — the only line this skill writes to, per [docs-scope.md](docs-scope.md). URLs are written as the site serves them: version-less, because that is what the line answers once the cutoff publishes it.
+URLs are written as the site serves them: version-less, so a link resolves within whichever line the page is published in.
 
-Primary exemplars: `ai-capabilities/text-generation.mdx` is the richest page, `ai-capabilities/image-classification.mdx` the minimal canonical one.
+## Facts and prose never share a passage
+
+Data components render the facts: `<SchemaTable fn>` the fields of a request, `<ModelsTable engines>` the models of an engine, `<FunctionReference>` a whole function, `<CliReference command>` a command's arguments and options, `<OpenApiReference>` the HTTP operations. Prose says what a reader does with them: when to reach for a field, how options interact, what to watch for.
+
+- Never write a field list, a model list, an option table, or an operation list by hand. If a page needs one, use its component.
+- Never repeat in prose what a component on the same page renders. Point at it instead.
+- A missing description is fixed in the source schema, where every channel reads it, not in the page.
+
+## Bindings
+
+A hand-written page declares in its frontmatter every public symbol it describes:
+
+```yaml
+binds:
+  - fn:translate
+  - command:qvac serve
+  - "endpoint:POST /v1/chat/completions"
+```
+
+Bind a symbol when the page's prose explains it, demonstrates it, or relies on its behaviour; that is what makes a change to it name the page. Do not bind a symbol a page only mentions in passing. Quote an identifier that holds spaces or braces. Generated pages bind nothing.
 
 ## Language and terminology
 
@@ -17,6 +38,24 @@ Primary exemplars: `ai-capabilities/text-generation.mdx` is the richest page, `a
 - Write headings in sentence case: `## Text generation`, `### Concurrent completions`. Product and command names keep their own casing: `` ### `qvac serve` ``, `## HTTP server`, `## RAG`.
 
 `text-generation.mdx` contains one violation: "so consumers don't have to parse tags from raw text". Do not copy it. Do not fix it either. A drive-by terminology correction is an editorial edit unrelated to the source change, and the Phase 6 diff review rejects it.
+
+## Writing the patch
+
+1. Write the smallest change that settles the target's `Reason`, then stop.
+
+If the new text asserts something the `Reason` does not support, it is scope creep or hallucination. Write it again.
+
+2. Correct a stale claim in place. Never rewrite a section to fix a sentence.
+
+3. Preserve everything else byte for byte, including the corpus's existing inconsistencies: trailing spaces, `*` versus `-` markers, punctuation. A normalising diff buries the real change.
+
+4. Ground every claim in the source: the regenerated data, the example file, a test, the model registry. If a claim cannot be grounded, then emit `HUMAN_INPUT_REQUIRED`. Never guess.
+
+## SDK conventions
+
+Page paths below are relative to the SDK's documentation root, `packages/sdk/docs/users/`.
+
+Primary exemplars: `ai-capabilities/text-generation.mdx` is the richest page, `ai-capabilities/image-classification.mdx` the minimal canonical one.
 
 ## Page structure — `ai-capabilities/`
 
@@ -37,7 +76,7 @@ Place optional sections between `## Models` and `## Example(s)`, and only with e
 
 Frontmatter `title` capitalization is not normalized across the corpus (`Text generation`, `Text-to-Speech`). Follow the capability's own name.
 
-Frontmatter `icon` is a Lucide export name, and it is what draws the page's sidebar entry: a versioned collection composes its navigation from the content, so the icon is declared here and nowhere else. A capability's icon must match the one its card renders on the Ecosystem overview, which the parity gate checks.
+Frontmatter `icon` is a Lucide export name, and it is what draws the page's sidebar entry: a versioned collection composes its navigation from the content, so the icon is declared here and nowhere else. A capability's icon must match the one its card renders on the Ecosystem overview. That card lives outside the documentation root, so a new capability's card is named in the report for the documentation owner.
 
 Only capability pages get `schemaType: HowTo`. the CLI line's `index.mdx` uses `schemaType: TechArticle` and adds `ogImage`.
 
@@ -51,13 +90,13 @@ Open by naming the inference engine and linking its package. Then state the `mod
 
 ### `## Functions`
 
-Write an ordered list of the call sequence. Link each item to its API summary anchor. Close with the fixed line.
+Write an ordered list of the call sequence. Link each item to its reference page. Close with the fixed line.
 
 ```mdx
 Use the following sequence of function calls:
-1. [`loadModel()`](/sdk/reference/api#loadmodel)
-2. [`completion()`](/sdk/reference/api#completion)
-3. [`unloadModel()`](/sdk/reference/api#unloadmodel)
+1. [`loadModel()`](/sdk/reference/api/loadModel)
+2. [`completion()`](/sdk/reference/api/completion)
+3. [`unloadModel()`](/sdk/reference/api/unloadModel)
 
 For how to use each function, see [SDK — API reference](/sdk/reference/api/).
 ```
@@ -69,25 +108,18 @@ This shape belongs to capability pages only. Pages outside `ai-capabilities/` ha
 Some pages annotate an item with a trailing em-dash note:
 
 ```mdx
-1. [`loadModel()`](/sdk/reference/api#loadmodel) — load with `modelConfig.parallel >= 2`.
+1. [`loadModel()`](/sdk/reference/api/loadModel) — load with `modelConfig.parallel >= 2`.
 ```
 
-Build the anchor by lowercasing the symbol name and stripping the parentheses: `assessModelFit()` becomes `/sdk/reference/api#assessmodelfit`.
+A function's reference page is `/sdk/reference/api/<function>`, with the function's exact name: `assessModelFit()` links to `/sdk/reference/api/assessModelFit`. Take the name from the generated reference (`reference/api/`), not from the source filename: `completion-stream.ts` exports `completion`.
 
-Take the symbol from `packages/sdk/src/client/api/index.ts`, not from the filename. The barrel is the authority, and `completion-stream.ts` exports `completion`.
-
-**Always link a symbol to its API anchor when one exists.** The anchor is R2's primary binding, so this rule keeps the next run's routing working. Two shapes in the corpus break it:
-
-```mdx
-[`getLogger()`](/sdk/reference/api)                                  {/* no anchor */}
-[`batchCompletion()`](/sdk/ai-capabilities/batch-processing)          {/* points at a page, not the anchor */}
-```
-
-R2 has a secondary pass that catches a symbol linked somewhere other than its anchor, so neither is invisible. The hit is reported as the weaker binding. A symbol mentioned in prose with no link at all is routed by nothing.
+Link a symbol to its reference page whenever one exists. A link is for the reader; what routes a change to the page is its `binds`, so add the symbol there too.
 
 ### `## Models`
 
-Write either prose plus a `-` bullet list of cross-references, or a `-` list of families and their file layouts. Both are current.
+Prose explains which models the task takes: families, file layouts, engine choices. The models available as constants are data, rendered by `<ModelsTable engines={[…]} />` with the engines the task uses, after the lead-in `Models available as constants:`. Never list constants by hand.
+
+Write the prose as either a sentence plus a `-` bullet list of cross-references, or a `-` list of families and their file layouts. Both are current.
 
 > You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible text-generation/chat model. Model file format: `*.gguf`.
 
@@ -95,22 +127,7 @@ Write either prose plus a `-` bullet list of cross-references, or a `-` list of 
 >
 > - **MobileNetV3-Small**: single all-in-one `*.gguf` file — the base model or any fine-tune of the same architecture (converted to GGUF).
 
-Nearly every page closes the section with a pointer to the model constants. Every variant ends with the same link:
-
-```
-[SDK — Models](/sdk#models)
-```
-
-The lead-in has four variants and they are not interchangeable. Match the page you are editing.
-
-| Occurrences | Lead-in |
-| --- | --- |
-| 12 | `For models available as constants, see …` |
-| 2 | `For model artifacts available as constants, see …` |
-| 1 | `For model constants, see …` |
-| 1 | the 12-variant plus a trailing caveat about quantization |
-
-Placement varies too: a standalone paragraph on some pages, the last bullet of a list on others, inside a `###` subsection on `transcription.mdx`. Rewriting one variant into another is an unrelated editorial edit, and the Phase 6 diff review rejects it.
+A few pages still close the section with a link to [SDK — Models](/sdk#models) instead of the table. Leave them as they are unless the target is that section.
 
 ### `## Features`
 
@@ -161,7 +178,7 @@ Rules that follow from that shape:
 
 - Order the tabs `js` → `ts` → `python`, always. `js` carries `default`. If a capability has only a Python example, then that single tab takes `default`.
 - Add the Python tab per example, not per page. Most `<Tabs>` blocks are JS + TS only. Add the tab where the `.py` file exists. Never add an empty tab for symmetry.
-- Use the right path per language. The difference is not cosmetic:
+- Use the right path per language. The difference is not cosmetic, and the materializer rewrites each to the line's own snapshot:
   - `js` → `packages/sdk/dist/examples/<name>.js`, the build output of the `.ts`
   - `ts` → `packages/sdk/examples/<name>.ts`
   - `python` → `packages/sdk-python/examples/<name>.py`
@@ -240,20 +257,8 @@ Link, do not duplicate. When another page covers the topic, link it. These shape
 see [Multimodal](/sdk/ai-capabilities/multimodal)
 see [Sharded models](/sdk/models/sharded-models)
 see [Concurrent completions](#concurrent-completions)              {/* same-page anchor */}
-[`deleteCache({ kvCacheKey })`](/sdk/reference/api#deletecache)     {/* symbol -> API summary */}
+[`deleteCache({ kvCacheKey })`](/sdk/reference/api/deleteCache)     {/* symbol -> reference page */}
 [a customized GGML backend](https://github.com/tetherto/qvac/tree/main/packages/classification-ggml)
 ```
 
-Write a symbol reference in prose as inline code, linked to its API summary anchor. R2 routes on that link.
-
-## Writing the patch
-
-1. Write the smallest change that settles the target's `Reason`, then stop.
-
-If the new text asserts something the `Reason` does not support, it is scope creep or hallucination. Write it again.
-
-2. Correct a stale claim in place. Never rewrite a section to fix a sentence.
-
-3. Preserve everything else byte for byte, including the corpus's existing inconsistencies: trailing spaces, `*` versus `-` markers, punctuation. A normalising diff buries the real change.
-
-4. Ground every claim in the source: TSDoc, the example file, a test, the model registry. If a claim cannot be grounded, then emit `HUMAN_INPUT_REQUIRED`. Never guess.
+Write a symbol reference in prose as inline code, linked to its reference page.

@@ -53,7 +53,7 @@ No other package is touched.
 - [x] 4.2 Implement symbol identifiers, the projected-surface hash, `api-bindings.lock.json`, and `docs:lock`
 - [x] 4.3 Implement the drift check and the product coverage check
 - [x] 4.4 Add bindings and locks to the SDK and CLI pages
-- [ ] 4.5 Rewrite `qv-docs-update` as package-agnostic and driven by the binding check
+- [x] 4.5 Rewrite `qv-docs-update` as package-agnostic and driven by the binding check
 - [x] 4.6 Retire `qv-docs-line-cut` and `qv-docs-cutoff`
 - [ ] 4.7 Sync the `docs-bindings` delta into the main specs
 

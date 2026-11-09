@@ -119,7 +119,7 @@ When unsure which skill fits, scan the tables below or ask: *"which qv skill sho
 
 | Skill | Purpose | Use when |
 |-------|---------|----------|
-| [`qv-docs-update`](../qv-docs-update/SKILL.md) | Updates the docs website after a change to the SDK or CLI. | You added or changed a feature and the docs need to catch up. **Manual:** `/qv-docs-update` |
+| [`qv-docs-update`](../qv-docs-update/SKILL.md) | Updates a package's documentation after a change to its code, for any software the docs website documents: regenerates the API facts and fixes the pages whose bindings drifted. | You added or changed a feature and the docs need to catch up. **Manual:** `/qv-docs-update` |
 
 ---
 
@@ -161,7 +161,7 @@ Rule nudge: `.cursor/rules/qip-triage.mdc`
 | Holepunch stack help | `qv-holepunch-dev` |
 | Generate NOTICE files | `qv-notice-generate` |
 | Reserve or inspect error code ranges | `qv-error-code-reserve` |
-| Update the docs website after an SDK/CLI change | `qv-docs-update` |
+| Update a package's docs after a code change | `qv-docs-update` |
 | Check if a QIP is needed | `qv-qip-triage` |
 | Draft a QIP | `qv-qip-create` |
 | Review a QIP | `qv-qip-review` |
