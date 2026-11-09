@@ -263,8 +263,12 @@ export const historyMessageSchema = historyMessageObjectSchema
   .transform(normalizeHistoryMessage)
 
 export const historyMessageWithoutAttachmentsSchema = historyMessageObjectSchema
-  .omit({ attachments: true })
-  .strict()
+  .extend({
+    attachments: z
+      .array(attachmentSchema)
+      .max(0, 'calcTokens does not support attachments; use completion() for attachments.')
+      .optional()
+  })
   .superRefine(refineHistoryMessage)
 
 export type HistoryMessage = z.infer<typeof historyMessageSchema>

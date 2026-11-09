@@ -265,10 +265,13 @@ function bciTranscribeStream(params: BciTranscribeStreamClientParams, options?: 
 
 Counts tokens with a loaded language model without running generation.
 
-`text` alone is counted raw. Supplying `history` or enabled tools renders the conversation
+`text` with no `history` field is counted raw. Supplying `history` or enabled tools renders the conversation
 with the model's chat template; `text`, when present, becomes its final user
 turn. Tools are counted only when the model was loaded with `modelConfig.tools: true`.
 Attachments are not supported.
+
+The count uses the reasoning setting from model load. A per-request
+`generationParams.reasoning_budget` override on `completion()` can change that request's prompt.
 
 **Signature**:
 

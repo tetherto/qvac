@@ -100,3 +100,22 @@ def test_calc_tokens_rejects_attachments() -> None:
                 ],
             }
         )
+
+
+def test_calc_tokens_accepts_completion_compatible_empty_attachments() -> None:
+    request = CalcTokensRequest.model_validate(
+        {
+            "modelId": "llm",
+            "history": [
+                {
+                    "role": "user",
+                    "content": "Hello",
+                    "attachments": [],
+                    "name": "ignored-by-completion",
+                }
+            ],
+        }
+    )
+
+    assert request.root.history[0].attachments == []
+    assert "name" not in request.root.history[0].model_dump()

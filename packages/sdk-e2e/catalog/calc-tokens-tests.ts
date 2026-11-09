@@ -16,6 +16,10 @@ export interface CalcTokensToolsParams {
   tool: typeof weatherTool
 }
 
+export interface CalcTokensParityParams {
+  history: Array<{ role: string; content: string }>
+}
+
 const weatherTool = {
   type: 'function' as const,
   name: 'weather',
@@ -155,10 +159,45 @@ export const calcTokensCountsTools: TestDefinition = {
   metadata: { category: 'completion', dependency: 'tools', estimatedDurationMs: 5000 }
 }
 
+export const calcTokensMatchesCompletion: TestDefinition = {
+  testId: 'calc-tokens-matches-completion',
+  params: {
+    history: [{ role: 'user', content: 'Reply with one short word.' }]
+  },
+  expectation: { validation: 'type', expectedType: 'number' },
+  steps: [
+    { useModel: { deps: ['llm'], as: 'model' } },
+    {
+      call: {
+        method: 'calcTokens',
+        params: { modelId: '$model', history: '$params.history' },
+        as: 'count'
+      }
+    },
+    {
+      call: {
+        method: 'completion',
+        collect: 'text',
+        params: {
+          modelId: '$model',
+          history: '$params.history',
+          stream: false,
+          generationParams: { predict: 1 }
+        },
+        as: 'completion'
+      }
+    },
+    { project: { from: '$completion', path: 'stats.promptTokens', as: 'promptTokens' } },
+    { assert: { on: '$promptTokens', named: 'valueIn', with: { values: ['$count'] } } }
+  ],
+  metadata: { category: 'completion', dependency: 'llm', estimatedDurationMs: 10000 }
+}
+
 export const calcTokensTests = [
   calcTokensPrompt,
   calcTokensRejectsMissingPrompt,
   calcTokensRejectsUnknownKey,
   calcTokensRejectsNonLlm,
-  calcTokensCountsTools
+  calcTokensCountsTools,
+  calcTokensMatchesCompletion
 ]

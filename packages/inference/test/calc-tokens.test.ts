@@ -37,6 +37,24 @@ test('calcTokens counts raw text without adding the configured system prompt', a
   t.alike(input, { text: 'hello world' })
 })
 
+test('calcTokens stays stable across concurrent calls', async (t) => {
+  let calls = 0
+  fixture(t, 'concurrent-count', async () => {
+    calls++
+    await Promise.resolve()
+    return 3
+  })
+
+  const responses = await Promise.all(
+    Array.from({ length: 25 }, () =>
+      calcTokens({ type: 'calcTokens', modelId: 'concurrent-count', text: 'hello world' })
+    )
+  )
+
+  t.is(calls, 25)
+  t.ok(responses.every((response) => response.tokens === 3))
+})
+
 test('calcTokens renders configured history, tools and a final text turn', async (t) => {
   let input: unknown
   fixture(t, 'prompt-count', async (value) => {
@@ -116,6 +134,50 @@ test('calcTokens contract requires text or a non-empty history', (t) => {
       ]
     }).success
   )
+})
+
+test('calcTokens accepts completion-compatible text histories', (t) => {
+  const request = calcTokensRequestSchema.parse({
+    type: 'calcTokens',
+    modelId: 'llm',
+    history: [
+      {
+        role: 'user',
+        content: 'Hello',
+        attachments: [],
+        name: 'ignored-by-completion'
+      }
+    ]
+  })
+
+  t.alike(request, {
+    type: 'calcTokens',
+    modelId: 'llm',
+    history: [{ role: 'user', content: 'Hello', attachments: [] }]
+  })
+  t.ok(
+    calcTokensRequestSchema.safeParse({
+      type: 'calcTokens',
+      modelId: 'llm',
+      history: [{ role: 'user', content: 'Hello', attachments: undefined }]
+    }).success
+  )
+
+  const withAttachment = calcTokensRequestSchema.safeParse({
+    type: 'calcTokens',
+    modelId: 'llm',
+    history: [
+      {
+        role: 'user',
+        content: 'Describe this image',
+        attachments: [{ path: '/tmp/image.png' }]
+      }
+    ]
+  })
+  t.absent(withAttachment.success)
+  if (!withAttachment.success) {
+    t.ok(withAttachment.error.message.includes('use completion() for attachments'))
+  }
 })
 
 test('calcTokens drops tools without switching raw text to the chat template', async (t) => {

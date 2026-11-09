@@ -19,14 +19,16 @@ export type CalcTokensClientParams = OmitTools<CalcTokensParams> & {
 /**
  * Counts tokens with a loaded language model without running generation.
  *
- * `text` alone is counted raw. Supplying `history` or enabled tools renders the conversation
+ * `text` with no `history` field is counted raw. Supplying `history` or enabled tools renders the conversation
  * with the model's chat template; `text`, when present, becomes its final user
  * turn. Tools are counted only when the model was loaded with `modelConfig.tools: true`.
  * Attachments are not supported.
+ * The count uses the load-time reasoning setting; a per-request reasoning override on
+ * `completion()` can render a different prompt.
  *
  * @param params - Loaded model ID and at least one prompt source: `text` or non-empty `history`.
  * @param options - RPC transport options.
- * @returns The number of tokens in the prompt the model would receive.
+ * @returns The number of tokens in the prompt under the model's load-time settings.
  * @throws {RequestValidationFailedError} If the request is invalid.
  * @throws {ModelNotFoundError} If `modelId` is not loaded.
  * @throws {ModelOperationNotSupportedError} If the loaded model is not a language model.

@@ -1,9 +1,10 @@
-import { calcTokens, RequestValidationFailedError } from '@qvac/sdk'
+import { calcTokens, completion, RequestValidationFailedError } from '@qvac/sdk'
 import { ValidationHelpers, type Expectation, type TestResult } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
 import {
   calcTokensTests,
   type CalcTokensInvalidParams,
+  type CalcTokensParityParams,
   type CalcTokensPromptParams,
   type CalcTokensToolsParams
 } from '../../../../catalog/calc-tokens-tests.js'
@@ -15,7 +16,8 @@ export class CalcTokensExecutor extends AbstractModelExecutor<typeof calcTokensT
     'calc-tokens-rejects-missing-prompt': this.invalid.bind(this),
     'calc-tokens-rejects-unknown-key': this.invalid.bind(this),
     'calc-tokens-rejects-non-llm': this.nonLlm.bind(this),
-    'calc-tokens-counts-tools': this.tools.bind(this)
+    'calc-tokens-counts-tools': this.tools.bind(this),
+    'calc-tokens-matches-completion': this.matchesCompletion.bind(this)
   }
 
   async prompt(params: CalcTokensPromptParams, expectation: Expectation): Promise<TestResult> {
@@ -76,5 +78,28 @@ export class CalcTokensExecutor extends AbstractModelExecutor<typeof calcTokensT
       }
     }
     return ValidationHelpers.validate(toolCount, expectation)
+  }
+
+  async matchesCompletion(
+    params: CalcTokensParityParams,
+    expectation: Expectation
+  ): Promise<TestResult> {
+    const modelId = await this.resources.ensureLoaded('llm')
+    const count = await calcTokens({ modelId, history: params.history })
+    const run = completion({
+      modelId,
+      history: params.history,
+      stream: false,
+      generationParams: { predict: 1 }
+    })
+    await run.text
+    const promptTokens = (await run.stats)?.promptTokens
+    if (count !== promptTokens) {
+      return {
+        passed: false,
+        output: `calcTokens=${count}, completion promptTokens=${String(promptTokens)}`
+      }
+    }
+    return ValidationHelpers.validate(count, expectation)
   }
 }

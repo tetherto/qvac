@@ -3807,6 +3807,15 @@ class CalcTokensRequestTextToolsItem(GeneratedBaseModel):
     ]
 
 
+class CalcTokensRequestTextHistoryItemAttachmentsItem(GeneratedBaseModel):
+    path: Annotated[
+        str,
+        Field(
+            description="Absolute or resolvable path to the attachment file (e.g., image for multimodal models)."
+        ),
+    ]
+
+
 class CalcTokensRequestTextHistoryItemToolCallsItemArguments(RootModel[dict[str, Any]]):
     root: Annotated[
         dict[str, Any],
@@ -3835,9 +3844,6 @@ class CalcTokensRequestTextHistoryItemToolCallsItem(GeneratedBaseModel):
 
 
 class CalcTokensRequestTextHistoryItem(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
     role: Annotated[
         str,
         Field(
@@ -3849,6 +3855,10 @@ class CalcTokensRequestTextHistoryItem(GeneratedBaseModel):
         Field(
             description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
         ),
+    ] = None
+    attachments: Annotated[
+        list[CalcTokensRequestTextHistoryItemAttachmentsItem] | None,
+        Field(max_length=0),
     ] = None
     tool_calls: Annotated[
         list[CalcTokensRequestTextHistoryItemToolCallsItem] | None,
@@ -3993,6 +4003,15 @@ class CalcTokensRequestHistoryToolsItem(GeneratedBaseModel):
     ]
 
 
+class CalcTokensRequestHistoryHistoryItemAttachmentsItem(GeneratedBaseModel):
+    path: Annotated[
+        str,
+        Field(
+            description="Absolute or resolvable path to the attachment file (e.g., image for multimodal models)."
+        ),
+    ]
+
+
 class CalcTokensRequestHistoryHistoryItemToolCallsItemArguments(
     RootModel[dict[str, Any]]
 ):
@@ -4023,9 +4042,6 @@ class CalcTokensRequestHistoryHistoryItemToolCallsItem(GeneratedBaseModel):
 
 
 class CalcTokensRequestHistoryHistoryItem(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
     role: Annotated[
         str,
         Field(
@@ -4037,6 +4053,10 @@ class CalcTokensRequestHistoryHistoryItem(GeneratedBaseModel):
         Field(
             description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
         ),
+    ] = None
+    attachments: Annotated[
+        list[CalcTokensRequestHistoryHistoryItemAttachmentsItem] | None,
+        Field(max_length=0),
     ] = None
     tool_calls: Annotated[
         list[CalcTokensRequestHistoryHistoryItemToolCallsItem] | None,
@@ -24987,6 +25007,12 @@ class TextToSpeechResponse(GeneratedBaseModel):
         Field(description="MOSS-Speech reply text, including text-only replies."),
     ] = None
     buffer: list[float]
+    pcm: Annotated[
+        str | None,
+        Field(
+            description="Base64 of the little-endian signed 16-bit PCM of this frame. When present, `buffer` is empty and this field carries the samples; decode with `withDecodedTtsPcm`."
+        ),
+    ] = None
     done: bool
     sample_rate: Annotated[
         int | None,
@@ -25195,6 +25221,12 @@ class TextToSpeechStreamResponse(GeneratedBaseModel):
     )
     type: Literal["textToSpeechStream"] = "textToSpeechStream"
     buffer: list[float]
+    pcm: Annotated[
+        str | None,
+        Field(
+            description="Base64 of the little-endian signed 16-bit PCM of this frame. When present, `buffer` is empty and this field carries the samples; decode with `withDecodedTtsPcm`."
+        ),
+    ] = None
     done: bool
     sample_rate: Annotated[
         int | None,

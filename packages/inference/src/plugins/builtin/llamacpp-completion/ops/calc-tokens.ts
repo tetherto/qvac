@@ -1,3 +1,4 @@
+import type LlmLlamacpp from '@qvac/llm-llamacpp'
 import type { CalcTokensInput } from '@qvac/llm-llamacpp'
 import type { CalcTokensRequest, CalcTokensResponse, Tool } from '@/schemas/index'
 import { getModel, getModelConfig } from '@/runtime/model-registry'
@@ -6,10 +7,6 @@ import {
   transformMessages
 } from '@/plugins/builtin/llamacpp-completion/ops/completion-stream'
 import { resolveDeferredTools, toWireTool } from '@/utils/tools/defer'
-
-interface TokenCountingModel {
-  calcTokens(input: CalcTokensInput): Promise<number>
-}
 
 export async function calcTokens(request: CalcTokensRequest): Promise<CalcTokensResponse> {
   const modelConfig = getModelConfig(request.modelId)
@@ -27,7 +24,7 @@ export async function calcTokens(request: CalcTokensRequest): Promise<CalcTokens
   const tools: Tool[] | undefined = toolsEnabled
     ? (deferred?.toolsToRender ?? request.tools?.map(toWireTool))
     : undefined
-  const model = getModel(request.modelId) as unknown as TokenCountingModel
+  const model = getModel(request.modelId) as LlmLlamacpp
   const transformedHistory = history
     ? (transformMessages(history) as NonNullable<CalcTokensInput['history']>)
     : undefined

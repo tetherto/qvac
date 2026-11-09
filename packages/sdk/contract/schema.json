@@ -4072,6 +4072,21 @@
                       }
                     ]
                   },
+                  "attachments": {
+                    "maxItems": 0,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "type": "string",
+                          "description": "Absolute or resolvable path to the attachment file (e.g., image for multimodal models)."
+                        }
+                      },
+                      "required": ["path"],
+                      "title": "CalcTokensRequestTextHistoryItemAttachmentsItem"
+                    }
+                  },
                   "toolCalls": {
                     "description": "Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
                     "type": "array",
@@ -4111,7 +4126,6 @@
                   }
                 },
                 "required": ["role"],
-                "additionalProperties": false,
                 "title": "CalcTokensRequestTextHistoryItem"
               },
               "description": "Text-only conversation to render with the loaded model chat template."
@@ -4274,6 +4288,21 @@
                       }
                     ]
                   },
+                  "attachments": {
+                    "maxItems": 0,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "type": "string",
+                          "description": "Absolute or resolvable path to the attachment file (e.g., image for multimodal models)."
+                        }
+                      },
+                      "required": ["path"],
+                      "title": "CalcTokensRequestHistoryHistoryItemAttachmentsItem"
+                    }
+                  },
                   "toolCalls": {
                     "description": "Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
                     "type": "array",
@@ -4313,7 +4342,6 @@
                   }
                 },
                 "required": ["role"],
-                "additionalProperties": false,
                 "title": "CalcTokensRequestHistoryHistoryItem"
               },
               "description": "Text-only conversation to render with the loaded model chat template."
@@ -24832,6 +24860,10 @@
             "type": "number"
           }
         },
+        "pcm": {
+          "description": "Base64 of the little-endian signed 16-bit PCM of this frame. When present, `buffer` is empty and this field carries the samples; decode with `withDecodedTtsPcm`.",
+          "type": "string"
+        },
         "done": {
           "default": false,
           "type": "boolean"
@@ -25036,6 +25068,10 @@
           "items": {
             "type": "number"
           }
+        },
+        "pcm": {
+          "description": "Base64 of the little-endian signed 16-bit PCM of this frame. When present, `buffer` is empty and this field carries the samples; decode with `withDecodedTtsPcm`.",
+          "type": "string"
         },
         "done": {
           "default": false,

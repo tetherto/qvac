@@ -154,6 +154,19 @@ def test_text_to_speech_returns_float32_pcm_array():
     assert np.allclose(audio, [0.1, 0.2, 0.3])
 
 
+def test_text_to_speech_decodes_pcm_frames():
+    # little-endian int16 for [1, -1, 32767, -32768], the worker's wire shape
+    frames = [
+        {"type": "textToSpeech", "buffer": [], "pcm": "AQD///9/AIA=", "done": False},
+        {"type": "textToSpeech", "buffer": [7.0], "done": True},
+    ]
+    transport = FakeTransport(stream_items=frames)
+    with SyncClient(transport=transport) as client:
+        audio = client.text_to_speech("m-1", "Hello.")
+    assert audio.dtype == np.float32
+    assert audio.tolist() == [1.0, -1.0, 32767.0, -32768.0, 7.0]
+
+
 # ---- real-worker e2e ----------------------------------------------------------
 
 
