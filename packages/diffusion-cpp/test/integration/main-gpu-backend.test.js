@@ -22,7 +22,7 @@ async function waitForLog(logs, predicate, timeoutMs = 5000) {
   return logs.find(predicate)
 }
 
-test('main-gpu requests Vulkan0 on Windows multi-GPU runner', { timeout: 600000 }, async (t) => {
+test('main-gpu pins the first enumerated GPU on Windows', { timeout: 600000 }, async (t) => {
   if (os.platform() !== 'win32' || os.arch() !== 'x64') {
     t.pass('main-gpu Windows multi-GPU integration is win32-x64 only')
     return
@@ -40,7 +40,6 @@ test('main-gpu requests Vulkan0 on Windows multi-GPU runner', { timeout: 600000 
 
   let model = null
   try {
-    const targetName = 'Vulkan0'
     const targetIndex = 0
 
     const [modelName, modelDir] = await ensureModel({
@@ -64,6 +63,15 @@ test('main-gpu requests Vulkan0 on Windows multi-GPU runner', { timeout: 600000 
     })
 
     await model.load()
+
+    // CUDA can register before Vulkan. Derive index zero from the device
+    // enumeration, independently of the main-gpu resolution/pinning messages.
+    const firstGpuLog = await waitForLog(logs, (line) =>
+      line.includes('Backend selection: GPU device ')
+    )
+    const targetName = firstGpuLog && /\(backend: ([^)]+)\)/.exec(firstGpuLog)?.[1]
+    t.ok(targetName, 'device enumeration identifies the first GPU')
+    if (!targetName) return
 
     const resolvedLog = await waitForLog(logs, (line) =>
       line.includes(`main-gpu resolved to backend '${targetName}'`)

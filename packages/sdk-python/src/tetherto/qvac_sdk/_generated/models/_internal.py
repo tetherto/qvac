@@ -569,6 +569,21 @@ class AudioEditStreamRequestOperationsItemRepaint(GeneratedBaseModel):
     ] = None
 
 
+class AudioEditStreamRequestOutputFormat(Enum):
+    wav = "wav"
+    flac = "flac"
+    alac = "alac"
+    aiff = "aiff"
+    caf = "caf"
+    m4a = "m4a"
+    aac = "aac"
+    opus = "opus"
+    ogg = "ogg"
+    ac3 = "ac3"
+    wma = "wma"
+    mp2 = "mp2"
+
+
 class AudioEditStreamRequestSourceAudioBase64(GeneratedBaseModel):
     type: Literal["base64"] = "base64"
     value: str
@@ -690,6 +705,14 @@ class AudioEditStreamRequest(GeneratedBaseModel):
             le=3.4028234663852886e38,
         ),
     ] = None
+    output_format: Annotated[
+        AudioEditStreamRequestOutputFormat | None,
+        Field(
+            alias="outputFormat",
+            description="Also encode the finished audio into this container and deliver it as `encoded`, next to the PCM. `wav` is always available; `flac`, `alac`, `aiff`, `caf`, `m4a`, `aac`, `opus`, `ogg`, `ac3`, `wma` and `mp2` need the matching FFmpeg encoder on the inference host, and the request fails before generation starts when it is missing. `opus` is resampled to 48 kHz. Omit for PCM only.",
+            title="AudioEditStreamRequestOutputFormat",
+        ),
+    ] = None
     source_audio: Annotated[
         AudioEditStreamRequestSourceAudioBase64
         | AudioEditStreamRequestSourceAudioFilePath,
@@ -725,6 +748,60 @@ class AudioEditStreamResponseProgress(GeneratedBaseModel):
             le=9007199254740991,
         ),
     ]
+
+
+class AudioEditStreamResponseEncodedFormat(Enum):
+    wav = "wav"
+    flac = "flac"
+    alac = "alac"
+    aiff = "aiff"
+    caf = "caf"
+    m4a = "m4a"
+    aac = "aac"
+    opus = "opus"
+    ogg = "ogg"
+    ac3 = "ac3"
+    wma = "wma"
+    mp2 = "mp2"
+
+
+class AudioEditStreamResponseEncoded(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    data: Annotated[str, Field(min_length=1)]
+    format: Annotated[
+        AudioEditStreamResponseEncodedFormat,
+        Field(title="AudioEditStreamResponseEncodedFormat"),
+    ]
+    mime_type: Annotated[str, Field(alias="mimeType", min_length=1)]
+    extension: Annotated[str, Field(min_length=1)]
+
+
+class AudioEditStreamResponseEncodeErrorFormat(Enum):
+    wav = "wav"
+    flac = "flac"
+    alac = "alac"
+    aiff = "aiff"
+    caf = "caf"
+    m4a = "m4a"
+    aac = "aac"
+    opus = "opus"
+    ogg = "ogg"
+    ac3 = "ac3"
+    wma = "wma"
+    mp2 = "mp2"
+
+
+class AudioEditStreamResponseEncodeError(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    format: Annotated[
+        AudioEditStreamResponseEncodeErrorFormat,
+        Field(title="AudioEditStreamResponseEncodeErrorFormat"),
+    ]
+    details: str | None = None
 
 
 class AudioEditStreamResponseStopReason(Enum):
@@ -1023,6 +1100,21 @@ class AudioEditStreamResponse(GeneratedBaseModel):
     bits_per_sample: Annotated[
         int | None, Field(alias="bitsPerSample", gt=0, le=9007199254740991)
     ] = None
+    encoded: Annotated[
+        AudioEditStreamResponseEncoded | None,
+        Field(
+            description="The run encoded as the requested `outputFormat`, sent once after the PCM: base64 file bytes, the MIME type and the file extension without its dot.",
+            title="AudioEditStreamResponseEncoded",
+        ),
+    ] = None
+    encode_error: Annotated[
+        AudioEditStreamResponseEncodeError | None,
+        Field(
+            alias="encodeError",
+            description="Sent in place of `encoded` when the finished PCM could not be encoded as the requested `outputFormat`. The run still completes: the PCM, stats and diagnostics are delivered, and only the encoded file is missing.",
+            title="AudioEditStreamResponseEncodeError",
+        ),
+    ] = None
     done: bool
     stop_reason: Annotated[
         AudioEditStreamResponseStopReason | None,
@@ -1059,6 +1151,21 @@ class AudioGenStreamRequestTaskType(Enum):
     text2music = "text2music"
     cover_nofsq = "cover-nofsq"
     lego = "lego"
+
+
+class AudioGenStreamRequestOutputFormat(Enum):
+    wav = "wav"
+    flac = "flac"
+    alac = "alac"
+    aiff = "aiff"
+    caf = "caf"
+    m4a = "m4a"
+    aac = "aac"
+    opus = "opus"
+    ogg = "ogg"
+    ac3 = "ac3"
+    wma = "wma"
+    mp2 = "mp2"
 
 
 class AudioGenStreamRequestReferenceAudioBase64(GeneratedBaseModel):
@@ -1300,6 +1407,14 @@ class AudioGenStreamRequest(GeneratedBaseModel):
             le=1.0,
         ),
     ] = None
+    output_format: Annotated[
+        AudioGenStreamRequestOutputFormat | None,
+        Field(
+            alias="outputFormat",
+            description="Also encode the finished audio into this container and deliver it as `encoded`, next to the PCM. `wav` is always available; `flac`, `alac`, `aiff`, `caf`, `m4a`, `aac`, `opus`, `ogg`, `ac3`, `wma` and `mp2` need the matching FFmpeg encoder on the inference host, and the request fails before generation starts when it is missing. `opus` is resampled to 48 kHz. Omit for PCM only.",
+            title="AudioGenStreamRequestOutputFormat",
+        ),
+    ] = None
     audio_codes: Annotated[
         list[AudioCode] | None,
         Field(
@@ -1345,6 +1460,60 @@ class AudioGenStreamResponseProgress(GeneratedBaseModel):
             le=9007199254740991,
         ),
     ]
+
+
+class AudioGenStreamResponseEncodedFormat(Enum):
+    wav = "wav"
+    flac = "flac"
+    alac = "alac"
+    aiff = "aiff"
+    caf = "caf"
+    m4a = "m4a"
+    aac = "aac"
+    opus = "opus"
+    ogg = "ogg"
+    ac3 = "ac3"
+    wma = "wma"
+    mp2 = "mp2"
+
+
+class AudioGenStreamResponseEncoded(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    data: Annotated[str, Field(min_length=1)]
+    format: Annotated[
+        AudioGenStreamResponseEncodedFormat,
+        Field(title="AudioGenStreamResponseEncodedFormat"),
+    ]
+    mime_type: Annotated[str, Field(alias="mimeType", min_length=1)]
+    extension: Annotated[str, Field(min_length=1)]
+
+
+class AudioGenStreamResponseEncodeErrorFormat(Enum):
+    wav = "wav"
+    flac = "flac"
+    alac = "alac"
+    aiff = "aiff"
+    caf = "caf"
+    m4a = "m4a"
+    aac = "aac"
+    opus = "opus"
+    ogg = "ogg"
+    ac3 = "ac3"
+    wma = "wma"
+    mp2 = "mp2"
+
+
+class AudioGenStreamResponseEncodeError(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    format: Annotated[
+        AudioGenStreamResponseEncodeErrorFormat,
+        Field(title="AudioGenStreamResponseEncodeErrorFormat"),
+    ]
+    details: str | None = None
 
 
 class AudioGenStreamResponseStopReason(Enum):
@@ -1638,6 +1807,21 @@ class AudioGenStreamResponse(GeneratedBaseModel):
     channels: Annotated[int | None, Field(gt=0, le=9007199254740991)] = None
     bits_per_sample: Annotated[
         int | None, Field(alias="bitsPerSample", gt=0, le=9007199254740991)
+    ] = None
+    encoded: Annotated[
+        AudioGenStreamResponseEncoded | None,
+        Field(
+            description="The run encoded as the requested `outputFormat`, sent once after the PCM: base64 file bytes, the MIME type and the file extension without its dot.",
+            title="AudioGenStreamResponseEncoded",
+        ),
+    ] = None
+    encode_error: Annotated[
+        AudioGenStreamResponseEncodeError | None,
+        Field(
+            alias="encodeError",
+            description="Sent in place of `encoded` when the finished PCM could not be encoded as the requested `outputFormat`. The run still completes: the PCM, stats and diagnostics are delivered, and only the encoded file is missing.",
+            title="AudioGenStreamResponseEncodeError",
+        ),
     ] = None
     done: bool
     stop_reason: Annotated[
@@ -4982,6 +5166,28 @@ class AudioGenEditOperation(Enum):
 class AudioGenEngine(Enum):
     acestep = "acestep"
     minimax = "minimax"
+
+
+class AudioGenMinimaxCoremlComputeUnits(Enum):
+    cpu_only = "CPU_ONLY"
+    cpu_and_gpu = "CPU_AND_GPU"
+    cpu_and_ne = "CPU_AND_NE"
+    all = "ALL"
+
+
+class AudioGenOutputFormat(Enum):
+    wav = "wav"
+    flac = "flac"
+    alac = "alac"
+    aiff = "aiff"
+    caf = "caf"
+    m4_a = "m4a"
+    aac = "aac"
+    opus = "opus"
+    ogg = "ogg"
+    ac3 = "ac3"
+    wma = "wma"
+    mp2 = "mp2"
 
 
 class AudioGenRepaintMode(Enum):
@@ -21983,6 +22189,13 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxDevice(Enum):
     auto = "auto"
 
 
+class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxCoremlComputeUnits(Enum):
+    cpu_only = "CPU_ONLY"
+    cpu_and_gpu = "CPU_AND_GPU"
+    cpu_and_ne = "CPU_AND_NE"
+    all = "ALL"
+
+
 class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon(Enum):
     llamacpp_completion = "llamacpp-completion"
     whispercpp_transcription = "whispercpp-transcription"
@@ -22239,6 +22452,22 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimax(GeneratedBaseModel):
         Field(
             description="Where MiniMax runs, instead of `useGPU`: `'gpu'` requires a usable GPU and fails the load otherwise, `'auto'` (what `useGPU: true` means) falls back to the CPU, `'cpu'` never touches a GPU. Cannot be combined with `useGPU`.",
             title="LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxDevice",
+        ),
+    ] = None
+    coreml_profile_dir: Annotated[
+        str | None,
+        Field(
+            alias="coremlProfileDir",
+            description="Advanced, macOS 15+: directory on the inference host holding the compiled full Core ML profile for this GGUF pair (`manifest.json` plus the LM, depth, conditioner, DiT and vocoder programs). Runs MiniMax through Core ML instead of the native backend and takes precedence over `device` and `useGPU`; the load fails when the build, OS or profile cannot support it rather than switching backends. Requires `coremlComputeUnits`.",
+            min_length=1,
+        ),
+    ] = None
+    coreml_compute_units: Annotated[
+        LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxCoremlComputeUnits | None,
+        Field(
+            alias="coremlComputeUnits",
+            description="Apple compute units the Core ML profile may use: `CPU_ONLY`, `CPU_AND_GPU`, `CPU_AND_NE` or `ALL`. A policy, not a guarantee of where each operation runs. Requires `coremlProfileDir`.",
+            title="LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxCoremlComputeUnits",
         ),
     ] = None
     inference_steps: Annotated[
@@ -24607,6 +24836,12 @@ class TextToSpeechResponse(GeneratedBaseModel):
         Field(description="MOSS-Speech reply text, including text-only replies."),
     ] = None
     buffer: list[float]
+    pcm: Annotated[
+        str | None,
+        Field(
+            description="Base64 of the little-endian signed 16-bit PCM of this frame. When present, `buffer` is empty and this field carries the samples; decode with `withDecodedTtsPcm`."
+        ),
+    ] = None
     done: bool
     sample_rate: Annotated[
         int | None,
@@ -24815,6 +25050,12 @@ class TextToSpeechStreamResponse(GeneratedBaseModel):
     )
     type: Literal["textToSpeechStream"] = "textToSpeechStream"
     buffer: list[float]
+    pcm: Annotated[
+        str | None,
+        Field(
+            description="Base64 of the little-endian signed 16-bit PCM of this frame. When present, `buffer` is empty and this field carries the samples; decode with `withDecodedTtsPcm`."
+        ),
+    ] = None
     done: bool
     sample_rate: Annotated[
         int | None,
