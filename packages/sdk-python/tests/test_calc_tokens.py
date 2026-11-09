@@ -117,5 +117,7 @@ def test_calc_tokens_accepts_completion_compatible_empty_attachments() -> None:
         }
     )
 
-    assert request.root.history[0].attachments == []
-    assert "name" not in request.root.history[0].model_dump()
+    history = request.root.history
+    assert history is not None
+    assert history[0].attachments == []
+    assert "name" not in history[0].model_dump()
