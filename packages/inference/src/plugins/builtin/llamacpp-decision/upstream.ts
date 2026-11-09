@@ -8,11 +8,19 @@ import type {
 } from '@/schemas/index'
 import { readGgufArchitecture } from '@/utils/gguf-architecture'
 
-// Upstream llama.cpp decision models through @qvac/embed-llamacpp's
-// DecisionEngine (QVAC-26667). The boundary types live here rather than being
-// imported from the addon: the published addon this package is built and
-// tested against may predate DecisionEngine, and the plugin must stay
-// importable with it (the legacy Laya path keeps working).
+// Decision models through @qvac/decision-ggml (QVAC-26667): fabric-format Laya
+// (LayaDecisions) and upstream llama.cpp decision models (DecisionEngine).
+// decision-ggml is loaded when a model loads, never at import: without it this
+// module still imports, fabric-format Laya runs on @qvac/embed-llamacpp's
+// LayaDecisions as before, and an upstream model fails to load with an
+// actionable error. The boundary types live here rather than being imported
+// from the addon.
+//
+// It is not yet declared in package.json. It is unpublished, and with
+// linkWorkspacePackages any declared range (even an optional peer) links the
+// workspace copy, whose @qvac/fabric is the unbuilt workspace one: Bare then
+// fails to link this module in the inference checks. Declare it as an optional
+// peer, like the other addons, once it is published.
 
 /** The engine's capabilities, as DecisionEngine.info() reports them. */
 export interface UpstreamDecisionInfo {
@@ -84,13 +92,36 @@ export type UpstreamEngineConstructor = new (args: {
   logger?: unknown
 }) => UpstreamEngine
 
+type LayaConstructor = typeof embed.LayaDecisions
+
+/** What DecisionModel uses from @qvac/decision-ggml. */
+export interface DecisionAddon {
+  LayaDecisions: LayaConstructor
+  DecisionEngine: UpstreamEngineConstructor
+}
+
+const DECISION_ADDON = '@qvac/decision-ggml'
+
+export function isMissingDecisionAddon(error: unknown): boolean {
+  const { code, message } = (error ?? {}) as { code?: unknown; message?: unknown }
+  return (
+    (code === 'MODULE_NOT_FOUND' || code === 'ERR_MODULE_NOT_FOUND') &&
+    typeof message === 'string' &&
+    message.includes(DECISION_ADDON)
+  )
+}
+
 /**
- * The addon's DecisionEngine, read at use time from the namespace so that an
- * addon without it leaves this module importable. Undefined on such an addon.
+ * @qvac/decision-ggml, or undefined when it is not installed. Any other load
+ * failure (a broken install, a missing native prebuild) is thrown.
  */
-function decisionEngineClass(): UpstreamEngineConstructor | undefined {
-  const candidate = (embed as unknown as Record<string, unknown>)['DecisionEngine']
-  return typeof candidate === 'function' ? (candidate as UpstreamEngineConstructor) : undefined
+export async function loadDecisionAddon(): Promise<DecisionAddon | undefined> {
+  try {
+    return (await import('@qvac/decision-ggml')) as unknown as DecisionAddon
+  } catch (error) {
+    if (isMissingDecisionAddon(error)) return undefined
+    throw error
+  }
 }
 
 /** Load options the upstream engine accepts, from the plugin's decision config. */
@@ -127,14 +158,15 @@ interface DecisionModelOptions {
   /** The validated plugin config, for the upstream engine. */
   config: Record<string, unknown>
   logger?: unknown
-  /** The upstream engine class; the addon's DecisionEngine by default. */
-  engineClass?: UpstreamEngineConstructor | undefined
+  /** Loads @qvac/decision-ggml; loadDecisionAddon by default (tests stub it). */
+  loadAddon?: (() => Promise<DecisionAddon | undefined>) | undefined
 }
 
 /**
  * A decision model that picks its engine at load: fabric-format Laya
- * (`general.architecture` "laya") keeps using LayaDecisions; every other GGUF
- * goes to the upstream engine, which rejects one without decision metadata.
+ * (`general.architecture` "laya") uses LayaDecisions; every other GGUF goes to
+ * the upstream engine, which rejects one without decision metadata. Both come
+ * from @qvac/decision-ggml; without it, Laya falls back to embed's copy.
  */
 export class DecisionModel {
   kind: 'laya' | 'upstream' | undefined
@@ -149,8 +181,10 @@ export class DecisionModel {
   async load(): Promise<void> {
     if (this.inner) return
     const arch = await readGgufArchitecture(this.options.modelPath)
+    const addon = await (this.options.loadAddon ?? loadDecisionAddon)()
     if (arch === 'laya') {
-      const laya = new embed.LayaDecisions({
+      const Laya = addon?.LayaDecisions ?? embed.LayaDecisions
+      const laya = new Laya({
         files: { model: this.options.files },
         config: this.options.layaConfig,
         logger: this.options.logger
@@ -160,10 +194,10 @@ export class DecisionModel {
       this.kind = 'laya'
       return
     }
-    const Engine = this.options.engineClass ?? decisionEngineClass()
+    const Engine = addon?.DecisionEngine
     if (!Engine) {
       throw new ModelLoadFailedError(
-        `this decision model (architecture '${arch ?? 'unknown'}') needs @qvac/embed-llamacpp with DecisionEngine, for upstream llama.cpp decision models; the installed addon only runs fabric-format Laya`
+        `this decision model (architecture '${arch ?? 'unknown'}') is an upstream llama.cpp decision model and needs ${DECISION_ADDON}; install it to run it (without it only fabric-format Laya runs, on @qvac/embed-llamacpp)`
       )
     }
     const engine = new Engine({
