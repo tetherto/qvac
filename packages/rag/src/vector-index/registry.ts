@@ -35,6 +35,8 @@ export interface IndexConfig {
 export interface OpenIndex {
   native: NativeIndex
   normalize: boolean
+  // The index's revision now; commits move it on between awaits.
+  revision(): number
 }
 
 interface Entry {
@@ -49,6 +51,8 @@ interface Entry {
   // Set while the index is loading, replaying or rebuilding; commits skip the
   // entry then and the next search replays them from `mutations`.
   syncing: Promise<void> | null
+  // The last snapshot write; writes share a sidecar temp file, so they chain.
+  persisting: Promise<void>
   needsPrepare: boolean
 }
 
@@ -92,6 +96,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
         revision: 0,
         persistedRevision: 0,
         syncing: null,
+        persisting: Promise.resolve(),
         needsPrepare: true
       }
       entries.set(key, entry)
@@ -114,6 +119,8 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
         await reader.close()
       }
       if (entry.native && entry.revision >= target) break
+      // Another call may have started a sync while this one awaited.
+      if (entry.syncing) continue
       const syncing = sync(entry, module)
       entry.syncing = syncing
       try {
@@ -127,7 +134,7 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       native.prepare()
       entry.needsPrepare = false
     }
-    return { native, normalize: entry.normalize }
+    return { native, normalize: entry.normalize, revision: () => entry.revision }
   }
 
   async function sync(entry: Entry, module: NativeIndexModule): Promise<void> {
@@ -154,7 +161,8 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       entry.identity = identity
       if (!entry.native) await load(entry, module, identity, ns.revision)
       if (entry.native && entry.revision < ns.revision) {
-        if (!(await replay(entry, reader, ns.revision))) discard(entry)
+        const replayed = await replay(entry, reader, ns.revision).catch(() => false)
+        if (!replayed) discard(entry)
       }
       if (!entry.native) await rebuild(entry, module, reader, identity, ns.revision)
     } catch (error) {
@@ -209,7 +217,9 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       const added = unpackNativeIds(mutation.added)
       const ids: bigint[] = []
       const vectors: Float32Array[] = []
+      const native = entry.native as NativeIndex
       for (const id of added) {
+        if (native.contains(id)) continue
         // Absent rows were removed by a later mutation in this range.
         const vector = await readVector(reader, namespace, id)
         if (vector) {
@@ -217,7 +227,6 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
           vectors.push(vector)
         }
       }
-      const native = entry.native as NativeIndex
       for (const id of unpackNativeIds(mutation.removed)) native.remove(id)
       addRows(entry, native, ids, concat(vectors, native.dim))
       entry.revision = mutation.revision
@@ -290,12 +299,23 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
 
   // Snapshot failures are not fatal: the mutations stay, and the next open
   // replays them.
-  async function persist(entry: Entry): Promise<void> {
-    if (!entry.store || !entry.native || !entry.identity) return
+  function persist(entry: Entry): Promise<void> {
+    const next = entry.persisting.then(() => write(entry))
+    entry.persisting = next.catch(() => {})
+    return next
+  }
+
+  async function write(entry: Entry): Promise<void> {
+    const { store, native, identity } = entry
+    if (!store || !native || !identity) return
     if (entry.revision <= entry.persistedRevision) return
-    const revision = entry.revision
-    await entry.store.write(entry.identity, revision, entry.native)
-    entry.persistedRevision = revision
+    const revision = await store.write(identity, native, () => {
+      // A rebuild may swap the index while the store awaits the filesystem.
+      if (entry.native !== native) throw new Error('index replaced during snapshot')
+      return entry.revision
+    })
+    if (entry.native !== native) return
+    entry.persistedRevision = Math.max(entry.persistedRevision, revision)
     prunable.set(entry.namespace, Math.max(prunable.get(entry.namespace) ?? 0, revision))
   }
 

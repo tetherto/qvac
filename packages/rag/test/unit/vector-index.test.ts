@@ -5,7 +5,7 @@ import fs from 'bare-fs'
 
 import { ERR_CODES, createRag } from '../../src/index.js'
 import { MUTATIONS, type MutationRecord } from '../../src/db/records.js'
-import { setNativeIndexLoader } from '../../src/vector-index/native.js'
+import { loadNativeIndex, setNativeIndexLoader } from '../../src/vector-index/native.js'
 import { SPACE, countNativeCalls, doc, inspect, rejectsWithCode, type Test } from './helpers.js'
 import type {
   EmbeddedDocumentInput,
@@ -208,6 +208,54 @@ test('a stale snapshot never brings back deleted or superseded chunks', async (t
   const hits = await search(forged, spaceId, [1, 0, 0])
   t.is(calls.creates, 2, 'the forged snapshot was loaded')
   t.alike(contents(hits), [], 'its IDs map to nothing current')
+})
+
+test('a commit during a search never hides the document it replaces', async (t) => {
+  await countNativeCalls(t)
+  const real = await loadNativeIndex()
+  const handle = await openStore(t)
+  const rag = await openOn(t, handle)
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['old', [1, 0, 0]]])] })
+  await search(rag, spaceId, [1, 0, 0])
+
+  // Holding the loader keeps the search between its snapshot and the index
+  // lookup while the replacement commits, so the open index is a revision
+  // ahead of the search's reader.
+  let release = () => {}
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  setNativeIndexLoader(() => gate.then(() => real))
+  const pending = search(rag, spaceId, [1, 0, 0])
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['new', [1, 0, 0]]])] })
+  release()
+  t.alike(contents(await pending), ['new'], 'retried on a reader that matches the index')
+})
+
+test('concurrent first searches share one replay', async (t) => {
+  const calls = await countNativeCalls(t)
+  const handle = await openStore(t)
+  const rag = await openOn(t, handle, { snapshotEvery: 1 })
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+  await search(rag, spaceId, [1, 0, 0])
+
+  const coreDir = snapshotFiles(handle.dir)[0].split('/').slice(0, -1).join('/')
+  fs.chmodSync(coreDir, 0o555)
+  t.teardown(() => fs.chmodSync(coreDir, 0o755))
+  await rag.ingest({ namespace: 'ns', documents: [doc('b', spaceId, [['b', [0, 1, 0]]])] })
+  await rag.ingest({ namespace: 'ns', documents: [doc('c', spaceId, [['c', [0, 0, 1]]])] })
+  await rag.close()
+  fs.chmodSync(coreDir, 0o755)
+
+  const reopened = await openOn(t, handle, { snapshotEvery: 100 })
+  const results = await Promise.all([
+    search(reopened, spaceId, [1, 1, 1]),
+    search(reopened, spaceId, [1, 1, 1]),
+    search(reopened, spaceId, [1, 1, 1])
+  ])
+  for (const hits of results) t.alike(contents(hits).sort(), ['a', 'b', 'c'])
+  t.is(calls.loads, 1, 'one load')
+  t.is(calls.creates, 1, 'and no rebuild')
 })
 
 test('scope never leaks through the index', async (t) => {

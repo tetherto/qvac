@@ -27,7 +27,9 @@ export interface StoredSnapshot {
 
 export interface SnapshotStore {
   read(identity: SnapshotIdentity): Promise<StoredSnapshot | null>
-  write(identity: SnapshotIdentity, revision: number, index: NativeIndex): Promise<void>
+  // `revision` is read right before the synchronous native write, so the file
+  // and its sidecar always describe the same state. Returns that revision.
+  write(identity: SnapshotIdentity, index: NativeIndex, revision: () => number): Promise<number>
 }
 
 interface FileSystem {
@@ -83,11 +85,12 @@ export function createSnapshotStore(dir: string, coreKey: string): SnapshotStore
       return { path: `${root}/${sidecar.file}`, revision: sidecar.revision }
     },
 
-    async write(identity, revision, index) {
+    async write(identity, index, current) {
       const files = await fileSystem()
       await files.mkdir(root, { recursive: true })
       const name = base(identity.namespace)
       const previous = await readSidecar(identity.namespace)
+      const revision = current()
       const file = `${name}.${revision}.tvec`
       index.write(`${root}/${file}`)
 
@@ -99,6 +102,7 @@ export function createSnapshotStore(dir: string, coreKey: string): SnapshotStore
       if (previous && previous.file !== file && !previous.file.includes('/')) {
         await files.unlink(`${root}/${previous.file}`).catch(() => {})
       }
+      return revision
     }
   }
 }

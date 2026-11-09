@@ -30,17 +30,22 @@ const MIN_EXTRA_CANDIDATES = 16
 // Index search with the same contract as `scanSearch`. The index proposes
 // candidates; every hit is then read back through `nativeIds` from the same
 // HyperDB snapshot and scored exactly. An ID the snapshot doesn't map to a
-// current chunk in scope is dropped, never returned. Returns null when no
-// index is available, so the caller can scan instead.
+// current chunk in scope is dropped, never returned.
+//
+// The index must be at the reader's revision: an index ahead of the reader
+// holds IDs the reader can't map and lacks the ones it replaced. Returns
+// 'stale' then, so the caller retries on a fresh reader, and 'unavailable'
+// when there is no index at all.
 export async function indexSearch(
   reader: HyperDBReader,
+  revision: number,
   space: SpaceRecord,
   scope: SearchScope,
   query: SearchQuery,
   k: number,
   openIndex: () => Promise<OpenIndex | null>,
   options: { strict: boolean; signal?: AbortSignal }
-): Promise<SearchHit[] | null> {
+): Promise<SearchHit[] | 'stale' | 'unavailable'> {
   throwIfAborted(options.signal)
   checkQuery(space, scope, query)
   if (scope.documentIds !== undefined && scope.documentIds.length === 0) return []
@@ -58,7 +63,8 @@ export async function indexSearch(
   // Opened last: a rebuild started by another search may dispose the native
   // index it replaces, so nothing awaits between this and the native search.
   const index = await openIndex()
-  if (!index) return null
+  if (!index) return 'unavailable'
+  if (index.revision() !== revision) return 'stale'
   const available = allowlist ? allowlist.length : index.native.length
   const candidates = Math.min(available, k + Math.max(k, MIN_EXTRA_CANDIDATES))
   if (candidates === 0) return []

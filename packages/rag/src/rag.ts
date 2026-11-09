@@ -66,6 +66,7 @@ import type {
 } from './types.js'
 
 const CORE_NAME = 'qvac-rag'
+const SEARCH_INDEX_ATTEMPTS = 3
 
 // One HyperDB per core, shared by every RAG opened on it. Separate instances
 // would each serialize only their own transactions and overwrite each other.
@@ -345,21 +346,31 @@ export function createRag(options: CreateRagOptions): Rag {
     }
   }
 
-  function runSearch(
+  // A commit landing between the reader's snapshot and the index lookup makes
+  // the index stale for that reader; a few retries on a fresh snapshot usually
+  // line them up, and the scan is always consistent with its reader.
+  async function runSearch(
     scope: SearchScope,
     query: SearchQuery,
     k: number,
     options: { strict: boolean; signal?: AbortSignal }
   ): Promise<SearchHit[]> {
     const indexRegistry = registry()
-    return withSnapshot(database(), async (reader) => {
-      const { space } = await readNamespace(reader, scope.namespace)
-      // A bad query fails before it can trigger an index rebuild.
-      checkQuery(space, scope, query)
-      const open = () => indexRegistry.open(scope.namespace, indexConfig)
-      const hits = await indexSearch(reader, space, scope, query, k, open, options)
-      return hits ?? (await scanSearch(reader, space, scope, query, k, options))
-    })
+    const instance = database()
+    const open = () => indexRegistry.open(scope.namespace, indexConfig)
+    for (let attempt = 0; ; attempt++) {
+      const result = await withSnapshot(instance, async (reader) => {
+        const { ns, space } = await readNamespace(reader, scope.namespace)
+        // A bad query fails before it can trigger an index rebuild.
+        checkQuery(space, scope, query)
+        const scan = () => scanSearch(reader, space, scope, query, k, options)
+        if (attempt === SEARCH_INDEX_ATTEMPTS) return await scan()
+        const hits = await indexSearch(reader, ns.revision, space, scope, query, k, open, options)
+        if (hits === 'unavailable') return await scan()
+        return hits
+      })
+      if (result !== 'stale') return result
+    }
   }
 
   return {
