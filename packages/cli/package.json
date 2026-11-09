@@ -1,6 +1,6 @@
 {
   "name": "@qvac/cli",
-  "version": "0.16.0",
+  "version": "0.22.0",
   "description": "QVAC workspace, local AI chat and model host",
   "author": "Tether",
   "license": "Apache-2.0",
