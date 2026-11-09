@@ -269,7 +269,7 @@ test('linux prebuild has no hard GPU-loader deps and ships DL backend modules', 
   }
 })
 
-test('win32 prebuild has no hard GPU-loader imports and ships the Vulkan backend DLL', async (t) => {
+test('win32 prebuild has no hard GPU-loader imports and ships the Vulkan and CUDA backend DLLs', async (t) => {
   if (os.platform() !== 'win32') {
     t.pass('PE import layout check is win32-only')
     return
@@ -320,6 +320,27 @@ test('win32 prebuild has no hard GPU-loader imports and ships the Vulkan backend
       `Vulkan module must not import ${dll}* (LoadLibrary must work on stock hosts)`
     )
   }
+
+  const cudaPath = path.join(PREBUILDS_DIR, target, moduleName, 'qvac-diffusion-ggml-cuda.dll')
+  const requireCuda = proc.env.CI === 'true' || proc.env.QVAC_REQUIRE_CUDA_MODULE === 'true'
+  if (!fs.existsSync(cudaPath)) {
+    if (requireCuda) t.fail(`CUDA DL backend module missing: ${cudaPath}`)
+    else t.comment('CUDA module not built (SD_CUDA=OFF); skipping CUDA checks')
+    return
+  }
+  const cudaImports = peImports(fs.readFileSync(cudaPath))
+  t.comment(`qvac-diffusion-ggml-cuda.dll imports: ${cudaImports.join(', ')}`)
+  // Windows GGML_STATIC links cudart_static; only cuBLAS must be imported.
+  t.ok(
+    cudaImports.some((name) => name.startsWith('cublas64')),
+    'CUDA module imports cublas64*'
+  )
+  for (const dll of FORBIDDEN_WIN_RUNTIME) {
+    t.absent(
+      cudaImports.find((name) => name.startsWith(dll)),
+      `CUDA module must not import ${dll}* (LoadLibrary must work on stock hosts)`
+    )
+  }
 })
 
 // File-level layout checks above prove the module EXISTS; this proves Linux
@@ -332,69 +353,111 @@ test('win32 prebuild has no hard GPU-loader imports and ships the Vulkan backend
 // `backend: 'vulkan0'`, which requires that named backend to be registered.
 // Device index zero may be CUDA on a Linux release, so it is not a stable
 // way to select Vulkan. An unavailable explicit backend fails model load.
-test(
-  'linux and win32 GPU hosts register the Vulkan backend through the DL module',
-  { timeout: 600000 },
-  async (t) => {
-    if (os.platform() !== 'linux' && os.platform() !== 'win32') {
-      t.pass('DL backend registration check is linux and win32 only')
-      return
-    }
-    if (proc.env && proc.env.NO_GPU === 'true') {
-      t.pass('NO_GPU=true; DL registration needs a GPU host')
-      return
-    }
-    if (proc.env && proc.env.QVAC_SKIP_PREBUILD_LINK_CHECK === 'true') {
-      t.pass('QVAC_SKIP_PREBUILD_LINK_CHECK=true; skipping (custom local build)')
-      return
-    }
-
-    const binding = require('../../binding')
-    const ImgStableDiffusion = require('../../index')
-    const { ensureModel, releaseJsLogger } = require('./utils')
-
-    const logs = []
-    binding.setLogger((priority, message) => {
-      logs.push(String(message))
-    })
-
-    let model = null
-    try {
-      const [modelName, modelDir] = await ensureModel({
-        modelName: 'stable-diffusion-v2-1-Q8_0.gguf'
-      })
-
-      model = new ImgStableDiffusion({
-        files: { model: path.join(modelDir, modelName) },
-        config: {
-          device: 'gpu',
-          backend: 'vulkan0',
-          threads: 4,
-          prediction: 'v',
-          verbosity: 2
-        },
-        logger: console
-      })
-      await model.load()
-
-      // Successful load with an explicit Vulkan assignment proves the
-      // registered device is usable. The assignment is also logged by the
-      // addon, with C++ messages marshalled asynchronously to JS.
-      const deadline = Date.now() + 5000
-      let resolvedLine = null
-      while (!resolvedLine && Date.now() < deadline) {
-        resolvedLine = logs.find((line) =>
-          line.includes("Explicit stable-diffusion backend assignment 'vulkan0'")
-        )
-        if (!resolvedLine) await new Promise((resolve) => setTimeout(resolve, 50))
+for (const backend of ['Vulkan', 'CUDA']) {
+  const assignment = backend.toLowerCase() + '0'
+  test(
+    `linux and win32 GPU hosts register the ${backend} backend through the DL module`,
+    { timeout: 600000 },
+    async (t) => {
+      if (os.platform() !== 'linux' && os.platform() !== 'win32') {
+        t.pass('DL backend registration check is linux and win32 only')
+        return
       }
-      t.ok(
-        resolvedLine,
-        `explicit Vulkan backend loaded (DL module registered): ${resolvedLine || 'NO MATCHING LOG LINE'}`
-      )
-    } finally {
-      if (model) await model.unload().catch(() => {})
-      releaseJsLogger(binding)
+      if (proc.env && proc.env.NO_GPU === 'true') {
+        t.pass('NO_GPU=true; DL registration needs a GPU host')
+        return
+      }
+      if (proc.env && proc.env.QVAC_SKIP_PREBUILD_LINK_CHECK === 'true') {
+        t.pass('QVAC_SKIP_PREBUILD_LINK_CHECK=true; skipping (custom local build)')
+        return
+      }
+
+      // The new CUDA runtime gate is for Windows release artifacts. Local
+      // source builds remain CUDA-optional; opt in when testing a CUDA build.
+      if (
+        backend === 'CUDA' &&
+        (os.platform() !== 'win32' ||
+          (proc.env.CI !== 'true' && proc.env.QVAC_REQUIRE_CUDA_MODULE !== 'true'))
+      ) {
+        t.pass('CUDA runtime check requires a Windows release or explicit CUDA opt-in')
+        return
+      }
+
+      const binding = require('../../binding')
+      const ImgStableDiffusion = require('../../index')
+      const { ensureModel, isPng, releaseJsLogger } = require('./utils')
+
+      const logs = []
+      binding.setLogger((priority, message) => {
+        logs.push(String(message))
+      })
+
+      let model = null
+      try {
+        const [modelName, modelDir] = await ensureModel({
+          modelName: 'stable-diffusion-v2-1-Q8_0.gguf'
+        })
+
+        model = new ImgStableDiffusion({
+          files: { model: path.join(modelDir, modelName) },
+          config: {
+            device: 'gpu',
+            backend: assignment,
+            threads: 4,
+            prediction: 'v',
+            // Runtime backend evidence is emitted at DEBUG level.
+            verbosity: 3
+          },
+          logger: console
+        })
+        await model.load()
+
+        // Successful load with an explicit backend assignment proves the
+        // registered device is usable. The assignment is also logged by the
+        // addon, with C++ messages marshalled asynchronously to JS.
+        const deadline = Date.now() + 5000
+        let resolvedLine = null
+        while (!resolvedLine && Date.now() < deadline) {
+          resolvedLine = logs.find((line) =>
+            line.includes(`Explicit stable-diffusion backend assignment '${assignment}'`)
+          )
+          if (!resolvedLine) await new Promise((resolve) => setTimeout(resolve, 50))
+        }
+        t.ok(
+          resolvedLine,
+          `explicit ${backend} backend loaded (DL module registered): ${resolvedLine || 'NO MATCHING LOG LINE'}`
+        )
+        if (backend === 'CUDA') {
+          const images = []
+          const response = await model.run({
+            prompt: 'a red fox in a snowy forest',
+            steps: 2,
+            width: 256,
+            height: 256,
+            cfg_scale: 7.5,
+            seed: 42
+          })
+          await response
+            .onUpdate((data) => {
+              if (data instanceof Uint8Array) images.push(data)
+            })
+            .await()
+          t.is(images.length, 1, 'CUDA inference returned one image')
+          t.ok(images.length === 1 && isPng(images[0]), 'CUDA inference returned a valid PNG')
+          const executedOnCuda = () =>
+            logs.some((line) =>
+              /Diffusion model runtime backend: CUDA(?:[0-9]+)?(?:\s|$)/.test(line)
+            )
+          const runtimeDeadline = Date.now() + 5000
+          while (!executedOnCuda() && Date.now() < runtimeDeadline) {
+            await new Promise((resolve) => setTimeout(resolve, 50))
+          }
+          t.ok(executedOnCuda(), 'diffusion executed on CUDA without falling back')
+        }
+      } finally {
+        if (model) await model.unload().catch(() => {})
+        releaseJsLogger(binding)
+      }
     }
-  }
-)
+  )
+}
