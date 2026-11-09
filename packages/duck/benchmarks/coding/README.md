@@ -1,7 +1,7 @@
 # bench
 
 `polyglot.mjs` runs Aider's polyglot benchmark (225 Exercism exercises in C++, Go, Java,
-JavaScript, Python and Rust, pinned to one commit) through the real `qvac -p`, so a score is what
+JavaScript, Python and Rust, pinned to one commit) through the real `duck -p`, so a score is what
 the app does: our instructions, the coding plugin, the sandbox and the harness.
 
 Each exercise is a fresh git copy. The agent gets the exercise's instructions and two tries; the
@@ -12,8 +12,8 @@ first, so the copy un-skips them all, and the test files are restored before eac
 
 ```sh
 # toolchains: python3, go, cargo, cmake + a C++ compiler, node, a JDK
-qvac serve --create --account-name Bench --device-name Bench --data-dir <bench-data>   # Ctrl+C once ready
-qvac --data-dir <bench-data> models pull Qwen3.6-35B-A3B-UD-Q4_K_M
+qvac models pull Qwen3.6-35B-A3B-UD-Q4_K_M       # into ~/.qvac/models, which duck shares
+QVAC_DEVICE_NAME=Bench duck --data-dir <bench-data> --model Qwen3.6-35B-A3B-UD-Q4_K_M -p "hi"   # sets the bench device up
 cd output/bench/js-deps && npm install            # the test packages every JS exercise shares
 ```
 

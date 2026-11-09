@@ -1,7 +1,7 @@
 # terminal-bench
 
 `qvac_agent.py` runs [Terminal-Bench 2.0](https://www.tbench.ai) (89 tasks) through the real
-`qvac -p` with [Harbor](https://github.com/laude-institute/harbor), inside each task's container,
+`duck -p` with [Harbor](https://github.com/laude-institute/harbor), inside each task's container,
 so a score is what the app does: our instructions, the coding plugin, its skills and the harness.
 
 The agent is what the TUI loads in a project, the task's working folder: the coding workflow and
@@ -19,8 +19,8 @@ A report says so.
 Linux with an NVIDIA GPU, Docker or rootless Podman, and `uv tool install harbor`.
 
 ```sh
-npm ci && npm run build                     # the CLI the containers mount
-qvac models pull Qwen3.6-35B-A3B-UD-Q4_K_M  # into ~/.qvac/models
+npm ci && npm run build                     # the duck the containers mount
+qvac models pull Qwen3.6-35B-A3B-UD-Q4_K_M  # into ~/.qvac/models, which duck shares
 harbor download terminal-bench@2.0 -o <tasks>
 ```
 

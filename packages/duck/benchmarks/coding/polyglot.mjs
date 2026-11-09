@@ -1,4 +1,4 @@
-// Aider's polyglot benchmark through the real `qvac -p`: what it scores is what the app does.
+// Aider's polyglot benchmark through the real `duck -p`: what it scores is what the app does.
 import { CODING_INSTRUCTIONS } from '@qvac/cli-kit/config'
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -81,7 +81,7 @@ const { values: opts } = parseArgs({
 
 if (!opts.model || !opts['data-dir'] || !['agent', 'aider'].includes(opts.protocol)) {
   console.error(
-    'usage: node benchmarks/coding/polyglot.mjs --model <name> --data-dir <set-up qvac data dir> [--protocol agent|aider] [...]'
+    'usage: node benchmarks/coding/polyglot.mjs --model <name> --data-dir <duck data dir> [--protocol agent|aider] [...]'
   )
   process.exit(2)
 }

@@ -4,9 +4,9 @@ Output docs/assets/coding.mp4
 Source docs/demo/common.tape
 
 Hide
-Type `cd docs/demo/project && cp .math.base math.mjs && alias qvac="node $PWD/../../../dist/index.js" && clear` Enter
+Type `cd docs/demo/project && cp .math.base math.mjs && alias duck="QVAC_DEVICE_NAME=Studio node $PWD/../../../dist/index.js" && clear` Enter
 Show
-Type "qvac --temp --skip-setup --model Qwen3.5-9B-Q4_K_M --device-name Studio" Sleep 500ms Enter
+Type "duck --temp --skip-setup --model Qwen3.5-9B-Q4_K_M" Sleep 500ms Enter
 Sleep 40s
 Type "Add an exported average(values) function to @math" Sleep 800ms Tab
 Sleep 300ms

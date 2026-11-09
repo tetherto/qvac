@@ -4,9 +4,9 @@ Output docs/assets/tour.mp4
 Source docs/demo/common.tape
 
 Hide
-Type `cd docs/demo/project && alias qvac="node $PWD/../../../dist/index.js" && clear` Enter
+Type `cd docs/demo/project && alias duck="QVAC_DEVICE_NAME=Studio node $PWD/../../../dist/index.js" && clear` Enter
 Show
-Type "qvac --temp --skip-setup --model Qwen3.5-9B-Q4_K_M --device-name Studio" Sleep 600ms Enter
+Type "duck --temp --skip-setup --model Qwen3.5-9B-Q4_K_M" Sleep 600ms Enter
 Sleep 4s
 Sleep 22s
 Ctrl+G
