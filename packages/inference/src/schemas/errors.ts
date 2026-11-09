@@ -68,6 +68,7 @@ export const ERROR_CODES = {
   REQUEST_REJECTED_BY_POLICY: 52420,
   CONTEXT_OVERFLOW: 52421,
   INVALID_AUDIO_INPUT: 52422,
+  AUDIO_ENCODE_FAILED: 52424,
 
   // RAG operations (52,800-52,999)
   RAG_SAVE_FAILED: 52800,
@@ -437,6 +438,11 @@ const errorDefinitions: ErrorCodesMap = {
   [ERROR_CODES.INVALID_AUDIO_INPUT]: {
     name: 'INVALID_AUDIO_INPUT',
     message: (details?: string) => `Invalid audio input${details ? `: ${details}` : ''}`
+  },
+  [ERROR_CODES.AUDIO_ENCODE_FAILED]: {
+    name: 'AUDIO_ENCODE_FAILED',
+    message: (format: string, details?: string) =>
+      `Failed to encode audio as ${format}${details ? `: ${details}` : ''}`
   },
 
   // RAG operations

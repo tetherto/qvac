@@ -16,6 +16,8 @@ sealed class QvacKnownException(name: String, code: Int?, message: String, paylo
         QvacKnownException("ASYNC_DISPOSE_UNAVAILABLE", reportedCode, message, payload)
     class ServerAttachmentNotFound(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("ATTACHMENT_NOT_FOUND", reportedCode, message, payload)
+    class ServerAudioEncodeFailed(message: String, payload: JsonObject, reportedCode: Int?) :
+        QvacKnownException("AUDIO_ENCODE_FAILED", reportedCode, message, payload)
     class ServerAudioFileNotFound(message: String, payload: JsonObject, reportedCode: Int?) :
         QvacKnownException("AUDIO_FILE_NOT_FOUND", reportedCode, message, payload)
     class ServerAudioPlayerFailed(message: String, payload: JsonObject, reportedCode: Int?) :
@@ -306,6 +308,7 @@ internal fun knownException(name: String, code: Int?, message: String, payload: 
     name == "ARCHIVE_UNSUPPORTED_TYPE" && (code == null || code == 53012) -> QvacKnownException.ServerArchiveUnsupportedType(message, payload, code)
     name == "ASYNC_DISPOSE_UNAVAILABLE" && (code == null || code == 53503) -> QvacKnownException.ServerAsyncDisposeUnavailable(message, payload, code)
     name == "ATTACHMENT_NOT_FOUND" && (code == null || code == 52407) -> QvacKnownException.ServerAttachmentNotFound(message, payload, code)
+    name == "AUDIO_ENCODE_FAILED" && (code == null || code == 52424) -> QvacKnownException.ServerAudioEncodeFailed(message, payload, code)
     name == "AUDIO_FILE_NOT_FOUND" && (code == null || code == 52404) -> QvacKnownException.ServerAudioFileNotFound(message, payload, code)
     name == "AUDIO_PLAYER_FAILED" && (code == null || code == 53501) -> QvacKnownException.ServerAudioPlayerFailed(message, payload, code)
     name == "CACHE_DIR_NOT_ABSOLUTE" && (code == null || code == 53202) -> QvacKnownException.ServerCacheDirNotAbsolute(message, payload, code)

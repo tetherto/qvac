@@ -23,7 +23,9 @@ import { createAudioEditResult } from '@/client/api/audio-gen-result'
  *   `repaint` regenerates the `start`..`end` range (seconds) against a new `caption`, keeping the
  *   rest of the clip. Operations may repeat or mix.
  * @param params.seed - Seeds the first operation; each following operation uses `seed + index`.
- * @returns The same run shape as `audioGen()`: a synchronous request ID, generation progress stream, PCM audio promise, stats promise, and diagnostics promise. `stats.metadata.seed` reports the base seed the edit used.
+ * @param params.outputFormat - Also deliver the edited audio as a file in this container, through
+ *   `run.encoded`, as on a generation.
+ * @returns The same run shape as `audioGen()`: a synchronous request ID, generation progress stream, PCM audio promise, `chunkStream`, `encoded`, stats promise, and diagnostics promise. `stats.metadata.seed` reports the base seed the edit used.
  *
  * @example
  * ```typescript
