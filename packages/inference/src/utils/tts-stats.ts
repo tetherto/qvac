@@ -77,33 +77,90 @@ export function pcmFrame(samples: ArrayLike<number>): { buffer: number[]; pcm?: 
   return { buffer: Array.from(samples) }
 }
 
-// Field-for-field, apart from `audioDurationMs` -> `audioDuration`, which keeps
-// the name the SDK has always exposed.
+/**
+ * The addon stats that keep their name on the wire. `audioDurationMs` is the
+ * one rename (`audioDuration`, the name the SDK has always exposed) and is
+ * handled on its own below.
+ *
+ * Two compile-time checks keep this table honest. `satisfies` requires every
+ * entry to be a key of both the addon's stats and `ttsStatsSchema`, and
+ * `UnforwardedTtsStats` below requires every key of either type to be an
+ * entry. A stat added to one side only, or to both without a line here, fails
+ * to compile rather than being dropped silently.
+ */
+const TTS_FORWARDED_STATS = [
+  'totalTime',
+  'realTimeFactor',
+  'tokensPerSecond',
+  'totalSamples',
+  'generatedFrames',
+  'firstAudioMs',
+  'backendDevice',
+  'backendId',
+  'gpuUnsupported',
+  'enhancerBackendDevice',
+  'enhancerBackendId',
+  'denoiserBackendDevice',
+  'denoiserBackendId',
+  'codecSidecarLoaded',
+  'codecOnCoreml',
+  // Chatterbox
+  't3Ms',
+  's3genMs',
+  't3Tokens',
+  // CosyVoice3 / Audio8
+  'stageTotalMs',
+  // CosyVoice3
+  'lmPrefillMs',
+  'lmDecodeMs',
+  'flowFrontendMs',
+  'ditEulerMs',
+  'hiftF0Ms',
+  'hiftSourceMs',
+  'hiftStftMs',
+  'hiftDecodeMs',
+  'decodeSteps',
+  'speechTokens',
+  'flowFrames',
+  'melFrames',
+  'textIds',
+  'promptSpeechTokens',
+  // Audio8
+  'voiceEncodeMs',
+  'promptMs',
+  'prefillMs',
+  'sampleMs',
+  'fastDecodeMs',
+  'slowDecodeMs',
+  'codecLatentMs',
+  'codecSynthMs',
+  'resampleMs'
+] as const satisfies readonly (keyof AddonTtsStats & keyof TtsStats)[]
+
+type ForwardedTtsStat = (typeof TTS_FORWARDED_STATS)[number]
+
+// The stats either side declares that the table does not cover, apart from the
+// renamed pair. Anything left here is a field `collectTtsStats` would drop.
+type UnforwardedTtsStats =
+  | Exclude<keyof AddonTtsStats, ForwardedTtsStat | 'audioDurationMs'>
+  | Exclude<keyof TtsStats, ForwardedTtsStat | 'audioDuration'>
+
+// Fails with the missing field's name: "Type '"newStat"' does not satisfy the
+// constraint 'never'".
+type AssertNoUnforwardedTtsStats<T extends never> = T
+export type TtsStatsTableIsExhaustive = AssertNoUnforwardedTtsStats<UnforwardedTtsStats>
+
+// Presence, not truthiness: `backendDevice: 0` (CPU) and a zero stage time are
+// real reports, so only `undefined` is dropped.
 export function collectTtsStats(response: { stats?: AddonTtsStats }): TtsStats {
   const stats = response.stats
   if (!stats) return {}
 
-  return {
-    ...(stats.audioDurationMs !== undefined && { audioDuration: stats.audioDurationMs }),
-    ...(stats.totalTime !== undefined && { totalTime: stats.totalTime }),
-    ...(stats.realTimeFactor !== undefined && { realTimeFactor: stats.realTimeFactor }),
-    ...(stats.tokensPerSecond !== undefined && { tokensPerSecond: stats.tokensPerSecond }),
-    ...(stats.totalSamples !== undefined && { totalSamples: stats.totalSamples }),
-    ...(stats.generatedFrames !== undefined && { generatedFrames: stats.generatedFrames }),
-    ...(stats.backendDevice !== undefined && { backendDevice: stats.backendDevice }),
-    ...(stats.backendId !== undefined && { backendId: stats.backendId }),
-    ...(stats.gpuUnsupported !== undefined && { gpuUnsupported: stats.gpuUnsupported }),
-    ...(stats.enhancerBackendDevice !== undefined && {
-      enhancerBackendDevice: stats.enhancerBackendDevice
-    }),
-    ...(stats.enhancerBackendId !== undefined && { enhancerBackendId: stats.enhancerBackendId }),
-    ...(stats.denoiserBackendDevice !== undefined && {
-      denoiserBackendDevice: stats.denoiserBackendDevice
-    }),
-    ...(stats.denoiserBackendId !== undefined && { denoiserBackendId: stats.denoiserBackendId }),
-    ...(stats.codecSidecarLoaded !== undefined && {
-      codecSidecarLoaded: stats.codecSidecarLoaded
-    }),
-    ...(stats.codecOnCoreml !== undefined && { codecOnCoreml: stats.codecOnCoreml })
+  const out: TtsStats = {}
+  if (stats.audioDurationMs !== undefined) out.audioDuration = stats.audioDurationMs
+  for (const key of TTS_FORWARDED_STATS) {
+    const value = stats[key]
+    if (value !== undefined) out[key] = value
   }
+  return out
 }
