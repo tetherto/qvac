@@ -9,6 +9,7 @@ import { registerModel, unregisterModel } from '@/runtime/model-registry'
 import { textToSpeech } from '@/plugins/builtin/tts-ggml/ops/text-to-speech'
 import { textToSpeechStream } from '@/plugins/builtin/tts-ggml/ops/text-to-speech-stream'
 import type { TtsOpResult } from '@/plugins/builtin/tts-ggml/ops/text-to-speech'
+import { getModelsCacheDir } from '@/utils/cache/paths'
 import { useTestCacheDir } from './fixtures/test-cache'
 
 // The per-request voice controls @qvac/tts-ggml takes on every entry point:
@@ -330,3 +331,78 @@ test('Audio8: cancelling by requestId stops a duplex session still fetching its 
   t.is(calls.length, 0, 'nothing reached the engine')
   t.is(getRequestRegistry().get(requestId), null, 'the model slot is released')
 })
+
+// Fires `onTouch` the moment the source resolver checks `target` on disk, then
+// lets the check succeed: a cancel that lands while a cached reference is being
+// resolved, at a known point instead of racing the op.
+function whenResolverTouches(target: string, onTouch: () => void) {
+  const promises = fs.promises as unknown as {
+    access: (file: string, ...rest: unknown[]) => Promise<void>
+  }
+  const original = promises.access
+  let touched = false
+  promises.access = async function (file: string, ...rest: unknown[]) {
+    if (!touched && file === target) {
+      touched = true
+      onTouch()
+    }
+    return original.call(promises, file, ...rest)
+  }
+  return {
+    wasTouched: () => touched,
+    restore: () => {
+      promises.access = original
+    }
+  }
+}
+
+// A `referenceAudioSrc` naming a file already in the cache resolves through a
+// file check that no abort signal interrupts, so a cancel during that wait
+// leaves the resolution successful. The op's abort listener has by then spent
+// its once-only `model.cancel()` on a model with no job, so the request must
+// stop here rather than start one.
+for (const entry of ['textToSpeech', 'textToSpeechStream'] as const) {
+  test(`Audio8 ${entry}: a cancel while a cached reference resolves starts no synthesis`, async (t) => {
+    useTestCacheDir()
+    const modelId = `audio8-reference-resolved-cancel-${entry}`
+    const requestId = `req-reference-resolved-cancel-${entry}`
+    // A bare filename is looked up in the models cache.
+    const reference = `someone-else-${entry}.wav`
+    const cached = path.join(getModelsCacheDir(), reference)
+    fs.mkdirSync(path.dirname(cached), { recursive: true })
+    fs.writeFileSync(cached, Buffer.from('RIFF'))
+    const calls: unknown[] = []
+    register(modelId, 'audio8', calls)
+    let cancelled = 0
+    const hook = whenResolverTouches(cached, () => {
+      cancelled = getRequestRegistry().cancel({ requestId })
+    })
+    t.teardown(() => {
+      hook.restore()
+      unregisterModel(modelId)
+      fs.rmSync(cached, { force: true })
+    })
+
+    const voice = { referenceAudioSrc: reference, referenceText: 'What that recording says.' }
+    const op =
+      entry === 'textToSpeech'
+        ? textToSpeech({
+            type: 'textToSpeech',
+            modelId,
+            requestId,
+            inputType: 'text',
+            text: 'Spoken in another voice.',
+            stream: false,
+            sentenceStream: false,
+            ...voice
+          })
+        : duplex({ modelId, requestId, ...voice }, 'Hi.')
+    const result = await withTimeout(drain(op), 5000, 'the cancelled request never settled')
+
+    t.ok(hook.wasTouched(), 'the reference was resolved from the cache')
+    t.is(cancelled, 1, 'the cancel landed on the registered request during the resolution')
+    t.is(result.cancelled, true, 'the op reports the cancellation')
+    t.is(calls.length, 0, 'nothing reached the engine')
+    t.is(getRequestRegistry().get(requestId), null, 'the model slot is released')
+  })
+}

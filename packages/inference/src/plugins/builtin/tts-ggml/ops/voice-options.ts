@@ -68,7 +68,8 @@ export function assertVoiceJobOptionsSupported(
 
 /**
  * The per-request voice controls in the addon's spelling, or `null` when the
- * request was cancelled while its reference recording was being fetched.
+ * request was cancelled while its reference recording was being resolved,
+ * whether that resolution then failed or succeeded.
  *
  * `referenceAudioSrc` goes through the same source resolution as the load-time
  * `referenceAudioSrc` (a local path, or a registry / remote source cached on
@@ -98,6 +99,12 @@ export async function resolveVoiceJobOptions(
       if (binding.signal.aborted) return null
       throw error
     }
+    // A resolution that succeeds does not mean the request is still wanted: a
+    // local or cached source only awaits a file check, which no signal
+    // interrupts. A cancel that lands during that wait has already fired the
+    // op's once-only `model.cancel()`, before any job existed, so starting the
+    // engine now would run a cancelled request to completion.
+    if (binding.signal.aborted) return null
   }
 
   return {
