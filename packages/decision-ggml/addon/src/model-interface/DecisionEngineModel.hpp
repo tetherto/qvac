@@ -1,19 +1,23 @@
 #pragma once
 
 #include <any>
+#include <atomic>
+#include <cstdint>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <streambuf>
 #include <string>
 #include <unordered_map>
 
-#include "DecisionRuntime.hpp"
+#include <llama/common/common.h>
+
+#include "DecisionContext.hpp"
 #include "LlamaLazyInitializeBackend.hpp"
 #include "inference-addon-cpp/InitLoader.hpp"
 #include "inference-addon-cpp/ModelInterfaces.hpp"
 #include "inference-addon-cpp/RuntimeStats.hpp"
 #include "inference-addon-cpp/job/JobId.hpp"
+#include "utils/JobCancelRegistry.hpp"
 
 /// @brief One upstream decision response, serialized as JSON.
 ///
@@ -24,21 +28,20 @@ struct DecisionEngineResult {
 };
 
 /// @brief Upstream llama.cpp decision models (openjev, lev, kev, clef, laya in
-/// upstream format, ...) through the addon's DecisionRuntime, which runs
-/// upstream's server-context in-process.
+/// upstream format, ...), run by upstream's server-context through this
+/// model's DecisionContext. Fabric-format Laya checkpoints keep using
+/// LayaModel.
 ///
-/// Decision parsing, prompt rendering, scheduling and answer calculation are
-/// upstream's, inside the shared fabric runtime. This class maps the addon's
-/// job lifecycle to the runtime: a delayed load, one cancellation token per
-/// job, and runtime statuses to addon errors. A request is upstream's
-/// /v1/systemone JSON for one state; the result is upstream's response JSON.
-/// Fabric-format Laya checkpoints keep using LayaModel.
+/// Structured like llm-llamacpp's LlamaModel: load options go straight into
+/// common_params, the DecisionContext owns the upstream objects, errors are
+/// the addon's own, and per-job cancellation goes through a JobCancelRegistry.
+/// A request is upstream's /v1/systemone JSON for one state; the result is
+/// upstream's response JSON.
 ///
-/// Driven by a MultiJobScheduler so that cancellation is tied to job ids: the
+/// Driven by a MultiJobScheduler (see makeDecisionEngineScheduler): the
 /// scheduler announces each job (jobStarting) under its admission lock before
-/// the job becomes cancellable, and the job's token is created there. A cancel
-/// that lands before process() starts therefore reaches the job's token
-/// instead of being lost.
+/// the job becomes cancellable, so a cancel that lands before process() starts
+/// is held by the registry and applied when the run arms.
 class DecisionEngineModel
     : public qvac_lib_inference_addon_cpp::model::IModel,
       public qvac_lib_inference_addon_cpp::model::IModelAsyncLoad,
@@ -68,7 +71,7 @@ public:
     return "DecisionEngineModel";
   }
 
-  /// Untagged path (no scheduler id): announces and runs one job.
+  /// Untagged path (no scheduler id): runs one job.
   std::any process(const std::any& input) final;
 
   /// @param input std::string holding upstream's request JSON for one state.
@@ -76,19 +79,16 @@ public:
   /// @returns DecisionEngineResult holding upstream's response JSON.
   std::any process(const std::any& input, JobId id) final;
 
-  /// Creates the job's cancellation token. Runs under the scheduler's
+  /// Registers the job, not yet cancellable. Runs under the scheduler's
   /// admission lock, before the job can be cancelled.
   void jobStarting(JobId id) final;
 
-  /// Cancels the job's run, or its run-to-be if process() has not started.
+  /// Stops the job's run, or holds the cancel until the run arms.
   void cancelById(JobId id) const final;
 
   /// Cancels every job announced and not yet finished. Point-in-time: jobs
   /// announced afterwards are not affected.
   void cancel() const final;
-
-  /// Runs one request under @p id's token (announced by jobStarting).
-  DecisionEngineResult predict(const std::string& requestJson, JobId id);
 
   [[nodiscard]] qvac_lib_inference_addon_cpp::RuntimeStats
   runtimeStats() const final;
@@ -97,46 +97,41 @@ public:
     initLoader_.waitForLoadInitialization();
   }
 
-  /// Weight streaming is not supported: the runtime loads from a path.
+  /// Weight streaming is not supported: the context loads from a path.
   void setWeightsForFile(
       const std::string& filename,
       std::unique_ptr<std::basic_streambuf<char>>&& shard) final;
 
-  /// @brief The model's decision capabilities (runtime JSON, see
-  /// DecisionRuntime::info). Waits for the load.
+  /// @brief The model's decision capabilities (see DecisionContext::info).
+  /// Waits for the load.
   std::string info();
 
-  /// @brief Maps addon load options to the runtime's params JSON. Throws
+  /// @brief Maps addon load options to upstream's parameters. Throws
   /// InvalidConfiguration for an unknown key or a bad value.
-  static std::string paramsJson(
+  static common_params loadParams(
       const std::string& modelGgufPath,
       const std::unordered_map<std::string, std::string>& config);
 
 private:
-  void load(const std::string& paramsJson);
-  /// The job's token; created if the job was never announced (defensive: the
-  /// scheduler always announces).
-  std::shared_ptr<qvac_lib_infer_llamacpp_decision::DecisionCancelToken>
-  tokenFor(JobId id);
-  void finishJob(JobId id);
+  void load(const common_params& params);
+  DecisionEngineResult run(const std::string& requestJson, JobId id);
 
   std::string backendsDir_;
   std::string openclCacheDir_;
 
   // Backends (and their log routing, and the Android OpenCL cache location)
-  // are initialized through the addon's shared initializer before the engine
+  // are initialized through the addon's shared initializer before the context
   // is created, and released after it is destroyed (declared before
-  // runtime_).
+  // context_).
   std::optional<LlamaBackendsHandle> backends_;
-  std::unique_ptr<qvac_lib_infer_llamacpp_decision::DecisionRuntime> runtime_;
+  std::unique_ptr<qvac_lib_inference_addon_decision::DecisionContext> context_;
   std::string info_;
 
-  // Tokens of the jobs announced and not yet finished, by job id.
-  mutable std::mutex tokensMutex_;
-  std::unordered_map<
-      JobId,
-      std::shared_ptr<qvac_lib_infer_llamacpp_decision::DecisionCancelToken>>
-      tokens_;
+  /// Live jobs and how to stop each one's run (see JobCancelRegistry).
+  mutable JobCancelRegistry liveJobs_;
+  /// Bumped by the whole-model cancel(): a run armed before the bump stops.
+  /// Jobs announced but not yet armed are parked in liveJobs_ instead.
+  mutable std::atomic<std::uint64_t> cancelEpoch_{0};
 
   long long lastInputTokens_ = 0;
   double lastMs_ = 0.0;

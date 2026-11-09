@@ -9,9 +9,9 @@ namespace qvac_lib_inference_addon_decision {
 
 /// The scheduler a DecisionEngine instance runs under.
 ///
-/// - Tagged jobs: the model creates each job's cancellation token in
+/// - Tagged jobs: the model registers each job in its JobCancelRegistry in
 ///   jobStarting(id), under the scheduler's admission lock, so a cancel that
-///   lands before process() starts still reaches the job.
+///   lands before process() starts is held until the run arms.
 /// - One worker and no waiting room (queueCapacity 0): a job submitted while
 ///   one is in flight is rejected, not queued, which is runJob()'s documented
 ///   "false if busy" contract. Callers queue in JS.

@@ -20,7 +20,7 @@
 #include <inference-addon-cpp/Errors.hpp>
 #include <nlohmann/json.hpp>
 
-#include "addon/BertErrors.hpp"
+#include "addon/DecisionErrors.hpp"
 #include "model-interface/LayaModel.hpp"
 #include "model-interface/logging.hpp"
 #include "test_common.hpp"
@@ -137,7 +137,7 @@ TEST(LayaModelConfigTest, RejectsOptionsThatDoNotApply) {
       LayaModel::checkConfig(config);
       FAIL() << key << " must be rejected";
     } catch (const qvac_errors::StatusError& error) {
-      EXPECT_EQ(error.codeString(), "[ GTE :: InvalidConfiguration ]") << key;
+      EXPECT_EQ(error.codeString(), "[ Decision :: InvalidConfiguration ]") << key;
       EXPECT_NE(std::string(error.what()).find(key), std::string::npos)
           << error.what();
     }
@@ -169,7 +169,7 @@ TEST(LayaModelConfigTest, ThreadsMustBeAWholeNumber) {
         LayaModel::checkConfig({{"device", "cpu"}, {key, value}});
         FAIL() << key << "=" << value << " must be rejected";
       } catch (const qvac_errors::StatusError& error) {
-        EXPECT_EQ(error.codeString(), "[ GTE :: InvalidConfiguration ]");
+        EXPECT_EQ(error.codeString(), "[ Decision :: InvalidConfiguration ]");
         EXPECT_NE(
             std::string(error.what()).find("must be a whole number"),
             std::string::npos)
@@ -185,7 +185,7 @@ TEST(LayaModelConfigTest, ThreadsOutOfRange) {
         {{"device", "cpu"}, {"threads", "99999999999999999999"}});
     FAIL() << "a value too large to parse must be rejected";
   } catch (const qvac_errors::StatusError& error) {
-    EXPECT_EQ(error.codeString(), "[ GTE :: InvalidConfiguration ]");
+    EXPECT_EQ(error.codeString(), "[ Decision :: InvalidConfiguration ]");
     EXPECT_NE(
         std::string(error.what()).find("is out of range"), std::string::npos)
         << error.what();
@@ -209,7 +209,7 @@ TEST(LayaModelConfigTest, ThreadsAtMostTheCpuCount) {
       LayaModel::checkConfig({{"device", "cpu"}, {key, over}});
       FAIL() << key << "=" << over << " must be rejected";
     } catch (const qvac_errors::StatusError& error) {
-      EXPECT_EQ(error.codeString(), "[ GTE :: InvalidConfiguration ]");
+      EXPECT_EQ(error.codeString(), "[ Decision :: InvalidConfiguration ]");
       EXPECT_NE(
           std::string(error.what())
               .find("this device has " + std::to_string(cpus) + " CPUs"),
@@ -231,7 +231,7 @@ TEST(LayaModelConfigTest, ConstructorRejectsOptionsThatDoNotApply) {
         LayaModel model(
             "unused.gguf", {{"device", "cpu"}, {"pooling", "mean"}}, "");
       }),
-      "[ GTE :: InvalidConfiguration ]");
+      "[ Decision :: InvalidConfiguration ]");
 }
 
 TEST(LayaModelLoadTest, MissingDeviceFailsAtLoad) {
@@ -262,7 +262,7 @@ TEST(LayaModelLoadTest, RejectsNonLayaModel) {
   model.initializeBackend(backendsDir());
   EXPECT_EQ(
       codeOf([&] { model.waitForLoadInitialization(); }),
-      "[ GTE :: UnsupportedModel ]");
+      "[ Decision :: UnsupportedModel ]");
   EXPECT_FALSE(model.isLoaded());
 }
 
@@ -356,7 +356,7 @@ TEST(LayaModelBatchTest, SameAnswerAloneAndInBatch) {
 TEST_F(LayaModelTest, InvalidJsonIsInvalidRequest) {
   EXPECT_EQ(
       codeOf([&] { model_->predict("{not json"); }),
-      "[ GTE :: InvalidRequest ]");
+      "[ Decision :: InvalidRequest ]");
 }
 
 TEST_F(LayaModelTest, MalformedRequestIsInvalidRequest) {
@@ -368,7 +368,7 @@ TEST_F(LayaModelTest, MalformedRequestIsInvalidRequest) {
        R"({"state": "x", "max_len": -1, "questions": {}})",
        R"([1, 2, 3])"}) {
     EXPECT_EQ(
-        codeOf([&] { model_->predict(request); }), "[ GTE :: InvalidRequest ]")
+        codeOf([&] { model_->predict(request); }), "[ Decision :: InvalidRequest ]")
         << request;
   }
   // The model still answers after rejected requests.
@@ -427,7 +427,7 @@ TEST(LayaModelBatchTest, BatchSizeSetsTheContext) {
     (void)model.predict(request.dump());
     FAIL() << "a sequence longer than batch_size must be rejected";
   } catch (const qvac_errors::StatusError& error) {
-    EXPECT_EQ(error.codeString(), "[ GTE :: InvalidRequest ]");
+    EXPECT_EQ(error.codeString(), "[ Decision :: InvalidRequest ]");
     EXPECT_NE(
         std::string(error.what()).find("batch size 512"), std::string::npos)
         << error.what();
@@ -445,7 +445,7 @@ TEST(LayaModelBatchTest, TooSmallBatchSizeIsInvalidConfiguration) {
   model.initializeBackend(backendsDir());
   EXPECT_EQ(
       codeOf([&] { model.waitForLoadInitialization(); }),
-      "[ GTE :: InvalidConfiguration ]");
+      "[ Decision :: InvalidConfiguration ]");
   EXPECT_FALSE(model.isLoaded());
 }
 

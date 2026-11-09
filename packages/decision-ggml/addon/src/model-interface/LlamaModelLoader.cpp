@@ -21,12 +21,12 @@
 #include <TargetConditionals.h>
 #endif
 
-#include "addon/BertErrors.hpp"
+#include "addon/DecisionErrors.hpp"
 #include "logging.hpp"
 #include "utils.hpp"
 
-using namespace qvac_lib_infer_llamacpp_embed::errors;
-using namespace qvac_lib_infer_llamacpp_embed::logging;
+using namespace qvac_lib_inference_addon_decision::errors;
+using namespace qvac_lib_inference_addon_decision::logging;
 
 namespace {
 // Trim each token and drop empties so "1,,2" and "1, 2" both count two shares,
@@ -346,7 +346,7 @@ LlamaModelSetup setupParams(
       params.split_mode = splitMode;
 
       if (splitMode != LLAMA_SPLIT_MODE_NONE && mainGpu.has_value()) {
-        qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+        qvac_lib_inference_addon_decision::logging::llamaLogCallback(
             GGML_LOG_LEVEL_WARN,
             "[LlamaModelLoader] main-gpu is ignored in multi-GPU split-mode\n",
             nullptr);
@@ -360,7 +360,7 @@ LlamaModelSetup setupParams(
           }
           deviceList += device.name;
         }
-        qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+        qvac_lib_inference_addon_decision::logging::llamaLogCallback(
             GGML_LOG_LEVEL_INFO,
             string_format(
                 "[LlamaModelLoader] split mode: pinning to %zu eligible "
@@ -376,7 +376,7 @@ LlamaModelSetup setupParams(
       params.split_mode = LLAMA_SPLIT_MODE_NONE;
       params.main_gpu = -1;
       if (splitMode != LLAMA_SPLIT_MODE_NONE) {
-        qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+        qvac_lib_inference_addon_decision::logging::llamaLogCallback(
             GGML_LOG_LEVEL_WARN,
             "[LlamaModelLoader] split-mode, tensor-split and main-gpu ignored: "
             "no eligible named GPU device available, falling back to CPU\n",
@@ -406,7 +406,7 @@ LlamaModelSetup setupParams(
                                   configFilemap.contains("flash_attn");
     if (isOpenCl && !userSetFlashAttn) {
       configFilemap["flash-attn"] = "off";
-      qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+      qvac_lib_inference_addon_decision::logging::llamaLogCallback(
           GGML_LOG_LEVEL_INFO,
           "[LlamaModelLoader] OpenCL backend selected: disabling flash "
           "attention by "
@@ -448,7 +448,7 @@ LlamaModelSetup setupParams(
   }
   if (deprecatedMode.has_value()) {
     if (configFilemap.contains("load-mode")) {
-      qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+      qvac_lib_inference_addon_decision::logging::llamaLogCallback(
           GGML_LOG_LEVEL_WARN,
           string_format(
               "[LlamaModelLoader] '%s' ignored: 'load-mode' is set\n",
@@ -582,7 +582,7 @@ void LlamaModelLoader::init(LlamaModelSetup& setup) {
 
   // print system information
   {
-    qvac_lib_infer_llamacpp_embed::logging::llamaLogCallback(
+    qvac_lib_inference_addon_decision::logging::llamaLogCallback(
         GGML_LOG_LEVEL_INFO,
         string_format(
             "%s\n", common_params_get_system_info(init_.params).c_str())

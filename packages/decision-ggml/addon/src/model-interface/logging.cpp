@@ -4,7 +4,7 @@
 
 using namespace qvac_lib_inference_addon_cpp::logger;
 
-namespace qvac_lib_infer_llamacpp_embed::logging {
+namespace qvac_lib_inference_addon_decision::logging {
 // Global verbosity level - initialized to ERROR as safe default
 // This ensures that if llamaLogCallback is triggered before verbosity is set,
 // only ERROR messages will be shown, preventing log spam
@@ -86,4 +86,4 @@ void llamaLogCallback(ggml_log_level level, const char* text, void* userData) {
   QLOG_IF(priority, string_format("[Llama.cpp] %s", text));
 }
 
-} // namespace qvac_lib_infer_llamacpp_embed::logging
+} // namespace qvac_lib_inference_addon_decision::logging

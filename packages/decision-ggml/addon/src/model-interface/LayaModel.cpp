@@ -11,10 +11,10 @@
 #include <llama.h>
 #include <nlohmann/json.hpp>
 
-#include "addon/BertErrors.hpp"
+#include "addon/DecisionErrors.hpp"
 #include "utils.hpp"
 
-using namespace qvac_lib_infer_llamacpp_embed::errors;
+using namespace qvac_lib_inference_addon_decision::errors;
 
 namespace {
 

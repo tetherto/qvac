@@ -17,3 +17,5 @@
     job even before its run starts. A model without decision metadata is
     rejected from its GGUF header before loading, and a request rejected by
     the model fails with `err.code` `DECISION_INVALID_REQUEST`.
+  - Load errors carry this addon's own ID, `[ Decision :: <code> ]`, for both
+    engines. Embed's `LayaDecisions` keeps reporting `[ GTE :: <code> ]`.

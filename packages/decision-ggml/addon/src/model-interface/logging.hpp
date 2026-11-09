@@ -7,7 +7,7 @@
 
 #include "inference-addon-cpp/Logger.hpp"
 
-namespace qvac_lib_infer_llamacpp_embed::logging {
+namespace qvac_lib_inference_addon_decision::logging {
 
 // Global verbosity level - same for all instances
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
@@ -20,7 +20,7 @@ void setVerbosityLevel(
 
 void llamaLogCallback(ggml_log_level level, const char* text, void* userData);
 
-} // namespace qvac_lib_infer_llamacpp_embed::logging
+} // namespace qvac_lib_inference_addon_decision::logging
 //
 // Simple logging macro that uses global verbosity level
 // Usage: QLOG_IF(Priority::DEBUG, "Debug message");
@@ -29,7 +29,7 @@ void llamaLogCallback(ggml_log_level level, const char* text, void* userData);
   do {                                                                         \
     if (static_cast<int>(priority) <=                                          \
         static_cast<int>(                                                      \
-            qvac_lib_infer_llamacpp_embed::logging::g_verbosityLevel)) {       \
+            qvac_lib_inference_addon_decision::logging::g_verbosityLevel)) {       \
       QLOG(priority, message);                                                 \
     }                                                                          \
   } while (0)

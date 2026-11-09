@@ -8,7 +8,7 @@
 
 #include <llama-cpp.h>
 
-#include "addon/BertErrors.hpp"
+#include "addon/DecisionErrors.hpp"
 #include "inference-addon-cpp/Errors.hpp"
 
 /// @brief Access model metadata without loading weights into memory.

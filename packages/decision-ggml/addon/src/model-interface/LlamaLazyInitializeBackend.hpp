@@ -6,7 +6,7 @@
 /**
  * Lazy initialization class for llama backend.
  * Ensures backend is initialized only once (even when instantiating multiple
- * BertModel objects) and tracks the backends directory.
+ * models) and tracks the backends directory.
  */
 class LlamaLazyInitializeBackend {
 public:

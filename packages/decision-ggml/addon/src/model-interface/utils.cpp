@@ -19,9 +19,9 @@
 #include <inference-addon-cpp/Errors.hpp>
 #include <llama/common/common.h>
 
-#include "addon/BertErrors.hpp"
+#include "addon/DecisionErrors.hpp"
 
-using namespace qvac_lib_infer_llamacpp_embed::errors;
+using namespace qvac_lib_inference_addon_decision::errors;
 
 std::vector<std::string>
 splitLines(const std::string& str, const std::string& separator) {

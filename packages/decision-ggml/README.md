@@ -91,7 +91,7 @@ Any other key fails the load.
   result poll, and reaches a request even before its run starts. The next
   request runs normally.
 - **Errors.** A model without decision metadata fails `load()` from its GGUF
-  header, before anything is loaded. A request the model rejects (too many
+  header, before anything is loaded, with `[ Decision :: UnsupportedModel ]`. A request the model rejects (too many
   options, an unsupported question type, nesting deeper than 128 levels, ...)
   fails with `err.code === DECISION_INVALID_REQUEST`; other failures do not
   carry that code.
@@ -187,10 +187,10 @@ With `opts: { stats: true }`, `response.stats` holds `total_tokens`, `total_time
 
 | `code` | When |
 |--------|------|
-| `[ GTE :: InvalidArgument ]` | `device` is missing (`must specify a device`) |
-| `[ GTE :: InvalidConfiguration ]` | A key outside the list above, a thread count that is not a whole number or exceeds the CPU count, or a `batch_size` too small for even a short sequence |
-| `[ GTE :: UnsupportedModel ]` | The GGUF is not a Laya checkpoint (detected before its weights load), or its decision metadata is malformed |
-| `[ GTE :: UnableToLoadMetadata ]`, `[ GTE :: UnableToLoadModel ]` | The file cannot be read or loaded, including a Laya model on a fabric runtime without Laya |
+| `[ Decision :: InvalidArgument ]` | `device` is missing (`must specify a device`) |
+| `[ Decision :: InvalidConfiguration ]` | A key outside the list above, a thread count that is not a whole number or exceeds the CPU count, or a `batch_size` too small for even a short sequence |
+| `[ Decision :: UnsupportedModel ]` | The GGUF is not a Laya checkpoint (detected before its weights load), or its decision metadata is malformed |
+| `[ Decision :: UnableToLoadMetadata ]`, `[ Decision :: UnableToLoadModel ]` | The file cannot be read or loaded, including a Laya model on a fabric runtime without Laya |
 
 `run()` rejects with an error that carries only a `message`, naming the problem: an invalid request (`predict: question 'q': unknown type "pick"; use one of choice, noul, score`), a sequence longer than `batch_size` (`predict: a sequence of 928 tokens does not fit the batch size 512`), a failed forward pass (`predict: llama_decode failed`), or `Job cancelled` after `cancel()`.
 

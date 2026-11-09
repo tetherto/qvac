@@ -23,7 +23,7 @@ set(DECISION_GGML_SOURCES
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/ModelMetadata.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LlamaModelLoader.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/LayaModel.cpp
-  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/DecisionRuntime.cpp
+  ${PROJECT_SOURCE_DIR}/addon/src/model-interface/DecisionContext.cpp
   ${PROJECT_SOURCE_DIR}/addon/src/model-interface/DecisionEngineModel.cpp
 )
 

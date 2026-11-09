@@ -190,7 +190,7 @@ safeTest('load rejects a missing device', {}, async (t) => {
     await laya.load()
     t.fail('load must reject')
   } catch (err) {
-    t.is(err.code, '[ GTE :: InvalidArgument ]', err.message)
+    t.is(err.code, '[ Decision :: InvalidArgument ]', err.message)
   } finally {
     await laya.unload().catch(() => {})
   }
@@ -205,7 +205,7 @@ safeTest('load rejects an option Laya does not take', {}, async (t) => {
     await laya.load()
     t.fail('load must reject')
   } catch (err) {
-    t.is(err.code, '[ GTE :: InvalidConfiguration ]', err.message)
+    t.is(err.code, '[ Decision :: InvalidConfiguration ]', err.message)
   } finally {
     await laya.unload().catch(() => {})
   }
@@ -219,7 +219,7 @@ safeTest('load rejects a GGUF that is not a Laya checkpoint', { timeout: 600_000
     await laya.load()
     t.fail('load must reject')
   } catch (err) {
-    t.is(err.code, '[ GTE :: UnsupportedModel ]', err.message)
+    t.is(err.code, '[ Decision :: UnsupportedModel ]', err.message)
   } finally {
     await laya.unload().catch(() => {})
   }

@@ -9,6 +9,8 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include <gtest/gtest.h>
 #include <inference-addon-cpp/Errors.hpp>
@@ -47,8 +49,9 @@ std::string outcomeOf(const std::function<void()>& call) {
   return "no error";
 }
 
-json params(const std::unordered_map<std::string, std::string>& config) {
-  return json::parse(DecisionEngineModel::paramsJson("/m.gguf", config));
+common_params
+params(const std::unordered_map<std::string, std::string>& config) {
+  return DecisionEngineModel::loadParams("/m.gguf", config);
 }
 
 /// First existing candidate, relative to the working directory or the build
@@ -102,8 +105,8 @@ const char* kRequest = R"({
 
 } // namespace
 
-TEST(DecisionEngineConfigTest, MapsLoadOptionsToRuntimeParams) {
-  const json p = params(
+TEST(DecisionEngineConfigTest, MapsLoadOptionsToUpstreamParams) {
+  const common_params p = params(
       {{"device", "gpu"},
        {"gpu_layers", "99"},
        {"ctx_size", "4096"},
@@ -112,49 +115,69 @@ TEST(DecisionEngineConfigTest, MapsLoadOptionsToRuntimeParams) {
        {"threads", "4"},
        {"parallel", "2"},
        {"mmproj", "/p.gguf"}});
-  EXPECT_EQ(p.at("model"), "/m.gguf");
-  EXPECT_EQ(p.at("n_gpu_layers"), 99);
-  EXPECT_EQ(p.at("n_ctx"), 4096);
-  EXPECT_EQ(p.at("n_batch"), 512);
-  EXPECT_EQ(p.at("n_ubatch"), 256);
-  EXPECT_EQ(p.at("n_threads"), 4);
-  EXPECT_EQ(p.at("n_parallel"), 2);
-  EXPECT_EQ(p.at("mmproj"), "/p.gguf");
+  EXPECT_EQ(p.model.path, "/m.gguf");
+  EXPECT_EQ(p.n_gpu_layers, 99);
+  EXPECT_EQ(p.n_ctx, 4096);
+  EXPECT_EQ(p.n_batch, 512);
+  EXPECT_EQ(p.n_ubatch, 256);
+  EXPECT_EQ(p.cpuparams.n_threads, 4);
+  EXPECT_EQ(p.n_parallel, 2);
+  EXPECT_EQ(p.mmproj.path, "/p.gguf");
+  EXPECT_EQ(p.sleep_idle_seconds, -1) << "idle sleep stays off";
 }
 
 TEST(DecisionEngineConfigTest, CpuKeepsEveryLayerAndTheProjectorOnTheCpu) {
-  const json p =
+  const common_params p =
       params({{"device", "cpu"}, {"gpu_layers", "99"}, {"mmproj", "/p.gguf"}});
-  EXPECT_EQ(p.at("n_gpu_layers"), 0);
-  EXPECT_EQ(p.at("mmproj_use_gpu"), false);
+  EXPECT_EQ(p.n_gpu_layers, 0);
+  EXPECT_FALSE(p.mmproj_use_gpu);
 }
 
 TEST(DecisionEngineConfigTest, UnsetOptionsAreLeftToUpstream) {
-  const json p = params({{"device", "gpu"}});
-  EXPECT_FALSE(p.contains("n_gpu_layers"));
-  EXPECT_FALSE(p.contains("n_ctx"));
-  EXPECT_FALSE(p.contains("mmproj"));
-  EXPECT_FALSE(p.contains("mmproj_use_gpu"));
+  const common_params defaults{};
+  const common_params p = params({{"device", "gpu"}});
+  EXPECT_EQ(p.n_gpu_layers, defaults.n_gpu_layers);
+  EXPECT_EQ(p.n_ctx, defaults.n_ctx);
+  EXPECT_EQ(p.n_parallel, defaults.n_parallel);
+  EXPECT_TRUE(p.mmproj.path.empty());
+  EXPECT_EQ(p.mmproj_use_gpu, defaults.mmproj_use_gpu);
 }
 
 // openclCacheDir is applied by the addon's shared backend initializer before
-// the engine is created (GGML_OPENCL_CACHE_DIR, Android), not by the runtime.
-TEST(DecisionEngineConfigTest, OpenclCacheDirIsAcceptedAndNotARuntimeParam) {
-  const json p = params({{"device", "gpu"}, {"openclCacheDir", "/data/cache"}});
-  EXPECT_FALSE(p.contains("openclCacheDir"));
+// the context is created (GGML_OPENCL_CACHE_DIR, Android).
+TEST(DecisionEngineConfigTest, OpenclCacheDirIsAccepted) {
+  EXPECT_EQ(
+      codeOf([] {
+        params({{"device", "gpu"}, {"openclCacheDir", "/data/cache"}});
+      }),
+      "no error");
 }
 
+// Upstream does not check slot and batch counts: 0 slots leave every request
+// deferred forever, and a batch of 0 cannot hold a token.
 TEST(DecisionEngineConfigTest, RejectsBadOptions) {
-  const std::string invalid = "[ GTE :: InvalidConfiguration ]";
+  const std::string invalid = "[ Decision :: InvalidConfiguration ]";
   EXPECT_EQ(codeOf([] { params({}); }), invalid) << "device is required";
   EXPECT_EQ(codeOf([] { params({{"device", "npu"}}); }), invalid);
   EXPECT_EQ(
       codeOf([] { params({{"device", "cpu"}, {"pooling", "mean"}}); }),
       invalid);
-  EXPECT_EQ(
-      codeOf([] { params({{"device", "cpu"}, {"ctx_size", "4k"}}); }), invalid);
-  EXPECT_EQ(
-      codeOf([] { params({{"device", "cpu"}, {"parallel", "0"}}); }), invalid);
+  for (const auto& [key, value] :
+       std::vector<std::pair<std::string, std::string>>{
+           {"ctx_size", "4k"},
+           {"ctx_size", "-1"},
+           {"parallel", "0"},
+           {"parallel", "-1"},
+           {"batch_size", "0"},
+           {"ubatch_size", "0"},
+           {"threads", "0"}}) {
+    EXPECT_EQ(
+        codeOf([&key = key, &value = value] {
+          params({{"device", "cpu"}, {key, value}});
+        }),
+        invalid)
+        << key << "=" << value;
+  }
 }
 
 TEST(DecisionEngineConfigTest, ConstructorRejectsBadOptionsBeforeLoading) {
@@ -163,7 +186,7 @@ TEST(DecisionEngineConfigTest, ConstructorRejectsBadOptionsBeforeLoading) {
         DecisionEngineModel model(
             "unused.gguf", {{"device", "cpu"}, {"pooling", "mean"}});
       }),
-      "[ GTE :: InvalidConfiguration ]");
+      "[ Decision :: InvalidConfiguration ]");
 }
 
 TEST(DecisionEngineLoadTest, RejectsAModelWithoutDecisionMetadata) {
@@ -174,14 +197,14 @@ TEST(DecisionEngineLoadTest, RejectsAModelWithoutDecisionMetadata) {
   DecisionEngineModel model(path, {{"device", "cpu"}});
   EXPECT_EQ(
       codeOf([&] { model.waitForLoadInitialization(); }),
-      "[ GTE :: UnsupportedModel ]");
+      "[ Decision :: UnsupportedModel ]");
 }
 
 TEST(DecisionEngineLoadTest, MissingFileFailsToLoad) {
   DecisionEngineModel model("/nonexistent/decision.gguf", {{"device", "cpu"}});
   EXPECT_EQ(
       codeOf([&] { model.waitForLoadInitialization(); }),
-      "[ GTE :: UnableToLoadModel ]");
+      "[ Decision :: UnableToLoadModel ]");
 }
 
 // The scheduler announces a job (jobStarting) under its admission lock and only
@@ -220,48 +243,26 @@ TEST(DecisionEngineCancelTest, CancelDoesNotLeakToOtherJobs) {
   // missing file (not a cancellation).
   EXPECT_EQ(
       outcomeOf([&] { model.process(std::string("{}"), 2); }),
-      "[ GTE :: UnableToLoadModel ]");
+      "[ Decision :: UnableToLoadModel ]");
   EXPECT_EQ(
       outcomeOf([&] { model.process(std::string("{}"), 3); }),
-      "[ GTE :: UnableToLoadModel ]");
+      "[ Decision :: UnableToLoadModel ]");
 }
 
-namespace qdecision = qvac_lib_infer_llamacpp_decision;
+namespace qdecision = qvac_lib_inference_addon_decision;
 
-// The runtime validates slot and batch counts itself, independently of the
-// addon's option checks. Validation runs before the model file is read.
-TEST(DecisionRuntimeTest, RejectsUnusableSlotAndBatchCountsBeforeLoading) {
-  for (const char* params :
-       {R"({"model":"/nonexistent.gguf","n_parallel":0})",
-        R"({"model":"/nonexistent.gguf","n_parallel":-1})",
-        R"({"model":"/nonexistent.gguf","n_batch":0})",
-        R"({"model":"/nonexistent.gguf","n_ubatch":0})",
-        R"({"model":"/nonexistent.gguf","n_ctx":-1})"}) {
-    const auto created = qdecision::DecisionRuntime::create(params);
-    EXPECT_EQ(created.outcome.status, qdecision::DecisionStatus::InvalidRequest)
-        << params;
-    EXPECT_EQ(created.runtime, nullptr) << params;
-    EXPECT_NE(created.outcome.json.find("must be"), std::string::npos)
-        << created.outcome.json;
-  }
-}
-
-TEST(DecisionRuntimeTest, MissingModelFileIsAnErrorAndNothingRuns) {
-  const auto created =
-      qdecision::DecisionRuntime::create(R"({"model":"/nonexistent.gguf"})");
-  EXPECT_EQ(created.outcome.status, qdecision::DecisionStatus::Error);
-  EXPECT_EQ(created.runtime, nullptr);
-  EXPECT_NE(
-      created.outcome.json.find("model file not found"), std::string::npos)
-      << created.outcome.json;
-}
-
-TEST(DecisionRuntimeTest, RejectsBadParamsJson) {
-  for (const char* params : {"not json", "{}", R"({"model":""})"}) {
-    const auto created = qdecision::DecisionRuntime::create(params);
-    EXPECT_EQ(created.outcome.status, qdecision::DecisionStatus::InvalidRequest)
-        << params;
-    EXPECT_EQ(created.runtime, nullptr) << params;
+TEST(DecisionContextTest, MissingModelFileFailsToLoadAndNothingRuns) {
+  common_params p;
+  p.model.path = "/nonexistent.gguf";
+  try {
+    qdecision::DecisionContext context(p);
+    FAIL() << "expected a load failure";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_EQ(error.codeString(), "[ Decision :: UnableToLoadModel ]");
+    EXPECT_NE(
+        std::string(error.what()).find("model file not found"),
+        std::string::npos)
+        << error.what();
   }
 }
 
@@ -274,73 +275,87 @@ std::string nestedRequest(int depth) {
          R"(,"questions":{"q":{"type":"noul","instructions":"?"}}})";
 }
 
-/// One loaded runtime on the tiny openjev fixture, shared by the tests below.
-class DecisionRuntimeModelTest : public ::testing::Test {
+const std::function<bool()> kNeverStop = [] { return false; };
+
+/// The code and message of a run's StatusError, "Job cancelled" for a
+/// cancellation, or "no error".
+std::pair<std::string, std::string> runOutcome(
+    qdecision::DecisionContext& context, const std::string& request,
+    const std::function<bool()>& shouldStop) {
+  try {
+    context.run(request, shouldStop);
+  } catch (const qvac_errors::StatusError& error) {
+    return {error.codeString(), error.what()};
+  } catch (const std::runtime_error& error) {
+    return {error.what(), ""};
+  }
+  return {"no error", ""};
+}
+
+/// One loaded context on the tiny openjev fixture, shared by the tests below.
+class DecisionContextModelTest : public ::testing::Test {
 protected:
   static void SetUpTestSuite() {
     const std::string model = fixture("tinyopenjev-for-testing-Q8_0.gguf");
     if (model.empty()) {
       return;
     }
-    json p = json::object();
-    p["model"] = model;
-    p["n_gpu_layers"] = 0;
-    p["n_ctx"] = 2048;
-    auto created = qdecision::DecisionRuntime::create(p.dump());
-    ASSERT_EQ(created.outcome.status, qdecision::DecisionStatus::Ok)
-        << created.outcome.json;
-    runtime_ = std::move(created.runtime);
+    context_ = std::make_unique<qdecision::DecisionContext>(
+        DecisionEngineModel::loadParams(
+            model, {{"device", "cpu"}, {"ctx_size", "2048"}}));
   }
-  static void TearDownTestSuite() { runtime_.reset(); }
+  static void TearDownTestSuite() { context_.reset(); }
   void SetUp() override {
-    if (!runtime_) {
+    if (!context_) {
       GTEST_SKIP() << "decision fixtures not found (set DECISION_TEST_MODELS)";
     }
   }
-  static std::unique_ptr<qdecision::DecisionRuntime> runtime_;
+  static std::unique_ptr<qdecision::DecisionContext> context_;
 };
-std::unique_ptr<qdecision::DecisionRuntime> DecisionRuntimeModelTest::runtime_;
+std::unique_ptr<qdecision::DecisionContext> DecisionContextModelTest::context_;
 
 } // namespace
 
-TEST_F(DecisionRuntimeModelTest, DepthGuardAccepts128AndRejects129AndDeeper) {
-  const auto ok = runtime_->run(nestedRequest(128), nullptr);
+TEST_F(DecisionContextModelTest, DepthGuardAccepts128AndRejects129AndDeeper) {
   // Depth 128 passes the guard; the model may still reject the payload.
-  EXPECT_EQ(ok.json.find("nested more than"), std::string::npos) << ok.json;
+  const auto ok = runOutcome(*context_, nestedRequest(128), kNeverStop);
+  EXPECT_EQ(ok.second.find("nested more than"), std::string::npos) << ok.second;
 
   for (const int depth : {129, 5000}) {
-    const auto rejected = runtime_->run(nestedRequest(depth), nullptr);
-    EXPECT_EQ(rejected.status, qdecision::DecisionStatus::InvalidRequest);
+    const auto rejected =
+        runOutcome(*context_, nestedRequest(depth), kNeverStop);
+    EXPECT_EQ(rejected.first, "[ Decision :: InvalidRequest ]");
     EXPECT_NE(
-        rejected.json.find("nested more than 128 levels"), std::string::npos)
-        << rejected.json;
+        rejected.second.find("nested more than 128 levels"), std::string::npos)
+        << rejected.second;
   }
 }
 
-TEST_F(DecisionRuntimeModelTest, ATokenCancelledBeforeTheRunIsCancelled) {
-  auto token = std::make_shared<qdecision::DecisionCancelToken>();
-  token->request();
-  const auto outcome = runtime_->run(kRequest, token);
-  EXPECT_EQ(outcome.status, qdecision::DecisionStatus::Cancelled);
+TEST_F(
+    DecisionContextModelTest, AStopBeforeTheRunCancelsItAndTheNextRunAnswers) {
+  EXPECT_EQ(
+      runOutcome(*context_, kRequest, [] { return true; }).first,
+      "Job cancelled");
 
-  // A fresh token runs normally afterwards.
-  const auto next = runtime_->run(
-      kRequest, std::make_shared<qdecision::DecisionCancelToken>());
-  EXPECT_EQ(next.status, qdecision::DecisionStatus::Ok) << next.json;
-  EXPECT_TRUE(json::parse(next.json).contains("answers"));
+  // No stale stop signal: the next run answers.
+  const json next = json::parse(context_->run(kRequest, kNeverStop));
+  EXPECT_TRUE(next.contains("answers"));
 }
 
-TEST_F(DecisionRuntimeModelTest, ReportsInfoAndMapsUpstreamRejections) {
-  const json info = json::parse(runtime_->info());
+TEST_F(DecisionContextModelTest, ReportsInfoAndMapsUpstreamRejections) {
+  const json info = json::parse(context_->info());
   EXPECT_EQ(info["decision_type"], "openjev");
-  EXPECT_EQ(info["max_json_depth"], qdecision::kDecisionMaxJsonDepth);
+  EXPECT_EQ(info["max_json_depth"], qdecision::DECISION_MAX_JSON_DEPTH);
 
-  const auto outcome = runtime_->run(
+  const auto rejected = runOutcome(
+      *context_,
       R"({"state":"x","questions":{"q":{"type":"score","instructions":"?",)"
       R"("criteria":["a","b","c","d","e","f","g","h","i","j","k"]}}})",
-      nullptr);
-  EXPECT_EQ(outcome.status, qdecision::DecisionStatus::InvalidRequest);
-  EXPECT_TRUE(json::parse(outcome.json).contains("error")) << outcome.json;
+      kNeverStop);
+  EXPECT_EQ(rejected.first, "[ Decision :: InvalidRequest ]");
+  // The JS side keys err.code DECISION_INVALID_REQUEST on this prefix.
+  EXPECT_EQ(rejected.second.rfind("invalid request: ", 0), 0U)
+      << rejected.second;
 }
 
 namespace {
@@ -461,11 +476,12 @@ TEST_F(DecisionEngineModelTest, AnswersAllQuestionTypes) {
 }
 
 TEST_F(DecisionEngineModelTest, InvalidRequestsMapToInvalidRequest) {
-  EXPECT_EQ(codeOf([&] { run("{not json"); }), "[ GTE :: InvalidRequest ]");
+  EXPECT_EQ(
+      codeOf([&] { run("{not json"); }), "[ Decision :: InvalidRequest ]");
   const std::string deep =
       R"({"state":)" + std::string(129, '[') + std::string(129, ']') +
       R"(,"questions":{"q":{"type":"noul","instructions":"?"}}})";
-  EXPECT_EQ(codeOf([&] { run(deep); }), "[ GTE :: InvalidRequest ]");
+  EXPECT_EQ(codeOf([&] { run(deep); }), "[ Decision :: InvalidRequest ]");
 }
 
 TEST_F(DecisionEngineModelTest, CancelledRunThrowsJobCancelledThenRecovers) {

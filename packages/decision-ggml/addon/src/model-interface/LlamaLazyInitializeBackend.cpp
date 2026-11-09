@@ -9,7 +9,7 @@
 #include "logging.hpp"
 #include "utils.hpp"
 
-using namespace qvac_lib_infer_llamacpp_embed::logging;
+using namespace qvac_lib_inference_addon_decision::logging;
 using namespace qvac_lib_inference_addon_cpp::logger;
 
 std::mutex LlamaLazyInitializeBackend::g_initMutex;

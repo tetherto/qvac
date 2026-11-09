@@ -287,8 +287,7 @@ constexpr std::string_view K_BACKEND_TRIM = " \t\r\n\v\f";
 /// Whether a ggml device backend name belongs to the requested family.
 /// Substring rather than equality because ggml suffixes the device index
 /// ("CUDA0", "Vulkan1") and OpenCL reports as "GPUOpenCL". Metal is special:
-/// some builds report "mtl..." instead of "Metal", which BertModel already
-/// special-cases the same way.
+/// some builds report "mtl..." instead of "Metal".
 bool backendNameMatchesFamily(
     const std::string& lowercasedBackendName, std::string_view family) {
   if (lowercasedBackendName.find(family) != std::string::npos) {

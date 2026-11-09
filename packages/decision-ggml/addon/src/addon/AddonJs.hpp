@@ -77,10 +77,10 @@ struct JsDecisionEngineOutputHandler
 };
 
 /// Like createModelInstance, but drives the model through a one-slot
-/// MultiJobScheduler: jobs carry ids, the model creates each job's
-/// cancellation token in jobStarting() under the scheduler's admission lock,
-/// and a cancel that lands before process() starts reaches that token instead
-/// of being lost. Args: [jsHandle, { path, config, backendsDir },
+/// MultiJobScheduler: jobs carry ids, the model registers each job in its
+/// JobCancelRegistry in jobStarting() under the scheduler's admission lock,
+/// and a cancel that lands before process() starts is held there instead of
+/// being lost. Args: [jsHandle, { path, config, backendsDir },
 /// outputCallback].
 inline js_value_t*
 createDecisionEngineInstance(js_env_t* env, js_callback_info_t* info) try {
@@ -113,7 +113,7 @@ createDecisionEngineInstance(js_env_t* env, js_callback_info_t* info) try {
 JSCATCH
 
 /// Args: [instance]. Returns the loaded model's decision capabilities as a
-/// JSON string (see DecisionRuntime::info). Blocks until the load ends, so
+/// JSON string (see DecisionContext::info). Blocks until the load ends, so
 /// call it after activate().
 inline js_value_t* decisionInfo(js_env_t* env, js_callback_info_t* info) try {
   using namespace qvac_lib_inference_addon_cpp;
