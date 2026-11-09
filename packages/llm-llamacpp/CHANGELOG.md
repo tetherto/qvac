@@ -8,8 +8,9 @@
   `devices: "XDNA0"`, on Linux x64 with an `@qvac/fabric` that ships the XDNA
   backend. It is never chosen automatically and never joins an automatic
   split. The KV cache stays at `f16` on the NPU, whose attention kernels take
-  only `f16` K/V. `split-mode: "tensor"` with `XDNA0` is rejected with
-  `InvalidArgument`.
+  only `f16` K/V, and a vision model's projector defaults to the CPU
+  (`mmproj-use-gpu: true` moves it to the NPU). `split-mode: "tensor"` with
+  `XDNA0` is rejected with `InvalidArgument`.
 
 ### Changed
 

@@ -2582,6 +2582,46 @@ TEST(UsesBackendFamilyTest, FalseWithoutXdnaDevice) {
   EXPECT_TRUE(lfn::usesBackendFamily(true, "CUDA0", {}, "cuda"));
 }
 
+// Fabric's --device parser refuses any device name in the unit tests but
+// "none", so XDNA0 sits in the mock's automatic split, which pins the devices
+// without --device. Both defaults read only the participating device names.
+TEST_F(LoadFitNormalizationTest, XdnaLoadKeepsF16KvAndCpuProjector) {
+  for (const std::string name : {"XDNA0", "vulkan0"}) {
+    const bool isXdna = name == "XDNA0";
+    auto config = baseConfig();
+    config["split-mode"] = "layer";
+    config["flash-attn"] = "on";
+
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = name}, {name}));
+
+    EXPECT_EQ(result.params.cache_type_k == GGML_TYPE_Q8_0, !isXdna) << name;
+    EXPECT_EQ(result.params.cache_type_v == GGML_TYPE_Q8_0, !isXdna) << name;
+    EXPECT_EQ(result.params.mmproj_backend, name);
+    EXPECT_EQ(result.params.mmproj_use_gpu, !isXdna) << name;
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, MmprojUseGpuOverridesXdnaProjectorDefault) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  config["mmproj-use-gpu"] = "true";
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::GPU, .name = "XDNA0"}, {"XDNA0"}));
+
+  EXPECT_EQ(result.params.mmproj_backend, "XDNA0");
+  EXPECT_TRUE(result.params.mmproj_use_gpu);
+}
+
 TEST_F(LoadFitNormalizationTest, DefaultSplitModeAllowsOneExplicitDevice) {
   auto config = baseConfig();
   config["devices"] = "none";

@@ -1794,8 +1794,13 @@ NormalizedLoad normalizeLoadForFit(
                                         ? "auto-default, Adreno <800"
                                         : "auto-default, non-Adreno-800+ GPU"));
 #else
-      bool mmprojUseGpu = true;
-      const char* mmprojDefaultReason = "auto-default";
+      // The projector is untested on the XDNA NPU, so it stays on the CPU
+      // unless mmproj-use-gpu asks for the NPU.
+      const bool projectorOnXdna =
+          usesBackendFamily(true, selected.name, {}, "xdna");
+      bool mmprojUseGpu = !projectorOnXdna;
+      const char* mmprojDefaultReason =
+          projectorOnXdna ? "auto-default, XDNA NPU" : "auto-default";
 #endif
       if (mmprojUseGpuOverride.has_value()) {
         mmprojUseGpu = mmprojUseGpuOverride.value();
