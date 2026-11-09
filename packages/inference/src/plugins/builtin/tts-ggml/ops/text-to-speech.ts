@@ -9,9 +9,10 @@ import { PluginRequestValidationFailedError, TextToSpeechFailedError } from '@/e
 import {
   type TtsStreamChunk,
   type TtsOpYield,
-  appendPcm,
   collectTtsStats,
-  chunkMetadata
+  chunkMetadata,
+  concatPcm,
+  pcmFrame
 } from '@/utils/tts-stats'
 import {
   assertParlerJobOptionsSupported,
@@ -124,7 +125,7 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
     const response = await model.runStream(text, streamOpts)
 
     if (!stream) {
-      const completeBuffer: number[] = []
+      const parts: ArrayLike<number>[] = []
       let sampleRate: number | undefined
       try {
         for await (const data of response.iterate()) {
@@ -132,7 +133,7 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
           // lunte-disable-next-line eqeqeq -- `!= null` intentionally matches null and undefined
           if (data.outputArray != null) {
             sampleRate ??= data.sampleRate
-            appendPcm(completeBuffer, data.outputArray)
+            parts.push(data.outputArray)
           }
         }
       } catch (error) {
@@ -140,7 +141,10 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
       }
       // A cancelled collect must not hand back a partial buffer as if complete.
       if (ctx.signal.aborted) return finish(modelStart, response, true)
-      yield { buffer: completeBuffer, ...(sampleRate !== undefined ? { sampleRate } : {}) }
+      yield {
+        ...pcmFrame(concatPcm(parts)),
+        ...(sampleRate !== undefined ? { sampleRate } : {})
+      }
       return finish(modelStart, response, false)
     }
 
@@ -149,9 +153,8 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
         if (await cancelIfAborted(model, ctx.signal)) continue
         // lunte-disable-next-line eqeqeq -- `== null` intentionally matches null and undefined
         if (data.outputArray == null) continue
-        const buf = Array.from(data.outputArray)
-        if (buf.length === 0) continue
-        yield { buffer: buf, ...chunkMetadata(data) }
+        if (data.outputArray.length === 0) continue
+        yield { ...pcmFrame(data.outputArray), ...chunkMetadata(data) }
       }
     } catch (error) {
       rethrowUnlessCancelled(error, ctx.signal)
@@ -185,7 +188,7 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
   })) as unknown as TtsResponse
 
   if (!stream || batchEngine) {
-    const completeBuffer: number[] = []
+    const parts: ArrayLike<number>[] = []
     let sampleRate: number | undefined
     let replyText: string | undefined
 
@@ -194,14 +197,14 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
         if (await cancelIfAborted(model, ctx.signal)) continue
         sampleRate ??= data.sampleRate
         if (data.text !== undefined) replyText = data.text
-        appendPcm(completeBuffer, data.outputArray)
+        parts.push(data.outputArray)
       }
     } catch (error) {
       rethrowUnlessCancelled(error, ctx.signal)
     }
     if (ctx.signal.aborted) return finish(modelStart, response, true)
     yield {
-      buffer: completeBuffer,
+      ...pcmFrame(concatPcm(parts)),
       ...(sampleRate !== undefined ? { sampleRate } : {}),
       ...(replyText !== undefined ? { text: replyText } : {})
     }
@@ -211,7 +214,7 @@ export async function* textToSpeech(params: TtsRequest): AsyncGenerator<TtsOpYie
   try {
     for await (const data of response.iterate()) {
       if (await cancelIfAborted(model, ctx.signal)) continue
-      yield { buffer: Array.from(data.outputArray), ...chunkMetadata(data) }
+      yield { ...pcmFrame(data.outputArray), ...chunkMetadata(data) }
     }
   } catch (error) {
     rethrowUnlessCancelled(error, ctx.signal)

@@ -10,7 +10,9 @@ import {
   type TextToSpeechStreamSession,
   type TextToSpeechStreamResult,
   type TtsSentenceChunkUpdate,
-  type TtsStats
+  type TtsStats,
+  withDecodedTtsPcm,
+  decodeTtsPcm
 } from '@/schemas/index'
 import Buffer from 'bare-buffer'
 import { stream as streamRpc, duplex, type DuplexReadable } from '@/dispatch'
@@ -344,8 +346,9 @@ async function* ttsResponseSource(
   side: TtsSideChannel
 ): AsyncGenerator<TtsResponse> {
   try {
-    for await (const response of streamRpc(request, options)) {
-      if (response.type !== 'textToSpeech') continue
+    for await (const raw of streamRpc(request, options)) {
+      if (raw.type !== 'textToSpeech') continue
+      const response = withDecodedTtsPcm(raw)
       side.observe(response)
       yield response
     }
@@ -471,15 +474,19 @@ async function* plainTtsChunkStream(
 ): AsyncGenerator<Int16Array> {
   let settled = false
   try {
-    for await (const response of streamRpc(request, options)) {
-      if (response.type !== 'textToSpeech') continue
+    for await (const raw of streamRpc(request, options)) {
+      if (raw.type !== 'textToSpeech') continue
       // See TtsMulticast.pump — skip per-frame Zod validation; the engine is
       // the source of truth for this response shape.
-      side.observe(response)
-      if (response.buffer.length > 0) {
-        yield Int16Array.from(response.buffer)
+      // The side channel reads text, rate, stats and stopReason, never the
+      // audio, so a `pcm` frame is decoded straight to the typed array callers
+      // get instead of through an intermediate `number[]`.
+      side.observe(raw)
+      const chunk = raw.pcm !== undefined ? decodeTtsPcm(raw.pcm) : Int16Array.from(raw.buffer)
+      if (chunk.length > 0) {
+        yield chunk
       }
-      if (response.done) {
+      if (raw.done) {
         settled = true
         resolveDone(true)
       }
@@ -540,8 +547,9 @@ async function collectTtsBuffer(
 ): Promise<number[]> {
   let buffer: number[] = []
   try {
-    for await (const response of streamRpc(request, options)) {
-      if (response.type !== 'textToSpeech') continue
+    for await (const raw of streamRpc(request, options)) {
+      if (raw.type !== 'textToSpeech') continue
+      const response = withDecodedTtsPcm(raw)
       side.observe(response)
       buffer = buffer.concat(response.buffer)
       if (response.done) {
@@ -671,5 +679,5 @@ function processTextToSpeechStreamLine(line: string): TextToSpeechStreamResponse
     throw new TextToSpeechStreamFailedError((obj['message'] as string) ?? 'Unknown server error')
   }
 
-  return textToSpeechStreamResponseSchema.parse(parsed)
+  return withDecodedTtsPcm(textToSpeechStreamResponseSchema.parse(parsed))
 }

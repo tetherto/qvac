@@ -40,11 +40,13 @@ import { ttsFitRequest } from '@/plugins/builtin/tts-ggml/fit'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
 import type { TtsOpYield } from '@/utils/tts-stats'
 
-// Everything a TTS frame carries beyond its PCM, forwarded verbatim from the
-// op yield onto the wire frame. Both handlers use it so the two response
-// shapes cannot drift apart.
+// Everything a TTS frame carries beyond its `buffer`, forwarded verbatim from
+// the op yield onto the wire frame: the base64 `pcm` the ops emit for int16
+// engine audio (see `pcmFrame`) and the chunk metadata. Both handlers use it
+// so the two response shapes cannot drift apart.
 function ttsFrameMetadata(value: TtsOpYield) {
   return {
+    ...(value.pcm !== undefined ? { pcm: value.pcm } : {}),
     ...(value.text !== undefined ? { text: value.text } : {}),
     ...(value.sampleRate !== undefined ? { sampleRate: value.sampleRate } : {}),
     ...(value.chunkIndex !== undefined ? { chunkIndex: value.chunkIndex } : {}),
