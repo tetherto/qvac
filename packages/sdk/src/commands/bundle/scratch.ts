@@ -6,6 +6,12 @@ import path from 'node:path'
 export interface Staged {
   dir: string
   next: string
+  /**
+   * Set by `replaceAll` when `dir`'s old content could not be moved back: the
+   * path in `next`'s scratch folder that still holds it. `discardStaged` keeps
+   * that scratch folder.
+   */
+  kept?: string
 }
 
 /**
@@ -23,6 +29,13 @@ export async function discardScratch(scratch: string) {
   await fsp.rm(path.dirname(scratch), { recursive: true, force: true })
 }
 
+/** Discards the scratch folder of each staged folder, except one that holds kept content. */
+export async function discardStaged(staged: Staged[]) {
+  for (const entry of staged) {
+    if (entry.kept === undefined) await discardScratch(entry.next)
+  }
+}
+
 /**
  * Moves every staged folder into place, or none: when a move fails, the folders
  * already moved go back to their scratch folders and their old content returns.
@@ -35,8 +48,15 @@ export async function replaceAll(staged: Staged[]) {
       replaced.push(entry)
     }
   } catch (error) {
-    for (const entry of replaced.reverse()) await putBack(entry)
-    throw error
+    let failure = error
+    for (const entry of replaced.reverse()) {
+      try {
+        await putBack(entry, error)
+      } catch (putBackError) {
+        failure = putBackError
+      }
+    }
+    throw failure
   }
 }
 
@@ -45,7 +65,8 @@ function previousOf(next: string) {
 }
 
 /** Moves `next` to `dir`, and `dir`'s old content into `next`'s scratch folder. */
-async function replaceWith({ dir, next }: Staged) {
+async function replaceWith(entry: Staged) {
+  const { dir, next } = entry
   let moved = true
   try {
     await fsp.rename(dir, previousOf(next))
@@ -56,16 +77,38 @@ async function replaceWith({ dir, next }: Staged) {
   try {
     await fsp.rename(next, dir)
   } catch (error) {
-    if (moved) await fsp.rename(previousOf(next), dir)
+    if (moved) await restorePrevious(entry, error)
     throw error
   }
 }
 
-async function putBack({ dir, next }: Staged) {
-  await fsp.rename(dir, next)
+async function putBack(entry: Staged, cause: unknown) {
+  await fsp.rename(entry.dir, entry.next)
+  await restorePrevious(entry, cause)
+}
+
+/**
+ * Moves `dir`'s old content back from `next`'s scratch folder. When that fails,
+ * marks the entry kept and throws an error naming where the content is.
+ */
+async function restorePrevious(entry: Staged, cause: unknown) {
+  const previous = previousOf(entry.next)
   try {
-    await fsp.rename(previousOf(next), dir)
+    await fsp.rename(previous, entry.dir)
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      try {
+        await fsp.access(previous)
+      } catch {
+        return
+      }
+    }
+    entry.kept = previous
+    const reason = cause instanceof Error ? cause.message : String(cause)
+    throw new Error(
+      `Could not replace ${entry.dir} (${reason}), nor move its previous content back ` +
+        `(${error instanceof Error ? error.message : String(error)}). The previous content is in ${previous}.`,
+      { cause }
+    )
   }
 }

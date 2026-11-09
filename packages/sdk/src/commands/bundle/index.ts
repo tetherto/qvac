@@ -28,6 +28,7 @@ import { assertNodeCanBundle } from '@/commands/bundle/node-support'
 import { readBundle } from '@/commands/bundle/read-bundle'
 import {
   discardScratch,
+  discardStaged,
   replaceAll,
   scratchFolderFor,
   type Staged
@@ -632,7 +633,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     if (!replaced) await restoreFile(entryPath, previousEntry)
     throw error
   } finally {
-    for (const { next } of staged) await discardScratch(next)
+    await discardStaged(staged)
   }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(2)

@@ -7,7 +7,8 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
-  writeFileSync
+  writeFileSync,
+  promises as fsp
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -19,7 +20,12 @@ import {
   type StageAddonsOptions,
   warnOverwritten
 } from '@/commands/bundle/link'
-import { discardScratch, replaceAll, scratchFolderFor } from '@/commands/bundle/scratch'
+import {
+  discardScratch,
+  replaceAll,
+  scratchFolderFor,
+  type Staged
+} from '@/commands/bundle/scratch'
 import type { Logger } from '@/logging/types'
 import { linkDependency } from './fixtures/link-dependency'
 
@@ -137,6 +143,45 @@ test('replaceAll: a failed move puts back the folders already moved', async (t) 
   t.is(readFileSync(join(worker, 'index.js'), 'utf8'), 'working worker')
   t.is(readFileSync(join(module, 'build.gradle'), 'utf8'), 'working module')
   t.is(readFileSync(join(nextWorker, 'index.js'), 'utf8'), 'new worker')
+})
+
+test('replaceAll: names and keeps old content it cannot put back', async (t) => {
+  const projectRoot = createProject(t)
+  const worker = join(projectRoot, 'qvac', 'worker')
+  const module = join(projectRoot, 'android', 'qvac-bare-kit')
+  writeFile(join(worker, 'index.js'), 'working worker')
+  writeFile(join(module, 'build.gradle'), 'working module')
+
+  const nextWorker = await scratchFolderFor(worker)
+  writeFile(join(nextWorker, 'index.js'), 'new worker')
+  const nextModule = await scratchFolderFor(module)
+  rmSync(nextModule, { recursive: true, force: true })
+  const rename = fsp.rename
+  fsp.rename = async (from, to) => {
+    if (to === worker && dirname(String(from)) === dirname(nextWorker) && from !== nextWorker) {
+      throw new Error('EACCES: permission denied')
+    }
+    return rename(from, to)
+  }
+  t.teardown(() => {
+    fsp.rename = rename
+  })
+  const staged: Staged[] = [
+    { dir: worker, next: nextWorker },
+    { dir: module, next: nextModule }
+  ]
+
+  const error = await replaceAll(staged).then(
+    () => null,
+    (error: Error) => error
+  )
+  fsp.rename = rename
+
+  const kept = staged[0]!.kept
+  t.ok(kept, 'the worker entry is marked kept')
+  t.is(readFileSync(join(kept!, 'index.js'), 'utf8'), 'working worker')
+  t.ok(error?.message.includes(kept!), 'the error names where the old content is')
+  t.is(readFileSync(join(module, 'build.gradle'), 'utf8'), 'working module')
 })
 
 test('stageAddons: a failed link leaves the app module as it was', async (t) => {

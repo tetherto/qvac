@@ -843,6 +843,33 @@ describe('bundleSdk', () => {
     assert.ok(fs.existsSync(path.join(workerDir, 'first-bundle')))
   })
 
+  it('keeps the last good bundle in its scratch folder when it cannot be moved back', async (t) => {
+    const { projectRoot, configPath, workerDir } = fakeBundleSdkProject(t)
+    await bundleSdk({ projectRoot, configPath, quiet: true })
+    const harness = fs.readFileSync(path.join(workerDir, 'index.js'), 'utf8')
+    const rename = fs.promises.rename
+    t.mock.method(fs.promises, 'rename', async (from: string, to: string) => {
+      if (to === workerDir) throw new Error('EACCES: permission denied')
+      return rename(from, to)
+    })
+
+    const error = await bundleSdk({ projectRoot, configPath, quiet: true }).then(
+      () => assert.fail('the bundle replaced the output folder'),
+      (error: unknown) => error as Error
+    )
+
+    const qvacDir = path.dirname(workerDir)
+    const scratch = fs.readdirSync(qvacDir).filter((name) => name.startsWith('.worker-'))
+    assert.equal(scratch.length, 1)
+    const backups = fs
+      .readdirSync(path.join(qvacDir, scratch[0]!))
+      .filter((name) => name !== path.basename(workerDir))
+    assert.equal(backups.length, 1)
+    const backup = path.join(qvacDir, scratch[0]!, backups[0]!)
+    assert.equal(fs.readFileSync(path.join(backup, 'index.js'), 'utf8'), harness)
+    assert.ok(error.message.includes(backup), error.message)
+  })
+
   it('leaves folders next to the output folder alone', async (t) => {
     const { projectRoot, configPath, workerDir } = fakeBundleSdkProject(t)
     const neighbours = [`${workerDir}.staging`, path.join(path.dirname(workerDir), 'worker-scan')]
