@@ -130,3 +130,46 @@ test('appendPcm: appends each chunk in place, in order', (t) => {
   appendPcm(buffer, new Int16Array([32767, -32768]))
   t.alike(buffer, [1, -2, 3, 32767, -32768])
 })
+
+test('collectTtsStats: forwards the engines’ stage timings and counters, zero included', (t) => {
+  // Chatterbox, CosyVoice3 and Audio8 each report their own stages; a zero
+  // stage time (e.g. no reference to encode) is a real report, not absence.
+  const stats = {
+    firstAudioMs: 180,
+    t3Ms: 410,
+    s3genMs: 220,
+    t3Tokens: 125,
+    stageTotalMs: 900,
+    lmPrefillMs: 30,
+    lmDecodeMs: 400,
+    flowFrontendMs: 5,
+    ditEulerMs: 300,
+    hiftF0Ms: 10,
+    hiftSourceMs: 20,
+    hiftStftMs: 15,
+    hiftDecodeMs: 120,
+    decodeSteps: 100,
+    speechTokens: 98,
+    flowFrames: 240,
+    melFrames: 200,
+    textIds: 12,
+    promptSpeechTokens: 140,
+    voiceEncodeMs: 0,
+    promptMs: 2,
+    prefillMs: 40,
+    sampleMs: 350,
+    fastDecodeMs: 200,
+    slowDecodeMs: 150,
+    codecLatentMs: 60,
+    codecSynthMs: 90,
+    resampleMs: 4
+  }
+  t.alike(collectTtsStats({ stats: { audioDurationMs: 1200, ...stats } }), {
+    audioDuration: 1200,
+    ...stats
+  })
+})
+
+test('collectTtsStats: forwards only the stage fields the addon reported', (t) => {
+  t.alike(collectTtsStats({ stats: { t3Ms: 410 } }), { t3Ms: 410 })
+})

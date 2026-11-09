@@ -186,7 +186,13 @@ function buildTextToSpeechStreamRequest(
     ...(params.expressivity !== undefined && { expressivity: params.expressivity }),
     ...(params.noise !== undefined && { noise: params.noise }),
     ...(params.reverb !== undefined && { reverb: params.reverb }),
-    ...(params.quality !== undefined && { quality: params.quality })
+    ...(params.quality !== undefined && { quality: params.quality }),
+    // Per-request voice controls: CosyVoice3's instruct, Audio8's reference pair.
+    ...(params.instruct !== undefined && { instruct: params.instruct }),
+    ...(params.referenceAudioSrc !== undefined && {
+      referenceAudioSrc: params.referenceAudioSrc
+    }),
+    ...(params.referenceText !== undefined && { referenceText: params.referenceText })
   }
 }
 
