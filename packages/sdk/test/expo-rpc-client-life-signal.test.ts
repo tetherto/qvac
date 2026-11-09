@@ -9,9 +9,16 @@ class FakeWorklet extends Duplex {
     callback()
   }
 
+  /** The worker stops and reports its exit, as bare-stow-runtime does once stop() has run. */
+  exit(code: number) {
+    this.emit('exit', code)
+    this.destroy()
+  }
+
   async terminate() {
     await terminateGate
-    this.destroy()
+    this.exit(0)
+    return 0
   }
 }
 
@@ -72,13 +79,13 @@ async function startHeld() {
 
 const CHANNEL_CLOSED = new Error('channel closed')
 
-test('a worklet that closes unexpectedly aborts the life signal and the next call starts a new one', async () => {
+test('a worklet that exits unexpectedly aborts the life signal and the next call starts a new one', async () => {
   await getRPC()
   const signal = getWorkerLifeSignal()
   assert.ok(signal)
   assert.equal(signal.aborted, false)
 
-  started[0]!.destroy()
+  started[0]!.exit(1)
   await new Promise((resolve) => setImmediate(resolve))
 
   assert.equal(signal.aborted, true)
@@ -139,7 +146,7 @@ test('a worklet that exits during initialization rejects the start as a crash', 
     (error: { name?: string }) => error.name === 'WORKER_CRASHED'
   )
 
-  started.at(-1)!.destroy()
+  started.at(-1)!.exit(1)
   await new Promise((resolve) => setImmediate(resolve))
   fail(CHANNEL_CLOSED)
 

@@ -3,7 +3,8 @@ import type { IPC as WorkerIPC } from 'bare-stow-host'
 import {
   RPCConnectionFailedError,
   WorkerCrashedError,
-  WorkerShutdownError
+  WorkerShutdownError,
+  WorkerStartupError
 } from '@/utils/errors-client'
 import { initializeConfig } from '@/client/init-hooks'
 import {
@@ -35,6 +36,11 @@ let closePromise: Promise<void> | null = null
 // Bumped by close(); a start that finishes under an older generation stops its
 // own worker, so a caller waiting on that start never receives a closed client.
 let generation = 0
+// The worklet runs in the app's process. One that ends without reporting its
+// exit was killed or died before its stop() ran, so the addons still hold
+// handles into its isolate, which crash the next worklet on first use.
+let uncleanStop = false
+const exitReported = new WeakSet<WorkerIPC>()
 let cachedRuntimeContext: RuntimeContext | undefined
 
 logger.debug('EXPO RPC Client bundle')
@@ -136,6 +142,13 @@ async function ensureRPC(): Promise<RPC> {
     return ensureRPC()
   }
 
+  if (uncleanStop) {
+    throw new WorkerStartupError(
+      'A QVAC worker in this app stopped before its cleanup finished; restart the app to start a new one',
+      { exitCode: null, exitSignal: null, timedOut: false }
+    )
+  }
+
   const startGeneration = generation
   const attempt = (async () => {
     const preloaded = await readConfigBeforeStart()
@@ -150,6 +163,10 @@ async function ensureRPC(): Promise<RPC> {
     })
     ipc.on('exit', (code: number) => {
       exitCode = code
+      exitReported.add(ipc)
+    })
+    ipc.once('close', () => {
+      if (!exitReported.has(ipc)) uncleanStop = true
     })
     const crashed = () => workerCrashed(workerError ?? { exitCode })
     if (startGeneration !== generation) {
@@ -228,6 +245,9 @@ export async function close(): Promise<void> {
 
     logger.info('🧹 Closing RPC client (Expo)')
     await ipc.terminate()
+    // terminate() resolves before the worklet's `close` event, so a start that
+    // follows close() would not see the unclean stop yet.
+    if (!exitReported.has(ipc)) uncleanStop = true
   })()
 
   try {

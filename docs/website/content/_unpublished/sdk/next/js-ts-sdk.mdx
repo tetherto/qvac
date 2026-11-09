@@ -86,6 +86,8 @@ npx expo run:ios --device
 # or
 npx expo run:android --device
 ```
+
+The worker runs in the app's process. A worker that stops before its cleanup finishes, because it was killed or died, makes later SDK calls fail with `WORKER_STARTUP_FAILED` until the app restarts.
 </Step>
 </Steps>
 
