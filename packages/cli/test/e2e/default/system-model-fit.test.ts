@@ -81,6 +81,15 @@ describe('qvac models/fit: validation', () => {
     }
   })
 
+  it('checks every entry of a *Srcs source list', async () => {
+    for (const sources of [['/etc/passwd'], ['WHISPER_EN_TINY_Q8_0', '/etc/passwd']]) {
+      const res = await fit({
+        models: [{ model: 'chat-model', modelConfig: { dialogueReferenceSrcs: sources } }]
+      })
+      assertStatusAndError(res, 400, 'invalid_model_src')
+    }
+  })
+
   it('looks for companion sources in nested config too', async () => {
     const res = await fit({
       models: [{ model: 'chat-model', modelConfig: { upscaler: { model_src: './esrgan.bin' } } }]

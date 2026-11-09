@@ -559,7 +559,7 @@ memory each load takes is summed per device and compared against what is free.
 An alias is assessed with the config it would load with. `modelConfig` is merged over it key
 by key, nested objects included, so `{"ctx_size": 32768}` asks about a longer context and an
 override inside `contextParams` keeps the alias's other context params. Model sources cannot be given in the request:
-companion sources in `modelConfig` (every `*Src` key, such as `llmModelSrc` or `tokenizerSrc`) must name SDK model constants, so a request
+companion sources in `modelConfig` (every `*Src` key, such as `llmModelSrc` or `tokenizerSrc`, and every entry of a `*Srcs` list) must name SDK model constants, so a request
 never makes the server read a path or URL of its choosing.
 
 The answer is advisory. `verdict` is `fits`, `does-not-fit` or `unknown` for every model loaded

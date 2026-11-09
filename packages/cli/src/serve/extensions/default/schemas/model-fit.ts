@@ -14,7 +14,7 @@ const fitCandidate = z.strictObject({
     .record(z.string(), z.unknown())
     .optional()
     .describe(
-      "Config to assess the load with. Merged over an alias's own `config`, nested objects key by key. Companion sources (every `*Src` key, such as `llmModelSrc` or `tokenizerSrc`) must name SDK model constants."
+      "Config to assess the load with. Merged over an alias's own `config`, nested objects key by key. Companion sources (every `*Src` key, such as `llmModelSrc` or `tokenizerSrc`, and every entry of a `*Srcs` list) must name SDK model constants."
     )
 })
 

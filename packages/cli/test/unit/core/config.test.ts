@@ -231,6 +231,16 @@ describe('resolveNestedModelSrcConstants', () => {
     assert.equal(out['referenceAudioSrc'], 'voice.wav')
   })
 
+  it('resolves each entry of a *Srcs list and nested modelSrc', () => {
+    const out = resolveNestedModelSrcConstants({
+      dialogueReferenceSrcs: ['WHISPER_EN_TINY_Q8_0', './speaker2.wav'],
+      pivotModel: { modelSrc: 'TTS_S3GEN_EN_CHATTERBOX' }
+    })
+    assert.deepEqual(out['dialogueReferenceSrcs'], [WHISPER_EN_TINY_Q8_0, './speaker2.wav'])
+    const pivot = out['pivotModel'] as Record<string, unknown>
+    assert.equal(pivot['modelSrc'], TTS_S3GEN_EN_CHATTERBOX)
+  })
+
   it('rewrites nested objects and upscaler.model_src', () => {
     const out = resolveNestedModelSrcConstants({
       whisperConfig: { vadModelSrc: 'WHISPER_EN_TINY_Q8_0' },
