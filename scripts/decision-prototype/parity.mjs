@@ -1,7 +1,7 @@
-// QVAC-26667 prototype: compares the fabric bridge (@qvac/embed-llamacpp
-// DecisionEngine) with llama-server built from the same fabric commit, on the
-// same model, the same /v1/systemone bodies (requests.json) and the same
-// settings. Each request declares its expected outcome ("expect"): an answer,
+// QVAC-26667 prototype: compares @qvac/decision-ggml's DecisionEngine
+// (upstream server-context, in-process) with llama-server built from the same
+// fabric commit, on the same model, the same /v1/systemone bodies
+// (requests.json) and the same settings. Each request declares its expected outcome ("expect"): an answer,
 // compared by question type against tolerances.json, or a rejection, whose
 // status, code and message both engines must match.
 //
@@ -60,9 +60,9 @@ function run(cmd, argv) {
   })
 }
 
-async function bridgeResults() {
-  const out = join(mkdtempSync(join(tmpdir(), 'decision-parity-')), 'bridge.json')
-  const collector = join(here, '..', '..', 'packages', 'embed-llamacpp', 'scripts', 'decision-parity-collect.js')
+async function addonResults() {
+  const out = join(mkdtempSync(join(tmpdir(), 'decision-parity-')), 'addon.json')
+  const collector = join(here, '..', '..', 'packages', 'decision-ggml', 'scripts', 'decision-parity-collect.js')
   const argv = [...bare.slice(1), collector, join(here, 'requests.json'), model, out, '--parallel', parallel, '--ctx', ctx]
   if (mmproj) argv.push('--mmproj', mmproj)
   if (cpu) argv.push('--cpu')
@@ -88,7 +88,7 @@ async function serverResults() {
   const port = await freePort(requestedPort)
   const argv = ['-m', model, '--host', '127.0.0.1', '--port', String(port), '-np', parallel, '-c', ctx, '-ngl', cpu ? '0' : '99']
   if (mmproj) argv.push('--mmproj', mmproj)
-  // The bridge keeps the projector on the CPU with --cpu; so must the reference.
+  // decision-ggml keeps the projector on the CPU with --cpu; so must the reference.
   if (mmproj && cpu) argv.push('--no-mmproj-offload')
   const child = spawn(server, argv, { stdio: ['ignore', 'ignore', 'pipe'] })
   let log = ''
@@ -167,33 +167,33 @@ function compareAnswer(label, a, b) {
   }
 }
 
-let bridge, reference
+let addon, reference
 try {
-  bridge = await bridgeResults()
+  addon = await addonResults()
   reference = await serverResults()
 } catch (error) {
   console.error(`✖ ${error.message}`)
   process.exit(1)
 }
 const failure = {
-  bridge: (r) => `${r.error.code}: ${r.error.message}`,
+  addon: (r) => `${r.error.code}: ${r.error.message}`,
   server: (r) => `HTTP ${r.status}: ${r.error?.message}`
 }
 for (let i = 0; i < requests.length; i++) {
   const { name, expect } = requests[i]
-  const a = bridge[i]
+  const a = addon[i]
   const b = reference[i]
   if (a?.name !== name || b?.name !== name) {
-    problems.push(`${name}: missing from the bridge or llama-server results`)
+    problems.push(`${name}: missing from the addon or llama-server results`)
     continue
   }
   if (expect !== 'answer') {
-    // Expected rejection: llama-server's status, the bridge's code, and the
+    // Expected rejection: llama-server's status, the addon's code, and the
     // same upstream message from both.
-    if (a.ok) problems.push(`${name}: bridge answered, expected a rejection`)
+    if (a.ok) problems.push(`${name}: addon answered, expected a rejection`)
     else {
-      if (a.error.code !== expect.code) problems.push(`${name}: bridge ${failure.bridge(a)}, expected code ${expect.code}`)
-      if (!a.error.message.includes(expect.message)) problems.push(`${name}: bridge message "${a.error.message}" lacks "${expect.message}"`)
+      if (a.error.code !== expect.code) problems.push(`${name}: addon ${failure.addon(a)}, expected code ${expect.code}`)
+      if (!a.error.message.includes(expect.message)) problems.push(`${name}: addon message "${a.error.message}" lacks "${expect.message}"`)
     }
     if (b.ok) problems.push(`${name}: llama-server answered, expected a rejection`)
     else {
@@ -201,12 +201,12 @@ for (let i = 0; i < requests.length; i++) {
       if (!b.error?.message?.includes(expect.message)) problems.push(`${name}: llama-server message "${b.error?.message}" lacks "${expect.message}"`)
     }
     if (!a.ok && !b.ok && !a.error.message.includes(b.error?.message)) {
-      problems.push(`${name}: messages differ: bridge "${a.error.message}", llama-server "${b.error?.message}"`)
+      problems.push(`${name}: messages differ: addon "${a.error.message}", llama-server "${b.error?.message}"`)
     }
     stats.rejected++
     continue
   }
-  if (!a.ok) problems.push(`${name}: bridge failed, expected an answer: ${failure.bridge(a)}`)
+  if (!a.ok) problems.push(`${name}: addon failed, expected an answer: ${failure.addon(a)}`)
   if (!b.ok) problems.push(`${name}: llama-server failed, expected an answer: ${failure.server(b)}`)
   if (!a.ok || !b.ok) continue
   same(`${name} input_tokens`, a.result.usage.input_tokens, b.result.usage.input_tokens)
