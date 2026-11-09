@@ -36,6 +36,9 @@ export interface NativeIndexModule {
 // UINT64_MAX pads short result rows.
 export const PADDING_ID = 0xffffffffffffffffn
 
+// TurboVec quantization rejects vector and query components at or above this.
+export const TURBOVEC_MAX_COMPONENT = 1e16
+
 export const BIT_WIDTHS: Record<IndexStorage, number> = {
   f32: 32,
   q8: 8,
@@ -72,6 +75,9 @@ async function importTurboVec(): Promise<NativeIndexModule | null> {
   }
   const IdMapIndex = imported.default
   if (typeof IdMapIndex !== 'function') return null
+  // The package imports anywhere but loads its native binding on first use,
+  // which fails on Node and on hosts without a prebuild.
+  new IdMapIndex({ dim: 8, storage: 'q8' }).dispose()
   return {
     create: (dim, storage) => new IdMapIndex({ dim, storage }),
     load: (path) => IdMapIndex.load(path)

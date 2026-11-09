@@ -41,6 +41,7 @@ import {
   type IndexRegistry
 } from './vector-index/registry.js'
 import { indexSearch } from './vector-index/search.js'
+import { TURBOVEC_MAX_COMPONENT } from './vector-index/native.js'
 import type {
   Hypercore,
   HyperDBInstance,
@@ -495,9 +496,6 @@ function concatEmbeddings(document: ValidDocument): Float32Array {
 function storageOf(ns: NamespaceRecord): IndexStorage {
   return (ns.indexStorage as IndexStorage | undefined) ?? DEFAULT_INDEX_STORAGE
 }
-
-// TurboVec quantization rejects components at or above this magnitude.
-const TURBOVEC_MAX_COMPONENT = 1e16
 
 function checkChunks(
   namespace: string,

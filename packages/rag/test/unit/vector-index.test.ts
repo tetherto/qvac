@@ -429,6 +429,12 @@ test('TurboVec storage is opt-in and needs dimensions divisible by 8 up to 1,024
     ERR_CODES.INVALID_INPUT,
     'components TurboVec cannot quantize are rejected before commit'
   )
+  const huge = [1e17, ...new Array(15).fill(0)]
+  t.is(
+    (await search(rag, created.spaceId, huge, 1)).length,
+    1,
+    'a query TurboVec cannot quantize is answered by the scan'
+  )
 })
 
 test('search falls back to the scan without the addon', async (t) => {

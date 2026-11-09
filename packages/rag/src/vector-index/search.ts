@@ -18,7 +18,8 @@ import {
   toHit,
   type SearchQuery
 } from '../search.js'
-import { PADDING_ID } from './native.js'
+import { QvacErrorRAG, ERR_CODES } from '../errors.js'
+import { PADDING_ID, TURBOVEC_MAX_COMPONENT, type NativeSearchResult } from './native.js'
 import { normalizeRows, type OpenIndex } from './registry.js'
 import type { HyperDBReader } from '../db/db-types.js'
 import type { SearchHit, SearchScope } from '../types.js'
@@ -65,6 +66,9 @@ export async function indexSearch(
   const index = await openIndex()
   if (!index) return 'unavailable'
   if (index.revision() !== revision) return 'stale'
+  if (index.storage.startsWith('turbovec-') && !index.normalize && !quantizable(query.vector)) {
+    return 'unavailable'
+  }
   const available = allowlist ? allowlist.length : index.native.length
   const candidates = Math.min(available, k + Math.max(k, MIN_EXTRA_CANDIDATES))
   if (candidates === 0) return []
@@ -72,9 +76,18 @@ export async function indexSearch(
   const dims = space.dimensions
   const vector = query.vector.slice()
   if (index.normalize) normalizeRows(vector, dims)
-  const result = allowlist
-    ? index.native.searchFiltered(vector, candidates, allowlist)
-    : index.native.search(vector, candidates)
+  let result: NativeSearchResult
+  try {
+    result = allowlist
+      ? index.native.searchFiltered(vector, candidates, allowlist)
+      : index.native.search(vector, candidates)
+  } catch (error) {
+    throw new QvacErrorRAG({
+      code: ERR_CODES.INDEX_OPERATION_FAILED,
+      adds: error instanceof Error ? error.message : String(error),
+      cause: error instanceof Error ? error : undefined
+    })
+  }
 
   const cosine = space.metric === 'cosine'
   const queryNorm = cosine ? norm(query.vector, 0, dims) : 1
@@ -100,6 +113,14 @@ export async function indexSearch(
   if (hits.length > k) hits.length = k
   await attachDocumentMetadata(reader, namespace, hits)
   return hits
+}
+
+// A query TurboVec can't rotate is still a valid query; the scan answers it.
+function quantizable(vector: Float32Array): boolean {
+  for (let i = 0; i < vector.length; i++) {
+    if (Math.abs(vector[i]) >= TURBOVEC_MAX_COMPONENT) return false
+  }
+  return true
 }
 
 // Ties fall back to key order, as in a namespace scan.

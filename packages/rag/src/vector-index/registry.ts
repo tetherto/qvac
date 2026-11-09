@@ -35,6 +35,7 @@ export interface IndexConfig {
 export interface OpenIndex {
   native: NativeIndex
   normalize: boolean
+  storage: IndexStorage
   // The index's revision now; commits move it on between awaits.
   revision(): number
 }
@@ -134,7 +135,12 @@ export function createIndexRegistry(db: HyperDBInstance, coreKey: string): Index
       native.prepare()
       entry.needsPrepare = false
     }
-    return { native, normalize: entry.normalize, revision: () => entry.revision }
+    return {
+      native,
+      normalize: entry.normalize,
+      storage: entry.identity?.storage ?? DEFAULT_INDEX_STORAGE,
+      revision: () => entry.revision
+    }
   }
 
   async function sync(entry: Entry, module: NativeIndexModule): Promise<void> {
