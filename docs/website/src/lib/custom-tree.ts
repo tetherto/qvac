@@ -1,6 +1,7 @@
 import type { Node, Root } from 'fumadocs-core/page-tree';
 import {
   computeSectionVersionUrl,
+  declaredSoftware,
   documentedSoftwareOfKind,
   getCurrentLine,
   getDocumentedSoftware,
@@ -118,8 +119,23 @@ function offSite(name: string, url: string, icon: string): Node {
  *
  * `tests/sidebar-consistency.test.ts` fails if the slash is dropped.
  */
-function intoCollection(name: string, url: `/${string}/`, icon: string): Node {
-  return { type: 'page', name, url, icon: resolveIcon(icon) };
+function intoCollection(name: string, url: `/${string}/`, icon: string): Node[] {
+  // A product no release has published yet has no pages to depart to.
+  if (!isPublished(url.replace(/\/$/, ''))) return [];
+  return [{ type: 'page', name, url, icon: resolveIcon(icon) }];
+}
+
+/**
+ * Whether the documented software at `path`, if any, has a published line. A
+ * versions file is declared before its software's first release, and the
+ * software stays off the site — tab, sidebar, and departures — until a
+ * release pins its first line.
+ */
+function isPublished(path: string): boolean {
+  const declared = declaredSoftware().find(
+    ({ declaration }) => path === declaration.path || path.startsWith(`${declaration.path}/`),
+  );
+  return !declared || getDocumentedSoftware(path) !== null;
 }
 
 /**
@@ -144,9 +160,9 @@ function ecosystemChildren(
       type: 'separator',
       name: 'Products',
     },
-    intoCollection('SDK', '/sdk/', 'Code'),
-    intoCollection('CLI', '/cli/', 'Terminal'),
-    intoCollection('Model provider', '/cli/http-server/connection/', 'Server'),
+    ...intoCollection('SDK', '/sdk/', 'Code'),
+    ...intoCollection('CLI', '/cli/', 'Terminal'),
+    ...intoCollection('Model provider', '/cli/http-server/connection/', 'Server'),
     offSite('Assistant app', 'https://qv.ac', 'MonitorPlay'),
     {
       type: 'separator',
@@ -260,7 +276,7 @@ interface Collection {
  * feeds both the bar and the root folders that scope the sidebar, so the two
  * can never list different collections.
  */
-const COLLECTIONS: Collection[] = [
+const DECLARED_COLLECTIONS: Collection[] = [
   {
     name: 'Ecosystem',
     description: 'Everything QVAC publishes, and the add-ons that extend it',
@@ -284,6 +300,11 @@ const COLLECTIONS: Collection[] = [
     children: resourcesChildren,
   },
 ];
+
+/** The collections the site serves: a product's tab appears with its first published line. */
+const COLLECTIONS = DECLARED_COLLECTIONS.filter(
+  (collection) => collection.children !== undefined || isPublished(collection.path),
+);
 
 /**
  * The children a documentation line declares, read out of the page tree
