@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- ACE-Step `normalizeLoudness: false` returns the engine's raw output. The
+  addon rescaled every non-edit result to a 0.9 peak whatever the option said,
+  so the flag only switched off the engine's percentile pass. Samples the VAE
+  leaves outside `[-1, 1]` now saturate at int16 full scale on that path.
+- ACE-Step lego stems keep their mix gain relative to the source; the same
+  rescale raised or lowered each stem to a 0.9 peak.
 - Include independent LM device pools in `assessFit()` when the primary
   pipeline runs on CPU, counting the host peak once.
 
