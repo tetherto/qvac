@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+### Added
+
+- The AMD XDNA NPU can be selected with `backend: "xdna"` or
+  `devices: "XDNA0"`, on Linux x64 with an `@qvac/fabric` that ships the XDNA
+  backend. It is never chosen automatically and never joins an automatic
+  split. The KV cache stays at `f16` on the NPU, whose attention kernels take
+  only `f16` K/V, and a vision model's projector defaults to the CPU
+  (`mmproj-use-gpu: true` moves it to the NPU). `split-mode: "tensor"` with
+  `XDNA0` is rejected with `InvalidArgument`.
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.26.0` -> `^0.28.0`, whose Linux x64
+  package ships the XDNA backend and its NPU kernels (system XRT 2.25 or newer
+  required to load it). A caret on a `0.x` version locks the minor, so
+  `^0.26.0` would not have resolved `0.28.0`. The mobile dev and peer
+  dependencies `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to
+  `^0.28.0` with it.
+
 ### Fixed
 
 - With `parallel >= 2`, a request whose chat template force-opens the
@@ -9,6 +28,12 @@
   first, as `parallel: 1` does. Without it, consumers that split reasoning on
   the tags returned the reasoning as content
   ([#5562](https://github.com/tetherto/qvac/pull/5562)).
+- On hybrid and recurrent models (such as Qwen3.5), the next user turn after
+  a tool loop now restores the checkpoint taken at the previous user message
+  instead of reprocessing the whole conversation. The tool rounds' checkpoints
+  no longer evict it, and the `cacheKey` file keeps it beside the newest one
+  (checkpoint section version 2; older files still load)
+  ([#5637](https://github.com/tetherto/qvac/pull/5637)).
 
 ## [0.68.0] - 2026-11-04
 

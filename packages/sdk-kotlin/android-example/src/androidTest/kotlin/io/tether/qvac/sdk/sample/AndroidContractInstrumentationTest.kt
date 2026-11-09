@@ -15,6 +15,7 @@ import io.tether.qvac.sdk.generated.SDK_VERSION
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequest
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestGenerationParams
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContent
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemAttachmentsItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItem
 import io.tether.qvac.sdk.generated.schema.TranscribeRequest
@@ -163,7 +164,7 @@ class AndroidContractInstrumentationTest {
                         reasoning_budget = 0,
                         temp = 0.0,
                     ),
-                    history = listOf(CompletionStreamRequestHistoryItem(role = "user", content = "Reply with exactly CPU_OK")),
+                    history = listOf(CompletionStreamRequestHistoryItem(role = "user", content = CompletionStreamRequestHistoryItemContent.Variant1("Reply with exactly CPU_OK"))),
                     modelId = requireNotNull(modelId),
                     stream = true,
                 ),
@@ -259,7 +260,7 @@ class AndroidContractInstrumentationTest {
                     history = listOf(
                         CompletionStreamRequestHistoryItem(
                             role = "user",
-                            content = "Name the dominant color in one word.",
+                            content = CompletionStreamRequestHistoryItemContent.Variant1("Name the dominant color in one word."),
                             attachments = listOf(CompletionStreamRequestHistoryItemAttachmentsItem(path = imageFile.absolutePath)),
                         ),
                     ),
