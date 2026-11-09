@@ -1,10 +1,9 @@
 import fs from 'bare-fs'
 import os from 'bare-os'
 import path from 'bare-path'
-import { compiledModule } from '../helpers/package-under-test.mjs'
-const { bootCore } = await import(compiledModule('lib/runtime/core-host.js').href)
+import { bootCore } from '@qvac/cli-kit/host'
+import { qrLines } from '@qvac/cli-kit/tui'
 import { decodeMeshInvite, encodeMeshInvite } from '@qvac/core/invite'
-const { qrLines } = await import(compiledModule('product/qr.js').href)
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-invite-smoke-'))
 const host = await bootCore({
   dataDir,
