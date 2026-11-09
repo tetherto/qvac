@@ -343,8 +343,8 @@ export async function* completion(
   const { signal, scope } = opts
   const requestLogger = opts.logger ?? logger
 
-  // A seed names which caller-managed cache to start which from, so both names
-  // are explicit: the auto key is never returned to the caller.
+  // seedFrom needs a named kvCache key other than itself: the auto key is
+  // never returned to the caller, so it cannot be named on either side.
   if (seedFrom !== undefined && (typeof kvCache !== 'string' || seedFrom === kvCache)) {
     throw new InvalidSeedFromParamsError()
   }

@@ -782,9 +782,12 @@ const seedCompletion = (
 export const kvCacheSeedFromBase: TestDefinition = {
   testId: 'kv-cache-seed-from-base',
   params: {
+    dependency: 'llm-shared-cache',
     baseKey: 'seed-base-session',
     chatKey: 'seed-chat-session',
     coldKey: 'seed-cold-session',
+    history: SEED_HISTORY,
+    question: SEED_QUESTION,
     generationParams: SEED_GENERATION
   },
   expectation: { validation: 'contains-all', contains: ['APPLE'] },
@@ -793,12 +796,12 @@ export const kvCacheSeedFromBase: TestDefinition = {
     { call: { method: 'deleteCache', params: { kvCacheKey: '$params.baseKey' } } },
     { call: { method: 'deleteCache', params: { kvCacheKey: '$params.chatKey' } } },
     { call: { method: 'deleteCache', params: { kvCacheKey: '$params.coldKey' } } },
-    seedCompletion('cold', SEED_QUESTION, { kvCache: '$params.coldKey' }),
-    seedCompletion('prime', SEED_HISTORY, { kvCache: '$params.baseKey', prefill: true }),
+    seedCompletion('cold', '$params.question', { kvCache: '$params.coldKey' }),
+    seedCompletion('prime', '$params.history', { kvCache: '$params.baseKey', prefill: true }),
     { project: { from: '$prime', path: 'stats.cacheTokens', as: 'primedTokens' } },
     { call: { method: 'evictResource', params: { dep: 'llm-shared-cache' } } },
     { useModel: { deps: ['llm-shared-cache'], as: 'model' } },
-    seedCompletion('seeded', SEED_QUESTION, {
+    seedCompletion('seeded', '$params.question', {
       kvCache: '$params.chatKey',
       seedFrom: '$params.baseKey'
     }),
@@ -931,10 +934,17 @@ export const kvCacheSeedDifferentSystemPrompt: TestDefinition = {
 
 export const kvCacheSeedWithoutSharing: TestDefinition = {
   testId: 'kv-cache-seed-without-sharing',
-  params: {},
+  params: {
+    dependency: 'llm',
+    history: SEED_QUESTION,
+    kvCache: 'seed-chat-session',
+    seedFrom: 'seed-base-session',
+    code: 53206,
+    generationParams: SEED_GENERATION
+  },
   expectation: { validation: 'function', fn: () => true },
   steps: seedRefusal(
-    { history: SEED_QUESTION, kvCache: 'seed-chat-session', seedFrom: 'seed-base-session' },
+    { history: '$params.history', kvCache: '$params.kvCache', seedFrom: '$params.seedFrom' },
     53206,
     [],
     'llm'

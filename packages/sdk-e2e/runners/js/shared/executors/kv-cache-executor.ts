@@ -4,6 +4,7 @@ import { AbstractModelExecutor } from './abstract-model-executor.js'
 import { kvCacheTests } from '../../../../catalog/kv-cache-tests.js'
 import { callWhenAddonIdle } from '../utils/addon-idle.js'
 import { runPrefill } from './prefill.js'
+import { runSeedFromBase, runSeedRefusal } from './seed.js'
 
 interface ChatMessage {
   role: string
@@ -74,6 +75,10 @@ export class KvCacheExecutor extends AbstractModelExecutor<typeof kvCacheTests> 
     kvCacheTests.map((test) => {
       if (test.testId.startsWith('kv-cache-prefill-'))
         return [test.testId, runPrefill.bind(null, this.resources)]
+      if (test.testId === 'kv-cache-seed-from-base')
+        return [test.testId, runSeedFromBase.bind(null, this.resources)]
+      if (test.testId === 'kv-cache-seed-without-sharing')
+        return [test.testId, runSeedRefusal.bind(null, this.resources)]
       if (test.testId === 'kv-cache-delete-and-reuse')
         return [test.testId, this.deleteAndReuse.bind(this)]
       if (test.testId === 'kv-cache-session-switch')

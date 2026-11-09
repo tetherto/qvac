@@ -80,9 +80,14 @@ const RULES: Rule[] = [
     }
   },
   {
-    match: /^kv-cache-seed-/,
+    match: [
+      'kv-cache-seed-ignored-once-cached',
+      'kv-cache-seed-without-named-key',
+      'kv-cache-seed-missing-source',
+      'kv-cache-seed-different-system-prompt'
+    ],
     skip: {
-      reason: 'Step-based: the React Native runner has no step bindings',
+      reason: 'Step-based with no hand-written body: the React Native runner has no step bindings',
       platforms: ['mobile-ios', 'mobile-android']
     }
   },
