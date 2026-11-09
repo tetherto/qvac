@@ -98,7 +98,7 @@
       ]
     },
     "server-context": {
-      "description": "Build and install upstream's tools/server server-context library on its own (no HTTP server, web UI, CLI or llama-server executable), with its headers under include/llama/server-context. Used by the @qvac/fabric decision bridge. Requires the llama feature.",
+      "description": "Build and install upstream's tools/server server-context library on its own (no HTTP server, web UI, CLI or llama-server executable), with its headers under include/llama/server-context. @qvac/decision-ggml links the archive statically and resolves its llama, common and mtmd references from the @qvac/fabric runtime. Requires the llama feature.",
       "dependencies": [
         {
           "name": "qvac-fabric",

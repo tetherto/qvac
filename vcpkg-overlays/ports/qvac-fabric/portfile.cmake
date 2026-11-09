@@ -2,8 +2,8 @@ vcpkg_from_github(
   OUT_SOURCE_PATH SOURCE_PATH
   REPO tetherto/qvac-fabric-llm.cpp
   # QVAC-26667 prototype: tetherto/qvac-fabric-llm.cpp#497 (temp-11739 + QVAC_FABRIC_SERVER_CONTEXT)
-  REF 5482f70a53517dbc2bb3f2cf692372a1c73ac6ac
-  SHA512 94f87a1ae1b6ce06272220878fb71f396f4148858756c01e8235dafc1162f95ead2a274aceb76beff89f16c46e75c6c25aec981ca419af8ac353d0612e89351f
+  REF d32d0b604e5cbad4a3f388dc0688906d94ba8630
+  SHA512 6a904ac91c66e6d979bc3c09bb671fc1ca7d1b9c87acde999afd5729707353639fd6b349b5ec8c071aeb7ec85822316ad699aa8ac7962d4d435a18650c1befbd
 )
 
 # Upstream CMake options only — passed through to vcpkg_cmake_configure.
@@ -17,7 +17,8 @@ vcpkg_check_features(
 )
 
 # server-context builds upstream's tools/server execution library on its own
-# (no HTTP server, UI, CLI or executable) for the @qvac/fabric decision bridge.
+# (no HTTP server, UI, CLI or executable). @qvac/decision-ggml builds this port
+# with it and links the archive statically.
 # It is part of the llama tree, so it needs the llama feature (common + mtmd).
 if("server-context" IN_LIST FEATURES AND NOT "llama" IN_LIST FEATURES)
   message(FATAL_ERROR "qvac-fabric: the server-context feature requires the llama feature")
