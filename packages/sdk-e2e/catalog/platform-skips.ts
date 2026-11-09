@@ -140,7 +140,7 @@ const RULES: Rule[] = [
     match: ['kv-cache-shared-prefix-default-isolated', 'kv-cache-shared-prefix-opt-in'],
     skip: {
       reason:
-        'Step-defined tests have no mobile interpreter and are covered by desktop and Python e2e',
+        'Defined only as steps, which the JS mobile consumer does not run; Kotlin inherits the skip because it shares the Android device. Covered by desktop and Python e2e',
       platforms: ['mobile']
     }
   },
