@@ -162,6 +162,20 @@ const nextHistory = cancelled
 The same partial-turn rule applies if you abort the `events` iterator early (e.g., `break` out of the `for await` loop) without calling `cancel()`. The model still committed a truncated turn — treat it as partial.
 </Callout>
 
+## Per-call timeouts
+
+For streaming calls such as `completion()`, the per-call `timeout` option in `rpcOptions` limits the wait, in milliseconds, for each response chunk, including the first. A stalled read throws `OperationTimeoutError` and closes that request's response stream. Each read gets a fresh timeout budget. Omitting `timeout` leaves reads unbounded.
+
+```ts
+const run = completion({ modelId, history, stream: true, rpcOptions: { timeout: 5000 } });
+```
+
+A timeout does not stop the inference job on the worker. Use `cancel({ requestId: run.requestId })` to stop it.
+
+<Callout type="info">
+**Python:** `completion()` takes no per-call `timeout`, so this applies to the JS/TS SDK only.
+</Callout>
+
 ## Example
 
 The following script loads a model, starts a streaming `completion()`, cancels it shortly after by `requestId`, and prints how many content deltas streamed before the cancel took effect:

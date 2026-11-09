@@ -786,7 +786,7 @@ importers:
         specifier: ^3.6.2
         version: 3.6.2
       bare-cpu-info:
-        specifier: 0.1.1
+        specifier: ^0.1.1
         version: 0.1.1
       bare-crypto:
         specifier: ^1.15.3
@@ -798,8 +798,8 @@ importers:
         specifier: ^4.8.4
         version: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-gpu-info:
-        specifier: 0.1.1
-        version: 0.1.1
+        specifier: ^0.1.3
+        version: 0.1.3
       bare-http1:
         specifier: ^4.6.2
         version: 4.6.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-pipe@4.2.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.2))(bare-url@2.4.6)
@@ -1633,7 +1633,7 @@ importers:
         specifier: ^3.4.2
         version: 3.6.2
       bare-cpu-info:
-        specifier: 0.1.1
+        specifier: ^0.1.1
         version: 0.1.1
       bare-crypto:
         specifier: ^1.15.0
@@ -1648,8 +1648,8 @@ importers:
         specifier: ^4.8.4
         version: 4.8.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
       bare-gpu-info:
-        specifier: 0.1.1
-        version: 0.1.1
+        specifier: ^0.1.3
+        version: 0.1.3
       bare-link:
         specifier: ^4.0.1
         version: 4.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)(bare-events@2.9.1(bare-abort-controller@1.1.2))
@@ -5788,8 +5788,8 @@ packages:
       bare-buffer:
         optional: true
 
-  bare-gpu-info@0.1.1:
-    resolution: {integrity: sha512-qI/WZiBuJ4ETcfwinUOBI/GZ43oO/L2tgstXLmXeIA6qCSFmfeBkj+VPijg9xZf28UcOFjnSritAMXMqp5qzbg==}
+  bare-gpu-info@0.1.3:
+    resolution: {integrity: sha512-07MtOL76BV4v0F3bP12w5URR/4ZiXAg1YiW8SmLRnQ08GWcvuiCO8CeUTxSY4M/VUqZZzMMxhHDGC7n333iGDA==}
     engines: {bare: '>=1.14.0'}
 
   bare-hrtime@2.1.1:
@@ -15729,7 +15729,7 @@ snapshots:
       - bare-abort-controller
       - react-native-b4a
 
-  bare-gpu-info@0.1.1: {}
+  bare-gpu-info@0.1.3: {}
 
   bare-hrtime@2.1.1: {}
 
