@@ -60,11 +60,11 @@ describe('the manifest derived from it', () => {
     expect(software.versions.map((entry) => entry.folder)).toEqual(['(v0.24)', 'v0.23'])
   })
 
-  it('makes no line of a package current', () => {
+  it("makes a package's first line current, like a product's", () => {
     const software = toDocumentedSoftware(
       parseVersionsFile('demo.json', { ...valid, kind: 'platform', path: '/ecosystem/packages/demo' }),
     )
-    expect(software.versions.map((entry) => entry.folder)).toEqual(['v0.24', 'v0.23'])
+    expect(software.versions.map((entry) => entry.folder)).toEqual(['(v0.24)', 'v0.23'])
   })
 
   it('parses every file shipped under versions/', () => {

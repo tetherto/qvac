@@ -73,7 +73,12 @@ export const versionsFileSchema = z
      * current line.
      */
     retired: z.array(lineVersion).default([]),
-    lines: z.array(versionsLineSchema).min(1),
+    /**
+     * Published lines, newest first; the first is current. Empty for software
+     * not released yet: it is documented in its package and previewed, but
+     * appears on the site only once a release pins its first line.
+     */
+    lines: z.array(versionsLineSchema),
   })
   .strict()
   .superRefine((file, ctx) => {

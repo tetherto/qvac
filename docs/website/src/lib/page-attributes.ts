@@ -48,10 +48,9 @@ export function collectionOf(url: string): string | undefined {
 export function pageAttributes(url: string): PageAttributes {
   const attributes: PageAttributes = { collection: collectionOf(url) };
 
-  // Only a collection published as documentation lines has one. An inventory
-  // package under Ecosystem carries versions of its own, but those are
-  // releases catalogued page by page, not lines of documentation, and
-  // retrieval must not scope a reader to one of them.
+  // Only a product's collection is scoped by line in retrieval. A package
+  // under Ecosystem publishes lines too, but retrieval scopes by collection,
+  // and its pages are retrieved as Ecosystem's.
   const versioned = getVersionForPath(url);
   if (versioned && versioned.software.kind === 'product') {
     attributes.package = versioned.software.package;

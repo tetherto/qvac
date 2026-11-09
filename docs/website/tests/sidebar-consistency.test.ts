@@ -29,7 +29,6 @@ const PAGE_EXTENSIONS = ['.mdx', '.md']
  */
 function linePageTree (): Root {
   const children: Node[] = DOCUMENTED_SOFTWARE
-    .filter((software) => software.kind === 'product')
     .flatMap((software) =>
       software.versions.map((line) => ({
         type: 'folder' as const,
@@ -218,51 +217,6 @@ describe('sidebar-consistency', () => {
           ).toBe(collection)
         }
       }
-    })
-  })
-
-  describe('every inventory page resolves to a root', () => {
-    // The sidebar beside a page is the last root folder on the path Fumadocs
-    // finds by matching the pathname against the tree — page URL against page
-    // URL, with the pathname's trailing slash normalized away and the node's
-    // left as written. A page the tree names nowhere, or names at a URL
-    // carrying a slash, matches nothing, and the sidebar falls back to listing
-    // the roots: the reader opens a README and is shown the collections.
-    //
-    // The inventory is where that bites, because it is the one part of the
-    // tree whose entries are composed rather than read from a `meta.json`.
-    const tree = { $id: 'root', name: 'docs', children: buildCustomTree(linePageTree()) }
-    const urls = DOCUMENTED_SOFTWARE
-      .filter((software) => software.kind === 'platform')
-      .flatMap((software) => [
-        software.path,
-        ...software.versions.map((version) => `${software.path}/${version.version}`),
-      ])
-
-    it.each(urls)('finds a sidebar for %s', (url) => {
-      for (const pathname of [url, `${url}/`]) {
-        const path = searchPath(tree.children, pathname) ?? []
-        expect(path.length, `${pathname} matches nothing in the tree`).toBeGreaterThan(0)
-        expect(
-          path.some((node) => node.type === 'folder' && node.root),
-          `${pathname} matches the tree but under no root, so the sidebar has nothing to scope to`,
-        ).toBe(true)
-      }
-    })
-
-    it('keeps versions out of the sidebar, leaving them to the switcher', () => {
-      // What a sidebar renders is a root's children; a root's own index is not
-      // an entry. So the versions may be named as indexes, and must not appear
-      // among any root's children.
-      const rendered = tree.children.flatMap((node) =>
-        node.type === 'folder' ? collectUrls(node.children) : [],
-      )
-
-      expect(
-        rendered.filter(
-          (url) => url.startsWith('/ecosystem/inventory/') && /\/v\d+\.\d+$/.test(url),
-        ),
-      ).toEqual([])
     })
   })
 

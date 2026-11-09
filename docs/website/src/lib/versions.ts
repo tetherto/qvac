@@ -87,7 +87,7 @@ export function toDocumentedSoftware(declaration: VersionsFile): DocumentedSoftw
     path: declaration.path as `/${string}`,
     versions: declaration.lines.map((line, index): DocumentedVersion => {
       const version = line.version as VersionNumber;
-      const current = declaration.kind === 'product' && index === 0;
+      const current = index === 0;
       return { version, folder: current ? `(${version})` : version };
     }),
     retired: declaration.retired as VersionNumber[],
@@ -98,8 +98,16 @@ export function toDocumentedSoftware(declaration: VersionsFile): DocumentedSoftw
  * Every software the site documents at more than one version, in the order
  * the versions files are listed above.
  */
-export const DOCUMENTED_SOFTWARE: readonly DocumentedSoftware[] =
-  declaredSoftware().map(({ declaration }) => toDocumentedSoftware(declaration));
+export function documentedSoftwareFrom(
+  files: Readonly<Record<string, unknown>> = VERSIONS_FILES,
+): readonly DocumentedSoftware[] {
+  return declaredSoftware(files)
+    // Software no release has pinned yet publishes nothing.
+    .filter(({ declaration }) => declaration.lines.length > 0)
+    .map(({ declaration }) => toDocumentedSoftware(declaration));
+}
+
+export const DOCUMENTED_SOFTWARE: readonly DocumentedSoftware[] = documentedSoftwareFrom();
 
 /** True when the folder is written as a Fumadocs folder group. */
 export function isCurrentLineFolder(folder: string): boolean {
@@ -120,7 +128,7 @@ export function documentedSoftwareOfKind(
 
 /**
  * The software documented at the given pathname, or `null` when the pathname
- * documents none. The longest matching path wins, so an inventory package
+ * documents none. The longest matching path wins, so a package documented
  * inside Ecosystem resolves to the package rather than to Ecosystem.
  */
 export function getDocumentedSoftware(
@@ -146,8 +154,8 @@ export function getPublishedVersions(
 }
 
 /**
- * The current line of a versioned collection: the entry whose folder is a
- * group. `null` for an inventory package, which declares no current version.
+ * The current line of a documented software: the entry whose folder is a
+ * group, the first its versions file declares.
  */
 export function getCurrentLine(
   software: DocumentedSoftware,
@@ -191,8 +199,7 @@ export function isVersionedCollectionPath(pathname: string): boolean {
  * Build the URL for a version of something published at `basePath`. The
  * version served without a segment — a collection's current line — maps to
  * `basePath/`; every other version maps to `basePath/<version>/`. Pass
- * `null` as `versionlessVersion` where no version is served bare, which is
- * every inventory package.
+ * `null` as `versionlessVersion` where no version is served bare.
  *
  * Trailing slash is mandatory: versioned slugs contain dots, and Sevalla's
  * Pretty URLs treats a slash-less dotted final segment as a file request and

@@ -99,7 +99,7 @@ export function planLines(options: MaterializeOptions = {}): PlannedLine[] {
       delete overrides[key]
       if (!override && !isPinnedLine(line)) return
 
-      const current = declaration.kind === 'product' && index === 0
+      const current = index === 0
       const folder = current ? `(${line.version})` : line.version
       const source: LineSource = override
         ? resolveOverride(override, monorepoRoot, declaration.repo)

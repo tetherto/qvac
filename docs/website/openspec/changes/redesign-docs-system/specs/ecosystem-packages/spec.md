@@ -2,12 +2,12 @@
 
 ### Requirement: Packages documents the internal packages inside Ecosystem
 
-The Ecosystem collection SHALL hold a Packages section with one entry per listed internal package. A package SHALL be listed only when it has a versions file. Test, CI, smoke, and private packages MUST NOT be listed. Software that has its own versioned collection MUST NOT appear in Packages.
+The Ecosystem collection SHALL hold a Packages section with one entry per listed internal package. A package SHALL be listed only when it has a versions file with at least one published line. The section MUST be absent while no package is listed. Test, CI, smoke, and private packages MUST NOT be listed. Software that has its own versioned collection MUST NOT appear in Packages.
 
 #### Scenario: Only declared packages are listed
 
 - **WHEN** the Packages section is rendered
-- **THEN** it lists exactly the packages that have a versions file of kind `platform`
+- **THEN** it lists exactly the packages that have a versions file of kind `platform` with a published line
 
 #### Scenario: Entry points are not packages
 

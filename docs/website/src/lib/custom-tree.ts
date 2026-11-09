@@ -5,6 +5,7 @@ import {
   getCurrentLine,
   getDocumentedSoftware,
   versionOfFolder,
+  type DocumentedSoftware,
   type DocumentedVersion,
 } from '@/lib/versions';
 import { resolveIcon } from '@/lib/resolveIcon';
@@ -39,86 +40,56 @@ import { resolveIcon } from '@/lib/resolveIcon';
  */
 
 /**
- * The inventory's entries, derived from the manifest rather than declared.
- * Everything the sidebar needs is already there — the package's published
- * name and where it is documented — and a second list would be one more thing
- * to forget when a package is added.
- *
- * One entry per package, and none per version: a package's versions are moved
- * between with the switcher, the same control a versioned collection's lines
- * use, so the sidebar carries the inventory's shape and the switcher carries
- * the version. A package is entered at its index, never at a version, because
- * the inventory publishes no current line — its version-less path belongs to
- * the index, and every README is addressed by its own segment.
+ * A package's name in navigation: the last segment of its path, which is also
+ * how its URL names it — `/ecosystem/packages/translation-nmtcpp`.
  */
-function inventoryChildren(): Node[] {
-  return documentedSoftwareOfKind('platform').map((software) => ({
-    type: 'page',
-    name: software.package,
-    url: software.path,
-  }));
+function packageName(software: DocumentedSoftware): string {
+  return software.path.slice(software.path.lastIndexOf('/') + 1);
+}
+
+/** The line of a package a sidebar is drawn for, with that line's own pages. */
+interface OpenPackageLine {
+  software: DocumentedSoftware;
+  index: string;
+  children: Node[];
 }
 
 /**
- * The inventory's place in the Ecosystem navigation.
+ * The Packages section of Ecosystem: one entry per package a `platform`
+ * versions file declares, entered at its current line. Derived from the
+ * versions files rather than declared, so adding a package is adding its
+ * versions file. Absent while no package is declared: a folder with no entry
+ * would be a dead end in the sidebar.
  *
- * Named only when the manifest lists a package. The inventory is built but
- * unpublished, so the manifest lists none and this entry is left out of
- * Ecosystem below: a folder whose index addresses a page the site does not
- * serve would be a dead entry in the sidebar.
+ * A package's own pages are listed only in the sidebar drawn for one of its
+ * lines (`open`), where its entry becomes a folder holding that line's
+ * navigation. Everywhere else it is one entry; its lines are moved between
+ * with the switcher, like a collection's.
  */
-const inventoryFolder: Node = {
-  name: 'Software inventory',
-  type: 'folder',
-  icon: resolveIcon('Package'),
-  index: {
-    type: 'page',
-    name: 'Software inventory',
-    url: '/ecosystem/inventory',
-  },
-  children: inventoryChildren(),
-};
-
-/**
- * A root folder per inventory version page, holding the Ecosystem navigation.
- *
- * The sidebar beside a page is the last root folder on the path Fumadocs
- * finds by matching the pathname against the tree, page URL for page URL. A
- * page named nowhere in the tree matches nothing, and the sidebar falls back
- * to listing the roots themselves — the reader lands on a README and is shown
- * a list of collections. Since a version page is deliberately absent from the
- * inventory's entries, it is named here instead, as the index of a root of
- * its own, which the sidebar renders as the Ecosystem tree it would have
- * rendered anyway. A root's index is not itself an entry, so naming it here
- * puts nothing back in the sidebar.
- *
- * The inventory folder is opened, because a folder opens itself only for a
- * page it lists and it lists no version. Left shut, a reader who followed a
- * package into a README would be shown an Ecosystem tree with no sign of where
- * they had gone.
- */
-function inventoryVersionRoots(): Node[] {
-  return documentedSoftwareOfKind('platform').flatMap((software) =>
-    software.versions.map(
-      (version): Node => ({
-        type: 'folder',
-        root: true,
-        name: `${software.package} ${version.version}`,
-        index: {
-          type: 'page',
-          name: software.package,
-          // Slash-less, the form `searchPath` compares against: it normalizes
-          // the pathname it is given but not the URL it reads off the node.
-          // What the browser requests is Next's business, and it writes the
-          // trailing slash back into every href it renders.
-          url: `${software.path}/${version.version}`,
-        },
-        children: ecosystemChildren.map((node) =>
-          node === inventoryFolder ? { ...inventoryFolder, defaultOpen: true } : node,
-        ),
-      }),
-    ),
-  );
+export function packagesSection(
+  packages: readonly DocumentedSoftware[] = documentedSoftwareOfKind('platform'),
+  open?: OpenPackageLine,
+): Node[] {
+  if (packages.length === 0) return [];
+  return [
+    {
+      name: 'Packages',
+      type: 'folder',
+      icon: resolveIcon('Package'),
+      defaultOpen: open !== undefined,
+      children: packages.map((software): Node =>
+        open?.software.path === software.path
+          ? {
+              type: 'folder',
+              name: packageName(software),
+              index: { type: 'page', name: packageName(software), url: open.index },
+              defaultOpen: true,
+              children: open.children,
+            }
+          : { type: 'page', name: packageName(software), url: software.path },
+      ),
+    },
+  ];
 }
 
 /**
@@ -157,51 +128,56 @@ function intoCollection(name: string, url: `/${string}/`, icon: string): Node {
  * where the subject is published. Nothing is written here to stand in for a
  * page that lives elsewhere.
  */
-const ecosystemChildren: Node[] = [
-  {
-    name: 'Overview',
-    url: '/ecosystem',
-    type: 'page',
-    icon: resolveIcon('House'),
-  },
-  offSite('Our vision', 'https://qvac.tether.io/vision', 'Telescope'),
-  {
-    type: 'separator',
-    name: 'Products',
-  },
-  intoCollection('SDK', '/sdk/', 'Code'),
-  intoCollection('CLI', '/cli/', 'Terminal'),
-  intoCollection('Model provider', '/cli/http-server/connection/', 'Server'),
-  offSite('Assistant app', 'https://qv.ac', 'MonitorPlay'),
-  {
-    type: 'separator',
-    name: 'Platform',
-  },
-  offSite('Fabric', 'https://qvac.tether.io/products/fabric', 'Layers'),
-  {
-    name: 'Addons',
-    type: 'folder',
-    icon: resolveIcon('Blocks'),
-    index: { type: 'page', name: 'Addons', url: '/ecosystem/addons' },
-    children: [
-      { name: 'llm-llamacpp', url: '/ecosystem/addons/llm-llamacpp', type: 'page' },
-      { name: 'embed-llamacpp', url: '/ecosystem/addons/embed-llamacpp', type: 'page' },
-      { name: 'translation-nmtcpp', url: '/ecosystem/addons/translation-nmtcpp', type: 'page' },
-      { name: 'transcription-whispercpp', url: '/ecosystem/addons/transcription-whispercpp', type: 'page' },
-      { name: 'transcription-parakeet', url: '/ecosystem/addons/transcription-parakeet', type: 'page' },
-      { name: 'tts-ggml', url: '/ecosystem/addons/tts-ggml', type: 'page' },
-      { name: 'audiogen-ggml', url: '/ecosystem/addons/audiogen-ggml', type: 'page' },
-      { name: 'diffusion-cpp', url: '/ecosystem/addons/diffusion-cpp', type: 'page' },
-    ],
-  },
-  ...(inventoryChildren().length > 0 ? [inventoryFolder] : []),
-  {
-    type: 'separator',
-    name: 'Research',
-  },
-  offSite('Psy family models', 'https://qvac.tether.io/products/models', 'Brain'),
-  offSite('Genesis datasets', 'https://qvac.tether.io/products/genesis', 'Database'),
-];
+function ecosystemChildren(
+  packages: readonly DocumentedSoftware[] = documentedSoftwareOfKind('platform'),
+  open?: OpenPackageLine,
+): Node[] {
+  return [
+    {
+      name: 'Overview',
+      url: '/ecosystem',
+      type: 'page',
+      icon: resolveIcon('House'),
+    },
+    offSite('Our vision', 'https://qvac.tether.io/vision', 'Telescope'),
+    {
+      type: 'separator',
+      name: 'Products',
+    },
+    intoCollection('SDK', '/sdk/', 'Code'),
+    intoCollection('CLI', '/cli/', 'Terminal'),
+    intoCollection('Model provider', '/cli/http-server/connection/', 'Server'),
+    offSite('Assistant app', 'https://qv.ac', 'MonitorPlay'),
+    {
+      type: 'separator',
+      name: 'Platform',
+    },
+    offSite('Fabric', 'https://qvac.tether.io/products/fabric', 'Layers'),
+    {
+      name: 'Addons',
+      type: 'folder',
+      icon: resolveIcon('Blocks'),
+      index: { type: 'page', name: 'Addons', url: '/ecosystem/addons' },
+      children: [
+        { name: 'llm-llamacpp', url: '/ecosystem/addons/llm-llamacpp', type: 'page' },
+        { name: 'embed-llamacpp', url: '/ecosystem/addons/embed-llamacpp', type: 'page' },
+        { name: 'translation-nmtcpp', url: '/ecosystem/addons/translation-nmtcpp', type: 'page' },
+        { name: 'transcription-whispercpp', url: '/ecosystem/addons/transcription-whispercpp', type: 'page' },
+        { name: 'transcription-parakeet', url: '/ecosystem/addons/transcription-parakeet', type: 'page' },
+        { name: 'tts-ggml', url: '/ecosystem/addons/tts-ggml', type: 'page' },
+        { name: 'audiogen-ggml', url: '/ecosystem/addons/audiogen-ggml', type: 'page' },
+        { name: 'diffusion-cpp', url: '/ecosystem/addons/diffusion-cpp', type: 'page' },
+      ],
+    },
+    ...packagesSection(packages, open),
+    {
+      type: 'separator',
+      name: 'Research',
+    },
+    offSite('Psy family models', 'https://qvac.tether.io/products/models', 'Brain'),
+    offSite('Genesis datasets', 'https://qvac.tether.io/products/genesis', 'Database'),
+  ];
+}
 
 /**
  * Resources holds what supports the products without documenting a release of
@@ -289,7 +265,7 @@ const COLLECTIONS: Collection[] = [
     name: 'Ecosystem',
     description: 'Everything QVAC publishes, and the add-ons that extend it',
     path: '/ecosystem',
-    children: ecosystemChildren,
+    children: ecosystemChildren(),
   },
   {
     name: 'SDK',
@@ -352,16 +328,16 @@ export function lineChildren(pageTree: Root, folderPath: string): Node[] {
  * trailing slash (see `computeSectionVersionUrl`).
  */
 function lineIndexUrl(
-  collection: Collection,
+  basePath: string,
   line: DocumentedVersion,
   current: DocumentedVersion | null,
 ): string {
   const url = computeSectionVersionUrl(
-    collection.path,
+    basePath,
     versionOfFolder(line.folder),
     current ? versionOfFolder(current.folder) : null,
   );
-  return url === `${collection.path}/` ? collection.path : url;
+  return url === `${basePath}/` ? basePath : url;
 }
 
 /**
@@ -402,7 +378,7 @@ function collectionRoots(collection: Collection, pageTree: Root): Node[] {
     index: {
       type: 'page',
       name: 'Overview',
-      url: lineIndexUrl(collection, line, current),
+      url: lineIndexUrl(collection.path, line, current),
     },
     children: lineChildren(pageTree, `${folder}/${line.folder}`),
   }));
@@ -416,12 +392,44 @@ function collectionRoots(collection: Collection, pageTree: Root): Node[] {
  * `source.pageTree` — which the caller holds, keeping this module free of the
  * content layer and testable without it.
  */
+/**
+ * One root per line of each package, drawing the Ecosystem sidebar with that
+ * package open on that line's pages. The sidebar beside a page is the last
+ * root folder whose entries name it, and a package's pages are named nowhere
+ * else, so without these a reader on a package page would be shown the list
+ * of collections instead of Ecosystem.
+ */
+export function packageRoots(
+  pageTree: Root,
+  packages: readonly DocumentedSoftware[] = documentedSoftwareOfKind('platform'),
+): Node[] {
+  const ecosystem = COLLECTIONS.find((collection) => collection.path === '/ecosystem')!;
+  return packages.flatMap((software) => {
+    const current = getCurrentLine(software);
+    return software.versions.map((line): Node => {
+      const index = lineIndexUrl(software.path, line, current);
+      return {
+        type: 'folder',
+        root: true,
+        name: ecosystem.name,
+        description: ecosystem.description,
+        index: { type: 'page', name: packageName(software), url: index },
+        children: ecosystemChildren(packages, {
+          software,
+          index,
+          children: lineChildren(pageTree, `${software.path.slice(1)}/${line.folder}`),
+        }),
+      };
+    });
+  });
+}
+
 export function buildCustomTree(pageTree: Root): Node[] {
   return [
     ...COLLECTIONS.flatMap((collection) =>
       collectionRoots(collection, pageTree),
     ),
-    ...inventoryVersionRoots(),
+    ...packageRoots(pageTree),
   ];
 }
 

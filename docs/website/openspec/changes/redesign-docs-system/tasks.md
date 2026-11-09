@@ -68,15 +68,15 @@ No other package is touched.
 
 ## 6. Ecosystem packages mechanism
 
-- [ ] 6.1 Add the Packages section to Ecosystem, composed from `kind: platform` versions files, with the switcher, and hidden while no package is listed
-- [ ] 6.2 Add the TypeDoc normalizer and `docs:api`, which write `_generated/api.json` with a `--check` gate
-- [ ] 6.3 Write the software-kind definitions, with a platform package's minimal pages, and a scaffold skill for them
-- [ ] 6.4 Implement the contract check of a platform package's minimal pages over a pull request's documentation, and keep it out of the build
-- [ ] 6.5 Add a fixture package and tests covering Packages composition, versioning, the switcher, the normalizer, and the contract check
+- [x] 6.1 Add the Packages section to Ecosystem, composed from `kind: platform` versions files, with the switcher, and hidden while no package is listed
+- [x] 6.2 Add the TypeDoc normalizer and `docs:api`, which write `_generated/api.json` with a `--check` gate
+- [x] 6.3 Write the software-kind definitions, with a platform package's minimal pages, and a scaffold skill for them
+- [x] 6.4 Implement the contract check of a platform package's minimal pages over a pull request's documentation, and keep it out of the build
+- [x] 6.5 Add a fixture package and tests covering Packages composition, versioning, the switcher, the normalizer, and the contract check
 - [x] 6.6 Delete the unpublished Software Inventory pages
 - [ ] 6.7 Sync the `docs-contract`, `ecosystem-packages`, and `software-inventory-docs` deltas into the main specs
 
 ## 7. Close-out
 
-- [ ] 7.1 Validate every spec with `openspec validate --specs --strict`
+- [x] 7.1 Validate every spec with `openspec validate --specs --strict`
 - [ ] 7.2 Archive this change

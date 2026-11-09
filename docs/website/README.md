@@ -89,6 +89,15 @@ manifest every version-shaped surface reads, and no other module reads them.
 - **An in-place line** (`inPlace: true`) is still held under `content/docs/`
   from before its software kept documentation in its package. It is
   transitional: the package migration replaces it with pinned lines.
+- **No line yet** (`"lines": []`) declares software not released yet. It is
+  documented in its package and checked on pull requests, and appears on the
+  site once a release pins its first line (`docs-pin-update.yml`).
+- **The kind decides where it appears.** A `product` is a collection of its
+  own, with a tab. A `platform` package is listed under Ecosystem → Packages,
+  at `path` `/ecosystem/packages/<name>`; its lines work exactly like a
+  collection's, current line and switcher included. `/qv-docs-scaffold`
+  creates a package's documentation, and `npm run docs:api -- packages/<name>`
+  generates its API reference from its declarations.
 - **No number of lines is imposed.** A line stays published until the team
   stops supporting it. Retiring it is one edit: move its version from `lines`
   to `retired`. The materializer then removes its folder, and its addresses

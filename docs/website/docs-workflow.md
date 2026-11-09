@@ -390,8 +390,9 @@ line the branch releases that `main` pins (`scripts/release-preview-flags.ts`).
 A line `main` does not pin yet, or still holds in place, is reported and not
 previewed. The Vitest suite runs after the build.
 
-**Bindings and generated data.** Reads the pull request's tree:
-`docs:bindings` (drift, removed symbols, product coverage), `docs:sdk-parity`,
+**Contract, bindings and generated data.** Reads the pull request's tree:
+`docs:contract` (a platform package's required pages), `docs:bindings`
+(drift, removed symbols, product coverage), `docs:sdk-parity`,
 and the freshness of the SDK's Python surface, which needs no installed
 package. The JavaScript and CLI data need their packages' dependencies, so
 they are checked fresh by the SDK pod's checks (`docs_data` in
@@ -473,6 +474,8 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 | `write-schema-slices.ts` | -- | After `next build`: publishes each function's `<fn>.schema.json` beside its reference page |
 | `write-line-redirects.ts` | -- | After `next build`: expands the documentation-line markers of `out/_redirects` |
 | `materialize-lines.ts` | `docs:materialize` | Materializes every pinned line from its commit; `--override`, `--include-dev`, and the same flags from `DOCS_MATERIALIZE_FLAGS` |
+| `api-reference/generate-package-api.ts` | `docs:api` | Writes a package's API reference: `_generated/api.json`, normalized from TypeDoc by `api-reference/package-api.ts`, and the generated `api.mdx`. Needs the package's dependencies installed. `--check` fails when stale. |
+| `contract/check-contract.ts` | `docs:contract` | Checks each documentation root against its kind's required pages (`contract/kinds.json`) and a package overview's link to its product; runs on pull requests, never in the build |
 | `bindings/check-bindings.ts` | `docs:bindings`, `docs:lock` | Checks each package's page bindings against its projected surface and `api-bindings.lock.json`; `--write` (`docs:lock`) records the review |
 | `update-pins.ts` | -- | Pins the lines a release branch publishes in their versions files; run by `docs-pin-update.yml` |
 | `release-preview-flags.ts` | -- | The `--override` flags that preview a pull request into a release branch; run by the PR checks |

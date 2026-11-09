@@ -14,7 +14,7 @@ import { ConnectMcpServer } from '@/components/for-ai-menu';
 import { FOR_AI_ENTRIES, FOR_AI_LABEL } from '@/lib/for-ai-menu';
 import KeetRoomModalMount from '@/components/keet-modal';
 import { buildCustomTree, collectionTabs } from '@/lib/custom-tree';
-import { collectionLines, packageLines } from '@/lib/lines';
+import { collectionLines } from '@/lib/lines';
 import { LineSwitcher } from '@/components/line-switcher';
 import { source } from '@/lib/source';
 import {
@@ -133,10 +133,7 @@ export default function Layout({ children }: LayoutProps<'/'>) {
           // the tree on every viewport, with no conditional layout of ours.
           banner: (
             <LineSwitcher
-              collections={[
-                ...collectionLines(source.getPages().map((page) => page.url)),
-                ...packageLines(),
-              ]}
+              collections={collectionLines(source.getPages().map((page) => page.url))}
             />
           ),
         }}

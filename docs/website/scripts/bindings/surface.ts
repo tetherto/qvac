@@ -10,14 +10,16 @@
  *
  * Which symbols exist follows from the data the software ships, not from its
  * name: a contract gives `fn:` symbols, a command model `command:` symbols,
- * an OpenAPI document `endpoint:` symbols. `surface` stands for all of them,
- * for software that binds its surface as a whole.
+ * an OpenAPI document `endpoint:` symbols, a package's normalized
+ * declarations `export:` symbols. `surface` stands for all of them, for
+ * software that binds its surface as a whole.
  */
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import * as path from 'node:path'
 import { commandsOf, openApiOperations, type CliCommand, type CliData } from '../../src/lib/api-reference/cli'
 import { functionReference, loadLineApi } from '../../src/lib/api-reference/data'
+import type { PackageApi } from '../../src/lib/api-reference/package-api'
 import { SchemaReader, type JsonSchema } from '../../src/lib/api-reference/schema'
 
 export const WHOLE_SURFACE = 'surface'
@@ -40,6 +42,11 @@ export function projectSurface({ root, paths }: SurfaceSource): Surface {
   if (cli) for (const [id, projection] of commandSymbols(cli)) surface.set(id, projection)
   const openapi = readJson<Record<string, unknown>>(path.join(generated, 'openapi.json'))
   if (openapi) for (const [id, projection] of endpointSymbols(openapi)) surface.set(id, projection)
+  const api = readJson<PackageApi>(path.join(generated, 'api.json'))
+  if (api) {
+    // `source` is where the declaration sits, which a move changes and a reader never relies on.
+    for (const { source: _source, ...entry } of api.exports) surface.set(`export:${entry.name}`, entry)
+  }
   return surface
 }
 

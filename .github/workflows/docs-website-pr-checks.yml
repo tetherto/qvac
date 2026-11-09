@@ -114,11 +114,11 @@ jobs:
 
   bindings:
     # Reads the pull request's own tree: its pages, its generated data, and its
-    # locks. Generated data is checked fresh against package source by each
+    # locks. Nothing here runs in the site build. Generated data is checked fresh against package source by each
     # package's own checks (the SDK pod's `docs_data`), which have the package's
     # dependencies installed; the Python surface needs none, so it is checked
     # here.
-    name: Bindings and generated data
+    name: Contract, bindings and generated data
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -131,6 +131,12 @@ jobs:
         run: bun install
 
       # A release branch cut before these checks existed has nothing to check.
+      - name: Check the docs contract
+        # A platform package missing a page its kind requires
+        # (docs/website/contract/kinds.json), or an overview that links no product.
+        if: hashFiles('docs/website/scripts/contract/check-contract.ts') != ''
+        run: bun run docs:contract
+
       - name: Check bindings
         if: hashFiles('docs/website/scripts/bindings/check-bindings.ts') != ''
         # A page whose bound surface changed without a review, a removed

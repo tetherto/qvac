@@ -2,7 +2,9 @@ import type { ReactNode } from 'react';
 import { formatSize, modelsForEngines } from '@/lib/api-reference/card';
 import type { CliData } from '@/lib/api-reference/cli';
 import { functionNames, functionReference, lineApiForUrl, lineGeneratedFile, type LineApi } from '@/lib/api-reference/data';
+import type { PackageApi } from '@/lib/api-reference/package-api';
 import { CliCommands, OpenApiOperations } from './cli-reference';
+import { PackageApiExports } from './package-api-reference';
 import { LanguageSwitch } from './language-switch';
 import { ShapeTables } from './schema-table';
 
@@ -177,5 +179,11 @@ export function apiComponentsFor(url: string) {
     return <OpenApiOperations document={document} />;
   }
 
-  return { SchemaTable, ModelsTable, FunctionReference, FunctionIndex, LanguageSwitch, CliReference, OpenApiReference };
+  function PackageApiReference() {
+    const data = lineGeneratedFile<PackageApi>(url, 'api.json');
+    if (!data) return <Missing>API reference data is not available for this documentation line.</Missing>;
+    return <PackageApiExports api={data} />;
+  }
+
+  return { SchemaTable, ModelsTable, FunctionReference, FunctionIndex, LanguageSwitch, CliReference, OpenApiReference, PackageApiReference };
 }

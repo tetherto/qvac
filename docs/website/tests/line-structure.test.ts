@@ -10,10 +10,9 @@
  * without touching the manifest, or the other way round.
  */
 import { describe, it, expect } from 'vitest'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import * as path from 'node:path'
 import {
-  checkIndexVersions,
   checkVersionStructure,
   type DirectoryListing,
 } from '@/lib/version-structure'
@@ -31,13 +30,13 @@ const sdk: DocumentedSoftware = {
   ],
 }
 
-const cliPackage: DocumentedSoftware = {
-  package: '@qvac/cli',
+const platformPackage: DocumentedSoftware = {
+  package: '@qvac/translation-nmtcpp',
   kind: 'platform',
-  path: '/ecosystem/inventory/cli',
+  path: '/ecosystem/packages/translation-nmtcpp',
   versions: [
-    { version: 'v0.9', folder: 'v0.9' },
-    { version: 'v0.8', folder: 'v0.8' },
+    { version: 'v1.4', folder: '(v1.4)' },
+    { version: 'v1.3', folder: 'v1.3' },
   ],
 }
 
@@ -61,8 +60,8 @@ describe('version structure check', () => {
     expect(check(sdk, listing(['(v0.17)', 'v0.16']))).toEqual([])
   })
 
-  it('accepts a package whose versions are all explicit', () => {
-    expect(check(cliPackage, listing(['v0.9', 'v0.8']))).toEqual([])
+  it('accepts a package inside Ecosystem cut into its declared lines', () => {
+    expect(check(platformPackage, listing(['(v1.4)', 'v1.3']))).toEqual([])
   })
 
   it('names a declared line whose folder was never created', () => {
@@ -114,34 +113,20 @@ describe('version structure check', () => {
     ).toEqual([])
   })
 
-  it('accepts a package carrying more than two versions, which is a catalogue', () => {
-    expect(
-      check(
-        {
-          ...cliPackage,
-          versions: [...cliPackage.versions, { version: 'v0.7', folder: 'v0.7' }],
-        },
-        listing(['v0.9', 'v0.8', 'v0.7']),
-      ),
-    ).toEqual([])
-  })
-
   it('rejects a patch-shaped version folder', () => {
-    const problems = check(cliPackage, listing(['v0.9', 'v0.8', 'v0.9.1']))
-    expect(problems.some((problem) => problem.includes('v0.9.1'))).toBe(true)
+    const problems = check(platformPackage, listing(['(v1.4)', 'v1.3', 'v1.4.1']))
+    expect(problems.some((problem) => problem.includes('v1.4.1'))).toBe(true)
     expect(problems.some((problem) => problem.includes('carries a patch'))).toBe(
       true,
     )
   })
 
-  it('rejects a folder group in the inventory, where the version-less path is the index', () => {
+  it('rejects a package with no current line, like a collection', () => {
     const problems = check(
-      { ...cliPackage, versions: [{ version: 'v0.9', folder: '(v0.9)' }] },
-      listing(['(v0.9)']),
+      { ...platformPackage, versions: [{ version: 'v1.4', folder: 'v1.4' }] },
+      listing(['v1.4']),
     )
-    expect(
-      problems.some((problem) => problem.includes('an inventory package may not use')),
-    ).toBe(true)
+    expect(problems.some((problem) => problem.includes('exactly one current line'))).toBe(true)
   })
 
   it('rejects a page left directly under a versioned collection', () => {
@@ -169,56 +154,6 @@ describe('version structure check', () => {
   it('reports a documented software with no content folder at all', () => {
     const problems = check(sdk, null)
     expect(problems).toEqual(['/sdk: documented but has no content folder'])
-  })
-})
-
-describe('package index against the manifest', () => {
-  const index = (versions: string[]) =>
-    new Map([
-      [
-        cliPackage.path,
-        versions
-          .map((version) => `- [${version}](${cliPackage.path}/${version}/)`)
-          .join('\n'),
-      ],
-    ])
-
-  it('accepts an index linking exactly the declared versions', () => {
-    expect(checkIndexVersions(index(['v0.9', 'v0.8']), [cliPackage])).toEqual([])
-  })
-
-  it('accepts the slash-less form of the same link', () => {
-    const text = new Map([
-      [cliPackage.path, `[v0.9](${cliPackage.path}/v0.9) [v0.8](${cliPackage.path}/v0.8)`],
-    ])
-    expect(checkIndexVersions(text, [cliPackage])).toEqual([])
-  })
-
-  it('names a declared version the index forgot', () => {
-    const problems = checkIndexVersions(index(['v0.9']), [cliPackage])
-    expect(problems).toHaveLength(1)
-    expect(problems[0]).toContain('v0.8')
-    expect(problems[0]).toContain('does not link it')
-  })
-
-  it('names a version the index links and the manifest does not declare', () => {
-    const problems = checkIndexVersions(index(['v0.9', 'v0.8', 'v0.7']), [cliPackage])
-    expect(problems).toHaveLength(1)
-    expect(problems[0]).toContain('v0.7')
-    expect(problems[0]).toContain('no manifest entry declares')
-  })
-
-  it('reports a package with no index at all', () => {
-    const problems = checkIndexVersions(new Map([[cliPackage.path, null]]), [
-      cliPackage,
-    ])
-    expect(problems).toEqual([
-      `${cliPackage.path}: has no index page, so its versions cannot be reached`,
-    ])
-  })
-
-  it('skips a collection, which is entered through the switcher', () => {
-    expect(checkIndexVersions(new Map(), [sdk])).toEqual([])
   })
 })
 
@@ -256,20 +191,5 @@ describe('the manifest against the content tree', () => {
     }
 
     expect(checkVersionStructure(listings)).toEqual([])
-  })
-
-  it('links from every package index exactly the versions declared', () => {
-    const indexes = new Map<string, string | null>()
-
-    for (const software of DOCUMENTED_SOFTWARE) {
-      if (software.kind !== 'platform') continue
-      const directory = path.join(contentRoot, software.path.replace(/^\//, ''))
-      const found = ['index.mdx', 'index.md']
-        .map((name) => path.join(directory, name))
-        .find((file) => existsSync(file))
-      indexes.set(software.path, found ? readFileSync(found, 'utf8') : null)
-    }
-
-    expect(checkIndexVersions(indexes)).toEqual([])
   })
 })

@@ -1,6 +1,6 @@
 import {
   computeSectionVersionUrl,
-  documentedSoftwareOfKind,
+  DOCUMENTED_SOFTWARE,
   getCurrentLine,
   isCurrentLineFolder,
   versionOfFolder,
@@ -17,11 +17,8 @@ import {
  */
 
 export interface Line {
-  /**
-   * The version this entry publishes, or `null` for one that publishes none —
-   * an inventory package's index, which is what its version-less path serves.
-   */
-  version: string | null;
+  /** The version this line publishes. */
+  version: string;
   /** True for the line served at the collection's version-less paths. */
   current: boolean;
   /** What the switcher shows, the current line marked as such. */
@@ -49,14 +46,14 @@ function normalize(pathname: string): string {
 }
 
 /**
- * The lines of every versioned collection, each carrying the pathnames it
- * publishes. `pageUrls` is every URL the site serves, which the caller reads
+ * The lines of every documented software — each product's collection and each
+ * package inside Ecosystem — each carrying the pathnames it publishes. `pageUrls` is every URL the site serves, which the caller reads
  * from the loader.
  */
 export function collectionLines(pageUrls: string[]): CollectionLines[] {
   const urls = pageUrls.map(normalize);
 
-  return documentedSoftwareOfKind('product').map((software) => {
+  return DOCUMENTED_SOFTWARE.map((software) => {
     const current = getCurrentLine(software);
     const currentVersion = current ? versionOfFolder(current.folder) : null;
 
@@ -90,56 +87,21 @@ export function collectionLines(pageUrls: string[]): CollectionLines[] {
   });
 }
 
-/**
- * What the switcher offers inside an inventory package: the index first, then
- * every version the package publishes.
- *
- * The index is an entry like any other because it is where a package is
- * entered, and a control whose selection is empty renders nothing — without
- * it the switcher would appear only after the reader had already found a
- * version by other means. It is marked `current` in the sense the field
- * carries: it is what the version-less path serves.
- *
- * Read from the manifest alone, with no page list, because a package version
- * publishes exactly one page and the structure check already holds the
- * manifest and the folders to each other.
- */
-export function packageLines(): CollectionLines[] {
-  return documentedSoftwareOfKind('platform').map((software) => ({
-    path: software.path,
-    lines: [
-      {
-        version: null,
-        current: true,
-        title: 'All versions',
-        index: software.path,
-        urls: [software.path],
-      },
-      ...software.versions.map((entry): Line => {
-        const version = versionOfFolder(entry.folder);
-        return {
-          version,
-          current: false,
-          title: version,
-          index: computeSectionVersionUrl(software.path, version, null),
-          urls: [`${software.path}/${version}`],
-        };
-      }),
-    ],
-  }));
-}
-
 /** The collection the reader is in, or null outside a versioned one. */
 export function collectionOfPath(
   collections: CollectionLines[],
   pathname: string,
 ): CollectionLines | null {
   const path = normalize(pathname);
+  // The longest path wins, so a package nested inside a collection's path
+  // resolves to the package.
   return (
-    collections.find(
-      (collection) =>
-        path === collection.path || path.startsWith(`${collection.path}/`),
-    ) ?? null
+    collections
+      .filter(
+        (collection) =>
+          path === collection.path || path.startsWith(`${collection.path}/`),
+      )
+      .sort((a, b) => b.path.length - a.path.length)[0] ?? null
   );
 }
 
@@ -155,9 +117,7 @@ export function destinationsFor(
   const path = normalize(pathname);
   const tail = path.slice(collection.path.length);
   const claimed = collection.lines.find(
-    (line) =>
-      line.version !== null &&
-      (tail === `/${line.version}` || tail.startsWith(`/${line.version}/`)),
+    (line) => tail === `/${line.version}` || tail.startsWith(`/${line.version}/`),
   );
   const rest = claimed ? tail.slice(`/${claimed.version}`.length) : tail;
 

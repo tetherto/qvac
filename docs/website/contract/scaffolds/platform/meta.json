@@ -1,0 +1,4 @@
+{
+  "title": "{{name}}",
+  "pages": ["index", "installation", "platforms", "usage", "api"]
+}
