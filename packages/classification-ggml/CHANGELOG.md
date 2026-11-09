@@ -30,6 +30,7 @@ and this project adheres to
 
 - [#5574](https://github.com/tetherto/qvac/pull/5574) - ship the XDNA backend in `@qvac/fabric` 0.27.0.
 - [#5658](https://github.com/tetherto/qvac/pull/5658) - bump `qvac-fabric` to `11739.1.1` in `@qvac/fabric` 0.28.0.
+- [#5681](https://github.com/tetherto/qvac/pull/5681) - move the fabric consumers to `@qvac/fabric` `^0.28.0`.
 
 ## [0.35.0] - 2026-11-04
 
