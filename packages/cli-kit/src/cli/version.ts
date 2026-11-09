@@ -6,7 +6,8 @@ export function packageVersion(root: string) {
 }
 
 export function versionText(root: string) {
-  const lines = [`@qvac/cli ${packageVersion(root)}`]
+  const { name, version } = readJson(path.join(root, 'package.json'))!
+  const lines = [`${name} ${version}`]
   for (const name of ['core', 'harness']) {
     const installed = installedVersion(root, `@qvac/${name}`)
     lines.push(`${name.padEnd(8)} ${installed ? installed.version : 'not installed'}`)
@@ -20,7 +21,7 @@ export function versionText(root: string) {
   return lines.join('\n')
 }
 
-function readJson(file: string, fallback?: null): { version: string } | null {
+function readJson(file: string, fallback?: null): { name: string; version: string } | null {
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8'))
   } catch (error) {
