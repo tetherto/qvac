@@ -28,6 +28,12 @@
   first, as `parallel: 1` does. Without it, consumers that split reasoning on
   the tags returned the reasoning as content
   ([#5562](https://github.com/tetherto/qvac/pull/5562)).
+- On hybrid and recurrent models (such as Qwen3.5), the next user turn after
+  a tool loop now restores the checkpoint taken at the previous user message
+  instead of reprocessing the whole conversation. The tool rounds' checkpoints
+  no longer evict it, and the `cacheKey` file keeps it beside the newest one
+  (checkpoint section version 2; older files still load)
+  ([#5637](https://github.com/tetherto/qvac/pull/5637)).
 
 ## [0.68.0] - 2026-11-04
 
