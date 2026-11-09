@@ -10,6 +10,7 @@ import {
   partitionTools,
   resolveDeferredTools,
   resolveToolSearchLimits,
+  resolveToolSearchSource,
   searchDeferredTools
 } from '@/utils/tools/defer'
 import { getMcpToolsWithHandlers } from '@/utils/mcp-adapter'
@@ -531,4 +532,40 @@ test('an MCP client entry can defer every tool it exposes', async (t) => {
 
   const { tools: plain } = await getMcpToolsWithHandlers([{ client }])
   t.ok(plain.every((entry) => !('deferLoading' in entry) && !('group' in entry)))
+})
+
+test('MCP tools: executeToolSearch asks for a resolved source, which finds them under the same limits', async (t) => {
+  const client = {
+    listTools: async () => ({
+      tools: [
+        {
+          name: 'create_issue',
+          description: 'Act on a repository',
+          inputSchema: { type: 'object' }
+        },
+        { name: 'list_prs', description: 'Act on a repository', inputSchema: { type: 'object' } }
+      ]
+    }),
+    callTool: async () => ({})
+  } as unknown as McpClient
+  const params = {
+    tools: [tool('read_file', 'Read a file from disk', { deferLoading: true })],
+    mcp: [{ client, deferLoading: true, group: 'github' }],
+    toolSearch: { defaultLimit: 1 }
+  }
+
+  t.exception(
+    () => executeToolSearch(params, { query: 'repository' }, []),
+    /resolveToolSearchSource/,
+    'unresolved MCP tools are not silently left out'
+  )
+
+  const source = await resolveToolSearchSource(params)
+  t.alike(
+    source.tools?.map((item) => item.name),
+    ['create_issue', 'list_prs', 'read_file'],
+    'MCP tools first, as completion() lists them'
+  )
+  t.alike(source.toolSearch, { defaultLimit: 1 })
+  t.alike(loadedBy(executeToolSearch(source, { query: 'repository' }, [])), ['create_issue'])
 })

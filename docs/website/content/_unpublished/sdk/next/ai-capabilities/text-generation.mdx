@@ -256,7 +256,9 @@ Notes:
 * When you run `tool_search` yourself, pass `executeToolSearch` the same params
   you gave `completion()` (`executeToolSearch(params, call.arguments, history)`)
   so it applies the limits the model was told. Given only a tool list, it
-  applies the defaults.
+  applies the defaults. With `mcp`, pass `await resolveToolSearchSource(params)`
+  instead, once per conversation: it lists the MCP tools the way `completion()`
+  does.
 * `group` is the heading a tool is listed under in the catalog — a skill or an
   MCP server name.
 * To defer an MCP server's tools, set it on the client entry:

@@ -148,6 +148,7 @@ export {
   buildToolSearchTool,
   executeToolSearch,
   loadedToolNames,
+  resolveToolSearchSource,
   searchDeferredTools,
   type ToolSearchSource
 } from '@/utils/tools/defer'

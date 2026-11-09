@@ -6,6 +6,8 @@ import {
   type ToolSearchOptions
 } from '@/schemas/tools'
 import { InvalidToolSchemaError } from '@/errors/index'
+import type { McpClientInput } from '@/schemas/mcp-adapter'
+import { getMcpTools } from '@/utils/mcp-adapter'
 import { validateTools, type ToolInput } from '@/utils/tool-helpers'
 
 /**
@@ -384,6 +386,18 @@ export function resolveDeferredTools(
 export type ToolSearchSource = {
   tools?: readonly Tool[] | readonly ToolInput[] | undefined
   toolSearch?: ToolSearchOptions | undefined
+  mcp?: readonly McpClientInput[] | undefined
+}
+
+/**
+ * Resolve completion params into a source `executeToolSearch` can search,
+ * listing MCP tools first as `completion()` does. Needed only when the params
+ * carry `mcp`; resolve once per conversation and reuse the result.
+ */
+export async function resolveToolSearchSource(params: ToolSearchSource): Promise<ToolSearchSource> {
+  const { tools: wire } = validateTools([...(params.tools ?? [])] as Tool[] | ToolInput[])
+  const mcpTools = params.mcp?.length ? await getMcpTools([...params.mcp]) : []
+  return { tools: [...mcpTools, ...wire], toolSearch: params.toolSearch }
 }
 
 /**
@@ -391,7 +405,8 @@ export type ToolSearchSource = {
  * result. Pure over the history it is given; the caller appends the message.
  *
  * Pass the same params given to `completion()`, so the search applies the
- * `toolSearch` limits the model was told. A bare tool list applies the default
+ * `toolSearch` limits the model was told; with `mcp`, pass
+ * `resolveToolSearchSource(params)` instead. A bare tool list applies the default
  * limits. Tools may be wire `Tool`s or the Zod-schema `ToolInput` form; both
  * are converted to wire form first, so the size cap measures the JSON schemas
  * the prompt will declare, not Zod objects.
@@ -401,9 +416,20 @@ export function executeToolSearch(
   args: Record<string, unknown>,
   history: readonly HistoryMessage[]
 ): string {
-  const { tools = [], toolSearch } = Array.isArray(source)
-    ? { tools: source as readonly Tool[] | readonly ToolInput[], toolSearch: undefined }
+  const {
+    tools = [],
+    toolSearch,
+    mcp
+  } = Array.isArray(source)
+    ? { tools: source as readonly Tool[] | readonly ToolInput[], toolSearch: undefined, mcp: [] }
     : (source as ToolSearchSource)
+  // MCP tools are listed asynchronously; searching without them would find
+  // nothing the model was shown from those servers.
+  if (mcp && mcp.length > 0) {
+    throw new InvalidToolSchemaError(
+      'executeToolSearch cannot list MCP tools. Pass the result of `await resolveToolSearchSource(params)` instead.'
+    )
+  }
   const { tools: wire } = validateTools([...tools] as Tool[] | ToolInput[])
   const { alwaysLoaded, deferred: registered } = partitionTools(wire)
   const deferred = declarableDeferred(alwaysLoaded, registered)

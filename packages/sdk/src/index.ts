@@ -238,6 +238,7 @@ export {
   executeToolSearch,
   loadedToolNames,
   searchDeferredTools,
+  resolveToolSearchSource,
   type ToolSearchOptions,
   type ToolSearchSource,
   type McpClient,
