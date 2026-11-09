@@ -480,6 +480,7 @@ async function* streamBase<T extends Request>(
     }
   } finally {
     stopDestroyOnAbort()
+    responseStream.destroy()
   }
 }
 
@@ -495,6 +496,7 @@ async function* streamProfiled<T extends Request>(
   const timings = createClientStreamTimings(profileId, requestType)
   let profilingMeta: ReturnType<typeof extractProfilingMeta> = undefined
   let stopDestroyOnAbort = () => {}
+  let responseStream: RPC.IncomingStream | undefined
 
   try {
     const zodStart = nowMs()
@@ -514,7 +516,7 @@ async function* streamProfiled<T extends Request>(
     timings.sendStart = nowMs()
     req.send(payload, 'utf-8')
 
-    const responseStream = req.createResponseStream({ encoding: 'utf-8' })
+    responseStream = req.createResponseStream({ encoding: 'utf-8' })
     stopDestroyOnAbort = destroyOnAbort(responseStream, options.signal)
     let buffer = ''
 
@@ -573,6 +575,7 @@ async function* streamProfiled<T extends Request>(
     throw error
   } finally {
     stopDestroyOnAbort()
+    responseStream?.destroy()
     if (timings.chunkCount > 0) {
       timings.requestEnd = nowMs()
       recordClientStreamEvents(timings, profilingMeta)
