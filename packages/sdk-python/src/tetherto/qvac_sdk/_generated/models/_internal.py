@@ -3534,6 +3534,389 @@ class BciTranscribeStreamResponse(GeneratedBaseModel):
     type: Literal["bciTranscribeStream"] = "bciTranscribeStream"
 
 
+class CalcTokensRequestTextToolsItemParametersPropertiesValueType(Enum):
+    string = "string"
+    number = "number"
+    integer = "integer"
+    boolean = "boolean"
+    object = "object"
+    array = "array"
+    null = "null"
+
+
+class CalcTokensRequestTextToolsItemParametersPropertiesValueTypeItem(Enum):
+    string = "string"
+    number = "number"
+    integer = "integer"
+    boolean = "boolean"
+    object = "object"
+    array = "array"
+    null = "null"
+
+
+class CalcTokensRequestTextToolsItemParametersPropertiesValue(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    type: (
+        CalcTokensRequestTextToolsItemParametersPropertiesValueType
+        | list[CalcTokensRequestTextToolsItemParametersPropertiesValueTypeItem]
+        | None
+    ) = None
+    description: str | None = None
+    enum: list[str | float | bool | None] | None = None
+
+
+CalcTokensRequestTextToolsItemParametersPropertiesValue.__annotations__[
+    "__pydantic_extra__"
+] = dict[str, Any]
+CalcTokensRequestTextToolsItemParametersPropertiesValue.model_rebuild(force=True)
+
+
+class CalcTokensRequestTextToolsItemParametersProperties(
+    RootModel[dict[str, CalcTokensRequestTextToolsItemParametersPropertiesValue]]
+):
+    root: Annotated[
+        dict[str, CalcTokensRequestTextToolsItemParametersPropertiesValue],
+        Field(title="CalcTokensRequestTextToolsItemParametersProperties"),
+    ]
+
+
+class CalcTokensRequestTextToolsItemParameters(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    type: Literal["object"] = "object"
+    properties: Annotated[
+        CalcTokensRequestTextToolsItemParametersProperties,
+        Field(title="CalcTokensRequestTextToolsItemParametersProperties"),
+    ]
+    required: list[str] | None = None
+
+
+CalcTokensRequestTextToolsItemParameters.__annotations__["__pydantic_extra__"] = dict[
+    str, Any
+]
+CalcTokensRequestTextToolsItemParameters.model_rebuild(force=True)
+
+
+class CalcTokensRequestTextToolsItem(GeneratedBaseModel):
+    type: Literal["function"] = "function"
+    name: str
+    description: str
+    defer_loading: Annotated[
+        bool | None,
+        Field(
+            alias="deferLoading",
+            description="Opt out of the initial prompt. A deferred tool is registered but only its name and description reach the model, in the catalog carried by the built-in `tool_search`; its parameter schema is appended to the conversation once the model searches for it. Tools without this field behave as before.",
+        ),
+    ] = None
+    group: Annotated[
+        str | None,
+        Field(
+            description="Optional heading this tool is listed under in the deferred catalog — a skill or an MCP server name. Ignored for tools that are not deferred."
+        ),
+    ] = None
+    parameters: Annotated[
+        CalcTokensRequestTextToolsItemParameters,
+        Field(title="CalcTokensRequestTextToolsItemParameters"),
+    ]
+
+
+class CalcTokensRequestTextHistoryItemToolCallsItemArguments(RootModel[dict[str, Any]]):
+    root: Annotated[
+        dict[str, Any],
+        Field(
+            description="Arguments the tool was called with.",
+            title="CalcTokensRequestTextHistoryItemToolCallsItemArguments",
+        ),
+    ]
+
+
+class CalcTokensRequestTextHistoryItemToolCallsItem(GeneratedBaseModel):
+    id: Annotated[
+        str | None,
+        Field(description="Call id, echoed by the `tool` message that answers it."),
+    ] = None
+    name: Annotated[
+        str, Field(description="Name of the tool that was called.", min_length=1)
+    ]
+    arguments: Annotated[
+        CalcTokensRequestTextHistoryItemToolCallsItemArguments,
+        Field(
+            description="Arguments the tool was called with.",
+            title="CalcTokensRequestTextHistoryItemToolCallsItemArguments",
+        ),
+    ]
+
+
+class CalcTokensRequestTextHistoryItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    role: Annotated[
+        str,
+        Field(
+            description='Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'
+        ),
+    ]
+    content: Annotated[
+        str | None,
+        Field(
+            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
+        ),
+    ] = None
+    tool_calls: Annotated[
+        list[CalcTokensRequestTextHistoryItemToolCallsItem] | None,
+        Field(
+            alias="toolCalls",
+            description="Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
+        ),
+    ] = None
+    tool_call_id: Annotated[
+        str | None,
+        Field(
+            alias="toolCallId",
+            description="On a `tool` turn: the id of the call this result answers.",
+        ),
+    ] = None
+    tool_name: Annotated[
+        str | None,
+        Field(
+            alias="toolName",
+            description="On a `tool` turn: the name of the tool that produced the result.",
+        ),
+    ] = None
+
+
+class CalcTokensRequestText(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="Loaded language model to tokenize with.",
+            min_length=1,
+        ),
+    ]
+    tools: Annotated[
+        list[CalcTokensRequestTextToolsItem] | None,
+        Field(
+            description="Tools to include in the rendered prompt when the model was loaded with `modelConfig.tools: true`."
+        ),
+    ] = None
+    text: Annotated[
+        str,
+        Field(description="Raw text, or the final user turn when history is present."),
+    ]
+    history: Annotated[
+        list[CalcTokensRequestTextHistoryItem] | None,
+        Field(
+            description="Text-only conversation to render with the loaded model chat template."
+        ),
+    ] = None
+    type: Literal["calcTokens"] = "calcTokens"
+
+
+class CalcTokensRequestHistoryToolsItemParametersPropertiesValueType(Enum):
+    string = "string"
+    number = "number"
+    integer = "integer"
+    boolean = "boolean"
+    object = "object"
+    array = "array"
+    null = "null"
+
+
+class CalcTokensRequestHistoryToolsItemParametersPropertiesValueTypeItem(Enum):
+    string = "string"
+    number = "number"
+    integer = "integer"
+    boolean = "boolean"
+    object = "object"
+    array = "array"
+    null = "null"
+
+
+class CalcTokensRequestHistoryToolsItemParametersPropertiesValue(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    type: (
+        CalcTokensRequestHistoryToolsItemParametersPropertiesValueType
+        | list[CalcTokensRequestHistoryToolsItemParametersPropertiesValueTypeItem]
+        | None
+    ) = None
+    description: str | None = None
+    enum: list[str | float | bool | None] | None = None
+
+
+CalcTokensRequestHistoryToolsItemParametersPropertiesValue.__annotations__[
+    "__pydantic_extra__"
+] = dict[str, Any]
+CalcTokensRequestHistoryToolsItemParametersPropertiesValue.model_rebuild(force=True)
+
+
+class CalcTokensRequestHistoryToolsItemParametersProperties(
+    RootModel[dict[str, CalcTokensRequestHistoryToolsItemParametersPropertiesValue]]
+):
+    root: Annotated[
+        dict[str, CalcTokensRequestHistoryToolsItemParametersPropertiesValue],
+        Field(title="CalcTokensRequestHistoryToolsItemParametersProperties"),
+    ]
+
+
+class CalcTokensRequestHistoryToolsItemParameters(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="allow",
+    )
+    type: Literal["object"] = "object"
+    properties: Annotated[
+        CalcTokensRequestHistoryToolsItemParametersProperties,
+        Field(title="CalcTokensRequestHistoryToolsItemParametersProperties"),
+    ]
+    required: list[str] | None = None
+
+
+CalcTokensRequestHistoryToolsItemParameters.__annotations__["__pydantic_extra__"] = (
+    dict[str, Any]
+)
+CalcTokensRequestHistoryToolsItemParameters.model_rebuild(force=True)
+
+
+class CalcTokensRequestHistoryToolsItem(GeneratedBaseModel):
+    type: Literal["function"] = "function"
+    name: str
+    description: str
+    defer_loading: Annotated[
+        bool | None,
+        Field(
+            alias="deferLoading",
+            description="Opt out of the initial prompt. A deferred tool is registered but only its name and description reach the model, in the catalog carried by the built-in `tool_search`; its parameter schema is appended to the conversation once the model searches for it. Tools without this field behave as before.",
+        ),
+    ] = None
+    group: Annotated[
+        str | None,
+        Field(
+            description="Optional heading this tool is listed under in the deferred catalog — a skill or an MCP server name. Ignored for tools that are not deferred."
+        ),
+    ] = None
+    parameters: Annotated[
+        CalcTokensRequestHistoryToolsItemParameters,
+        Field(title="CalcTokensRequestHistoryToolsItemParameters"),
+    ]
+
+
+class CalcTokensRequestHistoryHistoryItemToolCallsItemArguments(
+    RootModel[dict[str, Any]]
+):
+    root: Annotated[
+        dict[str, Any],
+        Field(
+            description="Arguments the tool was called with.",
+            title="CalcTokensRequestHistoryHistoryItemToolCallsItemArguments",
+        ),
+    ]
+
+
+class CalcTokensRequestHistoryHistoryItemToolCallsItem(GeneratedBaseModel):
+    id: Annotated[
+        str | None,
+        Field(description="Call id, echoed by the `tool` message that answers it."),
+    ] = None
+    name: Annotated[
+        str, Field(description="Name of the tool that was called.", min_length=1)
+    ]
+    arguments: Annotated[
+        CalcTokensRequestHistoryHistoryItemToolCallsItemArguments,
+        Field(
+            description="Arguments the tool was called with.",
+            title="CalcTokensRequestHistoryHistoryItemToolCallsItemArguments",
+        ),
+    ]
+
+
+class CalcTokensRequestHistoryHistoryItem(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    role: Annotated[
+        str,
+        Field(
+            description='Message role (e.g., `"user"`, `"assistant"`, `"system"`, `"tool"`).'
+        ),
+    ]
+    content: Annotated[
+        str | None,
+        Field(
+            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
+        ),
+    ] = None
+    tool_calls: Annotated[
+        list[CalcTokensRequestHistoryHistoryItemToolCallsItem] | None,
+        Field(
+            alias="toolCalls",
+            description="Tool calls an `assistant` turn made. Rendered by llama.cpp-backed models' chat templates in their own tool-call format; `content` may be empty.",
+        ),
+    ] = None
+    tool_call_id: Annotated[
+        str | None,
+        Field(
+            alias="toolCallId",
+            description="On a `tool` turn: the id of the call this result answers.",
+        ),
+    ] = None
+    tool_name: Annotated[
+        str | None,
+        Field(
+            alias="toolName",
+            description="On a `tool` turn: the name of the tool that produced the result.",
+        ),
+    ] = None
+
+
+class CalcTokensRequestHistory(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId",
+            description="Loaded language model to tokenize with.",
+            min_length=1,
+        ),
+    ]
+    tools: Annotated[
+        list[CalcTokensRequestHistoryToolsItem] | None,
+        Field(
+            description="Tools to include in the rendered prompt when the model was loaded with `modelConfig.tools: true`."
+        ),
+    ] = None
+    text: Annotated[
+        str | None,
+        Field(description="Raw text, or the final user turn when history is present."),
+    ] = None
+    history: Annotated[
+        list[CalcTokensRequestHistoryHistoryItem],
+        Field(
+            description="Text-only conversation to render with the loaded model chat template.",
+            min_length=1,
+        ),
+    ]
+    type: Literal["calcTokens"] = "calcTokens"
+
+
+class CalcTokensResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["calcTokens"] = "calcTokens"
+    tokens: Annotated[int, Field(ge=0, le=9007199254740991)]
+
+
 class CancelRequestRequest(GeneratedBaseModel):
     type: Literal["cancel"] = "cancel"
     operation: Annotated[Literal["request"], Field(description="Operation type")] = (
@@ -26918,19 +27301,26 @@ class WorldStepStreamResponse(GeneratedBaseModel):
     ] = None
 
 
-class Request_1(RootModel[CancelRequestRequest | CancelRequestBroad]):
+class Request_1(RootModel[CalcTokensRequestText | CalcTokensRequestHistory]):
+    root: Annotated[
+        CalcTokensRequestText | CalcTokensRequestHistory,
+        Field(title="CalcTokensRequest"),
+    ]
+
+
+class Request_2(RootModel[CancelRequestRequest | CancelRequestBroad]):
     root: Annotated[
         CancelRequestRequest | CancelRequestBroad, Field(title="CancelRequest")
     ]
 
 
-class Request_2(RootModel[DecideSingleRequest | DecideBatchRequest]):
+class Request_3(RootModel[DecideSingleRequest | DecideBatchRequest]):
     root: Annotated[
         DecideSingleRequest | DecideBatchRequest, Field(title="DecideRequest")
     ]
 
 
-class Request_3(
+class Request_4(
     RootModel[
         DeleteCacheAllRequest
         | DeleteCacheAutoRequest
@@ -26947,11 +27337,11 @@ class Request_3(
     ]
 
 
-class Request_4(RootModel[EmbedTextRequest | EmbedInputsRequest]):
+class Request_5(RootModel[EmbedTextRequest | EmbedInputsRequest]):
     root: Annotated[EmbedTextRequest | EmbedInputsRequest, Field(title="EmbedRequest")]
 
 
-class Request_5(
+class Request_6(
     RootModel[FinetuneRunRequest | FinetuneGetStateRequest | FinetuneStopRequest]
 ):
     root: Annotated[
@@ -26960,13 +27350,13 @@ class Request_5(
     ]
 
 
-class Request_6(RootModel[LoadModelSrcRequest | ReloadConfigRequest]):
+class Request_7(RootModel[LoadModelSrcRequest | ReloadConfigRequest]):
     root: Annotated[
         LoadModelSrcRequest | ReloadConfigRequest, Field(title="LoadModelRequest")
     ]
 
 
-class Request_7(
+class Request_8(
     RootModel[
         RagRequestChunk
         | RagRequestIngest
@@ -27020,13 +27410,13 @@ class Response_1(
     ]
 
 
-class Request_8(RootModel[TranslateNmtRequest | TranslateLlmRequest]):
+class Request_9(RootModel[TranslateNmtRequest | TranslateLlmRequest]):
     root: Annotated[
         TranslateNmtRequest | TranslateLlmRequest, Field(title="TranslateRequest")
     ]
 
 
-class Request_9(
+class Request_10(
     RootModel[
         VectorIndexRequestCreate
         | VectorIndexRequestLoad
@@ -27061,21 +27451,22 @@ class Request(
         | BciTranscribeRequest
         | BciTranscribeStreamRequest
         | Request_1
+        | Request_2
         | ClassifyRequest
         | CompletionOrchestrateRequest
         | CompletionStreamRequest
-        | Request_2
         | Request_3
+        | Request_4
         | DiffusionStreamRequest
         | DiscoverRpcServersRequest
         | DownloadAssetRequest
-        | Request_4
         | Request_5
+        | Request_6
         | GetLoadedModelInfoRequest
         | GetModelInfoRequest
         | GetSystemResourcesRequest
         | HeartbeatRequest
-        | Request_6
+        | Request_7
         | LoggingStreamRequest
         | ModelRegistryGetModelRequest
         | ModelRegistryListRequest
@@ -27083,7 +27474,7 @@ class Request(
         | OcrStreamRequest
         | PluginInvokeRequest
         | PluginInvokeStreamRequest
-        | Request_7
+        | Request_8
         | RerankRequest
         | ResumeRequest
         | StartRpcServerRequest
@@ -27094,10 +27485,10 @@ class Request(
         | TextToSpeechStreamRequest
         | TranscribeRequest
         | TranscribeStreamRequest
-        | Request_8
+        | Request_9
         | UnloadModelRequest
         | UpscaleStreamRequest
-        | Request_9
+        | Request_10
         | VideoStreamRequest
         | WorldSceneStreamRequest
         | WorldStepStreamRequest
@@ -27112,21 +27503,22 @@ class Request(
         | BciTranscribeRequest
         | BciTranscribeStreamRequest
         | Request_1
+        | Request_2
         | ClassifyRequest
         | CompletionOrchestrateRequest
         | CompletionStreamRequest
-        | Request_2
         | Request_3
+        | Request_4
         | DiffusionStreamRequest
         | DiscoverRpcServersRequest
         | DownloadAssetRequest
-        | Request_4
         | Request_5
+        | Request_6
         | GetLoadedModelInfoRequest
         | GetModelInfoRequest
         | GetSystemResourcesRequest
         | HeartbeatRequest
-        | Request_6
+        | Request_7
         | LoggingStreamRequest
         | ModelRegistryGetModelRequest
         | ModelRegistryListRequest
@@ -27134,7 +27526,7 @@ class Request(
         | OcrStreamRequest
         | PluginInvokeRequest
         | PluginInvokeStreamRequest
-        | Request_7
+        | Request_8
         | RerankRequest
         | ResumeRequest
         | StartRpcServerRequest
@@ -27145,10 +27537,10 @@ class Request(
         | TextToSpeechStreamRequest
         | TranscribeRequest
         | TranscribeStreamRequest
-        | Request_8
+        | Request_9
         | UnloadModelRequest
         | UpscaleStreamRequest
-        | Request_9
+        | Request_10
         | VideoStreamRequest
         | WorldSceneStreamRequest
         | WorldStepStreamRequest,
@@ -27193,6 +27585,7 @@ class Response(
         | BatchCompletionStreamResponse
         | BciTranscribeResponse
         | BciTranscribeStreamResponse
+        | CalcTokensResponse
         | CancelResponse
         | ClassifyResponse
         | CompletionOrchestrateResponse
@@ -27248,6 +27641,7 @@ class Response(
         | BatchCompletionStreamResponse
         | BciTranscribeResponse
         | BciTranscribeStreamResponse
+        | CalcTokensResponse
         | CancelResponse
         | ClassifyResponse
         | CompletionOrchestrateResponse

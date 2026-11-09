@@ -3,6 +3,7 @@ export * from '@/schemas/model-file'
 export * from '@/schemas/cancel'
 export * from '@/schemas/batch-completion-stream'
 export * from '@/schemas/completion-stream'
+export * from '@/schemas/calc-tokens'
 export * from '@/schemas/completion-event'
 export {
   toolSchema,

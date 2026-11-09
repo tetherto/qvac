@@ -769,6 +769,7 @@ class Calls(
         },
         "getModelInfo" to { p -> wire.send(mapOf("type" to "getModelInfo", "name" to p["name"]))["modelInfo"] },
         "getLoadedModelInfo" to { p -> wire.send(mapOf("type" to "getLoadedModelInfo", "modelId" to p["modelId"]))["info"] },
+        "calcTokens" to { p -> wire.send(mapOf("type" to "calcTokens") + p)["tokens"] },
         "modelRegistryList" to { _ -> registry("modelRegistryList", emptyMap(), "models") },
         "modelRegistrySearch" to { p ->
             val rest = p - "modelType"

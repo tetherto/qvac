@@ -17,6 +17,7 @@ export const methodShapes = {
   batchCompletionStream: 'stream',
   bciTranscribe: 'stream',
   bciTranscribeStream: 'duplex',
+  calcTokens: 'reply',
   cancel: 'reply',
   classify: 'stream',
   completionOrchestrate: 'duplex',

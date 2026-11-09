@@ -8,6 +8,7 @@ import type { Step, TestDefinition } from '@qvac/test-suite'
 import { applyPlatformSkips } from './platform-skips.js'
 import { batchCompletionTests } from './batch-completion-tests.js'
 import { completionTests } from './completion-tests.js'
+import { calcTokensTests } from './calc-tokens-tests.js'
 import { transcriptionTests } from './transcription-tests.js'
 import { transcribeStreamEventsTests } from './transcribe-stream-events-tests.js'
 import { embeddingTests } from './embedding-tests.js'
@@ -558,6 +559,7 @@ const catalog: TestDefinition[] = [
 
   // Completion tests
   ...completionTests,
+  ...calcTokensTests,
   ...batchCompletionTests,
 
   // Transcription tests
