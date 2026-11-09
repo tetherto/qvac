@@ -10,7 +10,7 @@ import { runtimeJson } from '../../dist/lib/runtime/config-json.js'
 
 const bare = createRequire(import.meta.url)('bare-runtime')()
 const fixture = new URL('./fixtures/config-inline-plugins.mjs', import.meta.url).pathname
-const greeter = new URL('../../docs/plugins/greeter.mjs', import.meta.url).href
+const greeter = new URL('./fixtures/greeter.mjs', import.meta.url).href
 
 const shout = `{
   name: 'shout',
