@@ -155,7 +155,8 @@ class BareRpcTransport:
             timeout_ms = self._config.get("rpcInitTimeoutMs")
             timeout = (
                 timeout_ms / 1000
-                if isinstance(timeout_ms, int)
+                if isinstance(timeout_ms, (int, float))
+                and not isinstance(timeout_ms, bool)
                 else DEFAULT_START_TIMEOUT
             )
         self._closing = False

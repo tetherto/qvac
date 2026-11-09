@@ -301,6 +301,27 @@ async def test_connect_terminates_the_worker_when_init_config_fails(
     assert worker.terminated.is_set()
 
 
+@pytest.mark.parametrize(
+    ("timeout_ms", "expected"),
+    [(2000, 2.0), (1500.5, 1.5005), (True, 60.0), ("2000", 60.0)],
+)
+async def test_connect_starts_the_worker_with_the_configured_init_timeout(
+    fake_worker, timeout_ms: object, expected: float
+) -> None:
+    worker = fake_worker(answer_init_config)
+    timeouts: list[float] = []
+
+    async def start(timeout: float):
+        timeouts.append(timeout)
+        return await worker.start(timeout)
+
+    transport = BareRpcTransport(start, config={"rpcInitTimeoutMs": timeout_ms})
+    await asyncio.wait_for(transport.connect(), timeout=5)
+    await transport.close()
+
+    assert timeouts == [expected]
+
+
 async def test_connect_fails_when_the_worker_does_not_apply_its_config_in_time(
     fake_worker,
 ) -> None:
