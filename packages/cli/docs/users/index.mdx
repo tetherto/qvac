@@ -12,9 +12,13 @@ binds:
   - "command:qvac configure"
   - "command:qvac doctor"
   - "command:qvac openai"
+  - "command:qvac openai coverage"
   - "command:qvac openai spec"
   - "command:qvac serve"
   - "command:qvac serve openai"
+  - "command:qvac verify"
+  - "command:qvac verify bundle"
+  - "command:qvac verify deps"
 ---
 
 ## Overview
@@ -24,6 +28,7 @@ QVAC CLI is provided through the `@qvac/cli` npm package. The CLI is installed g
 - System requirements check
 - Interactive `qvac.config.json` generator
 - SDK bundling
+- Native addon verification
 
 ## Usage
 
@@ -107,6 +112,13 @@ The `qvac doctor` command validates that the current host can run `@qvac/sdk` an
   Full host matrix, deploy targets, optional tools, exit codes, and JSON schema.
 </Card>
 
+## Native addon verification
+
+The `qvac verify` commands check the native Bare addons your application ships, before a device finds the problem at runtime:
+
+- [`qvac verify bundle`](#qvac-verify-bundle) checks that every native addon reachable from a worker bundle or a `node_modules` tree has prebuilds for your target hosts, and a declared `engines.bare` range compatible with the Bare runtime they will run on. Run it after `qvac bundle sdk`, or on the tree a packaged app ships.
+- [`qvac verify deps`](#qvac-verify-deps) reports native addon packages added or removed between two git refs of an npm lockfile, so a reviewer confirms each native change on purpose. Its exit codes are designed for CI guardrails.
+
 ## Reference
 
 Run `qvac --help` to see all available commands and `qvac <command> --help` for command-specific options.
@@ -178,8 +190,75 @@ qvac openai spec --yaml                # YAML → stdout
 qvac openai spec --yaml -o spec.yaml   # write YAML to file
 ```
 
+### `qvac openai coverage`
+
+Report which endpoints of the OpenAI REST API `qvac serve --openai` implements. The command reads OpenAI's published OpenAPI specification, compares each of its endpoints with the routes the server mounts, and prints the share implemented per category: primary AI inference, secondary AI, platform, and uncategorized. It also reports the share of the endpoints that OpenAI-compatible clients are known to call.
+
+The specification is downloaded from OpenAI's repository and cached under `~/.cache/qvac/`; `--offline` reads the cache instead.
+
+<CliReference command="qvac openai coverage" tablesOnly />
+
+Examples:
+
+```bash
+qvac openai coverage                     # summary per category
+qvac openai coverage --unsupported       # list only the endpoints not implemented
+qvac openai coverage --consumer-primary  # restrict to the endpoints clients call
+qvac openai coverage --json              # structured report
+```
+
 ### `qvac doctor`
 
 Run a preflight check of host system requirements.
 
 <CliReference command="qvac doctor" tablesOnly />
+
+### `qvac verify bundle`
+
+Verify that every native Bare addon reachable from a worker bundle or an installed `node_modules` tree has prebuilds for each requested host, and a declared `engines.bare` range compatible with the installed Bare runtime. `--addons-source` takes either a `qvac/worker.bundle.js` written by `qvac bundle sdk` or a `node_modules` directory; the kind is detected from the path.
+
+<CliReference command="qvac verify bundle" tablesOnly />
+
+The Bare runtime of a mobile host is read from the installed `react-native-bare-kit`. `--bare-runtime-version`, or `bareRuntimeVersion` in `qvac.config.*`, replaces it for every host, so set it for desktop builds only, such as an Electron app that ships its own Bare.
+
+Examples:
+
+```bash
+# Mobile bundle, after `qvac bundle sdk` writes qvac/worker.bundle.js
+qvac verify bundle --addons-source qvac/worker.bundle.js \
+  --host android-arm64 --host ios-arm64 --host ios-arm64-simulator
+
+# Desktop or Electron development tree
+qvac verify bundle --addons-source ./node_modules \
+  --host darwin-arm64 --host linux-x64 --host win32-x64
+
+# Structured output for CI
+qvac verify bundle --addons-source qvac/worker.bundle.js \
+  --host darwin-arm64 --json | jq '.issues[] | select(.level == "error")'
+```
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | No error-level issue. Warnings may report a check that was skipped or metadata that could not be read. |
+| `1` | At least one error-level issue: a missing prebuild, an ABI mismatch, an invalid runtime version, or an invalid source. Prebuild checks always run, so a malformed runtime version cannot hide a missing prebuild. |
+
+### `qvac verify deps`
+
+Detect native Bare addon packages added or removed between two git refs, by comparing the npm `package-lock.json` at each ref. A package counts as native when its installed `package.json` declares `"addon": true`, so run the command from a checkout with the head's dependencies installed. Only npm lockfiles are read.
+
+<CliReference command="qvac verify deps" tablesOnly />
+
+Examples:
+
+```bash
+qvac verify deps --base upstream/main --head HEAD
+qvac verify deps --base upstream/main --head HEAD --lockfile packages/sdk/package-lock.json
+```
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | No native addon change, or no npm lockfile at either ref. |
+| `1` | A native addon was added or removed, or a removed package's native status could not be determined. Confirm the change is intended. |
+| `2` | The check did not complete: a missing argument, an unresolvable ref, or an unreadable lockfile. |
+
+A CI guardrail should treat `1` and `2` differently: `1` is a native change to confirm, `2` a problem with the check itself.

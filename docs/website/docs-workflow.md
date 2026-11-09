@@ -468,7 +468,7 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 | `api-docs/extract.ts` | -- | TypeDoc analysis of the SDK's client functions, used by `generate-sdk-data.ts` |
 | `api-reference/generate-cli-data.ts` | `docs:cli-api` | Writes a Commander CLI's command tree (`cli.json`) and, with `--openapi`, its OpenAPI document (`openapi.json`) into its `_generated/`. Needs the CLI's dependencies installed. `--check` fails when stale. |
 | `api-reference/commander-walker.ts` | -- | Replays a Commander entry's `register*` calls without running it, run from the CLI package |
-| `write-schema-slices.ts` | -- | After `next build`: publishes each function's `<fn>.schema.json` beside its reference page |
+| `write-schema-slices.ts` | -- | After `next build`: publishes each function's `<fn>.schema.json` beside its reference page. The broken-link check sees only pages and `public/` assets, so the build passes it `--ignore '/**/*.schema.json'`. |
 | `write-line-redirects.ts` | -- | After `next build`: expands the documentation-line markers of `out/_redirects` |
 | `materialize-lines.ts` | `docs:materialize` | Materializes every pinned line from its commit; `--override`, `--include-dev`, and the same flags from `DOCS_MATERIALIZE_FLAGS` |
 | `api-reference/generate-package-api.ts` | `docs:api` | Writes a package's API reference: `_generated/api.json`, normalized from TypeDoc by `api-reference/package-api.ts`, and the generated `api.mdx`. Needs the package's dependencies installed. `--check` fails when stale. |

@@ -46,9 +46,13 @@
       "command:qvac configure": "5a368f51da867831",
       "command:qvac doctor": "f5778685424f0bd9",
       "command:qvac openai": "ce12faf4dc8cb53c",
+      "command:qvac openai coverage": "4e0630bece1e5416",
       "command:qvac openai spec": "571876a03c745d05",
       "command:qvac serve": "30a274c12daadb95",
-      "command:qvac serve openai": "32493b629683143d"
+      "command:qvac serve openai": "32493b629683143d",
+      "command:qvac verify": "a95b813eaaee0dd8",
+      "command:qvac verify bundle": "7f503ea14cbaf074",
+      "command:qvac verify deps": "b40590301bebe9cc"
     }
   }
 }

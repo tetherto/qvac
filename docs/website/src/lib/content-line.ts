@@ -25,6 +25,9 @@ export interface ContentLine {
 
 const CONTENT_ROOT = 'content/docs/'
 
+/** The folder the materializer writes a software's unreleased line to. */
+const PREVIEW_FOLDER = 'preview'
+
 /**
  * The line of the file at `filePath`, or null when the file is outside a
  * collection published as lines.
@@ -43,7 +46,12 @@ export function versionOfFile(filePath: string): ContentLine | null {
   const folder = relative.slice(collection.length + 1).split('/')[0]
   if (!folder) return null
 
-  const version = software.versions.find((entry) => entry.folder === folder)
+  // The unreleased line, materialized as `preview` for local and pull-request
+  // previews, is a line like any non-current one: its links resolve within it.
+  const version =
+    folder === PREVIEW_FOLDER
+      ? ({ version: PREVIEW_FOLDER, folder: PREVIEW_FOLDER } as unknown as DocumentedVersion)
+      : software.versions.find((entry) => entry.folder === folder)
   if (!version) return null
 
   return {
