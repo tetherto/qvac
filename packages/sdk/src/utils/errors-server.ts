@@ -810,6 +810,9 @@ export class InvalidSeedFromParamsError extends QvacErrorBase {
 }
 
 export class KvCacheSeedSourceNotFoundError extends QvacErrorBase {
+  readonly seedFrom: string
+  readonly modelId: string
+
   constructor(seedFrom: string, modelId: string, cause?: unknown) {
     super(
       createErrorOptions(
@@ -818,14 +821,27 @@ export class KvCacheSeedSourceNotFoundError extends QvacErrorBase {
         cause
       )
     )
+    this.seedFrom = seedFrom
+    this.modelId = modelId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { seedFrom: this.seedFrom, modelId: this.modelId }
   }
 }
 
 export class KvCacheSeedSharingDisabledError extends QvacErrorBase {
+  readonly modelId: string
+
   constructor(modelId: string, cause?: unknown) {
     super(
       createErrorOptions(SDK_SERVER_ERROR_CODES.KV_CACHE_SEED_SHARING_DISABLED, [modelId], cause)
     )
+    this.modelId = modelId
+  }
+
+  toErrorResponseFields(): Record<string, unknown> {
+    return { modelId: this.modelId }
   }
 }
 

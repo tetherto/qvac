@@ -486,7 +486,9 @@ export async function* completion(
     const sourcePath = resolveCacheFilePath(modelId, configHash, seedFrom)
     try {
       await fs.promises.access(sourcePath)
-    } catch {
+    } catch (error) {
+      // Only a missing file is "not found"; a permission or I/O error keeps its cause.
+      if ((error as { code?: string }).code !== 'ENOENT') throw error
       throw new KvCacheSeedSourceNotFoundError(seedFrom, modelId)
     }
     baseCacheKey = sourcePath
