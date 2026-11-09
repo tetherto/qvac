@@ -1,9 +1,9 @@
-import { commandsOf, openApiOperations, usage, type CliData, type CliOption } from '@/lib/api-reference/cli';
-import { ShapeTables } from './schema-table';
+import { commandsOf, usage, type CliData, type CliOption } from '@/lib/api-reference/cli';
+import { Code } from './code';
 
 /**
- * The command reference of a command-line product and the operation
- * reference of its HTTP API, drawn from the line's generated data.
+ * The command reference of a command-line product, drawn from the line's
+ * generated data.
  */
 
 function optionNotes(option: CliOption): string[] {
@@ -29,9 +29,7 @@ export function CliCommands({ data, path, tablesOnly }: { data: CliData; path?: 
             </h3>
           )}
           {!tablesOnly && command.description && <p>{command.description}</p>}
-          <pre>
-            <code>{usage(command)}</code>
-          </pre>
+          <Code code={usage(command)} lang="bash" />
           {command.arguments.length > 0 && (
             <table className="qv-schema-table">
               <thead>
@@ -81,40 +79,6 @@ export function CliCommands({ data, path, tablesOnly }: { data: CliData; path?: 
           )}
         </section>
       ))}
-    </div>
-  );
-}
-
-export function OpenApiOperations({ document }: { document: Record<string, unknown> }) {
-  const { reader, operations } = openApiOperations(document);
-  return (
-    <div className="qv-openapi-reference">
-      {operations.map((operation) => {
-        const request = operation.request ? reader.shapeOf(operation.request) : null;
-        return (
-          <section key={`${operation.method} ${operation.path}`}>
-            <h3 id={`${operation.method}-${operation.path}`.toLowerCase().replace(/[^a-z0-9]+/g, '-')}>
-              <code>{`${operation.method} ${operation.path}`}</code>
-            </h3>
-            {operation.summary && <p>{operation.summary}</p>}
-            {operation.description && operation.description !== operation.summary && <p>{operation.description}</p>}
-            {request && (
-              <details className="qv-field-children" open>
-                <summary>Request body</summary>
-                <ShapeTables shape={request} />
-              </details>
-            )}
-            {operation.responses.length > 0 && (
-              <p className="qv-field-notes">
-                Responses:{' '}
-                {operation.responses
-                  .map((response) => `${response.status}${response.description ? ` ${response.description}` : ''}`)
-                  .join(' · ')}
-              </p>
-            )}
-          </section>
-        );
-      })}
     </div>
   );
 }

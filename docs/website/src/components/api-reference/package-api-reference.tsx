@@ -1,3 +1,4 @@
+import { Code } from './code';
 import { Fragment } from 'react';
 import {
   EXPORT_GROUPS,
@@ -43,9 +44,7 @@ function Fields({ fields, label }: { fields: PackageApiField[]; label: string })
 function Signature({ signature }: { signature: PackageApiSignature }) {
   return (
     <>
-      <pre>
-        <code>{signature.text}</code>
-      </pre>
+      <Code code={signature.text} lang="ts" />
       {signature.parameters.length > 0 && <Fields fields={signature.parameters} label="Parameter" />}
       {signature.returns.description && (
         <p>
@@ -92,9 +91,7 @@ function Export({ entry }: { entry: PackageApiExport }) {
         </ul>
       )}
       {entry.type && (
-        <pre>
-          <code>{`type ${entry.name} = ${entry.type}`}</code>
-        </pre>
+        <Code code={`type ${entry.name} = ${entry.type}`} lang="ts" />
       )}
     </section>
   );
