@@ -52,3 +52,18 @@ test('MiniMax: carries the pair, and the device wins over the GPU switch', (t) =
   )
   t.ok('unknown' in audiogenFitRequest(load({ engine: 'minimax' }, {})), 'an unresolved pair')
 })
+
+// The fitter cannot size the Core ML route and says so; the request still has
+// to name it, or the answer would describe the native backend instead.
+test('MiniMax: the Core ML profile reaches the fitter', (t) => {
+  const pair = { lmModelPath: '/models/mm3-lm.gguf', synthModelPath: '/models/mm3-synth.gguf' }
+  const coreml = { coremlProfileDir: '/models/minimax-coreml', coremlComputeUnits: 'CPU_AND_NE' }
+
+  t.alike(requestOf(audiogenFitRequest(load({ engine: 'minimax', ...coreml }, pair))), {
+    engine: 'minimax',
+    lmPath: '/models/mm3-lm.gguf',
+    synthPath: '/models/mm3-synth.gguf',
+    gpuLayers: 0,
+    ...coreml
+  })
+})

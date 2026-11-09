@@ -876,6 +876,25 @@
           "minimum": 0,
           "maximum": 3.4028234663852886e38
         },
+        "outputFormat": {
+          "description": "Also encode the finished audio into this container and deliver it as `encoded`, next to the PCM. `wav` is always available; `flac`, `alac`, `aiff`, `caf`, `m4a`, `aac`, `opus`, `ogg`, `ac3`, `wma` and `mp2` need the matching FFmpeg encoder on the inference host, and the request fails before generation starts when it is missing. `opus` is resampled to 48 kHz. Omit for PCM only.",
+          "type": "string",
+          "enum": [
+            "wav",
+            "flac",
+            "alac",
+            "aiff",
+            "caf",
+            "m4a",
+            "aac",
+            "opus",
+            "ogg",
+            "ac3",
+            "wma",
+            "mp2"
+          ],
+          "title": "AudioEditStreamRequestOutputFormat"
+        },
         "sourceAudio": {
           "oneOf": [
             {
@@ -1002,6 +1021,75 @@
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
+        },
+        "encoded": {
+          "description": "The run encoded as the requested `outputFormat`, sent once after the PCM: base64 file bytes, the MIME type and the file extension without its dot.",
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "string",
+              "minLength": 1
+            },
+            "format": {
+              "type": "string",
+              "enum": [
+                "wav",
+                "flac",
+                "alac",
+                "aiff",
+                "caf",
+                "m4a",
+                "aac",
+                "opus",
+                "ogg",
+                "ac3",
+                "wma",
+                "mp2"
+              ],
+              "title": "AudioEditStreamResponseEncodedFormat"
+            },
+            "mimeType": {
+              "type": "string",
+              "minLength": 1
+            },
+            "extension": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": ["data", "format", "mimeType", "extension"],
+          "additionalProperties": false,
+          "title": "AudioEditStreamResponseEncoded"
+        },
+        "encodeError": {
+          "description": "Sent in place of `encoded` when the finished PCM could not be encoded as the requested `outputFormat`. The run still completes: the PCM, stats and diagnostics are delivered, and only the encoded file is missing.",
+          "type": "object",
+          "properties": {
+            "format": {
+              "type": "string",
+              "enum": [
+                "wav",
+                "flac",
+                "alac",
+                "aiff",
+                "caf",
+                "m4a",
+                "aac",
+                "opus",
+                "ogg",
+                "ac3",
+                "wma",
+                "mp2"
+              ],
+              "title": "AudioEditStreamResponseEncodeErrorFormat"
+            },
+            "details": {
+              "type": "string"
+            }
+          },
+          "required": ["format"],
+          "additionalProperties": false,
+          "title": "AudioEditStreamResponseEncodeError"
         },
         "done": {
           "default": false,
@@ -1449,6 +1537,25 @@
           "minimum": 0,
           "maximum": 1
         },
+        "outputFormat": {
+          "description": "Also encode the finished audio into this container and deliver it as `encoded`, next to the PCM. `wav` is always available; `flac`, `alac`, `aiff`, `caf`, `m4a`, `aac`, `opus`, `ogg`, `ac3`, `wma` and `mp2` need the matching FFmpeg encoder on the inference host, and the request fails before generation starts when it is missing. `opus` is resampled to 48 kHz. Omit for PCM only.",
+          "type": "string",
+          "enum": [
+            "wav",
+            "flac",
+            "alac",
+            "aiff",
+            "caf",
+            "m4a",
+            "aac",
+            "opus",
+            "ogg",
+            "ac3",
+            "wma",
+            "mp2"
+          ],
+          "title": "AudioGenStreamRequestOutputFormat"
+        },
         "audioCodes": {
           "minItems": 1,
           "maxItems": 3000,
@@ -1586,6 +1693,75 @@
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 9007199254740991
+        },
+        "encoded": {
+          "description": "The run encoded as the requested `outputFormat`, sent once after the PCM: base64 file bytes, the MIME type and the file extension without its dot.",
+          "type": "object",
+          "properties": {
+            "data": {
+              "type": "string",
+              "minLength": 1
+            },
+            "format": {
+              "type": "string",
+              "enum": [
+                "wav",
+                "flac",
+                "alac",
+                "aiff",
+                "caf",
+                "m4a",
+                "aac",
+                "opus",
+                "ogg",
+                "ac3",
+                "wma",
+                "mp2"
+              ],
+              "title": "AudioGenStreamResponseEncodedFormat"
+            },
+            "mimeType": {
+              "type": "string",
+              "minLength": 1
+            },
+            "extension": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": ["data", "format", "mimeType", "extension"],
+          "additionalProperties": false,
+          "title": "AudioGenStreamResponseEncoded"
+        },
+        "encodeError": {
+          "description": "Sent in place of `encoded` when the finished PCM could not be encoded as the requested `outputFormat`. The run still completes: the PCM, stats and diagnostics are delivered, and only the encoded file is missing.",
+          "type": "object",
+          "properties": {
+            "format": {
+              "type": "string",
+              "enum": [
+                "wav",
+                "flac",
+                "alac",
+                "aiff",
+                "caf",
+                "m4a",
+                "aac",
+                "opus",
+                "ogg",
+                "ac3",
+                "wma",
+                "mp2"
+              ],
+              "title": "AudioGenStreamResponseEncodeErrorFormat"
+            },
+            "details": {
+              "type": "string"
+            }
+          },
+          "required": ["format"],
+          "additionalProperties": false,
+          "title": "AudioGenStreamResponseEncodeError"
         },
         "done": {
           "default": false,
@@ -5298,6 +5474,44 @@
       "type": "string",
       "enum": ["acestep", "minimax"],
       "x-enum-varnames": ["ACESTEP", "MINIMAX"]
+    },
+    "constants.AudioGenMinimaxCoremlComputeUnits": {
+      "title": "AudioGenMinimaxCoremlComputeUnits",
+      "type": "string",
+      "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
+      "x-enum-varnames": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"]
+    },
+    "constants.AudioGenOutputFormat": {
+      "title": "AudioGenOutputFormat",
+      "type": "string",
+      "enum": [
+        "wav",
+        "flac",
+        "alac",
+        "aiff",
+        "caf",
+        "m4a",
+        "aac",
+        "opus",
+        "ogg",
+        "ac3",
+        "wma",
+        "mp2"
+      ],
+      "x-enum-varnames": [
+        "WAV",
+        "FLAC",
+        "ALAC",
+        "AIFF",
+        "CAF",
+        "M4A",
+        "AAC",
+        "OPUS",
+        "OGG",
+        "AC3",
+        "WMA",
+        "MP2"
+      ]
     },
     "constants.AudioGenRepaintMode": {
       "title": "AudioGenRepaintMode",
@@ -21240,6 +21454,17 @@
                           "type": "string",
                           "enum": ["cpu", "gpu", "auto"],
                           "title": "LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxDevice"
+                        },
+                        "coremlProfileDir": {
+                          "description": "Advanced, macOS 15+: directory on the inference host holding the compiled full Core ML profile for this GGUF pair (`manifest.json` plus the LM, depth, conditioner, DiT and vocoder programs). Runs MiniMax through Core ML instead of the native backend and takes precedence over `device` and `useGPU`; the load fails when the build, OS or profile cannot support it rather than switching backends. Requires `coremlComputeUnits`.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "coremlComputeUnits": {
+                          "description": "Apple compute units the Core ML profile may use: `CPU_ONLY`, `CPU_AND_GPU`, `CPU_AND_NE` or `ALL`. A policy, not a guarantee of where each operation runs. Requires `coremlProfileDir`.",
+                          "type": "string",
+                          "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
+                          "title": "LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxCoremlComputeUnits"
                         },
                         "inferenceSteps": {
                           "description": "MiniMax flow sampling steps; `0` uses the engine default (20).",

@@ -15,7 +15,8 @@ import {
   RequestIdConflictError as InferenceRequestIdConflictError,
   RequestNotFoundError as InferenceRequestNotFoundError,
   RequestRejectedByPolicyError as InferenceRequestRejectedByPolicyError,
-  TranslationFailedError as InferenceTranslationFailedError
+  TranslationFailedError as InferenceTranslationFailedError,
+  AudioEncodeFailedError as InferenceAudioEncodeFailedError
 } from '@qvac/inference/surface'
 import {
   ContextOverflowError,
@@ -24,7 +25,8 @@ import {
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
-  TranslationFailedError
+  TranslationFailedError,
+  AudioEncodeFailedError
 } from '@/utils/errors-server'
 
 test('reconstructError: cancellation preserves its public request ID and partial output', (t) => {
@@ -255,6 +257,25 @@ test('reconstructError: TranslationFailedError round-trips', (t) => {
     reconstructed.message.includes('could not detect source language'),
     'message survives the envelope'
   )
+})
+
+test('reconstructError: AudioEncodeFailedError round-trips its format and details', (t) => {
+  const envelope = createErrorResponse(
+    new InferenceAudioEncodeFailedError('flac', 'Encoder not found', new Error('ffmpeg'))
+  )
+
+  const reconstructed = reconstructError(envelope)
+
+  t.ok(reconstructed instanceof AudioEncodeFailedError)
+  const error = reconstructed as AudioEncodeFailedError
+  t.is(error.code, 52424)
+  t.is(error.format, 'flac')
+  t.is(error.details, 'Encoder not found')
+  t.ok(error.message.includes('flac') && error.message.includes('Encoder not found'))
+
+  const bare = reconstructError(createErrorResponse(new InferenceAudioEncodeFailedError('opus')))
+  t.ok(bare instanceof AudioEncodeFailedError)
+  t.is((bare as AudioEncodeFailedError).details, undefined)
 })
 
 test('reconstructError: native RPC errors preserve details and cause', (t) => {
