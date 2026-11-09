@@ -19,6 +19,7 @@ from tetherto.qvac_sdk.client import UnbundledWorker
 from tetherto.qvac_sdk.errors import (
     SetConfigFailedError,
     WorkerCrashedError,
+    WorkerShutdownError,
     WorkerStartupError,
 )
 
@@ -185,6 +186,61 @@ async def test_a_duplex_upload_that_raises_ends_the_call_with_its_error(
 
 async def _collect(values) -> list:
     return [value async for value in values]
+
+
+async def test_a_call_in_flight_during_close_raises_shutdown(fake_worker) -> None:
+    received = asyncio.Event()
+
+    async def on_request(req) -> None:
+        if await answer_init_config(req):
+            return
+        received.set()
+        await asyncio.Event().wait()
+
+    worker = fake_worker(on_request)
+    transport = BareRpcTransport(worker.start)
+    await asyncio.wait_for(transport.connect(), timeout=5)
+    call = asyncio.ensure_future(transport.call({"type": "heartbeat"}))
+    await asyncio.wait_for(received.wait(), timeout=5)
+
+    await asyncio.wait_for(transport.close(), timeout=5)
+
+    with pytest.raises(WorkerShutdownError):
+        await asyncio.wait_for(call, timeout=5)
+
+
+async def test_a_call_after_close_raises_shutdown(fake_worker) -> None:
+    worker = fake_worker(answer_init_config)
+    transport = BareRpcTransport(worker.start)
+    await asyncio.wait_for(transport.connect(), timeout=5)
+    await asyncio.wait_for(transport.close(), timeout=5)
+
+    with pytest.raises(WorkerShutdownError):
+        await asyncio.wait_for(transport.call({"type": "heartbeat"}), timeout=5)
+
+
+async def test_a_worker_that_exits_on_its_own_fails_calls_as_crashed(
+    fake_worker,
+) -> None:
+    async def on_request(req) -> None:
+        if await answer_init_config(req):
+            return
+        worker.control("exit", code=3)
+        worker.to_host.end()
+
+    worker = fake_worker(on_request)
+    transport = BareRpcTransport(worker.start)
+    await asyncio.wait_for(transport.connect(), timeout=5)
+    try:
+        with pytest.raises(WorkerCrashedError) as in_flight:
+            await asyncio.wait_for(transport.call({"type": "heartbeat"}), timeout=5)
+        assert in_flight.value.exit_code == 3
+
+        with pytest.raises(WorkerCrashedError) as later:
+            await asyncio.wait_for(transport.call({"type": "heartbeat"}), timeout=5)
+        assert later.value.exit_code == 3
+    finally:
+        await transport.close()
 
 
 async def test_close_terminates_the_worker(fake_worker) -> None:

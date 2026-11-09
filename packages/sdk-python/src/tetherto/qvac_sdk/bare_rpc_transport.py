@@ -18,7 +18,14 @@ import asyncio
 import json
 import os
 import sys
-from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Callable
+from collections.abc import (
+    AsyncIterable,
+    AsyncIterator,
+    Awaitable,
+    Callable,
+    Iterator,
+)
+from contextlib import contextmanager
 from typing import Any
 
 import bare_rpc
@@ -202,6 +209,24 @@ class BareRpcTransport:
             return WorkerShutdownError(cause=err)
         return WorkerCrashedError(err.exit_code, err.signal_code, cause=err)
 
+    @contextmanager
+    def _session_errors(self) -> Iterator[None]:
+        """Raises the SDK's error for a call that the end of the session cut
+        off. bare-rpc fails calls with `CHANNEL_CLOSED` when the session ends
+        without a worker fault: on `close()`, or when the worker reported its
+        exit and its IPC ended, as on SIGTERM."""
+        try:
+            yield
+        except WorkerError as err:
+            raise self._worker_failed(err) from err
+        except bare_rpc.RPCError as err:
+            if err.code != "CHANNEL_CLOSED" or isinstance(err, bare_rpc.RPCRemoteError):
+                raise
+            if self._closing:
+                raise WorkerShutdownError(cause=err) from err
+            exit_code = self.ipc.exit_code if self.ipc is not None else None
+            raise WorkerCrashedError(exit_code, cause=err) from err
+
     async def __aenter__(self) -> BareRpcTransport:
         return await self.connect()
 
@@ -217,24 +242,20 @@ class BareRpcTransport:
 
     async def call(self, payload: dict) -> dict:
         """Unary, via bare_rpc.RPC.request."""
-        try:
+        with self._session_errors():
             data = await self._require_rpc().request(
                 command=0, data=json.dumps(payload).encode("utf-8")
             )
-        except WorkerError as err:
-            raise self._worker_failed(err) from err
         return _json_or_raise(data)
 
     async def call_stream(self, payload: dict) -> AsyncIterator[dict]:
         """Server-stream, via bare_rpc.RPC.request_with_response_stream."""
-        try:
+        with self._session_errors():
             stream = await self._require_rpc().request_with_response_stream(
                 command=0, data=json.dumps(payload).encode("utf-8")
             )
             async for value in _iter_json_lines(stream):
                 yield value
-        except WorkerError as err:
-            raise self._worker_failed(err) from err
 
     async def call_duplex(
         self, payload: dict, up: AsyncIterable[bytes]
@@ -245,13 +266,11 @@ class BareRpcTransport:
 
         When `up` raises, both directions are closed so the worker stops
         waiting for input, and the error is raised once the reply has ended."""
-        try:
+        with self._session_errors():
             outgoing, incoming = await self._require_rpc().create_bidirectional_stream(
                 command=0
             )
             await outgoing.write(json.dumps(payload).encode("utf-8"))
-        except WorkerError as err:
-            raise self._worker_failed(err) from err
 
         async def _pump_up() -> None:
             try:
@@ -269,10 +288,9 @@ class BareRpcTransport:
 
         pump_task = asyncio.ensure_future(_pump_up())
         try:
-            async for value in _iter_json_lines(incoming):
-                yield value
-        except WorkerError as err:
-            raise self._worker_failed(err) from err
+            with self._session_errors():
+                async for value in _iter_json_lines(incoming):
+                    yield value
         finally:
             if not pump_task.done():
                 pump_task.cancel()
