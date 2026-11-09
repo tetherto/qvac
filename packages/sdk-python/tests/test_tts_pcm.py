@@ -47,6 +47,9 @@ class _FakeTransport:
     def __init__(self, frames):
         self.frames = frames
 
+    async def call(self, payload):
+        raise NotImplementedError
+
     async def call_stream(self, payload):
         for frame in self.frames:
             yield frame
@@ -61,7 +64,8 @@ async def _collect(iterator):
 
 
 def test_public_text_to_speech_decodes_pcm_frames():
-    assert sdk.text_to_speech is methods.text_to_speech
+    # The package re-exports the same function `methods` defines.
+    assert getattr(sdk, "text_to_speech") is methods.text_to_speech
     frames = [
         {
             "type": "textToSpeech",
@@ -74,7 +78,7 @@ def test_public_text_to_speech_decodes_pcm_frames():
     request = TextToSpeechRequest.model_validate(
         {"type": "textToSpeech", "modelId": "m", "inputType": "text", "text": "Hi."}
     )
-    out = asyncio.run(_collect(sdk.text_to_speech(_FakeTransport(frames), request)))
+    out = asyncio.run(_collect(methods.text_to_speech(_FakeTransport(frames), request)))
     assert out[0].buffer == [1, -1, 32767]
     assert out[0].pcm is None
     assert out[1].buffer == [9]
@@ -82,7 +86,7 @@ def test_public_text_to_speech_decodes_pcm_frames():
 
 
 def test_public_text_to_speech_stream_decodes_pcm_frames():
-    assert sdk.text_to_speech_stream is methods.text_to_speech_stream
+    assert getattr(sdk, "text_to_speech_stream") is methods.text_to_speech_stream
     frames = [
         {
             "type": "textToSpeechStream",
@@ -100,7 +104,7 @@ def test_public_text_to_speech_stream_decodes_pcm_frames():
         yield b"Hi."
 
     out = asyncio.run(
-        _collect(sdk.text_to_speech_stream(_FakeTransport(frames), request, up()))
+        _collect(methods.text_to_speech_stream(_FakeTransport(frames), request, up()))
     )
     assert out[0].buffer == [7, -7]
     assert out[0].pcm is None
