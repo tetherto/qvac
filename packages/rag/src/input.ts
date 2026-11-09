@@ -46,7 +46,7 @@ const chunkSchema = z
     // The encoding stores '' as absent, so it could not be read back.
     metadataJson: z.string().min(1).optional(),
     embedding: vectorSchema,
-    spaceId: z.string().min(1)
+    spaceId: z.string().min(1).optional()
   })
   .strict()
 
@@ -56,6 +56,7 @@ const documentSchema = z
   .object({
     id: z.string().min(1),
     metadata: metadataSchema,
+    spaceId: z.string().min(1).optional(),
     chunks: z.array(chunkSchema).min(1)
   })
   .strict()
@@ -141,7 +142,7 @@ function invalidInput(error: z.ZodError): QvacErrorRAG {
 }
 
 // Always copies, so a caller reusing its buffer can't change a pending call.
-export function toVector(value: Float32Array | number[], label: string): Float32Array {
+export function toVector(value: ArrayLike<number>, label: string): Float32Array {
   const vector = Float32Array.from(value)
   if (vector.length === 0) {
     throw new QvacErrorRAG({ code: ERR_CODES.INVALID_INPUT, adds: `${label} is empty` })
@@ -247,13 +248,22 @@ function parseDocument(input: unknown, path: string): ParsedDocument {
     document: {
       id: doc.id,
       metadata: toJsonMetadata(doc.id, doc.metadata),
-      chunks: doc.chunks.map((chunk, ordinal) => ({
-        id: ids[ordinal],
-        content: chunk.content,
-        metadataJson: chunk.metadataJson,
-        embedding: toVector(chunk.embedding, `document '${doc.id}' chunk ${ordinal} embedding`),
-        spaceId: chunk.spaceId
-      }))
+      chunks: doc.chunks.map((chunk, ordinal) => {
+        const spaceId = chunk.spaceId ?? doc.spaceId
+        if (spaceId === undefined) {
+          throw new QvacErrorRAG({
+            code: ERR_CODES.INVALID_INPUT,
+            adds: `${path}.chunks.${ordinal}: spaceId is required on the chunk or the document`
+          })
+        }
+        return {
+          id: ids[ordinal],
+          content: chunk.content,
+          metadataJson: chunk.metadataJson,
+          embedding: toVector(chunk.embedding, `document '${doc.id}' chunk ${ordinal} embedding`),
+          spaceId
+        }
+      })
     }
   }
 }

@@ -3,6 +3,7 @@ import { z } from 'zod'
 
 import { QvacErrorRAG, ERR_CODES } from './errors.js'
 import { computeSpaceId, parseEmbeddingSpace } from './space.js'
+import { fromZodError } from './validation.js'
 import type { ValidTextChunk } from './input.js'
 import type { EmbeddingSpace, EmbeddingsPort } from './types.js'
 
@@ -103,11 +104,35 @@ function splitRows(output: unknown, rows: number, dims: number): Float32Array[] 
   return result
 }
 
-// `rag-extract` defaults (256 tokens, 50 overlap) and chunk IDs `<id>:<index>`.
-export function chunkText(id: string, text: string): ValidTextChunk[] {
-  return chunkRagDocuments([{ id, title: '', content: text }], {}).map((chunk) => ({
-    id: chunk.id,
-    content: chunk.content,
-    metadataJson: chunk.metadataJson
-  }))
+const chunkingSchema = z
+  .object({
+    chunkSize: z.number().int().positive().optional(),
+    chunkOverlap: z.number().int().nonnegative().optional()
+  })
+  .strict()
+  .refine(
+    ({ chunkSize = DEFAULT_CHUNK_SIZE, chunkOverlap = DEFAULT_CHUNK_OVERLAP }) =>
+      chunkOverlap < chunkSize,
+    'chunkOverlap must be smaller than chunkSize'
+  )
+  .optional()
+
+// The `rag-extract/chunk` defaults, repeated so the overlap check knows them.
+const DEFAULT_CHUNK_SIZE = 256
+const DEFAULT_CHUNK_OVERLAP = 50
+
+export type Chunker = (id: string, text: string) => ValidTextChunk[]
+
+// Chunk IDs are `<id>:<index>`. rag-extract clamps bad options silently, so
+// they are rejected here instead.
+export function createChunker(options: unknown): Chunker {
+  const parsed = chunkingSchema.safeParse(options)
+  if (!parsed.success) throw fromZodError(ERR_CODES.INVALID_INPUT, parsed.error, 'chunking')
+  const chunking = parsed.data ?? {}
+  return (id, text) =>
+    chunkRagDocuments([{ id, title: '', content: text }], chunking).map((chunk) => ({
+      id: chunk.id,
+      content: chunk.content,
+      metadataJson: chunk.metadataJson
+    }))
 }

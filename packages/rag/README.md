@@ -76,7 +76,7 @@ See [`examples/quickstart.ts`](examples/quickstart.ts) for a runnable version.
 
 ## API
 
-### `createRag({ corestore, embeddings? })`
+### `createRag({ corestore, embeddings?, chunking? })`
 
 Creates a RAG instance on a caller-owned Corestore. `embeddings` is an `EmbeddingsPort`, needed only for text and pre-chunked ingest and for text query search:
 
@@ -89,7 +89,9 @@ interface EmbeddingsPort {
 }
 ```
 
-The port must be in the namespace's space: `computeSpaceId(port.space)` has to equal the namespace's `spaceId`, or text ingest and text search fail with `EMBEDDING_SPACE_MISMATCH` before anything is embedded. Without a port they fail with `DEPENDENCY_REQUIRED`. A port that throws surfaces as `EMBEDDING_FAILED`, and one that returns the wrong number of values as `EMBEDDING_DIMENSION_MISMATCH`. `close()` waits for calls already in progress, then closes the RAG's HyperDB but leaves the Corestore open; calls made after it fail with `NOT_READY`. Call `ready()` before any other method.
+The port must be in the namespace's space: `computeSpaceId(port.space)` has to equal the namespace's `spaceId`, or text ingest and text search fail with `EMBEDDING_SPACE_MISMATCH` before anything is embedded. Without a port they fail with `DEPENDENCY_REQUIRED`. A port that throws surfaces as `EMBEDDING_FAILED`, and one that returns the wrong number of values as `EMBEDDING_DIMENSION_MISMATCH`.
+
+`chunking` is `{ chunkSize?, chunkOverlap? }` in tokens, passed to `rag-extract/chunk` for text documents (defaults 256 and 50). `chunkOverlap` must be smaller than `chunkSize`. `close()` waits for calls already in progress, then closes the RAG's HyperDB but leaves the Corestore open; calls made after it fail with `NOT_READY`. Call `ready()` before any other method.
 
 ### `createNamespace({ name, space })`
 
@@ -103,9 +105,9 @@ Creates a namespace pinned to one embedding space and returns `{ name, spaceId, 
 
 Each document is one of:
 
-- **Text** `{ id, text, metadata? }`: chunked with `rag-extract/chunk` defaults (256 tokens, 50 overlap), so chunk IDs are `<id>:<index>` and each chunk carries `rag-extract`'s `metadataJson`. Text that is empty or only whitespace is rejected.
+- **Text** `{ id, text, metadata? }`: chunked with `rag-extract/chunk` using the `chunking` options, so chunk IDs are `<id>:<index>` and each chunk carries `rag-extract`'s `metadataJson`. Text that is empty or only whitespace is rejected.
 - **Pre-chunked** `{ id, metadata?, chunks: [{ id?, content, metadataJson? }] }`: segmentation and chunk IDs are kept exactly. A chunk list from `rag-extract` goes in as-is; its `tokenCount` is accepted and not stored.
-- **Precomputed** `{ id, metadata?, chunks: [{ id?, content, metadataJson?, embedding, spaceId }] }`: needs no port. A chunk's `spaceId` must equal the namespace's, and its embedding must have the space's dimensions.
+- **Precomputed** `{ id, metadata?, spaceId?, chunks: [{ id?, content, metadataJson?, embedding, spaceId? }] }`: needs no port. Each chunk takes its own `spaceId` or the document's, and it must equal the namespace's; the embedding must have the space's dimensions. A `rag-extract` artifact's chunks go in as-is with `spaceId` on the document.
 
 Within one document, either every chunk has an `embedding` or none does. Chunk IDs default to `<documentId>:<ordinal>`. Omit `metadataJson` rather than passing an empty string, which is rejected. Text and pre-chunked chunks are sent to the port in batches of 32.
 

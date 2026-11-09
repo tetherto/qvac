@@ -23,7 +23,13 @@ import {
   type NamespaceRecord,
   type SpaceRecord
 } from './db/records.js'
-import { EMBED_BATCH_SIZE, chunkText, createEmbedder, type Embedder } from './embeddings.js'
+import {
+  EMBED_BATCH_SIZE,
+  createChunker,
+  createEmbedder,
+  type Chunker,
+  type Embedder
+} from './embeddings.js'
 import {
   parseDelete,
   parseIngest,
@@ -143,6 +149,7 @@ export function createRag(options: CreateRagOptions): Rag {
     })
   }
   const embedder = createEmbedder(options.embeddings)
+  const chunker = createChunker(options.chunking)
 
   let db: HyperDBInstance | null = null
   let release: (() => Promise<void>) | null = null
@@ -251,7 +258,9 @@ export function createRag(options: CreateRagOptions): Rag {
       if (entry.kind === 'embedded') checkChunks(namespace, space, entry.document)
     }
 
-    const jobs = prepareJobs(documents, onProgress)
+    const jobs = prepareJobs(documents, chunker, onProgress)
+    // The jobs hold everything still needed; committed ones are released below.
+    documents.length = 0
     const queue: Array<{ job: IngestJob; ordinal: number }> = []
     for (const job of jobs) {
       job.vectors.forEach((vector, ordinal) => {
@@ -269,12 +278,16 @@ export function createRag(options: CreateRagOptions): Rag {
       while (next < jobs.length && jobs[next].missing === 0) {
         // Checked once the lock is held, so an abort while waiting for another
         // write still skips this document.
+        const job = jobs[next]
+        const document = toValidDocument(job, space.spaceId)
+        checkChunks(namespace, space, document)
         const committed = await withTransaction(instance, (tx) =>
-          signal?.aborted
-            ? Promise.resolve(null)
-            : commitDocument(tx, namespace, toValidDocument(jobs[next], space.spaceId))
+          signal?.aborted ? Promise.resolve(null) : commitDocument(tx, namespace, document)
         )
         if (!committed) return false
+        // A large call would otherwise hold every vector it embedded until it returns.
+        job.chunks = []
+        job.vectors = []
         results.push(committed.document)
         revision = committed.revision
         next++
@@ -354,7 +367,14 @@ export function createRag(options: CreateRagOptions): Rag {
   // A direct caller names documents explicitly, so an unknown one is an error.
   async function search(params: SearchParams): Promise<SearchHit[]> {
     const request = parseSearch(params)
-    return await runSearch(parseScope(request.scope), request, { strict: true })
+    const scope = parseScope(request.scope)
+    const instance = database()
+    const query = await resolveQuery(instance, scope, request)
+    if (!query) return []
+    return await runSearch(instance, scope, query, request.k, {
+      strict: true,
+      signal: request.signal
+    })
   }
 
   // A handle's documents are granted, not chosen per request: an ID the
@@ -365,33 +385,50 @@ export function createRag(options: CreateRagOptions): Rag {
     return {
       async search(params: ScopedSearchParams): Promise<SearchHit[]> {
         const request = parseSearch({ scope: undefined, ...params })
-        return await runSearch(intersectScope(bound, request.scope), request, { strict: false })
+        const narrowed = intersectScope(bound, request.scope)
+        const instance = database()
+        const query = await resolveQuery(instance, narrowed, request)
+        if (!query) return []
+        return await runSearch(instance, narrowed, query, request.k, {
+          strict: false,
+          signal: request.signal
+        })
       }
     }
   }
 
-  // A text query is embedded only after the namespace's space is known to
-  // match the port's, so a mismatch never costs an embedding call.
-  function runSearch(
+  // A text query is embedded once, before the search, and only after the
+  // namespace's space is known to match the port's. Returns null when the
+  // scope is empty, since no embedding could produce a hit.
+  async function resolveQuery(
+    instance: HyperDBInstance,
     scope: SearchScope,
-    request: ValidSearch,
-    options: { strict: boolean }
+    request: ValidSearch
+  ): Promise<SearchQuery | null> {
+    if (request.query === undefined) return { vector: request.vector, spaceId: request.spaceId }
+    const { space } = await withSnapshot(instance, (reader) =>
+      readNamespace(reader, scope.namespace)
+    )
+    const port = requireEmbedder(scope.namespace, space)
+    if (scope.documentIds?.length === 0) {
+      throwIfAborted(request.signal)
+      return null
+    }
+    return { vector: await port.embedQuery(request.query, request.signal), spaceId: port.spaceId }
+  }
+
+  // `instance` is taken before the call's first await, so close() can't drain
+  // between resolving the query and the scan.
+  function runSearch(
+    instance: HyperDBInstance,
+    scope: SearchScope,
+    query: SearchQuery,
+    k: number,
+    options: { strict: boolean; signal?: AbortSignal }
   ): Promise<SearchHit[]> {
-    const { k, signal } = request
-    return withSnapshot(database(), async (reader) => {
+    return withSnapshot(instance, async (reader) => {
       const { space } = await readNamespace(reader, scope.namespace)
-      let query: SearchQuery
-      if (request.query !== undefined) {
-        const port = requireEmbedder(scope.namespace, space)
-        if (scope.documentIds?.length === 0) {
-          throwIfAborted(signal)
-          return []
-        }
-        query = { vector: await port.embedQuery(request.query, signal), spaceId: port.spaceId }
-      } else {
-        query = { vector: request.vector, spaceId: request.spaceId }
-      }
-      return scanSearch(reader, space, scope, query, k, { strict: options.strict, signal })
+      return scanSearch(reader, space, scope, query, k, options)
     })
   }
 
@@ -422,6 +459,7 @@ interface IngestJob {
 // no chunks fails the whole call.
 function prepareJobs(
   documents: ParsedDocument[],
+  chunker: Chunker,
   onProgress: IngestOptions['onProgress']
 ): IngestJob[] {
   const textTotal = documents.filter((entry) => entry.kind === 'text').length
@@ -434,7 +472,7 @@ function prepareJobs(
     }
     let chunks = entry.kind === 'chunked' ? entry.document.chunks : []
     if (entry.kind === 'text') {
-      chunks = entry.document.text.trim() === '' ? [] : chunkText(id, entry.document.text)
+      chunks = entry.document.text.trim() === '' ? [] : chunker(id, entry.document.text)
       if (chunks.length === 0) {
         throw new QvacErrorRAG({
           code: ERR_CODES.INVALID_INPUT,

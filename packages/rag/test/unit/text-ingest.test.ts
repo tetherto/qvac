@@ -559,3 +559,116 @@ test('createRag rejects a malformed port', async (t) => {
     'invalid space'
   )
 })
+
+test('a rag-extract artifact goes in as-is with the spaceId on the document', async (t) => {
+  const { rag, store, spaceId } = await openWithPort(t)
+  // The shape of a rag-extract RagArtifactChunk: no spaceId of its own.
+  const artifact: ReadonlyArray<{
+    readonly id: string
+    readonly content: string
+    readonly metadataJson: string
+    readonly embedding: ReadonlyArray<number>
+  }> = [
+    { id: 'guide:0', content: 'cat', metadataJson: '{"chunkIndex":0}', embedding: [1, 0, 0] },
+    { id: 'guide:1', content: 'dog', metadataJson: '{"chunkIndex":1}', embedding: [0, 1, 0] }
+  ]
+
+  await rag.ingest({
+    namespace: 'ns',
+    documents: [{ id: 'guide', spaceId, chunks: [...artifact] }]
+  })
+  const hits = await rag.search({ scope: { namespace: 'ns' }, vector: [0, 1, 0], spaceId, k: 1 })
+  t.is(hits[0].chunkId, 'guide:1')
+
+  await rejectsWithCode(
+    t,
+    rag.ingest({
+      namespace: 'ns',
+      documents: [{ id: 'other', spaceId: 'not-the-space', chunks: [...artifact] }]
+    }),
+    ERR_CODES.EMBEDDING_SPACE_MISMATCH,
+    'a document spaceId from another space'
+  )
+  await rejectsWithCode(
+    t,
+    rag.ingest({ namespace: 'ns', documents: [{ id: 'bare', chunks: [...artifact] }] }),
+    ERR_CODES.INVALID_INPUT,
+    'no spaceId on the chunk or the document',
+    /spaceId/
+  )
+  await rag.close()
+
+  await inspect(store, async (reader) => {
+    const stored = await reader.find<ChunkRecord>(CHUNKS, ALL_NS).toArray()
+    t.alike(
+      stored.map((chunk) => [chunk.chunkId, chunk.content, chunk.metadataJson]),
+      artifact.map((chunk) => [chunk.id, chunk.content, chunk.metadataJson])
+    )
+  })
+})
+
+test('a chunk spaceId takes precedence over the document one', async (t) => {
+  const { rag } = await openWithPort(t)
+  await rejectsWithCode(
+    t,
+    rag.ingest({
+      namespace: 'ns',
+      documents: [
+        {
+          id: 'a',
+          spaceId: computeSpaceId(SPACE),
+          chunks: [{ content: 'cat', embedding: [1, 0, 0], spaceId: 'not-the-space' }]
+        }
+      ]
+    }),
+    ERR_CODES.EMBEDDING_SPACE_MISMATCH,
+    'the chunk spaceId is checked'
+  )
+})
+
+test('chunking options are passed to rag-extract', async (t) => {
+  const store = new Corestore(await tmp(t))
+  const rag = createRag({
+    corestore: store,
+    embeddings: fakePort(),
+    chunking: { chunkSize: 64, chunkOverlap: 8 }
+  })
+  await rag.ready()
+  t.teardown(async () => {
+    await rag.close()
+    await store.close()
+  })
+  await rag.createNamespace({ name: 'ns', space: SPACE })
+
+  const expected = chunkRagDocuments([{ id: 'long', title: '', content: LONG_TEXT }], {
+    chunkSize: 64,
+    chunkOverlap: 8
+  })
+  const defaults = chunkRagDocuments([{ id: 'long', title: '', content: LONG_TEXT }], {})
+  t.ok(expected.length > defaults.length, 'smaller chunks give more of them')
+
+  const result = await rag.ingest({ namespace: 'ns', documents: [{ id: 'long', text: LONG_TEXT }] })
+  t.is(result.documents[0].chunkCount, expected.length)
+})
+
+test('createRag rejects invalid chunking options', async (t) => {
+  const store = new Corestore(await tmp(t))
+  t.teardown(() => store.close())
+  const invalid = [
+    { chunkSize: 0 },
+    { chunkSize: 1.5 },
+    { chunkOverlap: -1 },
+    { chunkSize: 32, chunkOverlap: 32 },
+    { chunkOverlap: 256 },
+    { size: 64 }
+  ]
+  for (const chunking of invalid) {
+    await rejectsWithCode(
+      t,
+      () => createRag({ corestore: store, chunking: chunking as never }),
+      ERR_CODES.INVALID_INPUT,
+      JSON.stringify(chunking),
+      /chunking/
+    )
+  }
+})

@@ -23,10 +23,18 @@ export interface EmbeddingsPort {
   embedQuery(text: string, options?: { signal?: AbortSignal }): Promise<Float32Array>
 }
 
+// Passed to `rag-extract/chunk`; defaults are 256 tokens with 50 of overlap.
+export interface ChunkingOptions {
+  chunkSize?: number
+  chunkOverlap?: number
+}
+
 export interface CreateRagOptions {
   corestore: Corestore
   // Needed for text and pre-chunked ingest and for text query search.
   embeddings?: EmbeddingsPort
+  // Applies to text documents only; pre-chunked input keeps its chunks.
+  chunking?: ChunkingOptions
 }
 
 export interface CreateNamespaceParams {
@@ -45,17 +53,20 @@ export interface EmbeddedChunkInput {
   id?: string
   content: string
   metadataJson?: string
-  embedding: Float32Array | number[]
-  spaceId: string
+  embedding: Float32Array | ReadonlyArray<number>
+  // Falls back to the document's `spaceId`.
+  spaceId?: string
 }
 
+// A `rag-extract` artifact's chunks go in as-is with the `spaceId` set here.
 export interface EmbeddedDocumentInput {
   id: string
   metadata?: Record<string, unknown>
+  spaceId?: string
   chunks: EmbeddedChunkInput[]
 }
 
-// Chunked with `rag-extract/chunk` defaults, then embedded through the port.
+// Chunked with `rag-extract/chunk`, then embedded through the port.
 export interface TextDocument {
   id: string
   text: string
