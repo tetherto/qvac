@@ -5,8 +5,9 @@ import os from 'node:os'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { bundleSdk, describeMissingAddonBuild } from '@/commands/bundle'
+import { SCRATCH_OWNER_FILE, scratchFolderFor } from '@/commands/bundle/scratch'
 import {
   BARE_PACK_NODE_ENGINES,
   assertNodeCanBundle,
@@ -893,7 +894,7 @@ describe('bundleSdk', () => {
     assert.equal(scratch.length, 1)
     const backups = fs
       .readdirSync(path.join(qvacDir, scratch[0]!))
-      .filter((name) => name !== path.basename(workerDir))
+      .filter((name) => name !== path.basename(workerDir) && name !== SCRATCH_OWNER_FILE)
     assert.equal(backups.length, 1)
     const backup = path.join(qvacDir, scratch[0]!, backups[0]!)
     assert.equal(fs.readFileSync(path.join(backup, 'index.js'), 'utf8'), harness)
@@ -914,6 +915,21 @@ describe('bundleSdk', () => {
 
     const left = fs.readdirSync(qvacDir).filter((name) => name.startsWith('.'))
     assert.deepEqual(left, [holdingBackup])
+  })
+
+  it('keeps the scratch folders of a bundle that is still running', async (t) => {
+    const { projectRoot, configPath, workerDir } = fakeBundleSdkProject(t)
+    const running = await scratchFolderFor(workerDir)
+    writeFile(path.join(running, 'index.js'), 'bundle being written')
+    const exited = `.worker-0f8e6c2a-3b1d-4e5f-9a7b-1c2d3e4f5a6b`
+    writeFile(path.join(path.dirname(workerDir), exited, 'worker', 'index.js'), 'half-written')
+    const { pid } = spawnSync(process.execPath, ['-e', ''])
+    writeFile(path.join(path.dirname(workerDir), exited, SCRATCH_OWNER_FILE), String(pid))
+
+    await bundleSdk({ projectRoot, configPath, quiet: true })
+
+    assert.equal(fs.readFileSync(path.join(running, 'index.js'), 'utf8'), 'bundle being written')
+    assert.equal(fs.existsSync(path.join(path.dirname(workerDir), exited)), false)
   })
 
   it('leaves folders next to the output folder alone', async (t) => {
