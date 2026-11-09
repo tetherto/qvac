@@ -157,6 +157,16 @@ data class QvacTool(
             "QvacTool \"$name\": set either parametersSchema or parameters/required, not both"
         }
     }
+
+    /** The positional form from before [deferLoading] and [group] existed. */
+    constructor(
+        name: String,
+        description: String,
+        parameters: Map<String, QvacToolParameter>,
+        required: Set<String>,
+        parametersSchema: JsonObject?,
+        handler: QvacToolHandler?,
+    ) : this(name, description, parameters, required, parametersSchema, false, null, handler)
 }
 
 /**

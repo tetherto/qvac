@@ -365,6 +365,19 @@ class QvacCompletionApiTest {
     }
 
     @Test
+    fun positionalHandlerAndTrailingLambdaStillBuildTools() {
+        val handler: QvacToolHandler = { JsonPrimitive("ok") }
+        val positional = QvacTool("lookup", "Look up a value", emptyMap(), emptySet(), null, handler)
+        assertEquals(handler, positional.handler)
+        assertFalse(positional.deferLoading)
+        assertEquals(null, positional.group)
+
+        val trailing = QvacTool("lookup", "Look up a value") { JsonPrimitive("ok") }
+        assertTrue(trailing.handler != null)
+        assertFalse(trailing.deferLoading)
+    }
+
+    @Test
     fun invalidToolSearchLimitsAreRejected() {
         assertFailsWith<IllegalArgumentException> { QvacToolSearchLimits(defaultLimit = 0) }
         assertFailsWith<IllegalArgumentException> { QvacToolSearchLimits(maxLimit = 0) }
