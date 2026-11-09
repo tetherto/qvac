@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import 'fumadocs-ui/css/neutral.css';
 @import 'fumadocs-ui/css/preset.css';
+@import 'fumadocs-openapi/css/preset.css';
 
 @layer utilities {
   :root.light {
@@ -499,10 +500,6 @@
   cursor: pointer;
   font-size: 0.8125rem;
   color: var(--color-fd-muted-foreground);
-}
-.qv-signature {
-  overflow-x: auto;
-  white-space: pre-wrap;
 }
 .qv-api-missing {
   font-style: italic;

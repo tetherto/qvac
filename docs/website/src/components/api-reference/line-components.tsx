@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react';
 import { formatSize, modelsForEngines } from '@/lib/api-reference/card';
-import type { CliData } from '@/lib/api-reference/cli';
+import { openApiOperations, type CliData } from '@/lib/api-reference/cli';
 import { functionNames, functionReference, lineApiForUrl, lineGeneratedFile, type LineApi } from '@/lib/api-reference/data';
 import type { PackageApi } from '@/lib/api-reference/package-api';
-import { CliCommands, OpenApiOperations } from './cli-reference';
+import { CliCommands } from './cli-reference';
+import { Code } from './code';
+import { OpenAPIPage } from './openapi-page';
 import { PackageApiExports } from './package-api-reference';
 import { LanguageSwitch } from './language-switch';
 import { ShapeTables } from './schema-table';
@@ -91,14 +93,8 @@ export function apiComponentsFor(url: string) {
             <p key={paragraph}>{paragraph}</p>
           ))}
         <h2 id="signature">Signature</h2>
-        <pre className="qv-signature">
-          <code>{reference.jsSignature}</code>
-        </pre>
-        {reference.pythonSignature && (
-          <pre className="qv-signature">
-            <code>{reference.pythonSignature}</code>
-          </pre>
-        )}
+        <Code code={reference.jsSignature} lang="ts" />
+        {reference.pythonSignature && <Code code={reference.pythonSignature} lang="python" />}
         {reference.request && (
           <>
             <h2 id="parameters">Parameters</h2>
@@ -176,7 +172,18 @@ export function apiComponentsFor(url: string) {
   function OpenApiReference() {
     const document = lineGeneratedFile<Record<string, unknown>>(url, 'openapi.json');
     if (!document) return <Missing>HTTP API reference data is not available for this documentation line.</Missing>;
-    return <OpenApiOperations document={document} />;
+    return (
+      <OpenAPIPage
+        document="openapi"
+        payload={{ bundled: document as never }}
+        operations={openApiOperations(document).operations.map((operation) => ({
+          path: operation.path,
+          method: operation.method.toLowerCase() as never,
+        }))}
+        showTitle
+        showDescription
+      />
+    );
   }
 
   function PackageApiReference() {
