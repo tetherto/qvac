@@ -1,3 +1,3 @@
 dist
 test/dist
-src/adapters/database/hyperspec
+src/db/hyperspec
