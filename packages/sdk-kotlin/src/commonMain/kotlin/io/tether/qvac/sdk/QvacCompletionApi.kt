@@ -16,6 +16,7 @@ import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestResponseFormat
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestResponseFormatJsonSchemaJsonSchema
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestResponseFormatText
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestToolDialect
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestToolSearch
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestToolsItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItemCompletionStatsStats
@@ -134,6 +135,10 @@ typealias QvacToolHandler = suspend (JsonObject) -> JsonElement
  * A tool the model may call. Describe flat parameters with [parameters] and
  * [required], or pass a full JSON Schema object as [parametersSchema] for nested
  * `properties`, `items`, `anyOf` or `$defs`; it is sent as written.
+ *
+ * With [deferLoading] only the name and description reach the prompt, listed
+ * under [group] in the catalog of the built-in `tool_search`; the schema is
+ * declared once the model has searched for it.
  */
 data class QvacTool(
     val name: String,
@@ -141,11 +146,33 @@ data class QvacTool(
     val parameters: Map<String, QvacToolParameter> = emptyMap(),
     val required: Set<String> = emptySet(),
     val parametersSchema: JsonObject? = null,
+    val deferLoading: Boolean = false,
+    val group: String? = null,
     val handler: QvacToolHandler? = null,
 ) {
     init {
         require(parametersSchema == null || (parameters.isEmpty() && required.isEmpty())) {
             "QvacTool \"$name\": set either parametersSchema or parameters/required, not both"
+        }
+    }
+}
+
+/**
+ * Limits on what one `tool_search` call loads: [defaultLimit] when the model
+ * passes no `limit` (3, or [maxLimit] when lower), [maxLimit] whatever it asks
+ * for (8). The model is told these at the front of the prompt, so keep them the
+ * same for a whole conversation.
+ */
+data class QvacToolSearchLimits(
+    val defaultLimit: Int? = null,
+    val maxLimit: Int? = null,
+) {
+    init {
+        require(defaultLimit == null || defaultLimit >= 1) { "toolSearch.defaultLimit must be at least 1" }
+        require(maxLimit == null || maxLimit >= 1) { "toolSearch.maxLimit must be at least 1" }
+        val max = maxLimit ?: 8
+        require(defaultLimit == null || defaultLimit <= max) {
+            "toolSearch.defaultLimit ($defaultLimit) cannot exceed maxLimit ($max)"
         }
     }
 }
@@ -162,6 +189,8 @@ data class QvacCompletionOptions(
     val requestId: String = qvacRequestId(),
     /** Evaluate the prompt without generating an answer; requires an enabled KV cache. */
     val prefill: Boolean? = null,
+    /** Limits for the built-in `tool_search`; only used when a tool sets [QvacTool.deferLoading]. */
+    val toolSearch: QvacToolSearchLimits? = null,
 )
 
 sealed interface QvacCompletionEvent {
@@ -281,6 +310,7 @@ fun QvacCompletion.run(
         stream = options.stream,
         toolDialect = options.toolDialect?.let { wireEnum<CompletionStreamRequestToolDialect>("toolDialect", it) },
         tools = tools.takeIf { it.isNotEmpty() }?.map { it.toStreamTool() },
+        toolSearch = options.toolSearch?.toWire(),
     )
     return startRun(options.requestId, handlers) { emit ->
         val events = mutableListOf<QvacCompletionEvent>()
@@ -329,6 +359,7 @@ fun QvacCompletion.orchestrate(
         stream = options.stream,
         toolDialect = options.toolDialect?.let { wireEnum<CompletionStreamRequestToolDialect>("toolDialect", it) },
         tools = tools.map { it.toStreamTool() },
+        toolSearch = options.toolSearch?.toWire(),
     )
     val upstream = Channel<ByteArray>(Channel.UNLIMITED)
     return startRun(options.requestId, handlers) { emit ->
@@ -574,9 +605,16 @@ private fun QvacResponseFormat.toStreamFormat(): CompletionStreamRequestResponse
     )
 }
 
+private fun QvacToolSearchLimits.toWire() = CompletionStreamRequestToolSearch(
+    defaultLimit = defaultLimit?.toLong(),
+    maxLimit = maxLimit?.toLong(),
+)
+
 private fun QvacTool.toStreamTool() = CompletionStreamRequestToolsItem(
     name = name,
     description = description,
+    deferLoading = deferLoading.takeIf { it },
+    group = group,
     parameters = parametersSchema ?: buildJsonObject {
         put("type", "object")
         putJsonObject("properties") {

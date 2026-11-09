@@ -1,6 +1,6 @@
 import test from 'brittle'
 import { z } from 'zod'
-import type { Tool } from '@/schemas/tools'
+import type { Tool, ToolSearchOptions } from '@/schemas/tools'
 import {
   TOOL_SEARCH_NAME,
   buildCatalog,
@@ -9,6 +9,7 @@ import {
   loadedToolNames,
   partitionTools,
   resolveDeferredTools,
+  resolveToolSearchLimits,
   searchDeferredTools
 } from '@/utils/tools/defer'
 import { getMcpToolsWithHandlers } from '@/utils/mcp-adapter'
@@ -123,6 +124,94 @@ test('search honours the limit and clamps it', (t) => {
   t.is(searchDeferredTools(deferred, 'repository', 1).length, 1)
   t.is(searchDeferredTools(deferred, 'repository', 0).length, 1, 'clamped up to one')
   t.is(searchDeferredTools(deferred, 'repository', 99).length, 2, 'capped by the matches')
+})
+
+// Ten tools that tie on one query word, so only the limits decide how many load.
+const WIDE: Tool[] = Array.from({ length: 10 }, (_, index) =>
+  tool(`repo_tool_${index}`, 'Act on a repository', { deferLoading: true })
+)
+
+function limitText(tools: readonly Tool[] | undefined): string | undefined {
+  const search = tools?.find((item) => item.name === TOOL_SEARCH_NAME)
+  return search?.parameters.properties['limit']?.description
+}
+
+function loadedBy(content: string): string[] {
+  return (JSON.parse(content) as { tool_search: { loaded: string[] } }).tool_search.loaded
+}
+
+test('without toolSearch the model is told, and gets, the default limits', (t) => {
+  t.is(
+    limitText(resolveDeferredTools(WIDE, [])?.toolsToRender),
+    'Maximum definitions to load (default 3, max 8).'
+  )
+  t.is(loadedBy(executeToolSearch(WIDE, { query: 'repository' }, [])).length, 3)
+  t.is(loadedBy(executeToolSearch(WIDE, { query: 'repository', limit: 99 }, [])).length, 8)
+})
+
+test('toolSearch limits are what the model is told and what the search applies', (t) => {
+  const params = { tools: WIDE, toolSearch: { defaultLimit: 2, maxLimit: 5 } }
+
+  t.is(
+    limitText(resolveDeferredTools(params.tools, [], params.toolSearch)?.toolsToRender),
+    'Maximum definitions to load (default 2, max 5).'
+  )
+  t.is(loadedBy(executeToolSearch(params, { query: 'repository' }, [])).length, 2)
+  t.is(loadedBy(executeToolSearch(params, { query: 'repository', limit: 4 }, [])).length, 4)
+  t.is(
+    loadedBy(executeToolSearch(params, { query: 'repository', limit: 99 }, [])).length,
+    5,
+    'capped at maxLimit'
+  )
+})
+
+test('a maxLimit under the default lowers the default with it', (t) => {
+  t.alike(resolveToolSearchLimits({ maxLimit: 1 }), { defaultLimit: 1, maxLimit: 1 })
+  t.alike(resolveToolSearchLimits({ defaultLimit: 8 }), { defaultLimit: 8, maxLimit: 8 })
+  t.alike(resolveToolSearchLimits({ maxLimit: 20 }), { defaultLimit: 3, maxLimit: 20 })
+  t.is(
+    loadedBy(
+      executeToolSearch({ tools: WIDE, toolSearch: { maxLimit: 1 } }, { query: 'repository' }, [])
+    ).length,
+    1
+  )
+})
+
+test('invalid toolSearch limits are rejected, not treated as load nothing', (t) => {
+  const invalid: unknown[] = [
+    { defaultLimit: 0 },
+    { maxLimit: 0 },
+    { maxLimit: -1 },
+    { defaultLimit: 1.5 },
+    { defaultLimit: 4, maxLimit: 2 },
+    { defaultLimit: 9 },
+    { maxLimit: '5' },
+    { limit: 3 }
+  ]
+  for (const options of invalid) {
+    const label = JSON.stringify(options)
+    t.exception(() => resolveToolSearchLimits(options as ToolSearchOptions), /toolSearch/, label)
+    t.exception(
+      () =>
+        executeToolSearch(
+          { tools: WIDE, toolSearch: options as ToolSearchOptions },
+          { query: 'repository' },
+          []
+        ),
+      /toolSearch/,
+      `executeToolSearch ${label}`
+    )
+    t.exception(
+      () => resolveDeferredTools(WIDE, [], options as ToolSearchOptions),
+      /toolSearch/,
+      `resolveDeferredTools ${label}`
+    )
+  }
+})
+
+test('a limit the model sends that is not a finite number falls back to the default', (t) => {
+  t.is(loadedBy(executeToolSearch(WIDE, { query: 'repository', limit: Number.NaN }, [])).length, 3)
+  t.is(loadedBy(executeToolSearch(WIDE, { query: 'repository', limit: '7' }, [])).length, 3)
 })
 
 const CATALOG: Tool[] = [

@@ -148,7 +148,8 @@ export {
   buildToolSearchTool,
   executeToolSearch,
   loadedToolNames,
-  searchDeferredTools
+  searchDeferredTools,
+  type ToolSearchSource
 } from '@/utils/tools/defer'
 export { untilAborted } from '@/utils/until-aborted'
 

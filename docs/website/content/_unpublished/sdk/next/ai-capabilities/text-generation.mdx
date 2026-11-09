@@ -241,9 +241,22 @@ Notes:
 * A search ranks the deferred tools by where the query matches: an exact name
   first, then words in the name, then in the description, then in the group.
   An exact name loads that tool alone. Any other query loads the best match and
-  every match at least half as strong, up to the model's `limit`. A word that
+  every match at least half as strong, up to the search limit. A word that
   only appears in another tool's description or group does not load it beside
   a stronger match, while tools that match equally well load together.
+* One search loads at most `limit` definitions. When the model passes no
+  `limit` it is 3, and whatever it asks for it is capped at 8. Change these with
+  `toolSearch: { defaultLimit, maxLimit }` on `completion()`, or per prompt on
+  `batchCompletion()`; Python takes `tool_search=` and Kotlin
+  `QvacCompletionOptions(toolSearch = QvacToolSearchLimits(...))`. A
+  `defaultLimit` above `maxLimit`, or a limit under 1, is rejected.
+* Set the limits once per conversation. The model reads them in the
+  `tool_search` definition near the start of the prompt, so changing them
+  re-processes the prompt from there.
+* When you run `tool_search` yourself, pass `executeToolSearch` the same params
+  you gave `completion()` (`executeToolSearch(params, call.arguments, history)`)
+  so it applies the limits the model was told. Given only a tool list, it
+  applies the defaults.
 * `group` is the heading a tool is listed under in the catalog — a skill or an
   MCP server name.
 * To defer an MCP server's tools, set it on the client entry:

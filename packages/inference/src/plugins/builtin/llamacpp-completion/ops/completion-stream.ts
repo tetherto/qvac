@@ -7,7 +7,8 @@ import type {
   ResponseFormat,
   Tool,
   ToolCall,
-  ToolDialect
+  ToolDialect,
+  ToolSearchOptions
 } from '@/schemas/index'
 import {
   logCacheDisabled,
@@ -303,6 +304,7 @@ async function* processModelResponse(
 export async function* completion(
   params: CompletionParams & {
     tools?: Tool[]
+    toolSearch?: ToolSearchOptions | undefined
     generationParams?: GenerationParams
     toolDialect?: ToolDialect
     responseFormat?: ResponseFormat
@@ -324,6 +326,7 @@ export async function* completion(
     kvCache,
     prefill,
     tools,
+    toolSearch,
     generationParams,
     responseFormat
   } = params
@@ -336,7 +339,7 @@ export async function* completion(
   // With deferred tools the prompt carries the always-loaded ones, `tool_search`
   // and its catalog, and whatever earlier searches loaded. `null` when nothing
   // defers, which leaves the existing path alone.
-  const deferred = resolveDeferredTools(tools, history)
+  const deferred = resolveDeferredTools(tools, history, toolSearch)
   const toolsToRender = deferred?.toolsToRender ?? tools?.map(toWireTool)
   const toolsActive = !!toolsToRender?.length && toolsEnabled
   const dialect =

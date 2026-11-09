@@ -319,6 +319,62 @@ class QvacCompletionApiTest {
     }
 
     @Test
+    fun toolSearchLimitsAndDeferredToolsReachTheWire() = runTest {
+        val transport = ApiTransport(
+            stream = flowOf(
+                completionFrame(done = true, event("completionDone", 0) { put("stopReason", "eos") }),
+            ),
+            duplexFactory = {
+                flowOf(
+                    buildJsonObject {
+                        put("type", "completionOrchestrate")
+                        put("turn", 0)
+                        put("events", buildJsonArray { add(event("completionDone", 0) { put("stopReason", "eos") }) })
+                    },
+                    buildJsonObject { put("type", "completionOrchestrate"); put("done", true) },
+                )
+            },
+        )
+        val tools = listOf(
+            QvacTool("create_issue", "Open an issue", deferLoading = true, group = "github") { JsonPrimitive("ok") },
+            QvacTool("get_weather", "Get weather") { JsonPrimitive("sunny") },
+        )
+        val options = QvacCompletionOptions(toolSearch = QvacToolSearchLimits(defaultLimit = 2, maxLimit = 5))
+        val client = QvacClient(transport)
+        try {
+            client.completion.run("model", listOf(QvacMessage.user("hi")), tools, options).final.await()
+            val streamed = transport.lastPayload!!
+            client.completion.orchestrate("model", listOf(QvacMessage.user("hi")), tools, options = options).final.await()
+            val orchestrated = transport.lastPayload!!
+
+            for (payload in listOf(streamed, orchestrated)) {
+                val limits = payload.getValue("toolSearch").jsonObject
+                assertEquals(2, limits.getValue("defaultLimit").jsonPrimitive.content.toInt())
+                assertEquals(5, limits.getValue("maxLimit").jsonPrimitive.content.toInt())
+                val (deferred, loaded) = payload.getValue("tools").jsonArray.map { it.jsonObject }
+                assertEquals(JsonPrimitive(true), deferred["deferLoading"])
+                assertEquals("github", deferred["group"]?.jsonPrimitive?.content)
+                assertEquals(null, loaded["deferLoading"])
+            }
+
+            client.completion.run("model", listOf(QvacMessage.user("hi")), tools).final.await()
+            assertEquals(null, transport.lastPayload?.get("toolSearch"), "no limits unless set")
+        } finally {
+            client.close()
+        }
+    }
+
+    @Test
+    fun invalidToolSearchLimitsAreRejected() {
+        assertFailsWith<IllegalArgumentException> { QvacToolSearchLimits(defaultLimit = 0) }
+        assertFailsWith<IllegalArgumentException> { QvacToolSearchLimits(maxLimit = 0) }
+        assertFailsWith<IllegalArgumentException> { QvacToolSearchLimits(defaultLimit = 4, maxLimit = 2) }
+        assertFailsWith<IllegalArgumentException> { QvacToolSearchLimits(defaultLimit = 9) }
+        QvacToolSearchLimits(maxLimit = 1)
+        QvacToolSearchLimits(defaultLimit = 8)
+    }
+
+    @Test
     fun kvCacheAndToolDialectUseContractValues() = runTest {
         val transport = ApiTransport(
             stream = flowOf(

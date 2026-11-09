@@ -238,6 +238,8 @@ export {
   executeToolSearch,
   loadedToolNames,
   searchDeferredTools,
+  type ToolSearchOptions,
+  type ToolSearchSource,
   type McpClient,
   type McpClientInput,
   type OCRClientParams,
