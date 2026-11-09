@@ -1696,13 +1696,25 @@ NormalizedLoad normalizeLoadForFit(
             .adrenoVersion = maxAdrenoVersion,
             .isOpenCl = anyDevice(&backend_selection::SplitDevice::isOpenCl),
             .isMetal = anyDevice(&backend_selection::SplitDevice::isMetal)};
-      } else if (!splitSelection.rejectedDevices.empty()) {
+      } else if (
+          !splitSelection.rejectedDevices.empty() ||
+          !splitSelection.optInDevices.empty()) {
         std::string rejected;
         for (const std::string& device : splitSelection.rejectedDevices) {
           if (!rejected.empty()) {
             rejected += ", ";
           }
           rejected += device;
+        }
+        // 'backend' cannot be combined with split-mode, so the hint names
+        // 'devices'.
+        for (const backend_selection::SplitDevice& device :
+             splitSelection.optInDevices) {
+          if (!rejected.empty()) {
+            rejected += ", ";
+          }
+          rejected +=
+              device.name + " [opt in with devices: '" + device.name + "']";
         }
         QLOG_IF(
             Priority::WARNING,

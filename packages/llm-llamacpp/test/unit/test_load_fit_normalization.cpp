@@ -1002,6 +1002,37 @@ TEST_F(LoadFitNormalizationTest, SplitModeWarnsWhenEveryGpuIsRejected) {
           "ROCm0 (HIP); falling back to CPU"));
 }
 
+// An NPU-only host: the NPU never joins an automatic split, so the CPU
+// fallback warning says how to name it.
+TEST_F(LoadFitNormalizationTest, SplitModeWarnsHowToOptInToXdna) {
+  using qvac_lib_inference_addon_cpp::logger::Priority;
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+  auto dependencies =
+      backend({.type = backend_selection::GPU, .name = "vulkan0"}, {});
+  auto selection = splitSelection({"XDNA0"});
+  selection.optInDevices.push_back(selection.devices[0]);
+  selection.devices.pop_back();
+  dependencies.splitDevices = [selection]() { return selection; };
+
+  auto& verbosity = qvac_lib_inference_addon_llama::logging::g_verbosityLevel;
+  const Priority previous = verbosity;
+  verbosity = Priority::WARNING;
+  ::testing::internal::CaptureStdout();
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf", std::move(config), metadata_, {}, dependencies);
+  const std::string output = ::testing::internal::GetCapturedStdout();
+  verbosity = previous;
+
+  EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
+  EXPECT_EQ(result.runtimeBackendDevice, 0);
+  EXPECT_THAT(
+      output,
+      ::testing::HasSubstr(
+          "[WARNING]: [LlamaModel] no eligible GPU backend found; rejected "
+          "XDNA0 [opt in with devices: 'XDNA0']; falling back to CPU"));
+}
+
 // The message must direct callers to the two modes that do work.
 TEST_F(LoadFitNormalizationTest, SplitModeRowIsRejected) {
   auto config = baseConfig();
