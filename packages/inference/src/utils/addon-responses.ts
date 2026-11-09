@@ -53,6 +53,40 @@ export interface TtsStats {
   codecSidecarLoaded?: number
   /** Audio8 only: 1 when the synthesis ran its codec on that sidecar, 0 on ggml. */
   codecOnCoreml?: number
+  /** Milliseconds to the first audio, where the engine reports it. */
+  firstAudioMs?: number
+  /** Chatterbox: T3 decode and S3Gen + HiFT wall times (ms), speech tokens T3 emitted. */
+  t3Ms?: number
+  s3genMs?: number
+  t3Tokens?: number
+  /** CosyVoice3 / Audio8: the engine's own wall time (ms), the sum of its stages. */
+  stageTotalMs?: number
+  /** CosyVoice3 stage wall times (ms). */
+  lmPrefillMs?: number
+  lmDecodeMs?: number
+  flowFrontendMs?: number
+  ditEulerMs?: number
+  hiftF0Ms?: number
+  hiftSourceMs?: number
+  hiftStftMs?: number
+  hiftDecodeMs?: number
+  /** CosyVoice3 work counters. */
+  decodeSteps?: number
+  speechTokens?: number
+  flowFrames?: number
+  melFrames?: number
+  textIds?: number
+  promptSpeechTokens?: number
+  /** Audio8 stage wall times (ms). */
+  voiceEncodeMs?: number
+  promptMs?: number
+  prefillMs?: number
+  sampleMs?: number
+  fastDecodeMs?: number
+  slowDecodeMs?: number
+  codecLatentMs?: number
+  codecSynthMs?: number
+  resampleMs?: number
 }
 
 /**
