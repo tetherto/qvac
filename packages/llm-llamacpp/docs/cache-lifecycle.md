@@ -28,7 +28,7 @@ graph TB
     end
 
     subgraph "Durable"
-        FILE["cacheKey file<br/>sequence state + ledger<br/>+ newest checkpoint"]
+        FILE["cacheKey file<br/>sequence state + ledger<br/>+ checkpoints"]
     end
 
     HIST -->|render + tokenize| LEDGER
@@ -60,9 +60,8 @@ graph TB
   that part back and trims the rest to its position (see [Restoring a
   checkpoint](#restoring-a-checkpoint)).
 - The **`cacheKey` file** is the only durable artifact. On full-state models
-  it also carries the newest checkpoint after the sequence state, so a
-  conversation loaded in a new process restores it on its next turn. Older
-  checkpoints do not survive a process restart.
+  it also carries the checkpoints after the sequence state, so a
+  conversation loaded in a new process restores one on its next request.
 - With speculative decoding (`spec-type`), the **draft context's state** of
   the sequence travels with the pre-request snapshot, the checkpoints and the
   RAM tier, and is always kept in host RAM, even for a checkpoint whose target
@@ -164,6 +163,16 @@ because it also stops before an answer; with `cache_checkpoints: 2`, an edit
 decodes the previous answer and the edited message again and nothing before
 them. The default keeps one, so an edit of the last user message is a cold
 prefill.
+
+A tool loop sends several requests per user turn, one per tool round, and
+each commits a checkpoint at the end of its history (after the tool result).
+When the next user message arrives, the template drops the reasoning of every
+answer in that loop, so the new prompt diverges right after the first answer's
+header: only the checkpoint at the end of the user message that started the
+loop still matches. The addon therefore keeps the newest checkpoint whose
+history ends at a user message (not a tool result) on top of the newest
+`cache_checkpoints`. The newest checkpoint still serves the next tool round
+and a regenerate.
 
 Sliding-window models (Gemma 3/4, gpt-oss, without `swa_full`) keep only the
 last `n_swa` positions in their window layers. A trim back to the shared prefix
@@ -271,15 +280,18 @@ stateDiagram-v2
     Checkpoint --> Restored: later prompt diverges and<br/>this is the longest matching prefix
     Restored --> Checkpoint: stays in the list
     Checkpoint --> [*]: pruned, no longer a prefix<br/>of a later prompt
-    Checkpoint --> [*]: evicted, oldest first,<br/>when the list exceeds<br/>cache_checkpoints_max_bytes<br/>or cache_checkpoints
-    Checkpoint --> InFile: newest one, written with<br/>the cacheKey file
+    Checkpoint --> [*]: evicted, oldest first (newest<br/>user-turn one last), when the list<br/>exceeds cache_checkpoints_max_bytes<br/>or cache_checkpoints
+    Checkpoint --> InFile: newest and newest user-turn one,<br/>written with the cacheKey file
     InFile --> Checkpoint: conversation loaded<br/>from its file, any process
     Checkpoint --> [*]: cacheKey switched without cache_ram_mib,<br/>cleared, or loaded from its file<br/>(cache_ram_mib, parallel >= 2: kept with<br/>the conversation across requests)
     Checkpoint --> [*]: process exits
 ```
 
-Eviction checks the byte budget first, then the count. A budget that cannot
-hold `cache_checkpoints` checkpoints of the largest size the context allows is
+Eviction drops the oldest checkpoint until both the byte budget and the count
+hold. The newest checkpoint that ends at a user message is exempt from the
+count when it is older than the newest `cache_checkpoints`, so the list can
+hold one more than the count. Under the byte budget it stays only while it
+fits beside the newest checkpoint. A budget that cannot hold `cache_checkpoints` checkpoints of the largest size the context allows is
 rejected at model load with `InvalidArgument`; the addon measures that size on
 the loaded model rather than estimating it. On a sliding-window model the
 largest size is that of a full window (`n_swa` positions).
@@ -322,8 +334,9 @@ run() → render and tokenize the full history
   commit                           EOS, stop string, n_predict, or a cancel
                                    after prefill: ① is dropped, ② is appended
                                    to the checkpoints, the oldest dropped past
-                                   cache_checkpoints_max_bytes, then
-                                   cache_checkpoints
+                                   cache_checkpoints_max_bytes and
+                                   cache_checkpoints (the newest user-turn
+                                   one is kept on top)
   rollback                         cancel during prefill, decode error, context
                                    overflow: memory is restored from ①, ② is
                                    discarded. A request that diverged and
@@ -355,6 +368,10 @@ What is kept after a few turns:
 | 1 | end of `[user 1]` | end of `[user 1]` |
 | 2 | end of `[user 2]` | end of `[user 1]`, end of `[user 2]` |
 | 3 | end of `[user 3]` | end of `[user 2]`, end of `[user 3]` |
+
+The table assumes one request per turn. In a tool loop each round adds a
+checkpoint after its tool result; the end of the user message that started
+the loop is kept anyway, so the next user turn still restores it.
 
 The newest serves the next turn and a regenerate. With 2, the older one
 serves an edit of the last user message; with the default 1 that edit has no
@@ -417,12 +434,15 @@ larger models can reach hundreds of MB. Bound it
 with `cache_checkpoints_max_bytes`, or set `cache_checkpoints: 0`.
 Checkpoints live in host RAM by default
 (`cache_checkpoint_storage: memory`) or in files in `cache_checkpoint_dir`
-with `disk`. Every write of the `cacheKey` file appends the newest one after
-the sequence state, and a conversation loaded from its file starts with it,
-on both paths and after a restart. With `parallel >= 2` the scheduler also
-keeps a key's other checkpoints across a file round-trip while the process
-lives, and those replace the one from the file, which is then not read. With
-`disk` the checkpoint is copied between its file and the `cacheKey` file in
+with `disk`. Every write of the `cacheKey` file appends at most two after
+the sequence state: the newest one (next tool round or regenerate) and, when
+it is older, the newest one ending at a user message (next user turn). The
+file is therefore at most one checkpoint larger than with a single one,
+whatever `cache_checkpoints` is. A conversation loaded from its file starts
+with them, on both paths and after a restart. With `parallel >= 2` the
+scheduler also keeps a key's other checkpoints across a file round-trip while
+the process lives, and those replace the ones from the file, which are then
+not read. With `disk` each checkpoint is copied between its file and the `cacheKey` file in
 1 MiB chunks, never held whole in memory.
 
 ## The `cacheKey` file
@@ -446,8 +466,8 @@ stateDiagram-v2
     Resident --> Resident: rolled-back request<br/>(file untouched)
 ```
 
-Loading a file restores the sequence state and the ledger, and the newest
-checkpoint when the file carries one. With `parallel >= 2` the scheduler
+Loading a file restores the sequence state and the ledger, and the
+checkpoints the file carries (the newest, and the newest user-turn one). With `parallel >= 2` the scheduler
 instead hands the new slot the checkpoints the previous request on the same
 `cacheKey` left behind, when it still has them. Each checkpoint is checked
 against the loaded ledger before use. After a restart a full-state model
@@ -475,7 +495,7 @@ The file is a standard llama.cpp sequence-state file
 | llama.cpp header | magic, format version, number of tokens that follow |
 | ledger, stored as the token list | `QLDG` marker, ledger version, `nPast`, KV-cell count, entry count, a checksum over the entries, one reserved word; then five words per entry: kind (text token or media span), identity (the token id, or a hash of the media) in two words, positions, KV cells |
 | sequence state | the sequence's complete memory: every KV cell, and the recurrent state on hybrid and recurrent models (on DeepSeek V4: the sliding window, the compressed rows and the compressor states) |
-| checkpoint section (full-state models with a checkpoint) | `QCKP` marker, section version, checkpoint count (1); the newest checkpoint's `nPast`, its ledger in the format above (which gives its KV-cell count), its partial state and a hash of that state; a checksum over everything but the state bytes |
+| checkpoint section (full-state models with a checkpoint) | `QCKP` marker, section version, checkpoint count (at most 2: the newest, and the newest user-turn one when older); per checkpoint, oldest first: its `nPast`, a flags word (version 2: whether it ends at a user message), its ledger in the format above (which gives its KV-cell count), its partial state and a hash of that state; a checksum over everything but the state bytes |
 
 The state is always written in full; the checkpoint after it holds only the
 partial state, as in memory. `llama_state_seq_load_file` stops reading at the
@@ -687,7 +707,7 @@ stateDiagram-v2
 | `ephemeral` | `runOptions` | Never write this conversation automatically: drop it instead. |
 | `saveCache(cacheKey)` | model method | Write the conversation kept for the key now (see above). |
 | `prefill` | `runOptions` | Warm the cache without generating; commits as soon as prefill completes. Needs a `cacheKey` on `parallel >= 2`. |
-| `cache_checkpoints` | load config | Checkpoints kept per sequence (default 1: the last request's end-of-history checkpoint; 2 also serves an edit of the last user message; 0 disables them and their capture). Full-state and sliding-window models only. |
+| `cache_checkpoints` | load config | Checkpoints kept per sequence (default 1: the last request's end-of-history checkpoint; 2 also serves an edit of the last user message; 0 disables them and their capture). The newest one ending at a user message is kept on top of them, so a tool loop does not evict the checkpoint the next user turn needs. Full-state and sliding-window models only. |
 | `cache_checkpoints_max_bytes` | load config | Byte budget for those checkpoints, enforced before the count; fails the load early if too small. |
 | `cache_checkpoint_storage` | load config | `memory` (host RAM, default) or `disk` (files in `cache_checkpoint_dir`) for snapshots and checkpoints. |
 | `cache_checkpoint_dir` | load config | Required with `disk`, refused without it: where checkpoint files go, inside a private directory created in it (0700; on Windows, the directory itself). |

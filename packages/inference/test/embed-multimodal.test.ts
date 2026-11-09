@@ -8,12 +8,13 @@ import fs from 'bare-fs'
 import os from 'bare-os'
 import path from 'bare-path'
 import Buffer from 'bare-buffer'
-import { embedRequestSchema, embedParamsSchema } from '@/schemas/embed'
+import { embedRequestSchema, embedParamsSchema, embedBatchResponseSchema } from '@/schemas/embed'
 import { embedConfigBaseSchema, embedConfigSchema } from '@/schemas/llamacpp-config'
 import { transformEmbedConfig } from '@/plugins/builtin/llamacpp-embedding/transform'
 import { embed, markEmbeddingProjector } from '@/plugins/ops/embed'
 import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
 import { getRequestRegistry } from '@/runtime/index'
+import { embeddingsPlugin } from '@/plugins/builtin/llamacpp-embedding/plugin'
 import { ModelType } from '@/schemas/index'
 import { createErrorResponse } from '@/schemas/error'
 import { ERROR_CODES } from '@/schemas/errors'
@@ -381,4 +382,30 @@ test('embed op: retains admission until native cancellation settles', async (t) 
   finishCancel()
   t.ok((await first) instanceof InferenceCancelledError)
   t.alike((await embed({ modelId, text: 'recovery' })).embedding, [0, 1])
+})
+
+test('embed and embedBatch dispatch text and media through the same model', async (t) => {
+  const received: unknown[] = []
+  const modelId = install(async (input) => {
+    received.push(input)
+    return { await: async () => [[new Float32Array([3, 4])]], stats: { total_tokens: 5 } }
+  })
+  t.teardown(() => unregisterModel(modelId))
+  const single = await embed({ modelId, input: ['prefix', { media }] })
+  t.alike(single.embedding, [0.6000000000000001, 0.8])
+  const handler = embeddingsPlugin.handlers['embedBatch']!
+  const batch = embedBatchResponseSchema.parse(
+    await handler.handler({
+      type: 'embedBatch',
+      modelId,
+      inputs: [['prefix', { media }]],
+      requestId: 'explicit-batch'
+    })
+  )
+  t.alike(batch.embedding, [single.embedding])
+  t.is(batch.stats?.totalTokens, 5)
+  t.alike(received[0], received[1])
+  t.absent(getRequestRegistry().get('explicit-batch'))
+  t.alike(handler.cancel, { scope: 'model', hard: true })
+  await t.exception(embed({ modelId, input: { image: 'AQID' } }), /ordered media parts/)
 })

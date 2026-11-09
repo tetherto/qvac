@@ -175,6 +175,10 @@
     "./llamacpp-rerank/plugin": {
       "types": "./dist/src/worker/plugins/llamacpp-rerank.d.ts",
       "import": "./dist/src/worker/plugins/llamacpp-rerank.js"
+    },
+    "./ggml-image-embedding/plugin": {
+      "types": "./dist/src/worker/plugins/ggml-image-embedding.d.ts",
+      "import": "./dist/src/worker/plugins/ggml-image-embedding.js"
     }
   },
   "imports": {
