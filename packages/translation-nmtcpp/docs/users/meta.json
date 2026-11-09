@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "installation",
+    "platforms",
     "usage",
     "languages",
     "logging",

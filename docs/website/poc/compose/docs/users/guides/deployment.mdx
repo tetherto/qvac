@@ -1,0 +1,17 @@
+---
+title: Deployment
+icon: Package
+description: Ship a pipeline inside a desktop or mobile application.
+---
+
+<Callout type="warn">
+**Mock product.** This page is dummy content.
+</Callout>
+
+## Bundling
+
+Compose bundles only the plugins its pipeline uses, through the same mechanism as [`qvac bundle sdk`](/cli#qvac-bundle-sdk).
+
+## Models
+
+Pipelines reference registry models by constant, so the application downloads each model once and shares it between pipelines.

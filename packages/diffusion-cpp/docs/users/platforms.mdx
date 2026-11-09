@@ -1,0 +1,22 @@
+---
+title: Supported platforms
+description: The platforms, architectures, and GPU backends @qvac/diffusion-cpp supports.
+---
+
+## Platforms
+
+| Platform | Architecture | Status | GPU backend    |
+| -------- | ------------ | ------ | -------------- |
+| macOS    | arm64, x64   | Tier 1 | Metal          |
+| Linux    | arm64        | Tier 1 | Vulkan, CUDA   |
+| Linux    | x64          | Tier 1 | Vulkan, CUDA   |
+| Android  | arm64        | Tier 1 | Vulkan, OpenCL |
+| iOS      | arm64        | Tier 1 | Metal          |
+| Windows  | x64          | Tier 1 | Vulkan         |
+
+Dependencies:
+
+- `qvac-ext-stable-diffusion.cpp`
+- `ggml`
+- Bare Runtime >= 1.24.0
+- CMake >= 3.25 and a C++20-capable compiler
