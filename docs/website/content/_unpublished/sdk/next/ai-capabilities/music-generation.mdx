@@ -426,7 +426,9 @@ if (file) {
 
 The list is exported as `AUDIOGEN_OUTPUT_FORMATS`. There is no MP3: the FFmpeg build that ships with the addon has no MP3 encoder.
 
-Encoding runs on the inference host, in the FFmpeg build bundled with `@qvac/audiogen-ggml`, so which compressed formats work depends on the encoders that build carries. The SDK checks the encoder before the request queues for the model: an `outputFormat` the host cannot produce fails with `AUDIO_ENCODE_FAILED` (code 52424) before any generation starts. `"wav"` is written without FFmpeg and is always available.
+Encoding runs on the inference host, in the FFmpeg build bundled with `@qvac/audiogen-ggml`, so which compressed formats work depends on the encoders that build carries. The SDK checks the encoder before the request queues for the model: an `outputFormat` the host cannot produce fails with `AUDIO_ENCODE_FAILED` (code 52424) before any generation starts. `"wav"` is written without FFmpeg and is always available. The check runs once per format for the life of the inference process.
+
+If the encoder is present but encoding the finished audio still fails, only `encoded` rejects with `AudioEncodeFailedError`. The run itself completed: `audio`, `chunkStream`, `stats` and `diagnostics` deliver as usual, so the generated PCM is never lost to a failed file.
 
 The file is sent in addition to the PCM, so a run with an `outputFormat` transfers both. The QVAC CLI's `GET /qvac/v1/audio/generations/{id}/content` endpoint offers its own `format` parameter, encoded with the server's system `ffmpeg`; `outputFormat` is the library-side equivalent and does not change what the CLI serves.
 

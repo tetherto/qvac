@@ -1102,6 +1102,16 @@ const audioGenStreamFrameShape = {
     .describe(
       'The run encoded as the requested `outputFormat`, sent once after the PCM: base64 file bytes, the MIME type and the file extension without its dot.'
     ),
+  encodeError: z
+    .object({
+      format: audioGenOutputFormatSchema,
+      details: z.string().optional()
+    })
+    .strict()
+    .optional()
+    .describe(
+      'Sent in place of `encoded` when the finished PCM could not be encoded as the requested `outputFormat`. The run still completes: the PCM, stats and diagnostics are delivered, and only the encoded file is missing.'
+    ),
   done: z.boolean().default(false),
   stopReason: z.enum(['completed', 'cancelled']).optional(),
   stats: audioGenStatsSchema.optional(),
@@ -1186,13 +1196,17 @@ export interface AudioGenResult {
    * single chunk once generation finishes, so this is the chunk boundary the
    * engine reports rather than incremental synthesis. Shares the run with
    * `audio`, which still resolves with every chunk concatenated; ends without
-   * a chunk when the run is cancelled.
+   * a chunk when the run is cancelled. Chunks read after `audio` resolved are
+   * copied out of `audio.pcm`, so read them before editing that buffer in
+   * place.
    */
   chunkStream: AsyncGenerator<Int16Array>
   audio: Promise<AudioGenAudio>
   /**
    * The run in the container named by `outputFormat`; resolves `undefined`
-   * when the request named none.
+   * when the request named none. Rejects with `AudioEncodeFailedError` when
+   * the finished PCM could not be encoded: `audio`, `chunkStream`, `stats`
+   * and `diagnostics` still deliver the run.
    */
   encoded: Promise<AudioGenEncodedAudio | undefined>
   stats: Promise<AudioGenStats | undefined>

@@ -297,7 +297,17 @@ test('AudioGen rejects MiniMax Core ML off macOS before resolving model paths', 
         return '/resolved/model.gguf'
       }
     }
-    await t.exception(() => resolveAudioGenConfig(MINIMAX_COREML, context), ModelLoadFailedError)
+    let refusal: unknown
+    try {
+      await resolveAudioGenConfig(MINIMAX_COREML, context)
+    } catch (error) {
+      refusal = error
+    }
+    t.ok(refusal instanceof ModelLoadFailedError)
+    t.ok(
+      (refusal as Error).message.includes('MiniMax Core ML is available on macOS only'),
+      `${platform}: the message names the platform rule, not a macOS version`
+    )
     t.is(resolveCalls, 0, `${platform}: the guard runs before either model download`)
   }
 })

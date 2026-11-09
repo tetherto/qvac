@@ -8,6 +8,7 @@ import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-r
 import { ModelType } from '@/schemas/index'
 import { ERROR_CODES } from '@/schemas/errors'
 import { AudioEncodeFailedError, InferenceCancelledError } from '@/errors/index'
+import { resetOutputFormatProbes } from '@/plugins/builtin/audiogen-ggml/ops/audio-gen-encode'
 
 // Public-entry coverage: `audioGen()` through dispatch, the plugin handler and
 // the op, against an engine whose run is replaced, so `chunkStream` and
@@ -165,9 +166,12 @@ test('audioGen refuses an outputFormat the host cannot encode before running the
   const { model, calls } = fakeModel({ chunks: [pcmChunk([1, 2])] })
   const cleanup = withModel(modelId, model)
   const encode = AudioGen.encode
+  let probes = 0
   AudioGen.encode = function () {
+    probes += 1
     throw new Error('Encoder not found')
   } as typeof AudioGen.encode
+  resetOutputFormatProbes()
   try {
     const run = audioGen({ modelId, caption: 'ambient electronic music', outputFormat: 'flac' })
     t.ok((await rejection(run.encoded)) instanceof AudioEncodeFailedError)
@@ -182,8 +186,106 @@ test('audioGen refuses an outputFormat the host cannot encode before running the
     }
     t.ok((await rejection(collect(run.chunkStream))) instanceof AudioEncodeFailedError)
     t.alike(calls, [], 'no generation was spent on it')
+
+    // The addon's encoders do not change within a process: the second request
+    // for the format is refused from the remembered probe.
+    const again = audioGen({ modelId, caption: 'ambient electronic music', outputFormat: 'flac' })
+    const repeated = await rejection(again.audio)
+    t.ok(repeated instanceof AudioEncodeFailedError)
+    t.ok((repeated as Error).message.includes('Encoder not found'))
+    t.is(probes, 1, 'the format was probed once')
+    t.alike(calls, [])
   } finally {
     AudioGen.encode = encode
+    resetOutputFormatProbes()
+    cleanup()
+  }
+})
+
+test('audioGen probes an available outputFormat once across requests', async (t) => {
+  const modelId = 'audio-gen-public-probe-cache'
+  const { model } = fakeModel({ chunks: [pcmChunk([1, 2])] })
+  const cleanup = withModel(modelId, model)
+  const encode = AudioGen.encode
+  const sizes: number[] = []
+  AudioGen.encode = function (pcm: Uint8Array) {
+    sizes.push(pcm.byteLength)
+    return { data: Uint8Array.from([9]), mimeType: 'audio/flac', extension: 'flac' }
+  } as unknown as typeof AudioGen.encode
+  resetOutputFormatProbes()
+  try {
+    for (let request = 0; request < 2; request += 1) {
+      const run = audioGen({ modelId, caption: 'ambient electronic music', outputFormat: 'flac' })
+      t.is((await run.encoded)?.extension, 'flac')
+    }
+    // One silent probe, then one real encode of the 4-byte run per request.
+    t.is(sizes.length, 3)
+    t.alike(sizes.slice(1), [4, 4])
+  } finally {
+    AudioGen.encode = encode
+    resetOutputFormatProbes()
+    cleanup()
+  }
+})
+
+test('audioGen keeps the PCM, stats and diagnostics when the encode fails after generation', async (t) => {
+  const modelId = 'audio-gen-public-encode-fails-late'
+  const { model, calls } = fakeModel({ chunks: [pcmChunk([7, -7, 8, -8])] })
+  const cleanup = withModel(modelId, model)
+  const encode = AudioGen.encode
+  // The probe's silence encodes; the real buffer does not.
+  AudioGen.encode = function (pcm: Uint8Array) {
+    if (pcm.byteLength === 8) throw new Error('muxer rejected the stream')
+    return { data: Uint8Array.from([9]), mimeType: 'audio/flac', extension: 'flac' }
+  } as unknown as typeof AudioGen.encode
+  resetOutputFormatProbes()
+  try {
+    const run = audioGen({ modelId, caption: 'ambient electronic music', outputFormat: 'flac' })
+
+    const failure = await rejection(run.encoded)
+    t.ok(failure instanceof AudioEncodeFailedError, 'only the file is refused')
+    t.is((failure as AudioEncodeFailedError).code, ERROR_CODES.AUDIO_ENCODE_FAILED)
+    t.is((failure as AudioEncodeFailedError).format, 'flac')
+    t.is((failure as AudioEncodeFailedError).details, 'muxer rejected the stream')
+
+    const audio = await run.audio
+    t.alike(
+      Array.from(new Int16Array(audio.pcm.buffer, audio.pcm.byteOffset, audio.pcm.byteLength / 2)),
+      [7, -7, 8, -8],
+      'the generated PCM is still delivered'
+    )
+    t.alike(
+      (await collect(run.chunkStream)).map((chunk) => Array.from(chunk)),
+      [[7, -7, 8, -8]]
+    )
+    t.is((await run.stats)?.audioDurationMs, 10, 'stats still resolve')
+    t.is((await run.diagnostics)?.selectedBackend, 'cpu', 'diagnostics still resolve')
+    t.alike(calls, ['run'])
+  } finally {
+    AudioGen.encode = encode
+    resetOutputFormatProbes()
+    cleanup()
+  }
+})
+
+test('audioGen reads late chunks out of the settled PCM', async (t) => {
+  const modelId = 'audio-gen-public-late-chunks'
+  const { model } = fakeModel({ chunks: [pcmChunk([1, 2, 3, 4]), pcmChunk([5, 6])] })
+  const cleanup = withModel(modelId, model)
+  try {
+    const run = audioGen({ modelId, caption: 'ambient electronic music' })
+    const { pcm } = await run.audio
+    // After `audio` settles the chunks are views into its buffer, not a second
+    // copy of the run: an edit made to `pcm` shows in a chunk read afterwards.
+    new Int16Array(pcm.buffer, pcm.byteOffset, pcm.byteLength / 2)[4] = 50
+    t.alike(
+      (await collect(run.chunkStream)).map((chunk) => Array.from(chunk)),
+      [
+        [1, 2, 3, 4],
+        [50, 6]
+      ]
+    )
+  } finally {
     cleanup()
   }
 })

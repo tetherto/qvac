@@ -10,6 +10,7 @@ import {
   type TtsStreamChunk,
   type TtsOpYield,
   collectTtsStats,
+  pcmFrame,
   chunkMetadata
 } from '@/utils/tts-stats'
 import {
@@ -179,11 +180,10 @@ export async function* textToSpeechStream(
       if (data.outputArray == null) {
         continue
       }
-      const buf = Array.from(data.outputArray)
-      if (buf.length === 0) {
+      if (data.outputArray.length === 0) {
         continue
       }
-      yield { buffer: buf, ...chunkMetadata(data) }
+      yield { ...pcmFrame(data.outputArray), ...chunkMetadata(data) }
     }
   } catch (error) {
     // The addon fails the response with its own 'Job cancelled' error once a
