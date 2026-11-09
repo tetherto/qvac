@@ -155,6 +155,8 @@ async def main() -> int:
                 if response.done:
                     stats = response.stats
 
+            if not images:
+                raise RuntimeError("MOSS-Image returned no image.")
             for index, image in enumerate(images):
                 output_path = output_dir / f"moss_image_{index}.png"
                 output_path.write_bytes(image)

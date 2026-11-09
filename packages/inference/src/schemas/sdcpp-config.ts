@@ -141,8 +141,9 @@ export const sdcppConfigSchema = z.object({
     .optional()
     .describe(
       'GPU to pin when `device` is "gpu": a GPU-device index, "integrated", or ' +
-        '"dedicated" (the discrete GPU with the most VRAM). Omit to let the ' +
-        'backend choose the first enumerated device. Resolved against the ' +
+        '"dedicated" (the discrete GPU with the most VRAM). Omit to let automatic ' +
+        'placement choose: a dedicated GPU first, then an integrated one, taking ' +
+        'the largest available memory budget within each. Resolved against the ' +
         "addon's own ggml device enumeration, so it cannot desync from the " +
         'device list the backend actually uses. If an explicit request cannot ' +
         'be satisfied (e.g. "integrated" with no integrated GPU, "dedicated" ' +

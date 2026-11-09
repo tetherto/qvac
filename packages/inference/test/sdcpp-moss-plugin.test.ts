@@ -106,6 +106,10 @@ test('sdcpp plugin resolveConfig: requires MOSS-Image LLM and VAE companions', a
       t.fail('expected ModelLoadFailedError for an incomplete MOSS-Image layout')
     } catch (error) {
       t.ok(error instanceof ModelLoadFailedError)
+      t.ok(
+        /tokenizerSrc selects the MOSS-Image layout/.test((error as Error).message),
+        'the MOSS-Image companion guard is what rejects it'
+      )
       t.is(resolveCalls, 0, 'guard fires before any companion download')
     }
   }

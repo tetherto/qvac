@@ -157,6 +157,7 @@ export function videoConfigFor(config: SdcppConfig): SdConfig {
     vaeModelSrc,
     highNoiseDiffusionModelSrc,
     uncondModelSrc,
+    tokenizerSrc,
     audioVaeModelSrc,
     embeddingsConnectorsModelSrc,
     upscaler,
