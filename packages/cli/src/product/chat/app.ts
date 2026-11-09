@@ -1,4 +1,4 @@
-import type { WorkbenchConfig } from '../../lib/types.js'
+import type { WorkbenchConfig } from '@qvac/cli-kit/launch'
 import type {
   ActiveScreen,
   Attachment,
@@ -9,28 +9,44 @@ import type {
   MouseMessage,
   ProductOptions,
   RpcResult,
-  Tui
-} from '../app-types.js'
-import type { Screen, ScreenContext, ScreenPanel, ScreenRow } from '../screen.js'
+  Tui,
+  Screen,
+  ScreenContext,
+  ScreenPanel,
+  ScreenRow
+} from '@qvac/cli-kit/tui'
+import {
+  wrap,
+  Shell,
+  SPIN,
+  selectable,
+  arrow,
+  cycle,
+  pageKey,
+  noop,
+  accountMesh,
+  chooseAgent,
+  remember as rememberChat,
+  upload,
+  visibleChats,
+  writable
+} from '@qvac/cli-kit/tui'
+import { paint, plain, bytes, applyTheme, strong, paragraph } from '@qvac/cli-kit/brand'
+import { describeConfig } from '@qvac/cli-kit/config'
 import type { LoadedExtensions } from '../extensions.js'
+import type { loadTemplates, loadContextFiles } from '../../lib/runtime/resources.js'
 import type { Chunk, Turn } from '../transcript.js'
 import type { ProductCommand } from '../commands.js'
-import { paint, plain, bytes, applyTheme } from '../theme.js'
 import { Editor } from '../../lib/terminal/editor.js'
 import { turns, pendingApproval, activeRun } from '../transcript.js'
 import { renderTurns } from '../chat-view.js'
-import { wrap } from '../../lib/terminal/text.js'
 import { match, parse, commands } from '../commands.js'
 import { Extensions } from '../extensions.js'
-import * as session from '../session.js'
 import { rank, mention } from '../fuzzy.js'
 import { expandTemplate } from '../templates.js'
 import { toMarkdown, toHtml, lastAssistantText } from '../export.js'
 import { contextPreamble } from '../../lib/runtime/resources.js'
-import { strong, paragraph } from '../ink.js'
 import { RECEIVERS } from './receive.js'
-import { describeConfig } from '../../lib/runtime/config-merge.js'
-import { Shell, SPIN, selectable, arrow, cycle, pageKey, noop } from '../shell.js'
 
 const PALETTE_ROWS = 6
 const TOGGLE_BOXES: Record<string, string> = { on: paint('◉ ', 'teal'), off: paint('○ ', 'muted') }
@@ -117,8 +133,16 @@ const COMMANDS: Map<string, (app: ChatApp, arg: string) => Command> = new Map<
   ['help', (app) => app.show('Help', app.helpLines())]
 ])
 
+// what the chat needs from the host beyond the shell: extensions, prompt templates, context files
+export interface ChatOptions extends ProductOptions {
+  extensions?: LoadedExtensions | undefined
+  loadTemplates?: (() => ReturnType<typeof loadTemplates>) | undefined
+  loadContext?: (() => ReturnType<typeof loadContextFiles>) | undefined
+}
+
 // The chat page on the shell: conversations, the composer, the agent screens and extensions.
 export abstract class ChatApp extends Shell {
+  declare options: ChatOptions
   chatId: string | null
   chats: NonNullable<RpcResult<'listChats'>['chats']>
   turns: Turn[]
@@ -130,8 +154,8 @@ export abstract class ChatApp extends Shell {
   queued: string | null
   files: string[] | null
   before: Map<string, string | null | undefined>
-  templates: ReturnType<NonNullable<ProductOptions['loadTemplates']>>
-  contextFiles: ReturnType<NonNullable<ProductOptions['loadContext']>>
+  templates: ReturnType<NonNullable<ChatOptions['loadTemplates']>>
+  contextFiles: ReturnType<NonNullable<ChatOptions['loadContext']>>
   search: { query: string; at: number; count?: number } | null
   extensions: Extensions
   awaiting: boolean
@@ -144,7 +168,7 @@ export abstract class ChatApp extends Shell {
   composing: boolean
   lastEscape: number
 
-  constructor(tui: Tui, options: ProductOptions = {}) {
+  constructor(tui: Tui, options: ChatOptions = {}) {
     super(tui, options)
     this.chatId = null
     this.chats = []
@@ -198,12 +222,12 @@ export abstract class ChatApp extends Shell {
     const engine = this.engine!
     return async () => {
       try {
-        const meshId = this.meshId || (await session.accountMesh(engine))
-        await session.writable(engine, meshId)
+        const meshId = this.meshId || (await accountMesh(engine))
+        await writable(engine, meshId)
         const config = await engine.getConfig({})
         let agent =
           this.agent ||
-          (await session.chooseAgent(engine, meshId, {
+          (await chooseAgent(engine, meshId, {
             deviceId: this.originDeviceId,
             remembered: config.activeAgentId,
             modelName: options.model
@@ -216,7 +240,7 @@ export abstract class ChatApp extends Shell {
           })
         }
 
-        const chats = session.visibleChats((await engine.listChats({ meshId })).chats)
+        const chats = visibleChats((await engine.listChats({ meshId })).chats)
         const chat = chats.find((c) => c.id === config.activeChatId) || chats[0]
 
         return { type: 'chat.ready', meshId, agent, chats, chatId: chat?.id ?? null }
@@ -237,7 +261,7 @@ export abstract class ChatApp extends Shell {
     this.picker = null
     this.panel = null
     // selection memory is a convenience; a failed write keeps the chat open
-    const remember = session.remember(this.engine!, { agentId: this.agent?.id, chatId }).then(
+    const remember = rememberChat(this.engine!, { agentId: this.agent?.id, chatId }).then(
       () => null,
       () => null
     )
@@ -408,7 +432,7 @@ export abstract class ChatApp extends Shell {
         ).id
       }
 
-      await session.upload(this.engine!, scope, file)
+      await upload(this.engine!, scope, file)
 
       return { chatId: scope.chatId, fileName: file.fileName }
     }, 'chat.attached')

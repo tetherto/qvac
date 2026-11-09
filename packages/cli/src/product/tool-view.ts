@@ -71,9 +71,9 @@ const resultOf = (value: unknown): ToolResult =>
   value !== null && typeof value === 'object' ? (value as ToolResult) : {}
 const argsOf = (value: unknown): ToolArguments =>
   value !== null && typeof value === 'object' ? (value as ToolArguments) : {}
-import { paint, palette } from './theme.js'
+import { paint, palette } from '@qvac/cli-kit/brand'
+import { wrap, cellWidth, clean } from '@qvac/cli-kit/tui'
 import { languageOf, paintCode } from './highlight.js'
-import { wrap, cellWidth, clean } from '../lib/terminal/text.js'
 
 const MINUS = '−'
 const OMITTED = /\n?…\[(\d+) chars omitted[^\]]*\]…\n?/g

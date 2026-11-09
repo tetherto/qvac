@@ -1,10 +1,9 @@
 // Capture actual product frames from a running Core store; never seed transcript fixtures.
+import { bootCore, hostIO } from '@qvac/cli-kit/host'
 import fs from 'bare-fs'
 import tui from 'bare-tui'
-import { bootCore } from '../../dist/lib/runtime/core-host.js'
 import { productApp } from '../../dist/product/app.js'
 import { screens } from '../../dist/product/screens.js'
-import { hostIO } from '../../dist/lib/runtime/host-io.js'
 import { listFiles } from '../../dist/lib/runtime/files.js'
 import { loadTemplates, loadContextFiles } from '../../dist/lib/runtime/resources.js'
 

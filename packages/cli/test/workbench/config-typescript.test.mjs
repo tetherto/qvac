@@ -1,3 +1,4 @@
+import { importConfig } from '@qvac/cli-kit/config'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -5,7 +6,6 @@ import path from 'node:path'
 import test from 'node:test'
 import { pathToFileURL } from 'node:url'
 import { loadConfig } from '../../dist/lib/config.js'
-import { importConfig } from '../../dist/lib/runtime/config-import.js'
 
 function project(t, files) {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac native #ts-')))

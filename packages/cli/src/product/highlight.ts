@@ -1,4 +1,4 @@
-import { palette } from './theme.js'
+import { palette } from '@qvac/cli-kit/brand'
 
 const ESC = '\x1b['
 

@@ -1,19 +1,17 @@
+import {
+  applyPluginState,
+  describeConfig,
+  loadConfig,
+  mergeConfig,
+  readPluginState,
+  setEnabled,
+  withConfigPlugins
+} from '@qvac/cli-kit/config'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import {
-  applyPluginState,
-  describeConfig,
-  loadConfig,
-  mergeConfig
-} from '../../dist/lib/runtime/config.js'
-import {
-  readPluginState,
-  setEnabled,
-  withConfigPlugins
-} from '../../dist/lib/runtime/plugin-state.js'
 import { pluginsScreen } from '../../dist/product/plugins-screen.js'
 
 const GIB = 1024 ** 3

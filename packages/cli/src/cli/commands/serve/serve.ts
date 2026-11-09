@@ -1,11 +1,9 @@
 type Invites = Awaited<ReturnType<typeof mintInvites>>
-import type { CommandIO } from '../../io.js'
+import type { CommandIO, RuntimeOptions, CoreHost } from '@qvac/cli-kit/launch'
+import { downloadMeter, progressReporter } from '@qvac/cli-kit/launch'
 import type { Capabilities } from '@qvac/core/client'
-import type { RuntimeOptions } from '../../../lib/types.js'
-import type { CoreHost } from '../../../lib/types.js'
 import b4a from 'b4a'
 import { mintInvites } from '../invite/invites.js'
-import { downloadMeter, progressReporter } from '../../progress.js'
 import { setUp, markSetUp } from './setup.js'
 import { readStatus, thisDevice } from '../../snapshot.js'
 import { writeServeStatus, clearServeStatus } from '../status/status.js'

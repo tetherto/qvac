@@ -1,9 +1,11 @@
-import type { CoreHost, LaunchOptions, RuntimeOptions } from '../lib/types.js'
-import type { Command, HostStatus, ProductOptions } from './app-types.js'
+import type { CoreHost, LaunchOptions, RuntimeOptions } from '@qvac/cli-kit/launch'
+import type { Command, HostStatus } from '@qvac/cli-kit/tui'
+import { startUpdater, bootCore, hostIO } from '@qvac/cli-kit/host'
+import { bootLines, canvas, paint } from '@qvac/cli-kit/brand'
+import type { ChatOptions } from './chat/app.js'
 import type { ProductApp } from './app.js'
 import tui from 'bare-tui'
 import pear from 'bare-tui-updater/pear'
-import { startUpdater } from '../lib/runtime/updater.js'
 import process from 'bare-process'
 import fs from 'bare-fs'
 import path from 'bare-path'
@@ -13,16 +15,12 @@ import { spawn, spawnSync } from 'bare-subprocess'
 import updateBanner from 'bare-tui-updater'
 import tty from 'bare-tty'
 import pkg from '../../package.json' with { type: 'json' }
-import { bootCore } from '../lib/runtime/core-host.js'
 import { extensionImports } from './extension-imports.js'
-import { hostIO } from '../lib/runtime/host-io.js'
 import { productApp } from './app.js'
 import { chatOptions, runPrintMode } from './chat/main.js'
 import { loadExtensions } from './extension-loader.js'
 import { watchFiles, extensionFiles } from './config-watch.js'
-import { bootLines } from './splash.js'
 import { runCommand } from '../cli/run.js'
-import { canvas, paint } from './theme.js'
 
 let options: LaunchOptions = {}
 let updates: Awaited<ReturnType<typeof startUpdater>> = null
@@ -150,7 +148,7 @@ async function importFromConfig(file: string, version: number) {
   ).exports as { default?: unknown }
 }
 
-export function appOptions(io: ReturnType<typeof hostIO>): ProductOptions {
+export function appOptions(io: ReturnType<typeof hostIO>): ChatOptions {
   return {
     ...options,
     updateBanner: updates

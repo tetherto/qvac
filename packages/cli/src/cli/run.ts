@@ -1,7 +1,7 @@
-import type { RuntimeOptions } from '../lib/types.js'
+import type { RuntimeOptions } from '@qvac/cli-kit/launch'
+import { CommandError, CommandIO } from '@qvac/cli-kit/launch'
+import { startCore } from '@qvac/cli-kit/host'
 import process from 'bare-process'
-import { startCore, CommandError } from './core.js'
-import { CommandIO } from './io.js'
 import { statusFromServe } from './commands/status/status.js'
 import { find } from './index.js'
 

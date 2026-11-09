@@ -1,7 +1,7 @@
+import { envName, FLAGS } from '@qvac/cli-kit/launch'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { parseArgs, UsageError } from '../../dist/cli/index.js'
-import { envName, FLAGS } from '../../dist/cli/flags.js'
 
 const parse = (argv, env = {}) => parseArgs(argv, { env })
 const route = (argv, env) => {

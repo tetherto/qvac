@@ -1,4 +1,5 @@
-import type { Agent } from '../lib/types.js'
+import type { Agent } from '@qvac/cli-kit/launch'
+import { palette } from '@qvac/cli-kit/brand'
 export interface ExtensionContext {
   send(text: string): void
   insert(text: string): void
@@ -47,7 +48,6 @@ interface Binding {
   extension: string
   keys: NonNullable<Extension['keys']>
 }
-import { palette } from './theme.js'
 
 // Extension code only ever sees this facade; every action reaches the app as a message.
 function context({ post, read }: Environment): ExtensionContext {

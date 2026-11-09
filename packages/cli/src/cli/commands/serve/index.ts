@@ -1,6 +1,5 @@
+import { DEVICE, flags, command } from '@qvac/cli-kit/launch'
 import { summary, description } from 'paparam'
-import { DEVICE, flags } from '../../flags.js'
-import { command } from '../command.js'
 
 export const serve = (name = 'serve') =>
   command(

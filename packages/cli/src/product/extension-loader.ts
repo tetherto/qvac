@@ -1,4 +1,4 @@
-import { inlinePlugin } from '../lib/runtime/config-merge.js'
+import { inlinePlugin } from '@qvac/cli-kit/config'
 import type { Extension, LoadedExtensions } from './extensions.js'
 type Module = { default?: unknown }
 type Load = (file: string) => Promise<Module>

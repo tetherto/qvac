@@ -1,3 +1,11 @@
+import {
+  versionText,
+  downloadMeter,
+  progressLine,
+  duration,
+  Prompter,
+  bytes
+} from '@qvac/cli-kit/launch'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -6,11 +14,7 @@ import path from 'node:path'
 import { PassThrough } from 'streamx'
 import { tree } from '../../dist/cli/index.js'
 import { runHelp } from '../../dist/cli/commands/help/help.js'
-import { versionText } from '../../dist/cli/version.js'
-import { downloadMeter, progressLine } from '../../dist/cli/progress.js'
-import { bytes, duration } from '../../dist/cli/format.js'
 import { logFiles, tailLines, printLogs, followLogs } from '../../dist/cli/commands/logs/logs.js'
-import { Prompter } from '../../dist/cli/prompt.js'
 import { configText } from '../../dist/cli/commands/config/config.js'
 
 const root = path.resolve(import.meta.dirname, '../..')

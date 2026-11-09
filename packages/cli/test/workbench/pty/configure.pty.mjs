@@ -1,3 +1,4 @@
+import { Screen } from '@qvac/cli-kit/tui'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
@@ -6,7 +7,6 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { terminal, sleep } from '../helpers/pty.mjs'
-import { Screen } from '../helpers/vt.mjs'
 
 const bridge = new URL('../helpers/pty-bridge.py', import.meta.url).pathname
 const fixture = new URL('../fixtures/configure-prompts.mjs', import.meta.url).pathname

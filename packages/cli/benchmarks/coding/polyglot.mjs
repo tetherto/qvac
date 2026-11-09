@@ -1,10 +1,10 @@
 // Aider's polyglot benchmark through the real `qvac -p`: what it scores is what the app does.
+import { CODING_INSTRUCTIONS } from '@qvac/cli-kit/config'
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
-import { CODING_INSTRUCTIONS } from '../../dist/lib/runtime/agent-profile.js'
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..')
 const REPO = 'https://github.com/Aider-AI/polyglot-benchmark'

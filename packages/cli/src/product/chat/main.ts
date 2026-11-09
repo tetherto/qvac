@@ -1,6 +1,8 @@
-import type { LaunchOptions } from '../../lib/types.js'
-import type { Connection, ProductOptions } from '../app-types.js'
-import type { hostIO } from '../../lib/runtime/host-io.js'
+import type { LaunchOptions } from '@qvac/cli-kit/launch'
+import type { Connection } from '@qvac/cli-kit/tui'
+import type { hostIO } from '@qvac/cli-kit/host'
+import { readPluginState, writePluginState } from '@qvac/cli-kit/config'
+import type { ChatOptions } from './app.js'
 import type { PrintIO } from '../print.js'
 import process from 'bare-process'
 import fs from 'bare-fs'
@@ -13,7 +15,6 @@ import { listFiles } from '../../lib/runtime/files.js'
 import { loadTemplates, loadContextFiles, contextPreamble } from '../../lib/runtime/resources.js'
 import { screens } from '../screens.js'
 import { pluginsScreen } from '../plugins-screen.js'
-import { readPluginState, writePluginState } from '../../lib/runtime/plugin-state.js'
 import { runPrint } from '../print.js'
 
 function readClipboard() {
@@ -119,7 +120,7 @@ export function chatOptions(
   options: LaunchOptions,
   io: ReturnType<typeof hostIO>,
   program: { input: { destroy(): void } }
-): Partial<ProductOptions> {
+): Partial<ChatOptions> {
   return {
     resolveFileAttachment,
     resolvePastedFile,

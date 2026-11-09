@@ -1,7 +1,6 @@
+import type { Frame } from '@qvac/cli-kit/tui'
+import { paint, strong, paragraph, keyHints } from '@qvac/cli-kit/brand'
 import type { ProductApp } from '../app.js'
-import type { Frame } from '../app-types.js'
-import { paint } from '../theme.js'
-import { strong, paragraph, keyHints } from '../ink.js'
 
 // The dashboard frame: header, the page a product names, and the footer with its key hints.
 export interface Page {

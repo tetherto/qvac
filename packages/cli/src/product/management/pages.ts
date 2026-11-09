@@ -1,12 +1,9 @@
-import type { snapshot } from '../data.js'
 type Snapshot = Awaited<ReturnType<typeof snapshot>>
+import type { snapshot, Frame } from '@qvac/cli-kit/tui'
+import { hex, wrap } from '@qvac/cli-kit/tui'
+import { paint, count, strong } from '@qvac/cli-kit/brand'
 import type { ProductApp } from '../app.js'
-import type { Frame } from '../app-types.js'
 import type { Page, PageView } from '../dashboard/frame.js'
-import { paint, count } from '../theme.js'
-import { hex } from '../data.js'
-import { wrap } from '../../lib/terminal/text.js'
-import { strong } from '../ink.js'
 
 // The host's own pages: every device, the workspaces it serves, and its status.
 export const PAGES: Record<string, PageView> = {

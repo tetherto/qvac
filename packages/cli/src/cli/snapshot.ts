@@ -1,7 +1,7 @@
+import type { CoreHost } from '@qvac/cli-kit/launch'
 import type { Capabilities } from '@qvac/core/client'
 type Device = NonNullable<Awaited<ReturnType<Capabilities['listDevices']>>['devices']>[number]
 type Mesh = NonNullable<Awaited<ReturnType<Capabilities['listMeshes']>>['meshes']>[number]
-import type { CoreHost } from '../lib/types.js'
 import b4a from 'b4a'
 
 const hex = (id: Iterable<number> | null | undefined) => (id ? b4a.toHex(b4a.from(id)) : null)

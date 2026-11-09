@@ -1,3 +1,4 @@
+import { clean, cellWidth, fit } from '@qvac/cli-kit/tui'
 export interface KeyMessage {
   is(...names: string[]): boolean
   sequence?: string
@@ -5,7 +6,6 @@ export interface KeyMessage {
   ctrl?: boolean
   meta?: boolean
 }
-import { clean, cellWidth, fit } from './text.js'
 
 const MARKER = /\[paste #\d+ (?:\+\d+ lines|\d+ chars)\]/g
 const WORD = /[\p{L}\p{N}_]/u

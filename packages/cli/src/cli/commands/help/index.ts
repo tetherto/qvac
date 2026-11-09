@@ -1,5 +1,5 @@
+import { command } from '@qvac/cli-kit/launch'
 import { arg, sloppy, summary } from 'paparam'
-import { command } from '../command.js'
 
 export const help = () =>
   command(

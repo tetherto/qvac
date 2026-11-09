@@ -1,6 +1,5 @@
+import { DEVICE, flags, command } from '@qvac/cli-kit/launch'
 import { summary } from 'paparam'
-import { DEVICE, flags } from '../../flags.js'
-import { command } from '../command.js'
 
 export const config = () =>
   command(

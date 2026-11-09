@@ -4,11 +4,9 @@ interface QRFlags {
   color?: boolean | undefined
   columns?: number | undefined
 }
-import type { CommandIO } from '../../io.js'
+import type { CommandIO, RuntimeOptions, CoreHost } from '@qvac/cli-kit/launch'
+import { qrLines } from '@qvac/cli-kit/tui'
 import type { Capabilities } from '@qvac/core/client'
-import type { RuntimeOptions } from '../../../lib/types.js'
-import type { CoreHost } from '../../../lib/types.js'
-import { qrLines } from '../../../product/qr.js'
 import { joinedWorkspaces } from '../../snapshot.js'
 
 // Only an admin has a member invite, and never for their own workspace; just after a join Core

@@ -1,12 +1,19 @@
+import type {
+  ActiveScreen,
+  Attachment,
+  Command,
+  RpcResult,
+  WatchFrame,
+  ScreenData,
+  ScreenPanel
+} from '@qvac/cli-kit/tui'
+import { visibleChats } from '@qvac/cli-kit/tui'
+import type { Agent } from '@qvac/cli-kit/launch'
+import { applyTheme, paint } from '@qvac/cli-kit/brand'
 import type { ChatApp } from './app.js'
-import type { ActiveScreen, Attachment, Command, RpcResult, WatchFrame } from '../app-types.js'
-import type { Agent } from '../../lib/types.js'
-import type { ScreenData, ScreenPanel } from '../screen.js'
 import type { LoadedExtensions } from '../extensions.js'
 type Value<T> = { value: T }
 type Failure = { error: Error }
-import { applyTheme, paint } from '../theme.js'
-import * as session from '../session.js'
 
 export const RECEIVERS = new Map<string, (app: ChatApp, msg: never) => Command>([
   ['chat.ready', chatReady],
@@ -102,7 +109,7 @@ function chunksEnded(app: ChatApp, msg: { tag?: number }): Command {
 }
 
 function chatsChanged(app: ChatApp, msg: Value<WatchFrame<'chatsWatch'>>): Command {
-  app.chats = session.visibleChats(msg.value.chats)
+  app.chats = visibleChats(msg.value.chats)
   return app.watch('chats')
 }
 

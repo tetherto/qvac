@@ -1,4 +1,4 @@
-import type { ParsedCommand, LauncherKit } from '../../../lib/types.js'
+import type { ParsedCommand, LauncherKit } from '@qvac/cli-kit/launch'
 import { tree } from '../../index.js'
 
 // paparam writes the help from each command's own summary, flags and arguments

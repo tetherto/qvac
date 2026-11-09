@@ -1,7 +1,7 @@
+import type { KeyMessage, Command } from '@qvac/cli-kit/tui'
+import { plain } from '@qvac/cli-kit/brand'
+import { joinAndWait } from '@qvac/cli-kit/launch'
 import type { ProductApp } from '../app.js'
-import type { KeyMessage, Command } from '../app-types.js'
-import { plain } from '../theme.js'
-import { joinAndWait } from '../../cli/join.js'
 import { FORMS } from './pages.js'
 
 const DEFAULT_MODEL = 'Qwen3.5-2B-Q4_K_M'

@@ -1,3 +1,5 @@
+import { plain } from '@qvac/cli-kit/brand'
+import { cellWidth } from '@qvac/cli-kit/tui'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
@@ -9,8 +11,6 @@ import {
   renderToolBody,
   renderApprovalPreview
 } from '../../dist/product/tool-view.js'
-import { plain } from '../../dist/product/theme.js'
-import { cellWidth } from '../../dist/lib/terminal/text.js'
 
 const ops = (a, b) => diffLines(a, b).map((l) => l.op + l.text)
 const fits = (rows, width) =>

@@ -1,7 +1,6 @@
-import type { RpcResult } from '../app-types.js'
 type Model = NonNullable<RpcResult<'listModels'>['models']>[number]
+import type { RpcResult, KeyMessage, Command } from '@qvac/cli-kit/tui'
 import type { ProductApp } from '../app.js'
-import type { KeyMessage, Command } from '../app-types.js'
 import { FORMS } from '../onboarding/pages.js'
 
 export type KeyHandler = (app: ProductApp, msg: KeyMessage) => Command

@@ -1,10 +1,7 @@
-import type { CommandIO } from '../../io.js'
+import type { CommandIO, RuntimeOptions, CoreHost } from '@qvac/cli-kit/launch'
+import { CommandError, describeInvite, joinAndWait } from '@qvac/cli-kit/launch'
 import type { Capabilities } from '@qvac/core/client'
-import type { RuntimeOptions } from '../../../lib/types.js'
-import type { CoreHost } from '../../../lib/types.js'
 import process from '#process'
-import { CommandError } from '../../errors.js'
-import { describeInvite, joinAndWait } from '../../join.js'
 
 export async function markSetUp(engine: Capabilities, { done }: { done: boolean }) {
   await engine.setConfig({ ...(await engine.getConfig({})), onboardingCompleted: done })

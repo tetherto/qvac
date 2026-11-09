@@ -1,5 +1,5 @@
+import type { Command, RpcResult } from '@qvac/cli-kit/tui'
 import type { ProductApp } from './app.js'
-import type { Command, RpcResult } from '../app-types.js'
 type Value<T> = { value: T }
 
 export const RECEIVERS = new Map<string, (app: ProductApp, msg: never) => Command>([

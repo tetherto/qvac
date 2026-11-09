@@ -13,8 +13,8 @@
       "b4a": ["./types/b4a.d.ts"]
     },
     "lib": ["ES2023"],
-    "declaration": true,
-    "declarationMap": true,
+    "declaration": false,
+    "declarationMap": false,
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,

@@ -4,11 +4,11 @@ import type {
   Frame,
   KeyMessage,
   MouseMessage,
-  ProductOptions,
   RpcResult,
   Tui
-} from '../app-types.js'
-import { plain } from '../theme.js'
+} from '@qvac/cli-kit/tui'
+import { pageKey } from '@qvac/cli-kit/tui'
+import { plain } from '@qvac/cli-kit/brand'
 import { renderDashboard } from './frame.js'
 import { PAGES as DASHBOARD_PAGES } from './pages.js'
 import { PAGES as DASHBOARD_KEYS, SHORTCUTS, dashboardKey } from './keys.js'
@@ -17,8 +17,7 @@ import { MODAL as ONBOARDING_MODAL, ENTER as ONBOARDING_ENTER } from '../onboard
 import { PAGES as MANAGEMENT_PAGES } from '../management/pages.js'
 import { PAGES as MANAGEMENT_KEYS, SHORTCUTS as MANAGEMENT_SHORTCUTS } from '../management/keys.js'
 import { RECEIVERS } from './receive.js'
-import { ChatApp } from '../chat/app.js'
-import { pageKey } from '../shell.js'
+import { ChatApp, type ChatOptions } from '../chat/app.js'
 
 // qvac's dashboard: setup, the shared pages, and the host's own
 const PAGES = { ...ONBOARDING_PAGES, ...DASHBOARD_PAGES, ...MANAGEMENT_PAGES }
@@ -31,7 +30,7 @@ const KEYS = {
 
 export function productApp(tui: Tui) {
   return class extends ProductApp {
-    constructor(options?: ProductOptions) {
+    constructor(options?: ChatOptions) {
       super(tui, options)
     }
   }
@@ -54,7 +53,7 @@ export class ProductApp extends ChatApp {
   joinValue: string
   removeName: string
 
-  constructor(tui: Tui, options: ProductOptions = {}) {
+  constructor(tui: Tui, options: ChatOptions = {}) {
     super(tui, options)
     this.selection = 0
     this.choice = 0

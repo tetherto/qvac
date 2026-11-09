@@ -1,14 +1,17 @@
 #!/usr/bin/env node
-import type { LaunchOptions } from './lib/types.js'
+import type { LaunchOptions } from '@qvac/cli-kit/launch'
+import { launch, packageVersion, supervise } from '@qvac/cli-kit/launch'
 import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { launch, supervise } from './cli/launch.js'
 import { find, parseArgs } from './cli/index.js'
 import { sdkArguments } from './cli/commands/sdk/arguments.js'
 
 const require = createRequire(import.meta.url)
+const root = fileURLToPath(new URL('..', import.meta.url))
 const entry = fileURLToPath(new URL('./product/entry.js', import.meta.url))
 
 // Keep the SDK server in this process: readiness FDs and signal/PID semantics are public.
@@ -21,6 +24,9 @@ if (sdkWords) {
   await launch(process.argv.slice(2), {
     tree: { parseArgs, find },
     name: 'qvac',
+    root,
+    version: packageVersion(root),
+    dataDir: path.join(os.homedir(), '.qvac', 'cli'),
     launcher: { runtime: process.execPath, script: fileURLToPath(import.meta.url) },
     runApp(options: LaunchOptions, env) {
       const bare = require('bare-runtime')()

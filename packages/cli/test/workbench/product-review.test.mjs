@@ -1,10 +1,10 @@
+import { cellWidth } from '@qvac/cli-kit/tui'
+import { loadConfig } from '@qvac/cli-kit/config'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { cellWidth } from '../../dist/lib/terminal/text.js'
-import { loadConfig } from '../../dist/lib/runtime/config.js'
 import { App, boot, chunk, fakeEngine, model, press, screen, settle, type } from './helpers/app.mjs'
 
 test('boot resolves the remembered chat and streams its transcript natively', async () => {

@@ -1,5 +1,3 @@
-import type { RpcResult, WatchFrame } from '../app-types.js'
-import type { snapshot } from '../data.js'
 type Snapshot = Awaited<ReturnType<typeof snapshot>>
 type Model = NonNullable<RpcResult<'listModels'>['models']>[number]
 type Download = NonNullable<WatchFrame<'modelDownloadsWatch'>['downloads']>[number]
@@ -8,14 +6,11 @@ interface Hardware {
   gpu?: { devices?: { name?: string; unifiedMemory?: boolean }[] }
   hardware?: { model?: string }
 }
+import type { RpcResult, WatchFrame, snapshot, Frame } from '@qvac/cli-kit/tui'
+import { hex, wrap, modelParts, modelKind } from '@qvac/cli-kit/tui'
+import { palette, paint, bytes, count, strong, paragraph } from '@qvac/cli-kit/brand'
 import type { ProductApp } from '../app.js'
-import type { Frame } from '../app-types.js'
 import type { Page, PageView } from './frame.js'
-import { palette, paint, bytes, count } from '../theme.js'
-import { hex } from '../data.js'
-import { wrap } from '../../lib/terminal/text.js'
-import { strong, paragraph } from '../ink.js'
-import { modelParts, modelKind } from '../model-label.js'
 import { NAV_HINTS } from './frame.js'
 
 const MODEL_HINTS: [string, string][] = [

@@ -1,3 +1,4 @@
+import { FLAGS } from '@qvac/cli-kit/launch'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
@@ -6,7 +7,6 @@ import path from 'node:path'
 import test from 'node:test'
 import { random } from './helpers/chaos.mjs'
 import { parseArgs } from '../../dist/cli/index.js'
-import { FLAGS } from '../../dist/cli/flags.js'
 
 const CLI = new URL('../../dist/index.js', import.meta.url).pathname
 // CLI_CHAOS_RUNS for a longer run; CLI_CHAOS_SEED replays one argument list

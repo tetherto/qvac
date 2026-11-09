@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { it } from 'node:test'
-import { qrLines } from '../../../src/product/qr'
-import qrcode from '../../../src/lib/vendor/qrcode.mjs'
+import { qrLines } from '../../dist/product/qr.js'
+import qrcode from '../../dist/lib/vendor/qrcode.mjs'
 
 it('terminal QR output preserves every matrix cell and complete quiet zone', () => {
   const input = 'pear://abcdefghijklmnopqrstuv1234567890'
@@ -16,7 +16,7 @@ it('terminal QR output preserves every matrix cell and complete quiet zone', () 
   const blocks = [' ', '▄', '▀', '█']
   for (let y = 0; y < width; y++) {
     for (let x = 0; x < width; x++) {
-      const bits = blocks.indexOf(lines[Math.floor(y / 2)]![x]!)
+      const bits = blocks.indexOf(lines[Math.floor(y / 2)]?.[x])
       const dark = (bits & (y % 2 ? 1 : 2)) !== 0
       const expected = x >= 4 && y >= 4 && x < size + 4 && y < size + 4 && qr.isDark(y - 4, x - 4)
       assert.equal(dark, expected, `${x},${y}`)

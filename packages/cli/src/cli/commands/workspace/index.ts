@@ -1,6 +1,5 @@
+import { DEVICE, flags, command } from '@qvac/cli-kit/launch'
 import { summary } from 'paparam'
-import { DEVICE, flags } from '../../flags.js'
-import { command } from '../command.js'
 import { create } from './create/index.js'
 import { join } from './join/index.js'
 import { leave } from './leave/index.js'

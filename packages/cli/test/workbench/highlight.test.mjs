@@ -1,7 +1,7 @@
+import { palette, plain } from '@qvac/cli-kit/brand'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { languageOf, paintCode } from '../../dist/product/highlight.js'
-import { palette, plain } from '../../dist/product/theme.js'
 
 const colorOf = (painted, token) => {
   const at = painted.indexOf(token)

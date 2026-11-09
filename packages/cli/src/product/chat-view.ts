@@ -1,3 +1,5 @@
+import { paint, palette, strong, plain } from '@qvac/cli-kit/brand'
+import { wrap, cellWidth, fit } from '@qvac/cli-kit/tui'
 import type { Turn, AgentTurn, UserTurn, Segment, SegmentDetail } from './transcript.js'
 interface ToolRow extends Segment {
   name: string
@@ -26,8 +28,6 @@ interface View {
   live?: boolean
   streaming?: boolean
 }
-import { paint, palette, strong, plain } from './theme.js'
-import { wrap, cellWidth, fit } from '../lib/terminal/text.js'
 import { settled } from './transcript.js'
 import { toolSummary, renderToolBody, renderApprovalPreview } from './tool-view.js'
 import { languageOf, paintCode } from './highlight.js'

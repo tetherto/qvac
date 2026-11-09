@@ -1,7 +1,7 @@
+import { importConfig } from '@qvac/cli-kit/config'
 import fs, { promises as fsp } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { importConfig } from './runtime/config-import.js'
 import { ConfigNotFoundError, ConfigLoadError } from '@/lib/errors'
 
 export const CONFIG_CANDIDATES = [

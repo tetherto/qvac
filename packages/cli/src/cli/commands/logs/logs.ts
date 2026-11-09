@@ -1,7 +1,7 @@
-import type { ParsedCommand, LauncherKit } from '../../../lib/types.js'
 interface Output {
   write(data: string | Uint8Array): unknown
 }
+import type { ParsedCommand, LauncherKit } from '@qvac/cli-kit/launch'
 import fs from '#fs'
 import b4a from 'b4a'
 import path from '#path'

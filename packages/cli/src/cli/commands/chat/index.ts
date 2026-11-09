@@ -1,6 +1,5 @@
+import { CHAT, DEVICE, flags, command } from '@qvac/cli-kit/launch'
 import { arg, sloppy, summary } from 'paparam'
-import { CHAT, DEVICE, flags } from '../../flags.js'
-import { command } from '../command.js'
 
 const run = (...a: Parameters<(typeof import('./chat.js'))['runChat']>) =>
   import('./chat.js').then((m) => m.runChat(...a))

@@ -1,16 +1,16 @@
-import type { Screen, ScreenContext, ScreenRow } from './screen.js'
-import type { HostStatus, PluginStatus } from './app-types.js'
-import type { CatalogPlugin } from '../lib/runtime/plugin-catalog.js'
-import type { PluginEntry } from '../lib/types.js'
-import type { PluginState } from '../lib/runtime/plugin-state.js'
-type View = ReturnType<typeof view>
-import { BUILT_IN_PLUGINS, PLUGIN_CATALOG, supports } from '../lib/runtime/plugin-catalog.js'
+import type { Screen, ScreenContext, ScreenRow, HostStatus, PluginStatus } from '@qvac/cli-kit/tui'
+import type { CatalogPlugin, PluginState } from '@qvac/cli-kit/config'
 import {
+  BUILT_IN_PLUGINS,
+  PLUGIN_CATALOG,
+  supports,
   emptyPluginState,
   resolvePlugins,
   setEnabled,
   withConfigPlugins
-} from '../lib/runtime/plugin-state.js'
+} from '@qvac/cli-kit/config'
+import type { PluginEntry } from '@qvac/cli-kit/launch'
+type View = ReturnType<typeof view>
 
 // Harness plugins: what plugins.json asks for against what Core reported at its last start.
 const platformOf = (ctx: ScreenContext) =>

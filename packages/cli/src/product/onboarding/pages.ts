@@ -1,15 +1,10 @@
-import type { RpcResult, WatchFrame } from '../app-types.js'
 type Model = NonNullable<RpcResult<'listModels'>['models']>[number]
 type Download = NonNullable<WatchFrame<'modelDownloadsWatch'>['downloads']>[number]
+import type { RpcResult, WatchFrame, Frame } from '@qvac/cli-kit/tui'
+import { wrap, qrLines, modelParts, modelKind, remainingText } from '@qvac/cli-kit/tui'
+import { paint, plain, logo, bytes, highlight, strong, paragraph } from '@qvac/cli-kit/brand'
 import type { ProductApp } from '../app.js'
-import type { Frame } from '../app-types.js'
 import type { Page, PageView } from '../dashboard/frame.js'
-import { paint, plain, logo, bytes, highlight } from '../theme.js'
-import { wrap } from '../../lib/terminal/text.js'
-import { qrLines } from '../qr.js'
-import { strong, paragraph } from '../ink.js'
-import { modelParts, modelKind } from '../model-label.js'
-import { remainingText } from '../download-rate.js'
 import { percentOf } from '../dashboard/pages.js'
 
 export const FORMS = ['name', 'device-name', 'join']

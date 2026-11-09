@@ -1,17 +1,18 @@
-import assert from 'node:assert/strict'
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
-import test from 'node:test'
-import { BUILT_IN_PLUGINS, PLUGIN_CATALOG } from '../../dist/lib/runtime/plugin-catalog.js'
 import {
+  BUILT_IN_PLUGINS,
+  PLUGIN_CATALOG,
   emptyPluginState,
   readPluginState,
   resolvePlugins,
   resolveEnabled,
   setEnabled,
   writePluginState
-} from '../../dist/lib/runtime/plugin-state.js'
+} from '@qvac/cli-kit/config'
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import test from 'node:test'
 import { pluginsScreen } from '../../dist/product/plugins-screen.js'
 import { fileURLToPath } from 'node:url'
 

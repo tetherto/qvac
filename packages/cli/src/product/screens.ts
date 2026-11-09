@@ -1,6 +1,7 @@
+import type { Agent } from '@qvac/cli-kit/launch'
+import type { Screen, ScreenContext, ScreenPanel, ScreenRow } from '@qvac/cli-kit/tui'
+import { bytes } from '@qvac/cli-kit/brand'
 import type { Capabilities } from '@qvac/core/client'
-import type { Agent } from '../lib/types.js'
-import type { Screen, ScreenContext, ScreenPanel, ScreenRow } from './screen.js'
 import type { Chunk } from './transcript.js'
 type Skill = NonNullable<Awaited<ReturnType<Capabilities['skillCatalog']>>['skills']>[number]
 type ManagedSkill = NonNullable<
@@ -15,7 +16,6 @@ interface UsageMetrics {
   stopReason?: string
   usage?: Record<string, number>
 }
-import { bytes } from './theme.js'
 
 // Manage screens: data plus Core calls, rendered by the app (see screen.mjs).
 const TOOLSETS = [

@@ -14,27 +14,34 @@ import { AbortController } from '#abort-controller'
 import { fileURLToPath } from '#url'
 import { loadConfig } from '../lib/runtime/config.js'
 import { runtimeJson } from '../lib/runtime/config-json.js'
-import { packageVersion, versionText } from './version.js'
+import { versionText } from './version.js'
 import type { ChildProcess } from 'node:child_process'
 
-const root = import.meta.url.startsWith('file:')
+// the kit's own root: the harness host module ships here, beside Core and the harness
+const kitRoot = import.meta.url.startsWith('file:')
   ? path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
   : path.dirname(fileURLToPath(import.meta.asset('../../package.json')))
-const version = packageVersion(root)
 
-// tree: the product's commands; name: the bin, as usage errors say it;
+// tree: the product's commands; name: the bin, as usage errors say it; root and version: the
+// product's package; dataDir: where its state goes unless a flag or qvac.config says;
 // launcher: how the app calls back; runApp starts it
 export async function launch(
   args: string[],
   {
     tree,
     name,
+    root,
+    version,
+    dataDir: defaultDataDir,
     launcher,
     runApp,
     node = process.execPath
   }: {
     tree: CommandTree
     name: string
+    root: string
+    version: string
+    dataDir: string
     launcher: LaunchOptions['launcher'] | null
     runApp(options: LaunchOptions, env: NodeJS.ProcessEnv): Promise<void> | void
     node?: string
@@ -59,7 +66,7 @@ export async function launch(
   }
 
   const app = async (options: LaunchOptions) => {
-    const env = await prepare(options, name)
+    const env = await prepare(options, { name, version, defaultDataDir })
     options.launcher = launcher ?? undefined
     await runApp(options, env)
   }
@@ -83,7 +90,7 @@ export async function launch(
     app,
     usage,
     loadConfig: (file?: string) => config(file, name),
-    dataDir,
+    dataDir: (options: LaunchOptions, core: CoreConfig) => dataDir(options, core, defaultDataDir),
     supervise,
     fs,
     process,
@@ -108,10 +115,13 @@ async function rewriteRuntimeConfig(file: string, configFile?: string) {
 }
 
 // fills options in place and returns the env the app runs with
-async function prepare(options: LaunchOptions, name: string) {
+async function prepare(
+  options: LaunchOptions,
+  { name, version, defaultDataDir }: { name: string; version: string; defaultDataDir: string }
+) {
   options.version = version
 
-  return applyConfig(options, { loaded: await config(options.configFile, name) })
+  return applyConfig(options, { loaded: await config(options.configFile, name), defaultDataDir })
 }
 
 // a config that is missing or does not load is the user's to fix, so it gets a line, not a stack
@@ -124,17 +134,20 @@ async function config(file: string | undefined, name: string) {
   }
 }
 
-function dataDir(options: LaunchOptions, core: CoreConfig) {
-  return path.resolve(options.dataDir || core.dataDir || path.join(os.homedir(), '.qvac', 'cli'))
+function dataDir(options: LaunchOptions, core: CoreConfig, defaultDataDir: string) {
+  return path.resolve(options.dataDir || core.dataDir || defaultDataDir)
 }
 
-function applyConfig(options: LaunchOptions, { loaded }: { loaded: LoadedConfig }) {
+function applyConfig(
+  options: LaunchOptions,
+  { loaded, defaultDataDir }: { loaded: LoadedConfig; defaultDataDir: string }
+) {
   const { core, tui } = loaded.config
   if (options.temp) {
     options.dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-'))
   }
 
-  options.dataDir = dataDir(options, core)
+  options.dataDir = dataDir(options, core, defaultDataDir)
   options.deviceName = options.deviceName || core.deviceName
   options.accountName = options.accountName || core.accountName
   // a model named by flag or file is the agent's; the auto pick only seeds a new agent
@@ -156,7 +169,7 @@ function applyConfig(options: LaunchOptions, { loaded }: { loaded: LoadedConfig 
     ...process.env,
     QVAC_CLI_CONFIG: options.runtimeConfig,
     QVAC_SDK_OPTIONS: sdkOptions,
-    QVAC_HARNESS_HOST_MODULE: path.join(root, 'dist/lib/runtime/harness-extension.js')
+    QVAC_HARNESS_HOST_MODULE: path.join(kitRoot, 'dist/lib/runtime/harness-extension.js')
   }
   if (core.modelsDir) {
     env['QVAC_MODEL_CACHE_PATH'] = core.modelsDir

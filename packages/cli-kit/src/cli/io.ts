@@ -1,4 +1,4 @@
-import { CommandError } from './core.js'
+import { CommandError } from './errors.js'
 import { Prompter, type PromptInput, type PromptOutput } from './prompt.js'
 
 // Output and questions for one command; `tty` says which streams are terminals.

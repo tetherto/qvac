@@ -2,8 +2,6 @@ import type { PluginState } from '../lib/runtime/plugin-state.js'
 import type { Capabilities } from '@qvac/core/client'
 import type { Agent, CoreHost, LaunchOptions } from '../lib/types.js'
 import type { Screen, ScreenPanel, ScreenPrompt, ScreenRow } from './screen.js'
-import type { LoadedExtensions } from './extensions.js'
-import type { loadTemplates, loadContextFiles } from '../lib/runtime/resources.js'
 import type { canvas } from './theme.js'
 
 export type Frame = ReturnType<typeof canvas>
@@ -87,14 +85,11 @@ export interface ProductOptions extends Omit<LaunchOptions, 'initialPrompt'> {
   cwd?: string | undefined
   home?: string | undefined
   screens?: Record<string, Screen> | undefined
-  extensions?: LoadedExtensions | undefined
   updateBanner?: UpdateBanner | null | undefined
   platform?: string | undefined
   connect?: (() => Promise<Connection>) | undefined
   restartCore?: (() => Promise<Connection | void>) | undefined
   readHostStatus?: (() => HostStatus | null) | undefined
-  loadTemplates?: (() => ReturnType<typeof loadTemplates>) | undefined
-  loadContext?: (() => ReturnType<typeof loadContextFiles>) | undefined
   listFiles?: (() => string[]) | undefined
   post?: ((msg: unknown) => void) | undefined
   readText?: ((path: string) => string | null) | undefined

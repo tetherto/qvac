@@ -1,3 +1,4 @@
+import { plain, palette } from '@qvac/cli-kit/brand'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -5,7 +6,6 @@ import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { loadExtensions } from '../../dist/product/extension-loader.js'
-import { plain, palette } from '../../dist/product/theme.js'
 import { App, fakeEngine, press, screen, settle, type } from './helpers/app.mjs'
 
 test('an extension command is in the palette and /help, and its string reply shows', async () => {

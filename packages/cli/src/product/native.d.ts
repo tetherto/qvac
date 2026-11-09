@@ -7,11 +7,11 @@ declare module 'bare-tui' {
     repaint(): void
     run(): Promise<void>
   }
-  const tui: import('./app-types.js').Tui & {
+  const tui: import('@qvac/cli-kit/tui').Tui & {
     Program: new (
       model: {
         view(): string
-        update(msg: { type: string }): [unknown, import('./app-types.js').Command]
+        update(msg: { type: string }): [unknown, import('@qvac/cli-kit/tui').Command]
       },
       options: { mouse: boolean | 'drag' }
     ) => Program
@@ -24,14 +24,14 @@ declare module 'bare-tui-updater' {
     create(options: {
       onAccept(): unknown
       acceptKey: string
-    }): import('./app-types.js').UpdateBanner
+    }): import('@qvac/cli-kit/tui').UpdateBanner
   }
   export default widget
 }
 declare module 'bare-tui-updater/pear' {
   const pear: {
     wire(
-      widget: import('./app-types.js').UpdateBanner | null,
+      widget: import('@qvac/cli-kit/tui').UpdateBanner | null,
       options: { updater: unknown; send(msg: unknown): void }
     ): () => void
   }
