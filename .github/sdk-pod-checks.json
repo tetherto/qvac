@@ -22,7 +22,8 @@
     "package": "cli",
     "path": "packages/cli",
     "sdk_sources": ["workspace"],
-    "sdk_sources_release": ["workspace", "published"]
+    "sdk_sources_release": ["workspace", "published"],
+    "depends_on": ["packages/sdk", "packages/inference"]
   },
   {
     "package": "rag",
