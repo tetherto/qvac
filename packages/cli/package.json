@@ -175,17 +175,9 @@
     "quickjs-emscripten-core": "0.32.0"
   },
   "imports": {
-    "#abort-controller": {
-      "bare": "bare-abort-controller",
-      "default": "./dist/lib/runtime/abort-controller.js"
-    },
     "#child_process": {
       "bare": "bare-subprocess",
       "default": "child_process"
-    },
-    "#config-import": {
-      "bare": "./dist/lib/runtime/config-import.bare.js",
-      "default": "./dist/lib/runtime/config-import.js"
     },
     "#fs": {
       "bare": "bare-fs",
