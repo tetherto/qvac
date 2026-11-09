@@ -1,11 +1,27 @@
 name: Docs Website PR Checks
 
+# Checks every pull request that changes what the documentation site renders:
+# the site itself, a package's documentation root, the examples pages import,
+# and the contracts the reference renders from.
+#
+# A pull request into main builds main's site with every unreleased line
+# materialized as `preview` (`--include-dev`), so the package documentation it
+# changes renders. A pull request into a release branch corrects a released
+# line: main's site builds with that line overridden by the pull request's
+# checkout (`--override`, scripts/release-preview-flags.ts), so the
+# correction renders where it will be published once its pin moves.
+
 on:
   pull_request:
     paths:
       - 'docs/website/**'
+      - 'packages/*/docs/users/**'
+      - 'packages/*/examples/**'
+      - 'packages/*/contract/**'
+      - '.github/workflows/docs-website-pr-checks.yml'
     branches:
       - main
+      - release-*
   workflow_dispatch:
 
 permissions:
@@ -24,7 +40,34 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve what to preview
+        id: target
+        working-directory: .
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          if [ -z "${BASE_REF:-}" ] || [ "$BASE_REF" = "main" ]; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          elif [[ "$BASE_REF" =~ ^release-train-([a-z0-9][a-z0-9-]*)-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            { echo "release=true"; echo "train=${BASH_REMATCH[1]}"; } >> "$GITHUB_OUTPUT"
+          elif [[ "$BASE_REF" =~ ^release-([a-z0-9][a-z0-9-]*)-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            { echo "release=true"; echo "package=${BASH_REMATCH[1]}"; } >> "$GITHUB_OUTPUT"
+          else
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Into main: the pull request's own tree. Into a release branch: main's
+      # site, with the pull request checked out beside it under `pr/`.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: ${{ steps.target.outputs.release == 'true' && 'main' || '' }}
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        if: steps.target.outputs.release == 'true'
+        with:
+          path: pr
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
         with:
@@ -36,54 +79,81 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      - name: Choose the materializer flags
+        id: flags
+        shell: bash
+        env:
+          RELEASE: ${{ steps.target.outputs.release }}
+          TRAIN: ${{ steps.target.outputs.train }}
+          PACKAGE: ${{ steps.target.outputs.package }}
+        run: |
+          set -euo pipefail
+          if [ "$RELEASE" != "true" ]; then
+            echo "flags=--include-dev" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -n "$TRAIN" ]; then
+            slugs=$(node ../../.github/scripts/release-train.mjs slugs "$TRAIN")
+          else
+            slugs=$(jq -cn --arg p "$PACKAGE" '[$p]')
+          fi
+          mapfile -t args < <(echo "$slugs" | jq -r '.[] | "--package\n" + .')
+          flags=$(bun run scripts/release-preview-flags.ts --checkout pr "${args[@]}")
+          if [ -z "$flags" ]; then
+            echo "::notice::No released line of this branch is pinned on main, so the build renders main's lines only."
+          fi
+          echo "flags=$flags" >> "$GITHUB_OUTPUT"
+
       - name: Build and validate
-        # The API summary lives at `content/docs/sdk/(vX.Y)/reference/api.mdx`,
-        # with one copy per cut line under `content/docs/sdk/vX.Y/reference/`
-        # and one in the development line at
-        # `content/_unpublished/sdk/next/reference/api.mdx`. Each is committed
-        # to the repo and refreshed locally during the release cutoff (see
-        # `docs/ci/RELEASE-TRAIN.md` step 6), so every PR checkout already
-        # has them on disk — no placeholder step is needed here. (The
-        # historical placeholder targeted `content/docs/sdk/api/`, a path
-        # the build never read and that no longer exists.)
-        #
-        # The development line is not built: it sits outside `content/docs/`,
-        # which is what keeps unreleased pages off the site. The checks that do
-        # not need a render read it anyway — `tests/link-integrity.test.ts`
-        # resolves its links and requires a title on every page — so what
-        # surfaces only on the cutoff PR is malformed MDX.
+        env:
+          DOCS_MATERIALIZE_FLAGS: ${{ steps.flags.outputs.flags }}
         run: bun run build
 
       - name: Run docs tests
         run: bun run vitest run
 
-  published-lines:
-    # Two checks on where a PR writes documentation: one warns, one fails.
-    # Neither is required, so a red run asks for a rebase and records why
-    # rather than withholding the merge.
-    #
-    # Feature documentation belongs in the development line, outside the site
-    # at `content/_unpublished/<collection>/next/`. Everything under
-    # `content/docs/<collection>/` has been cut, so editing it is legitimate —
-    # correcting a shipped release is why the folders are kept — and the first
-    # step only warns: only a human can tell a correction from documentation
-    # written into the wrong line.
-    #
-    # The second step fails, and covers the window a cutoff opens for the
-    # published lines. The cut renames the outgoing group — `(vX.Y)` becomes
-    # `vX.Y` — beside a new `(vX.Y+1)` that is byte-identical wherever the
-    # sprint changed nothing, so each page a pre-cutoff PR edits has two exact
-    # rename candidates and git picks one (QVAC-27286, reproduced here with
-    # `git merge-tree`). No conflict, so nothing warns whoever merges.
-    #
-    # The filter reads `content/docs/<collection>/` only, on purpose: the
-    # development line crosses a cutoff intact — `next/` is copied, not
-    # renamed — so reading it too would fail every feature PR carrying docs, at
-    # every cutoff, and the rebase would dismiss their approvals. What that
-    # leaves unread — documentation merging clean into the line after the
-    # release it describes — the open-PR inventory in `qv-docs-cutoff` reads
-    # before the cut.
-    name: Documentation lines
+  bindings:
+    # Reads the pull request's own tree: its pages, its generated data, and its
+    # locks. Generated data is checked fresh against package source by each
+    # package's own checks (the SDK pod's `docs_data`), which have the package's
+    # dependencies installed; the Python surface needs none, so it is checked
+    # here.
+    name: Bindings and generated data
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          bun-version: 1.3.11
+
+      - name: Install dependencies
+        run: bun install
+
+      # A release branch cut before these checks existed has nothing to check.
+      - name: Check bindings
+        if: hashFiles('docs/website/scripts/bindings/check-bindings.ts') != ''
+        # A page whose bound surface changed without a review, a removed
+        # symbol, or a public symbol of a product that no page binds. Fix:
+        # review the named pages, then `npm run docs:lock`.
+        run: bun run docs:bindings
+
+      - name: Check language parity of the SDK
+        if: hashFiles('docs/website/scripts/bindings/check-bindings.ts') != ''
+        run: bun run docs:sdk-parity
+
+      - name: Check the Python surface is fresh
+        if: hashFiles('docs/website/scripts/bindings/check-bindings.ts') != ''
+        run: bun run docs:sdk-api --check --python-only
+
+  in-place-lines:
+    # Lines published before their software moved its documentation into its
+    # package are still held in place under content/docs/<collection>/. Each
+    # is a released version: correcting it is legitimate, documenting a new
+    # feature there is not. Only a human can tell the two apart, so this
+    # warns and never fails. The job goes once no versions file holds a line
+    # in place.
+    name: Lines held in place
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -91,7 +161,7 @@ jobs:
           # The diff needs both ends; the default depth of 1 has neither.
           fetch-depth: 0
 
-      - name: Report edits to lines already cut
+      - name: Report edits to lines held in place
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -104,80 +174,22 @@ jobs:
             exit 0
           fi
 
-          paths=()
-          for collection in sdk cli; do
-            paths+=("docs/website/content/docs/${collection}/")
-          done
+          # The folders of every line still held in place, from the versions files.
+          mapfile -t paths < <(jq -r '
+            . as $file | .lines[] | select(.inPlace == true)
+            | "docs/website/content/docs\($file.path)/"' docs/website/versions/*.json | sort -u)
+          if [ "${#paths[@]}" -eq 0 ]; then
+            echo "No line is held in place."
+            exit 0
+          fi
 
           base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
           changed=$(git diff --name-only "$base" "$HEAD_SHA" -- "${paths[@]}" || true)
 
           if [ -z "$changed" ]; then
-            echo "This PR edits no line that has been cut."
+            echo "This PR edits no line held in place."
             exit 0
           fi
 
-          echo "::warning::This PR edits documentation lines that have already been cut. Correcting a release's pages is legitimate; documenting a new feature is not — that belongs in content/_unpublished/<collection>/next/. If the correction also applies to the line under development, apply it there too, or it will not survive the next cutoff."
+          echo "::warning::This PR edits documentation lines held in place, which are released versions. Correcting a release's pages is legitimate; documenting a new feature is not — that belongs in packages/<package>/docs/users/. If the correction also applies to the coming version, apply it there too."
           printf '%s\n' "$changed"
-
-      - name: Fail documentation written against a line layout a cutoff has changed
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        working-directory: .
-        run: |
-          set -euo pipefail
-
-          if [ -z "${HEAD_SHA:-}" ]; then
-            echo "Not a pull request; nothing to check."
-            exit 0
-          fi
-
-          # The commit this PR's work was written against. Not the merge-base:
-          # the "Update branch" button moves that past the cutoff and takes the
-          # misplacement in with it, so a merge-base check turns green at the
-          # moment the damage is done. The parent of the PR's oldest own commit
-          # moves only under a rebase, which is the fix being asked for.
-          merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA")
-          commits=$(git log --reverse --no-merges --format=%H "$merge_base..$HEAD_SHA")
-          if [ -z "$commits" ]; then
-            echo "This PR carries no commit of its own; nothing to check."
-            exit 0
-          fi
-          origin="${commits%%$'\n'*}^"
-          if ! git rev-parse --verify --quiet "$origin" > /dev/null; then
-            echo "The branch point is not in this checkout; nothing to check."
-            exit 0
-          fi
-
-          # A cut's signature in the tree, read per collection: the
-          # parenthesized folder is the line last cut, and a cutoff is the only
-          # thing that changes its name. No `head`/`-m1` here — closing the
-          # pipe early kills `ls-tree` with SIGPIPE under `pipefail`.
-          group_at() {
-            git ls-tree --full-tree --name-only "$1:docs/website/content/docs/$2" 2> /dev/null \
-              | grep -E '^\(v[0-9]+\.[0-9]+\)$' || true
-          }
-
-          stale=""
-          for collection in sdk cli; do
-            if [ -z "$(git diff --name-only "$origin" "$HEAD_SHA" -- \
-              "docs/website/content/docs/${collection}/")" ]; then
-              continue
-            fi
-            was=$(group_at "$origin" "$collection")
-            now=$(group_at "$BASE_SHA" "$collection")
-            if [ "$was" = "$now" ]; then
-              continue
-            fi
-            stale="${stale}  ${collection}: the line last cut was ${was:-none} when this branch came off, and is ${now:-none} now"$'\n'
-          done
-
-          if [ -z "$stale" ]; then
-            echo "No cutoff has landed since this branch came off; the lines this PR writes to still mean what they meant."
-            exit 0
-          fi
-
-          printf '%s' "$stale"
-          echo "::error::A cutoff landed after this branch came off, so this PR's documentation was written against a line layout that no longer exists. Rebase onto the base branch — rebase, not 'Update branch': a merge commit lets git relocate the edits by similarity, which is the failure this check exists to stop. Then place each change in the line it documents: a correction to a released version in docs/website/content/docs/<collection>/<line>/, and documentation for the version still being written in docs/website/content/_unpublished/<collection>/next/. If the change belongs to the version that was just cut, it goes in that line's folder and reaches production with the next promotion. This check is not required, so it does not hold the merge: merging it red carries whatever it reports into the base branch."
-          exit 1

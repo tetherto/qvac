@@ -13,6 +13,11 @@ name: PR Release Guard (SDK Pod)
 # Uses pull_request (not pull_request_target): the job needs no secrets or write
 # token, only reads PR git content, so it must not run with elevated privilege.
 #
+# A documentation-only PR (every path under packages/*/docs/users/, per
+# .github/scripts/lib/docs-only.mjs) is exempt from every check here: it moves
+# no version and publishes nothing, and its line is published by moving a pin
+# (docs-pin-update.yml).
+#
 # No trigger-level `paths:` filter on purpose: if this check is added to a branch
 # ruleset, a skipped run never reports a status and GitHub blocks the PR on
 # "waiting for status". So it runs on every release-* PR and no-ops internally
@@ -83,23 +88,37 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Classify documentation-only changes
+        if: steps.pkg.outputs.is_sdk_pod_package == 'true' || steps.pkg.outputs.is_train == 'true'
+        id: docs
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          node .github/scripts/docs-only.mjs "$BASE_SHA" "$HEAD_SHA"
+          if grep -q '^docs_only=true$' "$GITHUB_OUTPUT"; then
+            echo "::notice::Documentation-only change: no version bump or changelog section is required."
+          fi
+
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        if: steps.pkg.outputs.is_train == 'true'
+        if: steps.pkg.outputs.is_train == 'true' && steps.docs.outputs.docs_only != 'true'
         with:
           node-version: "24.14.1"
 
       - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # 4.1.0
-        if: steps.pkg.outputs.is_train == 'true'
+        if: steps.pkg.outputs.is_train == 'true' && steps.docs.outputs.docs_only != 'true'
 
       - name: Install workspace dependencies
-        if: steps.pkg.outputs.is_train == 'true'
+        if: steps.pkg.outputs.is_train == 'true' && steps.docs.outputs.docs_only != 'true'
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       # From the merge base, so commits already on the train branch are not read
       # as this PR's. A follow-up PR onto a half-shipped train moves nothing and
       # passes.
       - name: Check the release train
-        if: steps.pkg.outputs.is_train == 'true'
+        if: steps.pkg.outputs.is_train == 'true' && steps.docs.outputs.docs_only != 'true'
         shell: bash
         env:
           BASE_REF: ${{ github.base_ref }}
@@ -111,7 +130,7 @@ jobs:
           node .github/scripts/release-train.mjs resolve "$BASE_REF" "$MERGE_BASE" "$HEAD_SHA" --check-npm
 
       - name: Validate release branch, version bump and changelog
-        if: steps.pkg.outputs.is_sdk_pod_package == 'true'
+        if: steps.pkg.outputs.is_sdk_pod_package == 'true' && steps.docs.outputs.docs_only != 'true'
         uses: ./.github/actions/release-merge-guard
         with:
           base-ref: ${{ github.base_ref }}
@@ -123,7 +142,7 @@ jobs:
 
       # Read the CHANGELOG as it would be after merge (the PR head commit).
       - name: Materialize PR-head CHANGELOG
-        if: steps.pkg.outputs.is_sdk_pod_package == 'true'
+        if: steps.pkg.outputs.is_sdk_pod_package == 'true' && steps.docs.outputs.docs_only != 'true'
         id: head_changelog
         shell: bash
         env:
@@ -142,7 +161,7 @@ jobs:
       # brought forward to the PR so a missing/empty section fails before merge —
       # not after the package is already on npm with no GitHub release.
       - name: Verify CHANGELOG has release notes for this version
-        if: steps.pkg.outputs.is_sdk_pod_package == 'true'
+        if: steps.pkg.outputs.is_sdk_pod_package == 'true' && steps.docs.outputs.docs_only != 'true'
         uses: ./.github/actions/verify-changelog-notes
         with:
           changelog-path: ${{ steps.head_changelog.outputs.path }}

@@ -6,6 +6,7 @@
     "tests_bare": true,
     "sdk_sources": ["workspace"],
     "sdk_sources_release": ["workspace", "published"],
+    "docs_data": ["docs:sdk-api"],
     "depends_on": [
       "packages/inference",
       "packages/registry-server/lib/generated",
@@ -21,6 +22,7 @@
   {
     "package": "cli",
     "path": "packages/cli",
+    "docs_data": ["docs:cli-api"],
     "sdk_sources": ["workspace"],
     "sdk_sources_release": ["workspace", "published"]
   },

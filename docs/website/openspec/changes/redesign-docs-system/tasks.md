@@ -59,11 +59,11 @@ No other package is touched.
 
 ## 5. CI and release automation
 
-- [ ] 5.1 Extend the docs pull-request checks to `packages/*/docs/users/**`, examples, and generated data, building with overrides
-- [ ] 5.2 Add the shared documentation-only classifier with tests for pure and mixed diffs
-- [ ] 5.3 Exempt documentation-only pull requests in the release guards, and exclude `packages/*/docs/users/**` from publish triggers
-- [ ] 5.4 Add the pin-update workflow for releases and for documentation-only merges into release branches
-- [ ] 5.5 Update `docs/gitflow.md`, `docs/ci/RELEASE-TRAIN.md`, and `CONTRIBUTING.md` for documentation in packages and pin-based publication
+- [x] 5.1 Extend the docs pull-request checks to `packages/*/docs/users/**`, examples, and generated data, building with overrides
+- [x] 5.2 Add the shared documentation-only classifier with tests for pure and mixed diffs
+- [x] 5.3 Exempt documentation-only pull requests in the release guards, and exclude `packages/*/docs/users/**` from publish triggers
+- [x] 5.4 Add the pin-update workflow for releases and for documentation-only merges into release branches
+- [x] 5.5 Update `docs/gitflow.md`, `docs/ci/RELEASE-TRAIN.md`, and `CONTRIBUTING.md` for documentation in packages and pin-based publication
 - [ ] 5.6 Sync the `docs-release-workflow` delta into the main specs
 
 ## 6. Ecosystem packages mechanism

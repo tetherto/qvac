@@ -2,26 +2,26 @@
   "//": "Written by `npm run docs:lock` in docs/website. Each entry is the surface hash of a symbol a page binds, at the page's last review.",
   "pages": {
     "ai-capabilities/batch-processing.mdx": {
-      "fn:batchCompletion": "b7d974feb8a23520",
-      "fn:completion": "acb4a71704515694",
+      "fn:batchCompletion": "363c50188b44a928",
+      "fn:completion": "01b3537932aaee4a",
       "fn:loadModel": "5d142740d6c776a6",
       "fn:unloadModel": "cd0edd42e880459d"
     },
     "ai-capabilities/bci.mdx": {
-      "fn:bciTranscribe": "727ccf9625b5a35a",
-      "fn:bciTranscribeStream": "4c3d203d24f00fa1",
+      "fn:bciTranscribe": "3865dc83d69fb003",
+      "fn:bciTranscribeStream": "cd083d7ae3e48f60",
       "fn:loadModel": "5d142740d6c776a6",
       "fn:unloadModel": "cd0edd42e880459d"
     },
     "ai-capabilities/decisions.mdx": {
       "fn:cancel": "f4654f3459c0ccc4",
-      "fn:decide": "58ebd69e0f181446",
+      "fn:decide": "375c1fce1263d69c",
       "fn:loadModel": "5d142740d6c776a6",
       "fn:unloadModel": "cd0edd42e880459d"
     },
     "ai-capabilities/fine-tuning.mdx": {
-      "fn:finetune": "969e63fa25773731",
-      "fn:getModelInfo": "440aecf8f85da8de",
+      "fn:finetune": "9d26063b65c73276",
+      "fn:getModelInfo": "474233bcf44debe7",
       "fn:loadModel": "5d142740d6c776a6",
       "fn:unloadModel": "cd0edd42e880459d"
     },
@@ -38,80 +38,80 @@
     },
     "ai-capabilities/multimodal-embeddings.mdx": {
       "fn:cancel": "f4654f3459c0ccc4",
-      "fn:embed": "be3763464c723b1c",
+      "fn:embed": "85362ce0883ab6a7",
       "fn:loadModel": "5d142740d6c776a6",
       "fn:unloadModel": "cd0edd42e880459d"
     },
     "ai-capabilities/multimodal.mdx": {
-      "fn:completion": "acb4a71704515694",
+      "fn:completion": "01b3537932aaee4a",
       "fn:loadModel": "5d142740d6c776a6",
       "fn:unloadModel": "cd0edd42e880459d"
     },
     "ai-capabilities/music-generation.mdx": {
-      "fn:audioEdit": "3e5966b31b7eb704",
-      "fn:audioGen": "0af57c93a7755b9f",
-      "fn:audioUnderstand": "7e5b5d906f4ef8b2",
+      "fn:audioEdit": "3d961805b196f6cd",
+      "fn:audioGen": "847c9bca7f856b45",
+      "fn:audioUnderstand": "2c8234227c0f7b00",
       "fn:loadModel": "5d142740d6c776a6",
       "fn:unloadModel": "cd0edd42e880459d"
     },
     "ai-capabilities/ocr.mdx": {
       "fn:loadModel": "5d142740d6c776a6",
-      "fn:ocr": "3a0990cd23a67863",
+      "fn:ocr": "37293f4270fba50b",
       "fn:unloadModel": "cd0edd42e880459d"
     },
     "ai-capabilities/rag.mdx": {
-      "fn:completion": "acb4a71704515694",
-      "fn:createVectorIndex": "3bf99537dab8b7ac",
-      "fn:embed": "be3763464c723b1c",
+      "fn:completion": "01b3537932aaee4a",
+      "fn:createVectorIndex": "b6755c02d77129f5",
+      "fn:embed": "85362ce0883ab6a7",
       "fn:loadModel": "5d142740d6c776a6",
-      "fn:loadVectorIndex": "d9e1098e9ae7644a",
+      "fn:loadVectorIndex": "dcee2cfb00bbe3f7",
       "fn:ragChunk": "4442cb517770a61e",
       "fn:ragCloseWorkspace": "5846845923dadddb",
       "fn:ragDeleteEmbeddings": "0c720d497c75a062",
       "fn:ragDeleteWorkspace": "f8a8d1bb0f3a8ac0",
-      "fn:ragIngest": "cb468c7ca688e72a",
+      "fn:ragIngest": "c7020bf858d62b72",
       "fn:ragListWorkspaces": "11db18fd26966636",
-      "fn:ragReindex": "0feb18704ffaab3e",
-      "fn:ragSaveEmbeddings": "3bc914c6defae2d5",
+      "fn:ragReindex": "fcd612f720cb0eb8",
+      "fn:ragSaveEmbeddings": "4f9bbaec1ebcf815",
       "fn:ragSearch": "a91a8f3939cdd0ed",
       "fn:unloadModel": "cd0edd42e880459d"
     },
     "ai-capabilities/reranking.mdx": {
       "fn:cancel": "f4654f3459c0ccc4",
-      "fn:embed": "be3763464c723b1c",
+      "fn:embed": "85362ce0883ab6a7",
       "fn:loadModel": "5d142740d6c776a6",
-      "fn:rerank": "1ee2c58192f781df",
+      "fn:rerank": "f1bc16a1685e5b6b",
       "fn:unloadModel": "cd0edd42e880459d"
     },
     "ai-capabilities/text-embeddings.mdx": {
-      "fn:embed": "be3763464c723b1c",
+      "fn:embed": "85362ce0883ab6a7",
       "fn:loadModel": "5d142740d6c776a6",
       "fn:unloadModel": "cd0edd42e880459d"
     },
     "ai-capabilities/text-generation.mdx": {
-      "fn:batchCompletion": "b7d974feb8a23520",
-      "fn:completion": "acb4a71704515694",
-      "fn:deleteCache": "d44a39b77efa4118",
+      "fn:batchCompletion": "363c50188b44a928",
+      "fn:completion": "01b3537932aaee4a",
+      "fn:deleteCache": "4e603355d93a2fb7",
       "fn:loadModel": "5d142740d6c776a6",
       "fn:unloadModel": "cd0edd42e880459d"
     },
     "ai-capabilities/text-to-speech.mdx": {
-      "fn:assessModelFit": "10eb0f303d64701a",
+      "fn:assessModelFit": "088ab87d2a80844f",
       "fn:cancel": "f4654f3459c0ccc4",
       "fn:loadModel": "5d142740d6c776a6",
-      "fn:textToSpeech": "dab327264245ea13",
-      "fn:textToSpeechStream": "4f2532a955e5a60b",
+      "fn:textToSpeech": "4f2459c4b10783ec",
+      "fn:textToSpeechStream": "46304dedb6937dfd",
       "fn:unloadModel": "cd0edd42e880459d"
     },
     "ai-capabilities/transcription.mdx": {
       "fn:loadModel": "5d142740d6c776a6",
-      "fn:transcribe": "ac2b8b6a3ddffc90",
-      "fn:transcribeStream": "e610fb6f21ab48c4",
+      "fn:transcribe": "b543a6e9ed33c2df",
+      "fn:transcribeStream": "2f9e221dd09bd000",
       "fn:unloadModel": "cd0edd42e880459d"
     },
     "ai-capabilities/translation.mdx": {
       "fn:loadModel": "5d142740d6c776a6",
-      "fn:translate": "843a73ed5eb35419",
+      "fn:translate": "2308b73916bd592b",
       "fn:unloadModel": "cd0edd42e880459d"
     },
     "ai-capabilities/video-generation.mdx": {
@@ -122,72 +122,72 @@
     "ai-capabilities/vla.mdx": {
       "fn:loadModel": "5d142740d6c776a6",
       "fn:unloadModel": "cd0edd42e880459d",
-      "fn:vla": "59a910ffda3c9dfa",
-      "fn:vlaHparams": "4576b0260c5c5d1b",
+      "fn:vla": "2929f37be622d099",
+      "fn:vlaHparams": "d09635677b0bbba5",
       "fn:vlaPadState": "5978a48740c095a6",
       "fn:vlaPreprocessImage": "d9a821801daf5291",
-      "fn:vlaSetEmbodiment": "96ce8cda8f8c125e"
+      "fn:vlaSetEmbodiment": "78968e11217c29d0"
     },
     "ai-capabilities/voice-assistant.mdx": {
-      "fn:completion": "acb4a71704515694",
+      "fn:completion": "01b3537932aaee4a",
       "fn:loadModel": "5d142740d6c776a6",
-      "fn:textToSpeech": "dab327264245ea13",
-      "fn:transcribeStream": "e610fb6f21ab48c4",
+      "fn:textToSpeech": "4f2459c4b10783ec",
+      "fn:transcribeStream": "2f9e221dd09bd000",
       "fn:unloadModel": "cd0edd42e880459d"
     },
     "ai-capabilities/world-simulation.mdx": {
-      "fn:assessModelFit": "10eb0f303d64701a",
+      "fn:assessModelFit": "088ab87d2a80844f",
       "fn:loadModel": "5d142740d6c776a6",
       "fn:unloadModel": "cd0edd42e880459d",
-      "fn:worldCreateScene": "b5d8904973145a70",
-      "fn:worldStep": "81179477240c2a09"
+      "fn:worldCreateScene": "f1869d5a4aeec722",
+      "fn:worldStep": "e3683e2d82c9bf55"
     },
     "configuration/index.mdx": {
       "fn:loadModel": "5d142740d6c776a6"
     },
     "index.mdx": {
       "fn:loadModel": "5d142740d6c776a6",
-      "fn:modelRegistryGetModel": "ebf2723c4314318d",
+      "fn:modelRegistryGetModel": "7ce9bffb89e9294e",
       "fn:modelRegistryList": "2a7503800930d8df",
       "fn:modelRegistrySearch": "32ef9908e7247ad4"
     },
     "kotlin-sdk.mdx": {
-      "fn:heartbeat": "45d98c3c2e829472"
+      "fn:heartbeat": "7d3d6a86adfc1ffc"
     },
     "models/assess-model-fit.mdx": {
-      "fn:assessModelFit": "10eb0f303d64701a",
+      "fn:assessModelFit": "088ab87d2a80844f",
       "fn:downloadAsset": "4910b7a05761c7e3",
-      "fn:getLoadedModelInfo": "b1d3430685729a4f",
+      "fn:getLoadedModelInfo": "28cf803723b2971f",
       "fn:loadModel": "5d142740d6c776a6"
     },
     "models/download-lifecycle.mdx": {
       "fn:cancel": "f4654f3459c0ccc4",
-      "fn:deleteCache": "d44a39b77efa4118",
+      "fn:deleteCache": "4e603355d93a2fb7",
       "fn:downloadAsset": "4910b7a05761c7e3",
       "fn:loadModel": "5d142740d6c776a6"
     },
     "models/sharded-models.mdx": {
-      "fn:completion": "acb4a71704515694",
-      "fn:embed": "be3763464c723b1c",
+      "fn:completion": "01b3537932aaee4a",
+      "fn:embed": "85362ce0883ab6a7",
       "fn:loadModel": "5d142740d6c776a6",
       "fn:unloadModel": "cd0edd42e880459d"
     },
     "p2p-capabilities/rpc-servers.mdx": {
       "fn:cancel": "f4654f3459c0ccc4",
-      "fn:discoverRpcServers": "8e2b8c7ba0f3fb2a",
+      "fn:discoverRpcServers": "4306db4add01ae55",
       "fn:loadModel": "5d142740d6c776a6",
-      "fn:startRpcServer": "fc0bc601cfdb5709",
+      "fn:startRpcServer": "15584833bdd42bf3",
       "fn:stopRpcServer": "2900fcc5e5b6d2e8"
     },
     "runtime/cancellation.mdx": {
       "fn:cancel": "f4654f3459c0ccc4",
-      "fn:completion": "acb4a71704515694",
-      "fn:decide": "58ebd69e0f181446",
+      "fn:completion": "01b3537932aaee4a",
+      "fn:decide": "375c1fce1263d69c",
       "fn:downloadAsset": "4910b7a05761c7e3",
-      "fn:embed": "be3763464c723b1c",
+      "fn:embed": "85362ce0883ab6a7",
       "fn:loadModel": "5d142740d6c776a6",
-      "fn:rerank": "1ee2c58192f781df",
-      "fn:transcribe": "ac2b8b6a3ddffc90"
+      "fn:rerank": "f1bc16a1685e5b6b",
+      "fn:transcribe": "b543a6e9ed33c2df"
     },
     "runtime/lifecycle.mdx": {
       "fn:resume": "db2208be69625f8b",
@@ -200,27 +200,27 @@
       "fn:subscribeServerLogs": "d4fc271002e97d28"
     },
     "runtime/profiler.mdx": {
-      "fn:completion": "acb4a71704515694",
+      "fn:completion": "01b3537932aaee4a",
       "fn:downloadAsset": "4910b7a05761c7e3",
-      "fn:embed": "be3763464c723b1c",
-      "fn:getSystemResources": "3a8a6d73e6f69251",
+      "fn:embed": "85362ce0883ab6a7",
+      "fn:getSystemResources": "a584c4d6c9866f9c",
       "fn:invokePlugin": "306ba4d34c4d9e17",
       "fn:invokePluginStream": "480c7a6cfd3c0687",
       "fn:loadModel": "5d142740d6c776a6",
-      "fn:ocr": "3a0990cd23a67863",
+      "fn:ocr": "37293f4270fba50b",
       "fn:ragChunk": "4442cb517770a61e",
       "fn:ragCloseWorkspace": "5846845923dadddb",
       "fn:ragDeleteEmbeddings": "0c720d497c75a062",
       "fn:ragDeleteWorkspace": "f8a8d1bb0f3a8ac0",
-      "fn:ragIngest": "cb468c7ca688e72a",
+      "fn:ragIngest": "c7020bf858d62b72",
       "fn:ragListWorkspaces": "11db18fd26966636",
-      "fn:ragReindex": "0feb18704ffaab3e",
-      "fn:ragSaveEmbeddings": "3bc914c6defae2d5",
+      "fn:ragReindex": "fcd612f720cb0eb8",
+      "fn:ragSaveEmbeddings": "4f9bbaec1ebcf815",
       "fn:ragSearch": "a91a8f3939cdd0ed",
-      "fn:textToSpeech": "dab327264245ea13",
-      "fn:transcribe": "ac2b8b6a3ddffc90",
-      "fn:transcribeStream": "e610fb6f21ab48c4",
-      "fn:translate": "843a73ed5eb35419"
+      "fn:textToSpeech": "4f2459c4b10783ec",
+      "fn:transcribe": "b543a6e9ed33c2df",
+      "fn:transcribeStream": "2f9e221dd09bd000",
+      "fn:translate": "2308b73916bd592b"
     }
   }
 }

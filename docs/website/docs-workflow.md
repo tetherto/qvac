@@ -23,8 +23,9 @@ For general contribution guidelines (PR labels, changelog format), see the [root
   - [Production (manual promotion)](#production-manual-promotion)
 - [CI Workflows](#ci-workflows)
   - [PR Checks](#1-docs-website-pr-checks)
-  - [Promote docs to production (manual)](#2-promote-docs-to-production-manual)
-  - [Documentation at a release](#3-documentation-at-a-release)
+  - [Docs Pin Update](#2-docs-pin-update)
+  - [The release guard and the publish workflows](#3-the-release-guard-and-the-publish-workflows)
+  - [Promote docs to production (manual)](#4-promote-docs-to-production-manual)
 - [Script Reference](#script-reference)
 - [Release-Notes Overrides (dormant)](#release-notes-overrides-dormant)
 - [Troubleshooting](#troubleshooting)
@@ -255,9 +256,10 @@ The two branches show different versions, and that is the point:
 | `main` (staging) | every line published so far | the tip of `main` |
 | `docs-production` (production) | the same, as of the last promotion | a commit already on `main` |
 
-Between two cutoffs the two branches show the same **set of lines**. The
-sprint's feature documentation goes into the development line, which is not
-built, so merging it changes nothing a reader can see.
+Between two releases the two branches show the same **set of lines**. The
+sprint's feature documentation goes into each package's documentation root,
+the unreleased line, which neither branch builds, so merging it changes
+nothing a reader can see.
 
 That is a statement about which versions are published, and about nothing else.
 **Production is always promoted to one named commit, never to whatever `main`
@@ -290,16 +292,16 @@ Raising `NODE_OPTIONS` does not help and tends to hurt: it is a ceiling, not a r
 ### Staging (automatic)
 
 ```
-During the sprint: feature PRs document the development line on main
-    │                 (not built — read it with the preview link, locally)
+During the sprint: feature PRs document packages/<pkg>/docs/users/ on main
+    │                 (not built — preview it locally with `npm run dev`)
     ▼
-At the cutoff: one PR publishes that line and preserves the previous one
+At the release: the pin PR declares the line, pinned to the release branch
     │
     ▼
 Hosting provider detects each new commit on main and rebuilds staging
 ```
 
-Staging shows every line published so far, which between cutoffs is the same
+Staging shows every line published so far, which between releases is the same
 set production shows. The version under development is deliberately not among
 them: its prose is reviewed in the PR that writes it, and previewed locally
 with the link described under [Previewing the development
@@ -336,14 +338,14 @@ semantics: if the branches have diverged it fails instead of creating a
 merge commit, so `docs-production` stays a pure pointer into `main`'s history.
 
 **Which commit:** one you verified on staging, named explicitly. At a release
-that is the merge commit of the cutoff PR, promoted once the version it
-publishes is on npm. For a correction between cutoffs it is that correction's
-own merge commit. Never `main`'s tip as a shorthand for either: the input
+that is the merge commit of the pin PR, promoted once the version it
+publishes is on npm. For a correction it is the merge commit of the PR that
+moves its pin. Never `main`'s tip as a shorthand for either: the input
 exists so the promoted tree is the one inspected, not the one that happens to
 be on `main` when the environment approval lands, which may be several merges
 later.
 
-The commit also must not be at or after the next cutoff while that version has
+The commit also must not be at or after the next release's pin PR while that version has
 not shipped — that would publish a line for packages nobody can install. The
 workflow rejects a commit that is not contained in `main`, so only reviewed,
 merged work can be promoted, and its preflight prints the content diff this
@@ -367,107 +369,88 @@ publish to go out) is a human decision.
 
 ## CI Workflows
 
-Two GitHub Actions workflows touch the docs: one validates docs PRs, one manually promotes a reviewed `main` commit to `docs-production`. There is no documentation release workflow — the API summary is generated locally at the cutoff. Neither workflow builds or deploys the site; the hosting provider does that on branch pushes.
+Four GitHub Actions workflows touch the docs. None of them builds or deploys
+the site for hosting; the hosting provider does that on branch pushes.
 
 ### 1. Docs Website PR Checks
 
 **File:** `.github/workflows/docs-website-pr-checks.yml`
 
-**Triggers:** Pull requests to `main` that change `docs/website/**`, or manual dispatch.
+**Triggers:** pull requests into `main` or a `release-*` branch that change
+`docs/website/**`, a package's `docs/users/**`, a package's `examples/**` or
+`contract/**`; or manual dispatch.
 
-**What it does:**
-- Installs dependencies with Bun
-- Runs `bun run build` to validate the site compiles
-- Runs Vitest tests (sidebar consistency, link integrity, materialization, API reference)
-- Runs `Documentation lines` in a second job, described below
+**Build.** A pull request into `main` builds its own tree with
+`DOCS_MATERIALIZE_FLAGS=--include-dev`, so every product's unreleased line
+renders as `preview` and the package documentation the pull request changes
+is built, not only read. A pull request into a release branch corrects a
+released line: the job checks out `main`'s site, puts the pull request beside
+it under `pr/`, and builds with `--override <software>@<line>=pr` for each
+line the branch releases that `main` pins (`scripts/release-preview-flags.ts`).
+A line `main` does not pin yet, or still holds in place, is reported and not
+previewed. The Vitest suite runs after the build.
 
-**Purpose:** Catches build errors and broken links in docs PRs before merge.
+**Bindings and generated data.** Reads the pull request's tree:
+`docs:bindings` (drift, removed symbols, product coverage), `docs:sdk-parity`,
+and the freshness of the SDK's Python surface, which needs no installed
+package. The JavaScript and CLI data need their packages' dependencies, so
+they are checked fresh by the SDK pod's checks (`docs_data` in
+`.github/sdk-pod-checks.json`), which run `docs:sdk-api --check` and
+`docs:cli-api --check` with those dependencies installed.
 
-The SDK's generated API data and reference stubs are committed in its package, so PR checkouts always have them on disk.
+**Lines held in place.** Warns, never fails, on edits to a line still held in
+place under `content/docs/<collection>/`: each is a released version, and a
+feature's documentation belongs in its package. The job goes once no versions
+file holds a line in place.
 
-**The tests cover the development line; the production build does not.** `tests/link-integrity.test.ts` resolves the links of each product's `packages/<pkg>/docs/users/`, and `npm run dev` renders it as `preview`. Building it in a PR check, with `--include-dev`, is part of the CI changes still to come.
+None of these jobs is a required check.
 
-**`Documentation lines`** is the second job, and it runs two checks on where a
-PR writes.
+### 2. Docs Pin Update
 
-The first only warns. It names every file the PR changes under
-`content/docs/<collection>/` — every folder there is a release that already
-shipped — and points at `content/_unpublished/<collection>/next/` as where a
-feature's documentation belongs. It cannot be a failure, because a factual
-correction to a shipped release's documentation is legitimate and only a human
-can tell it apart from a misplaced edit.
+**File:** `.github/workflows/docs-pin-update.yml`
 
-The second fails the run, and covers the window a cutoff opens for the
-published lines. A feature PR crosses a cutoff safely: it writes to the
-development line, which the cut copies and leaves in place, so its path means
-the same thing before and after. **A correction to the published line does
-not.** The cut renames the outgoing group — `(vX.Y)` becomes `vX.Y` — beside a
-new `(vX.Y+1)` whose pages are byte-identical wherever the sprint changed
-nothing, so every page the PR edits has two exact rename candidates and git
-replays the edit into one of them: no conflict, green merge, and a shipped
-release documenting a feature it never had. That is QVAC-27286, reachable at
-every cut and invisible to whoever merges.
+**Triggers:** a `release-*` branch is created; a push to a `release-*` branch
+changes `packages/*/docs/users/**`; or manual dispatch with the branch name.
 
-The check reads the parenthesized folder — the line last cut, whose name only a
-cutoff changes — at the parent of the PR's oldest commit and at the base
-branch's head, and fails when they differ while the PR edits a line under
-`content/docs/`. It anchors on the branch point rather than the merge-base
-because *Update branch* moves the merge-base past the cutoff and carries the
-misplacement in with it, turning a merge-base check green at the moment the
-damage is done. A rebase is what clears it.
+**What it does:** runs `scripts/update-pins.ts` from `main` against the
+branch head, for the packages the branch releases — its name's package, or
+every package of a release train. A new minor's line is declared, pinned to
+the branch head; an existing line's pin moves to a later patch branch, or to
+a documentation change on the same branch; a line still held in place is
+reported and left alone. When anything moved, it opens or updates one pull
+request on `main`, from `docs/pin-<branch>`, whose body lists every move.
 
-**It deliberately leaves the development line alone.** Reading
-`_unpublished/<collection>/next/` too would catch the other shape a cutoff
-strands — documentation meant to ship with the release, merging after the cut
-into the line after it — but would fail every open feature PR carrying docs at
-every cutoff and dismiss their approvals. The open-PR inventory in
-`qv-docs-cutoff` reads that shape before the cut instead.
+The pull request is opened with `GITHUB_TOKEN`, which starts no pull-request
+workflow: dispatch "Docs Website PR Checks" on its branch before merging. The
+documentation engineer reviews and merges it. Production waits for the
+promotion.
 
-**The job is not a required check**, so neither step withholds the merge. What
-the second one buys is that the window stops being silent: the run goes red and
-names the folder group as it stood at the branch point and as it stands now, so
-merging anyway is a decision someone takes rather than a step nobody saw. Making
-it required would hold the merge, at the cost of the job running only on docs
-paths — every PR that touches none would need the check reported some other way.
+### 3. The release guard and the publish workflows
 
-The structural fix is to stop renaming: a fixed group folder name would make a
-cut a copy plus an overwrite, leaving git no deletion to pair an edit against.
-That moves the manifest, the redirects, the breadcrumbs and their tests, so for
-now the check is what makes the window visible.
+A documentation-only change — every path under `packages/*/docs/users/`, as
+`.github/scripts/lib/docs-only.mjs` classifies it — moves no version.
+`pr-release-guard.yml` exempts such a pull request from the version-bump and
+changelog checks, and the publish workflows ignore `packages/*/docs/users/**`
+in their push triggers, so merging one publishes no package. It reaches the
+site through the pin update.
 
-### 2. Promote docs to production (manual)
+### 4. Promote docs to production (manual)
 
 **File:** `.github/workflows/promote-docs-production.yml`
 
 **Triggers:** Manual `workflow_dispatch` only. It never runs automatically on a merge to `main`.
 
-**Input:** the commit to promote, named explicitly and required — the cutoff PR's merge commit once the version is on npm, or a correction's own merge commit between cutoffs. It is the tree you verified on staging, which is the whole reason the input exists.
+**Input:** the commit to promote, named explicitly and required — the pin pull request's merge commit once the version is on npm, or a correction's own merge commit. It is the tree you verified on staging, which is the whole reason the input exists.
 
 **What it does:**
 - Validates the requested commit in an ungated job that cannot push: it must exist, be contained in `main`, and be strictly ahead of `docs-production`
 - Prints a step summary with the commits being promoted and **the documentation content diff this promotion publishes**, so the prose going public is read before the approval
 - Waits for the `docs-production` environment approval
-- Fast-forwards and pushes `docs-production` using `PAT_TOKEN` (the default `GITHUB_TOKEN` cannot push to the protected branch), which the hosting provider picks up to deploy production
+- Fast-forwards and pushes `docs-production` as the promotion GitHub App, the only identity the branch's ruleset lets push, which the hosting provider picks up to deploy production
 
 **Fails when:** the commit is unknown, is not on `main`, is behind `docs-production` (a silent rollback), or the branches have diverged. Each is intentional — divergence must be repaired deliberately, not resolved by an automatic merge commit. The workflow never opens a PR and never creates a new commit on `docs-production`.
 
 **Purpose:** Give the docs owner a single, deliberate button to publish the version that shipped, reviewed content and all, without ever letting `docs-production` drift from `main`'s history.
-
-> `docs-production` should stay branch-protected (no direct pushes, no PR merges); the promotion workflow's `PAT_TOKEN` account is the only identity allowed to push to it.
-
-### 3. Documentation at a release
-
-A release publishes its documentation by pinning it, in one pull request on
-`main`: the product's versions file gains the line (a minor) or moves its pin
-(a patch), with the release branch as `ref` and the release commit as `sha`.
-The documentation itself, and the SDK's generated API data, were already
-committed with the code that the release carries.
-
-Review it by building it: `npm run build` materializes the line from its
-commit, and the checks reject a pin without documentation or a malformed
-versions file. While earlier lines are still in place, the pull request that
-makes the first pinned line current also renames the in-place current folder
-from `(vX.Y)` to `vX.Y`.
 
 ---
 
@@ -480,7 +463,7 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 | `release-version.ts` | -- | **Retired**, kept for reference. Was the release dispatcher forwarding to the minor or patch orchestrator. |
 | `release-version-minor.ts` | -- | **Retired**, kept for reference. Was the minor (X.Y.0) orchestrator: freeze outgoing series → generate new latest → refresh `versions.ts`. |
 | `release-version-patch.ts` | -- | **Retired**, kept for reference. Was the patch (X.Y.Z, Z>=1) orchestrator, inserting `## v<X.Y.Z>` after the existing minor block. |
-| `api-reference/generate-sdk-data.ts` | `docs:sdk-api` | Writes the SDK's generated surface data (`js-api.json`, `python-api.json`) and its reference stubs. `--check` fails when they are stale. |
+| `api-reference/generate-sdk-data.ts` | `docs:sdk-api` | Writes the SDK's generated surface data (`js-api.json`, `python-api.json`) and its reference stubs. Needs the SDK's dependencies installed. `--check` fails when they are stale; `--python-only` handles `python-api.json` alone, with no installed package. |
 | `api-reference/python-surface.py` | -- | Reads the Python client's public functions from source, standard library only |
 | `api-reference/check-sdk-parity.ts` | `docs:sdk-parity` | Fails naming each contract method a published language does not reach |
 | `api-reference/report-sdk-descriptions.ts` | `docs:sdk-descriptions` | Lists public request fields without a description; never fails |
@@ -489,7 +472,10 @@ All scripts live in `docs/website/scripts/` and are designed to run with Bun.
 | `api-reference/commander-walker.ts` | -- | Replays a Commander entry's `register*` calls without running it, run from the CLI package |
 | `write-schema-slices.ts` | -- | After `next build`: publishes each function's `<fn>.schema.json` beside its reference page |
 | `write-line-redirects.ts` | -- | After `next build`: expands the documentation-line markers of `out/_redirects` |
-| `materialize-lines.ts` | `docs:materialize` | Materializes every pinned line from its commit; `--override`, `--include-dev` |
+| `materialize-lines.ts` | `docs:materialize` | Materializes every pinned line from its commit; `--override`, `--include-dev`, and the same flags from `DOCS_MATERIALIZE_FLAGS` |
+| `bindings/check-bindings.ts` | `docs:bindings`, `docs:lock` | Checks each package's page bindings against its projected surface and `api-bindings.lock.json`; `--write` (`docs:lock`) records the review |
+| `update-pins.ts` | -- | Pins the lines a release branch publishes in their versions files; run by `docs-pin-update.yml` |
+| `release-preview-flags.ts` | -- | The `--override` flags that preview a pull request into a release branch; run by the PR checks |
 | `generate-release-notes.ts` | `docs:generate-release-notes` | **Dormant**, kept on disk. Rendered a release-notes page of the SDK's newest line; the site publishes no such page any more. Do not call it. |
 | `update-versions-list.ts` | -- | **Retired**, kept for reference. Rebuilt `src/lib/versions.ts` from the series siblings on disk; that file is now hand-edited. |
 | `create-version-bundle.ts` | -- | **Retired**, kept for reference. Copied the current `index.mdx` of each versioned section to `v<X.Y>.x.mdx`. |
@@ -602,9 +588,10 @@ npm run docs:sdk-api
 
 ### Correct a published page without waiting for the next release
 
-For a pinned line, merge the correction into the line's release branch as a
-documentation-only pull request, then move the line's `sha` in its versions
-file to the merged commit. For an in-place line, correct its folder under
+For a pinned line, merge the correction into the release branch of the
+highest patch in its minor as a documentation-only pull request. The pin
+update opens the pull request on `main` that moves the line to the merged
+commit. For an in-place line, correct its folder under
 `content/docs/<collection>/` on `main`. Either way, the change reaches
 production with the next promotion of `docs-production`.
 

@@ -24,6 +24,7 @@ This repository uses a **main-first GitFlow** for **public SDK/model packages**.
 - [Branch retention & deletion](#branch-retention--deletion)
 - [Release flow](#release-flow-new-version-xyz)
 - [Patch flow](#patch-flow-xyz--xyzz1)
+- [Documentation of a released version](#documentation-of-a-released-version)
 - [Feature & temp flows](#feature--temp-branches-non-release-publishing)
 - [Release PR enforcement](#release-pr-enforcement-ci-policy)
 - [CI/CD routing requirements](#cicd-routing-requirements-high-level)
@@ -238,7 +239,7 @@ git push -u upstream release-<package>-<x.y.z>
 
 > Maintainers create release targets. Contributors open PRs from separate working branches in the org repo or a personal fork.
 
-**Pin the documentation line at the same time**, for a package the documentation site versions — one with a versions file under [`docs/website/versions/`](website/versions/), `@qvac/sdk` and `@qvac/cli` today. Open one PR into `main` that edits that file. A minor release declares its line first in `lines`, pinned to the release branch's head: `{ "version": "v<x.y>", "ref": "release-<package>-<x.y.z>", "sha": "<head sha>" }`. A patch release moves its minor's existing line to the new branch and its head, and declares no line. No documentation folder is copied, moved, or renamed: the site reads the line's pages from the pinned commit at build. The documentation engineer reviews and merges the PR. Do not approve or merge it yourself, and do not promote it to production yet — that waits for step 3. The release train runs this same step for every package it moves ([`docs/ci/RELEASE-TRAIN.md`](ci/RELEASE-TRAIN.md) step 6).
+**The documentation line is pinned when the branch is cut**, for a package the documentation site versions — one with a versions file under [`docs/website/versions/`](website/versions/), `@qvac/sdk` and `@qvac/cli` today. Pushing the new branch starts `docs-pin-update.yml`, which opens one PR into `main` that edits that file. A minor release declares its line first in `lines`, pinned to the release branch's head: `{ "version": "v<x.y>", "ref": "release-<package>-<x.y.z>", "sha": "<head sha>" }`. A patch release moves its minor's existing line to the new branch, and declares no line. No documentation folder is copied, moved, or renamed: the site reads the line's pages from the pinned commit at build. If the workflow did not run, dispatch it with the branch name. The PR is opened with `GITHUB_TOKEN`, which starts no pull-request checks: run "Docs Website PR Checks" on its branch by dispatch before merging. The documentation engineer reviews and merges the PR. Do not approve or merge it yourself, and do not promote it to production yet — that waits for step 3. The release train runs this same step for every package it moves ([`docs/ci/RELEASE-TRAIN.md`](ci/RELEASE-TRAIN.md) step 6).
 
 ### 2) Contributor opens a release PR into the upstream release branch
 
@@ -264,7 +265,7 @@ On merge to the upstream `release-*` branch, CI should:
 - `<package>-v<x.y.z>`  
   Example: `sdk-v1.0.0`
 
-Once NPM serves the version, promote the documentation: verify that tree on staging, then run `promote-docs-production.yml` on the merge commit of step 1's documentation PR. Name that commit, never `main`'s tip — earlier would publish documentation for a version nobody can install, and later would publish whatever else merged meanwhile. The procedure is in [`docs/website/docs-workflow.md`](website/docs-workflow.md), "Production (manual promotion)".
+Once NPM serves the version, promote the documentation: verify that tree on staging, then run `promote-docs-production.yml` on the merge commit of step 1's pin PR. Name that commit, never `main`'s tip — earlier would publish documentation for a version nobody can install, and later would publish whatever else merged meanwhile. The procedure is in [`docs/website/docs-workflow.md`](website/docs-workflow.md), "Production (manual promotion)".
 
 ### 4) Keep `main` aligned with what shipped (separate backmerge PR)
 
@@ -376,6 +377,19 @@ Only the release-line version/changelog metadata may require a follow-up PR back
 
 ---
 
+## Documentation of a released version
+
+A released minor's documentation is corrected on the release branch of the highest patch in that minor, in the package's documentation root, `packages/<package>/docs/users/`. It needs no patch release.
+
+1. Open a PR from a working branch into `release-<package>-<x.y.z>`, the highest patch of the minor, touching only `packages/<package>/docs/users/`.
+2. Such a PR is **documentation-only** (`.github/scripts/lib/docs-only.mjs`): the release guard requires no version bump and no changelog section. A PR that also touches any other path is not, and follows the patch flow.
+3. Merging it publishes no package: the publish workflows ignore `packages/*/docs/users/**`. It starts `docs-pin-update.yml`, which opens a PR on `main` moving the line's pin to the merged commit.
+4. The documentation engineer reviews and merges that PR, and promotes it to production.
+
+If the correction also applies to the coming version, make it on `main` too.
+
+---
+
 ## Feature & temp branches (non-release publishing)
 
 ![Feature/temp flow](../.github/docs/gitflow/images/feature-temp-flow.png)
@@ -425,6 +439,8 @@ For **all** `release-*` branches:
 - Version is unchanged / not incremented
 - Changelog is missing or unchanged
 
+A documentation-only PR — every path under `packages/*/docs/users/` — is exempt: it moves no version ([Documentation of a released version](#documentation-of-a-released-version)).
+
 ---
 
 ## CI/CD routing requirements (high level)
@@ -455,6 +471,7 @@ To reflect branch intent correctly and keep fork PRs safe:
 
 - All package workflows trigger on:
   - `paths: packages/<package>/**`
+- Publish workflows exclude `!packages/*/docs/users/**`: a documentation-only change publishes no package, and reaches the site by moving a pin.
 - Reusable workflows accept a `workdir` input pointing at the package directory.
 
 ---

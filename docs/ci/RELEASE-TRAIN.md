@@ -97,16 +97,19 @@ native addon's copy has no prebuilds, so the train never links one (see
    backmerge keeps `main`'s `pnpm-workspace.yaml` and regenerates
    `pnpm-lock.yaml` from it.
 
-   The documentation site has one step here. **Pin the documentation line
-   right after cutting the train branch**, for each package the train moves
-   that has a versions file under
+   The documentation site has one step here, and it starts on its own. Pushing
+   the train branch starts `docs-pin-update.yml`, which pins the line of each
+   package the train moves that has a versions file under
    [`docs/website/versions/`](../website/versions/) — `@qvac/sdk` and
-   `@qvac/cli` today. A train that moves neither pins nothing. Open one PR into
-   `main` that edits each of those files:
+   `@qvac/cli` today — and opens one PR into `main` with the edits:
    - a minor release declares its line, `v<x.y>`, first in `lines`, with `ref`
      the train branch and `sha` its head;
-   - a patch release moves its minor's existing line to the train branch and
-     its head, and declares no line.
+   - a patch release moves its minor's existing line to the train branch, and
+     declares no line.
+
+   If the workflow did not run, dispatch it with the train branch. Report the
+   PR's URL. It is opened with `GITHUB_TOKEN`, which starts no pull-request
+   checks, so run "Docs Website PR Checks" on its branch by dispatch.
 
    No documentation folder is copied, moved, or renamed: the site reads each
    line's pages from its pinned commit at build, and the package's
@@ -115,7 +118,8 @@ native addon's copy has no prebuilds, so the train never links one (see
    the PR; that review is how the documentation side of the release is
    verified, so do not approve or merge it yourself. It lands on `main`; the
    train branch is the release's target, never documentation's. Nothing in
-   steps 1 to 8 waits on it, and it touches no package.
+   steps 1 to 8 waits on it, and it touches no package. A documentation fix
+   merged into the train branch later moves the pin the same way.
 
    Skipping this step is the one option that is not available: the version
    would ship with the previous version's documentation. If the documentation

@@ -28,6 +28,8 @@
  * pull-request previews. `--include-dev` adds every versioned collection's
  * unreleased line, read from the monorepo's working tree, as `preview` — for
  * local and staging previews only; production builds never pass it.
+ * `DOCS_MATERIALIZE_FLAGS` appends flags from the environment, so a build run
+ * through `npm run build` can carry them.
  */
 import { execFileSync, spawnSync } from 'node:child_process'
 import * as fs from 'node:fs/promises'
@@ -356,7 +358,9 @@ async function readText(file: string): Promise<string | null> {
 }
 
 if (import.meta.main) {
-  const args = process.argv.slice(2)
+  // `DOCS_MATERIALIZE_FLAGS` carries the same flags through `npm run build`,
+  // which materializes before building: pull-request checks set it.
+  const args = [...process.argv.slice(2), ...(process.env.DOCS_MATERIALIZE_FLAGS ?? '').split(/\s+/).filter(Boolean)]
   const overrides: Record<string, string> = {}
   let includeDev = false
   for (let index = 0; index < args.length; index++) {

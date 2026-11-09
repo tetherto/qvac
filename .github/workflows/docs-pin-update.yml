@@ -1,0 +1,157 @@
+name: Docs Pin Update
+
+run-name: Pin documentation lines from ${{ inputs.branch || github.ref_name }}
+
+# Publishes documentation lines from a release branch, by opening (or
+# updating) one pull request on main that edits docs/website/versions/*.json:
+#
+#   - a release branch cut for a new minor declares that line, pinned to the
+#     branch head;
+#   - a later patch branch, or a documentation change merged into a release
+#     branch, moves the line's pin to the branch head.
+#
+# The edit itself is docs/website/scripts/update-pins.ts. Which packages a
+# branch releases comes from its name: release-<package>-x.y.z releases that
+# package, and release-train-<train>-x.y.z every package of the train
+# (.github/release-trains.json). No documentation folder is copied or renamed.
+#
+# The pull request is reviewed and merged by the documentation owner like any
+# other. It reaches production only through promote-docs-production.yml.
+#
+# A pull request opened with GITHUB_TOKEN starts no pull_request workflow: run
+# "Docs Website PR Checks" on its branch by workflow_dispatch, or close and
+# reopen it, before merging.
+
+on:
+  # A release branch is cut.
+  create:
+  # A change reaches a documentation root on a release branch: a documentation
+  # fix, or the release PR's own documentation.
+  push:
+    branches:
+      - release-*
+    paths:
+      - "packages/*/docs/users/**"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Release branch to pin (release-<package>-x.y.z or release-train-<train>-x.y.z)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-pin-update-${{ inputs.branch || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  pin:
+    name: Pin documentation lines
+    # `create` fires for tags and every branch; only release branches pin.
+    if: github.event_name != 'create' || (github.ref_type == 'branch' && startsWith(github.ref_name, 'release-'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Resolve the release branch
+        id: branch
+        shell: bash
+        env:
+          BRANCH: ${{ inputs.branch || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [[ "$BRANCH" =~ ^release-train-([a-z0-9][a-z0-9-]*)-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "train=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          elif [[ "$BRANCH" =~ ^release-([a-z0-9][a-z0-9-]*)-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "package=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::'$BRANCH' is not release-<package>-x.y.z or release-train-<train>-x.y.z"
+            exit 1
+          fi
+          echo "name=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      # The scripts and the versions files are main's: the pin is an edit to
+      # main, and nothing from the release branch runs.
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Fetch the release branch
+        id: head
+        shell: bash
+        env:
+          BRANCH: ${{ steps.branch.outputs.name }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}"
+          echo "sha=$(git rev-parse "refs/remotes/origin/${BRANCH}")" >> "$GITHUB_OUTPUT"
+
+      - name: List the packages the branch releases
+        id: packages
+        shell: bash
+        env:
+          TRAIN: ${{ steps.branch.outputs.train }}
+          PACKAGE: ${{ steps.branch.outputs.package }}
+        run: |
+          set -euo pipefail
+          if [ -n "$TRAIN" ]; then
+            slugs=$(node .github/scripts/release-train.mjs slugs "$TRAIN")
+          else
+            slugs=$(jq -cn --arg p "$PACKAGE" '[$p]')
+          fi
+          echo "args=$(echo "$slugs" | jq -r 'map("--package " + .) | join(" ")')" >> "$GITHUB_OUTPUT"
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # 2.2.0
+        with:
+          # Keep in sync with the `bun` devDep in docs/website/package.json.
+          bun-version: 1.3.11
+
+      - name: Install the website's dependencies
+        working-directory: docs/website
+        run: bun install
+
+      - name: Update the pins
+        id: pins
+        working-directory: docs/website
+        shell: bash
+        env:
+          BRANCH: ${{ steps.branch.outputs.name }}
+          SHA: ${{ steps.head.outputs.sha }}
+          PACKAGE_ARGS: ${{ steps.packages.outputs.args }}
+        run: |
+          set -euo pipefail
+          # PACKAGE_ARGS is built from validated slugs; word splitting is intended.
+          # shellcheck disable=SC2086
+          bun run scripts/update-pins.ts --ref "$BRANCH" --sha "$SHA" $PACKAGE_ARGS --summary "$RUNNER_TEMP/pins.md"
+          cat "$RUNNER_TEMP/pins.md" >> "$GITHUB_STEP_SUMMARY"
+
+      # Re-running on the same branch head rewrites the same commit onto the
+      # same pull-request branch, so a re-run after success changes nothing.
+      - name: Open or update the pull request
+        if: steps.pins.outputs.moved != '0'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ steps.branch.outputs.name }}
+        run: |
+          set -euo pipefail
+          head="docs/pin-${BRANCH}"
+          title="docs: pin the documentation lines of ${BRANCH}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$head"
+          git add docs/website/versions
+          { echo "$title"; echo; cat "$RUNNER_TEMP/pins.md"; } > "$RUNNER_TEMP/message.txt"
+          git commit --quiet -F "$RUNNER_TEMP/message.txt"
+          git push --force origin "$head"
+          if [ -n "$(gh pr list --head "$head" --base main --state open --json number --jq '.[0].number')" ]; then
+            gh pr edit "$head" --title "$title" --body-file "$RUNNER_TEMP/pins.md"
+          else
+            gh pr create --base main --head "$head" --title "$title" --body-file "$RUNNER_TEMP/pins.md"
+          fi

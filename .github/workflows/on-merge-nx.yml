@@ -28,6 +28,9 @@ on:
       - "packages/tts-ggml/**"
       - "packages/turbovec-ggml/**"
       - "packages/vla-ggml/**"
+      # A documentation-only change publishes no package: its line is
+      # published by moving a pin (docs-pin-update.yml). Must stay last.
+      - "!packages/*/docs/users/**"
   workflow_dispatch:
     inputs:
       package:

@@ -5,6 +5,11 @@
  * Usage:
  *   bun run scripts/api-reference/generate-sdk-data.ts           # write
  *   bun run scripts/api-reference/generate-sdk-data.ts --check   # fail when stale
+ *   bun run scripts/api-reference/generate-sdk-data.ts --check --python-only
+ *
+ * `--python-only` handles `python-api.json` alone. It needs no installed
+ * package, so the documentation checks can run it on every pull request; the
+ * whole set needs the SDK's dependencies, and runs with the SDK's checks.
  *
  * Writes into `packages/sdk/docs/users/_generated/`:
  *
@@ -116,18 +121,22 @@ function pythonSurface(): string {
 
 async function main(): Promise<void> {
   const check = process.argv.includes('--check')
-  const js = await javascriptSurface()
+  const pythonOnly = process.argv.includes('--python-only')
   const outputs: Record<string, string> = {
-    [path.join(GENERATED_DIR, 'js-api.json')]: js,
     [path.join(GENERATED_DIR, 'python-api.json')]: pythonSurface(),
   }
-  const pages = referencePages((JSON.parse(js) as { functions: JsSummary[] }).functions)
-  for (const [file, content] of Object.entries(pages)) outputs[path.join(REFERENCE_DIR, file)] = content
+  let leftovers: string[] = []
+  if (!pythonOnly) {
+    const js = await javascriptSurface()
+    outputs[path.join(GENERATED_DIR, 'js-api.json')] = js
+    const pages = referencePages((JSON.parse(js) as { functions: JsSummary[] }).functions)
+    for (const [file, content] of Object.entries(pages)) outputs[path.join(REFERENCE_DIR, file)] = content
 
-  const expected = new Set(Object.keys(outputs))
-  const leftovers = (await fs.readdir(REFERENCE_DIR).catch(() => [] as string[]))
-    .map((file) => path.join(REFERENCE_DIR, file))
-    .filter((file) => !expected.has(file))
+    const expected = new Set(Object.keys(outputs))
+    leftovers = (await fs.readdir(REFERENCE_DIR).catch(() => [] as string[]))
+      .map((file) => path.join(REFERENCE_DIR, file))
+      .filter((file) => !expected.has(file))
+  }
 
   const stale: string[] = []
   for (const [target, content] of Object.entries(outputs)) {

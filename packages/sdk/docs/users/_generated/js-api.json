@@ -5,7 +5,23 @@
       "signature": "function assessModelFit(input: AssessModelFitInput): Promise<AssessModelFitResult>;",
       "description": "Whether a set of models fits in this device's memory when loaded together,\nwithout downloading them.",
       "returns": "Promise<AssessModelFitResult>",
-      "returnFields": [],
+      "returnFields": [
+        {
+          "name": "models",
+          "type": "{ devices: { freeBytes?: number; id: string; name: string; totalBytes?: number; unified: boolean; usedBytes: number }[]; stats: Record<string, never> | { ctxSize: number; gpuLayers: number }; status: \"unknown\" | \"fits\" | \"does-not-fit\" }[]",
+          "required": true
+        },
+        {
+          "name": "pools",
+          "type": "{ freeBytes?: number; id: string; totalBytes?: number; unified: boolean; usedBytes: number }[]",
+          "required": true
+        },
+        {
+          "name": "verdict",
+          "type": "\"unknown\" | \"fits\" | \"does-not-fit\"",
+          "required": true
+        }
+      ],
       "throws": [
         {
           "error": "",
@@ -19,7 +35,33 @@
       "signature": "function audioEdit(params: AudioEditClientParams): AudioGenResult;",
       "description": "Edits a source recording with a loaded ACE-Step AudioGen model: an ordered\npipeline of `flow-edit` and `repaint` operations, executed in array order.",
       "returns": "AudioGenResult",
-      "returnFields": [],
+      "returnFields": [
+        {
+          "name": "audio",
+          "type": "Promise<AudioGenAudio>",
+          "required": true
+        },
+        {
+          "name": "diagnostics",
+          "type": "Promise<{ driver?: { name: string; version?: string }; fallback?: { reason: string; requestedBackend?: string; requestedDevice?: \"cpu\" | \"gpu\" }; gpuId?: string; graphicsApi?: \"vulkan\" | \"opencl\" | \"metal\" | \"cuda\" | \"rocm\" | \"opengl\" | \"webgpu\" | \"direct3d11\" | \"direct3d12\" | \"levelZero\"; probe?: { backend: string; reason?: string; status: \"unknown\" | \"compatible\" | \"incompatible\" }; selectedBackend: string; selectedDevice: \"cpu\" | \"gpu\" } | undefined>",
+          "required": true
+        },
+        {
+          "name": "progressStream",
+          "type": "AsyncGenerator<AudioGenProgress>",
+          "required": true
+        },
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "stats",
+          "type": "Promise<{ arMs?: number; audioDurationMs?: number; backendDevice?: number; backendId?: number; conditionMs?: number; emittedFrames?: number; flowMs?: number; gpuFallbackReason?: number; lrc?: string; lyricsScore?: number; metadata?: { beatsPerBar: number; bpm: number; caption: string; codeFrames: number; keyscale: string; lyrics: string; qualityReport?: string; seed: number; vocalLanguage: string }; qualityScore?: number; realTimeFactor?: number; totalTimeMs?: number; understand?: { audioCodes: number[]; bpm: number; caption: string; duration: number; keyscale: string; seed: number; timesignature: string; vocalLanguage: string }; vocoderMs?: number } | undefined>",
+          "required": true
+        }
+      ],
       "throws": [],
       "deprecated": null
     },
@@ -28,7 +70,33 @@
       "signature": "function audioGen(params: AudioGenClientParams): AudioGenResult;",
       "description": "Generates PCM audio using a loaded AudioGen model.",
       "returns": "AudioGenResult",
-      "returnFields": [],
+      "returnFields": [
+        {
+          "name": "audio",
+          "type": "Promise<AudioGenAudio>",
+          "required": true
+        },
+        {
+          "name": "diagnostics",
+          "type": "Promise<{ driver?: { name: string; version?: string }; fallback?: { reason: string; requestedBackend?: string; requestedDevice?: \"cpu\" | \"gpu\" }; gpuId?: string; graphicsApi?: \"vulkan\" | \"opencl\" | \"metal\" | \"cuda\" | \"rocm\" | \"opengl\" | \"webgpu\" | \"direct3d11\" | \"direct3d12\" | \"levelZero\"; probe?: { backend: string; reason?: string; status: \"unknown\" | \"compatible\" | \"incompatible\" }; selectedBackend: string; selectedDevice: \"cpu\" | \"gpu\" } | undefined>",
+          "required": true
+        },
+        {
+          "name": "progressStream",
+          "type": "AsyncGenerator<AudioGenProgress>",
+          "required": true
+        },
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "stats",
+          "type": "Promise<{ arMs?: number; audioDurationMs?: number; backendDevice?: number; backendId?: number; conditionMs?: number; emittedFrames?: number; flowMs?: number; gpuFallbackReason?: number; lrc?: string; lyricsScore?: number; metadata?: { beatsPerBar: number; bpm: number; caption: string; codeFrames: number; keyscale: string; lyrics: string; qualityReport?: string; seed: number; vocalLanguage: string }; qualityScore?: number; realTimeFactor?: number; totalTimeMs?: number; understand?: { audioCodes: number[]; bpm: number; caption: string; duration: number; keyscale: string; seed: number; timesignature: string; vocalLanguage: string }; vocoderMs?: number } | undefined>",
+          "required": true
+        }
+      ],
       "throws": [],
       "deprecated": null
     },
@@ -37,7 +105,33 @@
       "signature": "function audioUnderstand(params: AudioUnderstandClientParams): AudioUnderstandResult;",
       "description": "Describes a recording with a loaded ACE-Step AudioGen model, running the\nengine's reverse pipeline: the PCM is encoded, its FSQ semantic codes are\nrecovered, and the LM reports a caption and the clip's metadata.",
       "returns": "AudioUnderstandResult",
-      "returnFields": [],
+      "returnFields": [
+        {
+          "name": "description",
+          "type": "Promise<{ audioCodes: number[]; bpm: number; caption: string; duration: number; keyscale: string; seed: number; timesignature: string; vocalLanguage: string }>",
+          "required": true
+        },
+        {
+          "name": "diagnostics",
+          "type": "Promise<{ driver?: { name: string; version?: string }; fallback?: { reason: string; requestedBackend?: string; requestedDevice?: \"cpu\" | \"gpu\" }; gpuId?: string; graphicsApi?: \"vulkan\" | \"opencl\" | \"metal\" | \"cuda\" | \"rocm\" | \"opengl\" | \"webgpu\" | \"direct3d11\" | \"direct3d12\" | \"levelZero\"; probe?: { backend: string; reason?: string; status: \"unknown\" | \"compatible\" | \"incompatible\" }; selectedBackend: string; selectedDevice: \"cpu\" | \"gpu\" } | undefined>",
+          "required": true
+        },
+        {
+          "name": "progressStream",
+          "type": "AsyncGenerator<AudioGenProgress>",
+          "required": true
+        },
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "stats",
+          "type": "Promise<{ arMs?: number; audioDurationMs?: number; backendDevice?: number; backendId?: number; conditionMs?: number; emittedFrames?: number; flowMs?: number; gpuFallbackReason?: number; lrc?: string; lyricsScore?: number; metadata?: { beatsPerBar: number; bpm: number; caption: string; codeFrames: number; keyscale: string; lyrics: string; qualityReport?: string; seed: number; vocalLanguage: string }; qualityScore?: number; realTimeFactor?: number; totalTimeMs?: number; understand?: { audioCodes: number[]; bpm: number; caption: string; duration: number; keyscale: string; seed: number; timesignature: string; vocalLanguage: string }; vocoderMs?: number } | undefined>",
+          "required": true
+        }
+      ],
       "throws": [],
       "deprecated": null
     },
@@ -46,15 +140,46 @@
       "signature": "function batchCompletion(params: BatchCompletionParams): BatchCompletionRun;",
       "description": "Runs multiple prompts concurrently through one loaded model.",
       "returns": "BatchCompletionRun",
-      "returnFields": [],
+      "returnFields": [
+        {
+          "name": "events",
+          "type": "AsyncIterable<BatchCompletionEvent>",
+          "required": true
+        },
+        {
+          "name": "ids",
+          "type": "Promise<string[]>",
+          "required": true
+        },
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "results",
+          "type": "Promise<BatchCompletionResult[]>",
+          "required": true
+        },
+        {
+          "name": "stats",
+          "type": "Promise<CompletionStats | undefined>",
+          "required": true
+        },
+        {
+          "name": "byId",
+          "type": "unknown",
+          "required": true
+        }
+      ],
       "throws": [],
       "deprecated": null
     },
     {
       "name": "bciTranscribe",
-      "signature": "function bciTranscribe(params: any, options?: RPCOptions): Promise<TranscribeSegment[]> & { requestId: string };\nfunction bciTranscribe(params: BciTranscribeClientParams, options?: RPCOptions): Promise<string> & { requestId: string };",
+      "signature": "function bciTranscribe(params: BciTranscribeClientParams & { metadata: true }, options?: RPCOptions): Promise<{ append: boolean; endMs: number; id: number; isEndOfTurn?: boolean; language?: string; noSpeechProb?: number; speaker?: string; speakerId?: number; speakerSegments?: { endMs: number; speakerId: number; startMs: number }[]; speakerTurnNext?: boolean; startMs: number; startsWord?: boolean; text: string; tokens?: { endMs: number; probability: number; startMs: number; text: string }[] }[]> & { requestId: string };\nfunction bciTranscribe(params: BciTranscribeClientParams, options?: RPCOptions): Promise<string> & { requestId: string };",
       "description": "Transcribe a neural-signal buffer with a loaded BCI model and return the\ncomplete text. Accepts either a `.bin` file path or a raw neural buffer.",
-      "returns": "Promise<TranscribeSegment[]> & { requestId: string }",
+      "returns": "Promise<{ append: boolean; endMs: number; id: number; isEndOfTurn?: boolean; language?: string; noSpeechProb?: number; speaker?: string; speakerId?: number; speakerSegments?: { endMs: number; speakerId: number; startMs: number }[]; speakerTurnNext?: boolean; startMs: number; startsWord?: boolean; text: string; tokens?: { endMs: number; probability: number; startMs: number; text: string }[] }[]> & { requestId: string }",
       "returnFields": [
         {
           "name": "requestId",
@@ -67,10 +192,36 @@
     },
     {
       "name": "bciTranscribeStream",
-      "signature": "function bciTranscribeStream(params: any, options?: RPCOptions): Promise<BciTranscribeStreamMetadataSession>;\nfunction bciTranscribeStream(params: BciTranscribeStreamClientParams, options?: RPCOptions): Promise<BciTranscribeStreamSession>;",
+      "signature": "function bciTranscribeStream(params: BciTranscribeStreamClientParams & { metadata: true }, options?: RPCOptions): Promise<BciTranscribeStreamMetadataSession>;\nfunction bciTranscribeStream(params: BciTranscribeStreamClientParams, options?: RPCOptions): Promise<BciTranscribeStreamSession>;",
       "description": "Opens a bidirectional streaming BCI transcription session. Neural-signal\nchunks are streamed in via `write()`, and transcription is yielded as the\naddon's sliding window decodes successive windows.",
       "returns": "Promise<BciTranscribeStreamMetadataSession>",
-      "returnFields": [],
+      "returnFields": [
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "[asyncIterator]",
+          "type": "unknown",
+          "required": true
+        },
+        {
+          "name": "destroy",
+          "type": "unknown",
+          "required": true
+        },
+        {
+          "name": "end",
+          "type": "unknown",
+          "required": true
+        },
+        {
+          "name": "write",
+          "type": "unknown",
+          "required": true
+        }
+      ],
       "throws": [],
       "deprecated": null
     },
@@ -102,7 +253,48 @@
       "signature": "function completion(params: CompletionParams): CompletionRun;",
       "description": "Generates completion from a language model based on conversation history.",
       "returns": "CompletionRun",
-      "returnFields": [],
+      "returnFields": [
+        {
+          "name": "events",
+          "type": "AsyncIterable<CompletionEvent>",
+          "required": true
+        },
+        {
+          "name": "final",
+          "type": "Promise<CompletionFinal>",
+          "required": true
+        },
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "stats",
+          "type": "Promise<CompletionStats | undefined>",
+          "required": true
+        },
+        {
+          "name": "text",
+          "type": "Promise<string>",
+          "required": true
+        },
+        {
+          "name": "tokenStream",
+          "type": "AsyncGenerator<string>",
+          "required": true
+        },
+        {
+          "name": "toolCalls",
+          "type": "Promise<ToolCallWithCall[]>",
+          "required": true
+        },
+        {
+          "name": "toolCallStream",
+          "type": "AsyncGenerator<ToolCallEvent>",
+          "required": true
+        }
+      ],
       "throws": [],
       "deprecated": null
     },
@@ -129,7 +321,7 @@
         },
         {
           "name": "storage",
-          "type": "any",
+          "type": "VectorIndexStorage | undefined",
           "required": true
         },
         {
@@ -182,10 +374,25 @@
     },
     {
       "name": "decide",
-      "signature": "function decide(params: Extract<DecideParams, { state: unknown }>, options?: RPCOptions): Promise<DecisionResult> & { requestId: string };\nfunction decide(params: Extract<DecideParams, { states: unknown }>, options?: RPCOptions): Promise<DecisionResult[]> & { requestId: string };\nfunction decide(params: DecideParams, options?: RPCOptions): Promise<DecisionResponse> & { requestId: string };",
+      "signature": "function decide(params: Extract<DecideParams, { state: unknown }>, options?: RPCOptions): Promise<{ answers: z.ZodRecord<z.ZodString, z.ZodDiscriminatedUnion<[z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; choice: z.ZodUnion<readonly [(...), (...), (...)]>; confidence: z.ZodNumber; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; type: z.ZodLiteral<\"choice\"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; legend: z.ZodRecord<z.ZodString, z.ZodString>; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; score: z.ZodNumber; type: z.ZodLiteral<\"score\"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; noul: z.ZodNumber; type: z.ZodLiteral<\"noul\"> }, z.core.$strip>], \"type\">>; model: string; usage: { inputTokens: number; options?: Record<string, { distinct: number; tokensPerOption: number | null; total: number }>; outputTokens: number; stateTokens: number; stateTokensDropped: number; truncated: boolean; truncatedQuestions: string[] } }> & { requestId: string };\nfunction decide(params: Extract<DecideParams, { states: unknown }>, options?: RPCOptions): Promise<{ answers: z.ZodRecord<z.ZodString, z.ZodDiscriminatedUnion<[z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; choice: z.ZodUnion<readonly (...)>; confidence: z.ZodNumber; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; type: z.ZodLiteral<\"choice\"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; legend: z.ZodRecord<z.ZodString, z.ZodString>; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; score: z.ZodNumber; type: z.ZodLiteral<\"score\"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; noul: z.ZodNumber; type: z.ZodLiteral<\"noul\"> }, z.core.$strip>], \"type\">>; model: string; usage: { inputTokens: number; options?: Record<string, { distinct: number; tokensPerOption: number | null; total: number }>; outputTokens: number; stateTokens: number; stateTokensDropped: number; truncated: boolean; truncatedQuestions: string[] } }[]> & { requestId: string };\nfunction decide(params: DecideParams, options?: RPCOptions): Promise<{ answers: z.ZodRecord<z.ZodString, z.ZodDiscriminatedUnion<[z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; choice: z.ZodUnion<readonly (...)>; confidence: z.ZodNumber; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; type: z.ZodLiteral<\"choice\"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; legend: z.ZodRecord<z.ZodString, z.ZodString>; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; score: z.ZodNumber; type: z.ZodLiteral<\"score\"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: ... }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; noul: z.ZodNumber; type: z.ZodLiteral<\"noul\"> }, z.core.$strip>], \"type\">>; model: string; usage: { inputTokens: number; options?: Record<string, { distinct: number; tokensPerOption: number | null; total: number }>; outputTokens: number; stateTokens: number; stateTokensDropped: number; truncated: boolean; truncatedQuestions: string[] } } | { answers: z.ZodRecord<z.ZodString, z.ZodDiscriminatedUnion<[z.ZodObject<{ action: z.ZodObject<(...), (...)>; answerConfidence: z.ZodNumber; choice: z.ZodUnion<(...)>; confidence: z.ZodNumber; probabilities: z.ZodRecord<(...), (...)>; type: z.ZodLiteral<(...)> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<(...), (...)>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; legend: z.ZodRecord<(...), (...)>; probabilities: z.ZodRecord<(...), (...)>; score: z.ZodNumber; type: z.ZodLiteral<(...)> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<(...), (...)>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; noul: z.ZodNumber; type: z.ZodLiteral<(...)> }, z.core.$strip>], \"type\">>; model: string; usage: { inputTokens: number; options?: Record<string, { distinct: number; tokensPerOption: number | null; total: number }>; outputTokens: number; stateTokens: number; stateTokensDropped: number; truncated: boolean; truncatedQuestions: string[] } }[]> & { requestId: string };",
       "description": "Answers typed decision questions about one state or a batch of states.",
-      "returns": "Promise<DecisionResult> & { requestId: string }",
+      "returns": "Promise<{ answers: z.ZodRecord<z.ZodString, z.ZodDiscriminatedUnion<[z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; choice: z.ZodUnion<readonly [(...), (...), (...)]>; confidence: z.ZodNumber; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; type: z.ZodLiteral<\"choice\"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; legend: z.ZodRecord<z.ZodString, z.ZodString>; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; score: z.ZodNumber; type: z.ZodLiteral<\"score\"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; noul: z.ZodNumber; type: z.ZodLiteral<\"noul\"> }, z.core.$strip>], \"type\">>; model: string; usage: { inputTokens: number; options?: Record<string, { distinct: number; tokensPerOption: number | null; total: number }>; outputTokens: number; stateTokens: number; stateTokensDropped: number; truncated: boolean; truncatedQuestions: string[] } }> & { requestId: string }",
       "returnFields": [
+        {
+          "name": "answers",
+          "type": "z.ZodRecord<z.ZodString, z.ZodDiscriminatedUnion<[z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; choice: z.ZodUnion<readonly [(...), (...), (...)]>; confidence: z.ZodNumber; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; type: z.ZodLiteral<\"choice\"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; legend: z.ZodRecord<z.ZodString, z.ZodString>; probabilities: z.ZodRecord<z.ZodString, z.ZodNumber>; score: z.ZodNumber; type: z.ZodLiteral<\"score\"> }, z.core.$strip>, z.ZodObject<{ action: z.ZodObject<{ actProbability: z.ZodNumber }, z.core.$strip>; answerConfidence: z.ZodNumber; confidence: z.ZodNumber; noul: z.ZodNumber; type: z.ZodLiteral<\"noul\"> }, z.core.$strip>], \"type\">>",
+          "required": true
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "usage",
+          "type": "{ inputTokens: number; options?: Record<string, { distinct: number; tokensPerOption: number | null; total: number }>; outputTokens: number; stateTokens: number; stateTokensDropped: number; truncated: boolean; truncatedQuestions: string[] }",
+          "required": true
+        },
         {
           "name": "requestId",
           "type": "string",
@@ -214,13 +421,13 @@
     },
     {
       "name": "deleteCache",
-      "signature": "function deleteCache(params: { all: true } | { auto: true } | { kvCacheKey: string; modelId?: string } | { modelSrc: string }): Promise<{ success: any }>;",
+      "signature": "function deleteCache(params: { all: true } | { auto: true } | { kvCacheKey: string; modelId?: string } | { modelSrc: string }): Promise<{ success: boolean }>;",
       "description": "Deletes KV cache files, or a registry model's cached download.",
-      "returns": "Promise<{ success: any }>",
+      "returns": "Promise<{ success: boolean }>",
       "returnFields": [
         {
           "name": "success",
-          "type": "any",
+          "type": "boolean",
           "required": true
         }
       ],
@@ -252,9 +459,9 @@
     },
     {
       "name": "discoverRpcServers",
-      "signature": "function discoverRpcServers(options: DiscoverRpcServersOptions): Promise<RpcServerCandidate[]> & { requestId: string };",
+      "signature": "function discoverRpcServers(options: DiscoverRpcServersOptions): Promise<{ devices: { freeMemory: number; index: number; totalMemory: number }[]; rdmaAvailable: boolean; url: string }[]> & { requestId: string };",
       "description": "Find private-network candidates with device inventories and server RDMA availability.\nRDMA availability is a server-side offer, not a guarantee of the negotiated transport.\nUse getRpcDeviceMap with the chosen endpoint registration order before loadModel.\nCancel a pending search with its promise.requestId.",
-      "returns": "Promise<RpcServerCandidate[]> & { requestId: string }",
+      "returns": "Promise<{ devices: { freeMemory: number; index: number; totalMemory: number }[]; rdmaAvailable: boolean; url: string }[]> & { requestId: string }",
       "returnFields": [
         {
           "name": "requestId",
@@ -295,9 +502,9 @@
     },
     {
       "name": "embed",
-      "signature": "function embed(params: { inputs?: undefined; modelId: string; text: string }, options?: RPCOptions): Promise<{ embedding: number[]; stats?: any }> & { requestId: string };\nfunction embed(params: { inputs?: undefined; modelId: string; text: string[] }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: any }> & { requestId: string };\nfunction embed(params: { inputs: EmbedInput[]; modelId: string; text?: undefined }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: any }> & { requestId: string };\nfunction embed(params: EmbedParams, options?: RPCOptions): Promise<{ embedding: number[] | number[][]; stats?: any }> & { requestId: string };",
+      "signature": "function embed(params: { inputs?: undefined; modelId: string; text: string }, options?: RPCOptions): Promise<{ embedding: number[]; stats?: { backendDevice?: \"cpu\" | \"gpu\"; contextSize?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string };\nfunction embed(params: { inputs?: undefined; modelId: string; text: string[] }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: { backendDevice?: \"cpu\" | \"gpu\"; contextSize?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string };\nfunction embed(params: { inputs: (string | (string | { media: { type: \"base64\"; value: string } | { type: \"filePath\"; value: string } })[])[]; modelId: string; text?: undefined }, options?: RPCOptions): Promise<{ embedding: number[][]; stats?: { backendDevice?: \"cpu\" | \"gpu\"; contextSize?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string };\nfunction embed(params: EmbedParams, options?: RPCOptions): Promise<{ embedding: number[] | number[][]; stats?: { backendDevice?: \"cpu\" | \"gpu\"; contextSize?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string };",
       "description": "Generates embeddings for a single text using a specified model.",
-      "returns": "Promise<{ embedding: number[]; stats?: any }> & { requestId: string }",
+      "returns": "Promise<{ embedding: number[]; stats?: { backendDevice?: \"cpu\" | \"gpu\"; contextSize?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } }> & { requestId: string }",
       "returnFields": [
         {
           "name": "embedding",
@@ -306,7 +513,7 @@
         },
         {
           "name": "stats",
-          "type": "any",
+          "type": "{ backendDevice?: \"cpu\" | \"gpu\"; contextSize?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number }",
           "required": false
         },
         {
@@ -335,7 +542,7 @@
       "returnFields": [
         {
           "name": "progressStream",
-          "type": "AsyncGenerator<FinetuneProgress>",
+          "type": "AsyncGenerator<{ accuracy: number | null; accuracy_uncertainty: number | null; current_batch: number; current_epoch: number; elapsed_ms: number; eta_ms: number; global_steps: number; is_train: boolean; loss: number | null; loss_uncertainty: number | null; total_batches: number }>",
           "required": true
         },
         {
@@ -345,7 +552,7 @@
         },
         {
           "name": "result",
-          "type": "Promise<FinetuneResult>",
+          "type": "Promise<{ stats?: { epochs_completed: number; global_steps: number; learning_rate?: number; train_accuracy?: number; train_accuracy_uncertainty?: number | null; train_loss?: number; train_loss_uncertainty?: number | null; val_accuracy?: number; val_accuracy_uncertainty?: number | null; val_loss?: number; val_loss_uncertainty?: number | null }; status: \"IDLE\" | \"RUNNING\" | \"PAUSED\" | \"CANCELLED\" | \"COMPLETED\"; type: \"finetune\" }>",
           "required": true
         }
       ],
@@ -357,7 +564,58 @@
       "signature": "function getLoadedModelInfo(params: GetLoadedModelInfoParams, rpcOptions?: RPCOptions): Promise<LoadedModelInfo>;",
       "description": "Returns introspection info for a loaded `modelId`.",
       "returns": "Promise<LoadedModelInfo>",
-      "returnFields": [],
+      "returnFields": [
+        {
+          "name": "addonPackage",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "displayName",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "fitProbe",
+          "type": "{ models: { devices: { freeBytes?: number; id: string; name: string; totalBytes?: number; unified: boolean; usedBytes: number }[]; stats: { ctxSize: number; gpuLayers: number } | Record<string, never>; status: \"unknown\" | \"fits\" | \"does-not-fit\" }[]; pools: { freeBytes?: number; id: string; totalBytes?: number; unified: boolean; usedBytes: number }[]; verdict: \"unknown\" | \"fits\" | \"does-not-fit\" }",
+          "required": false
+        },
+        {
+          "name": "handlers",
+          "type": "string[]",
+          "required": true
+        },
+        {
+          "name": "loadedAt",
+          "type": "Date",
+          "required": true
+        },
+        {
+          "name": "modelId",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "modelType",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "path",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "toolDialect",
+          "type": "\"json\" | \"hermes\" | \"pythonic\" | \"harmony\" | \"qwen35\" | \"gemma4\" | \"dsml\"",
+          "required": false
+        }
+      ],
       "throws": [
         {
           "error": "InvalidResponseError",
@@ -375,7 +633,108 @@
       "signature": "function getModelInfo(params: GetModelInfoParams): Promise<ModelInfo>;",
       "description": "Returns status information for a catalog model, including cache state and loaded instances.",
       "returns": "Promise<ModelInfo>",
-      "returnFields": [],
+      "returnFields": [
+        {
+          "name": "actualSize",
+          "type": "number",
+          "required": false
+        },
+        {
+          "name": "addon",
+          "type": "\"bci\" | \"embeddings\" | \"diffusion\" | \"audiogen\" | \"tts\" | \"ocr\" | \"vla\" | \"moss-transcribe\" | \"llm\" | \"whisper\" | \"nmt\" | \"parakeet\" | \"classification\" | \"vad\" | \"other\"",
+          "required": true
+        },
+        {
+          "name": "blobBlockLength",
+          "type": "number",
+          "required": false
+        },
+        {
+          "name": "blobBlockOffset",
+          "type": "number",
+          "required": false
+        },
+        {
+          "name": "blobByteOffset",
+          "type": "number",
+          "required": false
+        },
+        {
+          "name": "blobCoreKey",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "cachedAt",
+          "type": "Date",
+          "required": false
+        },
+        {
+          "name": "cacheFiles",
+          "type": "{ actualSize?: number; cachedAt?: Date; expectedSize: number; filename: string; isCached: boolean; path: string; sha256Checksum: string }[]",
+          "required": true
+        },
+        {
+          "name": "engine",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "expectedSize",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "isCached",
+          "type": "boolean",
+          "required": true
+        },
+        {
+          "name": "isLoaded",
+          "type": "boolean",
+          "required": true
+        },
+        {
+          "name": "loadedInstances",
+          "type": "{ config?: unknown; loadedAt: Date; registryId: string }[]",
+          "required": false
+        },
+        {
+          "name": "modelId",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "params",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "quantization",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "registryPath",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "registrySource",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "sha256Checksum",
+          "type": "string",
+          "required": true
+        }
+      ],
       "throws": [
         {
           "error": "QvacErrorBase",
@@ -389,7 +748,18 @@
       "signature": "function getSystemResources(input?: GetSystemResourcesInput): Promise<SystemResources>;",
       "description": "Read the worker's system capabilities and optional resource sample.",
       "returns": "Promise<SystemResources>",
-      "returnFields": [],
+      "returnFields": [
+        {
+          "name": "capabilities",
+          "type": "{ cpu: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: { architecture: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; cacheLineBytes: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; efficiencyCores: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; frequencyHz: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; logicalCores: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; name: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: string } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; performanceCores: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; physicalCores: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; vendor: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: string } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" } } } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; gpus: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: { driverName: { provenance: { scope?: (...) | (...) | (...) | (...) | (...) | (...); source: string }; status: \"supported\"; value: string } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; drivers: { cuda: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: boolean } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; direct3d11: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: boolean } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; direct3d12: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: boolean } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; levelZero: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: boolean } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; metal: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: boolean } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; opencl: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: boolean } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; opengl: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: boolean } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; rocm: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: boolean } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; vulkan: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: boolean } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; webgpu: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: boolean } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" } }; driverVersion: { provenance: { scope?: (...) | (...) | (...) | (...) | (...) | (...); source: string }; status: \"supported\"; value: string } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; id: string; memoryTotalBytes: { provenance: { scope?: (...) | (...) | (...) | (...) | (...) | (...); source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; name: { provenance: { scope?: (...) | (...) | (...) | (...) | (...) | (...); source: string }; status: \"supported\"; value: string } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; type: { provenance: { scope?: (...) | (...) | (...) | (...) | (...) | (...); source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; unifiedMemory: { provenance: { scope?: (...) | (...) | (...) | (...) | (...) | (...); source: string }; status: \"supported\"; value: boolean } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; vendor: { provenance: { scope?: (...) | (...) | (...) | (...) | (...) | (...); source: string }; status: \"supported\"; value: string } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" } }[] } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; memory: { totalBytes: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" } } }",
+          "required": true
+        },
+        {
+          "name": "sample",
+          "type": "{ cpu: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; gpus: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: { compute: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: number } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; decode: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: number } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; encode: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: number } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; id: string; memoryTotalBytes: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: number } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; memoryUsedBytes: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: number } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; powerWatts: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: number } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" }; temperatureCelsius: { provenance: { scope?: ...; source: ... }; status: \"supported\"; value: number } | { reason?: (...) | (...); status: \"unavailable\" } | { reason?: (...) | (...); status: \"unverified\" } | { reason?: (...) | (...); status: \"failed\" } }[] } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; memory: { processAvailableBytes: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; processUsedBytes: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; totalBytes: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" }; usedBytes: { provenance: { scope?: \"device\" | \"system\" | \"process\" | \"budget\" | \"shared-system\"; source: string }; status: \"supported\"; value: number } | { reason?: string; status: \"unavailable\" } | { reason?: string; status: \"unverified\" } | { reason?: string; status: \"failed\" } }; sampledAt: number }",
+          "required": false
+        }
+      ],
       "throws": [
         {
           "error": "InvalidResponseError",
@@ -407,7 +777,18 @@
       "signature": "function heartbeat(): Promise<HeartbeatResponse>;",
       "description": "Checks whether the local SDK worker is responsive by sending a heartbeat\nround-trip.",
       "returns": "Promise<HeartbeatResponse>",
-      "returnFields": [],
+      "returnFields": [
+        {
+          "name": "number",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "type",
+          "type": "\"heartbeat\"",
+          "required": true
+        }
+      ],
       "throws": [
         {
           "error": "QvacErrorBase",
@@ -503,7 +884,7 @@
         },
         {
           "name": "storage",
-          "type": "any",
+          "type": "VectorIndexStorage | undefined",
           "required": true
         },
         {
@@ -573,7 +954,78 @@
       "signature": "function modelRegistryGetModel(registryPath: string, registrySource: string): Promise<ModelRegistryEntry>;",
       "description": "Fetches a single model entry from the registry by its path and source.",
       "returns": "Promise<ModelRegistryEntry>",
-      "returnFields": [],
+      "returnFields": [
+        {
+          "name": "addon",
+          "type": "\"bci\" | \"embeddings\" | \"diffusion\" | \"audiogen\" | \"tts\" | \"ocr\" | \"vla\" | \"moss-transcribe\" | \"llm\" | \"whisper\" | \"nmt\" | \"parakeet\" | \"classification\" | \"vad\" | \"other\"",
+          "required": true
+        },
+        {
+          "name": "blobBlockLength",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "blobBlockOffset",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "blobByteOffset",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "blobCoreKey",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "engine",
+          "type": "\"bci-whispercpp-transcription\" | \"moss-transcribe\" | \"llamacpp-completion\" | \"whispercpp-transcription\" | \"llamacpp-embedding\" | \"llamacpp-decision\" | \"llamacpp-rerank\" | \"nmtcpp-translation\" | \"onnx-tts\" | \"tts-ggml\" | \"parakeet-transcription\" | \"ggml-ocr\" | \"sdcpp-generation\" | \"audiogen-ggml\" | \"ggml-vla\" | \"ggml-classification\" | \"ggml-image-embedding\" | \"onnx-vad\"",
+          "required": true
+        },
+        {
+          "name": "expectedSize",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "modelId",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "params",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "quantization",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "registryPath",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "registrySource",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "sha256Checksum",
+          "type": "string",
+          "required": true
+        }
+      ],
       "throws": [
         {
           "error": "ModelRegistryModelNotFoundError",
@@ -616,23 +1068,23 @@
     },
     {
       "name": "ocr",
-      "signature": "function ocr(params: OCRClientParams): { blocks: Promise<OCRTextBlock[]>; blockStream: AsyncGenerator<OCRTextBlock[]>; stats: Promise<any> };",
+      "signature": "function ocr(params: OCRClientParams): { blocks: Promise<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; blockStream: AsyncGenerator<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; stats: Promise<{ detectionTime?: number; recognitionTime?: number; totalTime?: number } | undefined> };",
       "description": "Performs Optical Character Recognition (OCR) on an image to extract text.",
-      "returns": "{ blocks: Promise<OCRTextBlock[]>; blockStream: AsyncGenerator<OCRTextBlock[]>; stats: Promise<any> }",
+      "returns": "{ blocks: Promise<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; blockStream: AsyncGenerator<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>; stats: Promise<{ detectionTime?: number; recognitionTime?: number; totalTime?: number } | undefined> }",
       "returnFields": [
         {
           "name": "blocks",
-          "type": "Promise<OCRTextBlock[]>",
+          "type": "Promise<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>",
           "required": true
         },
         {
           "name": "blockStream",
-          "type": "AsyncGenerator<OCRTextBlock[]>",
+          "type": "AsyncGenerator<{ bbox?: [number, number, number, number]; confidence?: number; text: string }[]>",
           "required": true
         },
         {
           "name": "stats",
-          "type": "Promise<any>",
+          "type": "Promise<{ detectionTime?: number; recognitionTime?: number; totalTime?: number } | undefined>",
           "required": true
         }
       ],
@@ -708,7 +1160,7 @@
         },
         {
           "name": "processed",
-          "type": "RagSaveEmbeddingsResult[]",
+          "type": "SaveEmbeddingsResult[]",
           "required": true
         },
         {
@@ -745,10 +1197,20 @@
     },
     {
       "name": "ragReindex",
-      "signature": "function ragReindex(params: RagReindexParams, options?: RPCOptions): Promise<RagReindexResult> & { requestId: string };",
+      "signature": "function ragReindex(params: RagReindexParams, options?: RPCOptions): Promise<ReindexResult> & { requestId: string };",
       "description": "Reindexes the RAG database to optimize search performance.\nFor HyperDB, this rebalances centroids using k-means clustering.\n\n**Workspace lifecycle:** This operation requires an existing workspace.\n\n**Note:** Reindex requires a minimum number of documents to perform clustering.\nFor HyperDB, this is 16 documents by default. If there are insufficient documents,\n`reindexed` will be `false` with `details` explaining the reason.",
-      "returns": "Promise<RagReindexResult> & { requestId: string }",
+      "returns": "Promise<ReindexResult> & { requestId: string }",
       "returnFields": [
+        {
+          "name": "details",
+          "type": "Record<string, any>",
+          "required": false
+        },
+        {
+          "name": "reindexed",
+          "type": "boolean",
+          "required": true
+        },
         {
           "name": "requestId",
           "type": "string",
@@ -769,9 +1231,9 @@
     },
     {
       "name": "ragSaveEmbeddings",
-      "signature": "function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: RPCOptions): Promise<RagSaveEmbeddingsResult[]> & { requestId: string };",
+      "signature": "function ragSaveEmbeddings(params: RagSaveEmbeddingsParams, options?: RPCOptions): Promise<SaveEmbeddingsResult[]> & { requestId: string };",
       "description": "Saves pre-embedded documents to the RAG vector database.\nPart of the segregated flow: chunk() → embed() → saveEmbeddings()\n\n**Workspace lifecycle:** This operation implicitly opens (or creates) the workspace.\nThe workspace remains open until closed.",
-      "returns": "Promise<RagSaveEmbeddingsResult[]> & { requestId: string }",
+      "returns": "Promise<SaveEmbeddingsResult[]> & { requestId: string }",
       "returnFields": [
         {
           "name": "requestId",
@@ -807,9 +1269,9 @@
     },
     {
       "name": "rerank",
-      "signature": "function rerank(params: RerankParams, options?: RPCOptions): Promise<RerankScores> & { requestId: string };",
+      "signature": "function rerank(params: RerankParams, options?: RPCOptions): Promise<number[]> & { requestId: string };",
       "description": "Scores documents by relevance to a query with a reranker model.",
-      "returns": "Promise<RerankScores> & { requestId: string }",
+      "returns": "Promise<number[]> & { requestId: string }",
       "returnFields": [
         {
           "name": "requestId",
@@ -853,10 +1315,25 @@
     },
     {
       "name": "startRpcServer",
-      "signature": "function startRpcServer(options: StartRpcServerOptions): Promise<RpcServerInfo> & { requestId: string };",
+      "signature": "function startRpcServer(options: StartRpcServerOptions): Promise<{ rdmaCapable: boolean; serverId: string; url: string }> & { requestId: string };",
       "description": "Start a worker-owned native RPC server. Non-loopback binding and advertising require explicit opt-in.\nCancel a pending start with its promise.requestId.",
-      "returns": "Promise<RpcServerInfo> & { requestId: string }",
+      "returns": "Promise<{ rdmaCapable: boolean; serverId: string; url: string }> & { requestId: string }",
       "returnFields": [
+        {
+          "name": "rdmaCapable",
+          "type": "boolean",
+          "required": true
+        },
+        {
+          "name": "serverId",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "url",
+          "type": "string",
+          "required": true
+        },
         {
           "name": "requestId",
           "type": "string",
@@ -917,7 +1394,58 @@
       "signature": "function textToSpeech(params: TtsClientParamsInput, options?: RPCOptions): TextToSpeechStreamResult;",
       "description": "Converts text to speech audio using a loaded TTS model.",
       "returns": "TextToSpeechStreamResult",
-      "returnFields": [],
+      "returnFields": [
+        {
+          "name": "buffer",
+          "type": "Promise<number[]>",
+          "required": true
+        },
+        {
+          "name": "bufferStream",
+          "type": "AsyncGenerator<number>",
+          "required": true
+        },
+        {
+          "name": "chunkStream",
+          "type": "AsyncGenerator<Int16Array<ArrayBufferLike>>",
+          "required": true
+        },
+        {
+          "name": "chunkUpdates",
+          "type": "AsyncGenerator<TtsSentenceChunkUpdate, any, any>",
+          "required": false
+        },
+        {
+          "name": "done",
+          "type": "Promise<boolean>",
+          "required": true
+        },
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "sampleRate",
+          "type": "Promise<number | undefined>",
+          "required": true
+        },
+        {
+          "name": "stats",
+          "type": "Promise<{ audioDuration?: number; backendDevice?: number; backendId?: number; codecOnCoreml?: number; codecSidecarLoaded?: number; denoiserBackendDevice?: number; denoiserBackendId?: number; enhancerBackendDevice?: number; enhancerBackendId?: number; generatedFrames?: number; gpuUnsupported?: number; realTimeFactor?: number; tokensPerSecond?: number; totalSamples?: number; totalTime?: number } | undefined>",
+          "required": true
+        },
+        {
+          "name": "stopReason",
+          "type": "Promise<\"cancelled\" | \"completed\" | undefined>",
+          "required": true
+        },
+        {
+          "name": "text",
+          "type": "Promise<string | undefined>",
+          "required": true
+        }
+      ],
       "throws": [
         {
           "error": "TextToSpeechStreamFailedError",
@@ -931,7 +1459,33 @@
       "signature": "function textToSpeechStream(params: TextToSpeechStreamClientParams, options?: RPCOptions): Promise<TextToSpeechStreamSession>;",
       "description": "Duplex session: write UTF-8 text fragments (e.g. LLM token deltas) via `write`. Each string or\nUint8Array should be a complete UTF-8 fragment. The worker forwards them to the TTS streaming handler\n(optional sentence accumulation via request fields). Iterate the session for `TextToSpeechStreamResponse`\nlines (PCM in `buffer`, optional `chunkIndex` / `sentenceChunk`) until `done`.",
       "returns": "Promise<TextToSpeechStreamSession>",
-      "returnFields": [],
+      "returnFields": [
+        {
+          "name": "requestId",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "[asyncIterator]",
+          "type": "unknown",
+          "required": true
+        },
+        {
+          "name": "destroy",
+          "type": "unknown",
+          "required": true
+        },
+        {
+          "name": "end",
+          "type": "unknown",
+          "required": true
+        },
+        {
+          "name": "write",
+          "type": "unknown",
+          "required": true
+        }
+      ],
       "throws": [
         {
           "error": "TextToSpeechStreamFailedError",
@@ -942,7 +1496,7 @@
     },
     {
       "name": "transcribe",
-      "signature": "function transcribe(params: any, options?: RPCOptions): TranscribeCall<TranscribeSegment[]>;\nfunction transcribe(params: TranscribeClientParams, options?: RPCOptions): TranscribeCall<string>;",
+      "signature": "function transcribe(params: TranscribeClientParams & { metadata: true }, options?: RPCOptions): TranscribeCall<TranscribeSegment[]>;\nfunction transcribe(params: TranscribeClientParams, options?: RPCOptions): TranscribeCall<string>;",
       "description": "",
       "returns": "TranscribeCall<TranscribeSegment[]>",
       "returnFields": [],
@@ -951,7 +1505,7 @@
     },
     {
       "name": "transcribeStream",
-      "signature": "function transcribeStream(params: any, options?: RPCOptions): AsyncGenerator<TranscribeSegment>;\nfunction transcribeStream(params: TranscribeClientParams, options?: RPCOptions): AsyncGenerator<string>;\nfunction transcribeStream(params: any, options?: RPCOptions): Promise<TranscribeStreamConversationSession>;\nfunction transcribeStream(params: any, options?: RPCOptions): Promise<TranscribeStreamMetadataSession>;\nfunction transcribeStream(params: TranscribeStreamClientParams, options?: RPCOptions): Promise<TranscribeStreamSession>;",
+      "signature": "function transcribeStream(params: TranscribeClientParams & { metadata: true }, options?: RPCOptions): AsyncGenerator<TranscribeSegment>;\nfunction transcribeStream(params: TranscribeClientParams, options?: RPCOptions): AsyncGenerator<string>;\nfunction transcribeStream(params: TranscribeStreamClientParams & { emitVadEvents: true }, options?: RPCOptions): Promise<TranscribeStreamConversationSession>;\nfunction transcribeStream(params: TranscribeStreamClientParams & { parakeetStreamingConfig: { chunkLeftContextMs?: number; chunkMs?: number; chunkRightContextMs?: number; diarizationMinSegmentMs?: number; diarizationThreshold?: number; emitEnergyVad?: boolean; emitPartials?: boolean; emitSpeakerVad?: boolean; energyVadHangoverMs?: number; energyVadThresholdDb?: number; energyVadWindowMs?: number; fifoLen?: number; historyMs?: number; leftContextMs?: number; rightLookaheadMs?: number; spkCacheEnable?: boolean; spkCacheLen?: number; spkCacheUpdatePeriod?: number } }, options?: RPCOptions): Promise<TranscribeStreamConversationSession>;\nfunction transcribeStream(params: TranscribeStreamClientParams & { metadata: true }, options?: RPCOptions): Promise<TranscribeStreamMetadataSession>;\nfunction transcribeStream(params: TranscribeStreamClientParams, options?: RPCOptions): Promise<TranscribeStreamSession>;",
       "description": "",
       "returns": "AsyncGenerator<TranscribeSegment>",
       "returnFields": [],
@@ -960,9 +1514,9 @@
     },
     {
       "name": "translate",
-      "signature": "function translate(params: TranslateClientParams, options?: RPCOptions): { requestId: string; stats: Promise<any>; text: Promise<string>; tokenStream: AsyncGenerator<string>; translations: Promise<string[]> };",
+      "signature": "function translate(params: TranslateClientParams, options?: RPCOptions): { requestId: string; stats: Promise<{ cacheTokens?: number; decodeTime?: number; encodeTime?: number; timeToFirstToken?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } | undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string>; translations: Promise<string[]> };",
       "description": "Translates text from one language to another using a specified translation model.\nSupports both NMT (Neural Machine Translation) and LLM models.",
-      "returns": "{ requestId: string; stats: Promise<any>; text: Promise<string>; tokenStream: AsyncGenerator<string>; translations: Promise<string[]> }",
+      "returns": "{ requestId: string; stats: Promise<{ cacheTokens?: number; decodeTime?: number; encodeTime?: number; timeToFirstToken?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } | undefined>; text: Promise<string>; tokenStream: AsyncGenerator<string>; translations: Promise<string[]> }",
       "returnFields": [
         {
           "name": "requestId",
@@ -971,7 +1525,7 @@
         },
         {
           "name": "stats",
-          "type": "Promise<any>",
+          "type": "Promise<{ cacheTokens?: number; decodeTime?: number; encodeTime?: number; timeToFirstToken?: number; tokensPerSecond?: number; totalTime?: number; totalTokens?: number } | undefined>",
           "required": true
         },
         {
@@ -1044,7 +1598,28 @@
       "signature": "function vla(params: VlaClientRunParams): Promise<VlaClientRunResult>;",
       "description": "Run VLA inference on a loaded model (SmolVLA, π₀.₅, or GR00T) and return the\nproduced action chunk plus per-stage timings.",
       "returns": "Promise<VlaClientRunResult>",
-      "returnFields": [],
+      "returnFields": [
+        {
+          "name": "actionDim",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "actions",
+          "type": "Float32Array",
+          "required": true
+        },
+        {
+          "name": "chunkSize",
+          "type": "number",
+          "required": true
+        },
+        {
+          "name": "stats",
+          "type": "{ backendDevice?: number; ode_ms?: number; prefill_compute_ms?: number; prefill_total_ms?: number; smollm2_compute_ms?: number; smollm2_total_ms?: number; total_ms?: number; vision_ms?: number }",
+          "required": false
+        }
+      ],
       "throws": [],
       "deprecated": null
     },
@@ -1061,7 +1636,7 @@
         },
         {
           "name": "hparams",
-          "type": "VlaHparams",
+          "type": "{ actionDim: number; chunkSize: number; imageInputMode?: \"pixels\" | \"patches\"; imagePatchElems?: number; maxActionDim: number; maxStateDim: number; numCameras?: number; selectedEmbodimentCatId?: number; selectedEmbodimentTag?: string; stateInputMode?: \"discrete\" | \"continuous\"; tokenizerMaxLength: number; visionImageSize: number }",
           "required": true
         }
       ],
@@ -1112,7 +1687,7 @@
       "returnFields": [
         {
           "name": "hparams",
-          "type": "VlaHparams",
+          "type": "{ actionDim: number; chunkSize: number; imageInputMode?: \"pixels\" | \"patches\"; imagePatchElems?: number; maxActionDim: number; maxStateDim: number; numCameras?: number; selectedEmbodimentCatId?: number; selectedEmbodimentTag?: string; stateInputMode?: \"discrete\" | \"continuous\"; tokenizerMaxLength: number; visionImageSize: number }",
           "required": true
         }
       ],
@@ -1121,7 +1696,7 @@
     },
     {
       "name": "worldCreateScene",
-      "signature": "function worldCreateScene(params: any): WorldSceneResultWithPack;\nfunction worldCreateScene(params: any): WorldSceneResult;\nfunction worldCreateScene(params: WorldSceneClientParams): WorldSceneResultWithPack | WorldSceneResult;",
+      "signature": "function worldCreateScene(params: Omit<{ height?: number; image: string; modelId: string; prompt: string; requestId?: string; returnPack?: boolean; width?: number }, \"requestId\" | \"image\"> & { image: Uint8Array } & { returnPack: true }): WorldSceneResultWithPack;\nfunction worldCreateScene(params: Omit<{ height?: number; image: string; modelId: string; prompt: string; requestId?: string; returnPack?: boolean; width?: number }, \"requestId\" | \"image\"> & { image: Uint8Array } & { returnPack?: false }): WorldSceneResult;\nfunction worldCreateScene(params: WorldSceneClientParams): WorldSceneResultWithPack | WorldSceneResult;",
       "description": "Builds a world for an ABot-World session: the prompt and first frame are\nencoded into a scene pack the walk then runs on.",
       "returns": "WorldSceneResultWithPack",
       "returnFields": [
@@ -1137,7 +1712,7 @@
         },
         {
           "name": "stats",
-          "type": "Promise<any>",
+          "type": "Promise<{ height?: number; sceneCreateMs?: number; width?: number } | undefined>",
           "required": true
         }
       ],
@@ -1193,7 +1768,7 @@
         },
         {
           "name": "stats",
-          "type": "Promise<any>",
+          "type": "Promise<{ actionMask?: number; frames?: number; height?: number; modelLoadMs?: number; stepMs?: number; totalFrames?: number; totalStepMs?: number; totalSteps?: number; width?: number } | undefined>",
           "required": true
         }
       ],
