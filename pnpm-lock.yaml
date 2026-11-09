@@ -1328,7 +1328,7 @@ importers:
         version: 4.4.3
     devDependencies:
       '@qvac/turbovec-ggml':
-        specifier: ^0.4.0
+        specifier: ^0.5.0
         version: link:../turbovec-ggml
       '@types/brittle':
         specifier: ^3.5.0
