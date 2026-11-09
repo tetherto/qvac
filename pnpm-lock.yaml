@@ -896,7 +896,7 @@ importers:
         version: link:../tts-ggml
       '@qvac/turbovec-ggml':
         specifier: ^0.4.0
-        version: link:../turbovec-ggml
+        version: 0.4.0(@qvac/fabric-android-arm64@0.26.0)(@qvac/fabric-ios@0.26.0)
       '@qvac/vla-ggml':
         specifier: ^0.35.0
         version: link:../vla-ggml
@@ -1622,7 +1622,7 @@ importers:
         version: link:../tts-ggml
       '@qvac/turbovec-ggml':
         specifier: ^0.4.0
-        version: link:../turbovec-ggml
+        version: 0.4.0(@qvac/fabric-android-arm64@0.26.0)(@qvac/fabric-ios@0.26.0)
       '@qvac/vla-ggml':
         specifier: ^0.35.0
         version: link:../vla-ggml
@@ -4707,6 +4707,18 @@ packages:
 
   '@qvac/response@0.1.2':
     resolution: {integrity: sha512-xWAsUyxOd7kqOayjFwUGOGiWlwQ8z6bzy5lOTUdI3uHGCAbdsqUMivpMymktd3ub+ZvF7F/iCM4dxdDCTISSdA==}
+
+  '@qvac/turbovec-ggml@0.4.0':
+    resolution: {integrity: sha512-dH732qmI8SVhJoQB/8I0GMSIYMq7XhXfIL3NKLxV29eRTZF4FQVupA4suYpHeD5lxy9ccQKOlSJL93lmkDSqOw==}
+    engines: {bare: '>=1.24.0'}
+    peerDependencies:
+      '@qvac/fabric-android-arm64': ^0.26.0
+      '@qvac/fabric-ios': ^0.26.0
+    peerDependenciesMeta:
+      '@qvac/fabric-android-arm64':
+        optional: true
+      '@qvac/fabric-ios':
+        optional: true
 
   '@react-native/assets-registry@0.86.0':
     resolution: {integrity: sha512-nIaXbm2jX1OTYp0qbviJ3O6KZivoE8z3BnhUQ2LsqfZSWRoOK/n1qsiAr6oALiNKWnXY3j2KPwtYORnZzp8xew==}
@@ -14109,6 +14121,18 @@ snapshots:
   '@qvac/response@0.1.2':
     dependencies:
       bare-events: 2.4.2
+
+  '@qvac/turbovec-ggml@0.4.0(@qvac/fabric-android-arm64@0.26.0)(@qvac/fabric-ios@0.26.0)':
+    dependencies:
+      '@qvac/fabric': 0.26.0(@qvac/fabric-android-arm64@0.26.0)(@qvac/fabric-ios@0.26.0)
+    optionalDependencies:
+      '@qvac/fabric-android-arm64': 0.26.0
+      '@qvac/fabric-darwin-arm64': 0.26.0
+      '@qvac/fabric-darwin-x64': 0.26.0
+      '@qvac/fabric-ios': 0.26.0
+      '@qvac/fabric-linux-arm64': 0.26.0
+      '@qvac/fabric-linux-x64': 0.26.0
+      '@qvac/fabric-win32-x64': 0.26.0
 
   '@react-native/assets-registry@0.86.0': {}
 
