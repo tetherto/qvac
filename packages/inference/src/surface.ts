@@ -189,6 +189,7 @@ export { SUPPORTED_AUDIO_FORMATS } from '@/constants/audio'
 // group below).
 export {
   RpcServerOperationError,
+  AudioEncodeFailedError,
   InferenceCancelledError,
   ContextOverflowError,
   type ContextOverflowErrorSizes,
