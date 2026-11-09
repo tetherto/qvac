@@ -185,6 +185,30 @@ export function buildWavBuffer(samples: number[], sampleRate: number): Buffer {
   return Buffer.concat([header, data])
 }
 
+// OpenAI's `instructions` steers the voice in natural language, which is what
+// CosyVoice3's per-request `instruct` control does, so it is forwarded there
+// verbatim (a raw instruction string). No other engine takes a free-text
+// control, so elsewhere the route keeps treating it as an ignored param.
+//
+// A per-request `instruct` replaces the alias's own conditioning for that
+// synthesis, so it is forwarded only to an alias that configures none: when
+// the operator set `instruct`, `emotion` or a non-moderate `pace`, that choice
+// stands and a client's habitual `instructions` text stays an ignored param.
+export function speechInstructFor(
+  config: Record<string, unknown> | undefined,
+  instructions: unknown
+): string | undefined {
+  if (config?.['ttsEngine'] !== 'cosyvoice3' || typeof instructions !== 'string') return undefined
+  const pace = config['pace']
+  const configuresControl =
+    config['instruct'] !== undefined ||
+    config['emotion'] !== undefined ||
+    (pace !== undefined && pace !== 'moderate')
+  if (configuresControl) return undefined
+  const trimmed = instructions.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
 // Voice + model → alias lookup key. The route tries this first and falls
 // back to the bare model name when no <model>-<voice> alias exists, so
 // existing single-alias TTS configs continue to work even when callers omit
