@@ -244,20 +244,26 @@ own `symbols.map` / `exports.txt`, not in the consumer.
 
 ### Upstream server-context (decision addon only)
 
-Fabric builds upstream llama.cpp's `server-context` (decision execution without
-the HTTP server) but does not link it into the runtime. It ships the archive in
-each platform package under `prebuilds/<host>/server-context/`, from the same
-build as the runtime, and its headers under `prebuilds/include/llama/server-context`.
-An addon that needs it links it statically after `qvac_addon_use_fabric()`:
+`@qvac/decision-ggml` runs upstream llama.cpp's `server-context` (decision
+execution without the HTTP server). It is not part of this package: the addon
+builds the `qvac-fabric` port with the `server-context` feature in its own
+`vcpkg.json` and links the archive statically after `qvac_addon_use_fabric()`:
 
 ```cmake
 qvac_addon_link_fabric_server_context(${my-addon})
 ```
 
-Its `llama` / `common` / `mtmd` references resolve from the shared runtime. For
-that, the runtime also exports libcommon's `jinja` engine, `fs_validate_filename`
-and `glob_match` (in `symbols.map`, `exports.txt` and
-`cmake/generate-windows-def.cmake`). `@qvac/decision-ggml` is the only consumer.
+Only the archive is linked. Its `llama` / `common` / `mtmd` references resolve
+from the shared runtime, which exports exactly the libcommon symbols it needs
+(the `jinja` entries, `fs_validate_filename` and `glob_match` in `symbols.map`,
+`exports.txt` and `cmake/generate-windows-def.cmake`).
+
+The archive and the runtime must come from the same port version. This
+package's `package.json` records the port it is built from as
+`qvac["qvac-fabric"]`, and the addon records the same. CI
+(`verify-qvac-fabric-lockstep`) checks both records against the `vcpkg.json`
+pins, and the helper fails configure when the port vcpkg installed is not the
+version the installed `@qvac/fabric` records.
 
 ---
 

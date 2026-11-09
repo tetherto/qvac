@@ -2,6 +2,9 @@
   "name": "@qvac/decision-ggml",
   "version": "0.1.0",
   "description": "Decision models for QVAC: upstream llama.cpp decision models (laya, openjev, lev, kev, clef, ...)",
+  "qvac": {
+    "qvac-fabric": "11739.0.0#1"
+  },
   "addon": true,
   "engines": {
     "bare": ">=1.24.0"

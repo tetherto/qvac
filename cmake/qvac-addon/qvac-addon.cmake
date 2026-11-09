@@ -245,8 +245,6 @@ endmacro()
 #   qvac_fabric_soname    — the file name the runtime is linked and loaded
 #                           under, qvac__fabric-<suffix>@<major>.bare, with
 #                           <major> read from the installed platform package
-#   qvac_fabric_host      — the Bare host being built (bare_target())
-#   qvac_fabric_prebuilds — the platform package's prebuilds/ directory
 #
 # The runtime is the host's platform package, @qvac/fabric-<suffix>, whose
 # prebuilds/<host>/qvac__fabric-<suffix>.bare the module gets a DT_NEEDED on.
@@ -265,8 +263,6 @@ macro(qvac_addon_use_fabric)
   include_bare_module("${_qvac_fabric_specifier}" qvac_fabric_target PREBUILD
     WORKING_DIRECTORY "${_qvac_fabric_working_dir}")
 
-  set(qvac_fabric_host "${bare_target_value}")
-  set(qvac_fabric_prebuilds "${_qvac_fabric_prebuilds}")
   qvac_fabric_module_name("${bare_target_value}" _qvac_fabric_module)
   file(READ "${_qvac_fabric_prebuilds}/../package.json" _qvac_fabric_manifest)
   string(JSON _qvac_fabric_version GET "${_qvac_fabric_manifest}" version)
@@ -424,41 +420,6 @@ endfunction()
 # QVAC_FABRIC_MODULE_NAME, qvac_addon_use_fabric()'s qvac_fabric_soname, for
 # qvacAddonBindFabric().
 # ---------------------------------------------------------------------------
-# ---------------------------------------------------------------------------
-# qvac_addon_link_fabric_server_context(<target>)
-#
-# Link upstream llama.cpp's server-context (decision execution, without the
-# HTTP server) statically into <target>. @qvac/fabric builds it in the same
-# build as the runtime and ships the archive in each platform package under
-# prebuilds/<host>/server-context/, and its headers under the meta package's
-# prebuilds/include/llama/server-context. Its llama / common / mtmd references
-# resolve from the shared runtime, which exports them. Call after
-# qvac_addon_use_fabric(). Only the decision addon needs this.
-# ---------------------------------------------------------------------------
-function(qvac_addon_link_fabric_server_context target)
-  if(NOT qvac_fabric_prebuilds OR NOT qvac_fabric_host)
-    message(FATAL_ERROR "qvac-addon: call qvac_addon_use_fabric() before qvac_addon_link_fabric_server_context().")
-  endif()
-  if(WIN32)
-    set(_name "server-context.lib")
-  else()
-    set(_name "libserver-context.a")
-  endif()
-  set(_archive "${qvac_fabric_prebuilds}/${qvac_fabric_host}/server-context/${_name}")
-  if(NOT EXISTS "${_archive}")
-    message(FATAL_ERROR
-      "qvac-addon: ${_archive} not found. The installed @qvac/fabric does not ship "
-      "server-context for ${qvac_fabric_host}; it needs a build with the qvac-fabric "
-      "server-context feature.")
-  endif()
-  get_filename_component(_include "${qvac-fabric_DIR}/../../../include" ABSOLUTE)
-  target_include_directories(${target} PRIVATE
-    "${_include}/llama/server-context"
-    "${_include}/llama/common"
-    "${_include}/llama/mtmd")
-  target_link_libraries(${target} PRIVATE "${_archive}")
-endfunction()
-
 function(qvac_addon_link_fabric addon_target fabric_target)
   target_link_libraries(${addon_target} PRIVATE qvac-fabric::headers)
   target_link_libraries(${addon_target}_module PRIVATE ${fabric_target}_module)
@@ -467,6 +428,92 @@ function(qvac_addon_link_fabric addon_target fabric_target)
   target_compile_definitions(${addon_target} PRIVATE
     QVAC_FABRIC_MODULE_NAME="${qvac_fabric_soname}")
   target_include_directories(${addon_target} PRIVATE "${QVAC_ADDON_CMAKE_DIR}/include")
+endfunction()
+
+# ---------------------------------------------------------------------------
+# qvac_addon_link_fabric_server_context(<target>)
+#
+# Link upstream llama.cpp's server-context (decision execution, without the
+# HTTP server) statically into <target>. The archive comes from the addon's own
+# vcpkg build of the qvac-fabric port with the server-context feature
+# (default-features off, so the port builds no GPU backends). Only that archive
+# is linked, never the port's llama / ggml libraries: its llama / common / mtmd
+# references resolve from the shared @qvac/fabric runtime, which exports them.
+# The server-context symbols are hidden and stay inside <target>.
+#
+# Headers: the port installs the same llama / ggml / common / mtmd headers as
+# @qvac/fabric ships, into the vcpkg include root that already precedes
+# @qvac/fabric's (system) include directories. Each header must come from one
+# copy, or a header reached by two spellings (<common.h>,
+# <llama/common/common.h>) is defined twice, so <target> compiles against the
+# port's copy throughout. It is the version the runtime was built from (checked
+# below); only qvac-fabric.h still comes from @qvac/fabric.
+#
+# The archive and the runtime must come from the same port version. The addon's
+# package.json and @qvac/fabric's record it as qvac["qvac-fabric"], which
+# verify-qvac-fabric-lockstep checks against the vcpkg.json pins. Configure
+# fails here unless the port vcpkg installed is the version the installed
+# @qvac/fabric records. Call after qvac_addon_use_fabric(). Only the decision
+# addon needs this.
+# ---------------------------------------------------------------------------
+function(qvac_addon_link_fabric_server_context target)
+  if(NOT qvac-fabric_DIR OR NOT TARGET qvac-fabric::headers)
+    message(FATAL_ERROR "qvac-addon: call qvac_addon_use_fabric() before qvac_addon_link_fabric_server_context().")
+  endif()
+
+  find_package(llama CONFIG REQUIRED)
+  if(NOT TARGET llama::server-context)
+    message(FATAL_ERROR
+      "qvac-addon: the installed qvac-fabric port has no server-context. Add qvac-fabric "
+      "with the server-context feature to this addon's vcpkg.json.")
+  endif()
+
+  # The port version vcpkg installed, from the SPDX document it writes per port.
+  get_filename_component(_installed "${llama_DIR}/../.." ABSOLUTE)
+  set(_spdx "${_installed}/share/qvac-fabric/vcpkg.spdx.json")
+  if(NOT EXISTS "${_spdx}")
+    message(FATAL_ERROR "qvac-addon: ${_spdx} not found; cannot tell which qvac-fabric port was installed.")
+  endif()
+  file(READ "${_spdx}" _spdx_json)
+  string(JSON _count LENGTH "${_spdx_json}" packages)
+  set(_port_version "")
+  math(EXPR _last "${_count} - 1")
+  foreach(_i RANGE ${_last})
+    string(JSON _name GET "${_spdx_json}" packages ${_i} name)
+    if(_name STREQUAL "qvac-fabric")
+      string(JSON _port_version GET "${_spdx_json}" packages ${_i} versionInfo)
+      break()
+    endif()
+  endforeach()
+  if(_port_version STREQUAL "")
+    message(FATAL_ERROR "qvac-addon: ${_spdx} names no qvac-fabric package.")
+  endif()
+
+  # The port version the installed @qvac/fabric was built from.
+  get_filename_component(_fabric_meta "${qvac-fabric_DIR}/../../../.." ABSOLUTE)
+  file(READ "${_fabric_meta}/package.json" _fabric_manifest)
+  string(JSON _fabric_port ERROR_VARIABLE _fabric_port_error
+    GET "${_fabric_manifest}" qvac qvac-fabric)
+  if(_fabric_port_error)
+    message(FATAL_ERROR
+      "qvac-addon: ${_fabric_meta}/package.json records no qvac[\"qvac-fabric\"], so the "
+      "server-context archive cannot be matched to it. Use an @qvac/fabric release that "
+      "records the qvac-fabric port it was built from.")
+  endif()
+  if(NOT _port_version STREQUAL _fabric_port)
+    message(FATAL_ERROR
+      "qvac-addon: server-context comes from qvac-fabric ${_port_version}, but the installed "
+      "@qvac/fabric runtime was built from qvac-fabric ${_fabric_port}. Pin qvac-fabric "
+      "${_fabric_port} in vcpkg.json, or install the @qvac/fabric built from ${_port_version}.")
+  endif()
+  message(STATUS "qvac-addon: server-context from qvac-fabric ${_port_version}, matching @qvac/fabric")
+
+  target_include_directories(${target} PRIVATE
+    "${_installed}/include/llama"
+    "${_installed}/include/llama/common"
+    "${_installed}/include/llama/mtmd"
+    "${_installed}/include/llama/server-context")
+  target_link_libraries(${target} PRIVATE "$<TARGET_LINKER_FILE:llama::server-context>")
 endfunction()
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 name: Verify qvac-fabric lockstep
-description: Ensures qvac-fabric dependency version is identical across all package vcpkg manifests that declare it.
+description: Ensures qvac-fabric dependency version is identical across all package vcpkg manifests that declare it, and that each of those packages records that version in package.json.
 
 outputs:
   version:
@@ -92,5 +92,28 @@ runs:
           fi
         done
 
-        echo "qvac-fabric lockstep verified across ${#files[@]} manifests: ${baseline}"
+        # Each of these packages records the port version in package.json as
+        # qvac["qvac-fabric"]. @qvac/fabric's record says which port its runtime
+        # was built from; an addon that links code from the port itself
+        # (@qvac/decision-ggml's server-context) is checked against that record
+        # at configure time (qvac_addon_link_fabric_server_context), so the
+        # records must match the pins.
+        mismatched=()
+        for file in "${files[@]}"; do
+          manifest="$(dirname "${file}")/package.json"
+          recorded=""
+          if [ -f "${manifest}" ]; then
+            recorded="$(jq -r '.qvac["qvac-fabric"] // empty' "${manifest}")"
+          fi
+          if [ "${recorded}" != "${baseline}" ]; then
+            mismatched+=("${manifest}: qvac[\"qvac-fabric\"] is ${recorded:-missing}, ${file} pins ${baseline}")
+          fi
+        done
+        if [ "${#mismatched[@]}" -gt 0 ]; then
+          echo "qvac-fabric is not recorded in package.json as pinned in vcpkg.json:"
+          printf '  %s\n' "${mismatched[@]}"
+          exit 1
+        fi
+
+        echo "qvac-fabric lockstep verified across ${#files[@]} manifests and their package.json records: ${baseline}"
         echo "version=${baseline}" >> "${GITHUB_OUTPUT}"

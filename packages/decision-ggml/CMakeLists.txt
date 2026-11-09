@@ -39,8 +39,9 @@ target_include_directories(
 )
 
 # Upstream server-context (decision execution, no HTTP server), linked
-# statically from @qvac/fabric's platform package; its llama / common / mtmd
-# references resolve from the shared runtime.
+# statically from this addon's vcpkg build of qvac-fabric[server-context], at
+# the port version the installed @qvac/fabric records; its llama / common /
+# mtmd references resolve from the shared runtime.
 qvac_addon_link_fabric_server_context(${decision-ggml})
 
 qvac_addon_link_fabric(${decision-ggml} ${qvac_fabric_target})

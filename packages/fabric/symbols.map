@@ -78,18 +78,32 @@
     ggml_*;
     gguf_*;
 
-    # libcommon's jinja template engine, for upstream server-context, which the
-    # decision addon (@qvac/decision-ggml) links statically against this runtime.
-    # Matched here as *mangled* names because the vtable / typeinfo entries
-    # demangle with spaces ("vtable for jinja::..."), which an unquoted extern
-    # "C++" pattern cannot express and a quoted one would match literally:
-    # _ZN5jinja / _ZNK5jinja are the namespace's functions, _ZTVN5jinja its
-    # vtables, _ZTIN5jinja / _ZTSN5jinja its typeinfo and typeinfo names.
-    _ZN5jinja*;
-    _ZNK5jinja*;
-    _ZTVN5jinja*;
-    _ZTIN5jinja*;
-    _ZTSN5jinja*;
+    # The parts of libcommon's jinja engine that upstream server-context uses
+    # from this runtime: @qvac/decision-ggml links server-context statically
+    # and resolves its libcommon references here. Exactly the symbols the
+    # archive leaves undefined, nothing more: four out-of-line functions, and
+    # the vtables and typeinfo of the value classes it constructs and catches.
+    # Listed as *mangled* names because vtable and typeinfo entries demangle
+    # with spaces ("vtable for jinja::..."), which an unquoted extern "C++"
+    # pattern cannot express. None mention a std type, so the names are the
+    # same with Android's libc++ (std::__ndk1) as elsewhere. Keep in step with
+    # exports.txt and cmake/generate-windows-def.cmake; the package contract
+    # test checks all three.
+    _ZN5jinja16global_from_jsonI11common_jsonEEvRNS_7contextERKT_b;
+    _ZN5jinja6string6appendERKS0_;
+    _ZNK5jinja6string3strEv;
+    _ZNK5jinja9statement7executeERNS_7contextE;
+    _ZTIN5jinja11value_int_tE;
+    _ZTIN5jinja12value_bool_tE;
+    _ZTIN5jinja13value_array_tE;
+    _ZTIN5jinja13value_float_tE;
+    _ZTIN5jinja14value_string_tE;
+    _ZTVN5jinja11value_int_tE;
+    _ZTVN5jinja12value_bool_tE;
+    _ZTVN5jinja12value_none_tE;
+    _ZTVN5jinja13value_array_tE;
+    _ZTVN5jinja14value_object_tE;
+    _ZTVN5jinja14value_string_tE;
 
     # C++-linkage symbols consumed by the addons. Matched against *demangled*
     # names, so the patterns are the source-level names (no _Z mangling).

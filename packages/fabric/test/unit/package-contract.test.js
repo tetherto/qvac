@@ -148,46 +148,76 @@ test('fabric exports its own C API on every platform', () => {
   )
 })
 
-test('the runtime exports what server-context needs, and ships its archive', () => {
-  // The decision addon links upstream server-context statically and resolves
-  // its libcommon references (the jinja engine, two helpers) from this runtime.
-  const map = read('symbols.map')
-  for (const pattern of [
-    '_ZN5jinja*',
-    '_ZNK5jinja*',
-    '_ZTVN5jinja*',
-    '_ZTIN5jinja*',
-    '_ZTSN5jinja*'
-  ]) {
-    assert.match(map, new RegExp('^\\s*' + pattern.replace('*', '\\*') + ';', 'm'), pattern)
-  }
-  assert.match(map, /^\s*fs_validate_filename\*;/m)
-  assert.match(map, /^\s*glob_match\*;/m)
+// What @qvac/decision-ggml's statically linked server-context leaves undefined
+// in libcommon's jinja engine: four functions, and the vtables and typeinfo of
+// the value classes it constructs and catches. ELF names; Mach-O adds a '_'.
+const SERVER_CONTEXT_JINJA = [
+  '_ZN5jinja16global_from_jsonI11common_jsonEEvRNS_7contextERKT_b',
+  '_ZN5jinja6string6appendERKS0_',
+  '_ZNK5jinja6string3strEv',
+  '_ZNK5jinja9statement7executeERNS_7contextE',
+  '_ZTIN5jinja11value_int_tE',
+  '_ZTIN5jinja12value_bool_tE',
+  '_ZTIN5jinja13value_array_tE',
+  '_ZTIN5jinja13value_float_tE',
+  '_ZTIN5jinja14value_string_tE',
+  '_ZTVN5jinja11value_int_tE',
+  '_ZTVN5jinja12value_bool_tE',
+  '_ZTVN5jinja12value_none_tE',
+  '_ZTVN5jinja13value_array_tE',
+  '_ZTVN5jinja14value_object_tE',
+  '_ZTVN5jinja14value_string_tE'
+]
+
+test('the runtime exports exactly the jinja symbols server-context needs', () => {
+  // @qvac/decision-ggml links upstream server-context statically and resolves
+  // its libcommon references (these jinja symbols, two helpers) from this
+  // runtime. Exact names, not the namespace.
+  const mapLines = read('symbols.map')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+  const mapJinja = mapLines.filter((line) => /^_Z\w*N?5jinja/.test(line))
+  assert.deepEqual(mapJinja.sort(), SERVER_CONTEXT_JINJA.map((name) => name + ';').sort())
+  assert.ok(mapLines.includes('fs_validate_filename*;'))
+  assert.ok(mapLines.includes('glob_match*;'))
+
   const exportsTxt = read('exports.txt').split(/\r?\n/)
-  for (const pattern of [
-    '__ZN5jinja*',
-    '__ZNK5jinja*',
-    '__ZTVN5jinja*',
-    '__ZTIN5jinja*',
-    '__ZTSN5jinja*',
-    '__Z*fs_validate_filename*',
-    '__Z*glob_match*'
-  ]) {
-    assert.ok(exportsTxt.includes(pattern), pattern)
-  }
+  const exportsJinja = exportsTxt.filter((line) => line.includes('5jinja'))
+  assert.deepEqual(exportsJinja.sort(), SERVER_CONTEXT_JINJA.map((name) => '_' + name).sort())
+  assert.ok(exportsTxt.includes('__Z*fs_validate_filename*'))
+  assert.ok(exportsTxt.includes('__Z*glob_match*'))
+
+  // MSVC decorates differently: the same functions and the value classes by
+  // decorated scope, never the whole "@jinja@@" namespace.
   const def = read('cmake/generate-windows-def.cmake')
-  for (const fragment of ['"@jinja@@"', '"fs_validate_filename"', '"glob_match"']) {
+  for (const fragment of [
+    '"global_from_json@"',
+    '"@string@jinja@@"',
+    '"@statement@jinja@@"',
+    '"@value_[a-z_]*t@jinja@@"',
+    '"fs_validate_filename"',
+    '"glob_match"'
+  ]) {
     assert.ok(def.includes(fragment), fragment)
   }
+  assert.ok(!def.includes('"@jinja@@"'))
+})
+
+test('fabric neither builds nor ships server-context', () => {
+  // The decision addon builds it from the qvac-fabric port itself.
   assert.ok(
-    vcpkgJson.dependencies.some(
+    !vcpkgJson.dependencies.some(
       (dep) => dep.name === 'qvac-fabric' && (dep.features || []).includes('server-context')
     )
   )
-  assert.match(
-    read('CMakeLists.txt'),
-    /install\(FILES \$<TARGET_FILE:llama::server-context>\s+DESTINATION \$\{_fabric_host\}\/server-context\)/
-  )
+  assert.doesNotMatch(read('CMakeLists.txt'), /server-context/)
+})
+
+test('package.json records the qvac-fabric port the runtime is built from', () => {
+  // qvac_addon_link_fabric_server_context() checks an addon's own port build
+  // against this record.
+  const pinned = vcpkgJson.dependencies.find((dep) => dep.name === 'qvac-fabric')['version>=']
+  assert.equal(packageJson.qvac['qvac-fabric'], pinned)
 })
 
 test('the Mach-O export list does not re-export host symbols', () => {

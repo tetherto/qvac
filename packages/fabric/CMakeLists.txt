@@ -181,23 +181,6 @@ if(TARGET llama::llama-common-base)
     PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,llama::llama-common-base>")
 endif()
 
-# Upstream's server-context (decision execution without the HTTP server), built
-# by the qvac-fabric[server-context] feature. It is NOT linked into this runtime:
-# the decision addon (@qvac/decision-ggml) links it statically and resolves its
-# llama / common / mtmd references from this runtime, which exports them (see
-# the jinja / fs_validate_filename / glob_match entries in symbols.map,
-# exports.txt and cmake/generate-windows-def.cmake). The archive ships in each
-# platform package under prebuilds/<host>/server-context/, from this same build,
-# so it always matches the runtime; consumers link it with
-# qvac_addon_link_fabric_server_context(). It is never loaded at runtime.
-if(NOT TARGET llama::server-context)
-  message(FATAL_ERROR
-    "qvac-fabric did not export llama::server-context despite the "
-    "server-context feature being requested in vcpkg.json")
-endif()
-install(FILES $<TARGET_FILE:llama::server-context>
-  DESTINATION ${_fabric_host}/server-context)
-
 # Force-include the full ggml core (ggml + ggml-base) object code on every Unix
 # target (Linux, Android and macOS) so the entire ggml_* / gguf_* surface
 # promised by symbols.map / exports.txt is actually present in the module.

@@ -46,14 +46,21 @@ string(REPLACE "|" ";" _inputs "${INPUTS}")
 # exports.txt. Matched as substrings of the decorated symbol name, so they catch
 # both C entry points (bare "llama_decode") and C++ members/free functions whose
 # decoration embeds the identifier (e.g. "?model@common_init_result@@...").
+# Entries are joined into one regular expression; all but the value-class entry
+# are plain text.
 set(_allow
   "llama_" "llava_" "mtmd_" "ggml_" "gguf_"
   "common_" "json_schema_to_grammar" "string_"
   "set_process_priority" "postprocess_cpu_params" "metadata_handle_deleter"
-  # For upstream server-context in the decision addon: libcommon's jinja engine
-  # (MSVC decorates its members, vtables and RTTI with "@jinja@@") and two
-  # libcommon helpers.
-  "@jinja@@" "fs_validate_filename" "glob_match")
+  # For upstream server-context in @qvac/decision-ggml: the parts of libcommon's
+  # jinja engine it uses, and two libcommon helpers. The ELF and Mach-O lists
+  # name the exact symbols; MSVC decoration differs (vtables and RTTI are
+  # emitted in every module that needs them, and data is skipped below), so
+  # this matches the same functions and the value classes' members by their
+  # decorated scope instead of the whole namespace.
+  "global_from_json@" "@string@jinja@@" "@statement@jinja@@"
+  "@value_[a-z_]*t@jinja@@"
+  "fs_validate_filename" "glob_match")
 string(JOIN "|" _alt ${_allow})
 set(_pattern "(${_alt})")
 

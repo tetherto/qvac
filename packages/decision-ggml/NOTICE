@@ -11,6 +11,6 @@ Native Dependencies
 =========================================================================
 
 --- mit (MIT License) ---
-  llama.cpp server-context (tools/server), statically linked from the
-  qvac-fabric build that @qvac/fabric ships
+  llama.cpp server-context (tools/server), statically linked from this
+  addon's build of the qvac-fabric port
     https://github.com/tetherto/qvac-fabric-llm.cpp

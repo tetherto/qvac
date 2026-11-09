@@ -7,8 +7,8 @@ state, answered with probabilities.
 kev, clef, ...): any GGUF with `<arch>.decision.*` metadata. Decision parsing,
 prompt rendering, scheduling and answer calculation are upstream's: the addon
 runs upstream's `server-context` in-process, without an HTTP server, linked
-statically from `@qvac/fabric`. Models load from a path and run on the shared
-`@qvac/fabric` runtime.
+statically from its own build of the `qvac-fabric` port. Models load from a
+path and run on the shared `@qvac/fabric` runtime.
 
 ## Supported platforms
 
@@ -149,9 +149,16 @@ npm install
 npm run build
 ```
 
-The native build consumes `@qvac/fabric`'s runtime and the `server-context`
-archive its platform package ships (`qvac_addon_link_fabric_server_context()`
-in `cmake/qvac-addon`).
+The native build links the shared `@qvac/fabric` runtime and builds the
+`qvac-fabric` vcpkg port with the `server-context` feature (no GPU backends),
+taking only the `server-context` archive from it
+(`qvac_addon_link_fabric_server_context()` in `cmake/qvac-addon`). Everything
+else `server-context` references comes from the runtime.
+
+The port and the runtime must be the same version. `package.json` records the
+port as `qvac["qvac-fabric"]`, matching the `vcpkg.json` pin, and configure
+fails unless the installed `@qvac/fabric` records the same version. Update the
+pin, the record and the `@qvac/fabric` dependency together.
 
 ## License
 

@@ -7,7 +7,8 @@
 - `@qvac/decision-ggml`, QVAC's decision addon. `DecisionEngine` runs upstream
   llama.cpp decision models (laya, openjev, lev, kev, clef, ...) in-process
   through upstream's `server-context`, which this addon links statically from
-  `@qvac/fabric`.
+  its own build of the `qvac-fabric` port, at the version the installed
+  `@qvac/fabric` runtime records.
   - Requests and results use upstream's `/v1/systemone` shapes, one state per
     run; `info()` reports the model's decision capabilities.
   - One request runs at a time and a second is rejected while it does;
