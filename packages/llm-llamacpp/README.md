@@ -58,12 +58,15 @@ are loaded from `%CUDA_PATH%\bin\x64`, not from `PATH`.
 
 **Note on the AMD XDNA NPU (Linux x64):**
 On an XDNA2 NPU (Strix Point, Strix Halo, Krackan) with XRT 2.25 or newer installed, and an
-`@qvac/fabric` build that ships the XDNA backend, the NPU registers as `XDNA0`.
+`@qvac/fabric` build that ships the XDNA backend, the NPU registers as `XDNA0` when the
+process can read and write its `/dev/accel` node; otherwise fabric logs that it is not listed.
 
 - It is never chosen automatically. Select it with `backend: "xdna"` or `devices: "XDNA0"`.
-  Without an NPU or XRT, `backend: "xdna"` is skipped like any other absent backend.
-- Selection is opt-in, initialisation is not: on a host with an NPU, fabric opens it and
-  registers its kernels when the backends load, and each process holds an NPU context.
+  Without a listed NPU or XRT, `backend: "xdna"` is skipped like any other absent backend.
+- Fabric lists the NPU without opening it. The first load that uses `XDNA0` opens it and
+  registers its kernels, and the process then holds an NPU context. An NPU that fails to open
+  stays listed but takes no work: the load runs on the CPU and fabric logs
+  `the NPU did not open`.
 - The NPU kernels (`.xclbin` and `.insts.bin` files) are prebuilt and ship in
   `@qvac/fabric-linux-x64` next to `libqvac-ggml-xdna.so`; nothing is compiled at install or
   load time. Fabric looks for them in `GGML_XDNA_KERNEL_DIR` when set, then next to that
@@ -81,7 +84,8 @@ On an XDNA2 NPU (Strix Point, Strix Halo, Krackan) with XRT 2.25 or newer instal
 - Keep flash attention on (the default) and the KV cache at `f16` (the default on XDNA); the
   NPU's attention kernels need both. `poll: 0` (the default) stops the threadpool busy-waiting
   while the NPU works.
-- The NPU reports all of system memory as free, so fit and memory accounting are nominal.
+- The NPU reports the host's available memory as free, as the CPU backend does, so fit and
+  memory accounting are nominal.
 - Splitting one model across `XDNA0` and a GPU (`devices: "XDNA0,Vulkan0"`) with
   `split-mode: "layer"` is accepted but untested. `split-mode: "tensor"` with `XDNA0` is rejected:
   it never gives the NPU a whole layer.
