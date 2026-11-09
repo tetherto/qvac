@@ -291,7 +291,7 @@ export const sdcppConfigSchema = z.object({
     .optional()
     .describe(
       'LLM text encoder model — required for FLUX.2 [klein] (Qwen3), ' +
-        'Qwen-Image-2.1 and Ideogram 4 (Qwen3-VL), LTX-2 video (Gemma), ' +
+        'FLUX.3 Image Klein, Qwen-Image-2.1 and Ideogram 4 (Qwen3-VL), LTX-2 video (Gemma), ' +
         'and MiniMax-H3 (H3-specific Qwen3-VL).'
     ),
   projectionModelSrc: modelSrcInputSchema
@@ -304,7 +304,7 @@ export const sdcppConfigSchema = z.object({
   vaeModelSrc: modelSrcInputSchema
     .optional()
     .describe(
-      'VAE decoder model, required for Qwen-Image-2.1, FLUX.2 [klein], Ideogram 4, ' +
+      'VAE decoder model, required for Qwen-Image-2.1, FLUX.2 [klein], FLUX.3 Image Klein, Ideogram 4, ' +
         'LTX-2 video, and MiniMax-H3 video; optional for SDXL.'
     ),
   highNoiseDiffusionModelSrc: modelSrcInputSchema
@@ -793,9 +793,10 @@ export const diffusionRequestSchema = z
       .optional()
       .describe(
         'Ordered base64-encoded PNG/JPEG references for models with reference editing, ' +
-          'including FLUX.2 and Qwen-Image-2.1. Native model detection validates support. ' +
-          'Qwen-Image-2.1 requires projectionModelSrc, preserves alpha, and does not need ' +
-          'FLUX @imageN tags or a prediction override. Mutually exclusive with init_image.'
+          'including FLUX.2, FLUX.3 and Qwen-Image-2.1. Native model detection validates support. ' +
+          'FLUX.3 and Qwen-Image-2.1 do not need FLUX.2 @imageN tags or a prediction override; ' +
+          'Qwen-Image-2.1 requires projectionModelSrc and preserves alpha. ' +
+          'Mutually exclusive with init_image.'
       ),
     increase_ref_index: z
       .boolean()
