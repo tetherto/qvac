@@ -4,37 +4,43 @@ The collection model of the documentation site. Which collections exist, the rul
 ## Requirements
 ### Requirement: Content is partitioned into collections
 
-The documentation content SHALL be partitioned into collections. Each collection MUST be a single top-level folder under `content/docs`, and MUST own the URL namespace formed by its folder name. Every published page MUST belong to exactly one collection, so no page is reachable from two collections and no page sits outside a collection.
+The documentation content SHALL be partitioned into collections, and every collection MUST own the URL namespace formed by its name.
+
+- An unversioned collection's content MUST live in its folder under `docs/website/content/docs/`.
+- A versioned collection's content MUST live in its package's `docs/users/` folder and be materialized per line.
+
+Every published page MUST belong to exactly one collection.
 
 #### Scenario: Every published page belongs to a collection
 
-- **WHEN** the content tree under `content/docs` is enumerated
-- **THEN** every `.mdx` file resolves under exactly one top-level collection folder
-- **AND** no `.mdx` file remains directly at the root of `content/docs`
+- **WHEN** the built page set is enumerated
+- **THEN** every page resolves under exactly one collection
 
 #### Scenario: A collection owns its URL namespace
 
 - **WHEN** a page belonging to collection `<collection>` is requested
 - **THEN** its URL starts with `/<collection>/`
 
+#### Scenario: Versioned content lives with its package
+
+- **WHEN** the SDK collection's source is located
+- **THEN** it is `packages/sdk/docs/users/`, and nothing under `docs/website/content/docs/sdk/` is published
+
 ### Requirement: Collections introduced by this change
 
-The site SHALL provide exactly four collections: `ecosystem`, `sdk`, `cli`, and `resources`. The `app` and `research` collections anticipated by the target information architecture MUST NOT be created by this change. A collection MUST be named after what it holds, so a collection is renamed when what it holds changes.
+The site SHALL provide two unversioned collections, `ecosystem` and `resources`, and one versioned root collection per product, declared by a versions file of kind `product`. Today the versioned collections are `sdk` and `cli`. The collection set MUST NOT depend on how many products exist.
 
-#### Scenario: Only the four agreed collections exist
+Research and the assistant app MUST be reached as departures rather than as collections. A collection MUST be named after what it holds.
 
-- **WHEN** the top-level folders under `content/docs` are listed
-- **THEN** they are exactly `ecosystem`, `sdk`, `cli`, and `resources`
+#### Scenario: Only the agreed collections exist
 
-#### Scenario: Deferred collections are absent
+- **WHEN** the collections are listed
+- **THEN** they are exactly `ecosystem`, `resources`, and one collection per versions file of kind `product`
 
-- **WHEN** the content tree is enumerated
-- **THEN** no `app` or `research` collection folder exists
+#### Scenario: Research and the assistant app are departures
 
-#### Scenario: No collection is named after a feature of the package it tracks
-
-- **WHEN** a versioned collection's name is compared with the package its lines follow
-- **THEN** the name identifies that package rather than one of the things it does
+- **WHEN** the navigation is read
+- **THEN** Research leads to the project's model and dataset hub, the assistant app leads to its own site, and neither is a collection
 
 ### Requirement: SDK collection composition inside its lines
 
@@ -147,28 +153,19 @@ The `cli` collection SHALL hold the material about installing and using `@qvac/c
 
 ### Requirement: Ecosystem collection composition
 
-The `ecosystem` collection SHALL hold what QVAC publishes: the Software Inventory of the released packages and the add-on catalogue, entered from an overview. It MUST NOT hold material that documents no distributable, so the project's vision and its launch announcement leave the published set rather than moving with it, and the page on how the SDK works moves to the SDK. Retiring a page from this collection does not put its subject out of reach: where the subject is published elsewhere, the collection MUST reach it by a departure rather than by holding a page for it.
+The `ecosystem` collection SHALL hold what describes QVAC as a whole, entered from an overview. It SHALL also hold the Packages section that documents the internal packages, once at least one package is listed. It MUST NOT hold a product collection's guidance. Where a subject is published elsewhere, the collection MUST reach it by a departure.
 
-#### Scenario: Ecosystem receives the site index as its overview
+#### Scenario: Ecosystem holds the overview and Packages
 
-- **WHEN** the `ecosystem` collection is enumerated
-- **THEN** it contains an overview page whose content is the former `content/docs/index.mdx`
+- **WHEN** the `ecosystem` collection is enumerated while at least one package is listed
+- **THEN** it contains an overview and the Packages section
 
-#### Scenario: Ecosystem holds the inventory and the add-ons, and nothing else
+#### Scenario: Packages is absent while no package is listed
 
-- **WHEN** the `ecosystem` collection is enumerated
-- **THEN** it contains the Software Inventory and the add-on pages nested under it
-- **AND** it contains no `about/` section
+- **WHEN** no versions file of kind `platform` exists
+- **THEN** the `ecosystem` collection contains no Packages section, and no navigation entry names it
 
-#### Scenario: The vision and the launch announcement are retired
+#### Scenario: Product guidance stays in its collection
 
-- **WHEN** the former `about/vision.mdx` and `about/public-launch.mdx` are enumerated
-- **THEN** neither is published
-- **AND** each is retained unpublished, with its former URL redirecting to the collection overview
-
-#### Scenario: The retired vision is reachable where it is published
-
-- **WHEN** the Ecosystem sidebar is read
-- **THEN** it offers the project's vision as a departure to the main website
-- **AND** no page for it is restored to this collection
-
+- **WHEN** an Ecosystem page touches a topic a product collection documents
+- **THEN** it links to that collection instead of restating it

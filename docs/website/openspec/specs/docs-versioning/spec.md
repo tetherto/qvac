@@ -4,29 +4,28 @@ How the site publishes documentation at more than one version. What a documentat
 ## Requirements
 ### Requirement: Each versioned collection tracks one package
 
-Versioning SHALL be a property of a collection, not of the site. The SDK and CLI collections MUST be versioned; Ecosystem and Resources MUST NOT. A versioned collection MUST track exactly one package, and its line numbers MUST be that package's major and minor: the SDK tracks `@qvac/sdk`, and the CLI tracks `@qvac/cli`. A versioned collection MUST be named after the package it tracks, so that the thing being versioned and the thing being named are the same.
+Versioning SHALL be a property of a collection, not of the site. Every product — declared by a versions file of kind `product` — SHALL have exactly one versioned collection, however many products there are. Ecosystem and Resources MUST NOT be versioned as collections. A versioned collection MUST track exactly one package, and its line numbers MUST be that package's major and minor. Today:
+
+- the SDK tracks `@qvac/sdk`;
+- the CLI tracks `@qvac/cli`.
+
+A versioned collection MUST be named after the package it tracks, so that the thing being versioned and the thing being named are the same.
 
 #### Scenario: Versioned collections carry a line, unversioned ones do not
 
 - **WHEN** the published site is enumerated
-- **THEN** every SDK and CLI page belongs to a documentation line
-- **AND** no Ecosystem or Resources page belongs to a documentation line
+- **THEN** every page of a versioned collection belongs to a documentation line
+- **AND** no Ecosystem or Resources page belongs to a collection line
+
+#### Scenario: Adding a product adds a collection
+
+- **WHEN** a versions file of kind `product` is added and its slot is declared in the collection order
+- **THEN** a versioned collection is published with its lines and its switcher, and no other site code changes
 
 #### Scenario: A line number matches its package release
 
 - **WHEN** a documentation line of the SDK is published
 - **THEN** its number is the major and minor of an `@qvac/sdk` release
-
-#### Scenario: A collection is named after the package it tracks
-
-- **WHEN** a versioned collection is enumerated
-- **THEN** its name identifies the package its lines follow, not a feature of that package
-
-#### Scenario: The CLI is one collection across its functions
-
-- **WHEN** the CLI collection is enumerated
-- **THEN** the model provider, SDK bundling, configuration, and the requirements check are documented inside the same collection and the same documentation line
-- **AND** no function of the tool creates a collection or a line of its own
 
 #### Scenario: The SDK is one collection across language interfaces
 
@@ -34,120 +33,97 @@ Versioning SHALL be a property of a collection, not of the site. The SDK and CLI
 - **THEN** the JavaScript, Python, Kotlin, and Swift interfaces are documented inside the same collection and the same documentation line
 - **AND** no language interface creates a collection or a line of its own
 
+#### Scenario: The CLI is one collection across its functions
+
+- **WHEN** the CLI collection is enumerated
+- **THEN** the model provider, SDK bundling, configuration, and the requirements check are documented inside the same collection and the same documentation line
+
 ### Requirement: A documentation line is one folder holding a complete page tree
 
-A documentation line SHALL be represented by exactly one folder directly under its collection, and that folder MUST hold every page the collection publishes for that line.
+A documentation line SHALL be the complete page tree of its software as it stands at one pinned commit. Its pages, navigation, examples, and generated data MUST all come from that commit. A line MUST be materialized into exactly one folder under its collection before the build, and that folder MUST hold every page the collection publishes for that line.
 
 #### Scenario: A line owns a complete page tree
 
-- **WHEN** a documentation line folder is enumerated
+- **WHEN** a materialized line folder is enumerated
 - **THEN** it contains every page the collection publishes for that line
 - **AND** no page of that line resolves outside the folder
 
-#### Scenario: A versioned collection has no pages outside a line
+#### Scenario: A line's examples are its own
 
-- **WHEN** a versioned collection folder is enumerated
-- **THEN** every `.mdx` file under it sits inside a line folder
+- **WHEN** an example changes on `main` after a line was pinned
+- **THEN** that line still renders the example as it stood at its pinned commit
 
 ### Requirement: The current line is a folder group and the others are version folders
 
-The current line's folder SHALL be named as a Fumadocs folder group, `(v<major>.<minor>)`, so it is excluded from the slug and its pages keep the collection's version-less paths. Every other line's folder MUST be named `v<major>.<minor>`, without parentheses, so its pages carry the version segment. Exactly one folder group MUST exist per versioned collection, and it MUST be what identifies the current line.
+The current line SHALL be the first line its versions file declares. Materialization MUST write the current line as a Fumadocs folder group, `(v<major>.<minor>)`, so its pages keep the collection's version-less paths, and every other line as `v<major>.<minor>`. Exactly one folder group MUST exist per versioned collection after materialization. No folder MUST be renamed by hand to change currency.
 
 #### Scenario: The current line is served at version-less paths
 
-- **WHEN** the SDK's current line is `v0.19` and its folder is `(v0.19)`
-- **THEN** `content/docs/sdk/(v0.19)/js-ts-sdk.mdx` resolves at `/sdk/js-ts-sdk/`
+- **WHEN** the SDK's versions file declares `v0.24` first
+- **THEN** its pages resolve at `/sdk/<page>/`
+- **AND** every other declared line resolves at `/sdk/<version>/<page>/`
 
-#### Scenario: An older line carries its version segment
+#### Scenario: Currency moves with the declaration
 
-- **WHEN** the SDK also publishes `v0.18`
-- **THEN** `content/docs/sdk/v0.18/js-ts-sdk.mdx` resolves at `/sdk/v0.18/js-ts-sdk/`
-
-#### Scenario: Exactly one current line per collection
-
-- **WHEN** a versioned collection contains zero or more than one folder group
-- **THEN** the line structure check fails and names the collection
+- **WHEN** a new line is declared first
+- **THEN** it takes the version-less paths on the next build, with no folder renamed by hand
 
 ### Requirement: A version manifest declares every documented software and its lines
 
-The site SHALL carry one manifest declaring every piece of software it documents at more than one version — the versioned collections and the inventory packages alike — naming for each the package it is, where it is documented, and the versions published. An entry SHALL record its version and the folder that holds it, and nothing else: whether a versioned collection's line is current MUST be read from the folder it names, never stated separately. An inventory package declares no current version, because every one of its versions is addressed explicitly. The manifest SHALL be the single source every version-shaped surface reads.
+The site SHALL carry one versions file per documented software under `docs/website/versions/`. Each file MUST name:
 
-#### Scenario: The manifest names each software and its lines
+- the package;
+- its kind (collection or package);
+- the repository, when the software lives outside the monorepo;
+- the paths that make up a line;
+- the versions retired;
+- every published line with its version, the ref it follows, and the commit it is pinned to.
 
-- **WHEN** the manifest is read
-- **THEN** it names each documented software, its package, where it is documented, and every line published for it
-- **AND** each line entry carries its version and its folder
+Together the files SHALL be the single source every version-shaped surface reads.
 
-#### Scenario: Currency is read from the folder
+#### Scenario: A versions file pins every line
 
-- **WHEN** the current line of a versioned collection is resolved
-- **THEN** it is the entry whose folder is the folder group
-- **AND** no entry declares currency by any other means
+- **WHEN** a versions file is read
+- **THEN** each line entry carries a version, a ref, and a commit
 
-#### Scenario: An inventory package has no current version
-
-- **WHEN** an inventory package's entries are read
-- **THEN** none of their folders is a folder group, and no version is marked current
-
-#### Scenario: Derived surfaces read the manifest
+#### Scenario: Derived surfaces read the versions files
 
 - **WHEN** the switcher, the canonical URLs, `versions.json`, the page metadata, or the retrieval filters are produced
-- **THEN** each is computed from the manifest rather than by scanning the content tree
+- **THEN** each is computed from the versions files rather than by scanning content
 
 ### Requirement: The manifest and the line folders must agree
 
-Publishing a line SHALL require both a line folder and a manifest entry naming it, each created by hand. The build SHALL enforce a one-to-one correspondence between them: a line folder with no entry, an entry naming a folder that does not exist, or an entry whose folder name differs from the folder on disk MUST fail the build and name the offending line. A folder MUST NOT publish itself by existing, and an entry MUST NOT publish a line that has no content.
+The build SHALL fail, and name the offending line, when:
 
-#### Scenario: Adding a line takes both edits
+- a declared line's commit does not contain its documentation folder;
+- a declared line is not materialized;
+- a materialized folder has no declaration.
 
-- **WHEN** a line folder is created and the manifest declares it
-- **THEN** its pages resolve, it appears in the switcher, and it appears in the generated surfaces
+A line MUST NOT be published by a folder existing, and a declaration MUST NOT publish a line without content.
+
+#### Scenario: A pin without documentation fails the build
+
+- **WHEN** a line is pinned to a commit that has no documentation folder at the declared path
+- **THEN** the build fails and names the software and the line
 
 #### Scenario: An undeclared folder fails the build
 
-- **WHEN** a line folder exists under a versioned collection with no manifest entry
+- **WHEN** a line folder exists in the materialized tree with no declaration
 - **THEN** the build fails and names the folder
-
-#### Scenario: An entry without content fails the build
-
-- **WHEN** the manifest declares a line whose folder is absent
-- **THEN** the build fails and names the entry
-
-#### Scenario: A rename without a manifest edit fails the build
-
-- **WHEN** a folder group is renamed to its plain versioned form and the manifest still names the old folder
-- **THEN** the build fails, rather than serving the renamed line as current
 
 ### Requirement: The newest published line is the version last released
 
-The folder group SHALL be the version most recently released, and the version being written SHALL live in a development line that the site does not publish. A reader is therefore never served a line for a version that does not exist, and a reader following a version-less path always reaches the newest released documentation.
+The first declared line SHALL be the version most recently released. The version being written SHALL live in the package's documentation folder on `main`, which the production site does not publish. A reader following a version-less path therefore always reaches the newest released documentation.
 
-The development line SHALL be published by the cut at the release cutoff, which copies it into the collection as the new folder group and leaves it in place as the next version's. The development line itself is never moved, renamed, or reclassified, so the path a change writes to it is the same before and after a cutoff. The outgoing folder group is renamed by the cut, so a change written into the group across a cutoff is not placed by the merge alone — see "A cutoff reads the work in flight, and the checks flag what it strands" in the documentation release workflow.
+#### Scenario: The coming release's edits stay unpublished
 
-#### Scenario: The group is the version last released
+- **WHEN** a feature pull request edits a package's documentation on `main`
+- **THEN** no production page changes until a line is pinned to a commit that contains the edit
 
-- **WHEN** `@qvac/sdk` `0.18` is the most recent release
-- **THEN** the folder group is `(v0.18)` and the version-less paths serve it
-
-#### Scenario: The coming release's edits land outside the site
-
-- **WHEN** a page is written for the version being prepared
-- **THEN** it is written in the development line, which no URL resolves to
-
-#### Scenario: The cutoff publishes the development line
-
-- **WHEN** `0.19` reaches its release cutoff
-- **THEN** `(v0.18)` becomes `v0.18`, a copy of the development line becomes `(v0.19)`, and the development line stays in place
-
-#### Scenario: The current line is the highest number
-
-- **WHEN** a versioned collection's lines are enumerated
-- **THEN** the folder group is the highest-numbered line
-
-#### Scenario: A collection whose package is not released is not cut
+#### Scenario: A collection whose package is not released keeps its lines
 
 - **WHEN** a release moves no version of a tracked package
-- **THEN** that collection keeps the lines it has, and its group stays the version it already documents
+- **THEN** that software's declared lines stay as they are
 
 ### Requirement: Documentation lines do not carry patch versions
 
@@ -174,41 +150,57 @@ Because the Resources collection is not versioned, each entry SHALL declare its 
 - **THEN** its compatibility metadata is read from the entry itself
 - **AND** no documentation line applies to it
 
-### Requirement: A versioned collection publishes every line it has cut
+### Requirement: Lines are materialized from their pinned commits before the build
 
-A versioned collection SHALL publish the current line and every line a previous cut produced, with no upper bound. A line that has been published MUST NOT be removed, unpublished, or collapsed into another because a newer one was cut. A documentation line is the only record of how a released version behaved, and the readers who need it are the ones pinned to that version, so age is not a reason to withdraw it.
+The build SHALL extract every declared line from its pinned commit, restricted to the declared paths, before any page is compiled. Software outside the monorepo SHALL be fetched from its declared repository. The site MUST NOT run a package's toolchain while materializing, so a line builds from committed files alone.
 
-The cost is accepted rather than avoided: every cut adds that collection's whole page tree to the published set, to the search index, to the line's isolated agent corpus, and to the per-page Markdown twins. Nothing in the build is sized by the number of lines, so the cost grows in proportion and not in steps.
+#### Scenario: A line is extracted from its commit
 
-#### Scenario: The SDK publishes three lines
+- **WHEN** the site is built
+- **THEN** each line's pages, navigation, examples, and generated data are read from that line's pinned commit
 
-- **WHEN** the content tree is enumerated after this change ships with `@qvac/sdk` `0.20`
-- **THEN** the SDK publishes `(v0.20)`, `v0.19`, and `v0.18`
-- **AND** `v0.19` is what the collection's version-less paths served before the cut
+#### Scenario: Software in another repository is materialized
 
-#### Scenario: The CLI publishes three lines
+- **WHEN** a versions file declares a repository
+- **THEN** its lines are fetched from that repository at their pinned commits
 
-- **WHEN** the content tree is enumerated after the CLI is cut to `0.14`
-- **THEN** the CLI publishes `(v0.14)`, `v0.13`, and `v0.12`
+### Requirement: A build can substitute a line for preview
 
-#### Scenario: A cut pushes no line out
+Materialization SHALL accept an override that replaces one declared line with a working tree or another commit, and an option that adds the unreleased line from `main`. A pull request MUST be able to preview its own documentation inside the current site this way:
 
-- **WHEN** a cut is made on a collection that already publishes its maximum-so-far number of lines
-- **THEN** it proceeds, and the collection publishes one more line than before
-- **AND** no existing line is retired, redirected away, or otherwise stops resolving
+- a pull request into `main` previews the unreleased line from its working tree;
+- a pull request into a release branch is built with the site from `main` and its head substituted for its line.
 
-#### Scenario: A collection can publish one line
+#### Scenario: A pull request into a release branch is previewed
 
-- **WHEN** a versioned collection has published only one release
-- **THEN** it publishes one line, and everything except switching still works
+- **WHEN** a pull request edits a released line's documentation on its release branch
+- **THEN** its preview renders the current site with that line taken from the pull request's head
 
-#### Scenario: Adding a line requires no routing change
+#### Scenario: The unreleased line is previewed on staging
 
-- **WHEN** a line folder is added and declared
-- **THEN** it is published and offered by the switcher without any change to route definitions
+- **WHEN** the site is built with the unreleased-line option
+- **THEN** the unreleased line is rendered from `main` and never reaches production
 
-#### Scenario: The switcher offers every published line
+### Requirement: A line is published until it is retired by hand
 
-- **WHEN** a collection publishing more than two lines renders its switcher
-- **THEN** every declared line is offered, in the order the manifest lists them
+No number of published lines SHALL be imposed. A line SHALL stay published until it is retired. Retiring a line MUST be one edit to its versions file: moving the version from `lines` to `retired`. The build MUST then stop publishing the line and redirect its addresses to the current line, with no other file edited.
 
+#### Scenario: A new line retires nothing
+
+- **WHEN** a software publishing three lines gains a fourth
+- **THEN** all four lines are published
+
+#### Scenario: Retiring a line is one edit
+
+- **WHEN** a pull request moves `v0.16` from `lines` to `retired` in `versions/sdk.json`, and touches nothing else
+- **THEN** the build no longer publishes `v0.16`
+- **AND** every `/sdk/v0.16/…` address redirects to the same path in the current line
+
+### Requirement: Line redirect rules are generated from the versions files
+
+The redirect rules of every published line that is not current, and of every retired line, SHALL be generated from the versions files at build. No line's rules MUST be written by hand in `public/_redirects`. That file SHALL carry only the markers where the generated rules are expanded, so their position among the other rules is kept.
+
+#### Scenario: A pinned line gets its rules without a redirects edit
+
+- **WHEN** a line is added to a versions file
+- **THEN** the exported `_redirects` carries its rules, and `public/_redirects` is unchanged

@@ -18,7 +18,7 @@ No other package is touched.
 - [x] 1.8 Implement manual retirement through `retired`, and generate every line's redirect rules from the versions files into `out/_redirects`
 - [x] 1.9 Wire `docs:materialize` into `dev`, `build`, and the pull-request checks, and document local use in the README
 - [x] 1.10 Extend the line-structure, redirect, and artifact tests to the materialized tree
-- [ ] 1.11 Sync the `docs-versioning` and `versioned-urls` deltas into the main specs
+- [x] 1.11 Sync the `docs-versioning` and `versioned-urls` deltas into the main specs
 
 ## 2. SDK migration and API reference
 
@@ -34,8 +34,8 @@ No other package is touched.
 - [x] 2.10 Render each reference page's Markdown twin as its function's card, publish the `<fn>.schema.json` slice beside it, list both in each line's `llms.txt` and `llms-full.txt`, and carry them through every agent channel (each line's `llms.txt` corpus, the reference pages' Markdown twins, the MCP server), and make the agent protocol page declare the site the reference source
 - [x] 2.11 Add the non-failing description report for public request fields in the SDK contract
 - [x] 2.12 Trim SDK client TSDoc to summary, deprecation, throws, and status tags
-- [ ] 2.13 Pin the SDK's first release after the migration as its first line, and delete `content/docs/sdk/`
-- [ ] 2.14 Sync the `docs-collections`, `collection-navigation`, `api-reference`, and `agent-entry-points` deltas into the main specs
+- [ ] 2.13 Pin the SDK's first release after the migration as its first line, and delete `content/docs/sdk/` — moved to the follow-up change
+- [x] 2.14 Sync the `docs-collections`, `collection-navigation`, `api-reference`, and `agent-entry-points` deltas into the main specs
 
 ## 3. CLI migration
 
@@ -43,8 +43,8 @@ No other package is touched.
 - [x] 3.2 Add the Commander walker that writes `packages/cli/docs/users/_generated/cli.json`, with a `--check` freshness gate
 - [x] 3.3 Implement the CLI command reference component
 - [x] 3.4 Export the `qvac serve` OpenAPI document to `_generated/openapi.json` without starting the server, with a `--check` gate, and render its operations with the shared schema table. Any CLI source change: review case by case
-- [ ] 3.5 Render the configuration tables from the SDK's configuration schema
-- [ ] 3.6 Pin the CLI's first release after the migration as its first line, and delete `content/docs/cli/`
+- [ ] 3.5 Render the configuration tables from the SDK's configuration schema — moved to the follow-up change
+- [ ] 3.6 Pin the CLI's first release after the migration as its first line, and delete `content/docs/cli/` — moved to the follow-up change
 - [x] 3.7 Remove `scripts/cut-line.ts`, `content/_unpublished/`, and every README and `docs-workflow.md` passage on cutting lines
 
 ## 4. Docs contract and bindings
@@ -55,7 +55,7 @@ No other package is touched.
 - [x] 4.4 Add bindings and locks to the SDK and CLI pages
 - [x] 4.5 Rewrite `qv-docs-update` as package-agnostic and driven by the binding check
 - [x] 4.6 Retire `qv-docs-line-cut` and `qv-docs-cutoff`
-- [ ] 4.7 Sync the `docs-bindings` delta into the main specs
+- [x] 4.7 Sync the `docs-bindings` delta into the main specs
 
 ## 5. CI and release automation
 
@@ -64,7 +64,7 @@ No other package is touched.
 - [x] 5.3 Exempt documentation-only pull requests in the release guards, and exclude `packages/*/docs/users/**` from publish triggers
 - [x] 5.4 Add the pin-update workflow for releases and for documentation-only merges into release branches
 - [x] 5.5 Update `docs/gitflow.md`, `docs/ci/RELEASE-TRAIN.md`, and `CONTRIBUTING.md` for documentation in packages and pin-based publication
-- [ ] 5.6 Sync the `docs-release-workflow` delta into the main specs
+- [x] 5.6 Sync the `docs-release-workflow` delta into the main specs
 
 ## 6. Ecosystem packages mechanism
 
@@ -74,9 +74,9 @@ No other package is touched.
 - [x] 6.4 Implement the contract check of a platform package's minimal pages over a pull request's documentation, and keep it out of the build
 - [x] 6.5 Add a fixture package and tests covering Packages composition, versioning, the switcher, the normalizer, and the contract check
 - [x] 6.6 Delete the unpublished Software Inventory pages
-- [ ] 6.7 Sync the `docs-contract`, `ecosystem-packages`, and `software-inventory-docs` deltas into the main specs
+- [x] 6.7 Sync the `docs-contract`, `ecosystem-packages`, and `software-inventory-docs` deltas into the main specs
 
 ## 7. Close-out
 
 - [x] 7.1 Validate every spec with `openspec validate --specs --strict`
-- [ ] 7.2 Archive this change
+- [x] 7.2 Archive this change
