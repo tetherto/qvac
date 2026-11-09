@@ -2,8 +2,11 @@ import test from 'brittle'
 import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
 import { getRequestRegistry } from '@/runtime/request-context'
 import { decide } from '@/plugins/builtin/llamacpp-decision/ops/decide'
+import type {
+  UpstreamDecisionInfo,
+  UpstreamResult
+} from '@/plugins/builtin/llamacpp-decision/upstream'
 import { ModelType, type DecisionResult } from '@/schemas/index'
-import type { LayaResult } from '@qvac/embed-llamacpp'
 import {
   InferenceCancelledError,
   RequestRejectedByPolicyError,
@@ -12,50 +15,32 @@ import {
 
 const result: DecisionResult = {
   model: 'laya',
-  answers: {
-    refund: {
-      type: 'noul',
-      noul: 0.99,
-      answerConfidence: 0.99,
-      confidence: 0.99,
-      action: { actProbability: 1 }
-    }
-  },
-  usage: {
-    inputTokens: 20,
-    outputTokens: 0,
-    stateTokens: 10,
-    stateTokensDropped: 0,
-    truncated: false,
-    truncatedQuestions: [],
-    options: { refund: { total: 2, distinct: 2, tokensPerOption: null } }
-  }
+  answers: { refund: { type: 'noul', noul: 0.99, confidence: 0.99 } },
+  usage: { inputTokens: 20, outputTokens: 0 }
 }
-const nativeResult: LayaResult = {
+const nativeResult: UpstreamResult = {
   model: 'laya',
-  answers: {
-    refund: {
-      type: 'noul',
-      noul: 0.99,
-      answer_confidence: 0.99,
-      confidence: 0.99,
-      action: { act_probability: 1 }
-    }
-  },
-  usage: {
-    input_tokens: 20,
-    output_tokens: 0,
-    state_tokens: 10,
-    state_tokens_dropped: 0,
-    truncated: false,
-    truncated_questions: [],
-    options: { refund: { total: 2, distinct: 2, tokens_per_option: null } }
-  }
+  answers: { refund: { type: 'noul', noul: 0.99, confidence: 0.99 } },
+  usage: { input_tokens: 20, output_tokens: 0 }
 }
+const info: UpstreamDecisionInfo = {
+  decision_type: 'laya',
+  noul: 'probability',
+  joint: false,
+  shared_prefix: false,
+  images: false,
+  audio: false,
+  score_levels: { min: 2, max: 10 },
+  max_json_depth: 128,
+  n_ctx: 512,
+  model: 'laya'
+}
+// A noul question without criteria converts to itself.
 const questions = { refund: { type: 'noul' as const, instructions: 'Refund requested.' } }
 
 type TestContext = { teardown(cleanup: () => void): void }
 
+/** Registers a DecisionModel stand-in whose engine runs `run` for each state. */
 function fixture(
   t: TestContext,
   id: string,
@@ -63,8 +48,8 @@ function fixture(
   cancel = async () => {}
 ) {
   registerModel(id, {
-    model: { run, cancel } as unknown as AnyModel,
-    path: '/tmp/laya.gguf',
+    model: { info, engine: { run }, cancel } as unknown as AnyModel,
+    path: '/tmp/decision.gguf',
     config: {},
     modelType: ModelType.llamacppDecision
   })
@@ -73,17 +58,11 @@ function fixture(
   })
 }
 
-test('decisions unwrap the addon response once and preserve single and batch results', async (t) => {
-  let input: unknown
+test('decisions unwrap each engine response and preserve single and batch results', async (t) => {
+  const inputs: unknown[] = []
   fixture(t, 'decision-result', async (request) => {
-    input = request
-    return {
-      await: async () => [
-        request && typeof request === 'object' && 'states' in request
-          ? [nativeResult, nativeResult]
-          : nativeResult
-      ]
-    }
+    inputs.push(request)
+    return { await: async () => [nativeResult] }
   })
   const single = await decide({
     type: 'decide',
@@ -93,7 +72,7 @@ test('decisions unwrap the addon response once and preserve single and batch res
     questions
   })
   t.alike(single.result, result)
-  t.alike(input, { state: 'Refund', questions })
+  t.alike(inputs, [{ state: 'Refund', questions }])
   const batch = await decide({
     type: 'decide',
     modelId: 'decision-result',
@@ -101,10 +80,14 @@ test('decisions unwrap the addon response once and preserve single and batch res
     questions
   })
   t.alike(batch.result, [result, result])
+  t.alike(inputs.slice(1), [
+    { state: 'a', questions },
+    { state: 'b', questions }
+  ], 'one engine run per state, in input order')
   t.absent(getRequestRegistry().get('decide-single'))
 })
 
-test('decisions keep profiling metadata out of the native request', async (t) => {
+test('decisions keep profiling metadata out of the engine request', async (t) => {
   let input: unknown
   fixture(t, 'decision-profiled', async (request) => {
     input = request
@@ -121,49 +104,21 @@ test('decisions keep profiling metadata out of the native request', async (t) =>
   t.alike(input, { state: 'Refund', questions })
 })
 
-test('decisions omit undefined addon options while preserving explicit values', async (t) => {
-  let input: unknown
-  fixture(t, 'decision-options', async (request) => {
-    input = request
-    return {
-      await: async () => [
-        request && typeof request === 'object' && 'states' in request
-          ? [nativeResult, nativeResult]
-          : nativeResult
-      ]
-    }
+test('decisions pass criteria through and omit undefined values', async (t) => {
+  const inputs: unknown[] = []
+  fixture(t, 'decision-criteria', async (request) => {
+    inputs.push(request)
+    return { await: async () => [nativeResult] }
   })
   const requestQuestions = {
-    choice: {
-      type: 'choice' as const,
-      instructions: 'Which?',
-      criteria: { a: null, b: false },
-      optionOrder: undefined
-    },
-    score: {
-      type: 'score' as const,
-      instructions: 'How much?',
-      criteria: [false, 0, ''],
-      optionOrder: []
-    },
-    omitted: {
-      type: 'noul' as const,
-      instructions: 'Omitted?',
-      optionOrder: undefined,
-      criteria: undefined,
-      labels: undefined
-    },
-    defaults: {
-      type: 'noul' as const,
-      instructions: 'Defaults?',
-      criteria: null,
-      labels: { false: '', true: 'yes' }
-    },
+    choice: { type: 'choice' as const, instructions: 'Which?', criteria: { a: null, b: false } },
+    score: { type: 'score' as const, instructions: 'How much?', criteria: [false, 0, ''] },
+    omitted: { type: 'noul' as const, instructions: 'Omitted?', criteria: undefined },
+    nulled: { type: 'noul' as const, instructions: 'Null?', criteria: null },
     partial: {
       type: 'noul' as const,
       instructions: 'Partial?',
-      criteria: { true: undefined, false: null },
-      optionOrder: [1, 0]
+      criteria: { true: undefined, false: null }
     },
     empty: {
       type: 'noul' as const,
@@ -173,53 +128,28 @@ test('decisions omit undefined addon options while preserving explicit values', 
   }
   const expectedQuestions = {
     choice: { type: 'choice', instructions: 'Which?', criteria: { a: null, b: false } },
-    score: {
-      type: 'score',
-      instructions: 'How much?',
-      criteria: [false, 0, ''],
-      option_order: []
-    },
+    score: { type: 'score', instructions: 'How much?', criteria: [false, 0, ''] },
     omitted: { type: 'noul', instructions: 'Omitted?' },
-    defaults: {
-      type: 'noul',
-      instructions: 'Defaults?',
-      criteria: null,
-      labels: { false: '', true: 'yes' }
-    },
-    partial: {
-      type: 'noul',
-      instructions: 'Partial?',
-      criteria: { false: null },
-      option_order: [1, 0]
-    },
+    nulled: { type: 'noul', instructions: 'Null?' },
+    partial: { type: 'noul', instructions: 'Partial?', criteria: { false: null } },
     empty: { type: 'noul', instructions: 'Empty?', criteria: {} }
   }
-  for (const state of [
-    { state: { text: 'Refund', nested: [null, false, 0] } },
-    { states: ['a', 'b'] }
-  ]) {
-    await decide({
-      type: 'decide',
-      modelId: 'decision-options',
-      ...state,
-      questions: requestQuestions,
-      maxLen: undefined,
-      headMaxLen: 128
-    })
-    t.alike(input, { ...state, questions: expectedQuestions, head_max_len: 128 })
-    await decide({
-      type: 'decide',
-      modelId: 'decision-options',
-      ...state,
-      questions: requestQuestions,
-      maxLen: 512,
-      headMaxLen: undefined
-    })
-    t.alike(input, { ...state, questions: expectedQuestions, max_len: 512 })
-  }
+  const state = { text: 'Refund', nested: [null, false, 0] }
+  await decide({ type: 'decide', modelId: 'decision-criteria', state, questions: requestQuestions })
+  await decide({
+    type: 'decide',
+    modelId: 'decision-criteria',
+    states: ['a', 'b'],
+    questions: requestQuestions
+  })
+  t.alike(inputs, [
+    { state, questions: expectedQuestions },
+    { state: 'a', questions: expectedQuestions },
+    { state: 'b', questions: expectedQuestions }
+  ])
 })
 
-test('decisions reject malformed addon responses and release the model slot after failure', async (t) => {
+test('decisions reject malformed engine responses and release the model slot after failure', async (t) => {
   let output: unknown = []
   fixture(t, 'decision-invalid', async () => ({ await: async () => output }))
   const request = {
@@ -250,7 +180,7 @@ function gatedFixture(t: TestContext, id: string) {
       starts.push(input)
       return {
         await: () =>
-          new Promise<LayaResult[]>((resolve) => {
+          new Promise<UpstreamResult[]>((resolve) => {
             finish = () => resolve([nativeResult])
           })
       }
@@ -330,7 +260,7 @@ test('decisions bound the waiting queue without interrupting admitted requests',
       return {
         await: () =>
           starts === 1
-            ? new Promise<LayaResult[]>((resolve) => {
+            ? new Promise<UpstreamResult[]>((resolve) => {
                 finish = () => resolve([nativeResult])
               })
             : Promise.resolve([nativeResult])
@@ -367,7 +297,7 @@ test('decisions bound the waiting queue without interrupting admitted requests',
 })
 
 test('decisions cancel the owning job, admit the next queued call, and allow recovery', async (t) => {
-  let finish: (value: LayaResult[]) => void = () => {}
+  let finish: (value: UpstreamResult[]) => void = () => {}
   let started: () => void = () => {}
   const running = new Promise<void>((resolve) => {
     started = resolve
@@ -379,7 +309,7 @@ test('decisions cancel the owning job, admit the next queued call, and allow rec
     async () => ({
       await: () => {
         started()
-        return new Promise<LayaResult[]>((resolve) => {
+        return new Promise<UpstreamResult[]>((resolve) => {
           finish = resolve
         })
       }
@@ -415,7 +345,7 @@ test('decisions cancel the owning job, admit the next queued call, and allow rec
 })
 
 test('decisions hold the model slot until pending native cancellation settles', async (t) => {
-  let finishOutput: (value: LayaResult[]) => void = () => {}
+  let finishOutput: (value: UpstreamResult[]) => void = () => {}
   let rejectOutput: (error: Error) => void = () => {}
   let finishCancel: () => void = () => {}
   const cancellation = new Promise<void>((resolve) => {
@@ -436,7 +366,7 @@ test('decisions hold the model slot until pending native cancellation settles', 
     'decision-pending-cancel',
     async () => ({
       await: () =>
-        new Promise<LayaResult[]>((resolve, reject) => {
+        new Promise<UpstreamResult[]>((resolve, reject) => {
           finishOutput = resolve
           rejectOutput = reject
           starts++

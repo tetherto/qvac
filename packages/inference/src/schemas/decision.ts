@@ -46,8 +46,7 @@ export const decisionStateSchema = z.union([
 ])
 
 const questionBase = {
-  instructions: decisionStateSchema.refine((value) => value !== '', 'Instructions cannot be empty'),
-  optionOrder: z.array(z.number().int().nonnegative()).optional()
+  instructions: decisionStateSchema.refine((value) => value !== '', 'Instructions cannot be empty')
 }
 
 export const decisionQuestionSchema = z.discriminatedUnion('type', [
@@ -80,7 +79,6 @@ export const decisionQuestionSchema = z.discriminatedUnion('type', [
         .strict()
         .nullable()
         .optional(),
-      labels: z.object({ false: z.string(), true: z.string() }).strict().optional(),
       requireProbability: z
         .boolean()
         .optional()
@@ -94,19 +92,7 @@ export const decisionQuestionSchema = z.discriminatedUnion('type', [
 const decisionFields = {
   questions: z
     .record(z.string(), decisionQuestionSchema)
-    .describe('Question ID to decision question.'),
-  maxLen: z
-    .number()
-    .int()
-    .positive()
-    .optional()
-    .describe('Token budget per sequence; unset uses the checkpoint budget.'),
-  headMaxLen: z
-    .number()
-    .int()
-    .positive()
-    .optional()
-    .describe('Token budget for each question and its options; unset uses the checkpoint budget.')
+    .describe('Question ID to decision question.')
 }
 
 export const decisionSingleRequestSchema = z
@@ -135,30 +121,14 @@ export const decideRequestSchema = z.union([
   decisionBatchRequestSchema.extend(wireEnvelope).meta({ title: 'DecideBatchRequest' })
 ])
 
-// Diagnostics only some engines report. Fabric-format Laya models return them;
-// upstream decision engines do not, and they are left out rather than made up.
-const answerBase = {
-  answerConfidence: z
-    .number()
-    .optional()
-    .describe('Deprecated. Probability of the reported answer; only some models report it.'),
-  action: z
-    .object({
-      actProbability: z.number().describe('Currently unreliable; do not use to trigger actions.')
-    })
-    .optional()
-    .describe('Deprecated. Only some models report it.')
-}
 export const decisionAnswerSchema = z.discriminatedUnion('type', [
   z.object({
-    ...answerBase,
     confidence: z.number(),
     type: z.literal('choice'),
     choice: z.union([z.string(), z.number(), z.boolean()]),
     probabilities: z.record(z.string(), z.number())
   }),
   z.object({
-    ...answerBase,
     confidence: z.number(),
     type: z.literal('score'),
     score: z.number(),
@@ -166,7 +136,6 @@ export const decisionAnswerSchema = z.discriminatedUnion('type', [
     probabilities: z.record(z.string(), z.number())
   }),
   z.object({
-    ...answerBase,
     confidence: z
       .number()
       .optional()
@@ -181,21 +150,7 @@ export const decisionResultSchema = z.object({
   answers: z.record(z.string(), decisionAnswerSchema),
   usage: z.object({
     inputTokens: z.number(),
-    outputTokens: z.number(),
-    stateTokens: z.number().optional(),
-    stateTokensDropped: z.number().optional(),
-    truncated: z.boolean().optional(),
-    truncatedQuestions: z.array(z.string()).optional(),
-    options: z
-      .record(
-        z.string(),
-        z.object({
-          total: z.number(),
-          distinct: z.number(),
-          tokensPerOption: z.number().nullable()
-        })
-      )
-      .optional()
+    outputTokens: z.number()
   })
 })
 export const decisionResponseSchema = z.union([decisionResultSchema, z.array(decisionResultSchema)])
@@ -211,45 +166,18 @@ export const decisionConfigBaseSchema = z
       .number()
       .int()
       .optional()
-      .describe('Layers to offload. Unset lets the addon choose placement.'),
+      .describe('Layers to offload on the GPU. Unset lets the engine fit the model.'),
     batch_size: z
       .number()
       .int()
       .positive()
       .optional()
-      .describe('Tokens per forward pass. Default 2048; each sequence must fit.'),
-    poll: z
-      .number()
-      .int()
-      .min(0)
-      .max(100)
-      .optional()
-      .describe(
-        'CPU polling level, from 0 to 100. If omitted, uses the default native behavior. Higher values may reduce wake latency but consume more CPU during GPU work.'
-      ),
-    pollBatch: z
-      .number()
-      .int()
-      .min(0)
-      .max(100)
-      .optional()
-      .describe(
-        'CPU polling level for batch processing, from 0 to 100. If omitted, uses the default native behavior.'
-      ),
+      .describe("Tokens per forward pass. Unset uses the engine's default."),
     threads: z
       .number()
       .int()
       .optional()
       .describe('CPU threads, at most the CPU count. Zero or below uses all logical CPUs.'),
-    'threads-batch': z
-      .number()
-      .int()
-      .optional()
-      .describe('Batch CPU threads. Unset uses threads; zero or below uses all logical CPUs.'),
-    flash_attn: z
-      .enum(['on', 'off', 'auto'])
-      .optional()
-      .describe('Flash attention mode. Default auto.'),
     verbosity: z
       .number()
       .int()
@@ -257,12 +185,6 @@ export const decisionConfigBaseSchema = z
       .max(3)
       .optional()
       .describe('Native log level: 0 error, 1 warn, 2 info, 3 debug.'),
-    'main-gpu': z
-      .union([z.number().int().nonnegative(), z.enum(['integrated', 'dedicated'])])
-      .optional()
-      .describe('GPU index or device class.'),
-    'split-mode': z.enum(['none', 'layer']).optional().describe('Multi-GPU split mode.'),
-    'tensor-split': z.string().optional().describe('Per-GPU tensor split proportions.'),
     openclCacheDir: z
       .string()
       .optional()

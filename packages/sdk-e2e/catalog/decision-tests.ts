@@ -3,8 +3,9 @@ import type { DecisionBatchRequest, DecisionResult, DecisionSingleRequest } from
 
 export type DecisionSingleParams = DecisionSingleRequest
 export type DecisionBatchParams = DecisionBatchRequest
-export type DecisionInvalidBudgetParams = {
-  invalid: DecisionSingleParams
+export type DecisionInvalidRequestParams = {
+  /** Not a valid decide.request: maxLen is a control the contract no longer has. */
+  invalid: DecisionSingleParams & { maxLen: number }
   recovery: DecisionSingleParams
 }
 
@@ -18,7 +19,7 @@ type DecisionTestDefinition = Omit<TestDefinition, 'params'> &
           | 'decision-structured-batch-parity'
         params: DecisionBatchParams
       }
-    | { testId: 'decision-invalid-budget'; params: DecisionInvalidBudgetParams }
+    | { testId: 'decision-invalid-request'; params: DecisionInvalidRequestParams }
   )
 
 const questions: DecisionSingleParams['questions'] = {
@@ -72,7 +73,6 @@ function validDecision(result: DecisionResult): boolean {
       department.probabilities[String(department.choice)],
       Math.max(...Object.values(department.probabilities))
     ) &&
-    close(department.answerConfidence, department.probabilities[String(department.choice)]) &&
     urgency?.type === 'score' &&
     validDistribution(urgency.probabilities, ['0', '1', '2']) &&
     Object.keys(urgency.legend).sort().join(',') === '0,1,2' &&
@@ -81,12 +81,10 @@ function validDecision(result: DecisionResult): boolean {
     close(urgency.score, urgency.probabilities['1'] + 2 * urgency.probabilities['2']) &&
     refund?.type === 'noul' &&
     isProbability(refund.noul) &&
-    Object.values(result.answers).every(
-      (answer) =>
-        isProbability(answer.confidence) &&
-        isProbability(answer.answerConfidence) &&
-        isProbability(answer.action.actProbability)
-    ) &&
+    isProbability(department.confidence) &&
+    isProbability(urgency.confidence) &&
+    // Only some models report a confidence for noul answers.
+    (refund.confidence === undefined || isProbability(refund.confidence)) &&
     result.usage.inputTokens > 0
   )
 }
@@ -106,13 +104,6 @@ function decisionExpectation(count: number, compareNumbers = true): Expectation 
             result.model === expected.model &&
             result.usage.inputTokens === expected.usage.inputTokens &&
             result.usage.outputTokens === expected.usage.outputTokens &&
-            result.usage.stateTokens === expected.usage.stateTokens &&
-            result.usage.stateTokensDropped === expected.usage.stateTokensDropped &&
-            result.usage.truncated === expected.usage.truncated &&
-            result.usage.truncatedQuestions.length === expected.usage.truncatedQuestions.length &&
-            result.usage.truncatedQuestions.every(
-              (id, index) => id === expected.usage.truncatedQuestions[index]
-            ) &&
             Object.entries(result.answers).every(([id, answer]) => {
               const other = expected.answers[id]
               if (answer.type !== other.type) return false
@@ -182,9 +173,9 @@ export const decisionTests = [
     metadata: { category: 'decision', dependency: 'decision-parity', estimatedDurationMs: 60000 }
   },
   {
-    testId: 'decision-invalid-budget',
+    testId: 'decision-invalid-request',
     params: {
-      invalid: { state, questions, maxLen: -1 },
+      invalid: { state, questions, maxLen: 512 },
       recovery: { state, questions }
     },
     expectation: decisionExpectation(1),

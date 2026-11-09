@@ -2,7 +2,30 @@ import test from 'brittle'
 import { decideRequestSchema, ModelType } from '@qvac/inference/surface'
 import { PLUGIN_DECISION } from '@/plugin-ids'
 import { buildContract } from '../scripts/contract/build-contract'
+import { readFileSync } from 'node:fs'
 import { contractValidate } from './utils/contract-validator'
+
+type JsonSchema = {
+  anyOf?: JsonSchema[]
+  properties?: Record<string, JsonSchema & { const?: unknown }>
+}
+
+/** The modelConfig properties of loadModel.request's llamacpp-decision branch. */
+function decisionLoadBranchModelConfig(): Record<string, unknown> {
+  const contract = JSON.parse(
+    readFileSync(new URL('../contract/schema.json', import.meta.url), 'utf8')
+  ) as { $defs: Record<string, JsonSchema> }
+  const branches: JsonSchema[] = []
+  const collect = (schema: JsonSchema) => {
+    branches.push(schema)
+    schema.anyOf?.forEach(collect)
+  }
+  collect(contract.$defs['loadModel.request']!)
+  const branch = branches.find(
+    (candidate) => candidate.properties?.modelType?.const === ModelType.llamacppDecision
+  )
+  return branch?.properties?.modelConfig?.properties ?? {}
+}
 
 test('decisions are a typed unary method in the generated client contract', (t) => {
   const { manifest } = buildContract()
@@ -12,9 +35,7 @@ test('decisions are a typed unary method in the generated client contract', (t) 
     type: 'decide',
     modelId: 'laya',
     state: 'Refund',
-    questions: { refund: { type: 'noul', instructions: 'Refund requested.', optionOrder: [1, 0] } },
-    maxLen: 512,
-    headMaxLen: 128,
+    questions: { refund: { type: 'noul', instructions: 'Refund requested.', requireProbability: true } },
     requestId: 'decision-id'
   }
   t.is(decideRequestSchema.parse(single).requestId, 'decision-id')
@@ -23,6 +44,21 @@ test('decisions are a typed unary method in the generated client contract', (t) 
   t.ok(contractValidate('decide.request', { ...base, states: [state] }).valid)
   t.absent(contractValidate('decide.request', { ...single, states: [state] }).valid)
   t.absent(contractValidate('decide.request', { ...single, max_len: 512 }).valid)
+  // Controls only fabric-format Laya took are gone from the contract.
+  t.absent(contractValidate('decide.request', { ...single, maxLen: 512 }).valid)
+  t.absent(contractValidate('decide.request', { ...single, headMaxLen: 128 }).valid)
+  t.absent(
+    contractValidate('decide.request', {
+      ...single,
+      questions: { refund: { type: 'noul', instructions: 'Refund?', optionOrder: [1, 0] } }
+    }).valid
+  )
+  t.absent(
+    contractValidate('decide.request', {
+      ...single,
+      questions: { refund: { type: 'noul', instructions: 'Refund?', labels: { false: 'n', true: 'y' } } }
+    }).valid
+  )
   t.ok(contractValidate('constants.ModelType', ModelType.llamacppDecision).valid)
   t.ok(contractValidate('constants.PluginId', PLUGIN_DECISION).valid)
 })
@@ -36,4 +72,14 @@ test('decision loads accept omitted device in the generated client contract', (t
   t.ok(contractValidate('loadModel.request', load).valid)
   t.ok(contractValidate('loadModel.request', { ...load, modelConfig: {} }).valid)
   t.ok(contractValidate('loadModel.request', { ...load, modelConfig: { device: 'cpu' } }).valid)
+  // The decision branch takes DecisionEngine's options only; the ones only
+  // fabric-format Laya took are gone.
+  t.alike(Object.keys(decisionLoadBranchModelConfig()).sort(), [
+    'batch_size',
+    'device',
+    'gpu_layers',
+    'openclCacheDir',
+    'threads',
+    'verbosity'
+  ])
 })
