@@ -25,6 +25,10 @@ inputs:
     description: 'JSON array of explicit package short-names (no @qvac/ prefix). When non-empty, skips nx-affected entirely and builds the matrix from exactly these packages — no transitive expansion. For callers that already know which package(s) to act on (e.g. on-merge-nx''s per-package publish) and must not pull in dependents.'
     required: false
     default: '[]'
+  trusted-pr-checkout:
+    description: 'On pull_request, check out the PR base branch instead of the merge ref and take the changed paths from the API, exactly as pull_request_target does, so no PR content runs in the calling job. Callers with elevated permissions set this.'
+    required: false
+    default: 'false'
 
 outputs:
   matrix:
@@ -47,9 +51,12 @@ runs:
       with:
         fetch-depth: 0
         persist-credentials: false
+        # Empty keeps the event default: the merge ref on pull_request, the base
+        # branch on pull_request_target.
+        ref: ${{ github.event_name == 'pull_request' && inputs.trusted-pr-checkout == 'true' && github.event.pull_request.base.ref || '' }}
     # On dispatch/call there's no nx-set-shas and the checkout holds only the head
     # ref, so fetch base (+ config-ref) into local branches over unauthenticated origin.
-    - if: github.event_name != 'pull_request'
+    - if: github.event_name != 'pull_request' || inputs.trusted-pr-checkout == 'true'
       shell: bash
       env:
         BASE_REF: ${{ inputs.base-ref }}
@@ -76,15 +83,15 @@ runs:
     # not built packages; running every package's prepare is wasteful and flaky here.
     - shell: bash
       run: pnpm install --frozen-lockfile --ignore-scripts
-    - if: github.event_name == 'pull_request'
+    - if: github.event_name == 'pull_request' && inputs.trusted-pr-checkout != 'true'
       uses: nrwl/nx-set-shas@afb73a62d26e41464e9254689e1fd6122ee683c1 # v5
     # nx-set-shas reads both SHAs off the working tree (HEAD_SHA is git rev-parse
     # HEAD, and BASE_SHA is merge-base against it), which on pull_request_target
-    # is the base branch, so it diffs main against itself and nothing is ever
-    # affected. --base/--head only exist to produce a file list, so ask the API
-    # for the paths instead: nx needs no commit, and the PR's objects never enter
-    # this privileged checkout.
-    - if: github.event_name == 'pull_request_target'
+    # or a trusted pull_request checkout is the base branch, so it diffs main
+    # against itself and nothing is ever affected. --base/--head only exist to
+    # produce a file list, so ask the API for the paths instead: nx needs no
+    # commit, and the PR's objects never enter this privileged checkout.
+    - if: github.event_name == 'pull_request_target' || (github.event_name == 'pull_request' && inputs.trusted-pr-checkout == 'true')
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
@@ -169,7 +176,7 @@ runs:
           AFFECTED=$(echo "$INPUT_PACKAGES" | jq -c 'map(sub("^@qvac/"; ""))')
           echo "Explicit packages ($TARGET, no affected computation): $AFFECTED"
         else
-          # On pull_request_target the paths come from the API (see above), fed in
+          # On a base-branch checkout the paths come from the API (see above), fed in
           # newline-delimited. --stdin conflicts with --base/--head in nx, so the
           # two forms stay separate. Transitive expansion is identical either way.
           CHANGED_FILES="${RUNNER_TEMP}/nx-changed-files.txt"

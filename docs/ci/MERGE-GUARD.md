@@ -22,7 +22,7 @@ This must return **only** `pr-gate-merge.yml`. If it returns more than one file,
 
 ## The job graph
 
-`.github/workflows/pr-gate-merge.yml` ("Merge Guard", triggers on `pull_request_target`):
+`.github/workflows/pr-gate-merge.yml` ("Merge Guard", triggers on `pull_request`, so it loads from the PR merge ref):
 
 ```mermaid
 flowchart LR
@@ -205,7 +205,7 @@ Add the job to `pr-gate-merge.yml`, add it to `qvac-merge-guard`'s `needs:`, and
 
 ### What NOT to do
 
-Never give a new job its own top-level `pull_request_target` trigger with no `needs:` link into `qvac-merge-guard`. That produces a second, disconnected check name the ruleset doesn't require — a failure there is invisible to the merge gate. This is the exact anti-pattern the legacy per-package `on-pr-<pkg>.yml` workflows represent; wiring many similarly-named jobs straight into `needs:` one-by-one instead of behind a caller workflow is the same anti-pattern in miniature.
+Never give a new job its own top-level PR trigger (`pull_request` or `pull_request_target`) with no `needs:` link into `qvac-merge-guard`. That produces a second, disconnected check name the ruleset doesn't require — a failure there is invisible to the merge gate. This is the exact anti-pattern the legacy per-package `on-pr-<pkg>.yml` workflows represent; wiring many similarly-named jobs straight into `needs:` one-by-one instead of behind a caller workflow is the same anti-pattern in miniature.
 
 ---
 
@@ -213,7 +213,7 @@ Never give a new job its own top-level `pull_request_target` trigger with no `ne
 
 1. Open a real (or throwaway) PR touching the new job's trigger paths.
 2. Confirm via `gh pr checks <n> --repo tetherto/qvac` that `qvac-merge-guard / validate-pr` still appears exactly once, and its pass/fail reflects the new job's outcome (force the new job to fail once to confirm the aggregate check goes red).
-3. Because `pr-gate-merge.yml` is `pull_request_target`-triggered, it always runs the version of the workflow from `main` — a PR that edits `pr-gate-merge.yml` itself cannot self-validate its own wiring change pre-merge. Merge first, then validate on a subsequent PR against the updated `main`.
+3. Because `pr-gate-merge.yml` is `pull_request`-triggered, it runs the version from the PR merge ref, so a PR that edits `pr-gate-merge.yml` validates its own wiring change pre-merge. The same applies in reverse: a PR can weaken its own gate, which is why `.github/` is owned by `@tetherto/qvac-internal-devops` in `CODEOWNERS`. Actions and scripts the gate checks out from the default branch (`authorize-pr`, `prebuild-status`) still only change after merge.
 
 ## See also
 

@@ -5,8 +5,8 @@ on:
   # (workflow_call), which feeds the result into the required
   # `qvac-merge-guard / validate-pr` check. That caller is triggered by
   # pull_request, so on main the PR code below runs with a contents/packages:
-  # read GITHUB_TOKEN; fork PRs reach it only after the fork-approval gate in
-  # the caller.
+  # read GITHUB_TOKEN; fork PRs are denied by the caller's authorize job until
+  # the fork flow is reworked.
   #
   # Merge Guard does not run on the other branches, so they keep this direct
   # `pull_request` trigger: fork PRs get a read-only token and no secrets.

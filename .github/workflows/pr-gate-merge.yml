@@ -2,9 +2,11 @@ name: Merge Guard
 
 on:
   # Not pull_request_target (banned org-wide): this YAML loads from the PR merge
-  # ref, so a PR can edit its own gate. CODEOWNERS review on every path is what
-  # stops that. Fork PRs get a read-only token, cannot record qvac/fork-verified,
-  # and so fail closed at authorize.
+  # ref, so a PR can edit its own gate, including on-pr-nx.yml, whose statuses
+  # verify-prebuilds trusts. CODEOWNERS gives .github/ to qvac-internal-devops,
+  # and the ruleset requires code-owner review, so such an edit needs DevOps
+  # approval. Fork PRs never get qvac/fork-verified (fork-approval records it
+  # only on pull_request_target), so they fail closed at authorize.
   pull_request:
     types:
       - opened
@@ -29,7 +31,9 @@ concurrency:
   # could otherwise trust a pre-label "skipped = success" while the newer
   # labeled build is still running. Killing the older run leaves only the newer
   # run, which waits for the real build.
-  group: pr-gate-merge-${{ github.event.pull_request.number || github.ref }}
+  # event_name: while main still triggers on pull_request_target, its run and
+  # this PR's pull_request run would otherwise cancel each other.
+  group: pr-gate-merge-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -40,6 +44,7 @@ jobs:
   authorize:
     needs: [fork-approval]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: write
@@ -64,6 +69,7 @@ jobs:
   changes:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       packages: ${{ steps.pkglist.outputs.packages }}
       packages-with-path: ${{ steps.pkglist.outputs.packages-with-path }}
@@ -185,6 +191,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.changes.outputs.packages-with-path || '[]') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     name: sanity-checks (${{ matrix.package }})
     steps:
       - name: Checkout code

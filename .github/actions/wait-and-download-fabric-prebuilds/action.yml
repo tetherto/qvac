@@ -120,7 +120,7 @@ runs:
 
                 if (run.head_sha !== expectedSha) mismatches.push(`head_sha=${run.head_sha}`)
                 if (run.path !== expectedPath) mismatches.push(`path=${run.path}`)
-                if (run.event !== "pull_request_target") mismatches.push(`event=${run.event}`)
+                if (!["pull_request", "pull_request_target"].includes(run.event)) mismatches.push(`event=${run.event}`)
                 if (expectedRepo && headRepo !== expectedRepo) {
                   mismatches.push(`head_repository=${headRepo}`)
                 }

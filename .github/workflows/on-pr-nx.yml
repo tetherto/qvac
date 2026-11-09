@@ -2,10 +2,12 @@
 name: On PR Trigger (nx)
 
 on:
-  # Not pull_request_target (banned org-wide). options.ci is still read from the
-  # default branch; code-running jobs gate on fork-approval + authorize, which
-  # fork PRs cannot pass here because their read-only token cannot record
-  # qvac/fork-verified.
+  # Not pull_request_target (banned org-wide), so this YAML loads from the PR
+  # merge ref. The matrix job still runs no PR code: nx-project-matrix checks out
+  # the base branch (trusted-pr-checkout) and reads options.ci from the default
+  # branch. Code-running jobs gate on fork-approval + authorize, which fork PRs
+  # cannot pass because fork-approval only records qvac/fork-verified on
+  # pull_request_target.
   pull_request:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches: [main, release-*, feature-*, tmp-*]
@@ -121,6 +123,11 @@ jobs:
     if: needs.authorize.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # No id-token: this job authenticates to nothing.
+    permissions:
+      contents: read
+      pull-requests: read
+      packages: read
     outputs:
       matrix: ${{ steps.compute.outputs.matrix }}
       any: ${{ steps.compute.outputs.any }}
@@ -149,6 +156,7 @@ jobs:
           target: on-pr
           config-ref: ${{ github.event_name == 'workflow_dispatch' && inputs.config_ref_override || github.event.repository.default_branch }}
           packages: ${{ github.event_name == 'workflow_dispatch' && inputs.packages || '[]' }}
+          trusted-pr-checkout: 'true'
       # PR head, matching on-pr-fabric: a PR that adds itself as a consumer must
       # get the overlay in that same PR. Own path, so it cannot clobber the
       # trusted checkout above.
@@ -171,7 +179,8 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          # nx-project-matrix only writes the API path list on pull_request_target.
+          # The action is loaded from the default branch, and a copy without
+          # trusted-pr-checkout writes this list only on pull_request_target.
           if [ "$EVENT_NAME" = "pull_request" ] && [ ! -f "$CHANGED_FILES" ]; then
             gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" \
               --jq '.[] | .filename, (.previous_filename // empty)' > "$CHANGED_FILES"
