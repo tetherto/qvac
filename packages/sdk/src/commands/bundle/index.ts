@@ -381,6 +381,21 @@ async function assertHarnessDependenciesResolve(entryPath: string, outputDir: st
   }
 }
 
+async function readFileIfExists(filePath: string): Promise<Buffer | null> {
+  try {
+    return await fsp.readFile(filePath)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw error
+  }
+}
+
+/** Puts back `filePath`'s earlier content, or removes it when it had none. */
+async function restoreFile(filePath: string, content: Buffer | null) {
+  if (content === null) await fsp.rm(filePath, { force: true })
+  else await fsp.writeFile(filePath, content)
+}
+
 async function assertOutputDirEmpty(outputDir: string, entryPath: string) {
   let entries: string[]
   try {
@@ -485,20 +500,6 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
 
   await fsp.mkdir(qvacDir, { recursive: true })
 
-  logger.info('\n📝 Generating worker entry...')
-  await fsp.writeFile(
-    entryPath,
-    generateWorkerEntry(pluginSpecifiers, sdkName, config.rpcServerProvider, resolveImport),
-    'utf8'
-  )
-  logger.info(`   Created: ${path.relative(projectRoot, entryPath)}`)
-
-  logger.info(`\n🔨 Bundling for ${target}...`)
-  logger.debug(`   Hosts: ${hosts.join(', ')}`)
-  if (deferModules.length > 0) {
-    logger.debug(`   Deferred: ${deferModules.join(', ')}`)
-  }
-
   const stowOptions = {
     projectRoot,
     entryPath,
@@ -534,37 +535,55 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
       logger
     })
 
-  let installedPrebuilds: HostPrebuildPackage[] = []
-  const missingPlatformAddons = await addonsMissingPlatformPackages()
-  if (options.installMissingPrebuilds === true) {
-    // Desktop packages are never installed, so a missing one is reported
-    // before package.json changes.
-    await throwIfPlatformPackagesMissing(
-      missingPlatformAddons,
-      hosts.filter((host) => !isMobileHost(host))
-    )
-    const { installed } = await installMissingHostPrebuilds({
-      projectRoot,
-      hosts,
-      addons: missingPlatformAddons,
-      quiet: options.quiet === true,
-      logger
-    })
-    installedPrebuilds = installed
-  } else {
-    await throwIfPlatformPackagesMissing(missingPlatformAddons, hosts)
-  }
-
   // The bundle and the app's native modules are built in scratch folders and
   // replace the old ones together, so a failure leaves the working ones in place.
+  // bare-stow names the bundle's main after the entry's folder, so the entry is
+  // bundled from its own path and its previous content is restored on failure.
+  const previousEntry = await readFileIfExists(entryPath)
   const scratch = await scratchFolderFor(outputDir)
   const staged: Staged[] = [{ dir: outputDir, next: scratch }]
+  let installedPrebuilds: HostPrebuildPackage[] = []
   let addons: string[]
   let addonModules: string[]
   let linked: string[] = []
   let verification: VerifyBundleResult | null = null
   let bundlePath: string
+  let replaced = false
   try {
+    logger.info('\n📝 Generating worker entry...')
+    await fsp.writeFile(
+      entryPath,
+      generateWorkerEntry(pluginSpecifiers, sdkName, config.rpcServerProvider, resolveImport),
+      'utf8'
+    )
+    logger.info(`   Created: ${path.relative(projectRoot, entryPath)}`)
+
+    logger.info(`\n🔨 Bundling for ${target}...`)
+    logger.debug(`   Hosts: ${hosts.join(', ')}`)
+    if (deferModules.length > 0) {
+      logger.debug(`   Deferred: ${deferModules.join(', ')}`)
+    }
+
+    const missingPlatformAddons = await addonsMissingPlatformPackages()
+    if (options.installMissingPrebuilds === true) {
+      // Desktop packages are never installed, so a missing one is reported
+      // before package.json changes.
+      await throwIfPlatformPackagesMissing(
+        missingPlatformAddons,
+        hosts.filter((host) => !isMobileHost(host))
+      )
+      const { installed } = await installMissingHostPrebuilds({
+        projectRoot,
+        hosts,
+        addons: missingPlatformAddons,
+        quiet: options.quiet === true,
+        logger
+      })
+      installedPrebuilds = installed
+    } else {
+      await throwIfPlatformPackagesMissing(missingPlatformAddons, hosts)
+    }
+
     const scratchBundlePath = await stowBundle({ ...stowOptions, outputDir: scratch })
     if (language === 'javascript') await stampBundle(scratch, sdkPath, target)
     bundlePath = path.join(outputDir, path.relative(scratch, scratchBundlePath))
@@ -607,7 +626,11 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     }
 
     await replaceAll(staged)
+    replaced = true
     for (const stale of STALE_QVAC_FILES) await fsp.rm(path.join(qvacDir, stale), { force: true })
+  } catch (error) {
+    if (!replaced) await restoreFile(entryPath, previousEntry)
+    throw error
   } finally {
     for (const { next } of staged) await discardScratch(next)
   }

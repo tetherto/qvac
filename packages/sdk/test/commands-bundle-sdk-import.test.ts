@@ -776,9 +776,22 @@ describe('bundleSdk', () => {
       link: false,
       quiet: true
     }
-    await bundleSdk(options)
+    const result = await bundleSdk(options)
     const files = fs.readdirSync(workerDir)
     const contents = files.map((file) => fs.readFileSync(path.join(workerDir, file)))
+    const entry = fs.readFileSync(result.entryPath, 'utf8')
+    writeFile(
+      path.join(projectRoot, 'node_modules', 'extra-plugin', 'package.json'),
+      JSON.stringify({ name: 'extra-plugin', exports: { './plugin': './plugin.js' } })
+    )
+    writeFile(
+      path.join(projectRoot, 'node_modules', 'extra-plugin', 'plugin.js'),
+      'module.exports = {}\n'
+    )
+    writeFile(
+      configPath,
+      JSON.stringify({ plugins: ['@qvac/sdk/llamacpp-completion/plugin', 'extra-plugin/plugin'] })
+    )
     addAddon(path.join(sdkPath, 'node_modules', 'phone-addon'), 'phone-addon')
     writeFile(
       path.join(sdkPath, 'node_modules', 'phone-addon', 'index.js'),
@@ -800,6 +813,7 @@ describe('bundleSdk', () => {
     files.forEach((file, index) => {
       assert.ok(fs.readFileSync(path.join(workerDir, file)).equals(contents[index]!))
     })
+    assert.equal(fs.readFileSync(result.entryPath, 'utf8'), entry)
     assert.deepEqual(
       fs.readdirSync(path.dirname(workerDir)).filter((name) => name.startsWith('.')),
       []
