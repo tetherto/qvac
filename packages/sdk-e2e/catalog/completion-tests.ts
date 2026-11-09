@@ -969,9 +969,9 @@ export const completionContextOverflowWarmCache = createCompletionTest(
   {
     estimatedDurationMs: 30000,
     dependency: 'llm-small-ctx',
-    // Two turns against one named cache. Turn one has to end commit-eligible -- no stop reason,
+    // Two turns against one named cache. Turn one has to end commit-eligible -- stopped on EOS,
     // some text -- or turn two would be a cold full-history resend and would not be testing the
-    // warm path at all.
+    // warm path at all. A `length` (budget or context boundary) or `cancelled` stop is rolled back.
     steps: [
       { useModel: { deps: ['llm-small-ctx'], as: 'model' } },
       {
@@ -989,7 +989,7 @@ export const completionContextOverflowWarmCache = createCompletionTest(
         }
       },
       { project: { from: '$firstTurn', path: 'stopReason', as: 'firstStop' } },
-      { assert: { on: '$firstStop', named: 'isAbsent' } },
+      { assert: { on: '$firstStop', named: 'valueIn', with: { values: ['eos'] } } },
       { project: { from: '$firstTurn', path: 'fullText', as: 'firstText' } },
       { assert: { on: '$firstText', named: 'nonEmptyText' } },
       // The follow-up overflows on top of the committed first turn, so `cachedTokens` carries it;
