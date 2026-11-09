@@ -108,25 +108,31 @@ export async function extractTarStream(
   const gunzip = useGunzip ? createGunzip() : null
 
   return new Promise((resolve, reject) => {
-    let aborted = false
+    let settled = false
     let readStream: ReturnType<typeof fs.createReadStream> | null = null
+    let writeStream: ReturnType<typeof fs.createWriteStream> | null = null
+    let partPath: string | null = null
 
-    const cleanup = () => {
-      aborted = true
+    // Every failure tears the whole pipeline down and removes the partial file.
+    const fail = (error: unknown) => {
+      if (settled) return
+      settled = true
+      signal?.removeEventListener('abort', onAbort)
       readStream?.destroy()
       gunzip?.destroy()
       extract.destroy()
+      writeStream?.destroy()
+      const done = () => reject(error)
+      if (partPath) fsPromises.rm(partPath, { force: true }).then(done, done)
+      else done()
     }
-
-    if (signal) {
-      signal.addEventListener('abort', () => {
-        cleanup()
-        reject(new DownloadCancelledError())
-      })
-    }
+    const onAbort = () => fail(new DownloadCancelledError())
+    signal?.addEventListener('abort', onAbort)
 
     extract.on('entry', (header, stream, next) => {
-      if (aborted) {
+      stream.on('error', fail)
+
+      if (settled) {
         stream.resume()
         return
       }
@@ -153,30 +159,36 @@ export async function extractTarStream(
 
         // Write under a temporary name so an interrupted extraction never
         // leaves a truncated file under its shard name.
-        const partPath = `${filePath}.part`
-        const writeStream = fs.createWriteStream(partPath)
-        stream.on('error', reject)
+        const entryPartPath = `${filePath}.part`
+        partPath = entryPartPath
+        writeStream = fs.createWriteStream(entryPartPath)
         stream.pipe(writeStream)
 
         writeStream.on('finish', () => {
-          fsPromises.rename(partPath, filePath).then(() => next(), reject)
+          fsPromises.rename(entryPartPath, filePath).then(() => {
+            partPath = null
+            writeStream = null
+            next()
+          }, fail)
         })
-        writeStream.on('error', reject)
+        writeStream.on('error', fail)
       } else {
         stream.on('end', next)
         stream.resume()
       }
     })
 
-    extract.on('finish', resolve)
-    extract.on('error', reject)
-
-    if (gunzip) {
-      gunzip.on('error', reject)
-    }
+    extract.on('finish', () => {
+      if (settled) return
+      settled = true
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    })
+    extract.on('error', fail)
+    gunzip?.on('error', fail)
 
     readStream = fs.createReadStream(archivePath)
-    readStream.on('error', reject)
+    readStream.on('error', fail)
 
     // tar-stream's extract is a streamx Writable at runtime; cast past the
     // nominal private brand its shim can't carry (see types/tar-stream).
@@ -194,7 +206,26 @@ export async function extractTarStream(
   })
 }
 
-export async function extractAndValidateShardedArchive(
+// Concurrent loads of one archive share an extract directory, so they share
+// one extraction instead of writing the same files at the same time. A joining
+// caller shares the first caller's abort signal.
+const inFlightExtractions = new Map<string, Promise<string>>()
+
+export function extractAndValidateShardedArchive(
+  archivePath: string,
+  extractDir: string,
+  signal?: AbortSignal
+) {
+  const inFlight = inFlightExtractions.get(extractDir)
+  if (inFlight) return inFlight
+  const extraction = extractAndValidateShardedArchiveOnce(archivePath, extractDir, signal).finally(
+    () => inFlightExtractions.delete(extractDir)
+  )
+  inFlightExtractions.set(extractDir, extraction)
+  return extraction
+}
+
+async function extractAndValidateShardedArchiveOnce(
   archivePath: string,
   extractDir: string,
   signal?: AbortSignal

@@ -169,8 +169,68 @@ test('extractAndValidateShardedArchive: an interrupted extraction leaves no part
 
   await t.exception(extractAndValidateShardedArchive(archivePath, extractDir))
 
-  t.absent(
-    fs.existsSync(path.join(extractDir, 'model-00002-of-00002.gguf')),
-    'the truncated shard is not left under its shard name'
+  t.alike(
+    fs.readdirSync(extractDir),
+    ['model-00001-of-00002.gguf'],
+    'neither the truncated shard nor its partial file is left'
   )
+})
+
+test('extractAndValidateShardedArchive: an archive cut inside a skipped entry rejects', async (t) => {
+  const dir = tempDir(t)
+  const archivePath = path.join(dir, 'model.tar')
+  await writeTar(archivePath, {
+    'model-00001-of-00002.gguf': 'first',
+    'model.tensors.txt': 'x'.repeat(4096),
+    'model-00002-of-00002.gguf': 'second'
+  })
+  // Cut inside model.tensors.txt, which extraction skips.
+  fs.writeFileSync(
+    archivePath,
+    (fs.readFileSync(archivePath) as Buffer).subarray(0, 512 * 3 + 1024)
+  )
+
+  await t.exception(extractAndValidateShardedArchive(archivePath, path.join(dir, 'out')))
+})
+
+test('extractAndValidateShardedArchive: a failed rename rejects and removes the partial file', async (t) => {
+  const dir = tempDir(t)
+  const archivePath = path.join(dir, 'model.tar')
+  const extractDir = path.join(dir, 'out')
+  await writeTar(archivePath, {
+    'model-00001-of-00002.gguf': 'first',
+    'model-00002-of-00002.gguf': 'second'
+  })
+  fs.mkdirSync(path.join(extractDir, 'model-00001-of-00002.gguf'), { recursive: true })
+  fs.writeFileSync(path.join(extractDir, 'model-00001-of-00002.gguf', 'blocker'), '')
+
+  await t.exception(extractAndValidateShardedArchive(archivePath, extractDir))
+
+  t.alike(fs.readdirSync(extractDir), ['model-00001-of-00002.gguf'], 'no partial file is left')
+})
+
+test('extractAndValidateShardedArchive: concurrent extractions of one archive both succeed', async (t) => {
+  const dir = tempDir(t)
+  const archivePath = path.join(dir, 'model.tar')
+  const extractDir = path.join(dir, 'out')
+  const second = 'y'.repeat(1024 * 1024)
+  await writeTar(archivePath, {
+    'model-00001-of-00002.gguf': 'first',
+    'model-00002-of-00002.gguf': second
+  })
+
+  const results = await Promise.all([
+    extractAndValidateShardedArchive(archivePath, extractDir),
+    extractAndValidateShardedArchive(archivePath, extractDir)
+  ])
+
+  t.alike(results, [
+    path.join(extractDir, 'model-00001-of-00002.gguf'),
+    path.join(extractDir, 'model-00001-of-00002.gguf')
+  ])
+  t.is(fs.readFileSync(path.join(extractDir, 'model-00002-of-00002.gguf'), 'utf8'), second)
+  t.alike(fs.readdirSync(extractDir).sort(), [
+    'model-00001-of-00002.gguf',
+    'model-00002-of-00002.gguf'
+  ])
 })
