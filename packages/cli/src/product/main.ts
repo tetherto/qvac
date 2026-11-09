@@ -7,7 +7,6 @@ import { startUpdater } from '../lib/runtime/updater.js'
 import process from 'bare-process'
 import fs from 'bare-fs'
 import path from 'bare-path'
-import os from 'bare-os'
 import b4a from 'b4a'
 import URL, { pathToFileURL } from 'bare-url'
 import { spawn, spawnSync } from 'bare-subprocess'
@@ -16,18 +15,12 @@ import tty from 'bare-tty'
 import pkg from '../../package.json' with { type: 'json' }
 import { bootCore } from '../lib/runtime/core-host.js'
 import { extensionImports } from './extension-imports.js'
-import { listFiles } from '../lib/runtime/files.js'
 import { hostIO } from '../lib/runtime/host-io.js'
-import { loadTemplates, loadContextFiles, contextPreamble } from '../lib/runtime/resources.js'
-import { screens } from './screens.js'
-import { pluginsScreen } from './plugins-screen.js'
-import { readPluginState, writePluginState } from '../lib/runtime/plugin-state.js'
 import { productApp } from './app.js'
+import { chatOptions, runPrintMode } from './chat/main.js'
 import { loadExtensions } from './extension-loader.js'
 import { watchFiles, extensionFiles } from './config-watch.js'
 import { bootLines } from './splash.js'
-import type { PrintIO } from './print.js'
-import { runPrint } from './print.js'
 import { runCommand } from '../cli/run.js'
 import { canvas, paint } from './theme.js'
 
@@ -80,103 +73,6 @@ function copyToClipboard(text: string) {
 // no display (a container, ssh): ask the host terminal to set its clipboard instead
 function copyViaTerminal(program: { output: { write: (arg0: string) => void } }, text: string) {
   program!.output.write(`\x1b]52;c;${b4a.toString(b4a.from(text), 'base64')}\x07`)
-}
-
-function readClipboard() {
-  const commands: [string, string[]][] =
-    process.platform === 'darwin'
-      ? [['pbpaste', []]]
-      : [
-          ['wl-paste', ['--no-newline']],
-          ['xclip', ['-o', '-selection', 'clipboard']],
-          ['xsel', ['--clipboard', '--output']]
-        ]
-  return new Promise<string>((resolve, reject) => {
-    const attempt = (i: number) => {
-      if (i >= commands.length) {
-        reject(new Error('no clipboard command available'))
-        return
-      }
-
-      const [cmd, args] = commands[i]!
-      let child
-      try {
-        child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'ignore'] })
-      } catch {
-        attempt(i + 1)
-        return
-      }
-
-      const out: Uint8Array[] = []
-      child.stdout!.on('data', (data) => out.push(data as Uint8Array))
-      child.on('error', () => attempt(i + 1))
-      child.on('exit', (code) =>
-        code === 0 ? resolve(b4a.concat(out).toString()) : attempt(i + 1)
-      )
-    }
-    attempt(0)
-  })
-}
-
-const MIME_TYPES = new Map([
-  ['.png', 'image/png'],
-  ['.jpg', 'image/jpeg'],
-  ['.jpeg', 'image/jpeg'],
-  ['.gif', 'image/gif'],
-  ['.webp', 'image/webp'],
-  ['.heic', 'image/heic'],
-  ['.heif', 'image/heif'],
-  ['.pdf', 'application/pdf'],
-  ['.txt', 'text/plain'],
-  ['.md', 'text/markdown'],
-  ['.json', 'application/json']
-])
-// the engine's own cap (lib/core/files/attachments.ts); a lower one here refused files it takes
-const MAX_ATTACHMENT_BYTES = 100 * 1024 * 1024
-
-// raw image data on the clipboard has no portable tty-side accessor, so only file paths attach
-async function resolvePastedFile() {
-  const text = (await readClipboard()).trim()
-  if (!text || text.includes('\n')) {
-    return null
-  }
-
-  const file = expandFilePath(text)
-  let stat
-  try {
-    stat = fs.statSync(file)
-  } catch {
-    return null
-  }
-
-  if (!stat.isFile()) {
-    return null
-  }
-
-  return fileToAttachment(file, stat)
-}
-
-// `/attach` resolver: a named path -> attachment; throws on a bad path.
-function resolveFileAttachment(pathString: string) {
-  return fileToAttachment(expandFilePath(pathString))
-}
-
-function expandFilePath(text: string) {
-  const file = text.startsWith('file://') ? decodeURI(text.slice('file://'.length)) : text
-  return file.startsWith('~/') ? path.join(os.homedir(), file.slice(2)) : file
-}
-
-function fileToAttachment(file: string, stat = fs.statSync(file)) {
-  if (!stat.isFile()) throw new Error('not a regular file')
-  if (stat.size > MAX_ATTACHMENT_BYTES) {
-    throw new Error(`file too large (${MAX_ATTACHMENT_BYTES / (1024 * 1024)}MB cap)`)
-  }
-
-  return {
-    fileName: path.basename(file),
-    mimeType: MIME_TYPES.get(path.extname(file).toLowerCase()) ?? 'application/octet-stream',
-    data: fs.readFileSync(file) as Uint8Array
-  }
 }
 
 async function connect() {
@@ -271,25 +167,9 @@ export function appOptions(io: ReturnType<typeof hostIO>): ProductOptions {
         copyViaTerminal(program!, text)
       }
     },
-    resolveFileAttachment,
-    resolvePastedFile,
     ...io,
-    // a paused tty stream keeps its native read, so the editor and the TUI would race for keys
-    editExternal: async (text) => {
-      program!.input.destroy()
-      try {
-        return await io.editExternal(text)
-      } finally {
-        program!.input = new tty.ReadStream(0)
-      }
-    },
-    listFiles: () => listFiles(io.cwd),
-    loadTemplates: () => loadTemplates({ cwd: io.cwd }),
-    loadContext: () => loadContextFiles({ cwd: io.cwd }),
-    screens: { ...screens, plugins: pluginsScreen },
+    ...chatOptions(options, io, program!),
     platform: process.platform,
-    readPluginState: () => readPluginState(options.dataDir!, fs),
-    writePluginState: (state) => writePluginState(options.dataDir!, state, fs),
     restartCore: async () => {
       reloadConfig()
       await host?.close()
@@ -406,7 +286,11 @@ export async function main(launchOptions: LaunchOptions) {
     ? await startUpdater(options.entries as Parameters<typeof startUpdater>[0])
     : null
   if (options.mode) {
-    await runPrintMode()
+    silenceConsole()
+    const code = await runPrintMode(options, { connect, close })
+    await close()
+    await endStreams()
+    Bare.exit(code ?? 0)
   } else if (options.command) {
     await runCli()
   } else {
@@ -418,35 +302,6 @@ function silenceConsole() {
   for (const method of ['log', 'info', 'warn', 'error', 'debug'] as const) {
     console[method] = () => {}
   }
-}
-
-async function runPrintMode() {
-  silenceConsole()
-  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
-    process.on(signal, () => void close().finally(() => Bare.exit(130)))
-  }
-
-  let code = 1
-  try {
-    await connect()
-    code = await runPrint(host!.engine, {
-      deviceId: host!.deviceId,
-      options: options,
-      io: {
-        stdout: process.stdout,
-        stderr: process.stderr,
-        stdin:
-          options.mode === 'rpc' || options.stdinPiped ? (process.stdin as PrintIO['stdin']) : null,
-        context: contextPreamble(loadContextFiles({ cwd: process.cwd() }))
-      }
-    })
-  } catch (error) {
-    process.stderr.write(`qvac: ${error instanceof Error ? error.message : String(error)}\n`)
-  }
-
-  await close()
-  await endStreams()
-  Bare.exit(code ?? 0)
 }
 
 async function runCli() {
