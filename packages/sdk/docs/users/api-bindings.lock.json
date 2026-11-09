@@ -179,6 +179,9 @@
       "fn:startRpcServer": "15584833bdd42bf3",
       "fn:stopRpcServer": "2900fcc5e5b6d2e8"
     },
+    "reference/api/loadModel.mdx": {
+      "fn:loadModel": "5d142740d6c776a6"
+    },
     "runtime/cancellation.mdx": {
       "fn:cancel": "f4654f3459c0ccc4",
       "fn:completion": "01b3537932aaee4a",
