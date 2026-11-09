@@ -309,7 +309,7 @@ export const completionParamsSchema = z.object({
   kvCache: kvCacheSchema
     .optional()
     .describe(
-      'KV cache configuration — `true` to auto-generate a cache key from history, a string to use a custom key, or `false`/`undefined` to disable.'
+      'KV cache configuration — `true` to auto-generate a cache key from history, a string to use a custom key, or `false`/`undefined` to avoid a persistent cache key. Keyless requests reuse a model-wide shared prefix only when the model loads with `cache_share_across_keys: true`.'
     ),
   prefill: z
     .boolean()

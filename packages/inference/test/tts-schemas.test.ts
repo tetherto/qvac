@@ -207,12 +207,27 @@ test('ttsConfigSchema: accepts inclusive outputSampleRate boundaries', (t) => {
 })
 
 test('ttsConfigSchema: rejects Chatterbox-only native streaming options for supertonic', (t) => {
-  const r = ttsConfigSchema.safeParse({
-    ttsEngine: 'supertonic',
-    language: 'en',
-    streamChunkTokens: 25
-  })
-  t.is(r.success, false)
+  // Supertonic streams natively since @qvac/tts-ggml 0.10, so the chunk-size
+  // knobs are shared; the CFM / S3Gen / T3-cache controls stay Chatterbox-only.
+  for (const chatterboxOnly of [
+    { cfmSteps: 1 },
+    { cfgRate: 0.7 },
+    { nCtx: 1000 },
+    { kvCacheType: 'q8_0' },
+    { streamLeftContextTokens: 32 }
+  ]) {
+    const r = ttsConfigSchema.safeParse({
+      ttsEngine: 'supertonic',
+      language: 'en',
+      ...chatterboxOnly
+    })
+    t.is(r.success, false, JSON.stringify(chatterboxOnly))
+  }
+  t.is(
+    ttsConfigSchema.safeParse({ ttsEngine: 'supertonic', language: 'en', streamChunkTokens: 25 })
+      .success,
+    true
+  )
 })
 
 test('ttsConfigSchema: accepts GGML supertonic load config', (t) => {
@@ -1474,4 +1489,337 @@ test('TTS_SENTENCE_DELIMITER_PRESETS drives the stream request schema', (t) => {
     sentenceDelimiterPreset: 'cyrillic'
   })
   t.is(bad.success, false)
+})
+
+test('ttsConfigSchema: accepts the Chatterbox sampling, prosody and length controls', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'chatterbox',
+    language: 'en',
+    s3genModelSrc: 's3:///example/s3gen.gguf',
+    temperature: 0.8,
+    topK: 1000,
+    topP: 0.95,
+    repeatPenalty: 1.2,
+    exaggeration: -0.2,
+    cfgWeight: 0.5,
+    minP: 0.05,
+    nPredict: 1500,
+    maxSentenceChars: 180,
+    crossfadeMs: 30,
+    batchCfmSteps: 4,
+    streamLeftContextTokens: 32,
+    voiceDir: '/voices/me'
+  })
+  t.is(r.success, true)
+  if (r.success) {
+    const data = r.data as Record<string, unknown>
+    t.is(data['temperature'], 0.8)
+    t.is(data['topK'], 1000)
+    t.is(data['topP'], 0.95)
+    t.is(data['repeatPenalty'], 1.2)
+    t.is(data['exaggeration'], -0.2)
+    t.is(data['cfgWeight'], 0.5)
+    t.is(data['minP'], 0.05)
+    t.is(data['nPredict'], 1500)
+    t.is(data['maxSentenceChars'], 180)
+    t.is(data['crossfadeMs'], 30)
+    t.is(data['batchCfmSteps'], 4)
+    t.is(data['streamLeftContextTokens'], 32)
+    t.is(data['voiceDir'], '/voices/me')
+  }
+})
+
+test('ttsConfigSchema: bounds the Chatterbox sampling and length controls', (t) => {
+  const base = {
+    ttsEngine: 'chatterbox',
+    language: 'en',
+    s3genModelSrc: 's3:///example/s3gen.gguf'
+  }
+  for (const bad of [
+    { temperature: -0.1 },
+    { topK: -1 },
+    { topP: 0 },
+    { topP: 1.5 },
+    { repeatPenalty: 0 },
+    { cfgWeight: -1 },
+    { minP: -0.1 },
+    { minP: 1.5 },
+    { nPredict: 0 },
+    { maxSentenceChars: -1 },
+    { crossfadeMs: 1.5 },
+    { batchCfmSteps: -1 },
+    { streamLeftContextTokens: 2147483648 },
+    { voiceDir: '' }
+  ]) {
+    t.is(ttsConfigSchema.safeParse({ ...base, ...bad }).success, false, JSON.stringify(bad))
+  }
+  // Exaggeration is signed: below zero means flatter prosody.
+  t.is(ttsConfigSchema.safeParse({ ...base, exaggeration: -1 }).success, true)
+})
+
+test('ttsConfigSchema: rejects the Chatterbox-only controls on other engines', (t) => {
+  for (const bad of [
+    { ttsEngine: 'supertonic', language: 'en', repeatPenalty: 1.1 },
+    { ttsEngine: 'supertonic', language: 'en', voiceDir: '/voices/me' },
+    { ttsEngine: 'cosyvoice3', nPredict: 500 },
+    { ttsEngine: 'audio8', audio8CodecDecoderModelSrc: 's3:///a/dec.gguf', exaggeration: 0.5 }
+  ]) {
+    t.is(ttsConfigSchema.safeParse(bad).success, false, JSON.stringify(bad))
+  }
+})
+
+test('ttsConfigSchema: accepts the Supertonic streaming, voice and deployment controls', (t) => {
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'supertonic',
+    language: 'en',
+    voice: 'F1',
+    voiceJsonSrc: 's3:///voices/cloned.json',
+    noiseNpySrc: { src: 's3:///voices/noise.npy', name: 'TTS_SUPERTONIC_NOISE' },
+    prewarmText: 'A sentence of representative length for the warm-up.',
+    vulkanDevice: -1,
+    streamChunkTokens: 50,
+    streamFirstChunkTokens: 20,
+    streamChunkTolerancePct: 20,
+    streamMinChunkTokens: 30
+  })
+  t.is(r.success, true)
+  if (r.success) {
+    const data = r.data as Record<string, unknown>
+    t.is(data['voiceJsonSrc'], 's3:///voices/cloned.json')
+    t.alike(data['noiseNpySrc'], { src: 's3:///voices/noise.npy', name: 'TTS_SUPERTONIC_NOISE' })
+    t.is(data['prewarmText'], 'A sentence of representative length for the warm-up.')
+    t.is(data['vulkanDevice'], -1)
+    t.is(data['streamChunkTokens'], 50)
+    t.is(data['streamFirstChunkTokens'], 20)
+    t.is(data['streamChunkTolerancePct'], 20)
+    t.is(data['streamMinChunkTokens'], 30)
+  }
+  // Whitespace-only pre-warm text would reach the engine as a non-empty prompt.
+  t.is(
+    ttsConfigSchema.safeParse({ ttsEngine: 'supertonic', language: 'en', prewarmText: '   ' })
+      .success,
+    false
+  )
+})
+
+test('ttsConfigSchema: rejects Supertonic native streaming with either LavaSR stage', (t) => {
+  const base = { ttsEngine: 'supertonic', language: 'en', streamChunkTokens: 50 }
+  for (const field of ['lavasrEnhancerModelSrc', 'lavasrDenoiserModelSrc'] as const) {
+    const r = ttsConfigSchema.safeParse({ ...base, [field]: 's3:///lavasr/stage.gguf' })
+    t.is(r.success, false, field)
+    if (!r.success) {
+      t.is(r.error.issues[0]?.path.join('.'), field)
+      t.ok(r.error.issues[0]?.message.includes('Supertonic native chunk streaming'))
+    }
+  }
+  // Both stages at once name both fields.
+  const both = ttsConfigSchema.safeParse({
+    ...base,
+    lavasrEnhancerModelSrc: 's3:///lavasr/enhancer.gguf',
+    lavasrDenoiserModelSrc: 's3:///lavasr/denoiser.gguf'
+  })
+  t.is(both.success, false)
+  if (!both.success) t.is(both.error.issues.length, 2)
+  // 0 means batch; a first-chunk size alone enables nothing, so the stages stay reachable.
+  t.is(
+    ttsConfigSchema.safeParse({
+      ttsEngine: 'supertonic',
+      language: 'en',
+      streamChunkTokens: 0,
+      streamFirstChunkTokens: 20,
+      lavasrEnhancerModelSrc: 's3:///lavasr/enhancer.gguf',
+      lavasrDenoiserModelSrc: 's3:///lavasr/denoiser.gguf'
+    }).success,
+    true
+  )
+})
+
+test('ttsConfigSchema: keeps the Supertonic rate-control rule on the load schema', (t) => {
+  // The load schema is built from the runtime shape, so it has to re-run the
+  // runtime refinement rather than inherit it.
+  const r = ttsConfigSchema.safeParse({
+    ttsEngine: 'supertonic',
+    language: 'en',
+    ttsSpeed: 1.2,
+    pace: 'fast',
+    lavasrEnhancerModelSrc: 's3:///lavasr/enhancer.gguf'
+  })
+  t.is(r.success, false)
+  if (!r.success) t.is(r.error.issues[0]?.path.join('.'), 'pace')
+})
+
+test('ttsConfigSchema: bounds vulkanDevice to -1 and above on the engines that read it', (t) => {
+  for (const device of [-1, 0, 3]) {
+    t.is(
+      ttsConfigSchema.safeParse({ ttsEngine: 'supertonic', language: 'en', vulkanDevice: device })
+        .success,
+      true
+    )
+    t.is(ttsConfigSchema.safeParse({ ttsEngine: 'cosyvoice3', vulkanDevice: device }).success, true)
+  }
+  t.is(
+    ttsConfigSchema.safeParse({ ttsEngine: 'supertonic', language: 'en', vulkanDevice: -2 })
+      .success,
+    false
+  )
+  t.is(ttsConfigSchema.safeParse({ ttsEngine: 'cosyvoice3', vulkanDevice: 1.5 }).success, false)
+  // Audio8 always auto-picks and Chatterbox has no Vulkan adapter control.
+  t.is(
+    ttsConfigSchema.safeParse({
+      ttsEngine: 'chatterbox',
+      language: 'en',
+      s3genModelSrc: 's3:///example/s3gen.gguf',
+      vulkanDevice: 0
+    }).success,
+    false
+  )
+})
+
+test('ttsConfigSchema: accepts CosyVoice3 flowCutPrompt', (t) => {
+  const r = ttsConfigSchema.safeParse({ ttsEngine: 'cosyvoice3', flowCutPrompt: true })
+  t.is(r.success, true)
+  if (r.success) t.is((r.data as Record<string, unknown>)['flowCutPrompt'], true)
+  t.is(ttsConfigSchema.safeParse({ ttsEngine: 'cosyvoice3', flowCutPrompt: 'yes' }).success, false)
+  t.is(
+    ttsConfigSchema.safeParse({ ttsEngine: 'supertonic', language: 'en', flowCutPrompt: true })
+      .success,
+    false
+  )
+})
+
+test('ttsRequestSchema: accepts a per-request CosyVoice3 instruct and the Audio8 reference pair', (t) => {
+  const structured = ttsRequestSchema.safeParse({
+    type: 'textToSpeech',
+    modelId: 'cosyvoice3',
+    text: 'Hello.',
+    instruct: { dialect: 'cantonese' }
+  })
+  t.is(structured.success, true)
+  if (structured.success) t.alike(structured.data.instruct, { dialect: 'cantonese' })
+
+  const raw = ttsRequestSchema.safeParse({
+    type: 'textToSpeech',
+    modelId: 'cosyvoice3',
+    text: 'Hello.',
+    instruct: '  请用四川话表达。 '
+  })
+  t.is(raw.success, true)
+  if (raw.success) t.is(raw.data.instruct, '请用四川话表达。', 'raw instruction is trimmed')
+
+  const reference = ttsRequestSchema.safeParse({
+    type: 'textToSpeech',
+    modelId: 'audio8',
+    text: 'Hello.',
+    referenceAudioSrc: '/voices/someone-else.wav',
+    referenceText: ' What that recording says. '
+  })
+  t.is(reference.success, true)
+  if (reference.success) {
+    t.is(reference.data.referenceAudioSrc, '/voices/someone-else.wav')
+    t.is(reference.data.referenceText, 'What that recording says.')
+  }
+})
+
+test('ttsRequestSchema: enforces the per-request voice rules', (t) => {
+  const base = { type: 'textToSpeech', modelId: 'm', text: 'Hello.' }
+  const cases: Array<[Record<string, unknown>, string]> = [
+    [{ referenceAudioSrc: '/voices/x.wav' }, 'referenceText'],
+    [{ referenceAudioSrc: '/voices/x.wav', referenceText: '   ' }, 'referenceText'],
+    [{ instruct: { dialect: 'cantonese' }, emotion: 'happy' }, 'emotion'],
+    [{ instruct: 'loud please', pace: 'fast' }, 'pace'],
+    [{ instruct: '' }, 'instruct'],
+    [{ instruct: {} }, 'instruct'],
+    [{ instruct: { dialekt: 'cantonese' } }, 'instruct']
+  ]
+  for (const [fields, path] of cases) {
+    const r = ttsRequestSchema.safeParse({ ...base, ...fields })
+    t.is(r.success, false, JSON.stringify(fields))
+    if (!r.success) {
+      t.ok(
+        r.error.issues.some((issue) => issue.path[0] === path),
+        `${path} named`
+      )
+    }
+  }
+  // `moderate` disengages the pace channel, so it never conflicts.
+  t.is(
+    ttsRequestSchema.safeParse({ ...base, instruct: { style: 'robot' }, pace: 'moderate' }).success,
+    true
+  )
+  // A transcript alone is allowed: it corrects the loaded recording's transcript.
+  t.is(ttsRequestSchema.safeParse({ ...base, referenceText: 'corrected' }).success, true)
+})
+
+test('textToSpeechStreamRequestSchema: carries the per-request voice fields and rules', (t) => {
+  const ok = textToSpeechStreamRequestSchema.safeParse({
+    type: 'textToSpeechStream',
+    modelId: 'm',
+    instruct: { volume: 'soft' },
+    referenceAudioSrc: { src: 's3:///voices/x.wav', name: 'VOICE' },
+    referenceText: 'What it says.'
+  })
+  t.is(ok.success, true)
+  if (ok.success) {
+    t.alike(ok.data.instruct, { volume: 'soft' })
+    t.alike(ok.data.referenceAudioSrc, { src: 's3:///voices/x.wav', name: 'VOICE' })
+    t.is(ok.data.referenceText, 'What it says.')
+  }
+  const missingTranscript = textToSpeechStreamRequestSchema.safeParse({
+    type: 'textToSpeechStream',
+    modelId: 'm',
+    referenceAudioSrc: '/voices/x.wav'
+  })
+  t.is(missingTranscript.success, false)
+  if (!missingTranscript.success) {
+    t.is(missingTranscript.error.issues[0]?.path.join('.'), 'referenceText')
+  }
+  const twoControls = textToSpeechStreamRequestSchema.safeParse({
+    type: 'textToSpeechStream',
+    modelId: 'm',
+    instruct: 'softly',
+    emotion: 'sad'
+  })
+  t.is(twoControls.success, false)
+  if (!twoControls.success) t.is(twoControls.error.issues[0]?.path.join('.'), 'emotion')
+})
+
+test('ttsStatsSchema: carries the engines’ stage timings and counters', (t) => {
+  const stats = {
+    firstAudioMs: 180,
+    t3Ms: 410,
+    s3genMs: 220,
+    t3Tokens: 125,
+    stageTotalMs: 900,
+    lmPrefillMs: 30,
+    lmDecodeMs: 400,
+    flowFrontendMs: 5,
+    ditEulerMs: 300,
+    hiftF0Ms: 10,
+    hiftSourceMs: 20,
+    hiftStftMs: 15,
+    hiftDecodeMs: 120,
+    decodeSteps: 100,
+    speechTokens: 98,
+    flowFrames: 240,
+    melFrames: 200,
+    textIds: 12,
+    promptSpeechTokens: 140,
+    voiceEncodeMs: 0,
+    promptMs: 2,
+    prefillMs: 40,
+    sampleMs: 350,
+    fastDecodeMs: 200,
+    slowDecodeMs: 150,
+    codecLatentMs: 60,
+    codecSynthMs: 90,
+    resampleMs: 4
+  }
+  for (const [type, schema] of [
+    ['textToSpeech', ttsResponseSchema],
+    ['textToSpeechStream', textToSpeechStreamResponseSchema]
+  ] as const) {
+    const r = schema.safeParse({ type, buffer: [], done: true, stats })
+    t.is(r.success, true, type)
+    if (r.success) t.alike(r.data.stats, stats)
+  }
 })

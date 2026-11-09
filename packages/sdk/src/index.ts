@@ -259,6 +259,8 @@ export {
   AUDIOGEN_MAX_AUDIO_CODES,
   AUDIOGEN_EDIT_OPERATIONS,
   AUDIOGEN_REPAINT_MODES,
+  AUDIOGEN_OUTPUT_FORMATS,
+  AUDIOGEN_MINIMAX_COREML_COMPUTE_UNITS,
   type AudioGenEngine,
   type AudioGenTaskType,
   type AudioGenTrack,
@@ -268,6 +270,9 @@ export {
   type AudioGenRuntimeConfig,
   type AudioGenProgress,
   type AudioGenAudio,
+  type AudioGenEncodedAudio,
+  type AudioGenOutputFormat,
+  type AudioGenMinimaxCoremlComputeUnits,
   type AudioGenStats,
   type AudioGenGenerationMetadata,
   type AudioGenResult,
@@ -391,7 +396,8 @@ export {
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
-  TranslationFailedError
+  TranslationFailedError,
+  AudioEncodeFailedError
 } from './utils/errors-server'
 
 // `WorkerCrashedError` and `WorkerShutdownError` are thrown by the
