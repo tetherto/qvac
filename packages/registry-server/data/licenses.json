@@ -68,5 +68,10 @@
     "spdxId": "qwen-community-1.0",
     "name": "Qwen Community License 1.0",
     "url": "https://huggingface.co/Qwen/Qwen3.8-Flash-Next/raw/de4b8e4d43b917e7706784d8bb445c9af86a3540/LICENSE"
+  },
+  {
+    "spdxId": "flux-kommunity-license",
+    "name": "FLUX Kommunity License v.1.0",
+    "url": "https://huggingface.co/black-forest-labs/flux-3-image-klein/raw/09561231f44e41381c461caf53d5452005a60ac9/LICENSE.md"
   }
 ]
