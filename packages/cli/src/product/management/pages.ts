@@ -1,9 +1,7 @@
 type Snapshot = Awaited<ReturnType<typeof snapshot>>
-import type { snapshot, Frame } from '@qvac/cli-kit/tui'
+import type { snapshot, Frame, Dashboard, Page, PageView } from '@qvac/cli-kit/tui'
 import { hex, wrap } from '@qvac/cli-kit/tui'
 import { paint, count, strong } from '@qvac/cli-kit/brand'
-import type { ProductApp } from '../app.js'
-import type { Page, PageView } from '../dashboard/frame.js'
 
 // The host's own pages: every device, the workspaces it serves, and its status.
 export const PAGES: Record<string, PageView> = {
@@ -12,7 +10,7 @@ export const PAGES: Record<string, PageView> = {
   status: statusPage
 }
 
-function devicesPage(app: ProductApp, f: Frame): Page {
+function devicesPage(app: Dashboard, f: Frame): Page {
   const p = app.product!
   const devices = p.workspaceDevices || p.devices || []
 
@@ -32,12 +30,12 @@ function devicesPage(app: ProductApp, f: Frame): Page {
   }
 }
 
-function pairing(app: ProductApp, device: NonNullable<Snapshot['devices']>[number]) {
+function pairing(app: Dashboard, device: NonNullable<Snapshot['devices']>[number]) {
   if (hex(device.id) === hex(app.originDeviceId)) return 'This device'
   return device.revoked ? 'Removed' : 'Paired'
 }
 
-function workspacesPage(app: ProductApp): Page {
+function workspacesPage(app: Dashboard): Page {
   const workspaces = app.product!.meshes.filter((m) => m.workspace)
 
   return {
@@ -59,7 +57,7 @@ function workspacesPage(app: ProductApp): Page {
   }
 }
 
-function statusPage(app: ProductApp, f: Frame): Page {
+function statusPage(app: Dashboard, f: Frame): Page {
   const status = {
     connection: app.meshStatus,
     stateDirectory: app.options.dataDir,

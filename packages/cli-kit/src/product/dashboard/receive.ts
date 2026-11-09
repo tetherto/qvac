@@ -1,8 +1,8 @@
-import type { Command, RpcResult } from '@qvac/cli-kit/tui'
-import type { ProductApp } from './app.js'
+import type { Command, RpcResult } from '../app-types.js'
+import type { Dashboard } from './app.js'
 type Value<T> = { value: T }
 
-export const RECEIVERS = new Map<string, (app: ProductApp, msg: never) => Command>([
+export const RECEIVERS = new Map<string, (app: Dashboard, msg: never) => Command>([
   ['product.join-preview', joinPreviewed],
   ['product.created', workspaceCreated],
   ['product.invite', invited],
@@ -11,7 +11,7 @@ export const RECEIVERS = new Map<string, (app: ProductApp, msg: never) => Comman
   ['product.paired', paired]
 ])
 
-function joinPreviewed(app: ProductApp, msg: Value<RpcResult<'previewMeshInvite'>>): Command {
+function joinPreviewed(app: Dashboard, msg: Value<RpcResult<'previewMeshInvite'>>): Command {
   app.actionBusy = false
   // setup pairs devices; a workspace is joined after it, from the overview
   if (msg.value?.memberInvite && app.inSetup()) {
@@ -29,7 +29,7 @@ function joinPreviewed(app: ProductApp, msg: Value<RpcResult<'previewMeshInvite'
 }
 
 function workspaceCreated(
-  app: ProductApp,
+  app: Dashboard,
   msg: Value<RpcResult<'createWorkspace'> | null>
 ): Command {
   app.actionBusy = false
@@ -38,14 +38,14 @@ function workspaceCreated(
   return app.refresh()
 }
 
-function invited(app: ProductApp, msg: Value<RpcResult<'meshInvite'>>): Command {
+function invited(app: Dashboard, msg: Value<RpcResult<'meshInvite'>>): Command {
   app.actionBusy = false
   app.invitation = msg.value
   app.page = 'invite'
   return null
 }
 
-function catalogLoaded(app: ProductApp, msg: Value<RpcResult<'listModels'>>): Command {
+function catalogLoaded(app: Dashboard, msg: Value<RpcResult<'listModels'>>): Command {
   app.actionBusy = false
   app.catalog = msg.value.models || []
   app.selection = 0
@@ -54,12 +54,12 @@ function catalogLoaded(app: ProductApp, msg: Value<RpcResult<'listModels'>>): Co
 }
 
 // an Esc that cancelled the join already left the page
-function paired(app: ProductApp) {
+function paired(app: Dashboard) {
   return app.page === 'joining' ? app.finishOnboarding() : null
 }
 
-function onboarded(app: ProductApp) {
+function onboarded(app: Dashboard) {
   app.actionBusy = false
-  app.page = 'chat'
+  app.page = app.chat ? 'chat' : 'overview'
   return app.refresh()
 }

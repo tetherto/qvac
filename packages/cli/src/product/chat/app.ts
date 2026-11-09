@@ -17,7 +17,7 @@ import type {
 } from '@qvac/cli-kit/tui'
 import {
   wrap,
-  Shell,
+  Dashboard,
   SPIN,
   selectable,
   arrow,
@@ -141,7 +141,7 @@ export interface ChatOptions extends ProductOptions {
 }
 
 // The chat page on the shell: conversations, the composer, the agent screens and extensions.
-export abstract class ChatApp extends Shell {
+export abstract class ChatApp extends Dashboard {
   declare options: ChatOptions
   chatId: string | null
   chats: NonNullable<RpcResult<'listChats'>['chats']>
@@ -170,6 +170,7 @@ export abstract class ChatApp extends Shell {
 
   constructor(tui: Tui, options: ChatOptions = {}) {
     super(tui, options)
+    this.chat = this
     this.chatId = null
     this.chats = []
     this.turns = []
@@ -196,9 +197,6 @@ export abstract class ChatApp extends Shell {
     this.extensions = this.loadExtensions(options.extensions)
     applyTheme(this.extensions.theme)
   }
-
-  // the invitation page is the dashboard's; the chat only asks for it
-  abstract showInvite(options?: { member?: boolean }): Command
 
   loadExtensions(loaded: LoadedExtensions | undefined) {
     return new Extensions(loaded, {
@@ -1127,7 +1125,7 @@ export abstract class ChatApp extends Shell {
     ]
   }
 
-  helpLines() {
+  override helpLines() {
     const key = (k: string, d: string) => paint(k.padEnd(14), 'teal') + d
     return [
       paint('Chat', 'muted'),

@@ -1,18 +1,17 @@
-import type { KeyMessage, Command } from '@qvac/cli-kit/tui'
-import type { ProductApp } from '../app.js'
+import type { KeyMessage, Command, Dashboard } from '@qvac/cli-kit/tui'
 
 // the host's pages, from anywhere on the dashboard
-export const SHORTCUTS: [string, (app: ProductApp) => Command][] = [
-  ['v', (app: ProductApp) => app.showPage('devices')],
-  ['w', (app: ProductApp) => app.assign({ page: 'workspaces', selection: 0 })],
-  ['s', (app: ProductApp) => app.showPage('status')]
+export const SHORTCUTS: [string, (app: Dashboard) => Command][] = [
+  ['v', (app: Dashboard) => app.showPage('devices')],
+  ['w', (app: Dashboard) => app.assign({ page: 'workspaces', selection: 0 })],
+  ['s', (app: Dashboard) => app.showPage('status')]
 ]
 
-export const PAGES = new Map<string, (app: ProductApp, msg: KeyMessage) => Command>([
+export const PAGES = new Map<string, (app: Dashboard, msg: KeyMessage) => Command>([
   ['workspaces', workspacesKey]
 ])
 
-function workspacesKey(app: ProductApp, msg: KeyMessage) {
+function workspacesKey(app: Dashboard, msg: KeyMessage) {
   const workspaces = app.product!.meshes.filter((m) => m.workspace)
   if (msg.is('up', 'down')) {
     const step = msg.is('up') ? -1 : 1

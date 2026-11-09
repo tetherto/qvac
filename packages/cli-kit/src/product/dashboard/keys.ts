@@ -1,24 +1,24 @@
 type Model = NonNullable<RpcResult<'listModels'>['models']>[number]
-import type { RpcResult, KeyMessage, Command } from '@qvac/cli-kit/tui'
-import type { ProductApp } from '../app.js'
+import type { RpcResult, KeyMessage, Command } from '../app-types.js'
+import type { Dashboard } from './app.js'
 import { FORMS } from '../onboarding/pages.js'
 
-export type KeyHandler = (app: ProductApp, msg: KeyMessage) => Command
+export type KeyHandler = (app: Dashboard, msg: KeyMessage) => Command
 // What a product's dashboard answers: modal pages take every key, enter pages one, list pages the
 // keys left after navigation, and shortcuts open pages from anywhere.
 export interface DashboardKeys {
   modal: Map<string, KeyHandler>
-  enter: Map<string, (app: ProductApp) => Command>
-  shortcuts: [string, (app: ProductApp) => Command][]
+  enter: Map<string, (app: Dashboard) => Command>
+  shortcuts: [string, (app: Dashboard) => Command][]
   pages: Map<string, KeyHandler>
 }
 
 const TAB_ORDER = ['overview', 'device', 'models']
 const TAB_KEYS: Record<string, string> = { 1: 'overview', 2: 'device', 3: 'models' }
 
-export const SHORTCUTS: [string, (app: ProductApp) => Command][] = [
-  ['q', (app: ProductApp) => app.tui.quit],
-  ['i', (app: ProductApp) => app.showInvite()]
+export const SHORTCUTS: [string, (app: Dashboard) => Command][] = [
+  ['q', (app: Dashboard) => app.tui.quit],
+  ['i', (app: Dashboard) => app.showInvite()]
 ]
 
 // the pages both products list: models on this device and the catalog
@@ -28,7 +28,7 @@ export const PAGES = new Map<string, KeyHandler>([
   ['remove', removeKey]
 ])
 
-export function dashboardKey(app: ProductApp, msg: KeyMessage, keys: DashboardKeys) {
+export function dashboardKey(app: Dashboard, msg: KeyMessage, keys: DashboardKeys) {
   if (app.actionBusy) {
     return null
   }
@@ -50,7 +50,7 @@ export function dashboardKey(app: ProductApp, msg: KeyMessage, keys: DashboardKe
   return navigationKey(app, msg, keys)
 }
 
-function back(app: ProductApp) {
+function back(app: Dashboard) {
   if (app.page === 'welcome') return null
   if (app.page === 'joining') {
     app.cancelJoin()
@@ -72,15 +72,15 @@ function backPage(page: string) {
   return ['overview', 'welcome'].includes(page) ? page : 'overview'
 }
 
-function navigationKey(app: ProductApp, msg: KeyMessage, keys: DashboardKeys) {
-  if (msg.is('enter') && !keys.pages.has(app.page)) {
+function navigationKey(app: Dashboard, msg: KeyMessage, keys: DashboardKeys) {
+  if (app.chat && msg.is('enter') && !keys.pages.has(app.page)) {
     return app.showPage('chat')
   }
 
-  if (msg.sequence === '/' || msg.is('c')) {
+  if (app.chat && (msg.sequence === '/' || msg.is('c'))) {
     app.page = 'chat'
     if (msg.sequence === '/') {
-      app.editor.set('/')
+      app.chat.editor.set('/')
     }
 
     return null
@@ -114,7 +114,7 @@ function navigationKey(app: ProductApp, msg: KeyMessage, keys: DashboardKeys) {
   return page ? page(app, msg) : null
 }
 
-function removeKey(app: ProductApp, msg: KeyMessage) {
+function removeKey(app: Dashboard, msg: KeyMessage) {
   if (msg.is('y')) {
     return app.action(async () => {
       const model = app.product!.models.find((m) => m.name === app.removeName)
@@ -134,7 +134,7 @@ function removeKey(app: ProductApp, msg: KeyMessage) {
   return null
 }
 
-function modelsKey(app: ProductApp, msg: KeyMessage) {
+function modelsKey(app: Dashboard, msg: KeyMessage) {
   const models = (app.page === 'catalog' ? app.catalog : app.product!.models) ?? []
   if (msg.is('up', 'down')) {
     const step = msg.is('up') ? -1 : 1
@@ -149,7 +149,7 @@ function modelsKey(app: ProductApp, msg: KeyMessage) {
   return model ? modelKey(app, { msg, model }) : null
 }
 
-function modelKey(app: ProductApp, { msg, model }: { msg: KeyMessage; model: Model }) {
+function modelKey(app: Dashboard, { msg, model }: { msg: KeyMessage; model: Model }) {
   const { name } = model
   if (msg.is('enter')) {
     return chooseModel(app, model)
@@ -178,7 +178,7 @@ function modelKey(app: ProductApp, { msg, model }: { msg: KeyMessage; model: Mod
   return null
 }
 
-function chooseModel(app: ProductApp, model: Model) {
+function chooseModel(app: Dashboard, model: Model) {
   if (app.page === 'catalog' && !model.isCached) {
     return app.action(() => app.engine!.retryModelDownload({ name: model.name }))
   }
@@ -188,12 +188,16 @@ function chooseModel(app: ProductApp, model: Model) {
     return null
   }
 
+  if (!app.chat) {
+    return null
+  }
+
   app.page = 'chat'
 
-  return app.useModel(model.name)
+  return app.chat.useModel(model.name)
 }
 
-function toggleLoad(app: ProductApp, model: Model) {
+function toggleLoad(app: Dashboard, model: Model) {
   const { name, isLoaded } = model
 
   return app.action(async () => {

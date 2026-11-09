@@ -1,6 +1,7 @@
-import type { Frame } from '@qvac/cli-kit/tui'
-import { paint, strong, paragraph, keyHints } from '@qvac/cli-kit/brand'
-import type { ProductApp } from '../app.js'
+import type { Frame } from '../app-types.js'
+import type { Dashboard } from './app.js'
+import { paint, strong } from '../theme.js'
+import { paragraph, keyHints } from '../ink.js'
 
 // The dashboard frame: header, the page a product names, and the footer with its key hints.
 export interface Page {
@@ -10,7 +11,7 @@ export interface Page {
   hints?: string[][]
   aside?: string[][]
 }
-export type PageView = (app: ProductApp, f: Frame) => Page
+export type PageView = (app: Dashboard, f: Frame) => Page
 
 export const NAV_HINTS: [string, string][] = [
   ['i', 'invite'],
@@ -21,7 +22,7 @@ export const NAV_HINTS: [string, string][] = [
 ]
 
 // pages: what each page name renders; the product composes its own table
-export function renderDashboard(app: ProductApp, f: Frame, pages: Record<string, PageView>) {
+export function renderDashboard(app: Dashboard, f: Frame, pages: Record<string, PageView>) {
   const render = app.ready ? pages[app.page] || blankPage : startingPage
   const page = render(app, f)
   const header = page.header || [
@@ -42,12 +43,12 @@ export function renderDashboard(app: ProductApp, f: Frame, pages: Record<string,
   ])
 }
 
-export function brandLabel(app: ProductApp) {
+export function brandLabel(app: Dashboard) {
   return ['QV.AC', app.options.version].filter(Boolean).join(' ')
 }
 
 function dashboardFooter(
-  app: ProductApp,
+  app: Dashboard,
   f: Frame,
   { nav = true, hints = NAV_HINTS, aside = [] }: Partial<Page>
 ) {
@@ -58,11 +59,8 @@ function dashboardFooter(
   const footer = nav
     ? [
         paint('─'.repeat(width), 'line'),
-        strong('❯ ', 'teal') +
-          paint(`Ask ${app.agent?.name || 'QV.AC'} anything`, 'text') +
-          paint('  ·  enter to chat  ·  / for commands', 'muted'),
-        paint('─'.repeat(width), 'line'),
-        f.pair(app.tabs(), [working || paint(app.tabHint(), 'muted'), '']),
+        ...(app.chat ? composerLine(app, width) : []),
+        f.pair(app.tabs(), [working || paint(app.chat?.tabHint() || '', 'muted'), '']),
         keys
       ]
     : [paint('─'.repeat(width), 'line'), working || f.two(keys, right)]
@@ -76,11 +74,21 @@ function dashboardFooter(
   return footer
 }
 
+// the way into the chat beside the pages, and the rule under it
+function composerLine(app: Dashboard, width: number) {
+  return [
+    strong('❯ ', 'teal') +
+      paint(`Ask ${app.agent?.name || 'QV.AC'} anything`, 'text') +
+      paint('  ·  enter to chat  ·  / for commands', 'muted'),
+    paint('─'.repeat(width), 'line')
+  ]
+}
+
 function blankPage(): Page {
   return { body: [] }
 }
 
-function startingPage(app: ProductApp, f: Frame): Page {
+function startingPage(app: Dashboard, f: Frame): Page {
   return {
     body: [
       '',

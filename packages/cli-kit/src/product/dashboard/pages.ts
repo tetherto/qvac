@@ -6,10 +6,14 @@ interface Hardware {
   gpu?: { devices?: { name?: string; unifiedMemory?: boolean }[] }
   hardware?: { model?: string }
 }
-import type { RpcResult, WatchFrame, snapshot, Frame } from '@qvac/cli-kit/tui'
-import { hex, wrap, modelParts, modelKind } from '@qvac/cli-kit/tui'
-import { palette, paint, bytes, count, strong, paragraph } from '@qvac/cli-kit/brand'
-import type { ProductApp } from '../app.js'
+import type { RpcResult, WatchFrame, Frame } from '../app-types.js'
+import type { ChatLinks, Dashboard } from './app.js'
+import type { snapshot } from '../data.js'
+import { hex } from '../data.js'
+import { wrap } from '../../lib/terminal/text.js'
+import { modelParts, modelKind } from '../model-label.js'
+import { palette, paint, bytes, count, strong } from '../theme.js'
+import { paragraph } from '../ink.js'
 import type { Page, PageView } from './frame.js'
 import { NAV_HINTS } from './frame.js'
 
@@ -35,7 +39,7 @@ export const PAGES: Record<string, PageView> = {
   help: helpPage
 }
 
-function overviewPage(app: ProductApp, f: Frame): Page {
+function overviewPage(app: Dashboard, f: Frame): Page {
   const p = app.product!
   const loaded = p.models.filter((m) => m.isLoaded).length
   const body = [
@@ -59,14 +63,14 @@ function overviewPage(app: ProductApp, f: Frame): Page {
     '',
     paint('2', 'teal') + '  Explore this device'
   ]
-  if (app.chats.length) {
-    body.push('', '', f.rule('RECENT CONVERSATIONS', 'ctrl+b all'), '', ...recentChats(app))
+  if (app.chat?.chats.length) {
+    body.push('', '', f.rule('RECENT CONVERSATIONS', 'ctrl+b all'), '', ...recentChats(app.chat))
   }
 
   return { body }
 }
 
-function metrics(app: ProductApp, f: Frame) {
+function metrics(app: Dashboard, f: Frame) {
   const p = app.product!
   const { measure } = app
   const labels = ['DEVICES', 'PEOPLE', 'LOCAL MODELS', 'PROJECTS']
@@ -85,9 +89,9 @@ function metrics(app: ProductApp, f: Frame) {
   ]
 }
 
-function recentChats(app: ProductApp) {
-  return app.chats.slice(0, 3).map((chat) => {
-    const current = chat.id === app.chatId
+function recentChats(links: ChatLinks) {
+  return links.chats.slice(0, 3).map((chat) => {
+    const current = chat.id === links.chatId
     return (
       paint(current ? '▸ ' : '  ', 'teal') +
       paint(chat.title || 'Untitled', current ? 'text' : 'muted')
@@ -95,7 +99,7 @@ function recentChats(app: ProductApp) {
   })
 }
 
-function devicePage(app: ProductApp, f: Frame): Page {
+function devicePage(app: Dashboard, f: Frame): Page {
   const p = app.product!
   const used = p.memory?.usedBytes
   const total = p.memory?.capBytes
@@ -130,7 +134,7 @@ function devicePage(app: ProductApp, f: Frame): Page {
 }
 
 // One line of hardware facts; an integrated GPU shares the CPU's name, so print it once.
-function hardwareLine(app: ProductApp, p: Snapshot) {
+function hardwareLine(app: Dashboard, p: Snapshot) {
   const device = p.devices?.find((d) => hex(d.id) === hex(app.originDeviceId))
   const hardware = p.hardware as Hardware | null | undefined
   const cpu = hardwareName(hardware)
@@ -148,7 +152,7 @@ function hardwareLine(app: ProductApp, p: Snapshot) {
     .join(' · ')
 }
 
-function modelsPage(app: ProductApp, f: Frame): Page {
+function modelsPage(app: Dashboard, f: Frame): Page {
   const p = app.product!
   const catalog = app.page === 'catalog'
   const models = (catalog ? app.catalog : p.models) ?? []
@@ -182,7 +186,7 @@ function modelsPage(app: ProductApp, f: Frame): Page {
 }
 
 function modelRows(
-  app: ProductApp,
+  app: Dashboard,
   f: Frame,
   { model: m, selected }: { model: Model; selected: boolean }
 ) {
@@ -219,7 +223,7 @@ function modelState(model: Model, download: Download | undefined) {
   return paint(model.isCached ? '○ Available' : 'Download', 'muted')
 }
 
-function removePage(app: ProductApp, f: Frame): Page {
+function removePage(app: Dashboard, f: Frame): Page {
   const users = app.removeUsers.map((a) => a.agentName).join(', ')
 
   return {
@@ -249,7 +253,7 @@ function removePage(app: ProductApp, f: Frame): Page {
   }
 }
 
-function helpPage(app: ProductApp): Page {
+function helpPage(app: Dashboard): Page {
   return { body: [strong('A few keys. Everything in reach.'), '', ...app.helpLines()] }
 }
 

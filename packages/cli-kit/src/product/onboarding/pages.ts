@@ -1,9 +1,13 @@
 type Model = NonNullable<RpcResult<'listModels'>['models']>[number]
 type Download = NonNullable<WatchFrame<'modelDownloadsWatch'>['downloads']>[number]
-import type { RpcResult, WatchFrame, Frame } from '@qvac/cli-kit/tui'
-import { wrap, qrLines, modelParts, modelKind, remainingText } from '@qvac/cli-kit/tui'
-import { paint, plain, logo, bytes, highlight, strong, paragraph } from '@qvac/cli-kit/brand'
-import type { ProductApp } from '../app.js'
+import type { RpcResult, WatchFrame, Frame } from '../app-types.js'
+import type { Dashboard } from '../dashboard/app.js'
+import { wrap } from '../../lib/terminal/text.js'
+import { qrLines } from '../qr.js'
+import { modelParts, modelKind } from '../model-label.js'
+import { remainingText } from '../download-rate.js'
+import { paint, plain, logo, bytes, highlight, strong } from '../theme.js'
+import { paragraph } from '../ink.js'
 import type { Page, PageView } from '../dashboard/frame.js'
 import { percentOf } from '../dashboard/pages.js'
 
@@ -85,7 +89,7 @@ export const PAGES: Record<string, PageView> = {
 
 // The onboarding header: brand and version on the left, step and page label on the right.
 function setupHeader(
-  app: ProductApp,
+  app: Dashboard,
   f: Frame,
   { label, step = '', rule = true }: { label: string; rule?: boolean; step?: string }
 ) {
@@ -98,7 +102,7 @@ function setupHeader(
   return [f.two(brand, top), '', ...(rule ? [paint('─'.repeat(f.inner), 'line'), ''] : [])]
 }
 
-function welcomePage(app: ProductApp, f: Frame): Page {
+function welcomePage(app: Dashboard, f: Frame): Page {
   const width = Math.min(f.inner, 52)
   const indent = ' '.repeat(Math.floor((f.inner - width) / 2))
   const option = (index: number, label: string, note: string) => {
@@ -144,7 +148,7 @@ const PAIRING_COPY: Record<string, { step: string; label: string }> = {
   'device-name': { step: '03 / 04', label: JOIN }
 }
 
-function formPage(app: ProductApp, f: Frame): Page {
+function formPage(app: Dashboard, f: Frame): Page {
   const copy = { ...FORM_COPY[app.page]!, ...(app.joinValue && PAIRING_COPY[app.page]) }
   const room = Math.max(1, f.inner - 3)
   const value = [...app.form].slice(-room).join('')
@@ -164,7 +168,7 @@ function formPage(app: ProductApp, f: Frame): Page {
   }
 }
 
-function joinConfirmPage(app: ProductApp, f: Frame): Page {
+function joinConfirmPage(app: Dashboard, f: Frame): Page {
   const preview = app.joinPreview!
 
   return {
@@ -186,7 +190,7 @@ function joinConfirmPage(app: ProductApp, f: Frame): Page {
   }
 }
 
-function joiningPage(app: ProductApp, f: Frame): Page {
+function joiningPage(app: Dashboard, f: Frame): Page {
   return {
     nav: false,
     header: setupHeader(app, f, { step: '04 / 04', label: JOIN }),
@@ -202,7 +206,7 @@ function joiningPage(app: ProductApp, f: Frame): Page {
   }
 }
 
-function downloadPage(app: ProductApp, f: Frame): Page {
+function downloadPage(app: Dashboard, f: Frame): Page {
   const name = app.agent?.modelName
   const download = app.modelDownloads.get(name || '')
   const model = app.product!.models.find((m) => m.name === name)
@@ -243,7 +247,7 @@ function downloadPage(app: ProductApp, f: Frame): Page {
 
 // `0.8 / 1.3 GB   284 MB/s · a few seconds remaining`, sampled from successive updates.
 function transferLine(
-  app: ProductApp,
+  app: Dashboard,
   {
     name,
     model,
@@ -284,7 +288,7 @@ function progressBar(length: number, percent: number) {
   )
 }
 
-function invitePage(app: ProductApp, f: Frame): Page {
+function invitePage(app: Dashboard, f: Frame): Page {
   const invite = app.invitation?.invite
   const copy = INVITE_COPY[app.invitation?.member ? 'member' : 'device']
   const header = setupHeader(app, f, { label: copy.label, rule: false })
