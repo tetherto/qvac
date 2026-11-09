@@ -1,0 +1,293 @@
+{
+  "version": 1,
+  "schema": [
+    {
+      "name": "spaces",
+      "namespace": "rag",
+      "compact": false,
+      "flagsPosition": 5,
+      "fields": [
+        {
+          "name": "spaceId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "model",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "revision",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "dimensions",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "metric",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "normalized",
+          "required": false,
+          "type": "bool",
+          "version": 1
+        },
+        {
+          "name": "documentEncoding",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "queryEncoding",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "preprocessing",
+          "required": true,
+          "type": "string",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "namespaces",
+      "namespace": "rag",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "name",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "spaceId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "revision",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "nextNativeId",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "createdAt",
+          "required": true,
+          "type": "date",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "documents",
+      "namespace": "rag",
+      "compact": false,
+      "flagsPosition": 5,
+      "fields": [
+        {
+          "name": "namespace",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "documentId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "generation",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "chunkCount",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "contentHash",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "metadata",
+          "required": false,
+          "type": "json",
+          "version": 1
+        },
+        {
+          "name": "updatedAt",
+          "required": true,
+          "type": "date",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "chunks",
+      "namespace": "rag",
+      "compact": false,
+      "flagsPosition": 6,
+      "fields": [
+        {
+          "name": "namespace",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "documentId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "generation",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "ordinal",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "chunkId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "content",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "metadataJson",
+          "required": false,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "nativeId",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "vector",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "nativeIds",
+      "namespace": "rag",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "namespace",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "nativeId",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "documentId",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "generation",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "ordinal",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        }
+      ]
+    },
+    {
+      "name": "mutations",
+      "namespace": "rag",
+      "compact": false,
+      "flagsPosition": -1,
+      "fields": [
+        {
+          "name": "namespace",
+          "required": true,
+          "type": "string",
+          "version": 1
+        },
+        {
+          "name": "revision",
+          "required": true,
+          "type": "uint",
+          "version": 1
+        },
+        {
+          "name": "added",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "removed",
+          "required": true,
+          "type": "buffer",
+          "version": 1
+        },
+        {
+          "name": "createdAt",
+          "required": true,
+          "type": "date",
+          "version": 1
+        }
+      ]
+    }
+  ]
+}
