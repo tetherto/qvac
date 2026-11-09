@@ -14,7 +14,7 @@ description: One-page reference of all public functions and objects exported by 
 > **Fields intentionally omitted**: parameter descriptions, return field descriptions
 > (covered by IDE hover and `.d.ts` declarations).
 >
-> **Scope**: 62 functions in `packages/sdk/client/api/` plus the `profiler` object.
+> **Scope**: 63 functions in `packages/sdk/client/api/` plus the `profiler` object.
 
 ---
 
@@ -258,6 +258,30 @@ will throw a `TranscriptionFailedError`.
 ```ts
 function bciTranscribeStream(params: BciTranscribeStreamClientParams, options?: RPCOptions): Promise<BciTranscribeStreamSession>;
 ```
+
+---
+
+### `calcTokens`
+
+Counts tokens with a loaded language model without running generation.
+
+`text` alone is counted raw. Supplying `history` or enabled tools renders the conversation
+with the model's chat template; `text`, when present, becomes its final user
+turn. Tools are counted only when the model was loaded with `modelConfig.tools: true`.
+Attachments are not supported.
+
+**Signature**:
+
+```ts
+function calcTokens(params: CalcTokensClientParams, options?: RPCOptions): Promise<number>;
+```
+
+**Throws**:
+
+- `RequestValidationFailedError` — If the request is invalid.
+- `ModelNotFoundError` — If `modelId` is not loaded.
+- `ModelOperationNotSupportedError` — If the loaded model is not a language model.
+- `InvalidResponseError` — If the worker returns a malformed result.
 
 ---
 
