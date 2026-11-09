@@ -14,6 +14,7 @@ import { isModelLoaded, unregisterModel } from '@/runtime/model-registry'
 import { ModelType } from '@/schemas/index'
 import type { QvacPlugin } from '@/schemas/plugin'
 import { extractAndValidateShardedArchive } from '@/utils/archive'
+import { checkAllShardsExist } from '@/utils/shard-utils'
 
 env['HOME'] = path.join(os.tmpdir(), `qvac-sharded-disk-load-${os.pid()}`)
 
@@ -85,6 +86,32 @@ test('loadModel: a sharded model with a missing shard is rejected', async (t) =>
   t.ok(thrown instanceof ModelFileNotFoundError)
   t.ok((thrown as Error).message.includes('Missing shards. Expected 2 shard files'))
   t.is(created.length, 0, 'the addon never loads')
+})
+
+test('loadModel: a filename claiming 99999 shards is rejected without loading', async (t) => {
+  const created = registerRecordingPlugin(t)
+  const dir = tempDir(t)
+  fs.writeFileSync(path.join(dir, 'model-00001-of-99999.gguf'), '')
+
+  let thrown: unknown
+  try {
+    await load('sharded-oversized-count', path.join(dir, 'model-00001-of-99999.gguf'))
+  } catch (error) {
+    thrown = error
+  }
+
+  t.ok(thrown instanceof ModelFileNotFoundError)
+  t.ok((thrown as Error).message.includes('Missing shards. Expected 99999 shard files'))
+  t.is(created.length, 0, 'the addon never loads')
+})
+
+test('checkAllShardsExist: a gap in the middle of the group is reported', async (t) => {
+  const dir = tempDir(t)
+  fs.writeFileSync(path.join(dir, 'model-00001-of-00003.gguf'), '')
+  fs.writeFileSync(path.join(dir, 'model-00003-of-00003.gguf'), '')
+  t.is(await checkAllShardsExist(dir, 'model-00001-of-00003.gguf'), false)
+  fs.writeFileSync(path.join(dir, 'model-00002-of-00003.gguf'), '')
+  t.is(await checkAllShardsExist(dir, 'model-00003-of-00003.gguf'), true)
 })
 
 async function writeTar(archivePath: string, entries: Record<string, string>) {

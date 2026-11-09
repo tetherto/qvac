@@ -11,7 +11,7 @@ import { nowMs } from '@/profiling/clock'
 import { forwardBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import { isModelLoaded, registerModel, type AnyModel } from '@/runtime/model-registry'
 import { startLogBuffering, stopLogBufferingWithTimeout } from '@/runtime/logging-stream-registry'
-import { detectShardedModel, generateShardFilenames, checkAllShardsExist } from '@/utils/index'
+import { detectShardedModel, checkAllShardsExist } from '@/utils/index'
 import {
   PluginNotFoundError,
   ModelFileNotFoundError,
@@ -74,9 +74,8 @@ export async function loadModel(
   if (isShardedModel) {
     const shardDir = path.dirname(modelPath)
     if (!(await checkAllShardsExist(shardDir, modelFileName))) {
-      const numberedShards = generateShardFilenames(modelFileName)
       throw new ModelFileNotFoundError(
-        `Missing shards. Expected ${numberedShards.length} shard files in ${shardDir}`
+        `Missing shards. Expected ${shardInfo.totalShards} shard files in ${shardDir}`
       )
     }
   } else if (!plugin.skipPrimaryModelPathValidation) {

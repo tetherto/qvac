@@ -114,16 +114,15 @@ export async function checkAllShardsExist(shardDir: string, shardFilename: strin
     return false
   }
 
-  const shardFilenames = generateShardFilenames(shardFilename)
+  // Sequential with an early exit: the shard count comes from the filename, so a
+  // crafted name must not fan out one filesystem call per claimed shard.
+  for (const f of generateShardFilenames(shardFilename)) {
+    try {
+      await fsPromises.access(validateAndJoinPath(shardDir, f))
+    } catch {
+      return false
+    }
+  }
 
-  const allShardsExist = await Promise.all(
-    shardFilenames.map((f) =>
-      fsPromises
-        .access(validateAndJoinPath(shardDir, f))
-        .then(() => true)
-        .catch(() => false)
-    )
-  ).then((results) => results.every((exists) => exists))
-
-  return allShardsExist
+  return true
 }
