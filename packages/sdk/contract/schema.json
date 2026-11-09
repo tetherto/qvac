@@ -2500,10 +2500,54 @@
                       "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`, `\"tool\"`)."
                     },
                     "content": {
-                      "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.",
+                      "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string. A user turn may instead pass an ordered array of text/media parts, so each image keeps its position in the turn.",
                       "anyOf": [
                         {
-                          "type": "string"
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "const": "text"
+                                      },
+                                      "text": {
+                                        "type": "string",
+                                        "description": "Text rendered at this position in the turn."
+                                      }
+                                    },
+                                    "required": ["type", "text"],
+                                    "additionalProperties": false,
+                                    "title": "BatchCompletionStreamRequestPromptsItemHistoryItemContentItemText"
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "type": {
+                                        "type": "string",
+                                        "const": "media"
+                                      },
+                                      "path": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "description": "Absolute or resolvable path to the media file (e.g., image for multimodal models)."
+                                      }
+                                    },
+                                    "required": ["type", "path"],
+                                    "additionalProperties": false,
+                                    "title": "BatchCompletionStreamRequestPromptsItemHistoryItemContentItemMedia"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
                         },
                         {
                           "type": "null"
@@ -4105,10 +4149,54 @@
                 "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`, `\"tool\"`)."
               },
               "content": {
-                "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.",
+                "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string. A user turn may instead pass an ordered array of text/media parts, so each image keeps its position in the turn.",
                 "anyOf": [
                   {
-                    "type": "string"
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "text"
+                                },
+                                "text": {
+                                  "type": "string",
+                                  "description": "Text rendered at this position in the turn."
+                                }
+                              },
+                              "required": ["type", "text"],
+                              "additionalProperties": false,
+                              "title": "CompletionOrchestrateRequestHistoryItemContentItemText"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "media"
+                                },
+                                "path": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "description": "Absolute or resolvable path to the media file (e.g., image for multimodal models)."
+                                }
+                              },
+                              "required": ["type", "path"],
+                              "additionalProperties": false,
+                              "title": "CompletionOrchestrateRequestHistoryItemContentItemMedia"
+                            }
+                          ]
+                        }
+                      }
+                    ]
                   },
                   {
                     "type": "null"
@@ -4815,10 +4903,54 @@
                 "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`, `\"tool\"`)."
               },
               "content": {
-                "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string.",
+                "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string. A user turn may instead pass an ordered array of text/media parts, so each image keeps its position in the turn.",
                 "anyOf": [
                   {
-                    "type": "string"
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "array",
+                        "items": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "text"
+                                },
+                                "text": {
+                                  "type": "string",
+                                  "description": "Text rendered at this position in the turn."
+                                }
+                              },
+                              "required": ["type", "text"],
+                              "additionalProperties": false,
+                              "title": "CompletionStreamRequestHistoryItemContentItemText"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "media"
+                                },
+                                "path": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "description": "Absolute or resolvable path to the media file (e.g., image for multimodal models)."
+                                }
+                              },
+                              "required": ["type", "path"],
+                              "additionalProperties": false,
+                              "title": "CompletionStreamRequestHistoryItemContentItemMedia"
+                            }
+                          ]
+                        }
+                      }
+                    ]
                   },
                   {
                     "type": "null"
@@ -11817,6 +11949,94 @@
                                 "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesFailed"
                               }
                             ]
+                          },
+                          "dedicatedMemoryTotalBytes": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "supported"
+                                  },
+                                  "value": {
+                                    "type": "number",
+                                    "minimum": 0
+                                  },
+                                  "provenance": {
+                                    "type": "object",
+                                    "properties": {
+                                      "source": {
+                                        "type": "string"
+                                      },
+                                      "scope": {
+                                        "type": "string",
+                                        "enum": [
+                                          "system",
+                                          "process",
+                                          "device",
+                                          "budget",
+                                          "shared-system"
+                                        ],
+                                        "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupportedProvenanceScope"
+                                      }
+                                    },
+                                    "required": ["source"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupportedProvenance"
+                                  }
+                                },
+                                "required": ["status", "value", "provenance"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupported"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unavailable"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesUnavailable"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unverified"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesUnverified"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "failed"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesFailed"
+                              }
+                            ],
+                            "description": "Memory reserved for this GPU alone. All of a discrete GPU’s memory; for an integrated GPU, the carve-out the firmware sets aside for it, which the OS does not count as system memory (0 when there is none, as on Apple silicon)."
                           }
                         },
                         "required": [
@@ -11828,7 +12048,8 @@
                           "driverVersion",
                           "drivers",
                           "unifiedMemory",
-                          "memoryTotalBytes"
+                          "memoryTotalBytes",
+                          "dedicatedMemoryTotalBytes"
                         ],
                         "additionalProperties": false,
                         "title": "GetSystemResourcesResponseCapabilitiesGpusSupportedValueItem"
@@ -12785,6 +13006,94 @@
                               }
                             ]
                           },
+                          "dedicatedMemoryUsedBytes": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "supported"
+                                  },
+                                  "value": {
+                                    "type": "number",
+                                    "minimum": 0
+                                  },
+                                  "provenance": {
+                                    "type": "object",
+                                    "properties": {
+                                      "source": {
+                                        "type": "string"
+                                      },
+                                      "scope": {
+                                        "type": "string",
+                                        "enum": [
+                                          "system",
+                                          "process",
+                                          "device",
+                                          "budget",
+                                          "shared-system"
+                                        ],
+                                        "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupportedProvenanceScope"
+                                      }
+                                    },
+                                    "required": ["source"],
+                                    "additionalProperties": false,
+                                    "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupportedProvenance"
+                                  }
+                                },
+                                "required": ["status", "value", "provenance"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupported"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unavailable"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesUnavailable"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "unverified"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesUnverified"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "status": {
+                                    "type": "string",
+                                    "const": "failed"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["status"],
+                                "additionalProperties": false,
+                                "title": "GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesFailed"
+                              }
+                            ],
+                            "description": "The part of memoryUsedBytes held in dedicated memory (dedicatedMemoryTotalBytes)."
+                          },
                           "powerWatts": {
                             "oneOf": [
                               {
@@ -12966,6 +13275,7 @@
                           "decode",
                           "memoryUsedBytes",
                           "memoryTotalBytes",
+                          "dedicatedMemoryUsedBytes",
                           "powerWatts",
                           "temperatureCelsius"
                         ],

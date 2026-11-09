@@ -2260,6 +2260,34 @@ class AudioUnderstandResponse(GeneratedBaseModel):
     ] = None
 
 
+class BatchCompletionStreamRequestPromptsItemHistoryItemContentItemText(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["text"] = "text"
+    text: Annotated[
+        str, Field(description="Text rendered at this position in the turn.")
+    ]
+
+
+class BatchCompletionStreamRequestPromptsItemHistoryItemContentItemMedia(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["media"] = "media"
+    path: Annotated[
+        str,
+        Field(
+            description="Absolute or resolvable path to the media file (e.g., image for multimodal models).",
+            min_length=1,
+        ),
+    ]
+
+
 class BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem(
     GeneratedBaseModel
 ):
@@ -2310,9 +2338,14 @@ class BatchCompletionStreamRequestPromptsItemHistoryItem(GeneratedBaseModel):
         ),
     ]
     content: Annotated[
-        str | None,
+        str
+        | list[
+            BatchCompletionStreamRequestPromptsItemHistoryItemContentItemText
+            | BatchCompletionStreamRequestPromptsItemHistoryItemContentItemMedia
+        ]
+        | None,
         Field(
-            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
+            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string. A user turn may instead pass an ordered array of text/media parts, so each image keeps its position in the turn."
         ),
     ] = None
     attachments: Annotated[
@@ -3828,6 +3861,30 @@ class ClassifyResponse(GeneratedBaseModel):
     done: bool | None = None
 
 
+class CompletionOrchestrateRequestHistoryItemContentItemText(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["text"] = "text"
+    text: Annotated[
+        str, Field(description="Text rendered at this position in the turn.")
+    ]
+
+
+class CompletionOrchestrateRequestHistoryItemContentItemMedia(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["media"] = "media"
+    path: Annotated[
+        str,
+        Field(
+            description="Absolute or resolvable path to the media file (e.g., image for multimodal models).",
+            min_length=1,
+        ),
+    ]
+
+
 class CompletionOrchestrateRequestHistoryItemAttachmentsItem(GeneratedBaseModel):
     path: Annotated[
         str,
@@ -3874,9 +3931,14 @@ class CompletionOrchestrateRequestHistoryItem(GeneratedBaseModel):
         ),
     ]
     content: Annotated[
-        str | None,
+        str
+        | list[
+            CompletionOrchestrateRequestHistoryItemContentItemText
+            | CompletionOrchestrateRequestHistoryItemContentItemMedia
+        ]
+        | None,
         Field(
-            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
+            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string. A user turn may instead pass an ordered array of text/media parts, so each image keeps its position in the turn."
         ),
     ] = None
     attachments: Annotated[
@@ -4492,6 +4554,30 @@ class CompletionOrchestrateResponse(GeneratedBaseModel):
     ] = None
 
 
+class CompletionStreamRequestHistoryItemContentItemText(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["text"] = "text"
+    text: Annotated[
+        str, Field(description="Text rendered at this position in the turn.")
+    ]
+
+
+class CompletionStreamRequestHistoryItemContentItemMedia(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["media"] = "media"
+    path: Annotated[
+        str,
+        Field(
+            description="Absolute or resolvable path to the media file (e.g., image for multimodal models).",
+            min_length=1,
+        ),
+    ]
+
+
 class CompletionStreamRequestHistoryItemAttachmentsItem(GeneratedBaseModel):
     path: Annotated[
         str,
@@ -4538,9 +4624,14 @@ class CompletionStreamRequestHistoryItem(GeneratedBaseModel):
         ),
     ]
     content: Annotated[
-        str | None,
+        str
+        | list[
+            CompletionStreamRequestHistoryItemContentItemText
+            | CompletionStreamRequestHistoryItemContentItemMedia
+        ]
+        | None,
         Field(
-            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
+            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string. A user turn may instead pass an ordered array of text/media parts, so each image keeps its position in the turn."
         ),
     ] = None
     attachments: Annotated[
@@ -10157,6 +10248,78 @@ class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalByt
     reason: str | None = None
 
 
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[float, Field(ge=0.0)]
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
 class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItem(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -10213,6 +10376,16 @@ class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItem(GeneratedBase
         | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesUnverified
         | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesFailed,
         Field(alias="memoryTotalBytes"),
+    ]
+    dedicated_memory_total_bytes: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupported
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesUnavailable
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesUnverified
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesFailed,
+        Field(
+            alias="dedicatedMemoryTotalBytes",
+            description="Memory reserved for this GPU alone. All of a discrete GPU’s memory; for an integrated GPU, the carve-out the firmware sets aside for it, which the OS does not count as system memory (0 when there is none, as on Apple silicon).",
+        ),
     ]
 
 
@@ -11014,6 +11187,78 @@ class GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesFail
     reason: str | None = None
 
 
+class GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[float, Field(ge=0.0)]
+    provenance: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
 class GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsSupportedProvenanceScope(
     Enum
 ):
@@ -11194,6 +11439,16 @@ class GetSystemResourcesResponseSampleGpusSupportedValueItem(GeneratedBaseModel)
         | GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesUnverified
         | GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesFailed,
         Field(alias="memoryTotalBytes"),
+    ]
+    dedicated_memory_used_bytes: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupported
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesUnavailable
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesUnverified
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesFailed,
+        Field(
+            alias="dedicatedMemoryUsedBytes",
+            description="The part of memoryUsedBytes held in dedicated memory (dedicatedMemoryTotalBytes).",
+        ),
     ]
     power_watts: Annotated[
         GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsSupported

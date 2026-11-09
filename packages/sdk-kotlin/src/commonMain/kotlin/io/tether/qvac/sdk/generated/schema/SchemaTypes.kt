@@ -806,11 +806,81 @@ data class BatchCompletionStreamRequestPromptsItem(
 @Serializable
 data class BatchCompletionStreamRequestPromptsItemHistoryItem(
     @SerialName("role") val `role`: String,
-    @SerialName("content") val `content`: String? = null,
+    @SerialName("content") val `content`: BatchCompletionStreamRequestPromptsItemHistoryItemContent? = null,
     @SerialName("attachments") val `attachments`: List<BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem>? = null,
     @SerialName("toolCalls") val `toolCalls`: List<BatchCompletionStreamRequestPromptsItemHistoryItemToolCallsItem>? = null,
     @SerialName("toolCallId") val `toolCallId`: String? = null,
     @SerialName("toolName") val `toolName`: String? = null,
+)
+
+@Serializable(with = BatchCompletionStreamRequestPromptsItemHistoryItemContentSerializer::class)
+sealed class BatchCompletionStreamRequestPromptsItemHistoryItemContent {
+    data class Variant1(val value: String) : BatchCompletionStreamRequestPromptsItemHistoryItemContent()
+    data class Variant2(val value: List<BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item>) : BatchCompletionStreamRequestPromptsItemHistoryItemContent()
+}
+internal object BatchCompletionStreamRequestPromptsItemHistoryItemContentSerializer : KSerializer<BatchCompletionStreamRequestPromptsItemHistoryItemContent> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("BatchCompletionStreamRequestPromptsItemHistoryItemContent")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"text\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"},\"text\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"path\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"media\"},\"path\":{\"type\":\"string\"}}}]}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): BatchCompletionStreamRequestPromptsItemHistoryItemContent {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> BatchCompletionStreamRequestPromptsItemHistoryItemContent.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
+            1 -> BatchCompletionStreamRequestPromptsItemHistoryItemContent.Variant2(input.json.decodeFromJsonElement(serializer<List<BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item>>(), element))
+            else -> throw SerializationException("No matching BatchCompletionStreamRequestPromptsItemHistoryItemContent variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: BatchCompletionStreamRequestPromptsItemHistoryItemContent) {
+        when (value) {
+            is BatchCompletionStreamRequestPromptsItemHistoryItemContent.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is BatchCompletionStreamRequestPromptsItemHistoryItemContent.Variant2 -> encoder.encodeSerializableValue(serializer<List<BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item>>(), value.value)
+        }
+    }
+}
+
+@Serializable(with = BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2ItemSerializer::class)
+sealed class BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item {
+    data class BatchCompletionStreamRequestPromptsItemHistoryItemContentItemText(val value: io.tether.qvac.sdk.generated.schema.BatchCompletionStreamRequestPromptsItemHistoryItemContentItemText) : BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item()
+    data class BatchCompletionStreamRequestPromptsItemHistoryItemContentItemMedia(val value: io.tether.qvac.sdk.generated.schema.BatchCompletionStreamRequestPromptsItemHistoryItemContentItemMedia) : BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item()
+}
+internal object BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2ItemSerializer : KSerializer<BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"text\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"},\"text\":{\"type\":\"string\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"path\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"media\"},\"path\":{\"type\":\"string\"}}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item.BatchCompletionStreamRequestPromptsItemHistoryItemContentItemText(input.json.decodeFromJsonElement(serializer<BatchCompletionStreamRequestPromptsItemHistoryItemContentItemText>(), element))
+            1 -> BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item.BatchCompletionStreamRequestPromptsItemHistoryItemContentItemMedia(input.json.decodeFromJsonElement(serializer<BatchCompletionStreamRequestPromptsItemHistoryItemContentItemMedia>(), element))
+            else -> throw SerializationException("No matching BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item) {
+        when (value) {
+            is BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item.BatchCompletionStreamRequestPromptsItemHistoryItemContentItemText -> encoder.encodeSerializableValue(serializer<BatchCompletionStreamRequestPromptsItemHistoryItemContentItemText>(), value.value)
+            is BatchCompletionStreamRequestPromptsItemHistoryItemContentVariant2Item.BatchCompletionStreamRequestPromptsItemHistoryItemContentItemMedia -> encoder.encodeSerializableValue(serializer<BatchCompletionStreamRequestPromptsItemHistoryItemContentItemMedia>(), value.value)
+        }
+    }
+}
+
+@Serializable
+data class BatchCompletionStreamRequestPromptsItemHistoryItemContentItemText(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("type") val `type`: String = "text",
+    @SerialName("text") val `text`: String,
+)
+
+@Serializable
+data class BatchCompletionStreamRequestPromptsItemHistoryItemContentItemMedia(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("type") val `type`: String = "media",
+    @SerialName("path") val `path`: String,
 )
 
 @Serializable
@@ -1102,11 +1172,81 @@ data class CompletionOrchestrateRequest(
 @Serializable
 data class CompletionStreamRequestHistoryItem(
     @SerialName("role") val `role`: String,
-    @SerialName("content") val `content`: String? = null,
+    @SerialName("content") val `content`: CompletionStreamRequestHistoryItemContent? = null,
     @SerialName("attachments") val `attachments`: List<CompletionStreamRequestHistoryItemAttachmentsItem>? = null,
     @SerialName("toolCalls") val `toolCalls`: List<CompletionStreamRequestHistoryItemToolCallsItem>? = null,
     @SerialName("toolCallId") val `toolCallId`: String? = null,
     @SerialName("toolName") val `toolName`: String? = null,
+)
+
+@Serializable(with = CompletionStreamRequestHistoryItemContentSerializer::class)
+sealed class CompletionStreamRequestHistoryItemContent {
+    data class Variant1(val value: String) : CompletionStreamRequestHistoryItemContent()
+    data class Variant2(val value: List<CompletionStreamRequestHistoryItemContentVariant2Item>) : CompletionStreamRequestHistoryItemContent()
+}
+internal object CompletionStreamRequestHistoryItemContentSerializer : KSerializer<CompletionStreamRequestHistoryItemContent> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("CompletionStreamRequestHistoryItemContent")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"text\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"},\"text\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"path\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"media\"},\"path\":{\"type\":\"string\"}}}]}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): CompletionStreamRequestHistoryItemContent {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> CompletionStreamRequestHistoryItemContent.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
+            1 -> CompletionStreamRequestHistoryItemContent.Variant2(input.json.decodeFromJsonElement(serializer<List<CompletionStreamRequestHistoryItemContentVariant2Item>>(), element))
+            else -> throw SerializationException("No matching CompletionStreamRequestHistoryItemContent variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: CompletionStreamRequestHistoryItemContent) {
+        when (value) {
+            is CompletionStreamRequestHistoryItemContent.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
+            is CompletionStreamRequestHistoryItemContent.Variant2 -> encoder.encodeSerializableValue(serializer<List<CompletionStreamRequestHistoryItemContentVariant2Item>>(), value.value)
+        }
+    }
+}
+
+@Serializable(with = CompletionStreamRequestHistoryItemContentVariant2ItemSerializer::class)
+sealed class CompletionStreamRequestHistoryItemContentVariant2Item {
+    data class CompletionStreamRequestHistoryItemContentItemText(val value: io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContentItemText) : CompletionStreamRequestHistoryItemContentVariant2Item()
+    data class CompletionStreamRequestHistoryItemContentItemMedia(val value: io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContentItemMedia) : CompletionStreamRequestHistoryItemContentVariant2Item()
+}
+internal object CompletionStreamRequestHistoryItemContentVariant2ItemSerializer : KSerializer<CompletionStreamRequestHistoryItemContentVariant2Item> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("CompletionStreamRequestHistoryItemContentVariant2Item")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"text\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"},\"text\":{\"type\":\"string\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"path\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"media\"},\"path\":{\"type\":\"string\"}}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): CompletionStreamRequestHistoryItemContentVariant2Item {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> CompletionStreamRequestHistoryItemContentVariant2Item.CompletionStreamRequestHistoryItemContentItemText(input.json.decodeFromJsonElement(serializer<CompletionStreamRequestHistoryItemContentItemText>(), element))
+            1 -> CompletionStreamRequestHistoryItemContentVariant2Item.CompletionStreamRequestHistoryItemContentItemMedia(input.json.decodeFromJsonElement(serializer<CompletionStreamRequestHistoryItemContentItemMedia>(), element))
+            else -> throw SerializationException("No matching CompletionStreamRequestHistoryItemContentVariant2Item variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: CompletionStreamRequestHistoryItemContentVariant2Item) {
+        when (value) {
+            is CompletionStreamRequestHistoryItemContentVariant2Item.CompletionStreamRequestHistoryItemContentItemText -> encoder.encodeSerializableValue(serializer<CompletionStreamRequestHistoryItemContentItemText>(), value.value)
+            is CompletionStreamRequestHistoryItemContentVariant2Item.CompletionStreamRequestHistoryItemContentItemMedia -> encoder.encodeSerializableValue(serializer<CompletionStreamRequestHistoryItemContentItemMedia>(), value.value)
+        }
+    }
+}
+
+@Serializable
+data class CompletionStreamRequestHistoryItemContentItemText(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("type") val `type`: String = "text",
+    @SerialName("text") val `text`: String,
+)
+
+@Serializable
+data class CompletionStreamRequestHistoryItemContentItemMedia(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("type") val `type`: String = "media",
+    @SerialName("path") val `path`: String,
 )
 
 @Serializable
@@ -16093,7 +16233,7 @@ sealed class GetSystemResourcesResponseCapabilitiesGpus {
 internal object GetSystemResourcesResponseCapabilitiesGpusSerializer : KSerializer<GetSystemResourcesResponseCapabilitiesGpus> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("GetSystemResourcesResponseCapabilitiesGpus")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"status\",\"value\",\"provenance\"],\"properties\":{\"status\":{\"type\":\"string\",\"const\":\"supported\"},\"value\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"id\",\"name\",\"vendor\",\"type\",\"driverName\",\"driverVersion\",\"drivers\",\"unifiedMemory\",\"memoryTotalBytes\"]}},\"provenance\":{\"type\":\"object\",\"required\":[\"source\"],\"properties\":{\"source\":{\"type\":\"string\"},\"scope\":{\"type\":\"string\",\"enum\":[\"system\",\"process\",\"device\",\"budget\",\"shared-system\"]}}}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"status\",\"value\",\"provenance\"],\"properties\":{\"status\":{\"type\":\"string\",\"const\":\"supported\"},\"value\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"id\",\"name\",\"vendor\",\"type\",\"driverName\",\"driverVersion\",\"drivers\",\"unifiedMemory\",\"memoryTotalBytes\",\"dedicatedMemoryTotalBytes\"]}},\"provenance\":{\"type\":\"object\",\"required\":[\"source\"],\"properties\":{\"source\":{\"type\":\"string\"},\"scope\":{\"type\":\"string\",\"enum\":[\"system\",\"process\",\"device\",\"budget\",\"shared-system\"]}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"status\"],\"properties\":{\"status\":{\"type\":\"string\",\"const\":\"unavailable\"},\"reason\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"status\"],\"properties\":{\"status\":{\"type\":\"string\",\"const\":\"unverified\"},\"reason\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"status\"],\"properties\":{\"status\":{\"type\":\"string\",\"const\":\"failed\"},\"reason\":{\"type\":\"string\"}}}").jsonObject,
@@ -16138,6 +16278,7 @@ data class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItem(
     @SerialName("drivers") val `drivers`: GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDrivers,
     @SerialName("unifiedMemory") val `unifiedMemory`: GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemUnifiedMemory,
     @SerialName("memoryTotalBytes") val `memoryTotalBytes`: GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytes,
+    @SerialName("dedicatedMemoryTotalBytes") val `dedicatedMemoryTotalBytes`: GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytes,
 )
 
 @Serializable(with = GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemNameSerializer::class)
@@ -17514,6 +17655,86 @@ data class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTot
     @SerialName("reason") val `reason`: String? = null,
 )
 
+@Serializable(with = GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSerializer::class)
+sealed class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytes {
+    data class Supported(val value: io.tether.qvac.sdk.generated.schema.GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupported) : GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytes()
+    data class Unavailable(val value: io.tether.qvac.sdk.generated.schema.GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesUnavailable) : GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytes()
+    data class Unverified(val value: io.tether.qvac.sdk.generated.schema.GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesUnverified) : GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytes()
+    data class Failed(val value: io.tether.qvac.sdk.generated.schema.GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesFailed) : GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytes()
+}
+internal object GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSerializer : KSerializer<GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytes> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytes")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"status\",\"value\",\"provenance\"],\"properties\":{\"status\":{\"type\":\"string\",\"const\":\"supported\"},\"value\":{\"type\":\"number\"},\"provenance\":{\"type\":\"object\",\"required\":[\"source\"],\"properties\":{\"source\":{\"type\":\"string\"},\"scope\":{\"type\":\"string\",\"enum\":[\"system\",\"process\",\"device\",\"budget\",\"shared-system\"]}}}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"status\"],\"properties\":{\"status\":{\"type\":\"string\",\"const\":\"unavailable\"},\"reason\":{\"type\":\"string\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"status\"],\"properties\":{\"status\":{\"type\":\"string\",\"const\":\"unverified\"},\"reason\":{\"type\":\"string\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"status\"],\"properties\":{\"status\":{\"type\":\"string\",\"const\":\"failed\"},\"reason\":{\"type\":\"string\"}}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytes {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytes.Supported(input.json.decodeFromJsonElement(serializer<GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupported>(), element))
+            1 -> GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytes.Unavailable(input.json.decodeFromJsonElement(serializer<GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesUnavailable>(), element))
+            2 -> GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytes.Unverified(input.json.decodeFromJsonElement(serializer<GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesUnverified>(), element))
+            3 -> GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytes.Failed(input.json.decodeFromJsonElement(serializer<GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesFailed>(), element))
+            else -> throw SerializationException("No matching GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytes variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytes) {
+        when (value) {
+            is GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytes.Supported -> encoder.encodeSerializableValue(serializer<GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupported>(), value.value)
+            is GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytes.Unavailable -> encoder.encodeSerializableValue(serializer<GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesUnavailable>(), value.value)
+            is GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytes.Unverified -> encoder.encodeSerializableValue(serializer<GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesUnverified>(), value.value)
+            is GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytes.Failed -> encoder.encodeSerializableValue(serializer<GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesFailed>(), value.value)
+        }
+    }
+}
+
+@Serializable
+data class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupported(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("status") val `status`: String = "supported",
+    @SerialName("value") val `value`: Double,
+    @SerialName("provenance") val `provenance`: GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupportedProvenance,
+)
+
+@Serializable
+data class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupportedProvenance(
+    @SerialName("source") val `source`: String,
+    @SerialName("scope") val `scope`: GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupportedProvenanceScope? = null,
+)
+
+@Serializable
+enum class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupportedProvenanceScope {
+    @SerialName("system") `SYSTEM`,
+    @SerialName("process") `PROCESS`,
+    @SerialName("device") `DEVICE`,
+    @SerialName("budget") `BUDGET`,
+    @SerialName("shared-system") `SHAREDSYSTEM`,
+}
+
+@Serializable
+data class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesUnavailable(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("status") val `status`: String = "unavailable",
+    @SerialName("reason") val `reason`: String? = null,
+)
+
+@Serializable
+data class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesUnverified(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("status") val `status`: String = "unverified",
+    @SerialName("reason") val `reason`: String? = null,
+)
+
+@Serializable
+data class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesFailed(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("status") val `status`: String = "failed",
+    @SerialName("reason") val `reason`: String? = null,
+)
+
 @Serializable
 data class GetSystemResourcesResponseCapabilitiesGpusSupportedProvenance(
     @SerialName("source") val `source`: String,
@@ -17976,7 +18197,7 @@ sealed class GetSystemResourcesResponseSampleGpus {
 internal object GetSystemResourcesResponseSampleGpusSerializer : KSerializer<GetSystemResourcesResponseSampleGpus> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("GetSystemResourcesResponseSampleGpus")
     private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"status\",\"value\",\"provenance\"],\"properties\":{\"status\":{\"type\":\"string\",\"const\":\"supported\"},\"value\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"id\",\"compute\",\"encode\",\"decode\",\"memoryUsedBytes\",\"memoryTotalBytes\",\"powerWatts\",\"temperatureCelsius\"]}},\"provenance\":{\"type\":\"object\",\"required\":[\"source\"],\"properties\":{\"source\":{\"type\":\"string\"},\"scope\":{\"type\":\"string\",\"enum\":[\"system\",\"process\",\"device\",\"budget\",\"shared-system\"]}}}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"status\",\"value\",\"provenance\"],\"properties\":{\"status\":{\"type\":\"string\",\"const\":\"supported\"},\"value\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"id\",\"compute\",\"encode\",\"decode\",\"memoryUsedBytes\",\"memoryTotalBytes\",\"dedicatedMemoryUsedBytes\",\"powerWatts\",\"temperatureCelsius\"]}},\"provenance\":{\"type\":\"object\",\"required\":[\"source\"],\"properties\":{\"source\":{\"type\":\"string\"},\"scope\":{\"type\":\"string\",\"enum\":[\"system\",\"process\",\"device\",\"budget\",\"shared-system\"]}}}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"status\"],\"properties\":{\"status\":{\"type\":\"string\",\"const\":\"unavailable\"},\"reason\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"status\"],\"properties\":{\"status\":{\"type\":\"string\",\"const\":\"unverified\"},\"reason\":{\"type\":\"string\"}}}").jsonObject,
         Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"status\"],\"properties\":{\"status\":{\"type\":\"string\",\"const\":\"failed\"},\"reason\":{\"type\":\"string\"}}}").jsonObject,
@@ -18018,6 +18239,7 @@ data class GetSystemResourcesResponseSampleGpusSupportedValueItem(
     @SerialName("decode") val `decode`: GetSystemResourcesResponseSampleGpusSupportedValueItemDecode,
     @SerialName("memoryUsedBytes") val `memoryUsedBytes`: GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryUsedBytes,
     @SerialName("memoryTotalBytes") val `memoryTotalBytes`: GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytes,
+    @SerialName("dedicatedMemoryUsedBytes") val `dedicatedMemoryUsedBytes`: GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytes,
     @SerialName("powerWatts") val `powerWatts`: GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWatts,
     @SerialName("temperatureCelsius") val `temperatureCelsius`: GetSystemResourcesResponseSampleGpusSupportedValueItemTemperatureCelsius,
 )
@@ -18417,6 +18639,86 @@ data class GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalByte
 
 @Serializable
 data class GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesFailed(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("status") val `status`: String = "failed",
+    @SerialName("reason") val `reason`: String? = null,
+)
+
+@Serializable(with = GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSerializer::class)
+sealed class GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytes {
+    data class Supported(val value: io.tether.qvac.sdk.generated.schema.GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupported) : GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytes()
+    data class Unavailable(val value: io.tether.qvac.sdk.generated.schema.GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesUnavailable) : GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytes()
+    data class Unverified(val value: io.tether.qvac.sdk.generated.schema.GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesUnverified) : GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytes()
+    data class Failed(val value: io.tether.qvac.sdk.generated.schema.GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesFailed) : GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytes()
+}
+internal object GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSerializer : KSerializer<GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytes> {
+    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytes")
+    private val shapes = listOf(
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"status\",\"value\",\"provenance\"],\"properties\":{\"status\":{\"type\":\"string\",\"const\":\"supported\"},\"value\":{\"type\":\"number\"},\"provenance\":{\"type\":\"object\",\"required\":[\"source\"],\"properties\":{\"source\":{\"type\":\"string\"},\"scope\":{\"type\":\"string\",\"enum\":[\"system\",\"process\",\"device\",\"budget\",\"shared-system\"]}}}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"status\"],\"properties\":{\"status\":{\"type\":\"string\",\"const\":\"unavailable\"},\"reason\":{\"type\":\"string\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"status\"],\"properties\":{\"status\":{\"type\":\"string\",\"const\":\"unverified\"},\"reason\":{\"type\":\"string\"}}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"status\"],\"properties\":{\"status\":{\"type\":\"string\",\"const\":\"failed\"},\"reason\":{\"type\":\"string\"}}}").jsonObject,
+    )
+    override fun deserialize(decoder: Decoder): GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytes {
+        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
+        val element = input.decodeJsonElement()
+        return when (selectWireVariant(element, shapes)) {
+            0 -> GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytes.Supported(input.json.decodeFromJsonElement(serializer<GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupported>(), element))
+            1 -> GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytes.Unavailable(input.json.decodeFromJsonElement(serializer<GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesUnavailable>(), element))
+            2 -> GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytes.Unverified(input.json.decodeFromJsonElement(serializer<GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesUnverified>(), element))
+            3 -> GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytes.Failed(input.json.decodeFromJsonElement(serializer<GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesFailed>(), element))
+            else -> throw SerializationException("No matching GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytes variant")
+        }
+    }
+    override fun serialize(encoder: Encoder, value: GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytes) {
+        when (value) {
+            is GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytes.Supported -> encoder.encodeSerializableValue(serializer<GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupported>(), value.value)
+            is GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytes.Unavailable -> encoder.encodeSerializableValue(serializer<GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesUnavailable>(), value.value)
+            is GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytes.Unverified -> encoder.encodeSerializableValue(serializer<GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesUnverified>(), value.value)
+            is GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytes.Failed -> encoder.encodeSerializableValue(serializer<GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesFailed>(), value.value)
+        }
+    }
+}
+
+@Serializable
+data class GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupported(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("status") val `status`: String = "supported",
+    @SerialName("value") val `value`: Double,
+    @SerialName("provenance") val `provenance`: GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupportedProvenance,
+)
+
+@Serializable
+data class GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupportedProvenance(
+    @SerialName("source") val `source`: String,
+    @SerialName("scope") val `scope`: GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupportedProvenanceScope? = null,
+)
+
+@Serializable
+enum class GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupportedProvenanceScope {
+    @SerialName("system") `SYSTEM`,
+    @SerialName("process") `PROCESS`,
+    @SerialName("device") `DEVICE`,
+    @SerialName("budget") `BUDGET`,
+    @SerialName("shared-system") `SHAREDSYSTEM`,
+}
+
+@Serializable
+data class GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesUnavailable(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("status") val `status`: String = "unavailable",
+    @SerialName("reason") val `reason`: String? = null,
+)
+
+@Serializable
+data class GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesUnverified(
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    @SerialName("status") val `status`: String = "unverified",
+    @SerialName("reason") val `reason`: String? = null,
+)
+
+@Serializable
+data class GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesFailed(
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("status") val `status`: String = "failed",
     @SerialName("reason") val `reason`: String? = null,
