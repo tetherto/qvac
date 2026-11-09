@@ -11,6 +11,10 @@ export interface AudioGenConfigurationParams {
     useGPU?: boolean;
     /** MiniMax compute device ('cpu' | 'gpu' | 'auto'); overrides useGPU. */
     device?: string;
+    backend?: string;
+    lmBackend?: string;
+    dumpStagesDir?: string;
+    coremlConditionerPath?: string;
     coremlProfileDir?: string;
     coremlComputeUnits?: string;
     nGpuLayers?: number;

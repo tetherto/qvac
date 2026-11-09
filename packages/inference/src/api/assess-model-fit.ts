@@ -8,23 +8,23 @@ import { send } from '@/dispatch'
 import { InvalidResponseError } from '@/errors/index'
 
 /**
- * Assesses, before anything is downloaded, whether the given models are likely
- * to fit in this device's memory.
+ * Whether a set of models fits in this device's memory when loaded together,
+ * without downloading them.
  *
- * Advisory only: it does not download weights, block `loadModel`, reserve
- * memory, or make a performance claim. `unknown` is a real answer — it means
- * the available evidence does not support a verdict either way, and callers
- * should treat it as "cannot say", not "no".
+ * Each model's engine fitter runs against the registry's weightless description
+ * of the model, or the model itself when it is on disk. The memory each load
+ * takes is summed per device and compared against what is free.
  *
- * For each candidate it fetches the registry's weightless description of the
- * artifact — tens of KB, never the weights — and runs the engine's own fitter
- * against it, reported as `native-fit` evidence. Where that is unavailable the
- * computed floor stands, which can refuse a model but never confirm one.
+ * `unknown` is the answer for a load that would start but cannot be sized: an
+ * engine with no fitter, a load the fitter cannot project, a model with no
+ * registry description that is not on disk, or a device that reported no free
+ * memory.
  *
- * @param input - Candidates with their intended workloads, the declared
- *   execution mode, and the headroom policy.
- * @returns Per-model and combined verdicts, with the budget and bounds they came
- *   from, plus every assumption that was made.
+ * @param input - The models, each as `loadModel` takes it.
+ * @returns The verdict for the set, and each model's own verdict and stats.
+ * @throws The error `loadModel` would throw for a load it refuses: no plugin
+ *   for the model type, a config the plugin refuses, or a model the fitter
+ *   cannot read.
  */
 export async function assessModelFit(input: AssessModelFitInput): Promise<AssessModelFitResult> {
   const parsed = assessModelFitInputSchema.parse(input)
