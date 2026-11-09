@@ -14,9 +14,9 @@ const fails = (fn, pattern) =>
     (error) => error instanceof UsageError && error.code === 2 && pattern.test(error.message)
   )
 
-test('qvac alone opens chat', () => {
+test('qvac alone opens the dashboard', () => {
   assert.deepEqual(parse([]), {
-    command: 'chat',
+    command: 'open',
     action: null,
     words: [],
     options: {},
@@ -24,18 +24,16 @@ test('qvac alone opens chat', () => {
   })
 })
 
-test('a first word that is not a command is the first chat message', () => {
-  const { command, words } = parse(['explain', 'this', 'repo'])
-  assert.equal(command, 'chat')
-  assert.deepEqual(words, ['explain', 'this', 'repo'])
+test('a first word that is not a command is a usage error, never a message', () => {
+  fails(() => parse(['explain', 'this', 'repo']), /unknown command explain. Use qvac --help/)
+  fails(() => parse(['chat', 'hello']), /unknown command chat/)
+  fails(() => parse(['host', 'serve']), /unknown command host/)
 })
 
-test('every reserved word dispatches instead of becoming a prompt', () => {
+test('every reserved word dispatches', () => {
   assert.equal(parse(['serve']).command, 'serve')
   assert.equal(parse(['status']).command, 'status')
   assert.equal(parse(['logs', '-f']).command, 'logs')
-  assert.equal(parse(['chat', 'hello']).command, 'chat')
-  assert.equal(parse(['chat']).action, 'open')
   assert.equal(parse(['help']).command, 'help')
   assert.deepEqual(parse(['workspace', 'join', 'qvac://x']).words, ['qvac://x'])
   assert.equal(parse(['models', 'list']).action, 'list')
@@ -50,20 +48,12 @@ test('every reserved word dispatches instead of becoming a prompt', () => {
   }
 
   fails(() => parse(['workspace', 'please']), /workspace takes/)
-  fails(() => parse(['host', 'please']), /host takes/)
 })
 
 test('a command word after flags still dispatches', () => {
   const { command, options } = parse(['--temp', '--fake-models', 'status'])
   assert.equal(command, 'status')
   assert.deepEqual(options, { temp: true, fakeModels: true })
-})
-
-test('host serve is serve', () => {
-  const parsed = parse(['host', 'serve', '--json'])
-  assert.equal(parsed.command, 'serve')
-  assert.equal(parsed.options.json, true)
-  fails(() => parse(['host']), /host takes one command: serve/)
 })
 
 test('sdk forwards everything after it untouched', () => {
@@ -97,6 +87,12 @@ test('unknown subcommands and options are usage errors', () => {
   fails(() => parse(['serve', '--join', '--yes']), /missing value for --join/)
 })
 
+test('the chat flags are not qvac flags', () => {
+  for (const flag of ['-p', '--print', '--mode', '--chat', '-c', '-r', '-n']) {
+    fails(() => parse([flag]), new RegExp(`unknown option ${flag}`))
+  }
+})
+
 test('value flags take the next argument or an inline value', () => {
   assert.equal(parse(['serve', '--account-name', 'Ada']).options.accountName, 'Ada')
   assert.equal(parse(['serve', '--account-name=Ada Lovelace']).options.accountName, 'Ada Lovelace')
@@ -105,11 +101,10 @@ test('value flags take the next argument or an inline value', () => {
   assert.equal(parse(['serve', '--storage', '/a']).options.dataDir, '/a')
 })
 
-test('-- ends the options, and a leading one makes the rest a chat message', () => {
+test('-- ends the options; the words after it are words, not a message', () => {
   assert.deepEqual(parse(['--', '-x', 'serve']).words, ['-x', 'serve'])
-  assert.equal(parse(['--', 'status', 'of', 'the', 'build']).command, 'chat')
-  assert.equal(parse(['--temp', '--', 'status']).command, 'chat')
-  assert.deepEqual(parse(['chat', '--', '-x']).words, ['-x'])
+  assert.equal(parse(['--', 'status']).command, 'open')
+  assert.equal(parse(['--temp', '--', 'status']).command, 'open')
 })
 
 test('every flag reads QVAC_<FLAG_NAME>', () => {
@@ -144,8 +139,8 @@ test('env names are derived from every flag, help and version excepted', () => {
     assert.equal(options[flag.key], value, flag.name)
   }
 
-  assert.equal(parse([], { QVAC_HELP: '1' }).command, 'chat')
-  assert.equal(parse([], { QVAC_VERSION: '1' }).command, 'chat')
+  assert.equal(parse([], { QVAC_HELP: '1' }).command, 'open')
+  assert.equal(parse([], { QVAC_VERSION: '1' }).command, 'open')
 })
 
 test('a flag on the command line beats its env var', () => {
@@ -175,16 +170,9 @@ test('commands take exactly their words', () => {
   fails(() => parse(['workspace', 'join']), /missing <link>/)
 })
 
-test('a flag between the words of a chat message is still a flag', () => {
-  const { command, words, options } = parse(['explain', '--yes', 'this'])
-  assert.equal(command, 'chat')
-  assert.deepEqual(words, ['explain', 'this'])
-  assert.equal(options.yes, true)
-})
-
 test('each command runs where it says: the launcher, Core in the app, or the app', () => {
   assert.equal(parse(['config']).where, 'launcher')
   assert.equal(parse(['workspace', 'join', 'qvac://x']).where, 'core')
-  assert.equal(parse(['host', 'serve']).where, 'core')
-  assert.equal(parse(['hello']).where, 'app')
+  assert.equal(parse(['serve']).where, 'core')
+  assert.equal(parse([]).where, 'app')
 })

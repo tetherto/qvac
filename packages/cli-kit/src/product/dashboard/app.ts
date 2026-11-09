@@ -6,7 +6,7 @@ import type {
   Tui,
   ProductOptions
 } from '../app-types.js'
-import { Shell } from '../shell.js'
+import { Shell, TABS } from '../shell.js'
 import { plain } from '../theme.js'
 import { FORMS, SETUP_PAGES } from '../onboarding/pages.js'
 import { RECEIVERS } from './receive.js'
@@ -109,6 +109,19 @@ export abstract class Dashboard extends Shell {
 
   // what the help page lists: the product's keys and commands
   abstract helpLines(): string[]
+
+  // the keys the footer offers on every page: a product adds the pages it has
+  navHints(): [string, string][] {
+    return [
+      ['i', 'invite'],
+      ['q', 'quit']
+    ]
+  }
+
+  // Chat has no number, and only a product with one shows the tab
+  override tabs() {
+    return this.tabLine(this.chat ? [['chat', '', 'Chat'], ...TABS] : TABS)
+  }
 
   override receive(msg: { type: string }): Command {
     const handle = RECEIVERS.get(msg.type)

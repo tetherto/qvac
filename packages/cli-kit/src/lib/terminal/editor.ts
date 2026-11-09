@@ -1,4 +1,4 @@
-import { clean, cellWidth, fit } from '@qvac/cli-kit/tui'
+import { clean, cellWidth, fit } from './text.js'
 export interface KeyMessage {
   is(...names: string[]): boolean
   sequence?: string

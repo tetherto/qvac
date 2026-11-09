@@ -30,7 +30,6 @@ test("help lists every command, from each command's own definition", () => {
     'status',
     'logs',
     'config',
-    'chat',
     'help',
     'sdk'
   ]) {

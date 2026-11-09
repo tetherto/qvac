@@ -155,7 +155,7 @@ function applyConfig(
   // the test-only fake model must not be replaced by a configured or default model
   options.model = options.fakeModels ? undefined : options.model || core.model
   options.noDefaultModels = options.noDefaultModels ?? core.autoDownloadModels === false
-  options.startPage = options.startPage || tui.startPage || 'chat'
+  options.startPage = options.startPage || tui.startPage
   options.theme = tui.theme || 'terminal'
   core.dataDir = options.dataDir
   fs.mkdirSync(options.dataDir, { recursive: true, mode: 0o700 })

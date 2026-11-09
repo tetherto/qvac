@@ -13,14 +13,6 @@ export interface Page {
 }
 export type PageView = (app: Dashboard, f: Frame) => Page
 
-export const NAV_HINTS: [string, string][] = [
-  ['i', 'invite'],
-  ['v', 'all devices'],
-  ['w', 'workspace'],
-  ['s', 'status'],
-  ['q', 'quit']
-]
-
 // pages: what each page name renders; the product composes its own table
 export function renderDashboard(app: Dashboard, f: Frame, pages: Record<string, PageView>) {
   const render = app.ready ? pages[app.page] || blankPage : startingPage
@@ -50,7 +42,7 @@ export function brandLabel(app: Dashboard) {
 function dashboardFooter(
   app: Dashboard,
   f: Frame,
-  { nav = true, hints = NAV_HINTS, aside = [] }: Partial<Page>
+  { nav = true, hints = app.navHints(), aside = [] }: Partial<Page>
 ) {
   const width = f.inner
   const working = app.actionBusy ? paint('Working…', 'muted') : ''

@@ -15,17 +15,12 @@ import { modelParts, modelKind } from '../model-label.js'
 import { palette, paint, bytes, count, strong } from '../theme.js'
 import { paragraph } from '../ink.js'
 import type { Page, PageView } from './frame.js'
-import { NAV_HINTS } from './frame.js'
 
 const MODEL_HINTS: [string, string][] = [
   ['a', 'add model'],
   ['x', 'remove'],
   ['↑↓', 'choose'],
   ['l', 'load/unload'],
-  ['enter', 'chat with it'],
-  ['i', 'invite'],
-  ['s', 'status'],
-  ['q', 'quit'],
   ['d', 'retry']
 ]
 
@@ -130,7 +125,7 @@ function devicePage(app: Dashboard, f: Frame): Page {
     body.push(paint('  No models loaded. Press 3 to choose one.', 'muted'))
   }
 
-  return { body, hints: [['v', 'all devices'], ...NAV_HINTS.filter(([k]) => k !== 'v')] }
+  return { body }
 }
 
 // One line of hardware facts; an integrated GPU shares the CPU's name, so print it once.
@@ -182,7 +177,9 @@ function modelsPage(app: Dashboard, f: Frame): Page {
     return rows
   }
 
-  return { body, hints: MODEL_HINTS }
+  const chat: [string, string][] = app.chat ? [['enter', 'chat with it']] : []
+
+  return { body, hints: [...MODEL_HINTS, ...chat, ...app.navHints()] }
 }
 
 function modelRows(

@@ -9,7 +9,6 @@
   "exports": {
     ".": "./dist/product/app.js",
     "./tui": "./dist/product/app.js",
-    "./chat-session": "./dist/lib/client/chat-session.js",
     "./package.json": "./package.json"
   },
   "bin": {
@@ -67,15 +66,12 @@
     "start": "node dist/index.js",
     "dev": "pnpm build && node dist/index.js",
     "test:integration": "node test/helpers/run-bare.mjs test/integration/core-smoke.mjs",
-    "capture": "node test/helpers/run-bare.mjs docs/demo/capture-product.mjs",
     "pack:local": "node scripts/pack-distribution.mjs",
     "pear:build": "npm run build && node scripts/make.mjs",
     "test:pty": "node --test --test-concurrency=1 --test-timeout=300000 test/workbench/pty/*.pty.mjs",
     "test:p2p": "node --test --test-concurrency=1 --test-timeout=900000 test/workbench/p2p/*.p2p.mjs",
-    "test:delegation": "node test/helpers/run-bare.mjs test/integration/delegation-smoke.mjs",
     "pear:stage": "npm run build && node scripts/make.mjs --stage",
     "build:splash": "node scripts/build-splash.mjs",
-    "demo:record": "vhs docs/demo/boot.tape && vhs docs/demo/tour.tape && vhs docs/demo/coding.tape",
     "test:workbench": "npm run build && node --test test/workbench/*.test.mjs",
     "postinstall": "node scripts/patch-dependencies.mjs",
     "prepare:runtime": "node scripts/patch-dependencies.mjs",

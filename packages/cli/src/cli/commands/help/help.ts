@@ -1,11 +1,12 @@
 import type { ParsedCommand, LauncherKit } from '@qvac/cli-kit/launch'
+import type { Command } from 'paparam'
 import { tree } from '../../index.js'
 
 // paparam writes the help from each command's own summary, flags and arguments
 export function runHelp({ words }: ParsedCommand, { version, usage }: LauncherKit) {
   const root = tree({ version })
-  const names = words.filter((word: string) => word !== 'host')
-  let node = root
+  const names = words
+  let node: Command = root
   for (const name of names) {
     const child = node._definedCommands.get(name)
     if (!child) {

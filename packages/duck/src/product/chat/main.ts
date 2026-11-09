@@ -142,7 +142,7 @@ export function chatOptions(
   }
 }
 
-// qvac -p and --mode: one answer, JSON lines or an RPC session on stdio; resolves to the exit code
+// duck -p and --mode: one answer, JSON lines or an RPC session on stdio; resolves to the exit code
 export async function runPrintMode(
   options: LaunchOptions,
   { connect, close }: { connect(): Promise<Connection>; close(): Promise<void> }
@@ -166,7 +166,7 @@ export async function runPrintMode(
       }
     })
   } catch (error) {
-    process.stderr.write(`qvac: ${error instanceof Error ? error.message : String(error)}\n`)
+    process.stderr.write(`duck: ${error instanceof Error ? error.message : String(error)}\n`)
   }
 
   return code

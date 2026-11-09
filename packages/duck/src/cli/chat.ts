@@ -1,16 +1,12 @@
 import type { ParsedCommand, LauncherKit, LaunchOptions } from '@qvac/cli-kit/launch'
 import process from '#process'
 
-// qvac, qvac "prompt", qvac -p: the words are the first message, and the mode picks chat or print
-export async function runChat(
-  { action, words, options }: ParsedCommand,
-  { app, usage }: LauncherKit
-) {
+// duck, duck "prompt", duck -p: the words are the first message, and the mode picks chat or print
+export async function runChat({ words, options }: ParsedCommand, { app, usage }: LauncherKit) {
   if (words.length) {
     options.prompt = words.join(' ')
   }
 
-  options.startPage = action === 'open' ? 'chat' : undefined
   const problem = checkMode(options)
   if (problem) {
     usage(problem)
@@ -44,7 +40,7 @@ function checkMode(options: LaunchOptions) {
   }
 
   if (!options.mode && (!process.stdin.isTTY || !process.stdout.isTTY)) {
-    return 'QVAC needs a terminal. Use qvac -p for one prompt, qvac serve for an unattended host, or --help.'
+    return 'duck needs a terminal. Use duck -p for one prompt, or --help.'
   }
 
   return null

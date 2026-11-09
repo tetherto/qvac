@@ -1,8 +1,7 @@
 import type { CoreHost, LaunchOptions, RuntimeOptions } from '@qvac/cli-kit/launch'
-import type { Command, HostStatus } from '@qvac/cli-kit/tui'
+import type { Command, HostStatus, ProductOptions } from '@qvac/cli-kit/tui'
 import { startUpdater, bootCore, hostIO } from '@qvac/cli-kit/host'
 import { bootLines, canvas, paint } from '@qvac/cli-kit/brand'
-import type { ChatOptions } from './chat/app.js'
 import type { ProductApp } from './app.js'
 import tui from 'bare-tui'
 import pear from 'bare-tui-updater/pear'
@@ -10,25 +9,18 @@ import process from 'bare-process'
 import fs from 'bare-fs'
 import path from 'bare-path'
 import b4a from 'b4a'
-import URL, { pathToFileURL } from 'bare-url'
 import { spawn, spawnSync } from 'bare-subprocess'
 import updateBanner from 'bare-tui-updater'
 import tty from 'bare-tty'
 import pkg from '../../package.json' with { type: 'json' }
-import { extensionImports } from './extension-imports.js'
 import { productApp } from './app.js'
-import { chatOptions, runPrintMode } from './chat/main.js'
-import { loadExtensions } from './extension-loader.js'
-import { watchFiles, extensionFiles } from './config-watch.js'
 import { runCommand } from '../cli/run.js'
 
 let options: LaunchOptions = {}
 let updates: Awaited<ReturnType<typeof startUpdater>> = null
 let host: CoreHost | null = null
 let program: InstanceType<typeof tui.Program> | null = null
-let stopWatching: (() => void) | null = null,
-  closing = false,
-  loads = 0
+let closing = false
 const originalConsole = { ...console }
 const CLIPBOARD_COMMANDS: Record<string, [string, string[]][]> = {
   darwin: [['pbcopy', []]],
@@ -89,66 +81,17 @@ async function connect() {
     configure: () => host!.configure()
   }
 }
-async function startApp() {
+function startApp() {
   try {
     const App = productApp(tui)
-    const extensions = await extensionsNow()
-    watchConfig()
 
-    return { type: 'app', app: new App({ ...appOptions(hostIO()), extensions }) }
+    return { type: 'app', app: new App(appOptions(hostIO())) }
   } catch (error) {
     return { type: 'start-error', error }
   }
 }
 
-function extensionsNow() {
-  const version = loads++
-  return loadExtensions(options.config?.tui?.extensions, {
-    configPath: options.configPath,
-    load: (file) => importFromConfig(file, version)
-  })
-}
-
-// An edit to qvac.config, or to an extension it lists, applies at once; plugins wait for a restart.
-function watchConfig() {
-  if (!options.configPath || !options.launcher) {
-    return
-  }
-
-  stopWatching?.()
-  stopWatching = watchFiles(
-    extensionFiles(options.configPath, options.config?.tui?.extensions),
-    async () => {
-      const plugins = JSON.stringify(options.config?.harness?.plugins)
-      try {
-        reloadConfig()
-        const loaded = await extensionsNow()
-        const changed = plugins !== JSON.stringify(options.config?.harness?.plugins)
-        program!.send({ type: 'extensions.reloaded', loaded, pluginsChanged: changed })
-      } catch (error) {
-        program!.send({ type: 'error', error })
-      }
-
-      watchConfig()
-    }
-  )
-}
-
-// An extension in any project can import @qvac/harness from this install; ?v= imports it afresh.
-async function importFromConfig(file: string, version: number) {
-  const base = options.configPath ? path.dirname(options.configPath) : process.cwd()
-  const self = import.meta.cache[import.meta.url]!
-  const url = new URL(`${pathToFileURL(path.resolve(base, file)).href}?v=${version}`)
-
-  return (
-    await (self.constructor as typeof import('bare-module')).load(url, {
-      referrer: self,
-      imports: extensionImports()
-    })
-  ).exports as { default?: unknown }
-}
-
-export function appOptions(io: ReturnType<typeof hostIO>): ChatOptions {
+export function appOptions(io: ReturnType<typeof hostIO>): ProductOptions {
   return {
     ...options,
     updateBanner: updates
@@ -166,7 +109,6 @@ export function appOptions(io: ReturnType<typeof hostIO>): ChatOptions {
       }
     },
     ...io,
-    ...chatOptions(options, io, program!),
     platform: process.platform,
     restartCore: async () => {
       reloadConfig()
@@ -269,7 +211,6 @@ class Starting {
 async function close() {
   if (closing) return
   closing = true
-  stopWatching?.()
   await host?.close()
   await updates?.close()
 }
@@ -283,13 +224,7 @@ export async function main(launchOptions: LaunchOptions) {
   updates = options.standalone
     ? await startUpdater(options.entries as Parameters<typeof startUpdater>[0])
     : null
-  if (options.mode) {
-    silenceConsole()
-    const code = await runPrintMode(options, { connect, close })
-    await close()
-    await endStreams()
-    Bare.exit(code ?? 0)
-  } else if (options.command) {
+  if (options.command) {
     await runCli()
   } else {
     await runTui()
@@ -328,7 +263,7 @@ async function runTui() {
   program!.output.write('\x1b[?2004h')
   try {
     const running = program.run()
-    startApp().then((msg) => program!.send(msg))
+    program.send(startApp())
     // bare-tui cannot configure its decoder, whose 500ms escape wait lags every Esc and merges Esc+key
     if (program._decoder) {
       program._decoder._escapeDelay = 50

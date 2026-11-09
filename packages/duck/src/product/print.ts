@@ -152,7 +152,7 @@ async function once({ engine, deviceId, options, io }: Run) {
   const piped = io.stdin ? (await readAll(io.stdin)).trimEnd() : ''
   const text = [piped, options.prompt?.trim()].filter(Boolean).join('\n\n')
   if (!text) {
-    io.stderr.write('qvac: no prompt given. Pass -p "prompt" or pipe text on stdin.\n')
+    io.stderr.write('duck: no prompt given. Pass -p "prompt" or pipe text on stdin.\n')
     return 2
   }
 
@@ -260,7 +260,7 @@ async function answerPending(follow: Follow) {
     )
   } else if (!approved) {
     io.stderr.write(
-      `qvac: denied ${pending.detail.name || 'a tool call'} (pass --yes to approve)\n`
+      `duck: denied ${pending.detail.name || 'a tool call'} (pass --yes to approve)\n`
     )
   }
 
@@ -285,7 +285,7 @@ function finish({ turn, json, io, printed }: Follow) {
     }
 
     if (status !== 'completed') {
-      io.stderr.write(`qvac: run ${status}${reason ? `: ${reason}` : ''}\n`)
+      io.stderr.write(`duck: run ${status}${reason ? `: ${reason}` : ''}\n`)
     }
   }
 

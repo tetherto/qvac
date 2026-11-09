@@ -1,5 +1,5 @@
 import type { RoutedCommand, LaunchOptions, ParsedCommand } from '@qvac/cli-kit/launch'
-import { CHAT, DEVICE, FLAGS, envName, flags, paramKey } from '@qvac/cli-kit/launch'
+import { DEVICE, FLAGS, command, envName, flags, paramKey } from '@qvac/cli-kit/launch'
 import type { Command, Bail } from 'paparam'
 type ParseFailure = Error & { bail?: Bail; at?: Command }
 interface TreeResult {
@@ -9,11 +9,9 @@ interface TreeResult {
   options: LaunchOptions
 }
 // The one place paparam is set up, for both launchers and the app: commands, flags, env and help.
-import { bail, command as define, footer, header, summary } from 'paparam'
-import { chat } from './commands/chat/index.js'
+import { bail, footer, header, summary } from 'paparam'
 import { config } from './commands/config/index.js'
 import { help } from './commands/help/index.js'
-import { host } from './commands/host/index.js'
 import { invite } from './commands/invite/index.js'
 import { logs } from './commands/logs/index.js'
 import { models } from './commands/models/index.js'
@@ -23,11 +21,14 @@ import { serve } from './commands/serve/index.js'
 import { status } from './commands/status/index.js'
 import { workspace } from './commands/workspace/index.js'
 
-const COMMANDS = [serve, invite, workspace, models, status, logs, config, chat, help, host, sdk]
+const COMMANDS = [serve, invite, workspace, models, status, logs, config, help, sdk]
 // Asking for help or the version is never ambient, so neither reads an env var.
 const NO_ENV = new Set(['version'])
 const FALSE = new Set(['', '0', 'false', 'no', 'off'])
 const HELP = new Set(['--help', '-h'])
+// qvac alone opens the app: the management TUI
+const open = (...a: Parameters<(typeof import('./open.js'))['runOpen']>) =>
+  import('./open.js').then((m) => m.runOpen(...a))
 
 export class UsageError extends Error {
   code: number
@@ -39,13 +40,12 @@ export class UsageError extends Error {
 
 // commands keep what they parsed, so every parse builds its own tree
 export function tree({ version = '' } = {}) {
-  return define(
+  return command(
     'qvac',
+    { where: 'app', run: open },
     header(`QV.AC ${version}`.trimEnd() + ' — your most powerful device, everywhere.'),
-    summary(
-      'Open chat, setting this device up on first use. A first word that is not a command is your first message.'
-    ),
-    ...flags([...DEVICE, ...CHAT, 'version']),
+    summary('Open the dashboard of this device, setting it up on first use.'),
+    ...flags([...DEVICE, 'version']),
     ...COMMANDS.map((make) => make()),
     footer(
       'Every flag also reads QVAC_<FLAG_NAME>, e.g. QVAC_DATA_DIR. qvac help <command> for one.'
@@ -64,7 +64,7 @@ export function parseArgs(
     return parsed(['sdk'], { words: sdkWords, where: 'launcher' })
   }
 
-  // everything after `--` is words, and after a leading one a chat message, even a command word
+  // everything after `--` is words, even a command word
   const literal = argv.indexOf('--')
   const head = literal === -1 ? argv : argv.slice(0, literal)
   const tail = literal === -1 ? [] : argv.slice(literal + 1)
@@ -79,7 +79,7 @@ export function parseArgs(
     options.tail = count(options.tail)
   }
 
-  const path = literal !== -1 && read.path.length === 0 ? [] : read.path
+  const path = read.path
   const words = [...read.words, ...tail]
   if (asked) {
     return parsed(['help'], { words: path, options, where: 'launcher' })
@@ -105,7 +105,6 @@ export function parseArgs(
 export function find(command: string, action?: string | null) {
   const names = [command, action].filter((name): name is string => !!name)
   let node: Command = tree()
-  // chat's `open` is how it was asked for, not a command below it
   for (const name of names) {
     node = node._definedCommands.get(name) ?? node
   }
@@ -134,12 +133,7 @@ function parse(argv: string[]): TreeResult {
   } catch (caught) {
     const error = caught as ParseFailure
     if (!error.bail) throw error
-    if (error.bail.reason !== 'UNKNOWN_ARG' || error.bail.command.parent) {
-      throw Object.assign(usageError(error.bail!, argv), { at: error.bail?.command })
-    }
-
-    // a first word that names no command starts a chat message
-    leaf = chat('qvac').add(bail(rethrow)).parse(argv, { sync: true, silent: true, run: false })
+    throw Object.assign(usageError(error.bail, argv), { at: error.bail.command })
   }
 
   return { leaf: leaf!, path: pathOf(leaf), words: leaf!.positionals, options: optionsOf(leaf) }
@@ -147,7 +141,7 @@ function parse(argv: string[]): TreeResult {
 
 function routed({ path, words, options, leaf }: TreeResult): ParsedCommand {
   if (path.length === 0) {
-    return parsed(['chat'], { words, options, where: 'app' })
+    return parsed(['open'], { words, options, where: 'app' })
   }
 
   // a group alone names no command: qvac workspace
@@ -155,14 +149,11 @@ function routed({ path, words, options, leaf }: TreeResult): ParsedCommand {
     throw new UsageError(takes(leaf!))
   }
 
-  const [first, ...rest] = path[0] === 'host' ? path.slice(1) : path
-  const command = first === 'chat' ? ['chat', 'open'] : [first, ...rest]
-
-  return parsed(command, { words, options, where: (leaf as RoutedCommand).qvac.where! })
+  return parsed(path, { words, options, where: (leaf as RoutedCommand).qvac.where! })
 }
 
 const parsed = (
-  [command = 'chat', action = null]: Array<string | null | undefined>,
+  [command = 'open', action = null]: Array<string | null | undefined>,
   {
     words = [],
     options = {},
@@ -248,8 +239,11 @@ function usageError({ reason, flag, arg, command: at }: Bail, argv: string[]) {
     return new UsageError(`missing ${arg?.value}: ${usage}`)
   }
 
+  // the root takes commands only: a word that names none is not a message
   if (at._definedCommands.size > 0) {
-    return new UsageError(takes(at))
+    return new UsageError(
+      at.parent ? takes(at) : `unknown command ${arg?.value?.split(' ')[0]}. Use qvac --help.`
+    )
   }
 
   return new UsageError(`unexpected "${arg?.value}": ${usage}`)
@@ -259,7 +253,5 @@ function takes(group: Command) {
   const names = [...group._definedCommands.keys()]
   const [name] = pathOf(group)
 
-  return name === 'host'
-    ? 'host takes one command: serve (or just qvac serve).'
-    : `${name} takes ${names.join(', ')}. Use qvac help ${name}.`
+  return `${name} takes ${names.join(', ')}. Use qvac help ${name}.`
 }

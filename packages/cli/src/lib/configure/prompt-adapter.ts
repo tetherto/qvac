@@ -1,10 +1,9 @@
-import { wrap } from '@qvac/cli-kit/tui'
+import { Editor, wrap } from '@qvac/cli-kit/tui'
 import { emitKeypressEvents, type Key } from 'node:readline'
 import { spawn } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { Editor } from '../terminal/editor.js'
 
 interface Context {
   signal?: AbortSignal

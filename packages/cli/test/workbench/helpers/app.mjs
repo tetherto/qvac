@@ -1,4 +1,4 @@
-// The app under test with a fake engine: shared by the product, extension and chaos tests.
+// The dashboard under test with a fake engine: shared by the product tests.
 import { plain } from '@qvac/cli-kit/brand'
 import { cellWidth } from '@qvac/cli-kit/tui'
 import { productApp } from '../../../dist/product/app.js'
@@ -74,59 +74,19 @@ export function fakeEngine(overrides = {}) {
     calls,
     watches,
     account: async () => ({ meshId: 'account' }),
-    accountWatch: () => [{ meshId: 'account' }],
-    meshesWatch: () => [{ meshes: [{ meshId: 'account', account: true, writable: true }] }],
-    agentsWatch: () => {
-      const f = watch('agents')()
-      f.push({
-        agents: [
-          {
-            id: 'agent-1',
-            name: 'QV.AC',
-            isDefault: true,
-            providerDeviceId: 'aa',
-            modelName: 'Local'
-          }
-        ]
-      })
-
-      return f
-    },
-    chatsWatch: watch('chats'),
-    chunksWatch: (input) => {
-      calls.push(['chunksWatch', input])
-      return watch('chunks:' + input.chatId)()
-    },
     meshStatusWatch: watch('status'),
     modelDownloadsWatch: watch('downloads'),
-    getConfig: () => Promise.resolve({ onboardingCompleted: true, activeChatId: 'chat-1' }),
+    getConfig: () => Promise.resolve({ onboardingCompleted: true }),
     setConfig: (input) => {
       calls.push(['setConfig', input])
       return Promise.resolve()
     },
-    listChats: () => Promise.resolve({ chats: [{ id: 'chat-1', title: 'Existing conversation' }] }),
     listMeshes: () => Promise.resolve({ meshes: [{ meshId: 'account', account: true }] }),
     listModels: () => Promise.resolve({ models: [model('Local')] }),
     listMembers: () => Promise.resolve({ members: [] }),
     listDevices: () => Promise.resolve({ devices: [] }),
     listAgents: () => Promise.resolve({ agents: [] }),
     diagnostics: () => Promise.resolve({}),
-    sendMessage: (input) => {
-      calls.push(['sendMessage', input])
-      return Promise.resolve({ chatId: input.chatId || 'chat-new', runId: 'run-1' })
-    },
-    stopRun: (input) => {
-      calls.push(['stopRun', input])
-      return Promise.resolve()
-    },
-    resolveApproval: (input) => {
-      calls.push(['resolveApproval', input])
-      return Promise.resolve()
-    },
-    updateAgent: (input) => {
-      calls.push(['updateAgent', input])
-      return Promise.resolve({ id: 'agent-1', name: 'QV.AC', modelName: input.config.modelName })
-    },
     ...overrides
   }
 
@@ -140,13 +100,6 @@ export const model = (name, extra = {}) => ({
   isCached: true,
   expectedSize: 1000,
   ...extra
-})
-export const chunk = (seq, type, { runId = 'run-1', ...body } = {}) => ({
-  id: `chunk-${seq}`,
-  seq,
-  type,
-  runId,
-  ...body
 })
 
 // Runs commands like bare-tui's Program, without timers.
@@ -183,9 +136,4 @@ export async function boot({ engine: overrides, ...options } = {}) {
 
 export const press = (app, name, extra = {}) =>
   app.update(new KeyMsg({ name, sequence: name.length === 1 ? name : '', ...extra }))[1]
-export const type = (app, text) => {
-  for (const ch of text) {
-    press(app, ch)
-  }
-}
 export const screen = (app) => plain(app.view())

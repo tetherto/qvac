@@ -24,11 +24,11 @@ import { bootLines } from './splash.js'
 import { DownloadRate } from './download-rate.js'
 
 export const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-const TABS: [string, string][] = [
-  ['chat', 'Chat'],
-  ['overview', 'Overview'],
-  ['device', 'Device'],
-  ['models', 'Models']
+// [page, its number key, label]: the pages every product has; a product with a chat adds that tab
+export const TABS: [string, string, string][] = [
+  ['overview', '1 ', 'Overview'],
+  ['device', '2 ', 'Device'],
+  ['models', '3 ', 'Models']
 ]
 
 // The TUI shell both products share: Core connection, header, pickers, mouse and the message loop.
@@ -88,7 +88,7 @@ export abstract class Shell {
     this.product = null
     this.hostStatus = null
     this.ready = false
-    this.page = options.startPage || 'chat'
+    this.page = options.startPage || 'overview'
     this.error = ''
     this.notice = ''
     this.status = 'Starting QV.AC…'
@@ -469,15 +469,17 @@ export abstract class Shell {
     )
   }
 
-  // Chat has no number; pages keep Bruno's 1–3. The current one is marked ▸.
+  // the product's tabs; pages keep Bruno's 1–3. The current one is marked ▸.
   tabs() {
-    const keys: Record<string, string> = { chat: '', overview: '1 ', device: '2 ', models: '3 ' }
+    return this.tabLine(TABS)
+  }
 
-    return TABS.map(([page, label]) =>
-      page === this.page
-        ? strong(`▸ ${keys[page]}${label}`, 'teal')
-        : paint(`  ${keys[page]}${label}`, 'muted')
-    ).join(' ')
+  tabLine(tabs: [string, string, string][]) {
+    return tabs
+      .map(([page, key, label]) =>
+        page === this.page ? strong(`▸ ${key}${label}`, 'teal') : paint(`  ${key}${label}`, 'muted')
+      )
+      .join(' ')
   }
 
   updateLines(width: number) {

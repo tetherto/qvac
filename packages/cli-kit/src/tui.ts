@@ -10,6 +10,7 @@ export * from './product/download-rate.js'
 export * from './product/qr.js'
 export * from './product/session.js'
 export * from './lib/terminal/text.js'
+export { Editor } from './lib/terminal/editor.js'
 // The dashboard: its state, frame and key routing, setup, the pages both products have.
 export * from './product/dashboard/app.js'
 export * from './product/dashboard/frame.js'

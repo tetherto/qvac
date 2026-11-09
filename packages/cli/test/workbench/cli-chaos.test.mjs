@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import { random } from './helpers/chaos.mjs'
+import { random } from './helpers/random.mjs'
 import { parseArgs } from '../../dist/cli/index.js'
 
 const CLI = new URL('../../dist/index.js', import.meta.url).pathname

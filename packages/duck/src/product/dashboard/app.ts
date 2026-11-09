@@ -10,17 +10,15 @@ import {
   ONBOARDING_MODAL,
   ONBOARDING_ENTER
 } from '@qvac/cli-kit/tui'
-import { PAGES as MANAGEMENT_PAGES } from '../management/pages.js'
-import { PAGES as MANAGEMENT_KEYS, SHORTCUTS as MANAGEMENT_SHORTCUTS } from '../management/keys.js'
 import { ChatApp, type ChatOptions } from '../chat/app.js'
 
-// qvac's dashboard: setup, the shared pages, and the host's own
-const PAGES = { ...ONBOARDING_PAGES, ...DASHBOARD_PAGES, ...MANAGEMENT_PAGES }
+// duck's dashboard: setup and the shared pages
+const PAGES = { ...ONBOARDING_PAGES, ...DASHBOARD_PAGES }
 const KEYS = {
   modal: ONBOARDING_MODAL,
   enter: ONBOARDING_ENTER,
-  shortcuts: [...DASHBOARD_SHORTCUTS, ...MANAGEMENT_SHORTCUTS],
-  pages: new Map([...DASHBOARD_KEYS, ...MANAGEMENT_KEYS])
+  shortcuts: DASHBOARD_SHORTCUTS,
+  pages: DASHBOARD_KEYS
 }
 
 export function productApp(tui: Tui) {

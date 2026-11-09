@@ -52,8 +52,8 @@ test('TUI onboarding pairs with a serve device, offering the machine name and ta
   assert.ok(term.screen.text().includes(`❯ ${machineName()}`), term.screen.text())
   term.keys(CTRL_U + 'tui-box\r')
 
-  // onboarding ends by itself once the pairing lands, with no key to press
-  await term.waitFor(/Ask QV\.AC anything/, 180000)
+  // onboarding ends by itself once the pairing lands, with no key to press, on the overview
+  await term.waitFor(/Your workspace, at a glance/, 180000)
   const names = () => (a.status()?.devices ?? []).map((d) => d.name)
   await until(() => names().includes('tui-box'), `a to list tui-box, it lists ${names()}`)
 })

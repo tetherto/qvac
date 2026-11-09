@@ -29,7 +29,8 @@ import {
   remember as rememberChat,
   upload,
   visibleChats,
-  writable
+  writable,
+  Editor
 } from '@qvac/cli-kit/tui'
 import { paint, plain, bytes, applyTheme, strong, paragraph } from '@qvac/cli-kit/brand'
 import { describeConfig } from '@qvac/cli-kit/config'
@@ -37,7 +38,6 @@ import type { LoadedExtensions } from '../extensions.js'
 import type { loadTemplates, loadContextFiles } from '../../lib/runtime/resources.js'
 import type { Chunk, Turn } from '../transcript.js'
 import type { ProductCommand } from '../commands.js'
-import { Editor } from '../../lib/terminal/editor.js'
 import { turns, pendingApproval, activeRun } from '../transcript.js'
 import { renderTurns } from '../chat-view.js'
 import { match, parse, commands } from '../commands.js'
@@ -171,6 +171,7 @@ export abstract class ChatApp extends Dashboard {
   constructor(tui: Tui, options: ChatOptions = {}) {
     super(tui, options)
     this.chat = this
+    this.page = options.startPage || 'chat'
     this.chatId = null
     this.chats = []
     this.turns = []
@@ -881,7 +882,7 @@ export abstract class ChatApp extends Dashboard {
       ),
       row('Speed', usage?.speed ? `${usage.speed.toFixed(1)} tok/s` : '—'),
       row('Folder', this.options.cwd || '—'),
-      row('Storage', this.options.dataDir || '~/.qvac/cli')
+      row('Storage', this.options.dataDir || '~/.qvac/duck')
     ]
   }
 
@@ -1110,7 +1111,7 @@ export abstract class ChatApp extends Dashboard {
       this.options.configPath || 'Built-in defaults',
       '',
       paint('State', 'muted'),
-      this.options.dataDir || '~/.qvac/cli',
+      this.options.dataDir || '~/.qvac/duck',
       '',
       paint('Model', 'muted'),
       this.agent?.modelName || 'Not selected',
@@ -1151,7 +1152,7 @@ export abstract class ChatApp extends Dashboard {
       paint('Dashboard', 'muted'),
       key('enter or c', 'chat'),
       key('1 2 3', 'overview · device · models'),
-      key('i  v  w  s', 'invite · devices · workspaces · status'),
+      key('i', 'invite'),
       key('ctrl+g', 'switch between chat and dashboard'),
       '',
       paint('Commands', 'muted'),
