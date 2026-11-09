@@ -17,6 +17,7 @@ import {
 } from '@/commands/verify/engines-advice'
 import { formatVerifyBundleResult, hasErrors, verifyBundle } from '@/commands/verify/index'
 import { writeBundleFile } from './fixtures/bundle-file'
+import { linkDependency } from './fixtures/link-dependency'
 
 async function withTempDir(fn: (dir: string) => Promise<void> | void): Promise<void> {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-verify-engines-')))
@@ -723,6 +724,38 @@ describe('verifyBundle engines.bare against the phone runtimes', () => {
         mismatches[0]!.message,
         /runtime is 1\.36\.2 \(from bare-sidecar: bare-sidecar 0\.5\.2/
       )
+    })
+  })
+
+  it('finds the bare-sidecar next to a pnpm-linked pear-runtime', async () => {
+    await withTempDir(async (dir) => {
+      const bareStowDir = writeMobileProject(dir, { hosts: ['darwin-arm64'] })
+      writeSidecar(dir, '1.40.0')
+      const store = path.join(dir, 'node_modules', '.pnpm', 'pear-runtime@1.3.1')
+      writePackage(store, 'node_modules/pear-runtime', { name: 'pear-runtime', version: '1.3.1' })
+      const sibling = writePackage(store, 'node_modules/bare-sidecar', {
+        name: 'bare-sidecar',
+        version: '0.5.2'
+      })
+      writeFile(path.join(sibling, 'versions.json'), JSON.stringify({ bare: '1.36.2' }))
+      linkDependency(dir, 'pear-runtime', store)
+
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: path.join(dir, 'node_modules'),
+        hosts: ['darwin-arm64'],
+        desktopRuntime: 'pear-runtime',
+        bareStowDir,
+        network: false
+      })
+      const desktop = result.runtimes.find((runtime) => runtime.platform === 'desktop')
+      assert.equal(
+        desktop?.resolution.resolved ? desktop.resolution.runtime.packageVersion : null,
+        '0.5.2'
+      )
+      const mismatches = result.issues.filter((issue) => issue.code === 'abi-mismatch')
+      assert.equal(mismatches.length, 1)
+      assert.match(mismatches[0]!.message, /runtime is 1\.36\.2/)
     })
   })
 
