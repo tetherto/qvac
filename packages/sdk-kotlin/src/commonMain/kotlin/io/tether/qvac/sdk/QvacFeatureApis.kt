@@ -64,7 +64,6 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
@@ -128,15 +127,12 @@ class QvacSpeech internal constructor(private val client: QvacClient) {
 
     /**
      * Text chunks are UTF-8 bytes. Collect concurrently with producing input. No result aggregation.
-     * Frames arrive with their samples in `buffer`: audio the worker sent as base64 `pcm` is decoded here.
+     * Frames arrive with their samples in `buffer`: `QvacClient.textToSpeechStream` decodes the `pcm` the worker sent.
      */
     fun synthesizeStream(
         request: TextToSpeechStreamRequest,
         text: Flow<ByteArray>,
-    ): Flow<TextToSpeechStreamResponse> =
-        client.textToSpeechStream(request, text).map { frame ->
-            if (frame.pcm.isNullOrEmpty()) frame else frame.copy(buffer = ttsSamples(frame.buffer, frame.pcm), pcm = null)
-        }
+    ): Flow<TextToSpeechStreamResponse> = client.textToSpeechStream(request, text)
 
     suspend fun transcribe(
         modelId: String,
@@ -666,6 +662,17 @@ private fun OcrStreamResponseBlocksItem.toOcrBlock() = QvacOcrBlock(
  * 16-bit bytes in `pcm` with `buffer` empty; a frame without `pcm` carries
  * its samples in `buffer`.
  */
+/**
+ * The frame with its samples in `buffer` whatever the wire carried. Applied by
+ * the generated `QvacClient.textToSpeech` / `textToSpeechStream` methods, so
+ * every public typed path returns decoded audio.
+ */
+internal fun TextToSpeechResponse.withDecodedPcm(): TextToSpeechResponse =
+    if (pcm.isNullOrEmpty()) this else copy(buffer = ttsSamples(buffer, pcm), pcm = null)
+
+internal fun TextToSpeechStreamResponse.withDecodedPcm(): TextToSpeechStreamResponse =
+    if (pcm.isNullOrEmpty()) this else copy(buffer = ttsSamples(buffer, pcm), pcm = null)
+
 @OptIn(ExperimentalEncodingApi::class)
 internal fun ttsSamples(buffer: List<Double>, pcm: String?): List<Double> {
     if (pcm.isNullOrEmpty()) return buffer
