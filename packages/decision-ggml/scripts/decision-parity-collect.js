@@ -1,7 +1,7 @@
 'use strict'
 
 // QVAC-26667 prototype: runs a list of /v1/systemone requests through this
-// package's DecisionEngine (the fabric bridge) and writes each answer, or the
+// package's DecisionEngine (upstream server-context) and writes each answer, or the
 // error, to a JSON file. Runs under Bare; scripts/decision-prototype/parity.mjs
 // at the repo root starts it.
 //
@@ -40,7 +40,7 @@ async function main() {
   const results = []
   try {
     console.error(
-      `▸ ${engine.info().decision_type}: ${requests.length} requests through the bridge`
+      `▸ ${engine.info().decision_type}: ${requests.length} requests through DecisionEngine`
     )
     for (const { name, body } of requests) {
       try {

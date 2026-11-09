@@ -17,11 +17,10 @@ check() { # <from-package-dir> <dependency> <expected-dir>
   [ "$got" = "$want" ] || { err "$2 from $1 -> $got (expected $want)"; return; }
   echo "ok   $2 from $1"
 }
-check packages/sdk            @qvac/inference      packages/inference
-check packages/sdk            @qvac/embed-llamacpp packages/embed-llamacpp
-check packages/inference      @qvac/embed-llamacpp packages/embed-llamacpp
-check packages/embed-llamacpp @qvac/fabric         packages/fabric
-check packages/cli            @qvac/sdk            packages/sdk
+check packages/cli           @qvac/sdk           packages/sdk
+check packages/sdk           @qvac/inference     packages/inference
+check packages/inference     @qvac/decision-ggml packages/decision-ggml
+check packages/decision-ggml @qvac/fabric        packages/fabric
 
 host=$(node -p "process.platform + '-' + process.arch") || err "cannot read host"
 pkg="packages/fabric/node_modules/@qvac/fabric-$host"
