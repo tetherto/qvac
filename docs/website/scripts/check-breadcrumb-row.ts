@@ -131,7 +131,7 @@ const EXPECTED_TRAILS: { page: string; leadsTo: string; depth: number }[] = [
   },
   { page: 'cli/http-server', leadsTo: '/cli/', depth: 2 },
   { page: `cli/${CLI_LINE}/http-server`, leadsTo: `/cli/${CLI_LINE}`, depth: 2 },
-  { page: 'ecosystem/addons/llm-llamacpp', leadsTo: '/ecosystem/', depth: 3 },
+  { page: 'ecosystem/addons/embed-llamacpp', leadsTo: '/ecosystem/', depth: 3 },
   { page: 'resources/tutorials/electron', leadsTo: '/resources/', depth: 2 },
 ];
 

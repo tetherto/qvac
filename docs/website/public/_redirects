@@ -67,14 +67,22 @@
 /about/how-it-works/                            /sdk/how-it-works/                                  301
 /addons/                                        /ecosystem/addons/                                  301
 /addons/audiogen-ggml/                          /ecosystem/addons/audiogen-ggml/                    301
-/addons/diffusion-cpp/                          /ecosystem/addons/diffusion-cpp/                    301
+/addons/diffusion-cpp/                          /ecosystem/packages/diffusion-cpp/                    301
 /addons/embed-llamacpp/                         /ecosystem/addons/embed-llamacpp/                   301
-/addons/llm-llamacpp/                           /ecosystem/addons/llm-llamacpp/                     301
+/addons/llm-llamacpp/                           /ecosystem/packages/llm-llamacpp/                     301
 /addons/ocr-onnx/                               /ecosystem/addons/                                  301
 /addons/transcription-parakeet/                 /ecosystem/addons/transcription-parakeet/           301
 /addons/transcription-whispercpp/               /ecosystem/addons/transcription-whispercpp/         301
-/addons/translation-nmtcpp/                     /ecosystem/addons/translation-nmtcpp/               301
+/addons/translation-nmtcpp/                     /ecosystem/packages/translation-nmtcpp/               301
 /addons/tts-ggml/                               /ecosystem/addons/tts-ggml/                         301
+
+# Addons documented as packages, under Ecosystem → Packages (PoC)
+/ecosystem/addons/llm-llamacpp/                 /ecosystem/packages/llm-llamacpp/                   301
+/ecosystem/addons/llm-llamacpp.md               /ecosystem/packages/llm-llamacpp.md                 301
+/ecosystem/addons/diffusion-cpp/                /ecosystem/packages/diffusion-cpp/                  301
+/ecosystem/addons/diffusion-cpp.md              /ecosystem/packages/diffusion-cpp.md                301
+/ecosystem/addons/translation-nmtcpp/           /ecosystem/packages/translation-nmtcpp/             301
+/ecosystem/addons/translation-nmtcpp.md         /ecosystem/packages/translation-nmtcpp.md           301
 /ai-capabilities/batch-processing/              /sdk/ai-capabilities/batch-processing/              301
 /ai-capabilities/bci/                           /sdk/ai-capabilities/bci/                           301
 /ai-capabilities/fine-tuning/                   /sdk/ai-capabilities/fine-tuning/                   301
@@ -136,13 +144,13 @@
 /about/how-it-works.md                          /sdk/how-it-works.md                                301
 /addons.md                                      /ecosystem/addons.md                                301
 /addons/audiogen-ggml.md                        /ecosystem/addons/audiogen-ggml.md                  301
-/addons/diffusion-cpp.md                        /ecosystem/addons/diffusion-cpp.md                  301
+/addons/diffusion-cpp.md                        /ecosystem/packages/diffusion-cpp.md                  301
 /addons/embed-llamacpp.md                       /ecosystem/addons/embed-llamacpp.md                 301
-/addons/llm-llamacpp.md                         /ecosystem/addons/llm-llamacpp.md                   301
+/addons/llm-llamacpp.md                         /ecosystem/packages/llm-llamacpp.md                   301
 /addons/ocr-onnx.md                             /ecosystem/addons.md                                301
 /addons/transcription-parakeet.md               /ecosystem/addons/transcription-parakeet.md         301
 /addons/transcription-whispercpp.md             /ecosystem/addons/transcription-whispercpp.md       301
-/addons/translation-nmtcpp.md                   /ecosystem/addons/translation-nmtcpp.md             301
+/addons/translation-nmtcpp.md                   /ecosystem/packages/translation-nmtcpp.md             301
 /addons/tts-ggml.md                             /ecosystem/addons/tts-ggml.md                       301
 /ai-capabilities/batch-processing.md            /sdk/ai-capabilities/batch-processing.md            301
 /ai-capabilities/bci.md                         /sdk/ai-capabilities/bci.md                         301
