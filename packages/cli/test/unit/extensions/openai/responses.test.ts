@@ -691,4 +691,49 @@ describe('writeBlockingResponse: input tokens across search rounds', () => {
     // 100 (overlap: its own promptTokens) + 218 - 10 (solo: full prompt).
     assert.equal((obj['usage'] as { input_tokens: number }).input_tokens, 308)
   })
+
+  it("reports the last round's cache occupancy, not the sum across search rounds", async () => {
+    let sent = false
+    const res = {
+      setHeader: (): void => {},
+      writeHead: (): void => {
+        sent = true
+      },
+      end: (): void => {},
+      get headersSent(): boolean {
+        return sent
+      }
+    } as unknown as ServerResponse
+    const turns = [
+      fakeCompletion({
+        text: '',
+        toolCalls: [{ id: 'c1', name: 'tool_search', arguments: { query: 'create_issue' } }],
+        stats: { cacheTokens: 100 }
+      }),
+      fakeCompletion({ text: 'Done.', toolCalls: [], stats: { cacheTokens: 120 } })
+    ]
+    let turn = 0
+    const obj = await writeBlockingResponse(
+      res,
+      {
+        ...baseHandlerParams(),
+        kvCached: true,
+        tools: [
+          {
+            type: 'function' as const,
+            name: 'create_issue',
+            description: 'Open a new issue on a repository',
+            deferLoading: true,
+            parameters: {
+              type: 'object' as const,
+              properties: { title: { type: 'string' as const } }
+            }
+          }
+        ]
+      },
+      () => turns[turn++]!
+    )
+    assert.equal(turn, 2)
+    assert.equal((obj['usage'] as Record<string, number>)['qvac_cache_tokens'], 120)
+  })
 })
