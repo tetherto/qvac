@@ -1,0 +1,9 @@
+{
+  "package": "@qvac/llm-llamacpp",
+  "kind": "platform",
+  "path": "/ecosystem/packages/llm-llamacpp",
+  "paths": [
+    "packages/llm-llamacpp/docs/users"
+  ],
+  "lines": []
+}

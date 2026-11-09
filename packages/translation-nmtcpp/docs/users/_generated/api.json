@@ -1,0 +1,476 @@
+{
+  "package": "@qvac/translation-nmtcpp",
+  "exports": [
+    {
+      "name": "FitDevice",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:95",
+      "fields": [
+        {
+          "name": "freeBytes",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "optional": false,
+          "description": "The PCI bus ID when the backend reports one, the device name otherwise."
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalBytes",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "unified",
+          "type": "boolean",
+          "optional": false,
+          "description": "Memory the host owns: the host CPU, and a GPU that shares the host's memory."
+        },
+        {
+          "name": "usedBytes",
+          "type": "number",
+          "optional": false,
+          "description": "The weight-load allowance on the selected device; the staged source bytes on the host."
+        }
+      ]
+    },
+    {
+      "name": "FitRequest",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:83",
+      "fields": [
+        {
+          "name": "config",
+          "type": "TranslationNmtcppConfig",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "files",
+          "type": "TranslationNmtcppFiles",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "marginBytes",
+          "type": "number",
+          "optional": true,
+          "description": "Additional free memory to reserve, in bytes."
+        }
+      ]
+    },
+    {
+      "name": "FitResult",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:107",
+      "fields": [
+        {
+          "name": "devices",
+          "type": "FitDevice[]",
+          "optional": false,
+          "description": "The selected GPU, then the host CPU, which stages a discrete GPU's source\nbytes. One CPU row for a load on the CPU, and none for `unknown`."
+        },
+        {
+          "name": "stats",
+          "type": "FitStats",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "status",
+          "type": "FitStatus",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "FitStats",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:106",
+      "type": "Record<string, never>"
+    },
+    {
+      "name": "FitStatus",
+      "kind": "type",
+      "summary": "`unknown` is a load with no reliable verdict: a `main-gpu` selection,\nmemory that cannot be read, no CPU device for the host row, or a load\nbetween the allowance and the source bytes.",
+      "deprecated": null,
+      "source": "index.d.ts:94",
+      "values": [
+        "\"fits\"",
+        "\"does-not-fit\"",
+        "\"unknown\""
+      ]
+    },
+    {
+      "name": "InferenceClientState",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:201",
+      "fields": [
+        {
+          "name": "configLoaded",
+          "type": "boolean",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "destroyed",
+          "type": "boolean",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "weightsLoaded",
+          "type": "boolean",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "RuntimeStats",
+      "kind": "interface",
+      "summary": "Stats returned via `response.stats` when the addon is constructed with\n`opts.stats = true`. Field set differs by backend:\n\n- Bergamot emits: `totalTokens`, `totalTime`, `decodeTime`, `TPS`.\n- GGML/IndicTrans emits the above plus `encodeTime` and `TTFT`.\n\nUnits:\n- `totalTime`, `encodeTime`, `decodeTime` — seconds (double).\n- `TTFT` (Time-To-First-Token) — milliseconds (double).\n- `TPS` (Tokens-Per-Second) — tokens / second (double).\n- `totalTokens` — integer count.\n\nNote: pivot translations may emit keys prefixed with the model name\n(e.g. `\"BERGAMOT : ->TPS\"`). This interface models the non-pivot shape.",
+      "deprecated": null,
+      "source": "index.d.ts:222",
+      "fields": [
+        {
+          "name": "decodeTime",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "encodeTime",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "totalTime",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalTokens",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "TPS",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "TTFT",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "TranslationNmtcpp",
+      "kind": "interface",
+      "summary": "Public instance surface of a translation model. Kept as an interface (public\nmembers only) so the published type stays structural — emitting the class\ntype would leak private fields and reject consumer mocks.",
+      "deprecated": null,
+      "source": "index.d.ts:11",
+      "fields": [
+        {
+          "name": "destroy",
+          "type": "(): Promise<void>",
+          "optional": false,
+          "description": "Destroys the model permanently."
+        },
+        {
+          "name": "getActiveBackendDescription",
+          "type": "(): string",
+          "optional": false,
+          "description": "Returns the human-readable device description for the active GPU backend\n(e.g. 'NVIDIA GeForce RTX 5070', 'Intel(R) UHD Graphics').\nReturns '' when no GPU backend is loaded or model is unloaded."
+        },
+        {
+          "name": "getActiveBackendName",
+          "type": "(): \"Unloaded\" | \"Bergamot-CPU\" | \"CPU\" | string & {}",
+          "optional": false,
+          "description": "Returns the name of the compute backend that load() actually selected,\nor one of the sentinels \"Unloaded\", \"Bergamot-CPU\", \"CPU\". Open-ended\ndevice names like \"Vulkan0\", \"OpenCL\", \"Metal\" are also possible.\n\nReturn-type note: `(string & {})` keeps the literal sentinels\nIDE-completable. Plain `'Unloaded' | ... | string` collapses to `string`\nvia TypeScript's union absorption rule."
+        },
+        {
+          "name": "getState",
+          "type": "(): InferenceClientState",
+          "optional": false,
+          "description": "Returns the current state of the inference client."
+        },
+        {
+          "name": "load",
+          "type": "(): Promise<void>",
+          "optional": false,
+          "description": "Loads the model. If already loaded, unloads first. Rejects after\n`destroy()` — destruction is permanent; create a new instance instead."
+        },
+        {
+          "name": "run",
+          "type": "(input: string): Promise<TranslationResponse>",
+          "optional": false,
+          "description": "Runs inference on the given input. Serialized through completion — the\nnext `run()`/`runBatch()` job starts only after the returned response\nhas settled (finished, failed, or been cancelled)."
+        },
+        {
+          "name": "runBatch",
+          "type": "(texts: string[]): Promise<string[]>",
+          "optional": false,
+          "description": "Translates multiple texts in a single batch for better performance.\nSerialized with `run()` through the same queue."
+        },
+        {
+          "name": "unload",
+          "type": "(): Promise<void>",
+          "optional": false,
+          "description": "Unloads the model and frees resources."
+        }
+      ]
+    },
+    {
+      "name": "TranslationNmtcpp",
+      "kind": "variable",
+      "summary": "TranslationNmtcpp implementation for Marian/IndicTrans/Bergamot translation models",
+      "deprecated": null,
+      "source": "index.d.ts:11",
+      "type": "TranslationNmtcppConstructor"
+    },
+    {
+      "name": "TranslationNmtcppArgs",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:129",
+      "fields": [
+        {
+          "name": "config",
+          "type": "TranslationNmtcppConfig",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "files",
+          "type": "TranslationNmtcppFiles",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "logger",
+          "type": "unknown",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "opts",
+          "type": "{ stats?: boolean }",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "params",
+          "type": "TranslationNmtcppParams",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "TranslationNmtcppConfig",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:143",
+      "fields": [
+        {
+          "name": "backendsDir",
+          "type": "string",
+          "optional": true,
+          "description": "Path to the directory containing backend shared libraries\n(libqvac-ggml-vulkan.so, etc.). Defaults to the ones @qvac/fabric ships,\nwhich it locates itself next to its runtime."
+        },
+        {
+          "name": "gpu_backend",
+          "type": "string",
+          "optional": true,
+          "description": "Case-insensitive substring filter over eligible ggml device names when selecting\na compute backend (e.g. \"vulkan\", \"vulkan0\", \"opencl\", \"metal\"). When set,\nreplaces the default gated selector with a single explicit pass.\nAny explicit selector resolving to OpenCL bypasses the build-time USE_OPENCL guard.\n\n`gpu_backend` mirrors the C-struct field and is the primary key.\n`gpuBackend` is the camelCase alias matching the sibling-addon convention.\nBoth forms are accepted; if both are set, `gpu_backend` takes precedence."
+        },
+        {
+          "name": "gpu_device",
+          "type": "number",
+          "optional": true,
+          "description": "Ordinal within the matching compute devices. Defaults to 0.\nExample: { gpu_backend: \"vulkan\", gpu_device: 1 } → second Vulkan adapter.\n\n`gpu_device` mirrors the C struct and is the primary key.\n`gpuDevice` is the camelCase alias.\nIf both are set, `gpu_device` takes precedence."
+        },
+        {
+          "name": "gpuBackend",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "gpuDevice",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "main_gpu",
+          "type": "string | number",
+          "optional": true,
+          "description": "Alias for main-gpu; specifying both keys is rejected."
+        },
+        {
+          "name": "main-gpu",
+          "type": "string | number",
+          "optional": true,
+          "description": "Raw ggml registry index or GPU class. Requires use_gpu/useGPU.\nUnsupported devices fall back to CPU; out-of-range indices warn and auto-select.\nCannot be combined with gpu_backend/gpu_device or their camelCase aliases."
+        },
+        {
+          "name": "modelType",
+          "type": "\"IndicTrans\" | \"Bergamot\"",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "openclCacheDir",
+          "type": "string",
+          "optional": true,
+          "description": "Android-only. Writable directory for the OpenCL JIT kernel cache.\nForwarded to the backend via GGML_OPENCL_CACHE_DIR. Always provide an\napp-writable path when exercising OpenCL on Android."
+        },
+        {
+          "name": "pivotConfig",
+          "type": "Record<string, unknown>",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "use_gpu",
+          "type": "boolean",
+          "optional": true,
+          "description": "Enable an eligible Vulkan, Metal, OpenCL, or CUDA compute backend.\nBergamot is CPU-only by design — this flag is a no-op for that backend.\n\n`use_gpu` mirrors the C-struct field (`nmt_context_params::use_gpu`)\nand is the primary key. `useGPU` is the camelCase alias matching the\nsibling-addon convention (caps acronym). Both forms are accepted; if\nboth are set, `use_gpu` takes precedence."
+        },
+        {
+          "name": "useGPU",
+          "type": "boolean",
+          "optional": true,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "TranslationNmtcppFiles",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:116",
+      "fields": [
+        {
+          "name": "dstVocab",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "pivotDstVocab",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "pivotModel",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "pivotSrcVocab",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "srcVocab",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "TranslationNmtcppModelTypes",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:139",
+      "fields": [
+        {
+          "name": "Bergamot",
+          "type": "\"Bergamot\"",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "IndicTrans",
+          "type": "\"IndicTrans\"",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "TranslationNmtcppParams",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:124",
+      "fields": [
+        {
+          "name": "dstLang",
+          "type": "string",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "srcLang",
+          "type": "string",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "TranslationResponse",
+      "kind": "type",
+      "summary": "Response returned by `run()`: the public `QvacResponse<string>` surface\nplus typed access to `stats`. `stats` is `{}` until the run finishes and\nis only populated when the model was constructed with `opts.stats = true`\n(narrow with e.g. `'TPS' in response.stats`).",
+      "deprecated": null,
+      "source": "index.d.ts:236",
+      "type": "Omit<QvacResponse<string>, never> & { stats: RuntimeStats | Record<string, never> }"
+    }
+  ]
+}

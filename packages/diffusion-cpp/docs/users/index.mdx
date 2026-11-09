@@ -1,0 +1,66 @@
+---
+title: "@qvac/diffusion-cpp"
+description: Text-to-image generation and reference image editing.
+titleStyle: code
+icon: Image
+---
+
+<Callout type="info">
+**PoC — earlier line.** This line is pinned to an earlier commit of the PoC branch. It has no Supported platforms page, so switching to this line from that page lands on this overview.
+</Callout>
+
+## Overview
+
+[Bare module](https://bare.pears.com) for text-to-image generation and reference image editing in QVAC, using [`qvac-ext-stable-diffusion.cpp`](https://github.com/tetherto/qvac-ext-stable-diffusion.cpp) as the inference engine.
+
+Most applications use this package through the [QVAC SDK](/sdk/ai-capabilities/image-generation), which is the canonical way to run image generation with QVAC: it loads models, manages the worker, and exposes one API across languages. Use the package directly to embed the engine in a Bare application without the SDK.
+
+## Models
+
+Supports Qwen-Image-2.1, FLUX.2-klein, SD1.x, SD2.x, SDXL, and SD3 model families.
+
+### Qwen-Image-2.1
+
+Three separate components are required for text-to-image:
+
+- **Diffusion model** (`qwen_image_2.1-Q4_K.gguf`) - the main image transformer.
+- **Text encoder** (`Qwen3VL-8B-Instruct-Q4_K_M.gguf`) - the matching Qwen3-VL encoder.
+- **VAE** (`qwen_image_2.1_vae_bf16.safetensors`) - the 2.1 VAE; earlier Qwen Image and Wan VAEs are incompatible.
+
+Reference editing also requires the **vision projector** (`mmproj-Qwen3VL-8B-Instruct-F16.gguf`) as `files.llmVision`, separate from the video API's `clipVision`.
+
+### Model file reference for Qwen-Image-2.1
+
+| Role | File | Source |
+|------|------|--------|
+| Diffusion model | `qwen_image_2.1-Q4_K.gguf` | [leejet/Qwen-Image-2.1-GGUF](https://huggingface.co/leejet/Qwen-Image-2.1-GGUF/blob/cc11433936a06e9765f7c0c0b1f0436cfd2b9856/qwen_image_2.1-Q4_K.gguf) |
+| Text encoder | `Qwen3VL-8B-Instruct-Q4_K_M.gguf` | [Qwen/Qwen3-VL-8B-Instruct-GGUF](https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct-GGUF/blob/f982a07559d4a2f6c8744d840bf6fccab30eea96/Qwen3VL-8B-Instruct-Q4_K_M.gguf) |
+| VAE | `qwen_image_2.1_vae_bf16.safetensors` | [Comfy-Org/Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1/blob/a8342359c61979b06a8dafb1a47991fe1f30e994/vae/qwen_image_2.1_vae_bf16.safetensors) |
+| Vision projector, required for reference editing | `mmproj-Qwen3VL-8B-Instruct-F16.gguf` | [Qwen/Qwen3-VL-8B-Instruct-GGUF](https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct-GGUF/blob/f982a07559d4a2f6c8744d840bf6fccab30eea96/mmproj-Qwen3VL-8B-Instruct-F16.gguf) |
+
+For SDK configuration and a runnable example, see [Qwen-Image-2.1](/sdk/ai-capabilities/image-generation#qwen-image-21).
+
+### FLUX.2-klein
+
+Three separate components are required:
+- **Diffusion model** (`flux-2-klein-4b-Q8_0.gguf`) — the main image transformer.
+- **Text encoder** (`Qwen3-4B-Q4_K_M.gguf`) — Qwen3 4B in standard GGML Q4_K_M format.
+- **VAE** (`flux2-vae.safetensors`) — standard safetensors format, compatible as-is.
+
+### Model file reference — FLUX.2-klein 4B
+
+| Role | File | Source |
+|------|------|--------|
+| Diffusion model | `flux-2-klein-4b-Q8_0.gguf` | [leejet/FLUX.2-klein-4B-GGUF](https://huggingface.co/leejet/FLUX.2-klein-4B-GGUF) |
+| Text encoder | `Qwen3-4B-Q4_K_M.gguf` | [unsloth/Qwen3-4B-GGUF](https://huggingface.co/unsloth/Qwen3-4B-GGUF) |
+| VAE | `flux2-vae.safetensors` | [black-forest-labs/FLUX.2-klein-4B](https://huggingface.co/black-forest-labs/FLUX.2-klein-4B/blob/main/vae/diffusion_pytorch_model.safetensors) |
+
+### Stable Diffusion
+
+- **Stable Diffusion 1.x / 2.x** — all-in-one checkpoint as a single `*.gguf` file
+- **Stable Diffusion XL** — all-in-one `*.gguf` or split CLIP encoders
+- **Stable Diffusion 3** — safetensors with separate CLIP encoders
+
+## More resources
+
+[Package at npm](https://www.npmjs.com/package/@qvac/diffusion-cpp)

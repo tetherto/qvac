@@ -1,0 +1,26 @@
+---
+title: "@qvac/translation-nmtcpp"
+description: Text-to-text neural machine translation (NMT).
+titleStyle: code
+icon: Languages
+---
+
+<Callout type="info">
+**PoC — earlier line.** This line is pinned to an earlier commit of the PoC branch. It has no Supported platforms page, so switching to this line from that page lands on this overview.
+</Callout>
+
+## Overview
+
+[Bare module](https://bare.pears.com) that adds support for translation in QVAC using either [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp) or [Bergamot](https://browser.mt) as the inference engine.
+
+Most applications use this package through the [QVAC SDK](/sdk/ai-capabilities/translation), which is the canonical way to run translation with QVAC: it loads models, manages the worker, and exposes one API across languages. Use the package directly to embed the engine in a Bare application without the SDK.
+
+## Models
+
+You should load a model compatible with your chosen inference engine:
+- `qvac-fabric-llm.cpp` (default): IndicTrans2, converted to GGML. Model file format: `*.bin`.
+- Bergamot: Bergamot model bundle. Required files: model `*.bin` + `vocab*.spm`.
+
+## More resources
+
+[Package at npm](https://www.npmjs.com/package/@qvac/translation-nmtcpp)

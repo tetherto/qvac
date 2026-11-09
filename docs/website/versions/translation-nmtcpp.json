@@ -1,0 +1,9 @@
+{
+  "package": "@qvac/translation-nmtcpp",
+  "kind": "platform",
+  "path": "/ecosystem/packages/translation-nmtcpp",
+  "paths": [
+    "packages/translation-nmtcpp/docs/users"
+  ],
+  "lines": []
+}

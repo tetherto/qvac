@@ -1,0 +1,1517 @@
+{
+  "package": "@qvac/llm-llamacpp",
+  "exports": [
+    {
+      "name": "Addon",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:120",
+      "fields": [
+        {
+          "name": "activate",
+          "type": "(): Promise<void>",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "activeJobs",
+          "type": "(): number",
+          "optional": false,
+          "description": "Active jobs (in-flight + queued) per the native scheduler — the authoritative admission count."
+        },
+        {
+          "name": "activeSlots",
+          "type": "(): number",
+          "optional": true,
+          "description": "Requests occupying or waiting for a continuous-batching slot\n(active + pending). Capacity is consumed in slots, not jobs — one batch\njob of N prompts takes up to N — so admission compares the max of this and\n`activeJobs()` against `parallel`. 0 when no batch scheduler is active\n(`parallel: 1`). Optional: an older binding may not export it."
+        },
+        {
+          "name": "cancel",
+          "type": "(): Promise<void>",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "cancelJob",
+          "type": "(id: number): Promise<void>",
+          "optional": false,
+          "description": "Cancel a single job by its native-assigned id, leaving other concurrent jobs running."
+        },
+        {
+          "name": "finetune",
+          "type": "(params: FinetuneOptions): Promise<number | false>",
+          "optional": true,
+          "description": "Resolves the scheduler-minted exclusive-job id when admitted, `false` when rejected."
+        },
+        {
+          "name": "runJob",
+          "type": "(data: AddonRunJobMessage[]): Promise<AdmissionResult>",
+          "optional": false,
+          "description": "Single-request admission: resolves the accepted flag plus the native-assigned job id."
+        },
+        {
+          "name": "unload",
+          "type": "(): Promise<void>",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "AddonBatchRunItem",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:112",
+      "type": "AddonModule.AddonBatchRunItem"
+    },
+    {
+      "name": "AddonBatchRunResult",
+      "kind": "type",
+      "summary": "Batch admission result. The per-sequence `ids` are reported on both\nbranches (they are assigned while parsing the batch input); the native\ngroup id used to route the batch's terminal events exists only when the\nbatch was accepted.",
+      "deprecated": null,
+      "source": "index.d.ts:119",
+      "type": "AddonModule.AddonBatchRunResult"
+    },
+    {
+      "name": "AddonMediaMessage",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:104",
+      "type": "AddonModule.AddonMediaMessage"
+    },
+    {
+      "name": "AddonMessage",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:103",
+      "type": "AddonModule.AddonMessage"
+    },
+    {
+      "name": "AddonRunJobMessage",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:105",
+      "type": "AddonModule.AddonRunJobMessage"
+    },
+    {
+      "name": "AddonRunJobResult",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:111",
+      "type": "AddonModule.AddonRunJobResult"
+    },
+    {
+      "name": "AdmissionResult",
+      "kind": "type",
+      "summary": "Discriminated admission result: the native binding only sets `id` when the\nscheduler minted one, so a job id exists exactly when the job was accepted.",
+      "deprecated": null,
+      "source": "index.d.ts:110",
+      "type": "AddonModule.AdmissionResult"
+    },
+    {
+      "name": "BatchOutputChunk",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:653",
+      "fields": [
+        {
+          "name": "chunk",
+          "type": "string",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "BatchPrompt",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:637",
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "optional": true,
+          "description": "Correlates streamed chunks and results to this prompt. Auto-minted\n(`batch-N`) when omitted; the `batch-` prefix is reserved for those\nmints, so a provided id must not start with it."
+        },
+        {
+          "name": "prompt",
+          "type": "Message[]",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "runOptions",
+          "type": "RunOptions",
+          "optional": true,
+          "description": "Per-item options. `rejectWhenBusy` is a group policy — a batch is\nadmitted as one native job, so items that set it must agree (a conflict\nthrows `TypeError` before admission) and the agreed value gates the\nwhole group."
+        }
+      ]
+    },
+    {
+      "name": "BatchResponse",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:661",
+      "fields": [
+        {
+          "name": "await",
+          "type": "(): Promise<BatchResult[]>",
+          "optional": false,
+          "description": "Returns a promise that resolves with the terminal result when the response finishes."
+        },
+        {
+          "name": "ids",
+          "type": "string[]",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "on",
+          "type": "(event: \"output\", cb: (chunk: BatchOutputChunk) => void): this",
+          "optional": false,
+          "description": "Streamed chunks arrive on the `\"output\"` event."
+        },
+        {
+          "name": "onUpdate",
+          "type": "(cb: (chunk: BatchOutputChunk) => void): this",
+          "optional": false,
+          "description": "Registers a callback to be invoked on each output update."
+        }
+      ]
+    },
+    {
+      "name": "BatchResult",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:657",
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "output",
+          "type": "string",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "CalcTokensInput",
+      "kind": "interface",
+      "summary": "What `calcTokens` counts. At least one field is required; `tools` needs `text` or `history`.",
+      "deprecated": null,
+      "source": "index.d.ts:516",
+      "fields": [
+        {
+          "name": "history",
+          "type": "Message[]",
+          "optional": true,
+          "description": "A conversation in `run()`'s `Message[]` shape, tool definitions allowed."
+        },
+        {
+          "name": "text",
+          "type": "string",
+          "optional": true,
+          "description": "Counted raw on its own; with `history` or `tools`, the last user turn."
+        },
+        {
+          "name": "tools",
+          "type": "ChatFunctionDefinition[]",
+          "optional": true,
+          "description": "Tool definitions, as `run()` takes them. A name also in `history` rejects."
+        }
+      ]
+    },
+    {
+      "name": "ChatFunctionDefinition",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:508",
+      "fields": [
+        {
+          "name": "description",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "parameters",
+          "type": "Record<string, any>",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "type",
+          "type": "\"function\"",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "FinetuneHandle",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:806",
+      "fields": [
+        {
+          "name": "await",
+          "type": "(): Promise<FinetuneResult>",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "on",
+          "type": "(event: \"stats\", cb: (stats: FinetuneProgressStats) => void): this",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "removeListener",
+          "type": "(event: \"stats\", cb: (stats: FinetuneProgressStats) => void): this",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "FinetuneOptions",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:743",
+      "fields": [
+        {
+          "name": "assistantLossOnly",
+          "type": "boolean",
+          "optional": true,
+          "description": "Use SFT (chat) mode when true; causal (next-token) when false. Default false."
+        },
+        {
+          "name": "batchSize",
+          "type": "number",
+          "optional": true,
+          "description": "Backend n_batch (tokens per batch). Must be >= microBatchSize and divisible by it. Default 128."
+        },
+        {
+          "name": "chatTemplatePath",
+          "type": "string",
+          "optional": true,
+          "description": "Path to a custom chat template file (for SFT)."
+        },
+        {
+          "name": "checkpointSaveDir",
+          "type": "string",
+          "optional": true,
+          "description": "Directory for checkpoints. Default './checkpoints'."
+        },
+        {
+          "name": "checkpointSaveSteps",
+          "type": "number",
+          "optional": true,
+          "description": "Save a checkpoint every N optimizer steps (0 = only on pause). Default 0."
+        },
+        {
+          "name": "contextLength",
+          "type": "number",
+          "optional": true,
+          "description": "Training sequence length. Default 128."
+        },
+        {
+          "name": "learningRate",
+          "type": "number",
+          "optional": true,
+          "description": "Initial learning rate. Default 1e-4."
+        },
+        {
+          "name": "loraAlpha",
+          "type": "number",
+          "optional": true,
+          "description": "LoRA alpha (scaling factor). Default 16.0."
+        },
+        {
+          "name": "loraInitStd",
+          "type": "number",
+          "optional": true,
+          "description": "LoRA init standard deviation. Default 0.02."
+        },
+        {
+          "name": "loraModules",
+          "type": "string",
+          "optional": true,
+          "description": "Comma-separated LoRA target modules (e.g. 'attn_q,attn_k,attn_v,attn_o'). Default: attention Q/K/V/O."
+        },
+        {
+          "name": "loraRank",
+          "type": "number",
+          "optional": true,
+          "description": "LoRA rank. Default 8."
+        },
+        {
+          "name": "loraSeed",
+          "type": "number",
+          "optional": true,
+          "description": "Seed for LoRA weight initialization (0 = non-deterministic). Default 42."
+        },
+        {
+          "name": "lrMin",
+          "type": "number",
+          "optional": true,
+          "description": "Minimum learning rate (for cosine/linear schedulers). Default 0."
+        },
+        {
+          "name": "lrScheduler",
+          "type": "\"constant\" | \"cosine\" | \"linear\"",
+          "optional": true,
+          "description": "Learning rate scheduler: 'constant', 'cosine', or 'linear'. Default 'cosine'."
+        },
+        {
+          "name": "microBatchSize",
+          "type": "number",
+          "optional": true,
+          "description": "Backend n_ubatch (micro-batch size). Must be <= batchSize. Default 128."
+        },
+        {
+          "name": "numberOfEpochs",
+          "type": "number",
+          "optional": true,
+          "description": "Number of training epochs. Default 1."
+        },
+        {
+          "name": "outputParametersDir",
+          "type": "string",
+          "optional": false,
+          "description": "Directory (or file path ending in .gguf) for the final LoRA adapter."
+        },
+        {
+          "name": "trainDatasetDir",
+          "type": "string",
+          "optional": false,
+          "description": "Path to training dataset file (.jsonl for SFT, .txt for causal)."
+        },
+        {
+          "name": "validation",
+          "type": "FinetuneValidation",
+          "optional": false,
+          "description": "How to run validation."
+        },
+        {
+          "name": "warmupRatio",
+          "type": "number",
+          "optional": true,
+          "description": "Warmup ratio (0–1). Requires warmupRatioSet: true. Default 0.1."
+        },
+        {
+          "name": "warmupRatioSet",
+          "type": "boolean",
+          "optional": true,
+          "description": "When true, compute warmup steps from warmupRatio."
+        },
+        {
+          "name": "warmupSteps",
+          "type": "number",
+          "optional": true,
+          "description": "Explicit warmup steps (used when warmupStepsSet is true). Default 0."
+        },
+        {
+          "name": "warmupStepsSet",
+          "type": "boolean",
+          "optional": true,
+          "description": "When true, use warmupSteps directly instead of ratio."
+        },
+        {
+          "name": "weightDecay",
+          "type": "number",
+          "optional": true,
+          "description": "Weight decay. Default 0.01."
+        }
+      ]
+    },
+    {
+      "name": "FinetuneProgressStats",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:793",
+      "fields": [
+        {
+          "name": "accuracy",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "accuracy_uncertainty",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "current_batch",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "current_epoch",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "elapsed_ms",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "eta_ms",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "global_steps",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "is_train",
+          "type": "boolean",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "loss",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "loss_uncertainty",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "total_batches",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "FinetuneResult",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:824",
+      "fields": [
+        {
+          "name": "op",
+          "type": "\"finetune\"",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "stats",
+          "type": "FinetuneStats",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "status",
+          "type": "\"COMPLETED\" | \"PAUSED\"",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "FinetuneStats",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:811",
+      "fields": [
+        {
+          "name": "epochs_completed",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "global_steps",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "learning_rate",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "train_accuracy",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "train_accuracy_uncertainty",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "train_loss",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "train_loss_uncertainty",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "val_accuracy",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "val_accuracy_uncertainty",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "val_loss",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "val_loss_uncertainty",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "FinetuneValidation",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:742",
+      "type": "FinetuneValidationNone | FinetuneValidationSplit | FinetuneValidationDataset"
+    },
+    {
+      "name": "FinetuneValidationDataset",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:737",
+      "fields": [
+        {
+          "name": "path",
+          "type": "string",
+          "optional": false,
+          "description": "Path to a separate eval dataset file. Must differ from trainDatasetDir."
+        },
+        {
+          "name": "type",
+          "type": "\"dataset\"",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "FinetuneValidationNone",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:729",
+      "fields": [
+        {
+          "name": "type",
+          "type": "\"none\"",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "FinetuneValidationSplit",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:732",
+      "fields": [
+        {
+          "name": "fraction",
+          "type": "number",
+          "optional": true,
+          "description": "Fraction of training data to hold out for validation (0–1). Default 0.05."
+        },
+        {
+          "name": "type",
+          "type": "\"split\"",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "FitDevice",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:833",
+      "type": "LlamaFitDevice"
+    },
+    {
+      "name": "FitRequest",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:830",
+      "type": "LlamaFitRequest"
+    },
+    {
+      "name": "FitResult",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:831",
+      "type": "LlamaFitResult"
+    },
+    {
+      "name": "FitStats",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:834",
+      "type": "LlamaFitStats"
+    },
+    {
+      "name": "FitStatus",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:832",
+      "type": "LlamaFitStatus"
+    },
+    {
+      "name": "GenerationParams",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:524",
+      "fields": [
+        {
+          "name": "frequency_penalty",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "grammar",
+          "type": "string",
+          "optional": true,
+          "description": "GBNF grammar applied per request to constrain sampling. Equivalent to\nthe load-time `--grammar` config but scoped to a single `run()` call;\nthe sampler is re-initialized with this grammar for the request and\nthe prior grammar is restored afterwards.\n\n`undefined` or an empty string is treated as \"no override\" and falls\nthrough to whatever grammar was set at load time (typically none).\n\nMutually exclusive with `json_schema` — passing both throws."
+        },
+        {
+          "name": "json_schema",
+          "type": "string | Record<string, unknown>",
+          "optional": true,
+          "description": "JSON Schema applied per request to constrain sampling to valid JSON\nmatching the schema. Equivalent to the load-time `--json-schema`\nconfig but scoped to a single `run()` call; the schema is converted\nto GBNF natively (via llama.cpp's `json_schema_to_grammar()`) and\napplied identically to `grammar`.\n\nAccepts either a JSON Schema object literal or a pre-stringified\nJSON Schema. Mutually exclusive with `grammar` — passing both throws."
+        },
+        {
+          "name": "parallel_tool_calls",
+          "type": "boolean",
+          "optional": true,
+          "description": "Whether one response may carry more than one tool call. `true` lets the\ntemplate and the tool-call grammar accept several; unset or `false`\nkeeps one. Ignored when the prompt carries no tools."
+        },
+        {
+          "name": "predict",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "presence_penalty",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "reasoning_budget",
+          "type": "number",
+          "optional": true,
+          "description": "Per-request reasoning channel budget. `-1` keeps the model's reasoning\nchannel on; `0` disables it for this request; any positive integer caps\nthe reasoning channel at that many tokens. Equivalent to the load-time\n`reasoning_budget` config but scoped to a single `run()` call; the prior\nvalue is restored afterwards."
+        },
+        {
+          "name": "repeat_penalty",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "seed",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "temp",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "tool_choice",
+          "type": "\"auto\" | \"none\" | \"required\" | string & {}",
+          "optional": true,
+          "description": "Tool choice for a request whose prompt declares `function` tools, in the\nOpenAI style: `\"auto\"` (default) lets the model decide and constrains a\ncall only once it starts one; `\"required\"` forces a tool call;\n`\"none\"` disables the tool-call grammar while leaving the tool\ndefinitions in the prompt; any other string names one declared function\nand forces a call to it. Ignored when the prompt carries no tools;\n`\"required\"` or a function name without tools throws."
+        },
+        {
+          "name": "top_k",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "top_p",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "LlamaConfig",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:143",
+      "fields": [
+        {
+          "name": "backend",
+          "type": "string",
+          "optional": true,
+          "description": "Comma-separated GPU backend priority list, e.g. `'cuda,vulkan'`.\nAccepted names: cuda, vulkan, metal, opencl, plus\n`auto` for no preference. An unrecognised name is rejected; a recognised\none with no device present is skipped. Use `device: 'cpu'` to run on CPU."
+        },
+        {
+          "name": "cache_checkpoint_dir",
+          "type": "string",
+          "optional": true,
+          "description": "Required with `cache_checkpoint_storage: 'disk'`, and refused without\nit: where checkpoint files go, inside a private directory the addon\ncreates in it (mode 0700; on Windows, the directory itself). There is\nno default, because the OS temp directory is not usable on every\nplatform (Android); on mobile, pass the app's cache directory. The load\nfails with `InvalidArgument` when it is missing, empty, or unusable.\nAlso accepted as `cache-checkpoint-dir`."
+        },
+        {
+          "name": "cache_checkpoint_storage",
+          "type": "\"disk\" | \"memory\"",
+          "optional": true,
+          "description": "Where checkpoints and the per-request rollback snapshot live:\n`'memory'` (default) keeps them in host RAM so a cached chat never\ntouches the disk, `'disk'` writes them to files in\n`cache_checkpoint_dir`, which it requires. Each snapshot holds only the\nstate a tail trim cannot rebuild, a size fixed by the model (about 20 MB\non Qwen3.5-0.8B; on sliding-window models the window cells, which reach\nhundreds of MB on larger ones). Also accepted as\n`cache-checkpoint-storage`."
+        },
+        {
+          "name": "cache_checkpoints",
+          "type": "NumericLike",
+          "optional": true,
+          "description": "Per-sequence cap on the process-local full-state checkpoints kept for\ncached requests on hybrid / recurrent models (Qwen3.5, Jamba,\nGranite-Hybrid, DeepSeek V4, ...). Such models cannot trim a KV tail,\nso a diverging history is served by restoring the longest checkpoint\nthat is still a prefix of the new prompt. A committed cached request\nadds one, at the end of its history, holding only the state a tail\ntrim cannot rebuild. The default is 1: the last one, which an ordinary\nnext turn and a regenerate restore. `2` also keeps the one before it,\nwhich an edit of the last user message restores. Changing the user\nmessage k-th from the end (1 = the last) without reprocessing the whole\nconversation needs at least k + 1; with the default 1, editing the last\nuser message reprocesses everything. `0` keeps and takes none (every\ndivergent turn is a cold prefill), the maximum is 1024.\nSliding-window models (Gemma 3/4, gpt-oss, without `swa_full`) take\nthem too: their checkpoints hold the window cells, restored when a\nturn diverges behind the window. Ignored on other pure-attention\nmodels, which never take checkpoints.\nAlso accepted as `cache-checkpoints`; supplying both is an error."
+        },
+        {
+          "name": "cache_checkpoints_max_bytes",
+          "type": "NumericLike",
+          "optional": true,
+          "description": "Byte budget for the checkpoints kept per sequence, enforced before\n`cache_checkpoints`: the oldest checkpoints are dropped until the total\npayload fits. `0` (default) is unlimited. When set, the model load fails\nwith `InvalidArgument` if the budget cannot hold `cache_checkpoints`\ncheckpoints of the largest size the context allows (on a sliding-window\nmodel, a full window), so a misconfigured budget is reported up front\nrather than discovered mid-conversation.\nAlso accepted as `cache-checkpoints-max-bytes`."
+        },
+        {
+          "name": "cache_ram_mib",
+          "type": "NumericLike",
+          "optional": true,
+          "description": "Host-RAM budget, in MiB, for conversations that are not running: a\n`cacheKey` switch (single prompt) or a slot eviction (batch) moves the\nconversation there instead of writing its file, and the next request on\nthat key restores it from there. A write-back cache: unsaved turns reach\nthe file on `saveCache()`, when the budget pushes the entry out, or at\nunload; ephemeral entries are dropped instead. `0` (default) is off; the\nmaximum is 1048576 (1 TiB). Also accepted as `cache-ram-mib`."
+        },
+        {
+          "name": "cache_share_across_keys",
+          "type": "\"on\" | \"off\" | \"true\" | \"false\" | \"0\" | \"1\"",
+          "optional": true,
+          "description": "Whether a request on a decoder-only model may start from state another\nconversation left: the memory a request without a `cacheKey` keeps,\nanother key's state in a sequence or the RAM tier, or a `cacheKey` file\nthe model has used. `'true'` (default) shares it, as llama-server's\nprompt cache does. `'false'` keeps every request to its own key's state,\nfor a model serving callers who must not learn through `cacheTokens` or\ntiming whether another conversation shares their prompt: a request\nwithout a key starts cold and is reset afterwards, a new key starts cold,\nand `baseCacheKey` has no effect. Also accepted as\n`cache-share-across-keys`."
+        },
+        {
+          "name": "cache-type-k",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "cache-type-v",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "ctx_size",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "device",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "devices",
+          "type": "string",
+          "optional": true,
+          "description": "Explicit ggml device list, e.g. `'RPC0,RPC1'`. Overrides automatic\nplacement, including the multi-GPU behaviour of spreading across every\nvisible device — which is rarely what you want once remote devices are\nregistered, since the list then mixes local and remote. Names come from\nthe ggml registry (`RPC0`, `RPC1`, … for remote devices, in the order\ngiven to `rpc-servers`). Multiple names require `split-mode: 'layer'`\nor `'tensor'`; the default `'none'` accepts only one device."
+        },
+        {
+          "name": "flash-attn",
+          "type": "\"auto\" | \"on\" | \"off\" | \"enabled\" | \"disabled\" | \"true\" | \"false\" | \"0\" | \"1\"",
+          "optional": true,
+          "description": "Flash attention. Defaults to `'on'`, except when finetuning or on a\nBitNet model, where it is forced off. `'auto'` lets qvac-fabric decide.\n\nqvac-fabric treats `'on'`, `'enabled'`, `'true'` and `'1'` as\nequivalent, and likewise `'off'`, `'disabled'`, `'false'` and `'0'`;\n`'auto'` is a third state, not a synonym for either. All spellings are\nlower-case — matching is case-sensitive, and any other value is rejected\nwith `InvalidArgument` naming the accepted spellings.\n\n**`'auto'` and the KV-cache default.** On a GPU backend the addon\ndefaults `cache-type-k`/`-v` to q8_0 when flash attention is on, roughly\nhalving KV-cache memory. `'auto'` deliberately does *not* trigger that\ndefault and keeps f16: a quantized V cache forces qvac-fabric to promote\nAUTO to ENABLED, which would skip the runtime capability probe that\n`'auto'` exists to run. Set `cache-type-k`/`-v` explicitly alongside\n`'auto'`, or use `'on'`, to get both. The exception is\n`split-mode: 'tensor'`, where qvac-fabric promotes AUTO unconditionally\nso there is no probe to preserve — `'auto'` takes the q8_0 default there\nexactly as `'on'` does.\n\nRequired by `split-mode: 'tensor'` — combining the two with a falsey\nvalue is rejected with `InvalidArgument` rather than surfacing as an\nopaque native failure. All four falsey spellings are rejected; `'auto'`\nis accepted, since qvac-fabric promotes it to ENABLED for that mode.\n\nThe `flash_attn` spelling is also accepted at runtime and reaches the\naddon through the index signature below, matching how `main-gpu` and\n`split-mode` type only their hyphen form. Supplying both is an error and\nis rejected with `InvalidArgument`: both are dispatched to qvac-fabric\nand which one wins is unspecified."
+        },
+        {
+          "name": "frequency_penalty",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "gpu_layers",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "image_max_megapixels",
+          "type": "string",
+          "optional": true,
+          "description": "Alias for image-max-megapixels. Set only one spelling."
+        },
+        {
+          "name": "image-max-megapixels",
+          "type": "string",
+          "optional": true,
+          "description": "Maximum reported image pixel count in megapixels before decoding. Default: 50."
+        },
+        {
+          "name": "load_mode",
+          "type": "\"auto\" | \"none\" | \"mmap\" | \"mlock\" | \"mmap+mlock\" | \"dio\"",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "lora",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "main-gpu",
+          "type": "string | number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "mmproj-use-gpu",
+          "type": "string",
+          "optional": true,
+          "description": "Run the multimodal projector (mmproj / vision encoder) on the GPU. Accepts\n'true'/'on'/'1' or 'false'/'off'/'0'. When unset, the backend is auto-selected\nper device class: GPU on desktop/iOS and Android Adreno 800+; CPU on all other\nAndroid GPUs (Arm Mali, Adreno <800, and GPUs whose Adreno tier can't be\ndetected) — the LLM layers still run on the GPU while the projector stays on\nCPU. Only honoured when a GPU backend is selected (ignored with a warning on CPU)."
+        },
+        {
+          "name": "openclCacheDir",
+          "type": "string",
+          "optional": true,
+          "description": "Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup."
+        },
+        {
+          "name": "parallel",
+          "type": "NumericLike",
+          "optional": true,
+          "description": "Number of concurrent sequence slots for continuous-batching (`--parallel` /\n`n_parallel` in llama.cpp). Values `>= 2` activate the continuous-batch\nscheduler: the prompts of a single batch-array `run()` call and separate\nconcurrent top-level `run()` calls are both decoded together across slots,\nso multiple responses can be active at once. Default `1` (sequential, a\nsingle response active at a time, batching disabled).\n\nCost: `parallel` is a real resource commitment, sized upfront so a busy\nserver is ready to serve at full concurrency with no warm-up. It sizes\nthe native scheduler's worker pool one-to-one — that many OS threads are\ncreated at load and held for the model's lifetime, idle or not — and the\nKV cache is split evenly across the slots (each gets `ctx_size /\nparallel` tokens). Size it to the concurrency you actually intend to\nserve, not to a generous upper bound.\n\nRange `1..256`. The upper bound is the engine's own sequence limit\n(`LLAMA_MAX_SEQ`): a larger value is rejected up front rather than\nspawning its whole thread pool and then failing the model load with a\ngeneric error. `ctx_size / parallel` must also leave at least one token\nper slot, so a `parallel` too large for the context is refused as an\n`InvalidArgument` naming both knobs."
+        },
+        {
+          "name": "poll",
+          "type": "NumericLike",
+          "optional": true,
+          "description": "Main GGML threadpool busy-wait level, from 0 (sleep while idle) to 100\n(maximum polling). Defaults to 0. Values above 0 can reduce worker wake\nlatency for CPU-heavy workloads, but consume CPU while GPU work runs."
+        },
+        {
+          "name": "poll-batch",
+          "type": "NumericLike",
+          "optional": true,
+          "description": "Batch GGML threadpool busy-wait level. Defaults to `poll`, or 0 when\nneither option is set."
+        },
+        {
+          "name": "predict",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "presence_penalty",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "reasoning_budget",
+          "type": "number | `${number}`",
+          "optional": true,
+          "description": "Reasoning channel budget. `-1` (default) leaves the model's reasoning\nchannel on; `0` disables it; any positive integer caps the reasoning\nchannel at that many tokens (the sampler force-emits `</think>` once\nthe budget is exhausted)."
+        },
+        {
+          "name": "repeat_penalty",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "reverse_prompt",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "rpc-servers",
+          "type": "string",
+          "optional": true,
+          "description": "Comma-separated `host:port` endpoints of remote `ggml-rpc-server`\nprocesses, e.g. `'10.0.0.1:50052,10.0.0.2:50052'`. Their devices join the\nlocal ones and can then be selected with `devices`, letting a single\nmodel run split across several machines.\n\nOnly the machine loading the model needs the model file. Every endpoint\nmust be reachable at load time — an unreachable one fails the load rather\nthan being skipped. Endpoints must run a server built from the same\nqvac-fabric revision as this addon, since the RPC wire protocol is\nversioned and mismatched builds refuse to connect.\nWith the default `split-mode: 'none'`, `devices` must name one device;\nautomatic single-device selection never picks an RPC device.\nA load also fails if its final device selection uses none of the devices\nregistered by these endpoints.\n\nThe channel is unauthenticated: use it only on a trusted private network."
+        },
+        {
+          "name": "seed",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "spec_draft_model",
+          "type": "string",
+          "optional": true,
+          "description": "Absolute path of the draft model, as llama-server's\n`--spec-draft-model` (`-md`): the DFlash model, required by\n`spec_type: 'draft-dflash'`, or an external MTP head for\n`spec_type: 'draft-mtp'`. The draft model is placed like the model\n(`device`, `gpu_layers`). Also accepted as `spec-draft-model`."
+        },
+        {
+          "name": "spec_draft_n_max",
+          "type": "NumericLike",
+          "optional": true,
+          "description": "Longest draft per step (default 3, maximum 64), as\n`--spec-draft-n-max`. Requires `spec_type`. Also accepted as\n`spec-draft-n-max`."
+        },
+        {
+          "name": "spec_draft_n_min",
+          "type": "NumericLike",
+          "optional": true,
+          "description": "Shortest draft worth verifying (default 0); shorter drafts are\ndropped. As `--spec-draft-n-min`. Also accepted as `spec-draft-n-min`."
+        },
+        {
+          "name": "spec_draft_p_min",
+          "type": "NumericLike",
+          "optional": true,
+          "description": "Minimum draft-head probability for a token to extend the draft\n(default 0, between 0 and 1), as `--spec-draft-p-min`. Also accepted\nas `spec-draft-p-min`."
+        },
+        {
+          "name": "spec_type",
+          "type": "\"none\" | \"draft-mtp\" | \"draft-dflash\"",
+          "optional": true,
+          "description": "Speculative decoding, as llama-server's `--spec-type`. `'draft-mtp'`\ndrafts with the model's own multi-token-prediction (MTP / NextN) head,\nor with the external MTP head given as `spec_draft_model`; the model or\nthe head must ship MTP layers (`blk.N.nextn.*`), or the load fails.\n`'draft-dflash'` drafts with the DFlash model given as\n`spec_draft_model`. Either way the model verifies the draft, so the\noutput keeps the distribution of plain decoding. `'none'` (default)\ndecodes one token per step. Works on single prompts, multimodal\nprompts and continuous batching. Also accepted as `spec-type`."
+        },
+        {
+          "name": "split-mode",
+          "type": "\"none\" | \"layer\" | \"tensor\"",
+          "optional": true,
+          "description": "How to split the model across devices: local GPUs, plus remote ones\nregistered with `rpc-servers`.\n\n- 'none' (default) — pin the whole model to a single GPU.\n- 'layer' — pipeline parallelism; each GPU holds a contiguous slice of\n  layers. The compatible choice, effective on every backend shipped here.\n- 'tensor' — EXPERIMENTAL tensor parallelism via qvac-fabric's meta\n  device; weights *and* KV cache are split across the eligible devices\n  the addon pins.\n  Desktop only (rejected on Android/iOS). Requires flash attention, so\n  'flash-attn': 'off' is rejected with InvalidArgument. Disables auto-fit\n  — gpu_layers then defaults to every layer and ctx_size to the model's\n  trained context, so set ctx_size explicitly for large models. Not\n  available for every architecture; unsupported ones are rejected up\n  front with the architecture named.\n\n'row' (llama.cpp's legacy split-buffer tensor parallelism) is rejected\nwith InvalidArgument: it never took effect on any shipped backend. Use\n'layer' or 'tensor'. See docs/multi-gpu.md."
+        },
+        {
+          "name": "system_prompt",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "temp",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "tensor-split",
+          "type": "string",
+          "optional": true,
+          "description": "Proportions for distributing layers/rows across GPUs (e.g. '1,1' for equal split, '3,1' for 75/25)."
+        },
+        {
+          "name": "tools",
+          "type": "string | boolean",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "top_k",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "top_p",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "verbosity",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "LlmLlamacpp",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:23",
+      "fields": [
+        {
+          "name": "addon",
+          "type": "Addon | null",
+          "optional": false,
+          "description": "The native addon, or `null` before `load()` and after `unload()`. Advanced/test access only."
+        },
+        {
+          "name": "calcTokens",
+          "type": "(input: CalcTokensInput): Promise<number>",
+          "optional": false,
+          "description": "Tokens `input` takes on the loaded model, without running it. `text`\nalone is counted raw, with no chat template and no BOS. With `history` or\n`tools` the conversation, `text` (even empty) appended as the last user\nturn, is rendered by the chat template as the opening request of a fresh\nconversation, with BOS and the generation prompt, as `run()` renders it.\nTools the template leaves out are not counted. `tools` alone has no\nmessage to render and rejects, as `run()` does. Never queues behind\n`run()`: it reads only load-time state. A wrong-typed argument rejects\nwith `TypeError`, and before `load()` it rejects with `Model is not\nloaded`. Other invalid input, a media message included, rejects with code\n`InvalidArgument`; a conversation the chat template cannot render fails\nas it would in `run()`."
+        },
+        {
+          "name": "cancel",
+          "type": "(): Promise<void>",
+          "optional": false,
+          "description": "Global cancel: stops every job live at the moment of the call — in-flight\nand queued, across all concurrent `run()` calls — plus any finetuning in\nprogress (its pause checkpoint is removed so the next `finetune()` starts\nfresh). For cancelling a single request or batch group, use\n`response.cancel()` on that call's response instead."
+        },
+        {
+          "name": "discardCache",
+          "type": "(cacheKey: string): Promise<void>",
+          "optional": false,
+          "description": "Drop the conversation kept in memory for `cacheKey` without writing it,\nso no later eviction or unload writes it. Waits for a request running on\nthat key. The file, if one was written, is left alone: delete it too to\nremove the conversation from disk."
+        },
+        {
+          "name": "finetune",
+          "type": "(finetuningOptions: FinetuneOptions): Promise<FinetuneHandle>",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "getState",
+          "type": "(): { configLoaded: boolean }",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "load",
+          "type": "(): Promise<void>",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "logger",
+          "type": "QvacLogger",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "opts",
+          "type": "{ stats?: boolean }",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "pause",
+          "type": "(): Promise<void>",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "run",
+          "type": "(prompt: Message[], runOptions?: RunOptions): Promise<QvacResponse<any>>",
+          "optional": false,
+          "description": "Run inference. When the model was loaded with `config.parallel >= 2`,\nmultiple `run()` calls may be concurrently in flight (continuous\nbatching): separate top-level calls are decoded together across slots,\nand each call returns an independent `QvacResponse` that receives only\nits own output tokens and stats. A call at capacity throws an `Error` with `code === 'RUN_BUSY'`\nwhen the effective `rejectWhenBusy` policy is `true` (the default for\n`parallel: 1`), and queues until a slot frees when it is `false` (the\ndefault for `parallel >= 2`). Use `response.cancel()` to cancel just\nthat call's job or batch group."
+        },
+        {
+          "name": "saveCache",
+          "type": "(cacheKey: string): Promise<void>",
+          "optional": false,
+          "description": "Write the conversation kept in memory for `cacheKey` to that file now.\nWaits for a request running on that key, not one still queued, so read a\nresponse to the end first. Writes only when the file lacks turns, and\nrejects when nothing is cached under the key or the write fails (the\nconversation then stays in memory, still unsaved)."
+        },
+        {
+          "name": "state",
+          "type": "{ configLoaded: boolean }",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "unload",
+          "type": "(): Promise<void>",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "LlmLlamacpp",
+      "kind": "variable",
+      "summary": "LLM client wrapping the native LlamaInterface for inference, finetuning, and pause/resume.",
+      "deprecated": null,
+      "source": "index.d.ts:23",
+      "type": "LlmLlamacppConstructor"
+    },
+    {
+      "name": "LlmLlamacppArgs",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:429",
+      "fields": [
+        {
+          "name": "config",
+          "type": "LlamaConfig",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "files",
+          "type": "{ model: [string]; projectionModel?: string }",
+          "optional": false,
+          "description": "One absolute disk path, or only the first shard path. Weight buffers, multiple paths and tensor-name files are unsupported."
+        },
+        {
+          "name": "logger",
+          "type": "QvacLogger | Console | null",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "opts",
+          "type": "{ rejectWhenBusy?: boolean; stats?: boolean }",
+          "optional": true,
+          "description": "`rejectWhenBusy` is the instance-level admission policy when the worker\npool is full; defaults to `true` for `parallel: 1` and `false` for\n`parallel >= 2`, and can be overridden per call via\n`RunOptions.rejectWhenBusy` (see its doc for the full contract)."
+        }
+      ]
+    },
+    {
+      "name": "Message",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:514",
+      "type": "UserTextMessage | UserMediaMessage | ChatFunctionDefinition"
+    },
+    {
+      "name": "NumericLike",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:102",
+      "type": "number | `${number}`"
+    },
+    {
+      "name": "QvacResponse",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:829",
+      "type": "InferQvacResponseOf<Output>"
+    },
+    {
+      "name": "RunOptions",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:581",
+      "fields": [
+        {
+          "name": "baseCacheKey",
+          "type": "string",
+          "optional": true,
+          "description": "A `cacheKey` file to start from when nothing in memory serves more of\nthe prompt, such as a system prompt and tools primed with `prefill`.\nIt is read, never written: the request's own state goes to its\n`cacheKey`. A file that is missing or shares no prefix with the prompt\nis skipped. Once named, the file stays a source for later requests on\nthis model, as any `cacheKey` file it used does, until files named\nor picked as a prompt's closest match more recently push it out (the\nmodel keeps the 256 most recent, as far as 64 MiB of memory holds\ntheir prompt records). No effect with `cache_share_across_keys:\n'false'`."
+        },
+        {
+          "name": "cacheKey",
+          "type": "string",
+          "optional": true,
+          "description": "Enables addon-owned prompt caching at this path. Every cached request\nmust resend the complete authoritative message history and tool list;\ndelta-only continuations are not supported. The addon renders once and\ndecodes only the suffix after the longest matching token/media prefix."
+        },
+        {
+          "name": "ephemeral",
+          "type": "boolean",
+          "optional": true,
+          "description": "Keep this conversation in memory only. By default a cached\nconversation is written to its `cacheKey` file whenever it would\notherwise be lost with turns the file lacks: when it is set aside for\nanother key, evicted from its batch slot or from the RAM tier, or the\nmodel is reloaded or unloaded. With `ephemeral: true` each of those\ndrops it instead, so its next request finds no state of its own (it\nstill reuses any prefix it shares with what the model holds, except on\nencoder-decoder models). It still loads an existing file, and an\nexplicit `saveCache(cacheKey)` still writes it.\nThe flag belongs to the conversation's latest request."
+        },
+        {
+          "name": "generationParams",
+          "type": "GenerationParams",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "prefill",
+          "type": "boolean",
+          "optional": true,
+          "description": "Run prefill only (cache warming): the prompt is evaluated but no tokens\nare generated. On a model loaded with `parallel >= 2` a prefill needs a\n`cacheKey` (the warmed conversation stays in its slot for the next\nrequest on that key) — a keyless prefill warms state no later request\ncan count on and is rejected with `InvalidArgument`; run keyless\nprefills on a `parallel: 1` model. The same rule applies per batch item."
+        },
+        {
+          "name": "rejectWhenBusy",
+          "type": "boolean",
+          "optional": true,
+          "description": "Admission policy when the worker pool is full. `true` rejects before\nsubmitting with an `Error` carrying `code === 'RUN_BUSY'` — branch on the\ncode, not the message. `false` submits to the native multi-job\nscheduler, which queues the job in a nearly unbounded waiting room beyond\nthe pool (queued jobs start as slots free); under any realistic backlog it\nis queued rather than rejected. Overrides the instance-level\n`opts.rejectWhenBusy`, whose default is `true` for `parallel: 1` and\n`false` for `parallel >= 2`."
+        }
+      ]
+    },
+    {
+      "name": "RuntimeStats",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:669",
+      "fields": [
+        {
+          "name": "avgConcurrentSeq",
+          "type": "number",
+          "optional": false,
+          "description": "How busy the shared backend was, not a property of your request: the\nmean number of sequences decoded together, weighted by the tokens each\nengine step carried so the figure tracks how much traffic shared the\nbackend rather than how finely the scheduler sliced its work. Includes\noverlapping requests from other callers (capped by the `parallel`\nconfiguration). 1.0 = the model was effectively yours alone; ~N = your\ntokens shared compute with N-1 others, so this request's observed `TPS`\nis roughly the backend's aggregate rate divided by N. Even on a single\nrequest it tells apart \"slow model\" from \"busy backend\". Always\nmodel-level — never per-job."
+        },
+        {
+          "name": "backendDevice",
+          "type": "\"cpu\" | \"gpu\"",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "CacheTokens",
+          "type": "number",
+          "optional": false,
+          "description": "Final cache tokens for single requests, or the sum across completed batch slots."
+        },
+        {
+          "name": "draftAcceptedTokens",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "draftTokens",
+          "type": "number",
+          "optional": true,
+          "description": "Draft tokens proposed by speculative decoding, and how many of them\nthe model accepted (llama-server's `draft_n` / `draft_n_accepted`).\nPresent only when the model was loaded with `spec_type`."
+        },
+        {
+          "name": "generatedTokens",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "ppTPS",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "promptTokens",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "stopReason",
+          "type": "\"none\" | \"eos\" | \"antiprompt\" | \"predictionLimit\" | \"sequenceLimit\" | \"contextOverflow\"",
+          "optional": true,
+          "description": "Why generation stopped. Per-sequence, so it is reported for a single\nrequest on either path (sequential or one prompt on a parallel model).\n\nAbsent when it cannot be attributed to one request: a `runBatched` group\nwhose prompts stopped for different reasons reports nothing rather than\npicking one, and the whole-model `runtimeStats()` view omits it while\ncontinuous batching is active for the same reason."
+        },
+        {
+          "name": "toolDefinitionsDropped",
+          "type": "number",
+          "optional": false,
+          "description": "Number of prompt renders in this request that provably left the tool\ndefinitions out — the template either rejected them, or supplying them\ndid not change the rendered prompt at all. Such a render has its tool\nlist stripped, so no tool grammar constrains it.\n\nRead this in one direction only. Non-zero means definitions were dropped\nand the model did not see them. **0 is not a guarantee that the model saw\nevery definition**: a template that renders only some of the supplied\ntools changes the render and so reports no drop. Closing that needs the\nrenderer to report what it consumed.\n\nPer-inference for single requests; summed across completed slots for\nbatch requests. 0 when no tools were sent."
+        },
+        {
+          "name": "TPS",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "TTFT",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "visionEncodeMs",
+          "type": "number",
+          "optional": true,
+          "description": "Vision-encode time for the most recent inference. Multimodal models only."
+        },
+        {
+          "name": "visionEncodeTiles",
+          "type": "number",
+          "optional": true,
+          "description": "Vision slice/tile count for the most recent inference. Multimodal models only."
+        }
+      ]
+    },
+    {
+      "name": "ToolCallTurn",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:493",
+      "fields": [
+        {
+          "name": "arguments",
+          "type": "string | Record<string, unknown>",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "UserContentPart",
+      "kind": "type",
+      "summary": "One ordered piece of a message's `content`. Media parts keep their place in\nthe turn: a single user message can interleave text and media, which a\nstring `content` plus separate `type: \"media\"` messages cannot express\nwithout splitting the turn.",
+      "deprecated": null,
+      "source": "index.d.ts:454",
+      "type": "{ text: string; type: \"text\" } | { content: string | Uint8Array; type: \"media\" }"
+    },
+    {
+      "name": "UserMediaMessage",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:498",
+      "fields": [
+        {
+          "name": "content",
+          "type": "string | Uint8Array<ArrayBufferLike>",
+          "optional": false,
+          "description": "Either the raw bytes of an image/audio/video file (`Uint8Array`) or an\nabsolute path to a file on disk (`string`). Path-mode is handled by the\nC++ layer via `loadMedia()`; byte-mode takes the `parseMedia` path."
+        },
+        {
+          "name": "role",
+          "type": "\"user\"",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "type",
+          "type": "\"media\"",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "UserTextMessage",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:465",
+      "fields": [
+        {
+          "name": "content",
+          "type": "string | UserContentPart[]",
+          "optional": false,
+          "description": "Plain text, or ordered text/media parts rendered as one turn. Media parts\nare only valid on user messages."
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "optional": true,
+          "description": "On a `tool` turn: the name of the tool that produced the result."
+        },
+        {
+          "name": "reasoning_content",
+          "type": "string",
+          "optional": true,
+          "description": "An assistant turn's reasoning, separate from its answer in `content`, as\nin OpenAI-compatible APIs. Optional: an answer sent back with its\nreasoning inline (`<think>…</think>` first, as the model streamed it) is\nsplit into the two, using the reasoning markers the chat template\nreports, so the template can drop or place it. Ignored on other roles."
+        },
+        {
+          "name": "role",
+          "type": "string",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "tool_call_id",
+          "type": "string",
+          "optional": true,
+          "description": "On a `tool` turn: the id of the call this result answers."
+        },
+        {
+          "name": "tool_calls",
+          "type": "ToolCallTurn[]",
+          "optional": true,
+          "description": "Tool calls this assistant turn made, rendered by the chat template in\nthe model's own tool-call format. `arguments` is an object or the text\nof a JSON object. `content` may be empty on such a turn."
+        },
+        {
+          "name": "type",
+          "type": "undefined",
+          "optional": true,
+          "description": ""
+        }
+      ]
+    }
+  ]
+}

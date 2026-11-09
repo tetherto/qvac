@@ -25,11 +25,19 @@
 import { parseVersionsFile, type VersionsFile } from './versions-file'
 import sdkVersions from '../../versions/sdk.json'
 import cliVersions from '../../versions/cli.json'
+import llmLlamacppVersions from '../../versions/llm-llamacpp.json'
+import diffusionCppVersions from '../../versions/diffusion-cpp.json'
+import translationNmtcppVersions from '../../versions/translation-nmtcpp.json'
+import composeVersions from '../../versions/compose.json'
 
 /** Every versions file, by file name. */
 const VERSIONS_FILES: Readonly<Record<string, unknown>> = {
   'sdk.json': sdkVersions,
   'cli.json': cliVersions,
+  'llm-llamacpp.json': llmLlamacppVersions,
+  'diffusion-cpp.json': diffusionCppVersions,
+  'translation-nmtcpp.json': translationNmtcppVersions,
+  'compose.json': composeVersions,
 }
 
 /** A documentation line or package version: major and minor, never a patch. */

@@ -1,0 +1,67 @@
+---
+title: Logging
+description: Enable and control the C++ logs of @qvac/translation-nmtcpp.
+binds:
+  - surface
+---
+
+## Logging
+
+The library supports configurable logging for both JavaScript and C++ (native) components. By default, C++ logs are suppressed for cleaner output.
+
+### Enabling C++ Logs
+
+To enable verbose C++ logging, pass a `logger` object in the options:
+
+```javascript
+// Enable C++ logging
+const logger = {
+  info: (msg) => console.log('[C++ INFO]', msg),
+  warn: (msg) => console.warn('[C++ WARN]', msg),
+  error: (msg) => console.error('[C++ ERROR]', msg),
+  debug: (msg) => console.log('[C++ DEBUG]', msg)
+}
+
+const args = {
+  files: { model: modelPath, srcVocab, dstVocab }, // resolved paths (see Step 1)
+  params: { mode: 'full', srcLang: 'en', dstLang: 'it' },
+  config: { modelType: TranslationNmtcpp.ModelTypes.Bergamot },
+  logger  // Pass logger to enable C++ logs
+}
+```
+
+### Disabling C++ Logs
+
+To suppress all C++ logs, either omit the `logger` parameter or set it to `null`:
+
+```javascript
+const args = {
+  files: { model: modelPath, srcVocab, dstVocab }, // resolved paths (see Step 1)
+  params: { mode: 'full', srcLang: 'en', dstLang: 'it' },
+  config: { modelType: TranslationNmtcpp.ModelTypes.Bergamot }
+  // No logger = suppress C++ logs
+}
+```
+
+### Using Environment Variables (Recommended for Examples)
+
+All examples support the `VERBOSE` environment variable:
+
+```bash
+# Run with C++ logging disabled (default)
+bare examples/quickstart.js
+
+# Run with C++ logging enabled
+VERBOSE=1 bare examples/quickstart.js
+```
+
+### Log Levels
+
+The C++ backend supports these log levels (mapped from native priority):
+
+| Priority | Level | Description |
+|----------|-------|-------------|
+| 0 | `error` | Critical errors |
+| 1 | `warn` | Warnings |
+| 2 | `info` | Informational messages |
+| 3 | `debug` | Debug/trace messages |

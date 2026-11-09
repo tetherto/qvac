@@ -1,0 +1,9 @@
+{
+  "package": "@qvac/compose",
+  "kind": "product",
+  "path": "/compose",
+  "paths": [
+    "docs/website/poc/compose/docs/users"
+  ],
+  "lines": []
+}

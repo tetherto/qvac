@@ -1,0 +1,14 @@
+{
+  "title": "Compose",
+  "description": "Compose local AI pipelines from QVAC capabilities",
+  "root": true,
+  "pages": [
+    "---Getting started---",
+    "index",
+    "quickstart",
+    "---Guides---",
+    "...guides",
+    "---Reference---",
+    "configuration"
+  ]
+}

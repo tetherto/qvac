@@ -1,0 +1,9 @@
+{
+  "package": "@qvac/diffusion-cpp",
+  "kind": "platform",
+  "path": "/ecosystem/packages/diffusion-cpp",
+  "paths": [
+    "packages/diffusion-cpp/docs/users"
+  ],
+  "lines": []
+}

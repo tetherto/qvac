@@ -1,0 +1,35 @@
+---
+title: Compose
+sidebarTitle: Overview
+icon: Workflow
+description: Compose local AI pipelines from QVAC capabilities, declaratively.
+---
+
+<Callout type="info">
+**PoC — earlier line.** This line is pinned to an earlier commit of the PoC branch. It has no Deployment page, so switching to this line from that page lands on this overview.
+</Callout>
+
+<Callout type="warn">
+**Mock product.** Compose does not exist. This collection holds dummy content to show how one more product appears in the documentation site: its own tab, its own lines, and the same switcher, navigation, and agent artifacts as the SDK and the CLI.
+</Callout>
+
+## Overview
+
+Compose lets you describe a pipeline of AI capabilities — transcribe, translate, summarize, speak — in one declaration, and runs it on the device with the [QVAC SDK](/sdk) underneath. Each step names a capability and a model; Compose loads the models, streams each step's output into the next, and releases the models when the pipeline ends.
+
+## What you can build
+
+- A meeting assistant that transcribes audio, translates it, and writes a summary.
+- A voice interface that turns speech into a command and answers with speech.
+- A document flow that reads a scan with OCR and indexes it for retrieval.
+
+## Next steps
+
+<Cards>
+  <Card href="/compose/quickstart" title="Quickstart">
+    Run your first pipeline in five minutes.
+  </Card>
+  <Card href="/compose/guides/pipelines" title="Pipelines">
+    Declare steps, wire their inputs and outputs, and handle errors.
+  </Card>
+</Cards>

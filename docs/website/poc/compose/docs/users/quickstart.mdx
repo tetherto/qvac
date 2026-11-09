@@ -1,0 +1,40 @@
+---
+title: Quickstart
+icon: Rocket
+description: Install Compose and run a transcribe-and-translate pipeline.
+---
+
+<Callout type="warn">
+**Mock product.** Every command and API on this page is dummy content.
+</Callout>
+
+<Steps>
+<Step>
+Install Compose next to the SDK:
+
+```bash
+npm install @qvac/compose @qvac/sdk
+```
+</Step>
+
+<Step>
+Declare a pipeline in `pipeline.json`:
+
+```json
+{
+  "steps": [
+    { "id": "listen", "capability": "transcription", "model": "WHISPER_TINY" },
+    { "id": "translate", "capability": "translation", "model": "MARIAN_EN_ES", "input": "listen" }
+  ]
+}
+```
+</Step>
+
+<Step>
+Run it on an audio file:
+
+```bash
+npx qvac-compose run pipeline.json --input meeting.wav
+```
+</Step>
+</Steps>

@@ -1,0 +1,25 @@
+---
+title: Configuration
+icon: Settings
+description: Configure Compose with a qvac.config file.
+---
+
+<Callout type="warn">
+**Mock product.** This page is dummy content.
+</Callout>
+
+## The `compose` key
+
+Compose reads the `compose` key of `qvac.config.json`:
+
+```json
+{
+  "compose": {
+    "concurrency": 2,
+    "releaseModelsOnExit": true
+  }
+}
+```
+
+- `concurrency` — how many steps run at once.
+- `releaseModelsOnExit` — whether models are unloaded when the pipeline ends.

@@ -1,0 +1,11 @@
+{
+  "title": "@qvac/translation-nmtcpp",
+  "pages": [
+    "index",
+    "installation",
+    "usage",
+    "languages",
+    "logging",
+    "api"
+  ]
+}

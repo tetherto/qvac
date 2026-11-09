@@ -1,0 +1,14 @@
+{
+  "//": "Written by `npm run docs:lock` in docs/website. Each entry is the surface hash of a symbol a page binds, at the page's last review.",
+  "pages": {
+    "languages.mdx": {
+      "surface": "3b7d3a9db29a1505"
+    },
+    "logging.mdx": {
+      "surface": "3b7d3a9db29a1505"
+    },
+    "usage.mdx": {
+      "surface": "3b7d3a9db29a1505"
+    }
+  }
+}

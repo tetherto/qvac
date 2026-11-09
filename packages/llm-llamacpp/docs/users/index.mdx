@@ -1,0 +1,24 @@
+---
+title: "@qvac/llm-llamacpp"
+description: LLM inference for text generation and chat with support to images, and other media within a single conversation context.
+titleStyle: code
+icon: MessagesSquare
+---
+
+<Callout type="info">
+**PoC — earlier line.** This line is pinned to an earlier commit of the PoC branch. It has no Supported platforms page, so switching to this line from that page lands on this overview.
+</Callout>
+
+## Overview
+
+[Bare module](https://bare.pears.com) that adds support for text completion and multimodal prompts in QVAC using [`qvac-fabric-llm.cpp`](https://github.com/tetherto/qvac-fabric-llm.cpp) as the inference engine.
+
+Most applications use this package through the [QVAC SDK](/sdk/ai-capabilities/text-generation), which is the canonical way to run text generation with QVAC: it loads models, manages the worker, and exposes one API across languages. Use the package directly to embed the engine in a Bare application without the SDK.
+
+## Models
+
+You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible text-generation/chat model. Model file format: `*.gguf`.
+
+## More resources
+
+[Package at npm](https://www.npmjs.com/package/@qvac/llm-llamacpp)

@@ -162,6 +162,7 @@ function ecosystemChildren(
     },
     ...intoCollection('SDK', '/sdk/', 'Code'),
     ...intoCollection('CLI', '/cli/', 'Terminal'),
+    ...intoCollection('Compose', '/compose/', 'Workflow'),
     ...intoCollection('Model provider', '/cli/http-server/connection/', 'Server'),
     offSite('Assistant app', 'https://qv.ac', 'MonitorPlay'),
     {
@@ -292,6 +293,11 @@ const DECLARED_COLLECTIONS: Collection[] = [
     name: 'CLI',
     description: 'Install the CLI and use every function of the tool',
     path: '/cli',
+  },
+  {
+    name: 'Compose',
+    description: 'Compose local AI pipelines from QVAC capabilities',
+    path: '/compose',
   },
   {
     name: 'Resources',

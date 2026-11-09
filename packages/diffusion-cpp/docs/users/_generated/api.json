@@ -1,0 +1,1843 @@
+{
+  "package": "@qvac/diffusion-cpp",
+  "exports": [
+    {
+      "name": "Addon",
+      "kind": "interface",
+      "summary": "Low-level addon shape exposed by `addon.js` (`SdInterface`). Both image\nand video modes flow through the same `runJob` entrypoint.",
+      "deprecated": null,
+      "source": "index.d.ts:9",
+      "fields": [
+        {
+          "name": "activate",
+          "type": "(): Promise<void>",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "cancel",
+          "type": "(): Promise<void>",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "runJob",
+          "type": "(params: GenerationParams & { mode: \"txt2img\" | \"img2img\" } | { mode: \"txt2vid\" | \"img2vid\"; [key: string]: unknown }): Promise<boolean>",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "unload",
+          "type": "(): Promise<void>",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "applyFluxImg2ImgDimDefaults",
+      "kind": "function",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:244",
+      "signatures": [
+        {
+          "text": "applyFluxImg2ImgDimDefaults(params: GenerationParams, prediction: string, hasInitImages: boolean): GenerationParams",
+          "parameters": [
+            {
+              "name": "params",
+              "type": "GenerationParams",
+              "optional": false,
+              "description": ""
+            },
+            {
+              "name": "prediction",
+              "type": "string",
+              "optional": false,
+              "description": ""
+            },
+            {
+              "name": "hasInitImages",
+              "type": "boolean",
+              "optional": false,
+              "description": ""
+            }
+          ],
+          "returns": {
+            "type": "GenerationParams",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "assessFit",
+      "kind": "function",
+      "summary": "Projects a load against the memory free right now, reading model metadata\nand never weight data. A GGUF file set can be a weightless registry copy,\nso the projection can run before anything is downloaded. Safetensors\ncheckpoints can also contain only their tensor headers.\n\nConcurrent calls run one at a time within this addon.\n\nA malformed request, a model the engine cannot read, or an ESRGAN output\nabove the pixel limit rejects.",
+      "deprecated": null,
+      "source": "fit.d.ts:78",
+      "signatures": [
+        {
+          "text": "assessFit(request: DiffusionFitRequest | EsrganFitRequest | WorldFitRequest): Promise<DiffusionFitResult>",
+          "parameters": [
+            {
+              "name": "request",
+              "type": "DiffusionFitRequest | EsrganFitRequest | WorldFitRequest",
+              "optional": false,
+              "description": ""
+            }
+          ],
+          "returns": {
+            "type": "Promise<DiffusionFitResult>",
+            "description": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "CacheMode",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:26",
+      "values": [
+        "\"disabled\"",
+        "\"easycache\"",
+        "\"ucache\"",
+        "\"dbcache\"",
+        "\"taylorseer\"",
+        "\"cache-dit\""
+      ]
+    },
+    {
+      "name": "DiffusionFiles",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:66",
+      "fields": [
+        {
+          "name": "clipG",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "clipL",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "esrgan",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "highNoiseDiffusionModel",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "llm",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "llmVision",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "t5Xxl",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "tokenizer",
+          "type": "string",
+          "optional": true,
+          "description": "External tokenizer.json, required by MOSS-Image's Qwen3.5 encoder."
+        },
+        {
+          "name": "uncondModel",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "vae",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "DiffusionFitDevice",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "fit.d.ts:46",
+      "fields": [
+        {
+          "name": "freeBytes",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "optional": false,
+          "description": "The PCI bus ID when the backend reports one, the device name otherwise."
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalBytes",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "unified",
+          "type": "boolean",
+          "optional": false,
+          "description": "Memory the host owns: the CPU, an integrated GPU, and Apple's Metal device."
+        },
+        {
+          "name": "usedBytes",
+          "type": "number",
+          "optional": false,
+          "description": "The engine's measured projection for this device."
+        }
+      ]
+    },
+    {
+      "name": "DiffusionFitRequest",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "fit.d.ts:19",
+      "fields": [
+        {
+          "name": "config",
+          "type": "SdConfig",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "files",
+          "type": "DiffusionFiles & DiffusionVideoFiles",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "mode",
+          "type": "\"diffusion\"",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "workload",
+          "type": "DiffusionFitWorkload",
+          "optional": true,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "DiffusionFitResult",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "fit.d.ts:58",
+      "fields": [
+        {
+          "name": "devices",
+          "type": "DiffusionFitDevice[]",
+          "optional": false,
+          "description": "The GPU devices the placement uses, then the host. A shared-memory GPU's\nuse is in its own row, not repeated in the host row. Empty for `unknown`."
+        },
+        {
+          "name": "stats",
+          "type": "DiffusionFitStats",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "status",
+          "type": "DiffusionFitStatus",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "DiffusionFitStats",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "fit.d.ts:57",
+      "type": "Record<string, never>"
+    },
+    {
+      "name": "DiffusionFitStatus",
+      "kind": "type",
+      "summary": "`does-not-fit` includes a load the engine could place only by changing its\nbackend assignment. `unknown` is a placement the engine cannot plan from: a\n`mainGpu` pin, a `device` of cpu, a module-specific `paramsBackend`, or an\nOpenCL preference that does not name the first GPU.",
+      "deprecated": null,
+      "source": "fit.d.ts:45",
+      "values": [
+        "\"fits\"",
+        "\"does-not-fit\"",
+        "\"unknown\""
+      ]
+    },
+    {
+      "name": "DiffusionFitWorkload",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "fit.d.ts:4",
+      "fields": [
+        {
+          "name": "height",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "prompt",
+          "type": "string",
+          "optional": true,
+          "description": "Token count drives the text-encoder memory; a default stands in when absent."
+        },
+        {
+          "name": "upscaleRepeats",
+          "type": "number",
+          "optional": true,
+          "description": "Number of ESRGAN passes, each applying the checkpoint's scale factor."
+        },
+        {
+          "name": "vaeTileOverlap",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "vaeTileSizeX",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "vaeTileSizeY",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "vaeTiling",
+          "type": "boolean",
+          "optional": true,
+          "description": "Tiled decoding trades speed for a much smaller VAE arena."
+        },
+        {
+          "name": "videoFrames",
+          "type": "number",
+          "optional": true,
+          "description": "<= 1 projects image generation."
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "EsrganFiles",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:80",
+      "fields": [
+        {
+          "name": "esrgan",
+          "type": "string",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "EsrganFitRequest",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "fit.d.ts:25",
+      "fields": [
+        {
+          "name": "config",
+          "type": "EsrganUpscalerConfig",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "files",
+          "type": "EsrganFiles",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "mode",
+          "type": "\"upscale\"",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "workload",
+          "type": "Pick<DiffusionFitWorkload, \"width\" | \"height\" | \"upscaleRepeats\">",
+          "optional": true,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "EsrganRuntimeStats",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:169",
+      "fields": [
+        {
+          "name": "backendDevice",
+          "type": "\"gpu\" | \"cpu\"",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "modelLoadMs",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "repeats",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalImages",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalPixels",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalUpscaleMs",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalUpscales",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalWallMs",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "upscaleMs",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "EsrganUpscaleOptions",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:111",
+      "fields": [
+        {
+          "name": "repeats",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "EsrganUpscaler",
+      "kind": "class",
+      "summary": "Standalone ESRGAN image upscaling using stable-diffusion.cpp.\nAccepts encoded PNG/JPEG bytes and emits PNG bytes.",
+      "deprecated": null,
+      "source": "index.d.ts:217",
+      "signatures": [
+        {
+          "text": "new EsrganUpscaler(__namedParameters: EsrganUpscalerArgs): EsrganUpscaler",
+          "parameters": [
+            {
+              "name": "__namedParameters",
+              "type": "EsrganUpscalerArgs",
+              "optional": false,
+              "description": ""
+            }
+          ],
+          "returns": {
+            "type": "EsrganUpscaler",
+            "description": ""
+          }
+        }
+      ],
+      "fields": [
+        {
+          "name": "logger",
+          "type": "QvacLogger",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "opts",
+          "type": "{ stats?: boolean }",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "state",
+          "type": "{ configLoaded: boolean }",
+          "optional": false,
+          "description": ""
+        }
+      ],
+      "methods": [
+        {
+          "name": "cancel",
+          "signatures": [
+            {
+              "text": "cancel(): Promise<void>",
+              "parameters": [],
+              "returns": {
+                "type": "Promise<void>",
+                "description": ""
+              }
+            }
+          ]
+        },
+        {
+          "name": "getState",
+          "signatures": [
+            {
+              "text": "getState(): { configLoaded: boolean }",
+              "parameters": [],
+              "returns": {
+                "type": "{ configLoaded: boolean }",
+                "description": ""
+              }
+            }
+          ]
+        },
+        {
+          "name": "load",
+          "signatures": [
+            {
+              "text": "load(): Promise<void>",
+              "parameters": [],
+              "returns": {
+                "type": "Promise<void>",
+                "description": ""
+              }
+            }
+          ]
+        },
+        {
+          "name": "unload",
+          "signatures": [
+            {
+              "text": "unload(): Promise<void>",
+              "parameters": [],
+              "returns": {
+                "type": "Promise<void>",
+                "description": ""
+              }
+            }
+          ]
+        },
+        {
+          "name": "upscale",
+          "signatures": [
+            {
+              "text": "upscale(imageBytes: Uint8Array, options?: EsrganUpscaleOptions): Promise<QvacResponse>",
+              "parameters": [
+                {
+                  "name": "imageBytes",
+                  "type": "Uint8Array",
+                  "optional": false,
+                  "description": ""
+                },
+                {
+                  "name": "options",
+                  "type": "EsrganUpscaleOptions",
+                  "optional": true,
+                  "description": ""
+                }
+              ],
+              "returns": {
+                "type": "Promise<QvacResponse>",
+                "description": ""
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "EsrganUpscalerArgs",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:103",
+      "fields": [
+        {
+          "name": "config",
+          "type": "EsrganUpscalerConfig",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "files",
+          "type": "EsrganFiles",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "logger",
+          "type": "any",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "opts",
+          "type": "{ stats?: boolean }",
+          "optional": true,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "EsrganUpscalerConfig",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:83",
+      "fields": [
+        {
+          "name": "backendsDir",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "device",
+          "type": "\"gpu\" | \"cpu\"",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "max_image_pixels",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "threads",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "upscaler_direct",
+          "type": "boolean",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "upscaler_offload_params_to_cpu",
+          "type": "boolean",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "upscaler_threads",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "upscaler_tile_size",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "verbosity",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "GenerationParams",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:114",
+      "fields": [
+        {
+          "name": "auto_resize_ref_image",
+          "type": "boolean",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "batch_count",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "cache_mode",
+          "type": "CacheMode",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "cache_preset",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "cache_threshold",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "cfg_scale",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "clip_skip",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "custom_sigmas",
+          "type": "number[]",
+          "optional": true,
+          "description": "Strictly decreasing finite non-negative sigmas ending in zero.\nOverrides scheduler and steps; the step count is array length minus one."
+        },
+        {
+          "name": "eta",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "guidance",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "img_cfg_scale",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "increase_ref_index",
+          "type": "boolean",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "init_image",
+          "type": "Uint8Array<ArrayBufferLike>",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "init_images",
+          "type": "Uint8Array<ArrayBufferLike>[]",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "lora",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "negative_prompt",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "prompt",
+          "type": "string",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "sampler",
+          "type": "SamplerMethod",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "sampling_method",
+          "type": "SamplerMethod",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "scheduler",
+          "type": "ScheduleType",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "seed",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "steps",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "strength",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "upscale",
+          "type": "boolean | { repeats?: number }",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "vae_tile_overlap",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "vae_tile_size",
+          "type": "string | number",
+          "optional": true,
+          "description": "Positive spatial tile dimensions in latent pixels; omit to use the engine default."
+        },
+        {
+          "name": "vae_tiling",
+          "type": "boolean",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "ImgStableDiffusion",
+      "kind": "class",
+      "summary": "Text-to-image and image-to-image generation using stable-diffusion.cpp.\nSupports SD1.x, SD2.x, SDXL, SD3, FLUX.2 [klein], and Ideogram 4.",
+      "deprecated": null,
+      "source": "index.d.ts:186",
+      "signatures": [
+        {
+          "text": "new ImgStableDiffusion(__namedParameters: ImgStableDiffusionArgs): ImgStableDiffusion",
+          "parameters": [
+            {
+              "name": "__namedParameters",
+              "type": "ImgStableDiffusionArgs",
+              "optional": false,
+              "description": ""
+            }
+          ],
+          "returns": {
+            "type": "ImgStableDiffusion",
+            "description": ""
+          }
+        }
+      ],
+      "fields": [
+        {
+          "name": "addon",
+          "type": "Addon | null",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "logger",
+          "type": "QvacLogger",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "opts",
+          "type": "{ stats?: boolean }",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "state",
+          "type": "{ configLoaded: boolean }",
+          "optional": false,
+          "description": ""
+        }
+      ],
+      "methods": [
+        {
+          "name": "cancel",
+          "signatures": [
+            {
+              "text": "cancel(): Promise<void>",
+              "parameters": [],
+              "returns": {
+                "type": "Promise<void>",
+                "description": ""
+              }
+            }
+          ]
+        },
+        {
+          "name": "getState",
+          "signatures": [
+            {
+              "text": "getState(): { configLoaded: boolean }",
+              "parameters": [],
+              "returns": {
+                "type": "{ configLoaded: boolean }",
+                "description": ""
+              }
+            }
+          ]
+        },
+        {
+          "name": "load",
+          "signatures": [
+            {
+              "text": "load(): Promise<void>",
+              "parameters": [],
+              "returns": {
+                "type": "Promise<void>",
+                "description": ""
+              }
+            }
+          ]
+        },
+        {
+          "name": "run",
+          "signatures": [
+            {
+              "text": "run(params: GenerationParams): Promise<QvacResponse>",
+              "parameters": [
+                {
+                  "name": "params",
+                  "type": "GenerationParams",
+                  "optional": false,
+                  "description": ""
+                }
+              ],
+              "returns": {
+                "type": "Promise<QvacResponse>",
+                "description": ""
+              }
+            }
+          ]
+        },
+        {
+          "name": "unload",
+          "signatures": [
+            {
+              "text": "unload(): Promise<void>",
+              "parameters": [],
+              "returns": {
+                "type": "Promise<void>",
+                "description": ""
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ImgStableDiffusionArgs",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:95",
+      "fields": [
+        {
+          "name": "config",
+          "type": "SdConfig",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "files",
+          "type": "DiffusionFiles",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "logger",
+          "type": "any",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "opts",
+          "type": "{ stats?: boolean }",
+          "optional": true,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "LoraApplyMode",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:25",
+      "values": [
+        "\"auto\"",
+        "\"immediately\"",
+        "\"at_runtime\""
+      ]
+    },
+    {
+      "name": "NumericLike",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:4",
+      "type": "number | `${number}`"
+    },
+    {
+      "name": "PredictionType",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:24",
+      "values": [
+        "\"auto\"",
+        "\"eps\"",
+        "\"v\"",
+        "\"edm_v\"",
+        "\"flow\"",
+        "\"flux2_flow\""
+      ]
+    },
+    {
+      "name": "QvacResponse",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": null,
+      "type": "any"
+    },
+    {
+      "name": "RngType",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:22",
+      "values": [
+        "\"cpu\"",
+        "\"cuda\"",
+        "\"std_default\""
+      ]
+    },
+    {
+      "name": "RuntimeStats",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:151",
+      "fields": [
+        {
+          "name": "conditionerMs",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "denoiseMs",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "generationMs",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "modelLoadMs",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "postProcessMs",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "seed",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "stepsPerSecond",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalGenerationMs",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalGenerations",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalImages",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalPixels",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalSteps",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalWallMs",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "vaeMs",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "SamplerMethod",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:20",
+      "values": [
+        "\"euler\"",
+        "\"euler_a\"",
+        "\"heun\"",
+        "\"dpm2\"",
+        "\"dpm++2m\"",
+        "\"dpm++2mv2\"",
+        "\"dpm++2s_a\"",
+        "\"lcm\"",
+        "\"ipndm\"",
+        "\"ipndm_v\"",
+        "\"ddim_trailing\"",
+        "\"tcd\"",
+        "\"res_multistep\"",
+        "\"res_2s\""
+      ]
+    },
+    {
+      "name": "ScheduleType",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:23",
+      "values": [
+        "\"discrete\"",
+        "\"karras\"",
+        "\"exponential\"",
+        "\"ays\"",
+        "\"gits\"",
+        "\"sgm_uniform\"",
+        "\"simple\"",
+        "\"lcm\"",
+        "\"smoothstep\"",
+        "\"kl_optimal\"",
+        "\"bong_tangent\"",
+        "\"ltx2\""
+      ]
+    },
+    {
+      "name": "SdConfig",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:27",
+      "fields": [
+        {
+          "name": "backend",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "backendsDir",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "clip_on_cpu",
+          "type": "undefined",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "control_net_cpu",
+          "type": "undefined",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "device",
+          "type": "\"gpu\" | \"cpu\"",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "diffusion_conv_direct",
+          "type": "boolean",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "diffusion_fa",
+          "type": "boolean",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "flash_attn",
+          "type": "boolean",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "flow_shift",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "force_sdxl_vae_conv_scale",
+          "type": "boolean",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "lora_apply_mode",
+          "type": "LoraApplyMode",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "main-gpu",
+          "type": "number | \"integrated\" | \"dedicated\"",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "max_image_pixels",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "max_job_pixels",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "max_vram",
+          "type": "string | number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "mmap",
+          "type": "boolean",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "offload_to_cpu",
+          "type": "boolean",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "params_backend",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "prediction",
+          "type": "PredictionType",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "rng",
+          "type": "RngType",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "sampler_rng",
+          "type": "RngType",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "stream_layers",
+          "type": "boolean",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "tensor_type_rules",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "threads",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "type",
+          "type": "WeightType",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "upscaler_direct",
+          "type": "boolean",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "upscaler_offload_params_to_cpu",
+          "type": "boolean",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "upscaler_threads",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "upscaler_tile_size",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "vae_auto_cpu_fallback",
+          "type": "boolean",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "vae_auto_cpu_fallback_memory_ratio",
+          "type": "number",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "vae_conv_direct",
+          "type": "boolean",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "vae_decode_only",
+          "type": "boolean",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "vae_on_cpu",
+          "type": "undefined",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "vae_tiling",
+          "type": "boolean",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "verbosity",
+          "type": "NumericLike",
+          "optional": true,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "VideoDiffusionFiles",
+      "kind": "interface",
+      "summary": "File paths for a video model context (Wan 2.1 / 2.2, LTX-2 / LTXAV, or\nMiniMax-H3).\n\nWan 2.2 TI2V-5B uses only `model`, like Wan 2.1, but requires the matching\nWan 2.2 VAE. Wan 2.2 T2V-A14B uses both `model` (low noise) and\n`highNoiseDiffusionModel` (high noise).",
+      "deprecated": null,
+      "source": "video.d.ts:13",
+      "fields": [
+        {
+          "name": "audioVae",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "clipVision",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "embeddingsConnectors",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "esrgan",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "highNoiseDiffusionModel",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "llm",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "llmVision",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "model",
+          "type": "string",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "t5Xxl",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "tokenizer",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "vae",
+          "type": "string",
+          "optional": true,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "VideoGenerationParams",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "video.d.ts:88",
+      "type": "VideoGenerationBaseParams & ({ init_image?: never; mode: \"txt2vid\" } | { init_image: Uint8Array; mode: \"img2vid\" })"
+    },
+    {
+      "name": "VideoMode",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "video.d.ts:4",
+      "values": [
+        "\"txt2vid\"",
+        "\"img2vid\""
+      ]
+    },
+    {
+      "name": "VideoRuntimeStats",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "video.d.ts:95",
+      "fields": [
+        {
+          "name": "audioSampleRate",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "conditionerMs",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "denoiseMs",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "fps",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "generationMs",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "hasAudio",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "modelLoadMs",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "postProcessMs",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "seed",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "stepsPerSecond",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalGenerationMs",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalGenerations",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalImages",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalPixels",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalSteps",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalVideoFrames",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalVideos",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "totalWallMs",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "vaeMs",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "videoFrames",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "optional": false,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "VideoStableDiffusion",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:249",
+      "type": "InstanceType<typeof VideoStableDiffusionConstructor>"
+    },
+    {
+      "name": "VideoStableDiffusion",
+      "kind": "variable",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:249",
+      "type": "typeof default"
+    },
+    {
+      "name": "VideoStableDiffusionArgs",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "video.d.ts:26",
+      "fields": [
+        {
+          "name": "config",
+          "type": "SdConfig",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "files",
+          "type": "VideoDiffusionFiles",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "logger",
+          "type": "any",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "opts",
+          "type": "{ stats?: boolean }",
+          "optional": true,
+          "description": ""
+        }
+      ]
+    },
+    {
+      "name": "WeightType",
+      "kind": "type",
+      "summary": "",
+      "deprecated": null,
+      "source": "index.d.ts:21",
+      "values": [
+        "\"auto\"",
+        "\"f32\"",
+        "\"f16\"",
+        "\"bf16\"",
+        "\"q2_k\"",
+        "\"q3_k\"",
+        "\"q4_0\"",
+        "\"q4_1\"",
+        "\"q4_k\"",
+        "\"q5_0\"",
+        "\"q5_1\"",
+        "\"q5_k\"",
+        "\"q6_k\"",
+        "\"q8_0\""
+      ]
+    },
+    {
+      "name": "WorldFitRequest",
+      "kind": "interface",
+      "summary": "",
+      "deprecated": null,
+      "source": "fit.d.ts:31",
+      "fields": [
+        {
+          "name": "config",
+          "type": "WorldConfig",
+          "optional": true,
+          "description": ""
+        },
+        {
+          "name": "files",
+          "type": "WorldFiles",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "mode",
+          "type": "\"world\"",
+          "optional": false,
+          "description": ""
+        },
+        {
+          "name": "workload",
+          "type": "{ walkSteps?: number }",
+          "optional": true,
+          "description": ""
+        }
+      ]
+    }
+  ]
+}

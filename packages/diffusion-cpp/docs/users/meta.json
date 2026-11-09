@@ -1,0 +1,9 @@
+{
+  "title": "@qvac/diffusion-cpp",
+  "pages": [
+    "index",
+    "installation",
+    "usage",
+    "api"
+  ]
+}

@@ -1,0 +1,21 @@
+---
+title: Pipelines
+icon: GitBranch
+description: Declare the steps of a pipeline and how their outputs flow.
+---
+
+<Callout type="warn">
+**Mock product.** This page is dummy content.
+</Callout>
+
+## Steps
+
+A pipeline is an ordered list of steps. Each step names a `capability`, the `model` that runs it, and the `input` it reads: the pipeline's input, or the output of an earlier step.
+
+## Streaming
+
+A step starts as soon as the step it reads emits its first chunk, so a long transcription is translated while it is still being transcribed.
+
+## Errors
+
+A failed step stops the steps that read it and leaves the others running. The pipeline reports every failure with the id of its step.
