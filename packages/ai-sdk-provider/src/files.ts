@@ -12,6 +12,7 @@ import {
 import { mergeHeaders } from './headers.js'
 
 export interface QvacFilesOptions {
+  /** No trailing slash: `createExternalQvac` normalizes it. */
   readonly baseURL: string
   readonly headers: Record<string, string>
   readonly fetch?: typeof fetch
@@ -73,7 +74,7 @@ export function createQvacFiles(options: QvacFilesOptions): FilesV4 {
       if (typeof purpose === 'string' && purpose.length > 0) form.append('purpose', purpose)
 
       const response = await postFormDataToApi({
-        url: `${options.baseURL.replace(/\/+$/, '')}/files`,
+        url: `${options.baseURL}/files`,
         headers: multipartHeaders(mergeHeaders(options.headers, headers)),
         formData: form,
         failedResponseHandler,
