@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.69.0] - 2026-11-09
 
 ### Added
 
@@ -10,7 +10,8 @@
   split. The KV cache stays at `f16` on the NPU, whose attention kernels take
   only `f16` K/V, and a vision model's projector defaults to the CPU
   (`mmproj-use-gpu: true` moves it to the NPU). `split-mode: "tensor"` with
-  `XDNA0` is rejected with `InvalidArgument`.
+  `XDNA0` is rejected with `InvalidArgument`
+  ([#5588](https://github.com/tetherto/qvac/pull/5588)).
 
 ### Changed
 
@@ -19,7 +20,15 @@
   required to load it). A caret on a `0.x` version locks the minor, so
   `^0.26.0` would not have resolved `0.28.0`. The mobile dev and peer
   dependencies `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to
-  `^0.28.0` with it.
+  `^0.28.0` with it ([#5574](https://github.com/tetherto/qvac/pull/5574),
+  [#5588](https://github.com/tetherto/qvac/pull/5588)).
+- `@qvac/fabric` 0.28.0 (`qvac-fabric` `11739.1.1`,
+  [#5658](https://github.com/tetherto/qvac/pull/5658)) adds four fields to
+  `common_params`, which this addon uses, so it is rebuilt against the 0.28.0
+  headers and is not ABI-compatible with 0.26.x. Every addon loaded in one
+  process must resolve the same `@qvac/fabric` minor. Mobile apps must move
+  `@qvac/fabric` and `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to
+  `0.28.0` together.
 
 ### Fixed
 

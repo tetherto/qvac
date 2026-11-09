@@ -7,6 +7,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.36.0] - 2026-11-09
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.26.0` -> `^0.28.0`, which carries
+  `qvac-fabric` `11739.0.0` -> `11739.1.1`
+  ([#5574](https://github.com/tetherto/qvac/pull/5574),
+  [#5658](https://github.com/tetherto/qvac/pull/5658)): the Linux x64 package
+  ships the AMD XDNA backend (system XRT 2.25 or newer to load it), which falls
+  back to the CPU on any setup error, plus OpenCL, TurboQuant and mtmd fixes.
+  A caret on a `0.x` version locks the minor, so `^0.26.0` would not have
+  resolved `0.28.0` on its own. The mobile dev and peer dependencies
+  `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to `^0.28.0` with it.
+- `@qvac/fabric` 0.28.0 adds four fields to `common_params` and is not
+  ABI-compatible with 0.26.x, so every addon loaded in one process must resolve
+  the same `@qvac/fabric` minor. Mobile apps must move `@qvac/fabric` and
+  `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to `0.28.0` together.
+- This package needed no code change for the new fabric.
+
+### Pull Requests
+
+- [#5574](https://github.com/tetherto/qvac/pull/5574) - ship the XDNA backend in `@qvac/fabric` 0.27.0.
+- [#5658](https://github.com/tetherto/qvac/pull/5658) - bump `qvac-fabric` to `11739.1.1` in `@qvac/fabric` 0.28.0.
+
 ## [0.35.0] - 2026-11-04
 
 ### Breaking
