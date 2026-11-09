@@ -137,6 +137,14 @@ const RULES: Rule[] = [
     }
   },
   {
+    match: ['kv-cache-shared-prefix-default-isolated', 'kv-cache-shared-prefix-opt-in'],
+    skip: {
+      reason:
+        'Defined only as steps, which the JS mobile consumer does not run; Kotlin inherits the skip because it shares the Android device. Covered by desktop and Python e2e',
+      platforms: ['mobile']
+    }
+  },
+  {
     match: /^tools-(?!simple-function$|no-function-match$)/,
     skip: { reason: 'Tools test disabled on mobile', platforms: ['mobile'] }
   },
