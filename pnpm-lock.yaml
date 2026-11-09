@@ -862,6 +862,9 @@ importers:
 
   packages/inference:
     dependencies:
+      '@qvac/decision-ggml':
+        specifier: workspace:*
+        version: link:../decision-ggml
       '@qvac/error':
         specifier: ^0.1.1
         version: 0.1.1
