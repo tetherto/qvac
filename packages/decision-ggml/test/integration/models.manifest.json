@@ -1,0 +1,33 @@
+{
+  "cacheEpoch": 1,
+  "models": {
+    "jina-reranker-v1-tiny-en-f16.gguf": {
+      "urls": [
+        "https://huggingface.co/ggml-org/models/resolve/499bc8821c6b12b4e53c5bffcb21ec206f212d81/jina-reranker-v1-tiny-en/ggml-model-f16.gguf"
+      ],
+      "sha256": "ad9f450c1053a431e2e3746d1f9f7768fb9183cf0796e046983a3449dca093c2",
+      "bytes": 67504480
+    },
+    "tinylaya-for-testing-Q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/ggml-org/tinylaya-for-testing-gguf/resolve/db8373bdf1621f95b7db9eb0444539e1facbec96/tinylaya-for-testing-Q8_0.gguf"
+      ],
+      "sha256": "a8b2b8f7fe6b7e10a884c55bf72362b0a8701e40dc3f332831d58246e5fa0b70",
+      "bytes": 97200288
+    },
+    "tinyopenjev-for-testing-Q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/ggml-org/tinyopenjev-for-testing-gguf/resolve/953e44649ca8a71e5a8eee4676edebff2a45b2a2/tinyopenjev-for-testing-Q8_0.gguf"
+      ],
+      "sha256": "bb451e6faf46fea0b28dec91765a59d8392e40711ea5554f8e7d39b5e03b15a7",
+      "bytes": 45712544
+    },
+    "mmproj-tinyopenjev-for-testing-Q8_0.gguf": {
+      "urls": [
+        "https://huggingface.co/ggml-org/tinyopenjev-for-testing-gguf/resolve/953e44649ca8a71e5a8eee4676edebff2a45b2a2/mmproj-tinyopenjev-for-testing-Q8_0.gguf"
+      ],
+      "sha256": "5831d2b67fcf563ce6e6f80170847bffc0b361c2c3cc93ea6d700e3087a9f03a",
+      "bytes": 3209216
+    }
+  }
+}

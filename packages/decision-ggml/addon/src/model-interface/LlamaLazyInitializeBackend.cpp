@@ -1,0 +1,125 @@
+#include "LlamaLazyInitializeBackend.hpp"
+
+#include <filesystem>
+#include <string>
+
+#include <llama.h>
+#include <qvac-fabric.h>
+
+#include "logging.hpp"
+#include "utils.hpp"
+
+using namespace qvac_lib_infer_llamacpp_embed::logging;
+using namespace qvac_lib_inference_addon_cpp::logger;
+
+std::mutex LlamaLazyInitializeBackend::g_initMutex;
+bool LlamaLazyInitializeBackend::g_initialized = false;
+std::string LlamaLazyInitializeBackend::g_recordedBackendsDir;
+int LlamaLazyInitializeBackend::g_refCount = 0;
+
+bool LlamaLazyInitializeBackend::initialize(
+    const std::string& backendsDir, const std::string& openclCacheDir) {
+  std::lock_guard<std::mutex> lock(g_initMutex);
+  return initializeLocked(backendsDir, openclCacheDir);
+}
+
+void LlamaLazyInitializeBackend::acquire(
+    const std::string& backendsDir, const std::string& openclCacheDir) {
+  // Initialization and ownership must be atomic with the last model unloading.
+  const std::lock_guard<std::mutex> lock(g_initMutex);
+  initializeLocked(backendsDir, openclCacheDir);
+  ++g_refCount;
+}
+
+bool LlamaLazyInitializeBackend::initializeLocked(
+    const std::string& backendsDir, const std::string& openclCacheDir) {
+  if (g_initialized) {
+    if (!backendsDir.empty() && !g_recordedBackendsDir.empty() &&
+        backendsDir != g_recordedBackendsDir) {
+      QLOG_IF(
+          Priority::WARNING,
+          "Backend already initialized with different backendsDir. "
+          "Previously initialized at: " +
+              g_recordedBackendsDir + ", requested: " + backendsDir);
+    }
+    return false;
+  }
+
+  if (!backendsDir.empty()) {
+    g_recordedBackendsDir = backendsDir;
+  }
+
+  llama_log_set(llamaLogCallback, nullptr);
+
+#ifdef __ANDROID__
+  if (!openclCacheDir.empty()) {
+    auto oclCachePath =
+        (std::filesystem::path(openclCacheDir) / "opencl-cache").string();
+    setenv("GGML_OPENCL_CACHE_DIR", oclCachePath.c_str(), /*overwrite=*/1);
+  }
+#endif
+
+  if (!backendsDir.empty()) {
+    QLOG_IF(
+        Priority::INFO, "Loading backends from directory: " + backendsDir);
+    ggml_backend_load_all_from_path(backendsDir.c_str());
+  } else {
+    QLOG_IF(
+        Priority::DEBUG,
+        std::string("Loading backends shipped with @qvac/fabric from: ") +
+            qvac_fabric_backends_dir());
+    qvac_fabric_load_backends();
+  }
+
+  llama_backend_init();
+  g_initialized = true;
+  return true;
+}
+
+void LlamaLazyInitializeBackend::incrementRefCount() {
+  std::lock_guard<std::mutex> lock(g_initMutex);
+  g_refCount++;
+}
+
+void LlamaLazyInitializeBackend::decrementRefCount() {
+  std::lock_guard<std::mutex> lock(g_initMutex);
+  if (g_refCount > 0) {
+    g_refCount--;
+    if (g_refCount == 0 && g_initialized) {
+      QLOG_IF(
+          Priority::DEBUG, "Freeing backend (reference count reached zero)");
+      llama_backend_free();
+      g_initialized = false;
+      g_recordedBackendsDir.clear();
+    }
+  }
+}
+
+LlamaBackendsHandle::LlamaBackendsHandle(
+    const std::string& backendsDir, const std::string& openclCacheDir)
+    : ownsHandle_(true) {
+  LlamaLazyInitializeBackend::acquire(backendsDir, openclCacheDir);
+}
+
+LlamaBackendsHandle::~LlamaBackendsHandle() {
+  if (ownsHandle_) {
+    LlamaLazyInitializeBackend::decrementRefCount();
+  }
+}
+
+LlamaBackendsHandle::LlamaBackendsHandle(LlamaBackendsHandle&& other) noexcept
+    : ownsHandle_(other.ownsHandle_) {
+  other.ownsHandle_ = false;
+}
+
+LlamaBackendsHandle&
+LlamaBackendsHandle::operator=(LlamaBackendsHandle&& other) noexcept {
+  if (this != &other) {
+    if (ownsHandle_) {
+      LlamaLazyInitializeBackend::decrementRefCount();
+    }
+    ownsHandle_ = other.ownsHandle_;
+    other.ownsHandle_ = false;
+  }
+  return *this;
+}

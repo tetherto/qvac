@@ -1,0 +1,16 @@
+@qvac/decision-ggml
+Copyright 2026 Tether Data, S.A. de C.V.
+
+This product includes third-party components under their
+respective licenses. @qvac/decision-ggml itself is licensed under
+Apache-2.0; bundled dependencies are governed by the licenses
+listed below.
+
+=========================================================================
+Native Dependencies
+=========================================================================
+
+--- mit (MIT License) ---
+  llama.cpp server-context (tools/server), statically linked from the
+  qvac-fabric build that @qvac/fabric ships
+    https://github.com/tetherto/qvac-fabric-llm.cpp

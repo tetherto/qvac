@@ -1,0 +1,133 @@
+{
+  "name": "@qvac/decision-ggml",
+  "version": "0.1.0",
+  "description": "Decision models for QVAC: fabric-format Laya and upstream llama.cpp decision models (openjev, lev, kev, clef, ...)",
+  "addon": true,
+  "engines": {
+    "bare": ">=1.24.0"
+  },
+  "scripts": {
+    "build": "npm run build:ts && npm run build:native",
+    "build:native": "bare-make generate && bare-make build && bare-make install",
+    "build:ts": "tsc -p tsconfig.build.json",
+    "check:generated": "npm run build:ts && git diff --exit-code -- index.mjs index.js addon.js addonLogging.js decision.js laya.js modelRunner.js index.d.ts addon.d.ts addonLogging.d.ts decision.d.ts laya.d.ts modelRunner.d.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build:pack": "npm run build:ts && mkdir -p dist && npm pack --pack-destination dist",
+    "mobile:copy-prebuilds": "cp -r prebuilds/android-arm64 prebuilds/android-ia32 || echo 'Warning: Failed to copy decision-ggml prebuilds to android-ia32'; cp -r prebuilds/android-arm64 prebuilds/android-arm || echo 'Warning: Failed to copy decision-ggml prebuilds to android-arm'; cp -r prebuilds/android-arm64 prebuilds/android-x64 || echo 'Warning: Failed to copy decision-ggml prebuilds to android-x64'; cp -r prebuilds/ios-arm64 prebuilds/ios-arm64-simulator 2>/dev/null || echo 'iOS prebuilds already present'; cp -r prebuilds/ios-arm64 prebuilds/ios-x64-simulator 2>/dev/null || echo 'iOS prebuilds already present'",
+    "lint": "npm run lint:js && npm run lint:ts",
+    "lint:js": "prettier --check \"**/*.{js,cjs,mjs}\" && lunte",
+    "lint:ts": "eslint \"src/**/*.ts\" --max-warnings=0",
+    "lint:ts:fix": "eslint \"src/**/*.ts\" --fix",
+    "format": "prettier --write \"**/*.{js,cjs,mjs}\"",
+    "lint-cpp": "clang-tidy -p build $(find addon -name '*.cpp')",
+    "test:integration": "npm run build:ts && npm run test:integration:generate && bare test/integration/all.js --exit",
+    "test:integration:generate": "brittle -r test/integration/all.js test/integration/*.test.js && npm run test:mobile:generate",
+    "test:unit:generate": "brittle -r test/unit/all.js test/unit/*.test.js",
+    "test:prestage": "node --test scripts/__tests__/*.test.js",
+    "test:unit": "npm run build:ts && npm run test:unit:generate && bare test/unit/all.js --exit && npm run test:prestage",
+    "test:cpp:build": "bare-make generate -D BUILD_TESTING=ON && bare-make build --target addon-test",
+    "test:cpp:run": "node scripts/run-cpp-tests.js",
+    "test:cpp": "npm run test:cpp:build && npm run test:cpp:run",
+    "coverage:cpp:build": "bare-make generate -D BUILD_TESTING=ON -D ENABLE_COVERAGE=ON && bare-make build --target addon-test",
+    "coverage:cpp:run": "LLVM_PROFILE_FILE=default.profraw node scripts/run-cpp-tests.js",
+    "coverage:cpp:summary": "cd build/test/unit && llvm-cov report ./addon-test --instr-profile=coverage.profdata -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > coverage-summary.txt",
+    "coverage:cpp:report": "cd build/test/unit/ && ls -lha && llvm-profdata merge -sparse default.profraw -o coverage.profdata && llvm-cov show ./addon-test -instr-profile=coverage.profdata -format=html -output-dir=coverage-html -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' && llvm-cov export ./addon-test -instr-profile=coverage.profdata -format=lcov -ignore-filename-regex='(tests|build|node_modules|gtest|gmock|\\.vcpkg|/usr)/' > lcov.info && npm run coverage:cpp:summary",
+    "coverage:cpp": "npm run coverage:cpp:build && npm run coverage:cpp:run && npm run coverage:cpp:report",
+    "test:all": "npm run test:unit && npm run test:integration && npm run test:cpp",
+    "test:mobile:generate": "bare ./scripts/generate-mobile-integration-tests.js",
+    "test:mobile:validate": "node scripts/validate-mobile-tests.js",
+    "test": "npm run test:types && npm run test:unit && npm run test:integration",
+    "test:types": "npm run typecheck && npm run check:generated"
+  },
+  "files": [
+    "binding.js",
+    "index.mjs",
+    "index.js",
+    "addon.js",
+    "addonLogging.js",
+    "decision.js",
+    "laya.js",
+    "modelRunner.js",
+    "index.d.ts",
+    "addon.d.ts",
+    "addonLogging.d.ts",
+    "decision.d.ts",
+    "laya.d.ts",
+    "modelRunner.d.ts",
+    "prebuilds",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/decision-ggml"
+  },
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "homepage": "https://qvac.tether.io",
+  "devDependencies": {
+    "@qvac/fabric-android-arm64": "^0.27.0",
+    "@qvac/fabric-ios": "^0.27.0",
+    "@types/node": "^24.2.1",
+    "bare-crypto": "^1.15.3",
+    "brittle": "^3.4.0",
+    "cmake-bare": "^1.9.0",
+    "cmake-vcpkg": "^1.1.0",
+    "eslint": "^9.39.4",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import": "^2.32.0",
+    "lunte": "^1.8.4",
+    "prettier": "^3.9.4",
+    "prettier-config-holepunch": "^2.0.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.63.0",
+    "cmake-npm": "^1.1.0",
+    "bare-process": "^4.2.2",
+    "bare-https": "^3.0.0",
+    "bare-os": "^3.6.2",
+    "bare-url": "^2.1.6",
+    "bare-fs": "^4.5.1"
+  },
+  "dependencies": {
+    "@qvac/fabric": "^0.27.0",
+    "@qvac/infer-base": "^0.8.0",
+    "@qvac/logging": "^0.1.0",
+    "bare-path": "^3.0.0"
+  },
+  "optionalDependencies": {
+    "@qvac/fabric-linux-x64": "^0.27.0",
+    "@qvac/fabric-linux-arm64": "^0.27.0",
+    "@qvac/fabric-darwin-arm64": "^0.27.0",
+    "@qvac/fabric-darwin-x64": "^0.27.0",
+    "@qvac/fabric-win32-x64": "^0.27.0"
+  },
+  "peerDependencies": {
+    "@qvac/fabric-android-arm64": "^0.27.0",
+    "@qvac/fabric-ios": "^0.27.0"
+  },
+  "peerDependenciesMeta": {
+    "@qvac/fabric-android-arm64": {
+      "optional": true
+    },
+    "@qvac/fabric-ios": {
+      "optional": true
+    }
+  },
+  "exports": {
+    "./package": "./package.json",
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.mjs",
+      "default": "./index.js"
+    },
+    "./addonLogging": {
+      "types": "./addonLogging.d.ts",
+      "default": "./addonLogging.js"
+    },
+    "./addonLogging.js": "./addonLogging.js"
+  },
+  "main": "index.js",
+  "types": "index.d.ts"
+}
