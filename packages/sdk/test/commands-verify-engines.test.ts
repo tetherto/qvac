@@ -749,6 +749,37 @@ describe('verifyBundle engines.bare against the phone runtimes', () => {
     })
   })
 
+  it('checks a bundle stamped for pear-runtime against the bare-sidecar pear-runtime resolves', async () => {
+    await withTempDir(async (dir) => {
+      const { bundlePath, bareStowDir } = writeMixedHostBundle(dir, { linkedOnDesktop: true })
+      writeFile(
+        path.join(path.dirname(bundlePath), 'package.json'),
+        JSON.stringify({ name: 'qvac-worker', qvacTarget: 'pear-runtime' })
+      )
+      writeSidecar(dir, '1.40.0')
+      writePackage(dir, 'node_modules/pear-runtime', { name: 'pear-runtime', version: '1.3.1' })
+      const nested = writePackage(dir, 'node_modules/pear-runtime/node_modules/bare-sidecar', {
+        name: 'bare-sidecar',
+        version: '0.5.2'
+      })
+      writeFile(path.join(nested, 'versions.json'), JSON.stringify({ bare: '1.36.2' }))
+
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: bundlePath,
+        hosts: ['darwin-arm64'],
+        bareStowDir,
+        network: false
+      })
+      const mismatches = result.issues.filter((issue) => issue.code === 'abi-mismatch')
+      assert.equal(mismatches.length, 1)
+      assert.match(
+        mismatches[0]!.message,
+        /runtime is 1\.36\.2 \(from bare-sidecar: bare-sidecar 0\.5\.2/
+      )
+    })
+  })
+
   it('finds the bare-sidecar next to a pnpm-linked pear-runtime', async () => {
     await withTempDir(async (dir) => {
       const bareStowDir = writeMobileProject(dir, { hosts: ['darwin-arm64'] })

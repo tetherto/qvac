@@ -48,10 +48,10 @@ import { findInAncestorNodeModules } from '@/expo/plugins/find-in-ancestor-node-
 import type { NativeAddon } from '@/commands/verify/addon-source'
 import { isMobileHost } from '@/commands/verify/prebuilds'
 import {
+  DESKTOP_RUNTIMES,
   formatVerifyBundleResult,
   hasErrors,
   verifyBundle,
-  type VerifyBundleOptions,
   type VerifyBundleResult
 } from '@/commands/verify/index'
 import { formatRuntimeSource } from '@/commands/verify/abi'
@@ -205,14 +205,6 @@ function audioPluginsIn(pluginSpecifiers: string[], sdkName: string): string[] {
     const builtin = parseBuiltinSpecifier(specifier, sdkName)
     return builtin !== null && AUDIO_PLUGINS.has(builtin.suffix)
   })
-}
-
-/** The Bare that each target runs a bundle on for desktop hosts. */
-const DESKTOP_RUNTIMES: Record<BundleTarget, NonNullable<VerifyBundleOptions['desktopRuntime']>> = {
-  'bare-sidecar': 'bare-sidecar',
-  'react-native': 'bare-sidecar',
-  'pear-runtime': 'pear-runtime',
-  'bare-kit': 'bare-kit-kotlin'
 }
 
 /**

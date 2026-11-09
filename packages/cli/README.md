@@ -264,7 +264,11 @@ an installed `node_modules` tree has prebuilds for the requested host(s). For
 Android and iOS hosts, it also checks every declared `engines.bare` range
 against the Bare that Bare Kit runs on that platform, as pinned by the SDK's
 bare-stow. Desktop hosts are checked against the Bare of the project's
-`bare-sidecar`.
+`bare-sidecar`. For a bundle that `qvac bundle sdk` wrote for the
+`pear-runtime` target, they are checked against the `bare-sidecar` that
+`pear-runtime` resolves, and for the `bare-kit` target, against
+`bare-kit-kotlin` as bare-stow pins it. The target is read from the
+`package.json` next to the bundle.
 
 ```bash
 qvac verify bundle --addons-source <path> --host <target> [--host <target>...] [options]

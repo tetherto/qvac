@@ -35,17 +35,31 @@ import {
   type FetchPackageMetadata
 } from '@/commands/verify/engines-advice'
 import type { PackageRecord } from '@/commands/verify/addon-source'
+import { bundledTarget } from '@/client/rpc/bundle-stamp'
+import { isBundleTarget, type BundleTarget } from '@/commands/bundle/targets'
+
+export type DesktopRuntime = 'bare-sidecar' | 'pear-runtime' | 'bare-kit-kotlin'
+
+/** The Bare that each target runs a bundle on for desktop hosts. */
+export const DESKTOP_RUNTIMES: Record<BundleTarget, DesktopRuntime> = {
+  'bare-sidecar': 'bare-sidecar',
+  'react-native': 'bare-sidecar',
+  'pear-runtime': 'pear-runtime',
+  'bare-kit': 'bare-kit-kotlin'
+}
 
 export interface VerifyBundleOptions {
   projectRoot: string
   addonsSource: string
   hosts: string[]
   /**
-   * The Bare that desktop hosts run: the project's bare-sidecar (the default);
-   * the bare-sidecar that pear-runtime resolves, for a `pear-runtime` bundle;
-   * or bare-kit-kotlin as pinned by bare-stow, for a `bare-kit` bundle on the JVM.
+   * The Bare that desktop hosts run: the project's bare-sidecar; the
+   * bare-sidecar that pear-runtime resolves, for a `pear-runtime` bundle; or
+   * bare-kit-kotlin as pinned by bare-stow, for a `bare-kit` bundle on the JVM.
+   * Defaults to the one for the target recorded in the harness `package.json`
+   * next to a bundle, else the project's bare-sidecar.
    */
-  desktopRuntime?: 'bare-sidecar' | 'pear-runtime' | 'bare-kit-kotlin'
+  desktopRuntime?: DesktopRuntime
   /**
    * Allow GitHub and npm registry requests: GitHub for a Bare Kit binding or
    * bare-kit release missing from the built-in tables, the registry only after
@@ -227,11 +241,14 @@ export async function verifyBundle(options: VerifyBundleOptions): Promise<Verify
     issues.push(...prebuildIssues)
   }
 
+  const desktopRuntime =
+    options.desktopRuntime ??
+    (sourceKind === 'bare-pack-bundle' ? stampedDesktopRuntime(resolvedAddonsSource) : undefined)
   const runtimes: PlatformRuntime[] = []
   const advice: EnginesAdvice[] = []
   const malformed = new Set<string>()
   const platformOf = (host: string) =>
-    bareKitPlatformOf(host) ?? (options.desktopRuntime === 'bare-kit-kotlin' ? 'android' : null)
+    bareKitPlatformOf(host) ?? (desktopRuntime === 'bare-kit-kotlin' ? 'android' : null)
   for (const platform of BARE_KIT_PLATFORMS) {
     const platformHosts = hosts.filter((host) => platformOf(host) === platform)
     if (platformHosts.length === 0) continue
@@ -289,7 +306,7 @@ export async function verifyBundle(options: VerifyBundleOptions): Promise<Verify
   const desktopHosts = hosts.filter((host) => platformOf(host) === null)
   if (desktopHosts.length > 0) {
     const resolution =
-      options.desktopRuntime === 'pear-runtime'
+      desktopRuntime === 'pear-runtime'
         ? resolvePearRuntime(projectRoot)
         : resolveSidecarRuntime(projectRoot)
     runtimes.push({ platform: 'desktop', hosts: desktopHosts, resolution })
@@ -313,6 +330,12 @@ export async function verifyBundle(options: VerifyBundleOptions): Promise<Verify
     issues,
     advice
   }
+}
+
+/** The desktop runtime of the target `bundleSdk` recorded in the harness package next to a bundle. */
+function stampedDesktopRuntime(bundlePath: string): DesktopRuntime | undefined {
+  const target = bundledTarget(path.dirname(bundlePath))
+  return target !== undefined && isBundleTarget(target) ? DESKTOP_RUNTIMES[target] : undefined
 }
 
 /** `name@version` ids as built by `formatAddonId`; scoped names keep their leading `@`. */
