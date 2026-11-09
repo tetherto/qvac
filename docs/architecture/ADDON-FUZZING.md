@@ -13,8 +13,9 @@ CMake-template adoption. Bounded Linux CI coverage exists for
 fronts, the `asr-ggml` s16le PCM decoder, the `bci-whispercpp`
 neural-signal parser, the `embed-llamacpp` main-gpu config parsers, the
 `diffusion-cpp` GGUF video-capability inspector, the `llm-llamacpp`
-stop-string and log sanitizers, and the `vla-ggml` safetensors header
-parser. Fleet corpus/dictionary scale-up, scheduled continuous fuzzing, and
+stop-string and log sanitizers, the `vla-ggml` safetensors header parser,
+the `translation-nmtcpp` weight-header parsers, and the `ocr-ggml` image
+decoder. Fleet corpus/dictionary scale-up, scheduled continuous fuzzing, and
 optional OSS-Fuzz onboarding remain future phases. Chosen framework: **Google FuzzTest** (backed by
 libFuzzer).
 
@@ -406,6 +407,16 @@ validated at `20260526.0`) is that `onnxruntime` constrains Abseil with
 `version>= "onnxruntime#1"`: a non-comparable scheme, so resolving it *together*
 with the dated version is a hard error rather than an implicit bump.
 
+Addons whose production graph still needs the onnxruntime pin — today
+`translation-nmtcpp` via sentencepiece / marian-dev / Bergamot — cannot put
+`abseil[asan] 20260526.0` on the package-root manifest, even as a `fuzz`
+feature: vcpkg features only add dependencies, and a global `overrides` pin
+would starve FuzzTest of `absl::random_mocking_access`. Those addons give fuzz
+its own `test/fuzz/vcpkg.json` + slim `vcpkg-configuration.json` and configure
+a separate `build-fuzz/` tree (`VCPKG_MANIFEST_DIR`, `npm run fuzz:build`).
+Production `build/` keeps resolving `abseil@onnxruntime#1`. Combined
+`BUILD_TESTING` + `BUILD_FUZZING` in one tree is a configure error there.
+
 ### The `re2` registry port
 
 `ports/re2/` in `qvac-registry-vcpkg`, at version-date `2025-11-05`. Same source
@@ -433,9 +444,11 @@ headers carry no stability promise. A FuzzTest bump should re-check the closure
 above (`rg '#include "(re2|util)/' fuzztest-src/fuzztest/`) before bumping the
 port.
 
-Nothing else resolves `re2` from this registry: `packages/translation-nmtcpp`
-routes it to the Microsoft registry through its `vcpkg-configuration.json`
-allowlist.
+Nothing else resolves `re2` from this registry for production NMT:
+`packages/translation-nmtcpp/vcpkg-configuration.json` still routes it to the
+Microsoft registry. The fuzz tree uses `test/fuzz/vcpkg-configuration.json`,
+which does **not** allowlist `re2`, so FuzzTest gets the QVAC port (internal
+headers + `asan`).
 
 ### The `fuzztest` registry port
 
@@ -594,6 +607,18 @@ families that protect several addons at once.
   **`vla-ggml` safetensors_lite: done.** Header-only parser, no `LINK_FABRIC`
   (full ASan + LSan). `openFromMemory` rejects `headerLen > 16 MiB` before
   allocating. Linux C++ CI runs `npm run fuzz` after unit tests.
+  **`translation-nmtcpp` weight-header parsers: done.** `nmtReadTensorDims` /
+  `nmtReadBoundedString` / `nmtReadCount` / `nmtIsValidTensorType` are compiled
+  without `LINK_FABRIC` (full ASan + LSan) and without sentencepiece. Seeds
+  include the `n_dims=8` stack smash from #4590 so bounded CI actually reaches
+  the reject path. Linux C++ CI builds the fuzz target through `coverage:cpp:build` and runs
+  it before model tests through `coverage:cpp:run`, against a separate
+  `build-fuzz/` tree (`test/fuzz/vcpkg.json`) so FuzzTest's
+  ASan Abseil never shares a prefix with production `abseil@onnxruntime#1` and
+  the coverage artefacts in `build/` are left alone.
+  **`ocr-ggml` decodeOrWrapImage: done.** OpenCV only, no `LINK_FABRIC`
+  (full ASan + LSan). The shared `cpp-tests-nx.yml` job runs the bounded fuzz scripts after
+  the existing C++ tests.
 - **Phase 2 — text + audio + config families.** Add targets for the llama.cpp /
   NMT text parsers, the whisper/parakeet/tts audio buffer math, and the config
   JSON parsers. Code behind engine state lands with (or after) that addon's
@@ -631,7 +656,12 @@ families that protect several addons at once.
   one configure over two. Neither run step sets `ASAN_OPTIONS`: the unit-test
   runner self-applies the relaxed fabric-boundary options while the fuzz runner
   keeps full ASan + LSan (its target doesn't link fabric). darwin/win32 keep the
-  `test:cpp` path (no fuzzing). It reuses the caller's existing
+  `test:cpp` path (no fuzzing). **`translation-nmtcpp` cannot use that combined
+  configure:** its production graph pins `abseil@onnxruntime#1`, so Linux C++ CI
+  keeps model tests and coverage on `build/`; `coverage:cpp:build` also builds
+  the isolated `build-fuzz/` tree (`test/fuzz/vcpkg.json`), and
+  `coverage:cpp:run` runs fuzz before the model tests. This package-owned
+  wiring exercises fuzz on PRs even when the workflow is read from main. It reuses the caller's existing
   SHA-bound fork gate (no new trust wiring). The whole fuzz stack is vcpkg-served
   (see "Dependency sourcing"), so a job that wipes `build/` still pays only the
   vcpkg restore. Then add a separate scheduled
@@ -740,6 +770,11 @@ families that protect several addons at once.
   feature (`abseil[asan]`, `re2[asan]`, and `fuzztest[asan]` with version
   floors, plus `antlr4` and `gtest`) and the `microsoft/vcpkg` allowlist entries
   for `antlr4`, `gtest`, and transitive `libuuid`.
+- `packages/translation-nmtcpp/test/fuzz/vcpkg.json` /
+  `packages/translation-nmtcpp/test/fuzz/vcpkg-configuration.json` — the same
+  fuzz stack, isolated from the package-root manifest so production NMT keeps
+  `abseil@onnxruntime#1`. `re2` is **not** on the Microsoft allowlist here.
+  Configured as `build-fuzz/` (`bare-make generate -b build-fuzz`).
 - `packages/classification-ggml/scripts/run-cpp-fuzz.js` — bounded /
   `--continuous` fuzz runner (pins `ASAN_OPTIONS=detect_leaks=1:abort_on_error=1`
   and warns when it inherits a different value);

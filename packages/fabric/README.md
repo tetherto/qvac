@@ -70,6 +70,30 @@ creates `node_modules/@qvac/fabric-<host>` inside this package with its
 `prebuilds/<host>` linked to the fresh build, so `#host-addon` and the CMake
 template resolve the local runtime without a publish.
 
+### XDNA source builds (Linux x64)
+
+Linux x64 builds include the AMD XDNA backend and its NPU kernel artifacts.
+The builder needs XRT 2.25 or newer (base, base-dev and npu packages) under
+`/opt/xilinx/xrt`, or at `XILINX_XRT`, and `QVAC_XDNA_IRON_PYTHON` pointing to
+an interpreter with IRON (`mlir-aie` and `llvm-aie`). Set
+`QVAC_XDNA_IRON_VERSION` to that IRON release for binary-cache tracking. The
+Linux x64 triplet tracks the XRT install path and config contents, as well as
+the IRON release, so changing them invalidates cached XDNA builds. CI validates the
+runner-provisioned XRT and installs the pinned IRON environment through
+[setup-xdna](../../.github/actions/setup-xdna/action.yml). Compilation does
+not require NPU hardware.
+
+CUDA and XDNA share `ggml-base-libstdcxx`, a static archive compiled against
+libstdc++ in the same CMake configure. CUDA links its C++ runtime statically;
+XDNA uses the system libstdc++ dynamically to match XRT's C++ ABI. Each module
+embeds the required ggml-base objects. Its `.xclbin` and `.insts.bin` files ship beside it. Hosts
+without XRT skip this optional backend when loading modules.
+
+For a build-only CI check, dispatch
+[Prebuilds (Fabric)](../../.github/workflows/prebuilds-fabric.yml) with
+`linux-x64-only: true`. This builds the Linux backends, checks their runtime
+ABIs and XDNA kernel packaging, and uploads prebuild artifacts.
+
 ### Backend discovery
 
 The runtime finds its own backends; consumers pass no path. The lookup order

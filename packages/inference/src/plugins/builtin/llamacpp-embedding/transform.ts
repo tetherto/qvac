@@ -4,14 +4,18 @@ import { type EmbedConfig } from '@/schemas/index'
 /**
  * Converts an EmbedConfig into the flat string-keyed map the C++ addon expects.
  *
- * Extracted from the plugin so the advisory fit check can build its request
- * from the same transform the real embedding load uses.
+ * Shared by the embedding load and its fit request, so both send the addon
+ * the same config.
  */
 export function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {
   const config: GGMLConfig = {
     device: embedConfig.device as 'gpu' | 'cpu',
     gpu_layers: `${embedConfig.gpuLayers}` as `${number}`,
     batch_size: `${embedConfig.batchSize}` as `${number}`
+  }
+
+  if (embedConfig.ctxSize !== undefined) {
+    config.ctx_size = `${embedConfig.ctxSize}`
   }
 
   if (embedConfig.poll !== undefined) {
@@ -61,6 +65,30 @@ export function transformEmbedConfig(embedConfig: EmbedConfig): GGMLConfig {
 
   if (embedConfig.openclCacheDir) {
     config.openclCacheDir = embedConfig.openclCacheDir
+  }
+
+  if (embedConfig.imageMaxTokens !== undefined) {
+    config['image-max-tokens'] = `${embedConfig.imageMaxTokens}`
+  }
+
+  if (embedConfig.imageMinTokens !== undefined) {
+    config['image-min-tokens'] = `${embedConfig.imageMinTokens}`
+  }
+
+  if (embedConfig.imageMaxMegapixels !== undefined) {
+    config['image-max-megapixels'] = `${embedConfig.imageMaxMegapixels}`
+  }
+
+  if (embedConfig.audioMaxSeconds !== undefined) {
+    config['audio-max-seconds'] = `${embedConfig.audioMaxSeconds}`
+  }
+
+  if (embedConfig.mmprojNoAudio !== undefined) {
+    config['mmproj-no-audio'] = embedConfig.mmprojNoAudio ? '1' : '0'
+  }
+
+  if (embedConfig.mmprojUseGpu !== undefined) {
+    config['mmproj-use-gpu'] = embedConfig.mmprojUseGpu ? '1' : '0'
   }
 
   return config

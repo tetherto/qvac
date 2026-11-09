@@ -22,6 +22,7 @@ import { transcribe, transcribeStream } from '@/plugins/ops/transcribe'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
 import { attachBackendDiagnostics } from '@/profiling/backend-diagnostics'
 import { buildParakeetEngineConfig } from '@/plugins/builtin/asr-ggml/config'
+import { parakeetFitRequest } from '@/plugins/builtin/asr-ggml/fit'
 import { createAsrModelLogger } from '@/plugins/builtin/asr-ggml/logging'
 
 function resolveParakeetConfig(cfg: ParakeetConfig): Promise<ResolveResult<ParakeetConfig>> {
@@ -60,6 +61,7 @@ export const parakeetPlugin = definePlugin({
   displayName: 'Parakeet (NVIDIA NeMo GGML)',
   addonPackage: ADDON_ASR,
   loadConfigSchema: parakeetLoadConfigSchema,
+  fitRequest: parakeetFitRequest,
   assessFit: ASRGgml.assessFit,
 
   resolveConfig(cfg: ParakeetConfig): Promise<ResolveResult<ParakeetConfig>> {
