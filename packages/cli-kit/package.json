@@ -40,6 +40,7 @@
     "lint:fix": "lunte --fix",
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
     "test": "npm run test:workbench",
+    "test:unit": "npm run test:workbench",
     "test:workbench": "npm run build && node --test test/workbench/*.test.mjs",
     "build:splash": "node scripts/build-splash.mjs"
   },
