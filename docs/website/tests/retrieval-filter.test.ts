@@ -4,7 +4,7 @@ import {
   lineLabelOf,
   retrievalFilter,
 } from '../src/lib/retrieval-filter';
-import { inkeepMetaTags, pageAttributes } from '../src/lib/page-attributes';
+import { collectionOf, inkeepMetaTags, pageAttributes } from '../src/lib/page-attributes';
 import {
   documentedSoftwareOfKind,
   getCurrentLine,
@@ -90,10 +90,13 @@ describe('allowedLines', () => {
   });
 
   it('takes every current line when the reader is outside them all', () => {
-    expect(allowedLines('/ecosystem/addons')).toEqual([
-      { collection: 'SDK', line: SDK_CURRENT, current: true },
-      { collection: 'CLI', line: CLI_CURRENT, current: true },
-    ]);
+    expect(allowedLines('/ecosystem/addons')).toEqual(
+      documentedSoftwareOfKind('product').map((software) => ({
+        collection: collectionOf(software.path),
+        line: versionOfFolder(getCurrentLine(software)!.folder),
+        current: true,
+      })),
+    );
   });
 
   it('allows exactly one line per collection, wherever the reader is', () => {

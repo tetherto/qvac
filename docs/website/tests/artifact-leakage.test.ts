@@ -7,6 +7,7 @@ import {
   SITE_ORIGIN,
   type Collection,
 } from '../scripts/lib/artifact-leakage';
+import { documentedSoftwareOfKind } from '../src/lib/versions';
 
 /**
  * What the build gate decides about a URL an artifact names. The cases the
@@ -150,10 +151,9 @@ describe('extractUrls', () => {
 describe('the manifest the gate reads', () => {
   it('describes the collections published as lines', () => {
     const collections = collectionsFromManifest();
-    expect(collections.map((collection) => collection.path)).toEqual([
-      '/sdk',
-      '/cli',
-    ]);
+    expect(collections.map((collection) => collection.path)).toEqual(
+      documentedSoftwareOfKind('product').map((software) => software.path),
+    );
     for (const collection of collections) {
       expect(collection.lines.filter((line) => line.current)).toHaveLength(1);
     }

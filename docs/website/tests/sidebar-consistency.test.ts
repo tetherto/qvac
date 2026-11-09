@@ -81,8 +81,10 @@ function contentPaths (url: string): string[] {
 
   const paths = [cleanUrl]
 
+  // Every documented software — a product's collection or a package inside
+  // Ecosystem — holds its pages in line folders.
   const resolved = getVersionForPath('/' + cleanUrl)
-  if (resolved && resolved.software.kind === 'product') {
+  if (resolved) {
     const { software, version } = resolved
     const collection = software.path.slice(1)
     const rest = cleanUrl
