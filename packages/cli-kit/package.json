@@ -1,6 +1,7 @@
 {
   "name": "@qvac/cli-kit",
   "version": "0.1.0",
+  "private": true,
   "description": "What the QV.AC terminal products share: branding, the bare-tui shell, the Core and harness host, and the launcher",
   "author": "Tether",
   "license": "Apache-2.0",

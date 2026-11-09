@@ -15,10 +15,9 @@ function fixture (t) {
   return directory
 }
 
-test('the CLI and duck pack their own archives; the kit and the rest pack with pnpm', () => {
+test('the CLI and duck pack their own archives; the rest pack with pnpm', () => {
   assert.equal(packsArchive(repoRoot, 'packages/cli'), true)
   assert.equal(packsArchive(repoRoot, 'packages/duck'), true)
-  assert.equal(packsArchive(repoRoot, 'packages/cli-kit'), false)
   assert.equal(packsArchive(repoRoot, 'packages/sdk'), false)
 })
 

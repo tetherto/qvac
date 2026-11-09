@@ -13,7 +13,7 @@
         "projectsRelationship": "fixed"
       },
       "agentstack": {
-        "projects": ["@qvac/cli-kit", "@qvac/cli", "@qvac/duck", "@qvac/ai-sdk-provider", "@qvac/opencode-plugin", "@qvac/openclaw-plugin"],
+        "projects": ["@qvac/cli", "@qvac/duck", "@qvac/ai-sdk-provider", "@qvac/opencode-plugin", "@qvac/openclaw-plugin"],
         "projectsRelationship": "independent"
       }
     },

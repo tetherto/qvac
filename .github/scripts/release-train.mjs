@@ -213,11 +213,13 @@ function excludeFromNpm ([name]) {
 
 function checkLinked ([name]) {
   const resolved = train(name)
+  const roots = projectRoots(resolved.projects)
   const list = (filter, depth) => JSON.parse(capture('pnpm', ['--filter', filter, 'list', '--depth', depth, '--json']))[0]
   const deps = linkedOutsideTrain(resolved.projects, (project) => {
     const entry = list(project, '0')
+    const bundled = new Set(readRepoJson(join(roots[project], 'package.json')).bundleDependencies)
     return ['dependencies', 'optionalDependencies', 'peerDependencies'].flatMap((field) =>
-      Object.entries(entry?.[field] ?? {}).map(([dep, resolution]) => ({ name: dep, version: resolution.version ?? '' })))
+      Object.entries(entry?.[field] ?? {}).map(([dep, resolution]) => ({ name: dep, version: resolution.version ?? '', bundled: bundled.has(dep) })))
   })
   const errors = []
   for (const dep of deps) {

@@ -277,13 +277,14 @@ export function planTags (moved, { releaseProject, remoteCommit, gitHeadOf }) {
 }
 
 // pnpm links a workspace sibling whenever its version satisfies the range, so
-// the build can compile against a version npm does not have yet.
+// the build can compile against a version npm does not have yet. A bundled
+// sibling ships inside the project's archive, so npm never resolves it.
 export function linkedOutsideTrain (projects, resolvedDeps) {
   const inTrain = new Set(projects)
   const linked = new Map()
   for (const project of projects) {
     for (const dep of resolvedDeps(project)) {
-      if (inTrain.has(dep.name) || !dep.version.startsWith('link:')) continue
+      if (inTrain.has(dep.name) || dep.bundled || !dep.version.startsWith('link:')) continue
       if (!linked.has(dep.name)) linked.set(dep.name, { name: dep.name, dependents: [] })
       linked.get(dep.name).dependents.push(project)
     }

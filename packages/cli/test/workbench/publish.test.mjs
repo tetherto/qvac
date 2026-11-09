@@ -18,12 +18,15 @@ function fixture(t) {
       filter: (file) => !file.split(path.sep).includes('node_modules')
     })
   }
-  // the scripts call the kit, which the copy finds where the package does
-  fs.mkdirSync(path.join(dir, 'node_modules/@qvac'), { recursive: true })
-  fs.symlinkSync(
-    path.join(root, 'node_modules/@qvac/cli-kit'),
-    path.join(dir, 'node_modules/@qvac/cli-kit')
-  )
+  // the scripts call the kit, which the copy finds where the package does: its manifest and
+  // build, copied, since npm would bundle the whole workspace behind a link to it
+  const kit = fs.realpathSync(path.join(root, 'node_modules/@qvac/cli-kit'))
+  fs.mkdirSync(path.join(dir, 'node_modules/@qvac/cli-kit'), { recursive: true })
+  for (const name of ['package.json', 'build']) {
+    fs.cpSync(path.join(kit, name), path.join(dir, 'node_modules/@qvac/cli-kit', name), {
+      recursive: true
+    })
+  }
   return dir
 }
 
@@ -65,7 +68,7 @@ test('publish check allows CI package-name normalization', (t) => {
   assert.equal(check(dir).status, 0)
 })
 
-test('npm archive includes the distribution lock and dependency patches', (t) => {
+test('npm archive includes the distribution lock, dependency patches and the bundled kit', (t) => {
   const dir = fixture(t)
   const cache = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-pack-cache-'))
   t.after(() => fs.rmSync(cache, { recursive: true, force: true }))
@@ -77,6 +80,9 @@ test('npm archive includes the distribution lock and dependency patches', (t) =>
   const [archive] = JSON.parse(output)
   assert.ok(archive.files.some((file) => file.path === 'npm-shrinkwrap.json'))
   assert.ok(archive.files.some((file) => file.path === 'patches/unpdf@1.6.2.patch'))
+  assert.ok(
+    archive.files.some((file) => file.path === 'node_modules/@qvac/cli-kit/build/index.mjs')
+  )
 })
 
 test('publish check rejects arbitrary local SDK dependencies', (t) => {

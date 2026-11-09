@@ -16,6 +16,12 @@ export function pack({ root, destination = root, check = 'scripts/check-publish-
       stdio: 'inherit',
       shell: windows
     })
+  const copy = (source, target) =>
+    fs.cpSync(source, target, {
+      recursive: true,
+      mode: fs.constants.COPYFILE_FICLONE,
+      filter: (file) => !file.split(path.sep).includes('node_modules')
+    })
 
   try {
     execFileSync(process.execPath, [check], { cwd: root, stdio: 'inherit' })
@@ -35,15 +41,55 @@ export function pack({ root, destination = root, check = 'scripts/check-publish-
     ]) {
       const source = path.join(root, name)
       if (!fs.existsSync(source)) continue
-      fs.cpSync(source, path.join(stage, name), {
-        recursive: true,
-        mode: fs.constants.COPYFILE_FICLONE,
-        filter: (file) => !file.split(path.sep).includes('node_modules')
-      })
+      copy(source, path.join(stage, name))
     }
+    bundle({ root, stage, copy })
     fs.mkdirSync(destination, { recursive: true })
     npm(['pack', '--pack-destination', destination])
   } finally {
     fs.rmSync(stage, { recursive: true, force: true })
   }
+}
+
+// A bundled dependency ships inside the archive, under the package's node_modules, where npm
+// applies its files allowlist. It is copied from its real folder: pnpm links the workspace
+// sibling, and npm reads a link's .gitignore, which hides a built dist. The manifest, and the
+// lock when it names it, then take the version packed in place of the workspace: range, which
+// only pnpm reads.
+function bundle({ root, stage, copy }) {
+  const manifest = path.join(stage, 'package.json')
+  const lock = path.join(stage, 'npm-shrinkwrap.json')
+  const pkg = read(manifest)
+  const versions = {}
+  for (const name of pkg.bundleDependencies || []) {
+    const folder = path.join(stage, 'node_modules', name)
+    copy(fs.realpathSync(path.join(root, 'node_modules', name)), folder)
+    versions[name] = read(path.join(folder, 'package.json')).version
+  }
+  resolveWorkspace(pkg.dependencies, versions)
+  write(manifest, pkg)
+  if (fs.existsSync(lock)) {
+    const shrinkwrap = read(lock)
+    resolveWorkspace(shrinkwrap.packages[''].dependencies, versions)
+    write(lock, shrinkwrap)
+  }
+}
+
+// workspace:*, ^ and ~ take the packed version, as pnpm publishes them
+function resolveWorkspace(dependencies, versions) {
+  for (const [name, version] of Object.entries(versions)) {
+    const spec = dependencies[name]
+    if (!spec?.startsWith('workspace:')) continue
+    const range = spec.slice('workspace:'.length)
+    dependencies[name] =
+      range === '*' ? version : range === '^' || range === '~' ? range + version : range
+  }
+}
+
+function read(file) {
+  return JSON.parse(fs.readFileSync(file, 'utf8'))
+}
+
+function write(file, value) {
+  fs.writeFileSync(file, JSON.stringify(value, null, 2) + '\n')
 }

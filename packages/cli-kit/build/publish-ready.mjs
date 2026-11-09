@@ -16,11 +16,13 @@ export function checkPublishReady({ root, checks = [] }) {
   } else {
     const packages = JSON.parse(fs.readFileSync(lockPath, 'utf8')).packages || {}
     const locked = packages['']
+    // a bundled dependency is packed from the workspace, so npm never resolved it into the lock
+    const bundled = new Set(pkg.bundleDependencies)
     for (const field of ['dependencies', 'devDependencies', 'optionalDependencies']) {
       const wanted = pkg[field] || {}
       const actual = locked?.[field] || {}
       for (const name of new Set([...Object.keys(wanted), ...Object.keys(actual)])) {
-        if (wanted[name] !== actual[name]) {
+        if (!bundled.has(name) && wanted[name] !== actual[name]) {
           errors.push(`npm-shrinkwrap.json ${field}["${name}"] differs from package.json`)
         }
       }
