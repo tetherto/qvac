@@ -554,12 +554,20 @@ export const LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS = [
   'modelType'
 ] as const
 
-const legacyParakeetOnnxFieldsShape = LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS.reduce<
-  Record<string, z.ZodOptional<z.ZodUnknown>>
->((acc, name) => {
-  acc[name] = z.unknown().optional()
-  return acc
-}, {})
+// Keyed by the literal field names, not `string`: an index signature would
+// make every property of the extended load schema index-signature access.
+type LegacyParakeetOnnxFieldsShape = Record<
+  (typeof LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS)[number],
+  z.ZodOptional<z.ZodUnknown>
+>
+
+const legacyParakeetOnnxFieldsShape = LEGACY_PARAKEET_ONNX_MODEL_CONFIG_FIELDS.reduce(
+  (acc, name) => {
+    acc[name] = z.unknown().optional()
+    return acc
+  },
+  {} as LegacyParakeetOnnxFieldsShape
+)
 
 // Strict schema used by `loadModel` and the parakeet plugin's
 // `loadConfigSchema`. Permits the deprecated ONNX field names so the
