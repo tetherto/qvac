@@ -1,5 +1,62 @@
 # Changelog
 
+## [0.28.0] - 2026-11-08
+
+### Breaking
+
+- `qvac-fabric` dependency bumped `11739.0.0#1` -> `11739.1.1`. `common_params`
+  gains four `coreml_ffn*` fields mid-struct, so native consumers that use the
+  `common` library must rebuild against these headers. Core ML FFN itself is
+  not built into this package.
+
+### Fixed
+
+- XDNA opens the NPU on first use instead of when devices are listed, contains
+  every exception during setup and falls back to the CPU, no longer loads
+  kernels from the working directory, and reports `MemAvailable` as free
+  memory.
+- OpenCL initializes before buffer-type queries, fixing a crash when a buffer
+  type is queried before the backend, and keeps non-contiguous ADD inputs off
+  the broadcast fast path.
+- TurboQuant sign tables and `GGML_TQ_NORM_CORRECTION` initialize once,
+  thread-safely, instead of racing on first use.
+- mtmd keeps DeepSeek OCR SAM position tables in F32 when quantizing and
+  reports projector memory under the device that holds it.
+- Metal supports `DIAG_MASK_INF`.
+
+### Added
+
+- `ggml_backend_buft_get_buffer_alloc_size` returns the physical size of a
+  buffer for a payload without allocating.
+- `ggml_vec_index_load_with_flags` and `ggml_vec_index_from_bytes_with_flags`
+  accept `GGML_VEC_INDEX_LOAD_TURBOVEC_STAGED_OFF`, which skips building the
+  staged-search caches on load. Turning staged search off now frees the sign
+  planes.
+
+### Changed
+
+- Metal few-row MMA mat-mul covers up to 64 rows for F32, Q4_0, Q8_0 and Q4_K
+  (48 for F16 and Q5_K), speeding up concurrent speculative decoding.
+
+## [0.27.0] - 2026-11-05
+
+### Fixed
+
+- Native builds use `qvac-fabric 11739.0.0#1` from the registry instead of a
+  package-local overlay, so source and CI builds use the same port definition.
+- CUDA and XDNA share a private ggml core compiled against libstdc++. CUDA
+  retains static runtime linkage, while XDNA links the system runtime to match
+  XRT.
+
+### Added
+
+- Linux x64 packages ship the AMD XDNA backend with its compiled NPU kernels
+  and instruction stream beside the module. It requires system XRT 2.25 or
+  newer; hosts without XRT can continue using the other backends. Building the
+  kernels requires the pinned IRON toolchain but does not require NPU hardware.
+- Build validation checks the XDNA kernel files, instruction stream and runtime
+  dependencies alongside the existing checks for other backend modules.
+
 ## [0.26.0] - 2026-11-04
 
 ### Breaking

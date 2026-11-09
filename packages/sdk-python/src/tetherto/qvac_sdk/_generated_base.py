@@ -19,12 +19,17 @@ in for a hand-written kwargs wrapper without drifting from the schema.
 pydantic merges `model_config` across the class hierarchy, so this
 doesn't get lost when a generated subclass sets its own `model_config`
 (e.g. `extra="forbid"`).
+
+`model_post_init` marks every constant field (a single-value `Literal`
+with that value as default, such as `type`, `operation` or `modelType`)
+as set, so `exclude_unset` serialization always sends these labels.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, ClassVar
+from functools import cache
+from typing import Any, ClassVar, Literal, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict
 from pydantic_core import CoreSchema, core_schema
@@ -55,3 +60,17 @@ class GeneratedBaseModel(BaseModel):
         return core_schema.no_info_before_validator_function(
             reject_forbidden_fields, schema
         )
+
+    def model_post_init(self, context: Any) -> None:
+        self.model_fields_set.update(constant_fields(type(self)))
+
+
+@cache
+def constant_fields(cls: type[BaseModel]) -> frozenset[str]:
+    return frozenset(
+        name
+        for name, field in cls.model_fields.items()
+        if get_origin(field.annotation) is Literal
+        and len(get_args(field.annotation)) == 1
+        and not field.is_required()
+    )

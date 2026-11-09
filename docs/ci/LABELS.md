@@ -130,7 +130,7 @@ Deliberate limits:
 - **The impact set is never truncated.** It is bounded by the catalog, so extending a smoke run can never cost more than `test-e2e-full` would; capping it would only reduce coverage while pushing the author to the more expensive option. The comment states the added runtime so a broad change is visible.
 - **The mapper never blocks e2e.** If it fails, the smoke run proceeds unchanged and the comment says the analysis was unavailable.
 
-Implementation: [`impacted-tests.mjs`](../../packages/sdk-e2e/scripts/impacted-tests.mjs), the `sdk-e2e-report-impacted` action, and `--include` in `@qvac/test-suite`.
+Implementation: [`impacted-tests.mjs`](../../packages/sdk-e2e/scripts/impacted-tests.mjs), the `sdk-e2e-report-impacted` action, and `--include-file` in `@qvac/test-suite`, which takes the ids from a file because a list this long exceeds the Windows command-line limit.
 
 ---
 
