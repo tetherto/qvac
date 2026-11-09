@@ -351,7 +351,6 @@ export function describeMissingAddonBuild(error: unknown, hosts: string[]): Erro
   )
 }
 
-/** Records the bundling SDK's version in the harness package.json, where the desktop client checks it. */
 /** Files an older `@qvac/sdk` wrote into `qvac/`, which nothing reads now. */
 const STALE_QVAC_FILES = ['worker.bundle.js', 'addons.manifest.json']
 
