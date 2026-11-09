@@ -65,11 +65,14 @@ not need a sweeper of your own:
 
 Caches held by an in-flight request are never evicted.
 
-**Named caches are not covered.** The policy applies only to the _automatic_ caches these
-endpoints create. A caller-owned named cache — `completion({ kvCache: "my-session" })`
-through the SDK — is exempt from both the quota and the TTL, and the endpoint below never
-touches it. Clean those up with the SDK's `deleteCache({ kvCacheKey })`. Serve itself only
-ever creates automatic caches; it does not use named keys.
+**Responses caches follow the same policy.** `/v1/responses` names one cache per
+conversation key (`responses-<sha256>`); serve applies the same quota and TTL to those,
+counted separately, and the endpoint below reclaims them too. The quota and the endpoint
+only delete Responses caches this server has used, since other processes may share the
+directory; the TTL applies to all of them. A cache that any running QVAC process is using
+(it holds a lease file under `.responses-leases`) is never deleted. Any other caller-owned named
+cache — `completion({ kvCache: "my-session" })` through the SDK — is exempt from both, and
+the endpoint never touches it. Clean those up with the SDK's `deleteCache({ kvCacheKey })`.
 
 ## `POST /qvac/v1/chat/batch`
 

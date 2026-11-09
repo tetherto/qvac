@@ -8,6 +8,8 @@ import {
   AUDIOGEN_EDIT_OPERATIONS,
   AUDIOGEN_REPAINT_MODES,
   AUDIOGEN_TRACKS,
+  AUDIOGEN_OUTPUT_FORMATS,
+  AUDIOGEN_MINIMAX_COREML_COMPUTE_UNITS,
   TTS_ENGINES,
   TTS_PACES,
   TTS_PARLER_EMOTIONS,
@@ -117,5 +119,7 @@ export const constantsRegistry = {
   AudioGenEditOperation: enumFromVocabulary(AUDIOGEN_EDIT_OPERATIONS),
   AudioGenRepaintMode: enumFromVocabulary(AUDIOGEN_REPAINT_MODES),
   AudioGenTrack: enumFromVocabulary(AUDIOGEN_TRACKS),
+  AudioGenOutputFormat: enumFromVocabulary(AUDIOGEN_OUTPUT_FORMATS),
+  AudioGenMinimaxCoremlComputeUnits: enumFromVocabulary(AUDIOGEN_MINIMAX_COREML_COMPUTE_UNITS),
   VectorIndexStorage: z.enum(VectorIndexStorage)
 } as const

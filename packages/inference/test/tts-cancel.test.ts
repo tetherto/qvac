@@ -1,4 +1,8 @@
 import test from 'brittle'
+import { withDecodedTtsPcm } from '@/schemas/tts-pcm'
+
+const decodedPcm = (frame: unknown) =>
+  withDecodedTtsPcm(frame as { buffer: number[]; pcm?: string | undefined })
 import Buffer from 'bare-buffer'
 import { getRequestRegistry } from '@/runtime/index'
 import { registerModel, unregisterModel } from '@/runtime/model-registry'
@@ -155,7 +159,7 @@ test('a model-scoped cancel finds an in-flight TTS run, stops the addon, and dro
   try {
     const stream = startRun(modelId, 'req-model-scope')
     const first = await stream.next()
-    t.alike(first.value, { buffer: [1, 2, 3], sampleRate: 24000 }, 'run is live')
+    t.alike(decodedPcm(first.value), { buffer: [1, 2, 3], sampleRate: 24000 }, 'run is live')
 
     const cancelled = getRequestRegistry().cancel({ modelId, kind: 'tts' })
     t.is(cancelled, 1, 'the in-flight run must be visible to a model-scoped cancel')
@@ -212,7 +216,7 @@ test('a run that completes normally reports completed, not cancelled', async (t)
     await stream.next()
     model.release()
     const second = await stream.next()
-    t.alike(second.value, { buffer: [4, 5, 6], sampleRate: 24000 })
+    t.alike(decodedPcm(second.value), { buffer: [4, 5, 6], sampleRate: 24000 })
     const end = await stream.next()
     t.is(end.done, true)
     t.is((end.value as { cancelled?: boolean }).cancelled, undefined)
@@ -279,7 +283,7 @@ test('cancelling a duplex session ends it and reaches the addon', async (t) => {
       input
     )
     const first = await stream.next()
-    t.alike(first.value, { buffer: [1, 2, 3], sampleRate: 24000 })
+    t.alike(decodedPcm(first.value), { buffer: [1, 2, 3], sampleRate: 24000 })
 
     t.is(getRequestRegistry().cancel({ requestId }), 1)
     t.is(model.cancelCalls, 1, 'duplex cancel reaches the addon')
@@ -319,7 +323,7 @@ test('a model-scoped cancel unwinds an idle duplex session whose client never cl
       input
     )
     const first = await stream.next()
-    t.alike(first.value, { buffer: [1, 2, 3], sampleRate: 24000 })
+    t.alike(decodedPcm(first.value), { buffer: [1, 2, 3], sampleRate: 24000 })
 
     t.is(getRequestRegistry().cancel({ modelId }), 1, 'the model-scoped cancel finds the request')
     t.is(model.cancelCalls, 1, 'the cancel still reaches the addon')
