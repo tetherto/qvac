@@ -1,6 +1,6 @@
-// Upstream llama.cpp decision models (openjev, lev, kev, clef, upstream-format
-// laya, ...) through decide(). Pass a GGUF path: the plugin picks the upstream
-// engine from the file, or the Laya engine for a fabric-format Laya checkpoint.
+// Upstream llama.cpp decision models (laya, openjev, lev, kev, clef, ...)
+// through decide(), on @qvac/decision-ggml. Pass a GGUF path; Laya runs from
+// its upstream-format conversion (convert_hf_to_gguf.py).
 //
 //   npx tsx examples/decisions-upstream.ts /path/to/model.gguf
 import { loadModel, decide, unloadModel, close } from '@qvac/sdk'
