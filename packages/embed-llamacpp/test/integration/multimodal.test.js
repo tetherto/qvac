@@ -290,8 +290,8 @@ safeTest('image-max-tokens bounds the tokens of a large image', {}, async (t) =>
     'image-max-tokens': '280'
   })
   t.comment(`tokens: default ${byDefault}, image-max-tokens 280 -> ${capped}`)
-  // BOS and EOS around the image tokens.
-  t.ok(capped <= 282, `capped image uses at most 280 tokens (${capped})`)
+  // BOS, EOS and the image's start and end markers around the image tokens.
+  t.ok(capped <= 280 + 4, `capped image uses at most 280 tokens (${capped})`)
   t.ok(capped < byDefault, 'the cap lowers the default budget')
 })
 
