@@ -59,6 +59,9 @@
           "$ref": "#/$defs/embed.request"
         },
         {
+          "$ref": "#/$defs/embedBatch.request"
+        },
+        {
           "$ref": "#/$defs/finetune.request"
         },
         {
@@ -207,6 +210,9 @@
         },
         {
           "$ref": "#/$defs/embed.response"
+        },
+        {
+          "$ref": "#/$defs/embedBatch.response"
         },
         {
           "$ref": "#/$defs/error.response"
@@ -427,6 +433,7 @@
                               "sdcpp-generation",
                               "audiogen-ggml",
                               "ggml-vla",
+                              "ggml-image-embedding",
                               "ggml-classification",
                               "llm",
                               "whisper",
@@ -474,6 +481,7 @@
                   "sdcpp-generation",
                   "audiogen-ggml",
                   "ggml-vla",
+                  "ggml-image-embedding",
                   "ggml-classification",
                   "llm",
                   "whisper",
@@ -4009,6 +4017,7 @@
                 "completion",
                 "batchCompletion",
                 "embeddings",
+                "imageEmbedding",
                 "decision",
                 "rerank",
                 "transcribe",
@@ -5708,6 +5717,7 @@
         "sdcpp-generation",
         "audiogen-ggml",
         "ggml-vla",
+        "ggml-image-embedding",
         "ggml-classification"
       ],
       "x-enum-varnames": [
@@ -5726,6 +5736,7 @@
         "sdcppGeneration",
         "audiogenGgml",
         "ggmlVla",
+        "ggmlImageEmbedding",
         "ggmlClassification"
       ]
     },
@@ -5737,6 +5748,7 @@
         "@qvac/sdk/llamacpp-embedding/plugin",
         "@qvac/sdk/llamacpp-decision/plugin",
         "@qvac/sdk/llamacpp-rerank/plugin",
+        "@qvac/sdk/ggml-image-embedding/plugin",
         "@qvac/sdk/whispercpp-transcription/plugin",
         "@qvac/sdk/bci-whispercpp-transcription/plugin",
         "@qvac/sdk/moss-transcribe/plugin",
@@ -5753,6 +5765,7 @@
         "EMBEDDING",
         "DECISION",
         "RERANK",
+        "IMAGE_EMBEDDING",
         "WHISPER",
         "BCI",
         "MOSS_TRANSCRIBE",
@@ -7867,9 +7880,12 @@
                   }
                 }
               ],
-              "description": "Text to embed. A string returns one vector; an array returns one vector per string."
+              "description": "Legacy text input. A string returns one vector; an array returns one vector per string."
             },
             "inputs": {
+              "not": {}
+            },
+            "input": {
               "not": {}
             },
             "type": {
@@ -7962,9 +7978,12 @@
                 ],
                 "title": "EmbedInput"
               },
-              "description": "One embedding per input. Each input is text or ordered text and media parts. Media requires projectionModelSrc at load time."
+              "description": "Legacy batch input. One vector per text or ordered text/media input. Use embedBatch for images."
             },
             "text": {
+              "not": {}
+            },
+            "input": {
               "not": {}
             },
             "type": {
@@ -7979,6 +7998,132 @@
           },
           "required": ["modelId", "inputs", "type"],
           "title": "EmbedInputsRequest"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "modelId": {
+              "type": "string",
+              "description": "The identifier of the embedding model to use"
+            },
+            "input": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "title": "EmbedSingleInputText"
+                },
+                {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "media": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "const": "base64"
+                                  },
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "format": "base64",
+                                    "contentEncoding": "base64",
+                                    "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$"
+                                  }
+                                },
+                                "required": ["type", "value"],
+                                "title": "EmbedSingleInputPartsItemMediaBase64"
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "const": "filePath"
+                                  },
+                                  "value": {
+                                    "type": "string",
+                                    "minLength": 1
+                                  }
+                                },
+                                "required": ["type", "value"],
+                                "title": "EmbedSingleInputPartsItemMediaFilePath"
+                              }
+                            ],
+                            "description": "Image or WAV/MP3/FLAC bytes as base64, or a file path accessible to the inference worker."
+                          }
+                        },
+                        "required": ["media"],
+                        "title": "EmbedSingleInputPartsItem"
+                      }
+                    ]
+                  },
+                  "title": "EmbedSingleInputParts"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "width": {
+                      "description": "Packed RGB width in pixels. Supply with height and channels, or omit all three for JPEG/PNG.",
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 16384
+                    },
+                    "height": {
+                      "description": "Packed RGB height in pixels, from 1 to 16384.",
+                      "type": "integer",
+                      "exclusiveMinimum": 0,
+                      "maximum": 16384
+                    },
+                    "channels": {
+                      "description": "Packed RGB channel count. Must be 3.",
+                      "type": "number",
+                      "const": 3
+                    },
+                    "image": {
+                      "type": "string",
+                      "minLength": 1,
+                      "format": "base64",
+                      "contentEncoding": "base64",
+                      "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+                      "description": "JPEG/PNG bytes, or packed RGB bytes, encoded as base64."
+                    }
+                  },
+                  "required": ["image"],
+                  "title": "EmbedSingleInputImage"
+                }
+              ],
+              "title": "EmbedSingleInput",
+              "description": "One text, ordered text/media input, or image supported by the model."
+            },
+            "text": {
+              "not": {}
+            },
+            "inputs": {
+              "not": {}
+            },
+            "type": {
+              "type": "string",
+              "const": "embed"
+            },
+            "requestId": {
+              "description": "Caller-generated identifier for cancellation with cancel({ requestId }).",
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": ["modelId", "input", "type"],
+          "title": "EmbedSingleRequest"
         }
       ]
     },
@@ -7995,7 +8140,7 @@
         },
         "embedding": {
           "default": [],
-          "description": "The embedding vector(s). Single `number[]` when `text` is a string; `number[][]` when `text` is an array or `inputs` is provided.",
+          "description": "One vector for input or a text string. One vector per item for legacy text arrays or inputs.",
           "anyOf": [
             {
               "type": "array",
@@ -8019,30 +8164,251 @@
           "type": "object",
           "properties": {
             "totalTime": {
-              "description": "Total embedding time in milliseconds",
+              "description": "Total embedding time in milliseconds. For a MegaLoc batch, the sum of native times.",
               "type": "number"
             },
             "tokensPerSecond": {
-              "description": "Tokens processed per second",
+              "description": "Tokens processed per second. llama.cpp embedding models only.",
               "type": "number"
             },
             "totalTokens": {
-              "description": "Total tokens processed",
+              "description": "Total tokens processed. llama.cpp embedding models only.",
               "type": "number"
             },
             "backendDevice": {
-              "description": "Compute backend used for inference",
+              "description": "Compute backend used for inference. llama.cpp embedding models only.",
               "type": "string",
               "enum": ["cpu", "gpu"],
               "title": "EmbedResponseStatsBackendDevice"
             },
             "contextSize": {
-              "description": "Context size in tokens",
+              "description": "Context size in tokens. llama.cpp embedding models only.",
               "type": "number"
+            },
+            "backendId": {
+              "description": "Native backend ID: CPU=0, Metal=1, CUDA=2, Vulkan=3, OpenCL=4, other=99. MegaLoc only.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "cpuFallbackNodes": {
+              "description": "Number of graph nodes scheduled on CPU fallback. MegaLoc only.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "weightBytes": {
+              "description": "Allocated model weight bytes. MegaLoc only.",
+              "type": "number",
+              "minimum": 0
             }
           },
           "additionalProperties": false,
           "title": "EmbedResponseStats"
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": ["type", "success", "embedding"],
+      "additionalProperties": false
+    },
+    "embedBatch.request": {
+      "title": "EmbedBatchRequest",
+      "type": "object",
+      "properties": {
+        "modelId": {
+          "type": "string",
+          "description": "The identifier of the embedding model to use"
+        },
+        "inputs": {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "title": "EmbedBatchInputText"
+              },
+              {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "media": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "base64"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "format": "base64",
+                                  "contentEncoding": "base64",
+                                  "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$"
+                                }
+                              },
+                              "required": ["type", "value"],
+                              "title": "EmbedBatchInputPartsItemMediaBase64"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "filePath"
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              },
+                              "required": ["type", "value"],
+                              "title": "EmbedBatchInputPartsItemMediaFilePath"
+                            }
+                          ],
+                          "description": "Image or WAV/MP3/FLAC bytes as base64, or a file path accessible to the inference worker."
+                        }
+                      },
+                      "required": ["media"],
+                      "title": "EmbedBatchInputPartsItem"
+                    }
+                  ]
+                },
+                "title": "EmbedBatchInputParts"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "width": {
+                    "description": "Packed RGB width in pixels. Supply with height and channels, or omit all three for JPEG/PNG.",
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 16384
+                  },
+                  "height": {
+                    "description": "Packed RGB height in pixels, from 1 to 16384.",
+                    "type": "integer",
+                    "exclusiveMinimum": 0,
+                    "maximum": 16384
+                  },
+                  "channels": {
+                    "description": "Packed RGB channel count. Must be 3.",
+                    "type": "number",
+                    "const": 3
+                  },
+                  "image": {
+                    "type": "string",
+                    "minLength": 1,
+                    "format": "base64",
+                    "contentEncoding": "base64",
+                    "pattern": "^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+                    "description": "JPEG/PNG bytes, or packed RGB bytes, encoded as base64."
+                  }
+                },
+                "required": ["image"],
+                "title": "EmbedBatchInputImage"
+              }
+            ],
+            "title": "EmbedBatchInput"
+          },
+          "description": "One vector per input, in input order."
+        },
+        "text": {
+          "not": {}
+        },
+        "input": {
+          "not": {}
+        },
+        "type": {
+          "type": "string",
+          "const": "embedBatch"
+        },
+        "requestId": {
+          "description": "Caller-generated identifier for cancellation with cancel({ requestId }).",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["modelId", "inputs", "type"]
+    },
+    "embedBatch.response": {
+      "title": "EmbedBatchResponse",
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "embedBatch"
+        },
+        "success": {
+          "type": "boolean"
+        },
+        "embedding": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "stats": {
+          "description": "Performance statistics",
+          "type": "object",
+          "properties": {
+            "totalTime": {
+              "description": "Total embedding time in milliseconds. For a MegaLoc batch, the sum of native times.",
+              "type": "number"
+            },
+            "tokensPerSecond": {
+              "description": "Tokens processed per second. llama.cpp embedding models only.",
+              "type": "number"
+            },
+            "totalTokens": {
+              "description": "Total tokens processed. llama.cpp embedding models only.",
+              "type": "number"
+            },
+            "backendDevice": {
+              "description": "Compute backend used for inference. llama.cpp embedding models only.",
+              "type": "string",
+              "enum": ["cpu", "gpu"],
+              "title": "EmbedBatchResponseStatsBackendDevice"
+            },
+            "contextSize": {
+              "description": "Context size in tokens. llama.cpp embedding models only.",
+              "type": "number"
+            },
+            "backendId": {
+              "description": "Native backend ID: CPU=0, Metal=1, CUDA=2, Vulkan=3, OpenCL=4, other=99. MegaLoc only.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "cpuFallbackNodes": {
+              "description": "Number of graph nodes scheduled on CPU fallback. MegaLoc only.",
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "weightBytes": {
+              "description": "Allocated model weight bytes. MegaLoc only.",
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "title": "EmbedBatchResponseStats"
         },
         "error": {
           "type": "string"
@@ -13341,6 +13707,7 @@
                                     "sdcpp-generation",
                                     "audiogen-ggml",
                                     "ggml-vla",
+                                    "ggml-image-embedding",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -13439,6 +13806,7 @@
                                     "sdcpp-generation",
                                     "audiogen-ggml",
                                     "ggml-vla",
+                                    "ggml-image-embedding",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -13886,6 +14254,7 @@
                                     "sdcpp-generation",
                                     "audiogen-ggml",
                                     "ggml-vla",
+                                    "ggml-image-embedding",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -14168,6 +14537,7 @@
                                     "sdcpp-generation",
                                     "audiogen-ggml",
                                     "ggml-vla",
+                                    "ggml-image-embedding",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -14647,6 +15017,7 @@
                                     "sdcpp-generation",
                                     "audiogen-ggml",
                                     "ggml-vla",
+                                    "ggml-image-embedding",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -15144,6 +15515,81 @@
                   "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
                   "type": "string",
                   "enum": ["log", "refuse", "off"],
+                  "title": "LoadModelSrcRequestGgmlImageEmbeddingModelFitPolicy"
+                },
+                "requestId": {
+                  "description": "Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+                  "type": "string",
+                  "minLength": 1
+                },
+                "modelType": {
+                  "type": "string",
+                  "const": "ggml-image-embedding"
+                },
+                "modelConfig": {
+                  "type": "object",
+                  "properties": {
+                    "backend": {
+                      "description": "Exact GGML device name, such as CPU, CUDA0, Vulkan0 or MTL0. Omit to select GPU, then CPU. Metal and Metal0 are accepted aliases. An unavailable explicit device fails to load.",
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "threads": {
+                      "description": "CPU thread count, from 1 to 1024. Omit to use the native default.",
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 1024
+                    },
+                    "backendsDir": {
+                      "description": "Directory of GGML backend modules. Omit to use the modules shipped with Fabric.",
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "additionalProperties": false,
+                  "title": "LoadModelSrcRequestGgmlImageEmbeddingModelConfig"
+                }
+              },
+              "required": ["type", "modelSrc", "modelType"],
+              "additionalProperties": false,
+              "title": "LoadModelSrcRequestGgmlImageEmbedding"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "loadModel"
+                },
+                "modelSrc": {
+                  "type": "string",
+                  "description": "The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models."
+                },
+                "modelName": {
+                  "type": "string"
+                },
+                "withProgress": {
+                  "type": "boolean"
+                },
+                "seed": {
+                  "type": "boolean"
+                },
+                "fallbackSrc": {
+                  "description": "Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+                  "type": "string"
+                },
+                "requireHttpChecksum": {
+                  "description": "Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "requireSecureTransport": {
+                  "description": "Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+                  "type": "boolean"
+                },
+                "modelFitPolicy": {
+                  "description": "What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+                  "type": "string",
+                  "enum": ["log", "refuse", "off"],
                   "title": "LoadModelSrcRequestNmtcppTranslationModelFitPolicy"
                 },
                 "requestId": {
@@ -15395,6 +15841,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -15493,6 +15940,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -15636,6 +16084,7 @@
                                             "sdcpp-generation",
                                             "audiogen-ggml",
                                             "ggml-vla",
+                                            "ggml-image-embedding",
                                             "ggml-classification",
                                             "llm",
                                             "whisper",
@@ -15735,6 +16184,7 @@
                                             "sdcpp-generation",
                                             "audiogen-ggml",
                                             "ggml-vla",
+                                            "ggml-image-embedding",
                                             "ggml-classification",
                                             "llm",
                                             "whisper",
@@ -15833,6 +16283,7 @@
                                             "sdcpp-generation",
                                             "audiogen-ggml",
                                             "ggml-vla",
+                                            "ggml-image-embedding",
                                             "ggml-classification",
                                             "llm",
                                             "whisper",
@@ -16308,6 +16759,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -16406,6 +16858,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -16504,6 +16957,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -16602,6 +17056,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -16700,6 +17155,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -16798,6 +17254,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -17059,6 +17516,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -17157,6 +17615,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -17255,6 +17714,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -17353,6 +17813,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -17628,6 +18089,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -17726,6 +18188,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -17966,6 +18429,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -18064,6 +18528,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -18162,6 +18627,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -18260,6 +18726,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -18358,6 +18825,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -18533,6 +19001,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -18632,6 +19101,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -18730,6 +19200,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -18884,6 +19355,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -18983,6 +19455,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -19081,6 +19554,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -19183,6 +19657,7 @@
                                           "sdcpp-generation",
                                           "audiogen-ggml",
                                           "ggml-vla",
+                                          "ggml-image-embedding",
                                           "ggml-classification",
                                           "llm",
                                           "whisper",
@@ -19389,6 +19864,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -19620,6 +20096,7 @@
                                     "sdcpp-generation",
                                     "audiogen-ggml",
                                     "ggml-vla",
+                                    "ggml-image-embedding",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -19923,6 +20400,7 @@
                                     "sdcpp-generation",
                                     "audiogen-ggml",
                                     "ggml-vla",
+                                    "ggml-image-embedding",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -20021,6 +20499,7 @@
                                     "sdcpp-generation",
                                     "audiogen-ggml",
                                     "ggml-vla",
+                                    "ggml-image-embedding",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -20119,6 +20598,7 @@
                                     "sdcpp-generation",
                                     "audiogen-ggml",
                                     "ggml-vla",
+                                    "ggml-image-embedding",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -20217,6 +20697,7 @@
                                     "sdcpp-generation",
                                     "audiogen-ggml",
                                     "ggml-vla",
+                                    "ggml-image-embedding",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -20315,6 +20796,7 @@
                                     "sdcpp-generation",
                                     "audiogen-ggml",
                                     "ggml-vla",
+                                    "ggml-image-embedding",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -20413,6 +20895,7 @@
                                     "sdcpp-generation",
                                     "audiogen-ggml",
                                     "ggml-vla",
+                                    "ggml-image-embedding",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -20511,6 +20994,7 @@
                                     "sdcpp-generation",
                                     "audiogen-ggml",
                                     "ggml-vla",
+                                    "ggml-image-embedding",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -20609,6 +21093,7 @@
                                     "sdcpp-generation",
                                     "audiogen-ggml",
                                     "ggml-vla",
+                                    "ggml-image-embedding",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -20707,6 +21192,7 @@
                                     "sdcpp-generation",
                                     "audiogen-ggml",
                                     "ggml-vla",
+                                    "ggml-image-embedding",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -20805,6 +21291,7 @@
                                     "sdcpp-generation",
                                     "audiogen-ggml",
                                     "ggml-vla",
+                                    "ggml-image-embedding",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -20903,6 +21390,7 @@
                                     "sdcpp-generation",
                                     "audiogen-ggml",
                                     "ggml-vla",
+                                    "ggml-image-embedding",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -21001,6 +21489,7 @@
                                     "sdcpp-generation",
                                     "audiogen-ggml",
                                     "ggml-vla",
+                                    "ggml-image-embedding",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -21099,6 +21588,7 @@
                                     "sdcpp-generation",
                                     "audiogen-ggml",
                                     "ggml-vla",
+                                    "ggml-image-embedding",
                                     "ggml-classification",
                                     "llm",
                                     "whisper",
@@ -21316,6 +21806,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -21543,6 +22034,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -21641,6 +22133,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -21739,6 +22232,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -21837,6 +22331,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -21992,6 +22487,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -22090,6 +22586,7 @@
                                         "sdcpp-generation",
                                         "audiogen-ggml",
                                         "ggml-vla",
+                                        "ggml-image-embedding",
                                         "ggml-classification",
                                         "llm",
                                         "whisper",
@@ -22763,6 +23260,7 @@
                                 "sdcpp-generation",
                                 "audiogen-ggml",
                                 "ggml-vla",
+                                "ggml-image-embedding",
                                 "ggml-classification",
                                 "llm",
                                 "whisper",
@@ -24820,6 +25318,7 @@
                         "sdcpp-generation",
                         "audiogen-ggml",
                         "ggml-vla",
+                        "ggml-image-embedding",
                         "ggml-classification",
                         "llm",
                         "whisper",
@@ -25423,6 +25922,7 @@
                         "sdcpp-generation",
                         "audiogen-ggml",
                         "ggml-vla",
+                        "ggml-image-embedding",
                         "ggml-classification",
                         "llm",
                         "whisper",

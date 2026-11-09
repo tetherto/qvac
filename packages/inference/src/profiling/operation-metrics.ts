@@ -305,22 +305,24 @@ registerOperationMetrics<{ modelId?: string }, { stats?: TtsStats }>({
   }
 })
 
-registerOperationMetrics<{ modelId?: string }, { stats?: EmbedStats }>({
-  op: 'embed',
-  kind: 'handler',
-  getTags: (req) => (req.modelId ? { modelId: req.modelId } : {}),
-  fromResult: (res) => {
-    const gauges: Record<string, number> = {}
-    const modelExecMs = readModelExecutionMs(res)
-    if (modelExecMs !== undefined) gauges['modelExecutionTime'] = modelExecMs
-    if (res.stats?.totalTime !== undefined) gauges['totalTime'] = res.stats.totalTime
-    if (res.stats?.tokensPerSecond !== undefined) {
-      gauges['tokensPerSecond'] = res.stats.tokensPerSecond
+for (const op of ['embed', 'embedBatch']) {
+  registerOperationMetrics<{ modelId?: string }, { stats?: EmbedStats }>({
+    op,
+    kind: 'handler',
+    getTags: (req) => (req.modelId ? { modelId: req.modelId } : {}),
+    fromResult: (res) => {
+      const gauges: Record<string, number> = {}
+      const modelExecMs = readModelExecutionMs(res)
+      if (modelExecMs !== undefined) gauges['modelExecutionTime'] = modelExecMs
+      if (res.stats?.totalTime !== undefined) gauges['totalTime'] = res.stats.totalTime
+      if (res.stats?.tokensPerSecond !== undefined) {
+        gauges['tokensPerSecond'] = res.stats.tokensPerSecond
+      }
+      if (res.stats?.totalTokens !== undefined) gauges['totalTokens'] = res.stats.totalTokens
+      return Object.keys(gauges).length > 0 ? gauges : undefined
     }
-    if (res.stats?.totalTokens !== undefined) gauges['totalTokens'] = res.stats.totalTokens
-    return Object.keys(gauges).length > 0 ? gauges : undefined
-  }
-})
+  })
+}
 
 registerOperationMetrics<{ modelId?: string }, { stats?: OCRStats }>({
   op: 'ocrStream',
