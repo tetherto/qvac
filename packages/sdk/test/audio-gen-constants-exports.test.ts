@@ -6,6 +6,8 @@ import {
   AUDIOGEN_INPUT_MAX_SECONDS,
   AUDIOGEN_INPUT_SAMPLE_RATE,
   AUDIOGEN_MAX_AUDIO_CODES,
+  AUDIOGEN_MINIMAX_COREML_COMPUTE_UNITS,
+  AUDIOGEN_OUTPUT_FORMATS,
   AUDIOGEN_REPAINT_MODES,
   AUDIOGEN_TASK_TYPES,
   AUDIOGEN_TRACKS
@@ -26,6 +28,8 @@ test('AudioGen constants are exported from the package root', (t) => {
   t.is(AUDIOGEN_INPUT_CHANNELS, audioGenSchemas.AUDIOGEN_INPUT_CHANNELS)
   t.is(AUDIOGEN_INPUT_MAX_SECONDS, audioGenSchemas.AUDIOGEN_INPUT_MAX_SECONDS)
   t.is(AUDIOGEN_MAX_AUDIO_CODES, audioGenSchemas.AUDIOGEN_MAX_AUDIO_CODES)
+  t.is(AUDIOGEN_OUTPUT_FORMATS, audioGenSchemas.AUDIOGEN_OUTPUT_FORMATS)
+  t.is(AUDIOGEN_MINIMAX_COREML_COMPUTE_UNITS, audioGenSchemas.AUDIOGEN_MINIMAX_COREML_COMPUTE_UNITS)
 
   t.alike([...AUDIOGEN_TASK_TYPES], ['text2music', 'cover-nofsq', 'lego'])
   t.alike(
@@ -46,6 +50,14 @@ test('AudioGen constants are exported from the package root', (t) => {
     ]
   )
   t.alike([...AUDIOGEN_EDIT_OPERATIONS], ['flow-edit', 'repaint'])
+  t.alike(
+    [...AUDIOGEN_OUTPUT_FORMATS],
+    ['wav', 'flac', 'alac', 'aiff', 'caf', 'm4a', 'aac', 'opus', 'ogg', 'ac3', 'wma', 'mp2']
+  )
+  t.alike(
+    [...AUDIOGEN_MINIMAX_COREML_COMPUTE_UNITS],
+    ['CPU_ONLY', 'CPU_AND_GPU', 'CPU_AND_NE', 'ALL']
+  )
   t.alike([...AUDIOGEN_REPAINT_MODES], ['conservative', 'balanced', 'aggressive'])
   t.is(AUDIOGEN_INPUT_SAMPLE_RATE, 48000)
   t.is(AUDIOGEN_INPUT_CHANNELS, 2)
@@ -89,5 +101,29 @@ test('AudioGen task types are registered for cross-language codegen', (t) => {
     'FX',
     'BRASS',
     'WOODWINDS'
+  ])
+  t.alike(Object.values(constantsRegistry.AudioGenOutputFormat.enum), [...AUDIOGEN_OUTPUT_FORMATS])
+  t.alike(Object.keys(constantsRegistry.AudioGenOutputFormat.enum), [
+    'WAV',
+    'FLAC',
+    'ALAC',
+    'AIFF',
+    'CAF',
+    'M4A',
+    'AAC',
+    'OPUS',
+    'OGG',
+    'AC3',
+    'WMA',
+    'MP2'
+  ])
+  t.alike(Object.values(constantsRegistry.AudioGenMinimaxCoremlComputeUnits.enum), [
+    ...AUDIOGEN_MINIMAX_COREML_COMPUTE_UNITS
+  ])
+  t.alike(Object.keys(constantsRegistry.AudioGenMinimaxCoremlComputeUnits.enum), [
+    'CPU_ONLY',
+    'CPU_AND_GPU',
+    'CPU_AND_NE',
+    'ALL'
   ])
 })
