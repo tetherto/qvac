@@ -60,8 +60,9 @@ export async function replaceAll(staged: Staged[]) {
   }
 }
 
+/** Where `replaceAll` keeps `dir`'s old content: beside `next`, under a name `next` cannot have. */
 function previousOf(next: string) {
-  return path.join(path.dirname(next), 'previous')
+  return `${next}.previous`
 }
 
 /** Moves `next` to `dir`, and `dir`'s old content into `next`'s scratch folder. */

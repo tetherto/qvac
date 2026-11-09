@@ -470,6 +470,17 @@ describe('bundleSdk', () => {
     assert.equal(result.bundlePath, path.join(outputDir, 'index.bundle'))
   })
 
+  it('bundles into an empty output folder named previous', async (t) => {
+    const { projectRoot, configPath } = fakeBundleSdkProject(t)
+    const outputDir = path.join(projectRoot, 'out', 'previous')
+    fs.mkdirSync(outputDir, { recursive: true })
+
+    const result = await bundleSdk({ projectRoot, configPath, outputDir, quiet: true })
+
+    assert.ok(fs.existsSync(path.join(outputDir, 'index.js')))
+    assert.equal(result.bundlePath, path.join(outputDir, 'index.bundle'))
+  })
+
   it('bundles a PCM-only audio plugin without linking bare-ffmpeg', async (t) => {
     const { projectRoot, sdkPath, configPath } = fakeBundleSdkProject(t)
     addAddon(path.join(sdkPath, 'node_modules', 'bare-ffmpeg'), 'bare-ffmpeg')
