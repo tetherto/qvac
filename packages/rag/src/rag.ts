@@ -267,10 +267,14 @@ export function createRag(options: CreateRagOptions): Rag {
     // Returns false once the signal has aborted.
     async function commitReady(): Promise<boolean> {
       while (next < jobs.length && jobs[next].missing === 0) {
-        if (signal?.aborted) return false
+        // Checked once the lock is held, so an abort while waiting for another
+        // write still skips this document.
         const committed = await withTransaction(instance, (tx) =>
-          commitDocument(tx, namespace, toValidDocument(jobs[next], space.spaceId))
+          signal?.aborted
+            ? Promise.resolve(null)
+            : commitDocument(tx, namespace, toValidDocument(jobs[next], space.spaceId))
         )
+        if (!committed) return false
         results.push(committed.document)
         revision = committed.revision
         next++
@@ -379,6 +383,7 @@ export function createRag(options: CreateRagOptions): Rag {
       let query: SearchQuery
       if (request.query !== undefined) {
         const port = requireEmbedder(scope.namespace, space)
+        if (scope.documentIds?.length === 0) return []
         query = { vector: await port.embedQuery(request.query, signal), spaceId: port.spaceId }
       } else {
         query = { vector: request.vector, spaceId: request.spaceId }

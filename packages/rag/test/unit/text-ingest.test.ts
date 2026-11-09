@@ -246,6 +246,11 @@ test('text query search embeds with the port and takes its spaceId', async (t) =
     'scoped text search stays in scope'
   )
 
+  port.queries.length = 0
+  t.alike(await rag.search({ scope: { namespace: 'ns', documentIds: [] }, query: 'dog', k: 1 }), [])
+  t.alike(await reader.search({ query: 'dog', k: 1, scope: { documentIds: ['dogs'] } }), [])
+  t.is(port.queries.length, 0, 'an empty scope never calls the port')
+
   const vector = await rag.search({ scope: { namespace: 'ns' }, vector: [1, 0, 0], spaceId, k: 1 })
   t.is(vector[0].documentId, 'cats', 'vector search still works')
 
