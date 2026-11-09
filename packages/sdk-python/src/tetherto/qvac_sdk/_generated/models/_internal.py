@@ -778,6 +778,32 @@ class AudioEditStreamResponseEncoded(GeneratedBaseModel):
     extension: Annotated[str, Field(min_length=1)]
 
 
+class AudioEditStreamResponseEncodeErrorFormat(Enum):
+    wav = "wav"
+    flac = "flac"
+    alac = "alac"
+    aiff = "aiff"
+    caf = "caf"
+    m4a = "m4a"
+    aac = "aac"
+    opus = "opus"
+    ogg = "ogg"
+    ac3 = "ac3"
+    wma = "wma"
+    mp2 = "mp2"
+
+
+class AudioEditStreamResponseEncodeError(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    format: Annotated[
+        AudioEditStreamResponseEncodeErrorFormat,
+        Field(title="AudioEditStreamResponseEncodeErrorFormat"),
+    ]
+    details: str | None = None
+
+
 class AudioEditStreamResponseStopReason(Enum):
     completed = "completed"
     cancelled = "cancelled"
@@ -1079,6 +1105,14 @@ class AudioEditStreamResponse(GeneratedBaseModel):
         Field(
             description="The run encoded as the requested `outputFormat`, sent once after the PCM: base64 file bytes, the MIME type and the file extension without its dot.",
             title="AudioEditStreamResponseEncoded",
+        ),
+    ] = None
+    encode_error: Annotated[
+        AudioEditStreamResponseEncodeError | None,
+        Field(
+            alias="encodeError",
+            description="Sent in place of `encoded` when the finished PCM could not be encoded as the requested `outputFormat`. The run still completes: the PCM, stats and diagnostics are delivered, and only the encoded file is missing.",
+            title="AudioEditStreamResponseEncodeError",
         ),
     ] = None
     done: bool
@@ -1456,6 +1490,32 @@ class AudioGenStreamResponseEncoded(GeneratedBaseModel):
     extension: Annotated[str, Field(min_length=1)]
 
 
+class AudioGenStreamResponseEncodeErrorFormat(Enum):
+    wav = "wav"
+    flac = "flac"
+    alac = "alac"
+    aiff = "aiff"
+    caf = "caf"
+    m4a = "m4a"
+    aac = "aac"
+    opus = "opus"
+    ogg = "ogg"
+    ac3 = "ac3"
+    wma = "wma"
+    mp2 = "mp2"
+
+
+class AudioGenStreamResponseEncodeError(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    format: Annotated[
+        AudioGenStreamResponseEncodeErrorFormat,
+        Field(title="AudioGenStreamResponseEncodeErrorFormat"),
+    ]
+    details: str | None = None
+
+
 class AudioGenStreamResponseStopReason(Enum):
     completed = "completed"
     cancelled = "cancelled"
@@ -1753,6 +1813,14 @@ class AudioGenStreamResponse(GeneratedBaseModel):
         Field(
             description="The run encoded as the requested `outputFormat`, sent once after the PCM: base64 file bytes, the MIME type and the file extension without its dot.",
             title="AudioGenStreamResponseEncoded",
+        ),
+    ] = None
+    encode_error: Annotated[
+        AudioGenStreamResponseEncodeError | None,
+        Field(
+            alias="encodeError",
+            description="Sent in place of `encoded` when the finished PCM could not be encoded as the requested `outputFormat`. The run still completes: the PCM, stats and diagnostics are delivered, and only the encoded file is missing.",
+            title="AudioGenStreamResponseEncodeError",
         ),
     ] = None
     done: bool
