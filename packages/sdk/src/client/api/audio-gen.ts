@@ -92,6 +92,19 @@ import { createAudioGenResult } from '@/client/api/audio-gen-result'
  *     coremlComputeUnits: "CPU_AND_NE",
  *   },
  * });
+ *
+ * // ACE-Step can name the backend of its pipeline and of its LM independently:
+ * const placedId = await loadModel({
+ *   modelType: "audiogen",
+ *   modelConfig: {
+ *     textEncModelSrc,
+ *     lmModelSrc,
+ *     ditModelSrc,
+ *     vaeModelSrc,
+ *     backend: "CUDA0", // the load fails when the host cannot provide it
+ *     lmBackend: "cpu",
+ *   },
+ * });
  * const minimaxRun = audioGen({
  *   modelId: minimaxId,
  *   caption: "warm cinematic piano",

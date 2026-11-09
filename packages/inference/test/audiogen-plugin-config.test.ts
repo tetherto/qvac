@@ -139,6 +139,42 @@ test('AudioGen plugin defaults to ACE-Step and forwards all four artifacts', (t)
   t.is(internals._configuration.vaeModelPath, '/resolved/vae.gguf')
 })
 
+test('AudioGen plugin hands the ACE-Step backends and stage dump directory to the engine', async (t) => {
+  const context: ResolveContext = {
+    modelSrc: '',
+    modelType: 'audiogen-ggml',
+    resolveModelPath: async function (source) {
+      return `/resolved/${typeof source === 'string' ? source : source.src}`
+    }
+  }
+  const placement = { backend: 'CUDA0', lmBackend: 'cpu', dumpStagesDir: '/tmp/acestep-stages' }
+  const resolved = await resolveAudioGenConfig(
+    {
+      textEncModelSrc: 'text-encoder.gguf',
+      lmModelSrc: 'lm.gguf',
+      ditModelSrc: 'dit.gguf',
+      vaeModelSrc: 'vae.gguf',
+      useGPU: true,
+      ...placement
+    },
+    context
+  )
+  t.alike(resolved.config, { useGPU: true, ...placement })
+
+  const result = audioGenPlugin.createModel({
+    modelId: 'acestep-placement-model',
+    modelPath: '',
+    modelConfig: resolved.config,
+    artifacts: resolved.artifacts
+  })
+  const internals = result.model as unknown as {
+    _configuration: { backend?: string; lmBackend?: string; dumpStagesDir?: string }
+  }
+  t.is(internals._configuration.backend, 'CUDA0')
+  t.is(internals._configuration.lmBackend, 'cpu')
+  t.is(internals._configuration.dumpStagesDir, '/tmp/acestep-stages')
+})
+
 test('AudioGen plugin rejects incomplete ACE-Step artifacts', (t) => {
   t.exception(
     () =>
@@ -300,4 +336,65 @@ test('AudioGen plugin hands the MiniMax Core ML profile to the engine', async (t
   }
   t.is(internals._configuration.coremlProfileDir, '/models/minimax-coreml')
   t.is(internals._configuration.coremlComputeUnits, 'CPU_AND_NE')
+})
+
+const MINIMAX_CONDITIONER = {
+  engine: 'minimax',
+  lmModelSrc: 'minimax-lm.gguf',
+  synthModelSrc: 'minimax-synth.gguf',
+  device: 'gpu',
+  coremlConditionerPath: '/models/minimax-conditioner.mlmodelc'
+}
+
+test('AudioGen rejects the MiniMax Core ML conditioner off macOS before resolving model paths', async (t) => {
+  for (const platform of ['linux', 'win32'] as const) {
+    let resolveCalls = 0
+    const context: ResolveContext = {
+      modelSrc: '',
+      modelType: 'audiogen-ggml',
+      platform,
+      resolveModelPath: async function () {
+        resolveCalls++
+        return '/resolved/model.gguf'
+      }
+    }
+    await t.exception(
+      () => resolveAudioGenConfig(MINIMAX_CONDITIONER, context),
+      /Core ML conditioner requires macOS/
+    )
+    t.is(resolveCalls, 0, `${platform}: the guard runs before either model download`)
+  }
+})
+
+test('AudioGen plugin hands the MiniMax Core ML conditioner to the engine', async (t) => {
+  const context: ResolveContext = {
+    modelSrc: '',
+    modelType: 'audiogen-ggml',
+    platform: 'darwin',
+    resolveModelPath: async function (source) {
+      return `/resolved/${typeof source === 'string' ? source : source.src}`
+    }
+  }
+  const resolved = await resolveAudioGenConfig(MINIMAX_CONDITIONER, context)
+  t.alike(resolved.config, {
+    engine: 'minimax',
+    device: 'gpu',
+    coremlConditionerPath: '/models/minimax-conditioner.mlmodelc'
+  })
+
+  // The conditioner leaves the other stages where `device` puts them, and the
+  // addon checks the bundle natively at load, so the engine config builds on
+  // any host.
+  const result = audioGenPlugin.createModel({
+    modelId: 'minimax-conditioner-model',
+    modelPath: '',
+    modelConfig: resolved.config,
+    artifacts: resolved.artifacts
+  })
+  const internals = result.model as unknown as {
+    _configuration: { coremlConditionerPath?: string; coremlProfileDir?: string; device?: string }
+  }
+  t.is(internals._configuration.coremlConditionerPath, '/models/minimax-conditioner.mlmodelc')
+  t.is(internals._configuration.coremlProfileDir, undefined, 'the full profile stays off')
+  t.is(internals._configuration.device, 'gpu')
 })

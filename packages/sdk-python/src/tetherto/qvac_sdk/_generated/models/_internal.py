@@ -21853,6 +21853,29 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestep(GeneratedBaseModel):
             le=9007199254740991,
         ),
     ] = None
+    backend: Annotated[
+        str | None,
+        Field(
+            description="Advanced: ACE-Step's primary backend, by backend or device name (`cpu`, `MTL0`, `CUDA0`, …). Unset or `auto` keeps the placement `useGPU` and `nGpuLayers` select. A named backend the host cannot provide fails the load instead of falling back.",
+            min_length=1,
+        ),
+    ] = None
+    lm_backend: Annotated[
+        str | None,
+        Field(
+            alias="lmBackend",
+            description="Advanced: the backend ACE-Step's language model runs on, chosen independently of `backend` and named the same way. Unset or `auto` keeps the engine's own placement. A named backend the host cannot provide fails the load instead of falling back.",
+            min_length=1,
+        ),
+    ] = None
+    dump_stages_dir: Annotated[
+        str | None,
+        Field(
+            alias="dumpStagesDir",
+            description="Diagnostics: an existing directory on the inference host that receives the intermediate tensors of each ACE-Step stage. The engine does not create it. Unset writes nothing.",
+            min_length=1,
+        ),
+    ] = None
     text_enc_model_src: Annotated[
         str | LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrc,
         Field(
@@ -22168,6 +22191,14 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimax(GeneratedBaseModel):
             alias="coremlComputeUnits",
             description="Apple compute units the Core ML profile may use: `CPU_ONLY`, `CPU_AND_GPU`, `CPU_AND_NE` or `ALL`. A policy, not a guarantee of where each operation runs. Requires `coremlProfileDir`.",
             title="LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxCoremlComputeUnits",
+        ),
+    ] = None
+    coreml_conditioner_path: Annotated[
+        str | None,
+        Field(
+            alias="coremlConditionerPath",
+            description="Advanced, macOS: absolute path on the inference host to a compiled conditioner `.mlmodelc`. Runs the conditioner convolution alone through Core ML (CPU and Neural Engine); every other stage stays on the backend `device` or `useGPU` selects. Does not enable the full Core ML profile. The load fails when the bundle is invalid or the build cannot use it.",
+            min_length=1,
         ),
     ] = None
     inference_steps: Annotated[
