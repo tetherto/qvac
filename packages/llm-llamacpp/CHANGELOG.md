@@ -8,7 +8,9 @@
   `gpu` and `cpu`. It takes the first NPU fabric lists, falls back to the GPU
   order and then the CPU with a warning when none is listed, and is rejected
   with `InvalidArgument` together with `backend`, `devices`, `split-mode`,
-  `main-gpu` or `rpc-servers`. Runtime stats report `backendDevice: "npu"`
+  `main-gpu` or `rpc-servers`, except the defaults `backend: "auto"`,
+  `devices: ""` and `split-mode: "none"`. Runtime stats report
+  `backendDevice: "npu"`
   (native code `2`) for an NPU load, including `devices: "XDNA0"`
   ([#5701](https://github.com/tetherto/qvac/pull/5701)).
 

@@ -2807,6 +2807,27 @@ TEST_F(LoadFitNormalizationTest, NpuRejectsGpuSelectors) {
   }
 }
 
+// Default values select nothing, so they leave a plain NPU load.
+TEST_F(LoadFitNormalizationTest, NpuAcceptsDefaultSelectors) {
+  for (const auto& [key, value] :
+       std::vector<std::pair<std::string, std::string>>{
+           {"split-mode", "none"}, {"backend", "auto"}, {"devices", ""}}) {
+    auto config = baseConfig();
+    config["device"] = "npu";
+    config[key] = value;
+
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::NPU, .name = "none"}, {}));
+
+    EXPECT_EQ(result.runtimeBackendDevice, 2) << key;
+    EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE) << key;
+  }
+}
+
 TEST_F(LoadFitNormalizationTest, NpuRejectsRpcServers) {
   auto config = baseConfig();
   config["device"] = "npu";

@@ -146,7 +146,9 @@ declare namespace LlmLlamacpp {
          * first NPU fabric lists, the AMD XDNA NPU on Linux x64, falls back to the
          * GPU order and then the CPU when there is none, and
          * cannot be combined with `backend`, `devices`, `split-mode`, `main-gpu`,
-         * `rpc-servers` or finetuning. GPU selection never picks the NPU.
+         * `rpc-servers` or finetuning. Only the defaults `backend: 'auto'`,
+         * `devices: ''` and `split-mode: 'none'` are accepted with it. GPU
+         * selection never picks the NPU.
          */
         device?: string;
         /**
