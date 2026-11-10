@@ -18749,8 +18749,8 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Instruct(GeneratedBaseModel
     ] = None
 
 
-class ForceSpeechToken(RootModel[int]):
-    root: Annotated[int, Field(ge=-2147483648, le=2147483647)]
+class TtsSpeechTokenId(RootModel[int]):
+    root: Annotated[int, Field(ge=-2147483648, le=2147483647, title="TtsSpeechTokenId")]
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon(Enum):
@@ -19392,7 +19392,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3(GeneratedBaseModel):
         ),
     ] = None
     force_speech_tokens: Annotated[
-        list[ForceSpeechToken] | None,
+        list[TtsSpeechTokenId] | None,
         Field(
             alias="forceSpeechTokens",
             description="Speech-token trajectory of ONE native synthesis to replay instead of generating, as a previous batch run, native chunk stream or single sentence returned it in `speechTokenIds`. Fixed at load: every synthesis of the model replays this same array, so a joined sentence stream cannot be replayed sentence by sentence. An empty array restores generation.",
@@ -27015,10 +27015,6 @@ class TextToSpeechResponseStats(GeneratedBaseModel):
     ] = None
 
 
-class SpeechTokenId(RootModel[int]):
-    root: Annotated[int, Field(ge=-9007199254740991, le=9007199254740991)]
-
-
 class TextToSpeechResponseStopReason(Enum):
     completed = "completed"
     cancelled = "cancelled"
@@ -27065,7 +27061,7 @@ class TextToSpeechResponse(GeneratedBaseModel):
         ),
     ] = None
     speech_token_ids: Annotated[
-        list[SpeechTokenId] | None,
+        list[TtsSpeechTokenId] | None,
         Field(
             alias="speechTokenIds",
             description="CosyVoice3: the speech tokens of this native synthesis. Batch synthesis carries them with the PCM; native chunk streaming on a final `isLast` frame with no audio; the sentence paths once per sentence. Pass one array back as `forceSpeechTokens` to replay that synthesis (a joined sentence stream cannot be replayed as one).",
@@ -27703,7 +27699,7 @@ class TextToSpeechStreamResponse(GeneratedBaseModel):
         ),
     ] = None
     speech_token_ids: Annotated[
-        list[SpeechTokenId] | None,
+        list[TtsSpeechTokenId] | None,
         Field(
             alias="speechTokenIds",
             description="CosyVoice3: the speech tokens of this native synthesis. Batch synthesis carries them with the PCM; native chunk streaming on a final `isLast` frame with no audio; the sentence paths once per sentence. Pass one array back as `forceSpeechTokens` to replay that synthesis (a joined sentence stream cannot be replayed as one).",

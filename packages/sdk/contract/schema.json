@@ -18903,7 +18903,8 @@
                           "items": {
                             "type": "integer",
                             "minimum": -2147483648,
-                            "maximum": 2147483647
+                            "maximum": 2147483647,
+                            "title": "TtsSpeechTokenId"
                           }
                         },
                         "useGPU": {
@@ -26411,8 +26412,9 @@
           "type": "array",
           "items": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": -2147483648,
+            "maximum": 2147483647,
+            "title": "TtsSpeechTokenId"
           }
         },
         "stopReason": {
@@ -26914,8 +26916,9 @@
           "type": "array",
           "items": {
             "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "minimum": -2147483648,
+            "maximum": 2147483647,
+            "title": "TtsSpeechTokenId"
           }
         },
         "stopReason": {

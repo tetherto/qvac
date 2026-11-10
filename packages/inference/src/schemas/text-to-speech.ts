@@ -191,6 +191,11 @@ const ttsIntegerSchema = z.number().int()
 const ttsInt32Schema = ttsIntegerSchema.min(-2147483648).max(2147483647)
 const ttsNonNegativeInt32Schema = ttsInt32Schema.nonnegative()
 const ttsPositiveInt32Schema = ttsInt32Schema.positive()
+// A CosyVoice3 speech token travels both ways: the response hands them out as
+// `speechTokenIds`, the load config takes them back as `forceSpeechTokens`.
+// One titled scalar keeps the two interchangeable in every generated client
+// (one shared Python class instead of a differently named wrapper per field).
+const ttsSpeechTokenIdSchema = ttsInt32Schema.meta({ title: 'TtsSpeechTokenId' })
 
 // Describe text shared by fields repeated across engine arms.
 const TTS_USE_GPU_DESC =
@@ -895,7 +900,7 @@ const ttsCosyvoice3RuntimeConfigShape = {
       'Greedy LM decoding: take the argmax speech token instead of sampling (engine default off).'
     ),
   forceSpeechTokens: z
-    .array(ttsInt32Schema)
+    .array(ttsSpeechTokenIdSchema)
     .optional()
     .describe(
       'Speech-token trajectory of ONE native synthesis to replay instead of generating, as a previous batch run, native chunk stream or single sentence returned it in `speechTokenIds`. Fixed at load: every synthesis of the model replays this same array, so a joined sentence stream cannot be replayed sentence by sentence. An empty array restores generation.'
@@ -2035,7 +2040,7 @@ const ttsResponseSampleRateSchema = z
 // the load config's `forceSpeechTokens`; the sentence paths run one synthesis
 // per sentence, so their arrays replay sentence by sentence, not joined.
 const ttsResponseSpeechTokenIdsSchema = z
-  .array(z.number().int())
+  .array(ttsSpeechTokenIdSchema)
   .optional()
   .describe(
     'CosyVoice3: the speech tokens of this native synthesis. Batch synthesis carries them with the PCM; native chunk streaming on a final `isLast` frame with no audio; the sentence paths once per sentence. Pass one array back as `forceSpeechTokens` to replay that synthesis (a joined sentence stream cannot be replayed as one).'
