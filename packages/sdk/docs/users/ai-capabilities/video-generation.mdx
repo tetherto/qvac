@@ -74,7 +74,7 @@ Available in `txt2vid` only. Pass a composite reference sheet together with an I
 Wan 2.2 A14B routes a second set of knobs to its high-noise expert. They require a model loaded with `modelConfig.highNoiseDiffusionModelSrc` and are rejected on single-expert layouts (Wan 2.1, Wan 2.2 TI2V-5B) with `PluginRequestValidationFailedError`:
 
 - `high_noise_steps` — steps for the high-noise expert.
-- `high_noise_sample_method` — sampling method for the high-noise expert.
+- `high_noise_sampler` — sampling method for the high-noise expert.
 - `high_noise_scheduler` — scheduler for the high-noise expert.
 - `high_noise_cfg_scale` — classifier-free guidance strength for the high-noise expert.
 - `high_noise_flow_shift` — flow-matching shift for the high-noise expert.
