@@ -224,6 +224,22 @@ test('downloadModelFromHttp: an empty cache is not marked when HEAD gives no siz
   await server.close()
 })
 
+test('downloadModelFromHttp: an empty file with a 0 marker is not used offline', async (t) => {
+  const cacheDir = useTestCacheDir()
+  fs.rmSync(cacheDir, { recursive: true, force: true })
+  const server = await startServer()
+  t.teardown(() => fs.rmSync(cacheDir, { recursive: true, force: true }))
+
+  const url = `${server.base}/head-unsized.bin`
+  const modelPath = await downloadModelFromHttp(url)
+  // A marker some older build wrote for an empty file.
+  fs.writeFileSync(modelPath, Buffer.alloc(0))
+  fs.writeFileSync(completeMarkerPath(modelPath), '0')
+  await server.close()
+
+  await t.exception(() => downloadModelFromHttp(url))
+})
+
 test('downloadModelFromHttp: a 416 for a file longer than the server has is not marked', async (t) => {
   const cacheDir = useTestCacheDir()
   fs.rmSync(cacheDir, { recursive: true, force: true })

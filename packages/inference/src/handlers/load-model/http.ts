@@ -91,6 +91,7 @@ function extractFilenameFromUrl(url: string): string {
 // The marker holds the size of a verified download. Offline it is the only proof
 // a non-GGUF file (a whisper.cpp .bin, say) is whole.
 async function markDownloadComplete(modelPath: string, size: number): Promise<void> {
+  if (size <= 0) return
   try {
     await fsPromises.writeFile(completeMarkerPath(modelPath), String(size))
   } catch (error) {
@@ -99,6 +100,7 @@ async function markDownloadComplete(modelPath: string, size: number): Promise<vo
 }
 
 async function isMarkedComplete(modelPath: string, size: number): Promise<boolean> {
+  if (size <= 0) return false
   try {
     const marker = await fsPromises.readFile(completeMarkerPath(modelPath), 'utf8')
     return String(marker).trim() === String(size)
