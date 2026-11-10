@@ -977,13 +977,20 @@ void LlamaFinetuner::rejectNpuTarget(
     const std::unordered_map<std::string, std::string>& config,
     int64_t runtimeBackendDevice) {
   const auto deviceIt = config.find("device");
-  const bool requestedNpu =
-      deviceIt != config.end() && deviceIt->second == "npu";
-  if (requestedNpu || runtimeBackendDevice == 2) {
+  if (deviceIt != config.end() && deviceIt->second == "npu") {
+    // Rejected even when it fell back, so a model's finetunability does not
+    // depend on whether this host lists an NPU.
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
-        "Finetuning does not run on the NPU; load the model on a GPU or the "
-        "CPU.");
+        "A model loaded with device 'npu' cannot be finetuned, whether it runs "
+        "on the NPU or fell back to a GPU or the CPU; reload it with device "
+        "'gpu' or 'cpu'.");
+  }
+  if (runtimeBackendDevice == 2) {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "A model running on the NPU alone cannot be finetuned; reload it "
+        "without XDNA0 in devices.");
   }
 }
 
