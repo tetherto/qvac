@@ -19,7 +19,9 @@ import {
   AudioEncodeFailedError as InferenceAudioEncodeFailedError,
   InvalidSeedFromParamsError as InferenceInvalidSeedFromParamsError,
   KvCacheSeedSourceNotFoundError as InferenceKvCacheSeedSourceNotFoundError,
-  KvCacheSeedSharingDisabledError as InferenceKvCacheSeedSharingDisabledError
+  KvCacheSeedSharingDisabledError as InferenceKvCacheSeedSharingDisabledError,
+  ModelReconfiguredError as InferenceModelReconfiguredError,
+  RAGWorkspaceBusyError as InferenceRAGWorkspaceBusyError
 } from '@qvac/inference/surface'
 import {
   ContextOverflowError,
@@ -32,7 +34,9 @@ import {
   AudioEncodeFailedError,
   InvalidSeedFromParamsError,
   KvCacheSeedSourceNotFoundError,
-  KvCacheSeedSharingDisabledError
+  KvCacheSeedSharingDisabledError,
+  ModelReconfiguredError,
+  RAGWorkspaceBusyError
 } from '@/utils/errors-server'
 
 test('reconstructError: cancellation preserves its public request ID and partial output', (t) => {
@@ -330,4 +334,20 @@ test('reconstructError: native RPC errors preserve details and cause', (t) => {
   t.is(rpcError.code, 52423)
   t.ok(rpcError.cause)
   t.ok(rpcError.cause?.message.includes('native cause'))
+})
+
+test('reconstructError: the session refusals keep their typed fields', (t) => {
+  const reconfigured = reconstructError(
+    JSON.parse(JSON.stringify(createErrorResponse(new InferenceModelReconfiguredError('m-1'))))
+  )
+  t.ok(reconfigured instanceof ModelReconfiguredError)
+  t.is((reconfigured as ModelReconfiguredError).modelId, 'm-1')
+  t.is((reconfigured as ModelReconfiguredError).code, 53624)
+
+  const busy = reconstructError(
+    JSON.parse(JSON.stringify(createErrorResponse(new InferenceRAGWorkspaceBusyError('default'))))
+  )
+  t.ok(busy instanceof RAGWorkspaceBusyError)
+  t.is((busy as RAGWorkspaceBusyError).workspace, 'default')
+  t.is((busy as RAGWorkspaceBusyError).code, 52812)
 })

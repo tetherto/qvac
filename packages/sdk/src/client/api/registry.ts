@@ -6,7 +6,8 @@ import type {
   ModelRegistryGetModelRequest,
   ModelRegistryGetModelResponse,
   ModelRegistryEntry,
-  ModelRegistryEntryAddon
+  ModelRegistryEntryAddon,
+  RPCOptions
 } from '@qvac/inference/surface'
 import { send } from '@/client/rpc/rpc-client'
 import { ModelRegistryQueryFailedError } from '@/utils/errors-client'
@@ -38,12 +39,12 @@ function validateRegistryResponse(response: RegistryResponse): void {
  * @returns A promise resolving to an array of `ModelRegistryEntry` describing every model the SDK's connected registry knows about.
  * @throws {ModelRegistryQueryFailedError} When the registry query fails.
  */
-async function modelRegistryList(): Promise<ModelRegistryEntry[]> {
+async function modelRegistryList(options?: RPCOptions): Promise<ModelRegistryEntry[]> {
   const request: ModelRegistryListRequest = {
     type: 'modelRegistryList'
   }
 
-  const response = (await send(request)) as ModelRegistryListResponse
+  const response = (await send(request, options)) as ModelRegistryListResponse
   validateRegistryResponse(response)
 
   return response.models!
@@ -62,7 +63,8 @@ async function modelRegistryList(): Promise<ModelRegistryEntry[]> {
  * @throws {ModelRegistryQueryFailedError} When the registry query fails.
  */
 async function modelRegistrySearch(
-  params: ModelRegistrySearchParams = {}
+  params: ModelRegistrySearchParams = {},
+  options?: RPCOptions
 ): Promise<ModelRegistryEntry[]> {
   const { modelType, ...rest } = params
   const request: ModelRegistrySearchRequest = {
@@ -71,7 +73,7 @@ async function modelRegistrySearch(
     addon: modelType ?? rest.addon
   }
 
-  const response = (await send(request)) as ModelRegistrySearchResponse
+  const response = (await send(request, options)) as ModelRegistrySearchResponse
   validateRegistryResponse(response)
 
   return response.models!
@@ -88,7 +90,8 @@ async function modelRegistrySearch(
  */
 async function modelRegistryGetModel(
   registryPath: string,
-  registrySource: string
+  registrySource: string,
+  options?: RPCOptions
 ): Promise<ModelRegistryEntry> {
   const request: ModelRegistryGetModelRequest = {
     type: 'modelRegistryGetModel',
@@ -96,7 +99,7 @@ async function modelRegistryGetModel(
     registrySource
   }
 
-  const response = (await send(request)) as ModelRegistryGetModelResponse
+  const response = (await send(request, options)) as ModelRegistryGetModelResponse
   validateRegistryResponse(response)
 
   return response.model!
