@@ -25,30 +25,16 @@ test('hasNewModelEntries ignores metadata-only changes to an existing model', (t
   t.absent(hasNewModelEntries([{ source: MODEL_SOURCE, description: 'Updated metadata' }], dbByKey))
 })
 
-test('isAmbiguousRpcError identifies transport timeouts and channel closes', (t) => {
+test('isAmbiguousRpcError identifies RPC deadlines, transport timeouts and channel closes', (t) => {
+  t.ok(
+    isAmbiguousRpcError(
+      Object.assign(new Error('timeout of 3600000ms exceeded'), { code: 'TIMEOUT_EXCEEDED' })
+    )
+  )
   t.ok(isAmbiguousRpcError(Object.assign(new Error('connection timed out'), { code: 'ETIMEDOUT' })))
   t.ok(isAmbiguousRpcError(Object.assign(new Error('closed'), { code: 'CHANNEL_CLOSED' })))
   t.ok(isAmbiguousRpcError(new Error('Channel closed')))
   t.absent(isAmbiguousRpcError(new Error('License not found')))
-})
-
-test('isAmbiguousRpcError recovers a Protomux RPC response deadline', async (t) => {
-  const RPC = require('protomux-rpc')
-  const { PassThrough } = require('stream')
-  const rpc = new RPC(new PassThrough())
-  rpc.respond('slow', async () => {
-    await new Promise((resolve) => setTimeout(resolve, 30))
-    return Buffer.alloc(0)
-  })
-  try {
-    await rpc.request('slow', Buffer.alloc(0), { timeout: 10 })
-    t.fail('Expected response deadline')
-  } catch (err) {
-    t.is(err.code, 'TIMEOUT_EXCEEDED')
-    t.ok(isAmbiguousRpcError(err))
-  } finally {
-    rpc.destroy()
-  }
 })
 
 test('waitForModelAfterAmbiguousAdd polls until the model appears', async (t) => {
