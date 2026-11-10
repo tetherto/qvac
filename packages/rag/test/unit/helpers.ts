@@ -5,12 +5,17 @@ import HyperDB from 'hyperdb'
 import dbSpec from '../../src/db/hyperspec/hyperdb/index.js'
 import { createRag } from '../../src/index.js'
 import { QvacErrorRAG } from '../../src/errors.js'
+import {
+  loadNativeIndex,
+  setNativeIndexLoader,
+  type NativeIndexModule
+} from '../../src/vector-index/native.js'
 import type {
   Corestore as Store,
   HyperDBReader,
   HyperDBTransaction
 } from '../../src/db/db-types.js'
-import type { EmbeddedDocumentInput, EmbeddingSpace, Rag } from '../../src/types.js'
+import type { EmbeddedDocumentInput, EmbeddingSpace, IndexOptions, Rag } from '../../src/types.js'
 
 // brittle's types don't export the test instance; the last overload returns it.
 export type Test = ReturnType<typeof import('brittle')>
@@ -32,9 +37,13 @@ export interface Fixture {
   spaceId: string
 }
 
-export async function openRag(t: Test, namespaces: string[] = ['ns']): Promise<Fixture> {
+export async function openRag(
+  t: Test,
+  namespaces: string[] = ['ns'],
+  index?: IndexOptions
+): Promise<Fixture> {
   const store = new Corestore(await tmp(t))
-  const rag = createRag({ corestore: store })
+  const rag = createRag({ corestore: store, index })
   await rag.ready()
   let spaceId = ''
   for (const name of namespaces) {
@@ -107,4 +116,37 @@ export async function rejectsWithCode(
     t.is((error as QvacErrorRAG).code, code, message)
     if (pattern) t.ok(pattern.test((error as Error).message), `${message}: ${pattern}`)
   }
+}
+
+// Forces the scan path for one test, as if the addon were not installed.
+export function useScan(t: Test): void {
+  setNativeIndexLoader(() => Promise.resolve(null))
+  t.teardown(() => setNativeIndexLoader(null))
+}
+
+export interface NativeCalls {
+  creates: number
+  loads: number
+}
+
+// Counts how the index was opened: `create` is a rebuild, `load` a snapshot.
+export async function countNativeCalls(t: Test): Promise<NativeCalls> {
+  setNativeIndexLoader(null)
+  const real = (await loadNativeIndex()) as NativeIndexModule
+  if (!real) throw new Error('@qvac/turbovec-ggml is not loadable; index tests need it')
+  const calls: NativeCalls = { creates: 0, loads: 0 }
+  setNativeIndexLoader(() =>
+    Promise.resolve({
+      create(dim, storage) {
+        calls.creates++
+        return real.create(dim, storage)
+      },
+      load(path) {
+        calls.loads++
+        return real.load(path)
+      }
+    })
+  )
+  t.teardown(() => setNativeIndexLoader(null))
+  return calls
 }
