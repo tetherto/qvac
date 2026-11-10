@@ -109,6 +109,20 @@ export const modelLoadLlmLoadModeNone: TestDefinition = {
   }
 }
 
+// On a host without a listed XDNA NPU the addon skips the name and loads on its default order, so
+// the load passes only if the SDK accepts `xdna` and the addon does not reject it.
+export const modelLoadLlmXdnaBackend: TestDefinition = {
+  testId: 'model-load-llm-xdna-backend',
+  params: {},
+  expectation: { validation: 'type', expectedType: 'string' },
+  steps: loadsWithConfig('llm', { verbosity: 0, ctx_size: 2048, backend: ['xdna'] }),
+  metadata: {
+    category: 'model',
+    dependency: 'none',
+    estimatedDurationMs: 60000
+  }
+}
+
 // Asserts the validation code, not the key name: a native --no-mmap error names it too.
 export const modelLoadLlmLegacyNoMmapRejected: TestDefinition = {
   testId: 'model-load-llm-legacy-no-mmap-rejected',
@@ -542,6 +556,7 @@ const catalog: TestDefinition[] = [
   // Model tests (first section)
   modelLoadLlm,
   modelLoadLlmLoadModeNone,
+  modelLoadLlmXdnaBackend,
   modelLoadLlmLegacyNoMmapRejected,
   modelLoadLlmPromptCacheKeys,
   modelLoadLlmCacheCheckpointsOutOfRangeRejected,
