@@ -45,7 +45,7 @@ The design rule is: keep general OpenAI-compatible behavior in `@qvac/cli`, gene
 | SDK | `packages/sdk` | `@qvac/sdk` | Canonical QVAC API: model loading, completion, tool-call parsing, registry integration, cancellation primitives, native addon RPC. |
 | CLI OpenAI server | `packages/cli/src/serve` | `@qvac/cli` | Runs `qvac serve --openai`. `serve/core` owns model alias routing, auth/CORS, cancellation, queueing, lifecycle for loaded models, completion draining, and the in-memory file, vector-store, and job stores; `serve/extensions/openai` owns the OpenAI-compatible routes and request/response translation. |
 | AI SDK provider | `packages/ai-sdk-provider` | `@qvac/ai-sdk-provider` | Vercel AI SDK provider wrapper. Owns `createQvac`, external/managed modes, typed model metadata exports, friendly catalog ids, and managed serve reuse/lifecycle. |
-| OpenCode plugin | `plugins/opencode` | `@qvac/opencode-plugin` | OpenCode-specific turnkey setup. Starts a host process, injects a `qvac` provider into OpenCode config, selects project model defaults, applies temporary OpenAI-compat shims, and tears down on exit. |
+| OpenCode plugin | `plugins/opencode` | `@qvac/opencode-plugin` | OpenCode-specific turnkey setup. Starts a host process, registers a `qvac` provider through the OpenCode 2.x plugin API, selects the project default model, applies temporary OpenAI-compat shims, and tears down on exit. |
 | OpenClaw plugin | `plugins/openclaw` | `@qvac/openclaw-plugin` | OpenClaw provider plugin: plugin-owned local `qvac serve` started from `prepareRuntimeAuth` on a port it reports, static catalog from `@qvac/ai-sdk-provider/models`. |
 | Public HTTP docs | `docs/website/content/docs/provider/http-server` | QVAC docs | Public setup docs for OpenAI-compatible tools. OpenCode docs should be plugin-first; manual server setup is the advanced/custom-provider path. |
 | Architecture docs | `docs/architecture` | Internal repo docs | Design/reference material for maintainers and agents. |
@@ -129,14 +129,14 @@ Do not add OpenCode config injection, OpenCode project defaults, or OpenCode-spe
 
 Implement here only for OpenCode-specific behavior:
 
-- OpenCode plugin hook integration.
-- Injecting `provider.qvac` into OpenCode's config.
-- Setting project `model` and `small_model` to `qvac/<model>` when `setDefaultModel` is true.
+- OpenCode 2.x plugin integration (`Plugin.define` from `@opencode/plugin`).
+- Registering the `qvac` provider through `ctx.provider.transform`.
+- Setting the project default model to `qvac/<model>` through `ctx.model.transform` when `setDefaultModel` is true.
 - Spawning a real Node/Bun host process because OpenCode runs plugins inside a compiled binary whose `process.execPath` is not a JS runtime.
 - Returning quickly on the `QVAC_LISTENING` handshake so `opencode run` does not hit startup timeout while model download/preload continues behind the local proxy.
-- Validating that handshake and injecting the proxy's access token into OpenCode's provider options.
+- Validating that handshake and passing the proxy's access token in the `qvac` provider settings.
 - Proxy/shim behavior that only exists because OpenCode or `@ai-sdk/openai-compatible` currently disagrees with QVAC serve.
-- Plugin option parsing from defaults, project `qvac.json`, plugin tuple options, and `QVAC_*` env vars.
+- Plugin option parsing from defaults, project `qvac.json`, plugin entry options, and `QVAC_*` env vars.
 
 Plugin code should stay small. If a feature is useful outside OpenCode, move it down to `@qvac/ai-sdk-provider` or `@qvac/cli`.
 

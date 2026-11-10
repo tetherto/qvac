@@ -1,6 +1,6 @@
 {
   "name": "@qvac/opencode-plugin",
-  "version": "0.3.6",
+  "version": "0.4.0",
   "description": "OpenCode plugin that runs a local, managed QVAC serve so `opencode` works against on-device models with no second terminal",
   "author": "Tether",
   "license": "Apache-2.0",
@@ -53,6 +53,7 @@
     "test": "tsx --test test/*.test.ts",
     "test:unit": "tsx --test test/*.test.ts",
     "test:e2e": "npm run test:integration",
+    "test:smoke": "npm run build && tsx --test test/opencode-v2.smoke.ts",
     "test:integration": "npm run build && tsx --test test/managed-serve-host.integration.test.ts",
     "dev:link": "npm install ../../packages/ai-sdk-provider ../../packages/cli"
   },
@@ -63,7 +64,7 @@
     "ai": "^7.0.0"
   },
   "devDependencies": {
-    "@opencode-ai/plugin": "^1.16.0",
+    "@opencode/plugin": "^2.2.0",
     "@types/node": "^24.2.1",
     "lunte": "^1.8.2",
     "prettier": "^3.9.4",
