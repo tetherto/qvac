@@ -9,6 +9,7 @@ import type { TtsStats as AddonTtsStats } from '@/utils/addon-responses'
 import {
   type TtsStreamChunk,
   type TtsOpYield,
+  carriesSpeechTokenIds,
   collectTtsStats,
   pcmFrame,
   chunkMetadata
@@ -196,7 +197,9 @@ export async function* textToSpeechStream(
       if (data.outputArray == null) {
         continue
       }
-      if (data.outputArray.length === 0) {
+      // An empty chunk is a native end marker, unless it carries the sentence's
+      // speech tokens (CosyVoice3 native streaming), which the caller wants.
+      if (data.outputArray.length === 0 && !carriesSpeechTokenIds(data)) {
         continue
       }
       yield { ...pcmFrame(data.outputArray), ...chunkMetadata(data) }
