@@ -570,6 +570,11 @@ trailing `npm install`.
   carries the API the CLI now needs.
 - Push CI (`General CI/CD (cli)`) uses the same split: in-repo SDK on `main` /
   `feature-*` / `tmp-*`, published SDK on `release-*`.
+- The CLI compiles against the in-repo SDK's types, so a PR that changes
+  `packages/sdk` or `packages/inference` runs the CLI checks too, even when it
+  touches no CLI file (`depends_on` on the `cli` entry of
+  `.github/sdk-pod-checks.json`). An SDK type change that breaks a CLI source or
+  test file fails on the PR that makes it.
 
 The committed `@qvac/sdk` range is never changed for testing — the in-repo link
 is a CI-time/local-only override (`sdk-source:workspace` / `dev:link`), never
