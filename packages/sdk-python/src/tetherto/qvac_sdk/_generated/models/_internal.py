@@ -12086,7 +12086,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     backend: Annotated[
         list[LoadModelSrcRequestLlamacppCompletionModelConfigBackendItem] | None,
         Field(
-            description="Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, xdna, and auto for no preference. xdna is the AMD XDNA NPU on Linux x64 (requires XRT 2.25 or newer); it is never selected automatically, only when named here or in devices as XDNA0. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with a split-mode other than 'none' or with devices.",
+            description="Ordered GPU backend names, such as ['cuda', 'vulkan']. Accepted names: cuda, vulkan, metal, opencl, xdna, and auto for no preference. xdna is the AMD XDNA2 NPU on Linux x64, listed only with XRT 2.25 or newer and read/write access to its /dev/accel node. It is never selected automatically, only when named here or in devices as XDNA0, and a listed NPU that fails to open runs the load on the CPU. If unset, uses the native default order. If none of the specified names has a corresponding available device, selection falls back to the native default order. Use device: 'cpu' for CPU. A GPU override cannot be combined with a split-mode other than 'none' or with devices.",
             min_length=1,
         ),
     ] = None
@@ -12286,7 +12286,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
         LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode | None,
         Field(
             alias="split-mode",
-            description="How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctx_size` explicitly).",
+            description="How to split the model across GPUs: `'none'` (default, single GPU), `'layer'` (pipeline parallelism), or `'tensor'` (EXPERIMENTAL tensor parallelism across selected local or RPC GPUs; requires flash attention, and disables auto-fit, so set `ctx_size` explicitly). `'tensor'` is rejected with the XDNA0 NPU.",
             title="LoadModelSrcRequestLlamacppCompletionModelConfigSplitMode",
         ),
     ] = None
@@ -12559,7 +12559,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
         bool | None,
         Field(
             alias="mmproj-use-gpu",
-            description="Run the multimodal projector (mmproj / vision encoder) on the GPU (multimodal models only). `true` forces GPU, `false` forces CPU. When unset, the backend is auto-selected per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on every other Android GPU (Arm Mali, Adreno <800, and undetectable Adreno tiers), with the LLM layers still on the GPU. Only honoured when the model itself runs on a GPU backend — ignored with a warning on CPU.",
+            description="Run the multimodal projector (mmproj / vision encoder) on the GPU (multimodal models only). `true` forces GPU, `false` forces CPU. When unset, the backend is auto-selected per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on every other Android GPU (Arm Mali, Adreno <800, and undetectable Adreno tiers), with the LLM layers still on the GPU; CPU when the model runs on the XDNA0 NPU, where `true` moves it to the NPU. Only honoured when the model itself runs on a GPU backend — ignored with a warning on CPU.",
         ),
     ] = None
 
