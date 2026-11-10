@@ -10,8 +10,8 @@ packages:
   # fails. Its dependents install the published package, which ships only the
   # .d.ts files. infer-base installs and tests with npm in its own directory.
   - "!packages/infer-base"
-  # sdk-kotlin is a Gradle package; its package.json only declares the Android
-  # BareKit npm deps, installed locally by Gradle. Keeping it out of the pnpm
+  # sdk-kotlin is a Gradle package; its package.json only declares the
+  # @qvac/sdk it bundles, installed locally by Gradle. Keeping it out of the pnpm
   # workspace avoids an importer the root lockfile has no entry for, which would
   # fail every --frozen-lockfile install.
   - "!packages/sdk-kotlin"
@@ -156,8 +156,15 @@ minimumReleaseAgeExclude:
   - bare-runtime-win32-arm64
   - bare-runtime-win32-x64
   - bare-semver
+  - bare-sidecar
   - bare-signals
   - bare-stdio
+  - bare-stow
+  - bare-stow-host
+  - bare-stow-protocol
+  - bare-stow-runtime
+  - bare-stow-target-pear-runtime
+  - bare-stow-target-react-native
   - bare-stream
   - bare-structured-clone
   - bare-stylize
@@ -169,6 +176,7 @@ minimumReleaseAgeExclude:
   - bare-tty
   - bare-type
   - bare-type-stripper
+  - bare-unpack
   - bare-url
   - bare-utils
   - bare-v8

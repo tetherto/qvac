@@ -41,12 +41,12 @@ export class SnapStorageExecutor extends BaseExecutor<typeof snapStorageTests> {
 
     await heartbeat()
 
-    const commonLock = join(snapCommon, '.qvac', '.worker.lock')
+    const commonLock = join(snapCommon, '.qvac', '.cache.lock')
     const revisionQvacDir = join(home, '.qvac')
     if (!existsSync(commonLock)) {
       return {
         passed: false,
-        output: `SDK worker lock was not created in Snap common storage: ${commonLock}`
+        output: `SDK cache lock was not created in Snap common storage: ${commonLock}`
       }
     }
     if (existsSync(revisionQvacDir)) {
@@ -62,7 +62,7 @@ export class SnapStorageExecutor extends BaseExecutor<typeof snapStorageTests> {
         home,
         revision,
         snapCommon,
-        workerLock: commonLock
+        cacheLock: commonLock
       })
     }
   }
