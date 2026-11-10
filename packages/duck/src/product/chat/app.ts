@@ -1,4 +1,4 @@
-import type { WorkbenchConfig } from '@qvac/cli-kit/launch'
+import { type WorkbenchConfig, describeConfig } from '@qvac/cli-kit/config'
 import type {
   ActiveScreen,
   Attachment,
@@ -9,31 +9,21 @@ import type {
   MouseMessage,
   ProductOptions,
   RpcResult,
-  Tui,
-  Screen,
-  ScreenContext,
-  ScreenPanel,
-  ScreenRow
-} from '@qvac/cli-kit/tui'
+  Tui
+} from '../app-types.js'
+import type { Screen, ScreenContext, ScreenPanel, ScreenRow } from '../screen.js'
+import { wrap, Editor } from '@qvac/cli-kit/tui'
+import { Dashboard } from '../dashboard/app.js'
+import { SPIN, selectable, arrow, cycle, pageKey, noop } from '../shell.js'
 import {
-  wrap,
-  Dashboard,
-  SPIN,
-  selectable,
-  arrow,
-  cycle,
-  pageKey,
-  noop,
   accountMesh,
   chooseAgent,
   remember as rememberChat,
   upload,
   visibleChats,
-  writable,
-  Editor
-} from '@qvac/cli-kit/tui'
+  writable
+} from '../session.js'
 import { paint, plain, bytes, applyTheme, strong, paragraph } from '@qvac/cli-kit/brand'
-import { describeConfig } from '@qvac/cli-kit/config'
 import type { LoadedExtensions } from '../extensions.js'
 import type { loadTemplates, loadContextFiles } from '../../lib/runtime/resources.js'
 import type { Chunk, Turn } from '../transcript.js'

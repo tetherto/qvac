@@ -1,7 +1,10 @@
 type Model = NonNullable<Awaited<ReturnType<Capabilities['listModels']>>['models']>[number]
 type ModelArgs = { name?: string | undefined; options: RuntimeOptions; io: CommandIO }
-import type { CommandIO, RuntimeOptions, CoreHost } from '@qvac/cli-kit/launch'
-import { CommandError, table, downloadMeter, progressReporter } from '@qvac/cli-kit/launch'
+import type { CommandIO } from '../../io.js'
+import type { RuntimeOptions, CoreHost } from '../../../lib/types.js'
+import { CommandError } from '../../errors.js'
+import { table } from '../../format.js'
+import { downloadMeter, progressReporter } from '../../progress.js'
 import { bytes } from '@qvac/cli-kit/brand'
 import type { Capabilities } from '@qvac/core/client'
 

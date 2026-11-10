@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-import type { LaunchOptions } from '@qvac/cli-kit/launch'
-import { launch, packageVersion, supervise } from '@qvac/cli-kit/launch'
+import type { LaunchOptions } from './lib/types.js'
+import { launch, supervise } from './cli/launch.js'
+import { packageVersion } from './cli/version.js'
 import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import fs from 'node:fs'

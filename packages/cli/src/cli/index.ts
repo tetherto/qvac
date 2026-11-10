@@ -1,5 +1,7 @@
-import type { RoutedCommand, LaunchOptions, ParsedCommand } from '@qvac/cli-kit/launch'
-import { DEVICE, FLAGS, command, envName, flags, paramKey } from '@qvac/cli-kit/launch'
+import type { RoutedCommand } from './commands/command.js'
+import type { LaunchOptions, ParsedCommand } from '../lib/types.js'
+import { DEVICE, FLAGS, envName, flags, paramKey } from './flags.js'
+import { command } from './commands/command.js'
 import type { Command, Bail } from 'paparam'
 type ParseFailure = Error & { bail?: Bail; at?: Command }
 interface TreeResult {

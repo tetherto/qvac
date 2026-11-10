@@ -4,7 +4,7 @@ import os from 'bare-os'
 import path from 'bare-path'
 import process from 'bare-process'
 import { fileURLToPath } from 'bare-url'
-import { bootCore } from '@qvac/cli-kit/host'
+import { bootCore } from '../../dist/lib/runtime/core-host.js'
 const options = JSON.parse(Bare.argv[2] || '{}')
 const target = options.target || 'codex',
   model = options.model || 'Qwen3.5-2B-Q4_K_M'
@@ -53,12 +53,9 @@ fs.writeFileSync(configFile, JSON.stringify({ config, configPath: null }), {
   mode: 0o600
 })
 process.env.QVAC_CLI_CONFIG = configFile
-// the harness host module ships in the kit, where the launcher points the harness too
+// the harness host module, where the launcher points the harness too
 process.env.QVAC_HARNESS_HOST_MODULE = fileURLToPath(
-  new URL(
-    'dist/lib/runtime/harness-extension.js',
-    import.meta.resolve('@qvac/cli-kit/package.json')
-  )
+  new URL('../../dist/lib/runtime/harness-extension.js', import.meta.url)
 )
 let host,
   runId,

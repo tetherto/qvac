@@ -1,5 +1,7 @@
-import type { CommandRoute, LaunchOptions, ParsedCommand } from '@qvac/cli-kit/launch'
-import { CHAT, FLAGS, command, envName, flags, paramKey } from '@qvac/cli-kit/launch'
+import type { CommandRoute } from './commands/command.js'
+import type { LaunchOptions, ParsedCommand } from '../lib/types.js'
+import { CHAT, FLAGS, envName, flags, paramKey } from './flags.js'
+import { command } from './commands/command.js'
 import type { Command, Bail } from 'paparam'
 type ParseFailure = Error & { bail?: Bail }
 // The one place paparam is set up, for both launchers and the app: one command, its flags, env

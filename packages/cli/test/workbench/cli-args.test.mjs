@@ -1,4 +1,4 @@
-import { envName, FLAGS } from '@qvac/cli-kit/launch'
+import { envName, FLAGS } from '../../dist/cli/flags.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { parseArgs, UsageError } from '../../dist/cli/index.js'

@@ -4,14 +4,13 @@ import os from 'os'
 import path from 'path'
 import { spawn } from 'child_process'
 import { createRequire } from 'module'
-import { fileURLToPath, pathToFileURL } from 'url'
+import { pathToFileURL } from 'url'
 
 const sidecarTarget = createRequire(import.meta.url)('./sidecar-target.cjs')
-const kit = fileURLToPath(new URL('..', import.meta.url))
 const { env } = process
 const host = env.HOST || `${process.platform}-${process.arch}`
 
-// The product's standalone binary: Core's sidecar and the kit's harness host stowed beside its
+// The product's standalone binary: Core's sidecar and the product's harness host stowed beside its
 // launcher, with the addons, skills and release manifest they read from disk. The bundling tools
 // and the packages they bundle resolve from the product's root, the tree the binary ships.
 export async function make({
@@ -39,7 +38,7 @@ export async function make({
 
   const children = {
     sidecar: path.join(root, 'node_modules/@qvac/core/worker/assistant-sidecar.mjs'),
-    harness: path.join(kit, 'dist', 'standalone', 'harness.js')
+    harness: path.join(root, 'dist', 'standalone', 'harness.js')
   }
 
   fs.rmSync(runtime, { recursive: true, force: true })
@@ -93,7 +92,7 @@ export async function make({
 
   // Read by path at runtime, so neither bundling nor stow's offload covers them.
   function stageSkills() {
-    fs.cpSync(path.join(kit, 'skills'), path.join(runtime, 'cli-skills'), {
+    fs.cpSync(path.join(root, 'skills'), path.join(runtime, 'cli-skills'), {
       recursive: true,
       dereference: true
     })

@@ -1,6 +1,7 @@
 #!/usr/bin/env bare
-import type { LaunchOptions } from '@qvac/cli-kit/launch'
-import { launch, packageVersion } from '@qvac/cli-kit/launch'
+import type { LaunchOptions } from './lib/types.js'
+import { launch } from './cli/launch.js'
+import { packageVersion } from './cli/version.js'
 import process from 'bare-process'
 import os from 'bare-os'
 import path from 'bare-path'

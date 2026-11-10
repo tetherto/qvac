@@ -1,4 +1,4 @@
-import type { Agent } from '@qvac/cli-kit/launch'
+import type { Agent } from '@qvac/cli-kit/config'
 import { palette } from '@qvac/cli-kit/brand'
 export interface ExtensionContext {
   send(text: string): void

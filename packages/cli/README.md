@@ -183,15 +183,14 @@ qvac (Bare, bare-tui) ── Client ──► Core sidecar ──► harness wor
 
 The dashboard is a client like any other: everything goes through Core's `Client`, and inference
 happens only in the harness. Core and the harness are npm packages, `@qvac/core` and
-`@qvac/harness`, pinned to exact versions in `package.json`; the shell, branding, host and launcher
-the two products share are [`@qvac/cli-kit`](../cli-kit).
+`@qvac/harness`, pinned to exact versions in `package.json`; the branding, terminal text and
+`qvac.config` handling the two products share are [`@qvac/cli-kit`](../cli-kit).
 
 ## Development
 
 The CLI lives in the monorepo's `packages/cli`. Sources are strict TypeScript:
 `src/cli` owns command parsing and dispatch, `src/product` owns the dashboard, and
-`src/lib` holds the SDK and server code behind `qvac sdk`. The shell, the Core and
-harness host and the launcher are `@qvac/cli-kit`'s.
+`src/lib` holds the Core and harness host, and the SDK and server code behind `qvac sdk`.
 
 We retain the existing CLI's `tsc` + `tsc-alias` build. Modern Bare can run
 TypeScript directly, but both launchers and the packaged application use the

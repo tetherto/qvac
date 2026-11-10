@@ -2,16 +2,14 @@
   "name": "@qvac/cli-kit",
   "version": "0.1.0",
   "private": true,
-  "description": "What the QV.AC terminal products share: branding, the bare-tui shell, the Core and harness host, and the launcher",
+  "description": "What the QV.AC terminal products share: branding, terminal text and editing, qvac.config, and the build scripts",
   "author": "Tether",
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
     "./brand": "./dist/brand.js",
     "./tui": "./dist/tui.js",
-    "./host": "./dist/host.js",
     "./config": "./dist/config.js",
-    "./launch": "./dist/launch.js",
     "./testing": "./test/workbench/helpers/vt.mjs",
     "./build": "./build/index.mjs",
     "./package.json": "./package.json"
@@ -19,7 +17,6 @@
   "files": [
     "dist/**/*",
     "build",
-    "skills",
     "LICENSE",
     "NOTICE"
   ],
@@ -46,27 +43,15 @@
     "build:splash": "node scripts/build-splash.mjs"
   },
   "dependencies": {
-    "@qvac/core": "1.0.0-rc.2",
-    "@qvac/harness": "1.0.0-rc.10",
-    "@qvac/skills": "0.1.18",
-    "b4a": "^1.9.0",
-    "bare-abort-controller": "1.1.2",
     "bare-fs": "^4.7.2",
-    "bare-module": "7.1.0",
     "bare-os": "^3.9.1",
     "bare-path": "3.0.1",
     "bare-process": "4.5.1",
-    "bare-subprocess": "^6.1.0",
-    "bare-supervisor": "^0.1.1",
-    "bare-url": "^2.4.5",
-    "corestore": "7.15.0",
-    "fs-native-extensions": "^1.5.2",
-    "fs-native-lock": "1.2.0",
-    "hyperswarm": "^4.17.1",
-    "paparam": "^1.13.0",
-    "pear-runtime-updater": "3.4.0"
+    "bare-url": "^2.4.5"
   },
   "devDependencies": {
+    "@qvac/core": "1.0.0-rc.2",
+    "@qvac/harness": "1.0.0-rc.10",
     "@types/node": "^25.3.3",
     "bare-buffer": "3.7.1",
     "bare-runtime": "1.34.0",
@@ -78,14 +63,6 @@
     "typescript": "^5.9.3"
   },
   "imports": {
-    "#abort-controller": {
-      "bare": "bare-abort-controller",
-      "default": "./dist/lib/runtime/abort-controller.js"
-    },
-    "#child_process": {
-      "bare": "bare-subprocess",
-      "default": "child_process"
-    },
     "#config-import": {
       "bare": "./dist/lib/runtime/config-import.bare.js",
       "default": "./dist/lib/runtime/config-import.js"

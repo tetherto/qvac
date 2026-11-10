@@ -1,5 +1,6 @@
-import type { ParsedCommand, LauncherKit, LoadedConfig, LaunchOptions } from '@qvac/cli-kit/launch'
+import type { ParsedCommand, LauncherKit, LaunchOptions } from '../../../lib/types.js'
 import {
+  type LoadedConfig,
   applyPluginState,
   describeConfig,
   readPluginState,

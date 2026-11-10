@@ -1,4 +1,5 @@
-import type { Command, Dashboard } from '@qvac/cli-kit/tui'
+import type { Command } from '../app-types.js'
+import type { Dashboard } from '../dashboard/app.js'
 
 // The palette's commands: every page and action the keys reach, by name.
 export interface ProductCommand {

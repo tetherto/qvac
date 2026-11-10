@@ -1,11 +1,7 @@
-import {
-  versionText,
-  downloadMeter,
-  progressLine,
-  duration,
-  Prompter,
-  bytes
-} from '@qvac/cli-kit/launch'
+import { versionText } from '../../dist/cli/version.js'
+import { downloadMeter, progressLine } from '../../dist/cli/progress.js'
+import { duration, bytes } from '../../dist/cli/format.js'
+import { Prompter } from '../../dist/cli/prompt.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'

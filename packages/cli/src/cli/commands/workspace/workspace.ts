@@ -1,5 +1,6 @@
-import { describeInvite, joinAndWait } from '@qvac/cli-kit/launch'
-import type { CommandIO, RuntimeOptions, CoreHost } from '@qvac/cli-kit/launch'
+import { describeInvite, joinAndWait } from '../../join.js'
+import type { CommandIO } from '../../io.js'
+import type { RuntimeOptions, CoreHost } from '../../../lib/types.js'
 import { markSetUp } from '../serve/setup.js'
 import { joinedWorkspaces, thisDevice, workspaceInfo } from '../../snapshot.js'
 

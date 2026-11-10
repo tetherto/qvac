@@ -3,7 +3,8 @@ type Status = Awaited<ReturnType<typeof readStatus>> & {
   updatedAt?: string
   pid?: number
 }
-import type { RuntimeOptions, CoreHost, CommandIO } from '@qvac/cli-kit/launch'
+import type { RuntimeOptions, CoreHost } from '../../../lib/types.js'
+import type { CommandIO } from '../../io.js'
 import { bytes } from '@qvac/cli-kit/brand'
 import fs from 'bare-fs'
 import path from 'bare-path'

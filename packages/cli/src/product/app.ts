@@ -1,16 +1,16 @@
-import type { Command, Frame, KeyMessage, PageView, ProductOptions, Tui } from '@qvac/cli-kit/tui'
+import type { Command, Frame, KeyMessage, ProductOptions, Tui } from './app-types.js'
+import type { PageView } from './dashboard/frame.js'
+import { Dashboard } from './dashboard/app.js'
+import { pageKey } from './shell.js'
+import { renderDashboard } from './dashboard/frame.js'
 import {
-  Dashboard,
-  pageKey,
-  renderDashboard,
   dashboardKey,
-  DASHBOARD_PAGES,
-  DASHBOARD_KEYS,
-  DASHBOARD_SHORTCUTS,
-  ONBOARDING_PAGES,
-  ONBOARDING_MODAL,
-  ONBOARDING_ENTER
-} from '@qvac/cli-kit/tui'
+  PAGES as DASHBOARD_KEYS,
+  SHORTCUTS as DASHBOARD_SHORTCUTS
+} from './dashboard/keys.js'
+import { PAGES as DASHBOARD_PAGES } from './dashboard/pages.js'
+import { PAGES as ONBOARDING_PAGES } from './onboarding/pages.js'
+import { MODAL as ONBOARDING_MODAL, ENTER as ONBOARDING_ENTER } from './onboarding/keys.js'
 import { paint } from '@qvac/cli-kit/brand'
 import { PAGES as MANAGEMENT_PAGES } from './management/pages.js'
 import { PAGES as MANAGEMENT_KEYS, SHORTCUTS as MANAGEMENT_SHORTCUTS } from './management/keys.js'

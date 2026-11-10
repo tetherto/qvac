@@ -1,6 +1,10 @@
 type Snapshot = Awaited<ReturnType<typeof snapshot>>
-import type { snapshot, Frame, Dashboard, Page, PageView } from '@qvac/cli-kit/tui'
-import { hex, wrap } from '@qvac/cli-kit/tui'
+import type { snapshot } from '../data.js'
+import type { Frame } from '../app-types.js'
+import type { Dashboard } from '../dashboard/app.js'
+import type { Page, PageView } from '../dashboard/frame.js'
+import { hex } from '../data.js'
+import { wrap } from '@qvac/cli-kit/tui'
 import { paint, count, strong } from '@qvac/cli-kit/brand'
 
 // The host's own pages: every device, the workspaces it serves, and its status.

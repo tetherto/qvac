@@ -1,4 +1,5 @@
-import type { KeyMessage, Command, Dashboard } from '@qvac/cli-kit/tui'
+import type { KeyMessage, Command } from '../app-types.js'
+import type { Dashboard } from '../dashboard/app.js'
 
 // the host's pages, from anywhere on the dashboard
 export const SHORTCUTS: [string, (app: Dashboard) => Command][] = [

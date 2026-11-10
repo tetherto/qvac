@@ -1,6 +1,7 @@
 // The Pear entry: the same launcher as duck-bare, with Core and the harness bundled as assets.
-import type { LaunchOptions } from '@qvac/cli-kit/launch'
-import { launch, packageVersion } from '@qvac/cli-kit/launch'
+import type { LaunchOptions } from './lib/types.js'
+import { launch } from './cli/launch.js'
+import { packageVersion } from './cli/version.js'
 import process from 'bare-process'
 import os from 'bare-os'
 import path from 'bare-path'
@@ -19,7 +20,7 @@ const entries = {
   release: import.meta.asset('./runtime/release.json')
 }
 
-// the staged package.json, as the launcher read it before the kit held the launcher
+// the staged package.json
 const root = path.dirname(fileURLToPath(import.meta.asset('../package.json')))
 
 await launch(Bare.argv.slice(1), {

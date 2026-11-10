@@ -1,4 +1,4 @@
-import type { CoreHost } from '@qvac/cli-kit/launch'
+import type { CoreHost } from '../lib/types.js'
 import type { Capabilities } from '@qvac/core/client'
 type Device = NonNullable<Awaited<ReturnType<Capabilities['listDevices']>>['devices']>[number]
 type Mesh = NonNullable<Awaited<ReturnType<Capabilities['listMeshes']>>['meshes']>[number]

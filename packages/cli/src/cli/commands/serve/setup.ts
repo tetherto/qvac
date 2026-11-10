@@ -1,5 +1,7 @@
-import type { CommandIO, RuntimeOptions, CoreHost } from '@qvac/cli-kit/launch'
-import { CommandError, describeInvite, joinAndWait } from '@qvac/cli-kit/launch'
+import type { CommandIO } from '../../io.js'
+import type { RuntimeOptions, CoreHost } from '../../../lib/types.js'
+import { CommandError } from '../../errors.js'
+import { describeInvite, joinAndWait } from '../../join.js'
 import type { Capabilities } from '@qvac/core/client'
 import process from '#process'
 

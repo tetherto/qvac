@@ -1,15 +1,17 @@
-import type { Screen, ScreenContext, ScreenRow, HostStatus, PluginStatus } from '@qvac/cli-kit/tui'
-import type { CatalogPlugin, PluginState } from '@qvac/cli-kit/config'
+import type { Screen, ScreenContext, ScreenRow } from './screen.js'
+import type { HostStatus, PluginStatus } from './app-types.js'
 import {
+  type CatalogPlugin,
+  type PluginState,
   BUILT_IN_PLUGINS,
   PLUGIN_CATALOG,
   supports,
   emptyPluginState,
   resolvePlugins,
   setEnabled,
-  withConfigPlugins
+  withConfigPlugins,
+  type PluginEntry
 } from '@qvac/cli-kit/config'
-import type { PluginEntry } from '@qvac/cli-kit/launch'
 type View = ReturnType<typeof view>
 
 // Harness plugins: what plugins.json asks for against what Core reported at its last start.

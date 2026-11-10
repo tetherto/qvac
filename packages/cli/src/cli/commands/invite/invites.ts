@@ -4,7 +4,8 @@ interface QRFlags {
   color?: boolean | undefined
   columns?: number | undefined
 }
-import type { CommandIO, RuntimeOptions, CoreHost } from '@qvac/cli-kit/launch'
+import type { CommandIO } from '../../io.js'
+import type { RuntimeOptions, CoreHost } from '../../../lib/types.js'
 import { qrLines } from '@qvac/cli-kit/tui'
 import type { Capabilities } from '@qvac/core/client'
 import { joinedWorkspaces } from '../../snapshot.js'

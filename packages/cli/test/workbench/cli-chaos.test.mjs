@@ -1,4 +1,4 @@
-import { FLAGS } from '@qvac/cli-kit/launch'
+import { FLAGS } from '../../dist/cli/flags.js'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'

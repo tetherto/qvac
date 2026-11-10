@@ -1,14 +1,7 @@
-import type {
-  ActiveScreen,
-  Attachment,
-  Command,
-  RpcResult,
-  WatchFrame,
-  ScreenData,
-  ScreenPanel
-} from '@qvac/cli-kit/tui'
-import { visibleChats } from '@qvac/cli-kit/tui'
-import type { Agent } from '@qvac/cli-kit/launch'
+import type { ActiveScreen, Attachment, Command, RpcResult, WatchFrame } from '../app-types.js'
+import type { ScreenData, ScreenPanel } from '../screen.js'
+import { visibleChats } from '../session.js'
+import type { Agent } from '@qvac/cli-kit/config'
 import { applyTheme, paint } from '@qvac/cli-kit/brand'
 import type { ChatApp } from './app.js'
 import type { LoadedExtensions } from '../extensions.js'

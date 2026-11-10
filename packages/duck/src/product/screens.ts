@@ -1,5 +1,5 @@
-import type { Agent } from '@qvac/cli-kit/launch'
-import type { Screen, ScreenContext, ScreenPanel, ScreenRow } from '@qvac/cli-kit/tui'
+import type { Agent } from '@qvac/cli-kit/config'
+import type { Screen, ScreenContext, ScreenPanel, ScreenRow } from './screen.js'
 import { bytes } from '@qvac/cli-kit/brand'
 import type { Capabilities } from '@qvac/core/client'
 import type { Chunk } from './transcript.js'

@@ -1,4 +1,5 @@
-import { DEVICE, flags, command } from '@qvac/cli-kit/launch'
+import { DEVICE, flags } from '../../../flags.js'
+import { command } from '../../command.js'
 import { arg, summary } from 'paparam'
 
 export const join = () =>

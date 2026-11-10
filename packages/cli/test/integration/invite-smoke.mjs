@@ -1,7 +1,7 @@
 import fs from 'bare-fs'
 import os from 'bare-os'
 import path from 'bare-path'
-import { bootCore } from '@qvac/cli-kit/host'
+import { bootCore } from '../../dist/lib/runtime/core-host.js'
 import { qrLines } from '@qvac/cli-kit/tui'
 import { decodeMeshInvite, encodeMeshInvite } from '@qvac/core/invite'
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-invite-smoke-'))

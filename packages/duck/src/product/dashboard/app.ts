@@ -1,72 +1,164 @@
-import type { Command, Frame, KeyMessage, Tui } from '@qvac/cli-kit/tui'
-import {
-  pageKey,
-  renderDashboard,
-  dashboardKey,
-  DASHBOARD_PAGES,
-  DASHBOARD_KEYS,
-  DASHBOARD_SHORTCUTS,
-  ONBOARDING_PAGES,
-  ONBOARDING_MODAL,
-  ONBOARDING_ENTER
-} from '@qvac/cli-kit/tui'
-import { ChatApp, type ChatOptions } from '../chat/app.js'
+import type {
+  Command,
+  Connection,
+  MouseMessage,
+  RpcResult,
+  Tui,
+  ProductOptions
+} from '../app-types.js'
+import { Shell, TABS } from '../shell.js'
+import { plain } from '@qvac/cli-kit/brand'
+import { FORMS, SETUP_PAGES } from '../onboarding/pages.js'
+import { RECEIVERS } from './receive.js'
 
-// duck's dashboard: setup and the shared pages
-const PAGES = { ...ONBOARDING_PAGES, ...DASHBOARD_PAGES }
-const KEYS = {
-  modal: ONBOARDING_MODAL,
-  enter: ONBOARDING_ENTER,
-  shortcuts: DASHBOARD_SHORTCUTS,
-  pages: DASHBOARD_KEYS
+// The chat beside the dashboard, where a product has one: what the shared pages link to.
+export interface ChatLinks {
+  chats: NonNullable<RpcResult<'listChats'>['chats']>
+  chatId: string | null
+  editor: { set(text: string): void }
+  tabHint(): string
+  useModel(name: string): Command
 }
 
-export function productApp(tui: Tui) {
-  return class extends ProductApp {
-    constructor(options?: ChatOptions) {
-      super(tui, options)
-    }
-  }
-}
+// The dashboard every product has: setup, the shared pages and their state. A product composes
+// the page tables, adds its own pages, and names the chat beside them if it has one.
+export abstract class Dashboard extends Shell {
+  chat: ChatLinks | null
+  invitation: (RpcResult<'meshInvite'> & { member?: boolean }) | null
+  joinPreview: RpcResult<'previewMeshInvite'> | null
+  cancelJoin: () => void
+  setupNames: { account: string; device: string }
+  configureDevice: () => Promise<void>
+  removeUsers: NonNullable<RpcResult<'modelUsers'>['agents']>
+  catalog: NonNullable<RpcResult<'listModels'>['models']> | null
+  selection: number
+  choice: number
+  form: string
+  accountName: string
+  showQr: boolean
+  joinValue: string
+  removeName: string
 
-// The dashboard pages beside the chat: overview, device, models, setup and invitations.
-export class ProductApp extends ChatApp {
-  backToChat(): Command {
-    this.page = 'chat'
-    this.error = ''
+  constructor(tui: Tui, options: ProductOptions = {}) {
+    super(tui, options)
+    this.chat = null
+    this.selection = 0
+    this.choice = 0
     this.form = ''
-    this.composing = true
+    this.accountName = ''
+    this.invitation = null
+    this.showQr = false
+    this.joinPreview = null
+    this.joinValue = ''
+    this.cancelJoin = () => {}
+    this.setupNames = { account: '', device: '' }
+    this.configureDevice = async () => {}
+    this.removeName = ''
+    this.removeUsers = []
+    this.catalog = null
+  }
+
+  override connected(conn: Partial<Connection>): Command {
+    this.setupNames = conn.setupNames || this.setupNames
+    this.configureDevice = conn.configure || this.configureDevice
+    return super.connected(conn)
+  }
+
+  override snapshotTaken(): Command {
+    const choices = pageChoices(this)
+    if (choices) {
+      this.selection = Math.min(this.selection, Math.max(0, choices.length - 1))
+    }
+
+    const first = !this.ready
+    super.snapshotTaken()
+    if (first && !this.product!.config?.onboardingCompleted && !this.options.skipSetup) {
+      this.page = 'welcome'
+    }
+
     return null
   }
 
-  override routeKey(msg: KeyMessage): Command {
-    if (msg.is('ctrl+g')) {
-      this.page = this.page === 'chat' ? 'overview' : 'chat'
-      this.error = ''
-      return null
-    }
-
-    if (this.page === 'chat') {
-      return super.routeKey(msg)
-    }
-
-    if (msg.name === 'escape' && !this.inSetup()) {
-      return this.backToChat()
-    }
-
-    const jump = pageKey(msg, { plain: false })
-    if (jump) {
-      return this.showPage(jump)
-    }
-
-    return dashboardKey(this, msg, KEYS)
+  showInvite({ member = false } = {}) {
+    return this.action(
+      async () => ({
+        ...(await this.engine!.meshInvite(
+          member ? { member: true, meshId: this.product?.workspace?.meshId || this.meshId! } : {}
+        )),
+        member
+      }),
+      'product.invite'
+    )
   }
 
-  override pageView(f: Frame) {
-    if (this.page === 'chat') {
-      return super.pageView(f)
+  finishOnboarding(): Command {
+    return this.action(async () => {
+      const config = await this.engine!.getConfig({})
+      await this.engine!.setConfig({ ...config, onboardingCompleted: true })
+    }, 'product.finished')
+  }
+
+  // First-run setup keeps Esc as "back a step"; everywhere else it is the way home.
+  inSetup() {
+    if (SETUP_PAGES.has(this.page)) {
+      return true
     }
 
-    return renderDashboard(this, f, PAGES)
+    return this.page === 'invite' && !this.product?.config?.onboardingCompleted
   }
+
+  // what the help page lists: the product's keys and commands
+  abstract helpLines(): string[]
+
+  // the keys the footer offers on every page: a product adds the pages it has
+  navHints(): [string, string][] {
+    return [
+      ['i', 'invite'],
+      ['q', 'quit']
+    ]
+  }
+
+  // Chat has no number, and only a product with one shows the tab
+  override tabs() {
+    return this.tabLine(this.chat ? [['chat', '', 'Chat'], ...TABS] : TABS)
+  }
+
+  override receive(msg: { type: string }): Command {
+    const handle = RECEIVERS.get(msg.type)
+    return handle ? handle(this, msg as never) : super.receive(msg)
+  }
+
+  override pasted(text: string): void {
+    if (FORMS.includes(this.page)) {
+      this.form += plain(text).replace(/\s+/g, ' ')
+    } else {
+      super.pasted(text)
+    }
+  }
+
+  override wheel(msg: MouseMessage): Command {
+    if (!['models', 'catalog'].includes(this.page)) {
+      return super.wheel(msg)
+    }
+
+    const step = msg.button === 'wheelup' ? -1 : 1
+    const n = (this.page === 'catalog' ? this.catalog : this.product?.models)?.length || 0
+    if (n) {
+      this.selection = Math.min(n - 1, Math.max(0, this.selection + step))
+    }
+
+    return null
+  }
+}
+
+function pageChoices(app: Dashboard) {
+  if (app.page === 'workspaces') {
+    return app.product!.meshes.filter((m) => m.workspace)
+  }
+
+  if (app.page === 'catalog') {
+    return app.catalog || []
+  }
+
+  return app.page === 'models' ? app.product!.models : null
 }

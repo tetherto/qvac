@@ -1,4 +1,4 @@
-import type { ParsedCommand, LauncherKit, LaunchOptions } from '@qvac/cli-kit/launch'
+import type { ParsedCommand, LauncherKit, LaunchOptions } from '../lib/types.js'
 import process from '#process'
 
 // duck, duck "prompt", duck -p: the words are the first message, and the mode picks chat or print

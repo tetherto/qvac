@@ -1,5 +1,6 @@
-import type { Agent, LaunchOptions } from '@qvac/cli-kit/launch'
-import type { WatchFrame } from '@qvac/cli-kit/tui'
+import type { Agent } from '@qvac/cli-kit/config'
+import type { LaunchOptions } from '../lib/types.js'
+import type { WatchFrame } from './app-types.js'
 import type { AgentTurn, Chunk, Turn } from './transcript.js'
 type Input = AsyncIterable<Uint8Array | string> | Iterable<Uint8Array | string>
 export interface PrintIO {
@@ -49,7 +50,7 @@ const buffer = (value: Uint8Array | string) =>
   typeof value === 'string' ? b4a.from(value) : b4a.from(value)
 import type { Capabilities } from '@qvac/core/client'
 import b4a from 'b4a'
-import * as session from '@qvac/cli-kit/tui'
+import * as session from './session.js'
 import { turns, pendingApproval, activeRun, settled } from './transcript.js'
 
 function replacer(this: Record<string, unknown>, key: string, value: unknown) {

@@ -178,6 +178,10 @@
     "@qvac/cli-kit"
   ],
   "imports": {
+    "#abort-controller": {
+      "bare": "bare-abort-controller",
+      "default": "./dist/lib/runtime/abort-controller.js"
+    },
     "#child_process": {
       "bare": "bare-subprocess",
       "default": "child_process"

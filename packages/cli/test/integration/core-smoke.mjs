@@ -2,7 +2,7 @@
 import fs from 'bare-fs'
 import os from 'bare-os'
 import path from 'bare-path'
-import { bootCore } from '@qvac/cli-kit/host'
+import { bootCore } from '../../dist/lib/runtime/core-host.js'
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-cli-smoke-'))
 let host
 const assert = (value, message) => {
