@@ -1323,6 +1323,9 @@ importers:
       hyperschema:
         specifier: ^1.13.0
         version: 1.21.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.2)
+      rag-extract:
+        specifier: ^0.2.2
+        version: 0.2.2
       zod:
         specifier: ^4.1.13
         version: 4.4.3
@@ -5633,6 +5636,9 @@ packages:
   asap@2.0.6:
     resolution: {integrity: sha512-BSHWgDSAiKs50o2Re8ppvp3seVHXSRM44cdSsT9FfNEUUZLOGWVCsiWaRPWM1Znn+mqZ1OfVZ3z3DWEzSp7hRA==}
 
+  asenion@0.1.0:
+    resolution: {integrity: sha512-aUlZm/mZpPMzdSJgyvE7m5tdIy/eTd9214Ka1OLbt5GKTs1/oKmUpwooRljp1sr770NgpoCpR6LudN8rF1ZRMw==}
+
   asn1.js@5.4.1:
     resolution: {integrity: sha512-+I//4cYPccV8LdmBLiX8CYvf9Sp3vQsrqu2QNXRcrbiWvcx/UdlFiqUJJzxRQxgsZmvhXhn4cSKeSmoFjVdupA==}
 
@@ -9691,6 +9697,9 @@ packages:
   rache@1.0.0:
     resolution: {integrity: sha512-e0k0g0w/8jOCB+7YqCIlOa+OJ38k0wrYS4x18pMSmqOvLKoyhmMhmQyCcvfY6VaP8D75cqkEnlakXs+RYYLqNg==}
 
+  rag-extract@0.2.2:
+    resolution: {integrity: sha512-Vjp/kuIwlp/39VIK75tYSeTJnaA21pUZL0KVVecvL/apPfYaHFMRblnlMNTEXu8M08LwoSx6uFvlZiaCzUy8HQ==}
+
   random-array-iterator@1.0.0:
     resolution: {integrity: sha512-u7xCM93XqKEvPTP6xZp2ehttcAemKnh73oKNf1FvzuVCfpt6dILDt1Kxl1LeBjm2iNIeR49VGFhy4Iz3yOun+Q==}
 
@@ -10633,6 +10642,10 @@ packages:
     resolution: {integrity: sha512-hpbDzxUY9BFwX+UeBnxv3Sh1q7HFxj48DTmXchNgRa46lO8uj3/1iEn3MiNUYTg1g9ctIqXCCERn8gYZhHC5lQ==}
     engines: {node: '>=4'}
 
+  unicode-to-plain-text@2.2.0:
+    resolution: {integrity: sha512-s87W8Tvv8rTxavL4rgrvwecPv10ZCYdVnCeFTYF84NGFVRxPJvKLpWvGN17GE6wH/7TdgIXL2LvhKYQRWN7hrw==}
+    engines: {node: '>=18.0.0'}
+
   unicorn-magic@0.3.0:
     resolution: {integrity: sha512-+QBBXBCvifc56fsbuxZQ6Sic3wqqc3WWaqxs58gvJrcOuN83HGTCwz3oS5phzU9LthRNE9VrJCFCLUgHeeFnfA==}
     engines: {node: '>=18'}
@@ -10648,6 +10661,14 @@ packages:
 
   unordered-set@2.0.1:
     resolution: {integrity: sha512-eUmNTPzdx+q/WvOHW0bgGYLWvWHNT3PTKEQLg0MAQhc0AHASHVHoP/9YytYd4RBVariqno/mEUhVZN98CmD7bg==}
+
+  unpdf@1.6.2:
+    resolution: {integrity: sha512-zQ80ySoPuPHOsvIoRp/nJyQt8TOUoTh1+WBCGcBvlddQNgKDLRwm0AY3x8Q35I7+kIiRSgqMx+Ma2pl9McIp7A==}
+    peerDependencies:
+      '@napi-rs/canvas': ^0.1.69
+    peerDependenciesMeta:
+      '@napi-rs/canvas':
+        optional: true
 
   unpipe@1.0.0:
     resolution: {integrity: sha512-pjy2bYhSsufwWlKwPc+l3cN7+wuJlK6uz0YdJEOlQDbl6jo/YlPi4mb8agUkVC8BF7V8NuzeyPNqRksA3hztKQ==}
@@ -15399,6 +15420,13 @@ snapshots:
       is-array-buffer: 3.0.5
 
   asap@2.0.6: {}
+
+  asenion@0.1.0:
+    dependencies:
+      b4a: 1.8.1
+      unicode-to-plain-text: 2.2.0
+    transitivePeerDependencies:
+      - react-native-b4a
 
   asn1.js@5.4.1:
     dependencies:
@@ -21948,6 +21976,17 @@ snapshots:
 
   rache@1.0.0: {}
 
+  rag-extract@0.2.2:
+    dependencies:
+      asenion: 0.1.0
+      b4a: 1.8.1
+      bare-abort-controller: 1.1.2
+      unpdf: 1.6.2
+      web-streams-polyfill: 3.3.3
+    transitivePeerDependencies:
+      - '@napi-rs/canvas'
+      - react-native-b4a
+
   random-array-iterator@1.0.0: {}
 
   range-parser@1.2.1: {}
@@ -23157,6 +23196,8 @@ snapshots:
 
   unicode-property-aliases-ecmascript@2.2.0: {}
 
+  unicode-to-plain-text@2.2.0: {}
+
   unicorn-magic@0.3.0: {}
 
   universal-github-app-jwt@2.2.2: {}
@@ -23166,6 +23207,8 @@ snapshots:
   unix-path-resolve@1.0.2: {}
 
   unordered-set@2.0.1: {}
+
+  unpdf@1.6.2: {}
 
   unpipe@1.0.0: {}
 
