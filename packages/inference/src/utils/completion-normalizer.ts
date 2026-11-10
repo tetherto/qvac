@@ -123,6 +123,19 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   // Content frame: inner streamed as it arrives; partial close tail buffered.
   let activeContentFrame: FrameSpec | null = null
 
+  // Set when a thinking frame closes before any content. Reasoning templates
+  // put a blank line between the close marker and the answer; it belongs to
+  // the framing, not the answer, so whitespace is dropped until the answer's
+  // first visible character.
+  let trimAfterThinking = false
+
+  // The same framing whitespace sits inside a thinking frame (`<think>\n` ...
+  // `\n</think>`). Leading whitespace is dropped and trailing whitespace held
+  // back until more reasoning follows, so the close drops it. Both reset when a
+  // frame opens; a later frame starts on a new line so frames don't run together.
+  let trimThinkingStart = false
+  let pendingThinkingWhitespace = ''
+
   // Trailing chars that could be a prefix of a watched marker, so markers
   // split across token pushes aren't missed by indexOf.
   let contentTail = ''
@@ -179,6 +192,10 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     for (const token of contentDropTokens) {
       normalized = normalized.split(token).join('')
     }
+    if (trimAfterThinking) {
+      normalized = normalized.trimStart()
+      if (normalized) trimAfterThinking = false
+    }
     if (!normalized) return
     contentParts.push(normalized)
     events.push({ type: 'contentDelta', seq: nextSeq(), text: normalized })
@@ -188,10 +205,23 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   // is false (e.g. harmony's analysis channel, to strip markers from
   // `contentDelta`) — drop the inner here instead of buffering it.
   function emitThinking(events: CompletionEvent[], text: string) {
-    if (!text) return
+    let normalized = text
+    if (trimThinkingStart) {
+      normalized = normalized.trimStart()
+      if (!normalized) return
+      trimThinkingStart = false
+      if (thinkingParts.length > 0) normalized = '\n' + normalized
+    }
+    const body = normalized.trimEnd()
+    if (!body) {
+      pendingThinkingWhitespace += normalized
+      return
+    }
+    const out = pendingThinkingWhitespace + body
+    pendingThinkingWhitespace = normalized.slice(body.length)
     if (config.captureThinking) {
-      thinkingParts.push(text)
-      events.push({ type: 'thinkingDelta', seq: nextSeq(), text })
+      thinkingParts.push(out)
+      events.push({ type: 'thinkingDelta', seq: nextSeq(), text: out })
     }
   }
 
@@ -361,6 +391,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
           emitThinking(events, buf.slice(0, closeIdx))
           buf = buf.slice(closeIdx + closeMarker.length)
           activeThinkingFrame = null
+          trimAfterThinking = contentParts.length === 0
           state = 'content'
           continue
         }
@@ -406,12 +437,17 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
         }
 
         const entry = markerToEntry.get(hit.marker)!
+        // A content frame (Harmony's final channel) carries the answer itself,
+        // so the trim carries into it; any other frame ends it.
+        if (entry.kind !== 'content') trimAfterThinking = false
         if (entry.kind === 'tool') {
           toolCallBuffer = hit.marker
           activeToolFrame = entry.spec
           state = 'toolFraming'
         } else if (entry.kind === 'thinking') {
           activeThinkingFrame = entry.spec
+          trimThinkingStart = true
+          pendingThinkingWhitespace = ''
           state = 'thinkingFraming'
         } else {
           activeContentFrame = entry.spec
