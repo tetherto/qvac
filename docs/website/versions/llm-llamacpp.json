@@ -9,12 +9,12 @@
     {
       "version": "v0.68",
       "ref": "docs/docs-system-poc",
-      "sha": "b4da0487bdafb11cb60998b8eb0407083304548e"
+      "sha": "651e3f4e701cf576f76736b651aca46addb7f3e4"
     },
     {
       "version": "v0.67",
       "ref": "docs/docs-system-poc",
-      "sha": "01a92559d593dbf917c33cd82afa6701bcf1a5df"
+      "sha": "5fb53bfd3e53f3d26ef42f512cc62c13b6949922"
     }
   ]
 }
