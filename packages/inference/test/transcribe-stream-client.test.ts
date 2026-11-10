@@ -193,3 +193,39 @@ test('conversation session forwards the VAD detector source', async (t) => {
     'source reaches the event a caller iterates'
   )
 })
+
+test('conversation session keeps the native Parakeet boundary and chunk detail', async (t) => {
+  const session = await createTranscribeStreamSession(
+    { modelId: 'parakeet-eou', parakeetStreamingConfig: { emitEnergyVad: true } },
+    undefined,
+    (line, onTerminal) => processLineConversation(line, false, onTerminal),
+    'TranscribeStreamConversationSession',
+    createDuplexFactory([
+      JSON.stringify({
+        type: 'transcribeStream',
+        vad: { speaking: true, probability: 0.8, source: 'energy', timestamp: 0.5, chunkIndex: 1 }
+      }),
+      JSON.stringify({
+        type: 'transcribeStream',
+        endOfTurn: { source: 'parakeet', timestamp: 4.125, chunkIndex: 6, confidence: 0.93 }
+      }),
+      JSON.stringify({ type: 'transcribeStream', endOfTurn: { source: 'parakeet' } }),
+      JSON.stringify({ type: 'transcribeStream', done: true })
+    ]) as never
+  )
+
+  const events: unknown[] = []
+  for await (const event of session) events.push(event)
+  t.alike(events, [
+    {
+      type: 'vad',
+      speaking: true,
+      probability: 0.8,
+      source: 'energy',
+      timestamp: 0.5,
+      chunkIndex: 1
+    },
+    { type: 'endOfTurn', source: 'parakeet', timestamp: 4.125, chunkIndex: 6, confidence: 0.93 },
+    { type: 'endOfTurn', source: 'parakeet' }
+  ])
+})

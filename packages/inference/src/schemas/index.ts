@@ -8,7 +8,9 @@ export {
   toolSchema,
   toolCallSchema,
   toolCallErrorSchema,
+  toolSearchOptionsSchema,
   type Tool,
+  type ToolSearchOptions,
   type ToolCall,
   type ToolCallError,
   type ToolCallWithCall

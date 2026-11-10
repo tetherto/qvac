@@ -84,6 +84,8 @@ TranscribePsy EU-sub publishes a separate Core ML distribution. `PARAKEET_TRANSC
 
 **TranscribePsy EU.** The full TranscribePsy-250M-EU model (`PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0`) covers 25 European languages from one GGUF that embeds its CAFE language adapters and gate, and it runs on ggml on every platform: it has no Core ML distribution, and the EU-sub bundles do not contain its adapters. `language` in `modelConfig` picks the route: `"en"` decodes on the English trunk, `"other"` on the non-English adapters, and `"auto"` (the default when omitted) runs the gate on the first 20 seconds of the recording and routes it.
 
+**Backend selection.** `modelConfig.backend` selects the native backend explicitly: `auto` (the default), `cpu`, `cuda`, `vulkan`, `opencl`, `metal`, or an exact ggml device name such as `CUDA0` or `MTL0`. An explicit selection overrides `useGPU`, and the load fails if that backend is unavailable instead of falling back to the CPU. The same selector reaches `assessModelFit`, where it also overrides the GPU gate. Core ML sidecars keep their own routing; a ggml selector does not move them.
+
 **Long recordings.** Parakeet encodes a long `transcribe()` input in overlapping windows, so memory stays flat however long the recording is and cancellation lands between windows. The defaults need nothing from you: TranscribePsy uses the 60 s windows with 25 % overlap it recommends, the other models the engine's automatic windows. To trade speed for a smaller footprint, for example on a phone with little memory, set `longFormWindowFrames` and `longFormContextFrames` in `modelConfig` (encoder frames of 80 ms: 375 is a 30 s window, and 47 frames of context on each side keeps the 25 % overlap); a negative window encodes the whole input in one pass.
 
 For model artifacts available as constants, see [SDK — Models](/sdk#models).
@@ -170,6 +172,42 @@ model defaults. Load with `streaming: true` before calling `transcribeStream`.
 Enable `streamingSpeakerVad` at load or `emitSpeakerVad` per stream to receive
 speaker-activity events. Streaming diarization metadata retains speaker IDs.
 
+## Speaker-attributed Parakeet transcription
+
+A Parakeet ASR model can transcribe each speaker turn found by a separate
+diarization model, so one `transcribe()` call returns text per speaker. Set
+`speakerAttribution` in `modelConfig` with the diarization GGUF (Sortformer or
+Nemotron 3 Diarization) as its `modelSrc`; the SDK resolves and downloads it like
+any other model source and loads it beside the ASR model.
+
+```ts
+const modelId = await loadModel({
+  modelSrc: PARAKEET_UNIFIED_0_6B_Q8_0,
+  modelType: 'parakeet-transcription',
+  modelConfig: {
+    speakerAttribution: {
+      modelSrc: PARAKEET_SORTFORMER_4SPK_V2_1_Q8_0,
+      mergeSameSpeaker: true,  // merge adjacent turns of the same speaker (default)
+      minSegmentMs: 200,       // shortest padded turn sent to ASR; 0 keeps every turn
+      padSegmentMs: 0          // widen the audio slice around each turn
+    }
+  }
+})
+const segments = await transcribe({ modelId, audioChunk: 'meeting.wav', metadata: true })
+for (const { speakerId, startMs, endMs, text } of segments) {
+  console.log(speakerId, startMs, endMs, text)
+}
+```
+
+Each segment carries a zero-based `speakerId` and the diarized turn's
+`startMs`/`endMs`; `padSegmentMs` widens only the audio the ASR model hears.
+Omitted options keep the addon's defaults, and `diarizationThreshold` and
+`diarizationMinSegmentMs` still override the diarizer when set. `backend`
+applies to both models. Speaker attribution is a batch mode: it cannot be
+combined with `streaming: true`, and `transcribeStream()` is unavailable on such
+a load. `assessModelFit` answers `unknown` for it, as the fitter projects one
+model at a time; assess the ASR and diarization models as separate loads.
+
 The CLI accepts MOSS `hotwords` and `max_new_tokens` in transcription requests.
 Its `verbose_json` response includes MOSS speaker labels and Nemotron
 `speaker_segments` with `speaker_id`, `start`, and `end` in seconds.
@@ -179,10 +217,10 @@ Its `verbose_json` response includes MOSS speaker labels and Nemotron
 `transcribeStream()` opens a duplex session for both engines — write audio chunks via `session.write(...)`, iterate events with `for await (const event of session) { ... }`. Events are typed as a discriminated union `{ type }`:
 
 - `{ type: "text", text }` — incremental transcript text.
-- `{ type: "segment", segment }` — segment metadata when `metadata: true`, on both engines. Parakeet segments also carry `isEndOfTurn` and `startsWord`.
-- `{ type: "vad", speaking, probability, source }` — voice-activity-detection state (whisper-only; `source` is `"silero"`).
+- `{ type: "segment", segment }` — segment metadata when `metadata: true`, on both engines. Parakeet segments also carry `isEndOfTurn` and `startsWord`, and in streaming the native `tokenIds`, `isFinal`, `chunkIndex` and `eotConfidence` (see "Parakeet streaming metadata").
+- `{ type: "vad", speaking, probability, source }` — voice-activity-detection state. `source` is `"silero"` for whisper, `"energy"` for Parakeet's energy detector, or `"sortformer"` for Parakeet speaker activity. Parakeet events also carry `timestamp` (seconds from the session start) and `chunkIndex` (the native chunk, `-1` when unavailable).
 - `{ type: "endOfTurn", source: "whisper", silenceDurationMs }` — turn boundary detected from a measured silence window (whisper).
-- `{ type: "endOfTurn", source: "parakeet" }` — turn boundary detected from the EOU model's `<EOU>` token (parakeet; no silence window — the event is token-driven).
+- `{ type: "endOfTurn", source: "parakeet", timestamp?, chunkIndex?, confidence? }` — turn boundary detected from the EOU model's `<EOU>` token (parakeet; no silence window — the event is token-driven). The native boundary reports its time in seconds from the session start, its chunk index and the model's end-of-turn confidence; a boundary the addon derives from a segment carries none of them.
 
 The `source` field on `endOfTurn` lets consumers narrow the union: whisper events always carry a numeric `silenceDurationMs`; parakeet events never do.
 
@@ -231,7 +269,25 @@ for await (const event of session) {
 }
 ```
 
-The synthetic `{ type: "endOfTurn", source: "parakeet" }` event surfaces whenever the EOU model emits an `<EOU>` token, and is the parakeet equivalent of whisper's silence-window EOU. Pair it with the `PARAKEET_EOU_120M_V1_Q8_0` checkpoint when you need explicit turn boundaries from parakeet.
+The `{ type: "endOfTurn", source: "parakeet" }` event surfaces whenever the EOU model emits an `<EOU>` token, and is the parakeet equivalent of whisper's silence-window EOU. Pair it with the `PARAKEET_EOU_120M_V1_Q8_0` checkpoint when you need explicit turn boundaries from parakeet. The boundary follows the transcript chunks of its turn, so a consumer can submit and clear the text it accumulated when the event arrives.
+
+### Parakeet streaming metadata
+
+With `metadata: true`, every Parakeet streaming segment carries what the native
+streaming session reports for its chunk, alongside `text`, `startMs`, `endMs`,
+`append`, `id`, `isEndOfTurn` and `startsWord`:
+
+- `tokenIds` — the native token ids of the segment.
+- `isFinal` — the engine's own finality flag. Empty final markers are delivered,
+  so use it rather than non-empty text to detect a finalized chunk.
+- `chunkIndex` — the native streaming chunk the segment belongs to; `-1` when
+  unknown.
+- `eotConfidence` — the EOU model's end-of-turn confidence for the segment; it
+  may be `0` when the model reports none.
+
+Diarization streaming segments carry `isFinal` and `chunkIndex` with their
+`speakerId`. Batch `transcribe()` segments and whisper segments do not gain
+these fields.
 
 ## Examples
 

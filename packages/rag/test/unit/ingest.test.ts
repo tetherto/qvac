@@ -45,7 +45,12 @@ test('ingest stores precomputed chunks with Float32 bytes and default chunk ids'
       }
     ]
   })
-  t.alike(result, { documents: [{ id: 'a', generation: 1, chunkCount: 2 }], revision: 1 })
+  t.alike(result, {
+    documents: [{ id: 'a', generation: 1, chunkCount: 2 }],
+    skipped: [],
+    cancelled: false,
+    revision: 1
+  })
   await rag.close()
 
   await inspect(store, async (reader) => {

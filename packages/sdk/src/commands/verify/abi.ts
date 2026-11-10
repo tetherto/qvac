@@ -1,25 +1,22 @@
-import { promises as fsp } from 'node:fs'
-import path from 'node:path'
 import semver from 'semver'
 import { formatAddonId, type NativeAddon } from '@/commands/verify/addon-source'
 
+/** Bare Kit binding a phone platform links: bare-kit-kotlin on Android, bare-kit-swift on iOS. */
+export type BareKitBinding = 'bare-kit-kotlin' | 'bare-kit-swift'
+
+/** The Bare build inside the Bare Kit that a phone platform runs. */
 export interface BareRuntime {
   version: string
-  source: 'flag' | 'config' | 'bare-runtime' | 'bare' | 'react-native-bare-kit'
-  /** Installed version of the package named by `source`, when it differs from `version`. */
-  packageVersion?: string
-  detail?: string
+  /** The package the Bare comes with: a Bare Kit binding on phones, bare-sidecar on desktop. */
+  source: BareKitBinding | 'bare-sidecar'
+  /** Version of that package: the binding version bare-stow pins, or the installed bare-sidecar. */
+  packageVersion: string
+  detail: string
 }
 
 export interface UnresolvedBareRuntime {
   reason: string
   triedPaths: string[]
-}
-
-export interface ResolveBareRuntimeOptions {
-  projectRoot: string
-  explicitVersion?: string
-  explicitSource?: 'flag' | 'config'
 }
 
 export type BareRuntimeResolution =
@@ -32,16 +29,23 @@ export interface AbiMismatchIssue {
   message: string
   enginesBare: string
   runtimeVersion: string
+  /** Hosts that run this runtime, when the check was given them. */
+  hosts?: string[]
 }
 
-/** A bundled package that is not an addon but still declares engines.bare. */
+/**
+ * A bundled package that is not an addon but still declares engines.bare. It
+ * warns: the package's JavaScript may run on the older Bare, whereas an addon
+ * built for another ABI does not load.
+ */
 export interface EnginesMismatchIssue {
   code: 'engines-mismatch'
-  level: 'error'
+  level: 'warning'
   package: string
   message: string
   enginesBare: string
   runtimeVersion: string
+  hosts?: string[]
 }
 
 export interface UnknownRuntimeIssue {
@@ -49,6 +53,7 @@ export interface UnknownRuntimeIssue {
   level: 'warning'
   message: string
   triedPaths: string[]
+  hosts?: string[]
 }
 
 export interface MalformedEnginesBareIssue {
@@ -67,6 +72,8 @@ export interface CheckAbiOptions {
   runtime: BareRuntimeResolution
   /** Non-addon packages that declare engines.bare. */
   packages?: EnginesPackage[] | undefined
+  /** Hosts that run `runtime`, recorded on the issues. */
+  hosts?: string[] | undefined
 }
 
 export interface EnginesPackage {
@@ -75,93 +82,13 @@ export interface EnginesPackage {
   enginesBare: string
 }
 
-const RUNTIME_PACKAGES: Array<{
-  source: BareRuntime['source']
-  packageName: string
-}> = [
-  { source: 'bare-runtime', packageName: 'bare-runtime' },
-  { source: 'bare', packageName: 'bare' }
-]
-
-export async function resolveBareRuntime(
-  options: ResolveBareRuntimeOptions
-): Promise<BareRuntimeResolution> {
-  if (options.explicitVersion) {
-    // Caller (verifyBundle) pre-validates explicitVersion via normalizeVersion.
-    return {
-      resolved: true,
-      runtime: {
-        version: normalizeVersion(options.explicitVersion)!,
-        source: options.explicitSource ?? 'flag'
-      }
-    }
-  }
-
-  const tried: string[] = []
-  for (const candidate of RUNTIME_PACKAGES) {
-    const pkgJsonPath = path.join(
-      options.projectRoot,
-      'node_modules',
-      candidate.packageName,
-      'package.json'
-    )
-    tried.push(pkgJsonPath)
-    const version = await tryReadRuntimeVersion(pkgJsonPath)
-    if (version) {
-      return {
-        resolved: true,
-        runtime: { version, source: candidate.source }
-      }
-    }
-  }
-
-  return {
-    resolved: false,
-    error: {
-      reason: 'Unable to detect installed Bare runtime version',
-      triedPaths: tried
-    }
-  }
-}
-
-async function tryReadRuntimeVersion(pkgJsonPath: string): Promise<string | null> {
-  let raw: string
-  try {
-    raw = await fsp.readFile(pkgJsonPath, 'utf8')
-  } catch {
-    return null
-  }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(raw)
-  } catch {
-    return null
-  }
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    return null
-  }
-  const version = (parsed as Record<string, unknown>)['version']
-  return typeof version === 'string' ? normalizeVersion(version) : null
-}
-
-export function normalizeVersion(value: string): string | null {
-  const coerced = semver.coerce(value, { includePrerelease: true })
-  return coerced ? coerced.version : null
-}
-
-export function formatConfigLabel(projectRoot: string, configPath?: string): string {
-  if (!configPath) return 'qvac.config'
-  const rel = path.relative(projectRoot, configPath)
-  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return configPath
-  return rel
-}
-
 export function formatRuntimeSource(runtime: BareRuntime) {
-  return runtime.detail === undefined ? runtime.source : `${runtime.source}: ${runtime.detail}`
+  return `${runtime.source}: ${runtime.detail}`
 }
 
 export function checkAbi(options: CheckAbiOptions): AbiIssue[] {
-  const { addons, runtime, packages = [] } = options
+  const { addons, runtime, packages = [], hosts } = options
+  const onHosts = hosts === undefined ? {} : { hosts }
   const constrained = [
     ...addons.map((addon) => ({
       id: formatAddonId(addon),
@@ -200,10 +127,9 @@ export function checkAbi(options: CheckAbiOptions): AbiIssue[] {
       level: 'warning',
       message:
         `${runtime.error.reason}. ABI checks skipped for ${checkable.length} ` +
-        `package${checkable.length === 1 ? '' : 's'}. ` +
-        'For mobile hosts, install react-native-bare-kit; for a desktop build, ' +
-        'install bare-runtime or pass bareRuntimeVersion.',
-      triedPaths: runtime.error.triedPaths
+        `package${checkable.length === 1 ? '' : 's'}.`,
+      triedPaths: runtime.error.triedPaths,
+      ...onHosts
     })
     return issues
   }
@@ -221,16 +147,18 @@ export function checkAbi(options: CheckAbiOptions): AbiIssue[] {
         addon: entry.id,
         enginesBare: entry.range,
         runtimeVersion: version,
-        message
+        message,
+        ...onHosts
       })
     } else {
       issues.push({
         code: 'engines-mismatch',
-        level: 'error',
+        level: 'warning',
         package: entry.id,
         enginesBare: entry.range,
         runtimeVersion: version,
-        message
+        message,
+        ...onHosts
       })
     }
   }

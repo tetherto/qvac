@@ -46,6 +46,16 @@ speaker-activity VAD events retain `speakerId`. `diarizationThreshold` and
 Omitted controls preserve native model defaults. Registry constants and model-output
 validation are pending registry weights.
 
+Parakeet loads take an explicit native `backend` selector (`auto`, `cpu`, `cuda`,
+`vulkan`, `opencl`, `metal`, or an exact ggml device name), which overrides `useGPU`
+and reaches the fit request. `speakerAttribution` adds a separate diarization
+model, given as a `modelSrc` the plugin resolves into the
+`speakerAttributionModelPath` artifact, for batch text-per-speaker transcription;
+it is refused with `streaming`, left out of config reloads, and makes the fit
+verdict `unknown` because the fitter projects one model. Parakeet streaming
+segments and events keep the native `tokenIds`, `isFinal`, `chunkIndex`,
+`eotConfidence`, end-of-turn `timestamp`/`confidence` and VAD `chunkIndex`.
+
 TranscribePsy-250M-EU-sub (`PARAKEET_TRANSCRIBEPSY_250M_Q8_0`) loads through
 `parakeet-transcription` as a TDT model; it detects its eight European languages
 itself. The full TranscribePsy-250M-EU (`PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0`,
