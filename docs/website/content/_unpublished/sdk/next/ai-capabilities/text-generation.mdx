@@ -37,7 +37,7 @@ You can load any [`llama.cpp`](https://github.com/ggml-org/llama.cpp)-compatible
 * Event stream: `completion()` exposes a single ordered `events` async iterable plus an aggregated `final` promise. Events are discriminated by `type` — `contentDelta`, `thinkingDelta`, `toolCall`, `toolError`, `completionStats`, `completionDone`, `rawDelta`. The terminal `completionDone` event carries a `stopReason` (e.g. `"eos"`, `"length"`, `"cancelled"`).
 * Thinking content: models that emit `<think>` blocks surface them as dedicated `thinkingDelta` events (enable with `captureThinking: true`), so consumers don't have to parse tags from raw text.
 * Tool calls: the model emits structured tool calls as `toolCall` events ordered alongside content and thinking in the same stream.
-* Tool choice: `generationParams.tool_choice` takes `"auto"` (default), `"required"`, `"none"` or the name of a declared tool. On llama.cpp-backed models the sampler is constrained by the chat template's tool-call grammar, so `"required"` guarantees a call and a name restricts the call to that tool; a request that cannot honour the choice fails instead of answering in prose.
+* Tool choice: `generationParams.tool_choice` takes `"auto"` (default), `"required"`, `"none"` or the name of a declared tool. On llama.cpp-backed models the sampler is constrained by the chat template's tool-call grammar, so under `"required"` the model cannot finish without a call, though a long text reply can use up the tokens before it reaches one, and a name restricts the call to that tool; a request whose choice cannot be applied fails before generating.
 * Tool parameters: a tool's `parameters` is a JSON Schema object and is passed to the model as declared, including nested `properties`, `items`, nullable types (`["string", "null"]`) and `anyOf`. Zod `parameters` are converted with `z.toJSONSchema`, so nested Zod objects and arrays keep their structure.
 * Tool errors: a tool-call region the model emitted that fails to parse or validate surfaces as a `toolError` event and in `final.toolErrors`, so an empty `toolCalls` can be told apart from a malformed call.
 * Past tool calls in history: an `assistant` message carries the calls it made in `toolCalls` (`id`, `name`, `arguments`), and a `tool` message names the call it answers with `toolCallId` and `toolName`. llama.cpp-backed models render them with their own chat template instead of reading them as text in `content`.
@@ -348,6 +348,31 @@ On hybrid and recurrent models (Qwen3.5, Jamba, DeepSeek V4) and on sliding-wind
 - `cache_checkpoint_storage`: `'memory'` (default) or `'disk'`. With `'disk'`, set `cache_checkpoint_dir` to a writable directory; on mobile, use the app's cache directory.
 - `cache_ram_mib`: host-RAM budget, in MiB, for cached conversations that are not running, so switching back to a caller-managed `kvCache` key skips reading its cache file. Default `0` (off).
 - `cache_share_across_keys`: whether requests may reuse a prefix held by another conversation. Default `false`; set `true` to opt in to model-wide sharing.
+
+#### Start a chat from a primed cache
+
+In-memory reuse only helps while the base conversation is still loaded. To start a chat from a caller-managed cache that may no longer be in memory, such as a system prompt and tools primed with `prefill` in an earlier session, pass its key as `seedFrom`:
+
+```js
+// The model is loaded with `cache_share_across_keys: true` in its modelConfig.
+// Prime the base once.
+await completion({ modelId, history: systemAndTools, stream: false, kvCache: "base", prefill: true }).final;
+
+// Each new chat starts from it and processes only its own message.
+completion({
+  modelId,
+  history: [...systemAndTools, { role: "user", content: "First question" }],
+  stream: true,
+  kvCache: "chat-2",
+  seedFrom: "base",
+});
+```
+
+- `seedFrom` needs a string `kvCache` other than itself; it has no meaning for the auto cache.
+- The model reads the `seedFrom` cache and reuses the prefix it shares with the prompt, so a history that does not continue the base reuses less, down to nothing on hybrid and recurrent models. The source is never written; the chat's own key is.
+- It applies only while the chat's `kvCache` key has no cache. Once the chat has one, later turns ignore it.
+- The call is refused when no cache named `seedFrom` exists for the model and system prompt, or when the model was not loaded with `cache_share_across_keys: true`, which is off by default.
+- The source must have been saved by a model loaded with the same `parallel` value.
 
 #### Prepare the system prompt and tools ahead of time
 

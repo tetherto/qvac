@@ -205,6 +205,7 @@ export {
   type VectorIndexAddParams,
   type VectorIndexIdsParams,
   type VectorIndexSearchParams,
+  type VectorIndexSetStagedSearchParams,
   type VectorIndexWriteParams,
   type QvacConfig,
   type ModelInfo,
@@ -408,7 +409,10 @@ export {
   RequestNotFoundError,
   RequestRejectedByPolicyError,
   TranslationFailedError,
-  AudioEncodeFailedError
+  AudioEncodeFailedError,
+  InvalidSeedFromParamsError,
+  KvCacheSeedSourceNotFoundError,
+  KvCacheSeedSharingDisabledError
 } from './utils/errors-server'
 
 // `WorkerCrashedError` and `WorkerShutdownError` are thrown by the
