@@ -30,7 +30,9 @@ export interface LoadManagerDeps {
 }
 
 const defaultCancel = (requestId: string): Promise<void> => sdkCancel({ requestId })
-const defaultUnload = (modelId: string): Promise<void> => sdkUnloadModel({ modelId })
+const defaultUnload = async (modelId: string): Promise<void> => {
+  await sdkUnloadModel({ modelId })
+}
 
 export class ModelLoadTimeoutError extends Error {
   constructor(alias: string, timeoutMs: number) {
