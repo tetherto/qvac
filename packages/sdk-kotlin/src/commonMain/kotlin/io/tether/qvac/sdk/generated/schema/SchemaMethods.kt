@@ -3,6 +3,7 @@ package io.tether.qvac.sdk
 
 import io.tether.qvac.sdk.generated.schema.*
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 sealed interface QvacProgressEvent<out Progress, out Result> {
     data class Progress<out Progress>(val value: Progress) : QvacProgressEvent<Progress, Nothing>
@@ -43,6 +44,8 @@ suspend fun QvacClient.`downloadAsset`(request: io.tether.qvac.sdk.generated.sch
 fun QvacClient.downloadAssetWithProgress(request: io.tether.qvac.sdk.generated.schema.DownloadAssetRequest): Flow<QvacProgressEvent<io.tether.qvac.sdk.generated.schema.ModelProgressResponse, io.tether.qvac.sdk.generated.schema.DownloadAssetResponse>> = progressTyped(request, progressType = "modelProgress")
 
 suspend fun QvacClient.`embed`(request: io.tether.qvac.sdk.generated.schema.EmbedRequest): io.tether.qvac.sdk.generated.schema.EmbedResponse = callTyped(request)
+
+suspend fun QvacClient.`embedBatch`(request: io.tether.qvac.sdk.generated.schema.EmbedBatchRequest): io.tether.qvac.sdk.generated.schema.EmbedBatchResponse = callTyped(request)
 
 suspend fun QvacClient.`finetune`(request: io.tether.qvac.sdk.generated.schema.FinetuneRequest): io.tether.qvac.sdk.generated.schema.FinetuneResponse = callTyped(request)
 fun QvacClient.finetuneWithProgress(request: io.tether.qvac.sdk.generated.schema.FinetuneRequest): Flow<QvacProgressEvent<io.tether.qvac.sdk.generated.schema.FinetuneProgressResponse, io.tether.qvac.sdk.generated.schema.FinetuneResponse>> = progressTyped(request, progressType = "finetune:progress")
@@ -87,9 +90,9 @@ suspend fun QvacClient.`stopRpcServer`(request: io.tether.qvac.sdk.generated.sch
 
 suspend fun QvacClient.`suspend`(request: io.tether.qvac.sdk.generated.schema.SuspendRequest): io.tether.qvac.sdk.generated.schema.SuspendResponse = callTyped(request)
 
-fun QvacClient.`textToSpeech`(request: io.tether.qvac.sdk.generated.schema.TextToSpeechRequest): Flow<io.tether.qvac.sdk.generated.schema.TextToSpeechResponse> = streamTyped(request)
+fun QvacClient.`textToSpeech`(request: io.tether.qvac.sdk.generated.schema.TextToSpeechRequest): Flow<io.tether.qvac.sdk.generated.schema.TextToSpeechResponse> = streamTyped<io.tether.qvac.sdk.generated.schema.TextToSpeechRequest, io.tether.qvac.sdk.generated.schema.TextToSpeechResponse>(request).map { it.withDecodedPcm() }
 
-fun QvacClient.`textToSpeechStream`(request: io.tether.qvac.sdk.generated.schema.TextToSpeechStreamRequest, input: Flow<ByteArray>): Flow<io.tether.qvac.sdk.generated.schema.TextToSpeechStreamResponse> = duplexTyped(request, input)
+fun QvacClient.`textToSpeechStream`(request: io.tether.qvac.sdk.generated.schema.TextToSpeechStreamRequest, input: Flow<ByteArray>): Flow<io.tether.qvac.sdk.generated.schema.TextToSpeechStreamResponse> = duplexTyped<io.tether.qvac.sdk.generated.schema.TextToSpeechStreamRequest, io.tether.qvac.sdk.generated.schema.TextToSpeechStreamResponse>(request, input).map { it.withDecodedPcm() }
 
 fun QvacClient.`transcribe`(request: io.tether.qvac.sdk.generated.schema.TranscribeRequest): Flow<io.tether.qvac.sdk.generated.schema.TranscribeResponse> = streamTyped(request)
 
