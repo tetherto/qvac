@@ -4,7 +4,7 @@ import Corestore from 'corestore'
 import fs from 'bare-fs'
 import { AbortController } from 'bare-abort-controller'
 
-import { ERR_CODES, createRag } from '../../src/index.js'
+import { ERR_CODES, computeSpaceId, createRag } from '../../src/index.js'
 import { MUTATIONS, type MutationRecord } from '../../src/db/records.js'
 import {
   loadNativeIndex,
@@ -588,4 +588,85 @@ test('search falls back to the scan without the addon', async (t) => {
   await rag.close()
   t.alike(snapshotFiles(handle.dir), [], 'no snapshot without an index')
   t.alike(await mutationRevisions(handle.store), [1], 'and nothing pruned')
+})
+
+test('re-ingesting unchanged content after a crash between commit and snapshot', async (t) => {
+  const calls = await countNativeCalls(t)
+  const handle = await openStore(t)
+  const rag = await openOn(t, handle, { snapshotEvery: 2 })
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+  await search(rag, spaceId, [1, 0, 0])
+  await rag.ingest({ namespace: 'ns', documents: [doc('b', spaceId, [['b', [0, 1, 0]]])] })
+  t.is(sidecarRevision(handle.dir), 2)
+
+  const coreDir = snapshotFiles(handle.dir)[0].split('/').slice(0, -1).join('/')
+  fs.chmodSync(coreDir, 0o555)
+  t.teardown(() => fs.chmodSync(coreDir, 0o755))
+  await rag.ingest({ namespace: 'ns', documents: [doc('c', spaceId, [['c', [0, 0, 1]]])] })
+  await rag.close()
+  fs.chmodSync(coreDir, 0o755)
+  t.is(sidecarRevision(handle.dir), 2, 'the commit of c is not in the snapshot')
+
+  const reopened = await openOn(t, handle, { snapshotEvery: 2 })
+  const retried = await reopened.ingest({
+    namespace: 'ns',
+    documents: [doc('c', spaceId, [['c', [0, 0, 1]]]), doc('b', spaceId, [['b2', [0, 1, 0]]])]
+  })
+  t.alike(retried.documents, [
+    { id: 'c', generation: 1, chunkCount: 1, status: 'unchanged' },
+    { id: 'b', generation: 2, chunkCount: 1, status: 'replaced', removedChunks: 1 }
+  ])
+  t.is(retried.revision, 4, 'only the changed document bumped the revision')
+  t.alike(contents(await search(reopened, spaceId, [0, 1, 1])), ['b2', 'c', 'a'])
+  t.is(calls.loads, 1, 'the stale snapshot was loaded')
+  t.is(calls.creates, 1, 'and caught up by replay, without a rebuild')
+})
+
+test('a query from another space is rejected before the index opens', async (t) => {
+  const calls = await countNativeCalls(t)
+  const handle = await openStore(t)
+  const rag = await openOn(t, handle)
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+  const other = await rag.createNamespace({ name: 'other', space: spaceOf(3) })
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+
+  await rejectsWithCode(
+    t,
+    search(rag, other.spaceId, [1, 0, 0]),
+    ERR_CODES.EMBEDDING_SPACE_MISMATCH,
+    'direct search'
+  )
+  await rejectsWithCode(
+    t,
+    rag.scoped({ namespace: 'ns', documentIds: ['a'] }).search({
+      vector: [1, 0, 0],
+      spaceId: other.spaceId,
+      k: 1
+    }),
+    ERR_CODES.EMBEDDING_SPACE_MISMATCH,
+    'scoped search'
+  )
+  t.is(calls.creates + calls.loads, 0, 'the index was never opened')
+})
+
+test('a snapshot from another space is never loaded, even with the same dimensions', async (t) => {
+  const calls = await countNativeCalls(t)
+  const handle = await openStore(t)
+  const rag = await openOn(t, handle)
+  const { spaceId } = await rag.createNamespace({ name: 'ns', space: SPACE })
+  await rag.ingest({ namespace: 'ns', documents: [doc('a', spaceId, [['a', [1, 0, 0]]])] })
+  await search(rag, spaceId, [1, 0, 0])
+  await rag.close()
+
+  const sidecar = snapshotFiles(handle.dir).find((file) => file.endsWith('.json')) as string
+  const written = JSON.parse(fs.readFileSync(sidecar, 'utf8')) as { spaceId: string }
+  t.is(written.spaceId, spaceId)
+  written.spaceId = computeSpaceId(spaceOf(3))
+  fs.writeFileSync(sidecar, JSON.stringify(written))
+
+  const reopened = await openOn(t, handle)
+  t.alike(contents(await search(reopened, spaceId, [1, 0, 0])), ['a'])
+  t.is(calls.loads, 0, 'the snapshot was not loaded')
+  t.is(calls.creates, 2, 'the index was rebuilt from the database')
 })

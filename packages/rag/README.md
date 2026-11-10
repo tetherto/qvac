@@ -138,11 +138,12 @@ Within one document, either every chunk has an `embedding` or none does. Chunk I
 - The whole call is validated, and text is chunked, before anything is written.
 - Each document commits in its own HyperDB batch, in input order, as soon as all its chunks are embedded. If a later document fails, earlier ones stay committed.
 - `signal` is checked between embedding batches and before each document's commit. An abort does not throw: committed documents stay, the rest are listed in `skipped`, and `cancelled` is `true`.
-- `onProgress({ stage, done, total })` reports `chunk` (text documents chunked), `embed` (chunks embedded, once per batch) and `commit` (documents written).
+- `onProgress({ stage, done, total })` reports `chunk` (text documents chunked), `embed` (chunks embedded, once per batch) and `commit` (documents written or found unchanged).
 - Ingesting an existing document ID replaces it: the new chunks get a new generation and the old chunks are deleted in the same batch.
+- Re-ingesting a document whose content is unchanged writes nothing: no new generation and no revision bump, and its text is not sent to the port. Content is the chunk IDs, text and `metadataJson` after chunking, the precomputed vectors, the document `metadata` and the namespace's space. So new `chunking` options count as a change, while `rag-extract`'s per-chunk `indexedAt` timestamp does not.
 - There is no content deduplication. Identical text in two documents is stored and returned twice.
 
-Returns `{ documents: [{ id, generation, chunkCount }], skipped, cancelled, revision }`.
+Returns `{ documents, skipped, cancelled, revision }`. Each entry in `documents` is `{ id, generation, chunkCount, status }`, where `status` is `created`, `replaced` (with `removedChunks`, the previous generation's chunk count) or `unchanged`.
 
 ### `deleteDocuments({ namespace, documentIds })`
 

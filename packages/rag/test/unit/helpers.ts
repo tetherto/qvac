@@ -15,7 +15,13 @@ import type {
   HyperDBReader,
   HyperDBTransaction
 } from '../../src/db/db-types.js'
-import type { EmbeddedDocumentInput, EmbeddingSpace, IndexOptions, Rag } from '../../src/types.js'
+import type {
+  EmbeddedDocumentInput,
+  EmbeddingSpace,
+  EmbeddingsPort,
+  IndexOptions,
+  Rag
+} from '../../src/types.js'
 
 // brittle's types don't export the test instance; the last overload returns it.
 export type Test = ReturnType<typeof import('brittle')>
@@ -29,6 +35,44 @@ export const SPACE: EmbeddingSpace = {
   documentEncoding: '',
   queryEncoding: '',
   preprocessing: 'none'
+}
+
+const WORDS = ['cat', 'dog', 'fish']
+
+// One dimension per keyword, so a query ranks the chunks that mention it.
+function embed(text: string): number[] {
+  const lower = text.toLowerCase()
+  return WORDS.map((word) => (lower.includes(word) ? 1 : 0))
+}
+
+export interface FakePort extends EmbeddingsPort {
+  batches: string[][]
+  queries: string[]
+}
+
+export function fakePort(
+  space: EmbeddingSpace = SPACE,
+  onBatch?: (batch: number, signal?: AbortSignal) => void
+): FakePort {
+  const port: FakePort = {
+    space,
+    batches: [],
+    queries: [],
+    embedDocuments(texts, options) {
+      port.batches.push(texts)
+      try {
+        onBatch?.(port.batches.length, options?.signal)
+      } catch (error) {
+        return Promise.reject(error)
+      }
+      return Promise.resolve(Float32Array.from(texts.flatMap(embed)))
+    },
+    embedQuery(text) {
+      port.queries.push(text)
+      return Promise.resolve(Float32Array.from(embed(text)))
+    }
+  }
+  return port
 }
 
 export interface Fixture {

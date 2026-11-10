@@ -311,9 +311,10 @@ export function createRag(options: CreateRagOptions): Rag {
       if (entry.kind === 'embedded') checkChunks(namespace, ns, space, entry.document)
     }
 
-    const jobs = prepareJobs(documents, chunker, onProgress)
+    const jobs = prepareJobs(documents, chunker, space.spaceId, onProgress)
     // The jobs hold everything still needed; committed ones are released below.
     documents.length = 0
+    await withSnapshot(instance, (reader) => findUnchanged(reader, namespace, jobs))
     const queue: Array<{ job: IngestJob; ordinal: number }> = []
     for (const job of jobs) {
       job.vectors.forEach((vector, ordinal) => {
@@ -332,19 +333,25 @@ export function createRag(options: CreateRagOptions): Rag {
         // Checked once the lock is held, so an abort while waiting for another
         // write still skips this document.
         const job = jobs[next]
-        const document = toValidDocument(job, space.spaceId)
-        checkChunks(namespace, ns, space, document)
-        const committed = await withTransaction(instance, (tx) =>
-          signal?.aborted
-            ? Promise.resolve(null)
-            : commitDocument(tx, indexRegistry, namespace, document)
-        )
+        let committed: Committed | null
+        if (job.unchanged) {
+          if (signal?.aborted) return false
+          committed = { document: unchangedResult(job.unchanged), revision: null }
+        } else {
+          const document = toValidDocument(job, space.spaceId)
+          checkChunks(namespace, ns, space, document)
+          committed = await withTransaction(instance, (tx) =>
+            signal?.aborted
+              ? Promise.resolve(null)
+              : commitDocument(tx, indexRegistry, namespace, document, job.contentHash)
+          )
+        }
         if (!committed) return false
         // A large call would otherwise hold every vector it embedded until it returns.
         job.chunks = []
         job.vectors = []
         results.push(committed.document)
-        revision = committed.revision
+        if (committed.revision !== null) revision = committed.revision
         next++
         onProgress?.({ stage: 'commit', done: next, total: jobs.length })
       }
@@ -524,6 +531,15 @@ interface IngestJob {
   // Precomputed vectors are set up front; the rest are filled by the port.
   vectors: Array<Float32Array | undefined>
   missing: number
+  contentHash: string
+  // The stored document, when it already holds this content.
+  unchanged?: DocumentRecord
+}
+
+interface Committed {
+  document: IngestedDocument
+  // Null when nothing was written.
+  revision: number | null
 }
 
 // Chunks every text document before anything is written, so text that yields
@@ -531,6 +547,7 @@ interface IngestJob {
 function prepareJobs(
   documents: ParsedDocument[],
   chunker: Chunker,
+  spaceId: string,
   onProgress: IngestOptions['onProgress']
 ): IngestJob[] {
   const textTotal = documents.filter((entry) => entry.kind === 'text').length
@@ -538,8 +555,10 @@ function prepareJobs(
   return documents.map((entry): IngestJob => {
     const { id, metadata } = entry.document
     if (entry.kind === 'embedded') {
-      const vectors = entry.document.chunks.map((chunk) => chunk.embedding)
-      return { id, metadata, chunks: entry.document.chunks, vectors, missing: 0 }
+      const { chunks } = entry.document
+      const vectors = chunks.map((chunk) => chunk.embedding)
+      const contentHash = hashContent(spaceId, metadata, chunks, vectors)
+      return { id, metadata, chunks, vectors, missing: 0, contentHash }
     }
     let chunks = entry.kind === 'chunked' ? entry.document.chunks : []
     if (entry.kind === 'text') {
@@ -553,8 +572,36 @@ function prepareJobs(
       chunked++
       onProgress?.({ stage: 'chunk', done: chunked, total: textTotal })
     }
-    return { id, metadata, chunks, vectors: chunks.map(() => undefined), missing: chunks.length }
+    const vectors = chunks.map(() => undefined)
+    const contentHash = hashContent(spaceId, metadata, chunks, vectors)
+    return { id, metadata, chunks, vectors, missing: chunks.length, contentHash }
   })
+}
+
+// Runs before anything is embedded, so an unchanged text document costs no
+// embedding calls.
+async function findUnchanged(
+  reader: HyperDBReader,
+  namespace: string,
+  jobs: IngestJob[]
+): Promise<void> {
+  for (const job of jobs) {
+    const stored = await reader.get<DocumentRecord>(DOCUMENTS, { namespace, documentId: job.id })
+    if (stored?.contentHash !== job.contentHash) continue
+    job.unchanged = stored
+    job.chunks = []
+    job.vectors = []
+    job.missing = 0
+  }
+}
+
+function unchangedResult(stored: DocumentRecord): IngestedDocument {
+  return {
+    id: stored.documentId,
+    generation: stored.generation,
+    chunkCount: stored.chunkCount,
+    status: 'unchanged'
+  }
 }
 
 function toValidDocument(job: IngestJob, spaceId: string): ValidDocument {
@@ -575,10 +622,15 @@ async function commitDocument(
   tx: HyperDBTransaction,
   indexes: IndexRegistry,
   namespace: string,
-  document: ValidDocument
-): Promise<{ document: IngestedDocument; revision: number }> {
+  document: ValidDocument,
+  contentHash: string
+): Promise<Committed> {
   const ns = await getNamespace(tx, namespace)
   const previous = await tx.get<DocumentRecord>(DOCUMENTS, { namespace, documentId: document.id })
+  // A concurrent call may have written the same content since findUnchanged.
+  if (previous?.contentHash === contentHash) {
+    return { document: unchangedResult(previous), revision: null }
+  }
   const removed = previous ? await deleteGeneration(tx, previous) : []
   const generation = previous ? previous.generation + 1 : 1
 
@@ -618,7 +670,7 @@ async function commitDocument(
     documentId: document.id,
     generation,
     chunkCount: document.chunks.length,
-    contentHash: hashDocument(document),
+    contentHash,
     metadata: document.metadata,
     updatedAt: new Date()
   })
@@ -627,8 +679,11 @@ async function commitDocument(
   await tx.flush()
   await indexes.apply(namespace, revision, added, () => concatEmbeddings(document), removed)
 
+  const result = { id: document.id, generation, chunkCount: document.chunks.length }
   return {
-    document: { id: document.id, generation, chunkCount: document.chunks.length },
+    document: previous
+      ? { ...result, status: 'replaced', removedChunks: removed.length }
+      : { ...result, status: 'created' },
     revision
   }
 }
@@ -709,12 +764,39 @@ function checkChunks(
   }
 }
 
-function hashDocument(document: ValidDocument): string {
+// Text documents are hashed after chunking, so new chunking options are a
+// change. Vectors are hashed only when precomputed; a port's are fixed by its space.
+function hashContent(
+  spaceId: string,
+  metadata: Record<string, unknown> | undefined,
+  chunks: ValidTextChunk[],
+  vectors: Array<Float32Array | undefined>
+): string {
   const hash = qvacCrypto.createHash('sha256')
-  for (const chunk of document.chunks) {
-    hash.update(JSON.stringify([chunk.id, chunk.content, chunk.metadataJson ?? null]))
-  }
+  hash.update(JSON.stringify(['qvac-rag-content-v1', spaceId, metadata ?? null]))
+  chunks.forEach((chunk, ordinal) => {
+    hash.update(JSON.stringify([chunk.id, chunk.content, comparableMetadata(chunk.metadataJson)]))
+    const vector = vectors[ordinal]
+    if (vector) hash.update(new Uint8Array(vector.buffer, vector.byteOffset, vector.byteLength))
+  })
   return hash.digest('hex') as string
+}
+
+// rag-extract stamps every chunk with the time it was chunked, which would make
+// the same text a change on every ingest.
+function comparableMetadata(metadataJson: string | undefined): string | null {
+  if (metadataJson === undefined) return null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(metadataJson)
+  } catch {
+    return metadataJson
+  }
+  if (typeof parsed !== 'object' || parsed === null || !('indexedAt' in parsed)) {
+    return metadataJson
+  }
+  const { indexedAt: _indexedAt, ...rest } = parsed as Record<string, unknown>
+  return JSON.stringify(rest)
 }
 
 async function getNamespace(reader: HyperDBReader, name: string): Promise<NamespaceRecord> {
