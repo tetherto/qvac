@@ -61,7 +61,7 @@ SDK calls, with an optional extension compatible with the
 [OpenAI REST API](https://developers.openai.com/api/reference/overview), enabling
 broad integration with the AI ecosystem. Run it with `qvac serve --openai` and
 any system compatible with the OpenAI REST API can point to
-`http://localhost:11434/v1/` and work without changes.
+`http://localhost:11435/v1/` and work without changes.
 
 This is what makes QVAC usable as a local model provider: any tool that already speaks that API can point at it and run against models on your own machine, with no code change.
 
@@ -130,7 +130,7 @@ Start the HTTP server. `qvac serve openai` is a deprecated alias for
 | `--openai` | Mount the OpenAI-compatible REST API |
 | `--no-default` | Do not mount the QVAC surface |
 | `-c, --config <path>` | Config file path (default: auto-detect `qvac.config.*`) |
-| `-p, --port <number>` | Port to listen on (default: `11434`) |
+| `-p, --port <number>` | Port to listen on (default: `11435`) |
 | `-H, --host <address>` | Host to bind to (default: `127.0.0.1`) |
 | `--model <alias>` | Model alias to preload (repeatable, must be in config) |
 | `--api-key <key>` | Require Bearer token authentication |
