@@ -969,9 +969,8 @@ export const completionContextOverflowWarmCache = createCompletionTest(
   {
     estimatedDurationMs: 30000,
     dependency: 'llm-small-ctx',
-    // Two turns against one named cache. Turn one has to end commit-eligible -- stopped on EOS,
-    // some text -- or turn two would be a cold full-history resend and would not be testing the
-    // warm path at all. A `length` (budget or context boundary) or `cancelled` stop is rolled back.
+    // Two turns against one named cache. Turn one must end on EOS with text, or turn two
+    // would be a cold full-history resend and would not test the warm path.
     steps: [
       { useModel: { deps: ['llm-small-ctx'], as: 'model' } },
       {

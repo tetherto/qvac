@@ -450,9 +450,6 @@ export class CompletionExecutor extends AbstractModelExecutor<typeof completionT
       generationParams: params.generationParams
     } as CompletionFnParams)
     const firstFinal = await first.final
-    // Turn one must end on EOS with text to be commit-eligible. The commit
-    // policy refuses a budget-exhausted, boundary-hit or cancelled turn; a
-    // rolled-back turn one would make turn two a cold full-history resend.
     if (firstFinal.stopReason !== 'eos' || firstFinal.raw.fullText.length === 0) {
       return {
         passed: false,
