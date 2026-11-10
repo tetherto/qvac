@@ -1470,7 +1470,7 @@ NormalizedLoad normalizeLoadForFit(
   auto deviceIt = configFilemap.find("device");
   if (deviceIt == configFilemap.end()) {
     std::string errorMsg = string_format(
-        "%s: must specify a device: 'gpu' or 'cpu'.\n",
+        "%s: must specify a device: 'gpu', 'npu' or 'cpu'.\n",
         K_LEGACY_PARSER_NAME.data());
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument, errorMsg);
@@ -1505,6 +1505,14 @@ NormalizedLoad normalizeLoadForFit(
           string_format(
               "%s: 'rpc-servers' requires device: 'gpu'; device: 'cpu' runs "
               "entirely on the local CPU.\n",
+              K_LEGACY_PARSER_NAME.data()));
+    }
+    if (preferredBackend == backend_selection::BackendType::NPU) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          string_format(
+              "%s: 'rpc-servers' requires device: 'gpu'; device: 'npu' runs "
+              "on the local NPU.\n",
               K_LEGACY_PARSER_NAME.data()));
     }
     if (splitMode == LLAMA_SPLIT_MODE_NONE) {
@@ -1553,6 +1561,21 @@ NormalizedLoad normalizeLoadForFit(
 
     const std::vector<std::string> backendOverride =
         tryBackendOverrideFromMap(configFilemap);
+    // The NPU is a single device: the GPU selectors have nothing to choose.
+    if (preferredBackend == BackendType::NPU &&
+        (splitMode != LLAMA_SPLIT_MODE_NONE || !explicitDevices.empty() ||
+         !backendOverride.empty() || mainGpu.has_value())) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "device 'npu' cannot be combined with 'split-mode', 'devices', "
+          "'backend' or 'main-gpu'.");
+    }
+    if (preferredBackend == BackendType::GPU &&
+        std::ranges::find(backendOverride, "xdna") != backendOverride.end()) {
+      QLOG_IF(
+          Priority::WARNING,
+          "[LlamaModel] backend 'xdna' is deprecated; use device: 'npu'\n");
+    }
     // The split and explicit-device paths below do not apply the override, so
     // reject the combination rather than silently run on another backend.
     if (preferredBackend == BackendType::GPU && !backendOverride.empty() &&
@@ -1690,8 +1713,14 @@ NormalizedLoad normalizeLoadForFit(
             maxAdrenoVersion = device.adrenoVersion;
           }
         }
+        // `devices: 'XDNA0'` runs on the NPU alone, so it reports as one.
+        const bool onlyNpu = std::ranges::all_of(
+            devices, [](const backend_selection::SplitDevice& device) {
+              return toLowerAscii(device.name).find("xdna") !=
+                     std::string::npos;
+            });
         selected = {
-            .type = BackendType::GPU,
+            .type = onlyNpu ? BackendType::NPU : BackendType::GPU,
             .name = primary.name,
             .adrenoVersion = maxAdrenoVersion,
             .isOpenCl = anyDevice(&backend_selection::SplitDevice::isOpenCl),
@@ -1765,8 +1794,11 @@ NormalizedLoad normalizeLoadForFit(
     }
 
     const bool useGpu = selected.type == BackendType::GPU;
+    const bool useNpu = selected.type == BackendType::NPU;
 
-    if (useGpu) {
+    // The NPU places layers through `--device` exactly as a GPU does; only its
+    // projector default and reported device class differ.
+    if (useGpu || useNpu) {
       params.mmproj_backend = selected.name;
 #ifdef __ANDROID__
       // QVAC-21867: auto-default the projector backend by GPU class.
@@ -1797,7 +1829,7 @@ NormalizedLoad normalizeLoadForFit(
       // The projector is untested on the XDNA NPU, so it stays on the CPU
       // unless mmproj-use-gpu asks for the NPU.
       const bool projectorOnXdna =
-          usesBackendFamily(true, selected.name, {}, "xdna");
+          useNpu || usesBackendFamily(true, selected.name, {}, "xdna");
       bool mmprojUseGpu = !projectorOnXdna;
       const char* mmprojDefaultReason =
           projectorOnXdna ? "auto-default, XDNA NPU" : "auto-default";
@@ -1809,13 +1841,13 @@ NormalizedLoad normalizeLoadForFit(
           Priority::INFO,
           string_format(
               "[LlamaModel] multimodal projector backend: %s (%s)\n",
-              mmprojUseGpu ? "GPU" : "CPU",
+              mmprojUseGpu ? (useNpu ? "NPU" : "GPU") : "CPU",
               mmprojUseGpuOverride.has_value() ? "mmproj-use-gpu override"
                                                : mmprojDefaultReason));
       params.mmproj_use_gpu = mmprojUseGpu;
 
       params.split_mode = splitMode;
-      result.runtimeBackendDevice = 1;
+      result.runtimeBackendDevice = useNpu ? 2 : 1;
 
       if (splitMode != LLAMA_SPLIT_MODE_NONE && mainGpu.has_value()) {
         QLOG_IF(
@@ -1867,8 +1899,8 @@ NormalizedLoad normalizeLoadForFit(
     } else {
       throw qvac_errors::StatusError(
           qvac_errors::general_error::InternalError,
-          "preferredDeviceFromString: wrong deduced device, must be 'gpu' or "
-          "'cpu'.\n");
+          "preferredDeviceFromString: wrong deduced device, must be 'gpu', "
+          "'npu' or 'cpu'.\n");
     }
 
     if (splitMode != LLAMA_SPLIT_MODE_NONE) {
@@ -1917,7 +1949,10 @@ NormalizedLoad normalizeLoadForFit(
     isMetal = isGpu && selected.isMetal;
     isCuda =
         usesBackendFamily(isGpu, selected.name, splitSelection.devices, "cuda");
+    // A mixed split such as XDNA0,Vulkan0 is a GPU load that still uses the
+    // NPU.
     isXdna =
+        useNpu ||
         usesBackendFamily(isGpu, selected.name, splitSelection.devices, "xdna");
   }
 

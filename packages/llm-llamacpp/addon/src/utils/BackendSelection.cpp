@@ -191,7 +191,8 @@ bool isRpcDevice(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
       "rpc");
 }
 
-// The AMD XDNA NPU registers as an integrated GPU. It is opt-in only: the
+// The AMD XDNA NPU registers as an integrated GPU, but it is its own device
+// class here: `device: 'npu'` selects it and GPU selection never does. The
 // fused decode path rejects some quantizations outright, and there are no
 // NPU-vs-iGPU measurements to justify picking it automatically.
 bool isXdnaDevice(const BackendInterface& bckI, const ggml_backend_dev_t dev) {
@@ -340,7 +341,7 @@ void tryEmplaceDevice(
       !(allowNonAdrenoOpenCl && isOpenCl) && !(allowXdna && isXdna)) {
     // The NPU is opt-in rather than unusable, so say how to select it.
     rejectedDevices.emplace_back(
-        isXdna ? deviceIdentity(bckI, dev) + " [opt in with backend: 'xdna']"
+        isXdna ? deviceIdentity(bckI, dev) + " [opt in with device: 'npu']"
                : deviceIdentity(bckI, dev));
     return;
   }
@@ -386,10 +387,13 @@ backend_selection::preferredBackendTypeFromString(const std::string& device) {
   if (device == "cpu") {
     return BackendType::CPU;
   }
+  if (device == "npu") {
+    return BackendType::NPU;
+  }
   throw qvac_errors::StatusError(
       qvac_errors::general_error::InvalidArgument,
-      "preferredDeviceFromString: wrong device specified, must be 'gpu' or "
-      "'cpu'.\n");
+      "preferredDeviceFromString: wrong device specified, must be 'gpu', "
+      "'npu' or 'cpu'.\n");
 }
 
 std::optional<MainGpu>
@@ -426,7 +430,8 @@ namespace {
 // mistyped `backend` value (hard error) apart from a correctly-spelled backend
 // that simply has no device on this machine (falls through). Deliberately does
 // NOT include "cpu": the CPU path is `device`, and accepting two spellings for
-// it would make `device: 'gpu', backend: 'cpu'` ambiguous.
+// it would make `device: 'gpu', backend: 'cpu'` ambiguous. "xdna" is the
+// deprecated spelling of `device: 'npu'`, kept so existing configs still load.
 constexpr std::array<std::string_view, 5> KNOWN_GPU_BACKEND_FAMILIES = {
     "cuda", "vulkan", "metal", "opencl", "xdna"};
 
@@ -484,8 +489,9 @@ backend_selection::parseBackendOverride(const std::string& backendStr) {
           qvac_errors::general_error::InvalidArgument,
           string_format(
               "backend: unknown backend '%s'. Expected a comma-separated list "
-              "of cuda/vulkan/metal/opencl/xdna or 'auto', for example "
-              "'cuda,vulkan'. To run on CPU use device 'cpu' instead.\n",
+              "of cuda/vulkan/metal/opencl or 'auto', for example "
+              "'cuda,vulkan'. To run on CPU use device 'cpu' instead, and "
+              "device 'npu' for the NPU.\n",
               family.c_str()));
     }
     if (std::ranges::find(families, family) == families.end()) {
@@ -510,8 +516,9 @@ backend_selection::parseBackendOverride(const std::string& backendStr) {
         qvac_errors::general_error::InvalidArgument,
         string_format(
             "backend: '%s' names no backend. Expected a comma-separated list "
-            "of cuda/vulkan/metal/opencl/xdna or 'auto', for example "
-            "'cuda,vulkan'. To run on CPU use device 'cpu' instead.\n",
+            "of cuda/vulkan/metal/opencl or 'auto', for example "
+            "'cuda,vulkan'. To run on CPU use device 'cpu' instead, and "
+            "device 'npu' for the NPU.\n",
             backendStr.c_str()));
   }
   return families;
@@ -551,6 +558,28 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
     const ModelMetaData* metadata, const std::optional<MainGpu>& mainGpu,
     std::optional<int>* outAdrenoVersion, const bool isFinetuning,
     bool* outIsMaliGpu, const std::vector<std::string>& backendOverride) {
+
+  if (preferredBackendType == BackendType::NPU) {
+    if (isFinetuning) {
+      throw qvac_errors::StatusError(
+          qvac_errors::general_error::InvalidArgument,
+          "Finetuning does not run on the NPU; use device 'gpu' or 'cpu'.");
+    }
+    for (size_t i = 0; i < bckI.ggml_backend_dev_count(); ++i) {
+      const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
+      if (::isXdnaDevice(bckI, dev)) {
+        bckI.llamaLogCallback(
+            GGML_LOG_LEVEL_INFO, "Chosen NPU Backend", nullptr);
+        return {BackendType::NPU, lowerCopy(bckI.ggml_backend_dev_name(dev))};
+      }
+    }
+    bckI.llamaLogCallback(
+        GGML_LOG_LEVEL_WARN,
+        "No NPU device found; falling back to CPU",
+        nullptr);
+    bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen CPU", nullptr);
+    return {BackendType::CPU, "none"};
+  }
 
   std::vector<std::string> gpuBackends;
   std::vector<std::string> igpuBackends;
@@ -712,7 +741,9 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
             std::string text = string_format(
                 "Chosen %s Backend (backend override)", family.c_str());
             bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, text.c_str(), nullptr);
-            return {BackendType::GPU, name};
+            // The deprecated `xdna` family names the NPU, not a GPU.
+            return {
+                family == "xdna" ? BackendType::NPU : BackendType::GPU, name};
           }
         }
       }

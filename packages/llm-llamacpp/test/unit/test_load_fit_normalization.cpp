@@ -2603,7 +2603,126 @@ TEST_F(LoadFitNormalizationTest, XdnaLoadKeepsF16KvAndCpuProjector) {
     EXPECT_EQ(result.params.cache_type_v == GGML_TYPE_Q8_0, !isXdna) << name;
     EXPECT_EQ(result.params.mmproj_backend, name);
     EXPECT_EQ(result.params.mmproj_use_gpu, !isXdna) << name;
+    // A split of the NPU alone reports as an NPU load.
+    EXPECT_EQ(result.runtimeBackendDevice, isXdna ? 2 : 1) << name;
   }
+}
+
+// Fabric's --device parser accepts "none" in the unit tests, so it stands in
+// for XDNA0. The NPU places layers like a GPU, but reports device class 2 and
+// keeps the GPU-only defaults off.
+TEST_F(LoadFitNormalizationTest, NpuLoadKeepsF16KvAndCpuProjector) {
+  for (const auto type : {backend_selection::GPU, backend_selection::NPU}) {
+    const bool isNpu = type == backend_selection::NPU;
+    auto config = baseConfig();
+    config["device"] = isNpu ? "npu" : "gpu";
+    config["flash-attn"] = "on";
+
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = type, .name = "none"}));
+
+    EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
+    EXPECT_EQ(result.runtimeBackendDevice, isNpu ? 2 : 1);
+    EXPECT_EQ(result.params.mmproj_backend, "none");
+    EXPECT_EQ(result.params.mmproj_use_gpu, !isNpu);
+    EXPECT_EQ(result.params.cache_type_k == GGML_TYPE_Q8_0, !isNpu);
+    EXPECT_EQ(result.params.cache_type_v == GGML_TYPE_Q8_0, !isNpu);
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, NpuWithoutDeviceFallsBackToCpu) {
+  auto config = baseConfig();
+  config["device"] = "npu";
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::CPU, .name = "none"}));
+
+  EXPECT_EQ(result.runtimeBackendDevice, 0);
+  EXPECT_FALSE(result.params.mmproj_use_gpu);
+}
+
+TEST_F(LoadFitNormalizationTest, NpuRejectsGpuSelectors) {
+  for (const auto& [key, value] :
+       std::vector<std::pair<std::string, std::string>>{
+           {"split-mode", "layer"},
+           {"devices", "none"},
+           {"backend", "vulkan"},
+           {"main-gpu", "0"}}) {
+    auto config = baseConfig();
+    config["device"] = "npu";
+    config[key] = value;
+    try {
+      static_cast<void>(lfn::normalizeLoadForFit(
+          "/tmp/model.gguf",
+          std::move(config),
+          metadata_,
+          {},
+          backend({.type = backend_selection::NPU, .name = "none"})));
+      FAIL() << "device 'npu' with " << key << " must be rejected";
+    } catch (const qvac_errors::StatusError& error) {
+      EXPECT_THAT(
+          error.what(), ::testing::HasSubstr("device 'npu' cannot be combined"))
+          << key;
+    }
+  }
+}
+
+TEST_F(LoadFitNormalizationTest, NpuRejectsRpcServers) {
+  auto config = baseConfig();
+  config["device"] = "npu";
+  config["rpc-servers"] = "127.0.0.1:50052";
+  std::vector<std::string> registrations;
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend(
+            {.type = backend_selection::NPU, .name = "none"},
+            {"mock-device"},
+            &registrations)));
+    FAIL() << "device 'npu' with rpc-servers must be rejected";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(
+        error.what(),
+        ::testing::HasSubstr("device: 'npu' runs on the local NPU"));
+  }
+  EXPECT_TRUE(registrations.empty());
+}
+
+// The deprecated spelling still loads on the NPU, with a warning.
+TEST_F(LoadFitNormalizationTest, BackendXdnaWarnsDeprecatedAndRunsOnNpu) {
+  using qvac_lib_inference_addon_cpp::logger::Priority;
+  auto config = baseConfig();
+  config["backend"] = "xdna";
+
+  auto& verbosity = qvac_lib_inference_addon_llama::logging::g_verbosityLevel;
+  const Priority previous = verbosity;
+  verbosity = Priority::WARNING;
+  ::testing::internal::CaptureStdout();
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::NPU, .name = "none"}));
+  const std::string output = ::testing::internal::GetCapturedStdout();
+  verbosity = previous;
+
+  EXPECT_EQ(result.runtimeBackendDevice, 2);
+  EXPECT_THAT(
+      output,
+      ::testing::HasSubstr(
+          "[LlamaModel] backend 'xdna' is deprecated; use device: 'npu'"));
 }
 
 TEST_F(LoadFitNormalizationTest, MmprojUseGpuOverridesXdnaProjectorDefault) {

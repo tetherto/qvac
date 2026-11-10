@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `device: "npu"` selects the AMD XDNA NPU as its own device class, beside
+  `gpu` and `cpu`. It falls back to the CPU with a warning when no NPU is
+  listed, and is rejected with `InvalidArgument` together with `backend`,
+  `devices`, `split-mode`, `main-gpu`, `rpc-servers` or finetuning. Runtime
+  stats report `backendDevice: "npu"` (native code `2`) for an NPU load,
+  including `devices: "XDNA0"`.
+
+### Deprecated
+
+- `backend: "xdna"`: use `device: "npu"`. It still selects the NPU, now
+  reported as `backendDevice: "npu"`, and logs a deprecation warning.
+
 ## [0.69.0] - 2026-11-09
 
 ### Added

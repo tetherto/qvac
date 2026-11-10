@@ -1221,14 +1221,19 @@ namespace LlmLlamacpp {
   }
 
   export interface LlamaConfig {
+    /**
+     * Device class to run on: `'gpu'`, `'cpu'` or `'npu'`. `'npu'` selects the
+     * AMD XDNA NPU (Linux x64), falls back to CPU when there is none, and
+     * cannot be combined with `backend`, `devices`, `split-mode`, `main-gpu`,
+     * `rpc-servers` or finetuning. GPU selection never picks the NPU.
+     */
     device?: string;
     /**
      * Comma-separated GPU backend priority list, e.g. `'cuda,vulkan'`.
-     * Accepted names: cuda, vulkan, metal, opencl, xdna, plus
+     * Accepted names: cuda, vulkan, metal, opencl, plus
      * `auto` for no preference. An unrecognised name is rejected; a recognised
      * one with no device present is skipped. Use `device: 'cpu'` to run on CPU.
-     * `xdna` (the AMD XDNA NPU, Linux x64) is never chosen automatically;
-     * it is used only when named here or in `devices` as `XDNA0`.
+     * `xdna` is a deprecated alias of `device: 'npu'`.
      */
     backend?: string;
     gpu_layers?: NumericLike;
@@ -1802,7 +1807,7 @@ namespace LlmLlamacpp {
      * model-level — never per-job.
      */
     avgConcurrentSeq: number;
-    backendDevice: "cpu" | "gpu";
+    backendDevice: "cpu" | "gpu" | "npu";
     /**
      * Draft tokens proposed by speculative decoding, and how many of them
      * the model accepted (llama-server's `draft_n` / `draft_n_accepted`).

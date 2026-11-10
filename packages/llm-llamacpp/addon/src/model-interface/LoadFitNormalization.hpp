@@ -117,6 +117,7 @@ struct NormalizedLoad {
   common_params params;
   NormalizedFitSnapshot fitSnapshot;
   std::optional<int> adrenoVersion;
+  // The `backendDevice` stat: 0 = CPU, 1 = GPU, 2 = NPU.
   int64_t runtimeBackendDevice = 0;
 };
 

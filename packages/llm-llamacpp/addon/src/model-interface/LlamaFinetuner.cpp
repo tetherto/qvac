@@ -448,6 +448,17 @@ std::string LlamaFinetuner::finetune(
 }
 
 void LlamaFinetuner::validateModelForFinetuning() {
+  // Checked before finetune() reloads the model: a reload that throws leaves
+  // it with no context.
+  const auto& config = model_.constructionArgs_.configFilemap;
+  if (const auto it = config.find("device");
+      it != config.end() && it->second == "npu") {
+    throw qvac_errors::StatusError(
+        qvac_errors::general_error::InvalidArgument,
+        "Finetuning does not run on the NPU; load the model with device 'gpu' "
+        "or 'cpu'.");
+  }
+
   auto fileType = model_.metadata_.tryGetU32("general.file_type");
   if (fileType.has_value()) {
     const uint32_t ft = *fileType;

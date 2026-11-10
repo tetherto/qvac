@@ -1580,7 +1580,7 @@ TEST_F(BackendSelectionTest, XdnaOnlyHostFallsBackToCpuByDefault) {
       mockBackend, BackendType::GPU, BackendType::CPU, "none");
   EXPECT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& log) {
     return log.first == GGML_LOG_LEVEL_WARN &&
-           log.second.find("XDNA0 (XDNA) [opt in with backend: 'xdna']") !=
+           log.second.find("XDNA0 (XDNA) [opt in with device: 'npu']") !=
                std::string::npos;
   }));
 }
@@ -1598,11 +1598,12 @@ TEST_F(BackendSelectionTest, CpuFallbackHintNamesOnlyXdna) {
   }));
 }
 
+// The deprecated `backend: 'xdna'` still reaches the NPU, reported as one.
 TEST_F(BackendSelectionTest, OverrideReachesXdna) {
   mockBackend.addDevice(createIGPUDevice(RADEON_DESC, VULKAN0_BACK));
   mockBackend.addDevice(createXdnaDevice());
   auto result = chooseWithOverride(mockBackend, {"xdna"});
-  expectChosen(result, BackendType::GPU, "xdna0");
+  expectChosen(result, BackendType::NPU, "xdna0");
   EXPECT_FALSE(loggedOverrideMiss(mockBackend));
 }
 
@@ -1610,7 +1611,7 @@ TEST_F(BackendSelectionTest, OverrideXdnaReachesNpuBesideDiscreteGpu) {
   mockBackend.addDevice(createGPUDevice(NVIDIA_DESC, CUDA0_BACK));
   mockBackend.addDevice(createXdnaDevice());
   auto result = chooseWithOverride(mockBackend, {"xdna"});
-  expectChosen(result, BackendType::GPU, "xdna0");
+  expectChosen(result, BackendType::NPU, "xdna0");
 }
 
 TEST_F(BackendSelectionTest, OverrideHonoursPriorityOrderWithXdna) {
@@ -1619,7 +1620,7 @@ TEST_F(BackendSelectionTest, OverrideHonoursPriorityOrderWithXdna) {
   auto vulkanFirst = chooseWithOverride(mockBackend, {"vulkan", "xdna"});
   expectChosen(vulkanFirst, BackendType::GPU, "vulkan0");
   auto xdnaFirst = chooseWithOverride(mockBackend, {"xdna", "vulkan"});
-  expectChosen(xdnaFirst, BackendType::GPU, "xdna0");
+  expectChosen(xdnaFirst, BackendType::NPU, "xdna0");
 }
 
 // No NPU (XDNA registers no device): an absent backend is skipped, as for
@@ -1660,7 +1661,7 @@ TEST_F(BackendSelectionTest, OverrideXdnaWithinMainGpuIndex) {
       false,
       nullptr,
       {"xdna"});
-  expectChosen(result, BackendType::GPU, "xdna0");
+  expectChosen(result, BackendType::NPU, "xdna0");
 }
 
 TEST_F(BackendSelectionTest, MainGpuIndexOnXdnaWithoutOverrideFallsBackToCpu) {
@@ -1675,6 +1676,62 @@ TEST_F(BackendSelectionTest, OverrideXdnaIgnoredWhenPreferredCpu) {
   auto result = chooseWithOverride(mockBackend, {"xdna"}, BackendType::CPU);
   EXPECT_EQ(result.first, BackendType::CPU);
   EXPECT_EQ(result.second, "none");
+}
+
+// ---- device: 'npu' ----
+
+static bool loggedAt(
+    const MockBackendInterface& mockBackend, ggml_log_level level,
+    const std::string& text) {
+  return std::ranges::any_of(mockBackend.logs, [&](const auto& log) {
+    return log.first == level && log.second.find(text) != std::string::npos;
+  });
+}
+
+TEST_F(BackendSelectionTest, DeviceNpuPicksXdna) {
+  mockBackend.addDevice(createIGPUDevice(RADEON_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createXdnaDevice());
+  expectChosenForPreference(
+      mockBackend, BackendType::NPU, BackendType::NPU, "xdna0");
+  EXPECT_TRUE(loggedAt(mockBackend, GGML_LOG_LEVEL_INFO, "Chosen NPU Backend"));
+}
+
+TEST_F(BackendSelectionTest, DeviceNpuPicksXdnaBesideDiscreteGpu) {
+  mockBackend.addDevice(createGPUDevice(NVIDIA_DESC, CUDA0_BACK));
+  mockBackend.addDevice(createXdnaDevice());
+  expectChosenForPreference(
+      mockBackend, BackendType::NPU, BackendType::NPU, "xdna0");
+}
+
+TEST_F(BackendSelectionTest, DeviceNpuWithoutNpuFallsBackToCpu) {
+  mockBackend.addDevice(createIGPUDevice(RADEON_DESC, VULKAN0_BACK));
+  expectChosenForPreference(
+      mockBackend, BackendType::NPU, BackendType::CPU, "none");
+  EXPECT_TRUE(loggedAt(
+      mockBackend,
+      GGML_LOG_LEVEL_WARN,
+      "No NPU device found; falling back to CPU"));
+}
+
+TEST_F(BackendSelectionTest, DeviceNpuRejectsFinetuning) {
+  mockBackend.addDevice(createXdnaDevice());
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  try {
+    chooseBackend(BackendType::NPU, bckI, nullptr, std::nullopt, nullptr, true);
+    FAIL() << "finetuning on the NPU must be rejected";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_NE(
+        std::string(error.what()).find("Finetuning does not run on the NPU"),
+        std::string::npos);
+  }
+}
+
+TEST_F(BackendSelectionTest, PreferredBackendTypeFromStringAcceptsNpu) {
+  EXPECT_EQ(preferredBackendTypeFromString("gpu"), BackendType::GPU);
+  EXPECT_EQ(preferredBackendTypeFromString("cpu"), BackendType::CPU);
+  EXPECT_EQ(preferredBackendTypeFromString("npu"), BackendType::NPU);
+  EXPECT_THROW(
+      preferredBackendTypeFromString("xdna"), qvac_errors::StatusError);
 }
 
 // ---- parseBackendOverride ----

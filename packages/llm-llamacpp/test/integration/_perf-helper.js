@@ -255,6 +255,7 @@ function _installExitHook() {
 
 function resolveBackend(device) {
   if (!device || device === 'cpu') return 'cpu'
+  if (device === 'npu') return 'xdna'
   if (platform === 'darwin' || platform === 'ios') return 'metal'
   if (platform === 'android') {
     const override =
@@ -306,7 +307,7 @@ function recordPerformance(label, totalTime, extra) {
   const promptTokens = stats ? _num(stats.promptTokens) : null
 
   const reportedDevice =
-    stats && (stats.backendDevice === 'cpu' || stats.backendDevice === 'gpu')
+    stats && ['cpu', 'gpu', 'npu'].includes(stats.backendDevice)
       ? stats.backendDevice
       : null
 

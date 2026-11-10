@@ -61,8 +61,13 @@ On an XDNA2 NPU (Strix Point, Strix Halo, Krackan) with XRT 2.25 or newer instal
 `@qvac/fabric` build that ships the XDNA backend, the NPU registers as `XDNA0` when the
 process can read and write its `/dev/accel` node; otherwise fabric logs that it is not listed.
 
-- It is never chosen automatically. Select it with `backend: "xdna"` or `devices: "XDNA0"`.
-  Without a listed NPU or XRT, `backend: "xdna"` is skipped like any other absent backend.
+- The NPU is its own device class, beside `gpu` and `cpu`, and `device: "gpu"` never picks it.
+  Select it with `device: "npu"`, which falls back to the CPU with a warning when no NPU is
+  listed. `device: "npu"` cannot be combined with `backend`, `devices`, `split-mode`,
+  `main-gpu`, `rpc-servers` or finetuning. Runtime stats report `backendDevice: "npu"`.
+- `backend: "xdna"` is a deprecated alias of `device: "npu"`. It still selects the NPU and
+  logs a deprecation warning; without a listed NPU it is skipped like any other absent backend.
+  `devices: "XDNA0"` also selects the NPU explicitly.
 - Fabric lists the NPU without opening it. The first load that uses `XDNA0` opens it and
   registers its kernels, and the process then holds an NPU context. An NPU that fails to open
   stays listed but takes no work: the load runs on the CPU and fabric logs
@@ -75,7 +80,7 @@ process can read and write its `/dev/accel` node; otherwise fabric logs that it 
 - On an XDNA load the NPU runs the ops it supports and the CPU runs the rest. The GPU is not
   used, so another model can run on it at the same time. All loads in a process share one NPU
   context and take turns on it.
-- A vision model's projector runs on the CPU with `backend: "xdna"` or with `XDNA0` first in
+- A vision model's projector runs on the CPU with `device: "npu"` or with `XDNA0` first in
   `devices`; it is untested on the NPU. `mmproj-use-gpu: true` moves it there.
 - The backend is built around Qwen3.5. A model whose `ssm_out` quantization the fused decode
   layer does not cover, such as Qwen's own Qwen3.5-0.8B `Q4_K_M` GGUF with `Q8_0` `ssm_out`, fails at
@@ -191,7 +196,7 @@ const config = {
 
 | Parameter         | Range / Type                                | Default                      | Description                                           |
 |-------------------|---------------------------------------------|------------------------------|-------------------------------------------------------|
-| device            | `"gpu"` or `"cpu"`                          | — (required)                 | Device to run inference on                            |
+| device            | `"gpu"`, `"cpu"` or `"npu"`                 | — (required)                 | Device class to run inference on. `"npu"` is the AMD XDNA NPU on Linux x64 (see the note on the AMD XDNA NPU above) |
 | gpu_layers        | integer                                     | 0                            | Number of model layers to offload to GPU              |
 | ctx_size          | 0 – model-dependent                         | 4096 (0 = loaded from model) | Context window size                                   |
 | poll              | integer 0 – 100                             | 0                            | Main GGML threadpool busy-wait level. `0` sleeps while idle; higher values can reduce wake latency but consume CPU during GPU work |
@@ -211,7 +216,7 @@ const config = {
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
 | image-max-megapixels | positive integer                            | 50                           | Maximum reported image pixel count in millions, checked before decode. Alias: `image_max_megapixels`. |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
-| backend           | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, `xdna`, or `auto` | N/A | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU. Cannot be combined with `split-mode` or `devices`. `xdna` selects the AMD XDNA NPU on Linux x64, which is never chosen automatically (see the note on the AMD XDNA NPU above) |
+| backend           | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, or `auto` | N/A | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU. Cannot be combined with `split-mode` or `devices`. `xdna` is a deprecated alias of `device: "npu"` |
 | split-mode        | `"none"`, `"layer"`, or `"tensor"` | `"none"`                     | How to split the model across GPUs. `"tensor"` is EXPERIMENTAL and desktop-only; `"row"` is rejected ([details](./docs/multi-gpu.md)) |
 | tensor-split      | comma-separated proportions (e.g. `"1,1"`)  | —                            | GPU split ratios for the multi-GPU split modes ([details](./docs/multi-gpu.md)) |
 | parallel          | integer                                     | 1                            | Concurrent sequence slots for continuous batching. Values `>= 2` enable batch `run()` and split the KV cache uniformly across slots ([details](./docs/continuous-batching.md)) |
@@ -336,7 +341,7 @@ try {
 }
 ```
 
-When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `TTFT`, `TPS`, token counters, and `backendDevice` (`"cpu"` or `"gpu"`). `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
+When `opts.stats` is enabled, `response.stats` includes runtime metrics such as `TTFT`, `TPS`, token counters, and `backendDevice` (`"cpu"`, `"gpu"` or `"npu"`). `backendDevice` reflects the resolved device used at runtime after backend selection/fallback logic, not only the requested config.
 
 #### Tool calling
 
