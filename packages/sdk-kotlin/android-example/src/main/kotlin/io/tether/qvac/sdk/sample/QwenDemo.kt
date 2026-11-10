@@ -7,6 +7,7 @@ import io.tether.qvac.sdk.models
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequest
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestGenerationParams
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContent
 import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItem
 import io.tether.qvac.sdk.generated.schema.ModelProgressResponse
 import kotlinx.coroutines.flow.collect
@@ -105,7 +106,7 @@ class QwenDemo(
                     reasoning_budget = -1,
                     temp = 0.7,
                 ),
-                history = listOf(CompletionStreamRequestHistoryItem(role = "user", content = prompt)),
+                history = listOf(CompletionStreamRequestHistoryItem(role = "user", content = CompletionStreamRequestHistoryItemContent.Variant1(prompt))),
                 modelId = modelId,
                 stream = true,
             ),

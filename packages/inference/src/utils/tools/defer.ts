@@ -1,3 +1,4 @@
+import type { HistoryContent } from '@/schemas/completion-stream'
 import type { Tool } from '@/schemas/tools'
 import { validateTools, type ToolInput } from '@/utils/tool-helpers'
 
@@ -10,6 +11,7 @@ export const TOOL_SEARCH_NAME = 'tool_search'
 
 const DEFAULT_SEARCH_LIMIT = 3
 const MAX_SEARCH_LIMIT = 8
+const EXACT_NAME_SCORE = 1000
 
 // Ceiling on the definitions one search may declare. A query matching a dozen
 // large schemas would otherwise undo the saving the catalog just made.
@@ -17,7 +19,7 @@ const MAX_DEFINITION_BYTES = 8 * 1024
 
 export type HistoryMessage = {
   role: string
-  content: string
+  content: HistoryContent
 }
 
 /**
@@ -155,7 +157,7 @@ function scoreTool(tool: Tool, query: string, tokens: readonly string[]): number
 
   // Exact name wins outright: the model asking for a tool by name is not a
   // capability search and must not be outranked by a wordier description.
-  if (name === normalizedQuery) return 1000
+  if (name === normalizedQuery) return EXACT_NAME_SCORE
 
   let score = 0
   if (normalizedQuery.length > 2 && name.includes(normalizedQuery)) score += 100
@@ -171,9 +173,23 @@ function scoreTool(tool: Tool, query: string, tokens: readonly string[]): number
   return score
 }
 
+type Scored = { tool: Tool; score: number }
+
+// Names score case-insensitively, so `GetWeather` and `getWeather` both score as
+// exact; the one spelled as asked wins, and with neither, both load.
+function namedBy(scored: readonly Scored[], query: string): Scored[] {
+  const exact = scored.filter(({ score }) => score === EXACT_NAME_SCORE)
+  const literal = exact.filter(({ tool }) => tool.name === query.trim())
+  return literal.length > 0 ? literal : exact
+}
+
 /**
  * Rank the deferred inventory against a query. Exact name first, then text
  * match. Ties keep registration order so repeated searches are deterministic.
+ *
+ * An exact name loads that tool alone. Otherwise a match scoring under half of
+ * the best is left out: one query word in a description or group is not enough
+ * to load a tool beside a strong match, while tools tied at the top load together.
  */
 export function searchDeferredTools(
   deferred: readonly Tool[],
@@ -185,12 +201,17 @@ export function searchDeferredTools(
     .map((tool, index) => ({ tool, index, score: scoreTool(tool, query, tokens) }))
     .filter((entry) => entry.score > 0)
     .sort((a, b) => b.score - a.score || a.index - b.index)
+  const best = scored[0]?.score ?? 0
+  const matches =
+    best === EXACT_NAME_SCORE
+      ? namedBy(scored, query)
+      : scored.filter(({ score }) => score >= best / 2)
 
   const cap = Math.min(Math.max(Math.trunc(limit ?? DEFAULT_SEARCH_LIMIT), 1), MAX_SEARCH_LIMIT)
 
   const picked: Tool[] = []
   let bytes = 0
-  for (const { tool } of scored) {
+  for (const { tool } of matches) {
     if (picked.length >= cap) break
     const size = JSON.stringify(toWireTool(tool)).length
     // Always let the top match through, however large; past that, stop rather
@@ -251,7 +272,7 @@ function readSearchResult(content: string): ToolSearchResult['tool_search'] | nu
 export function loadedToolNames(history: readonly HistoryMessage[]): Set<string> {
   const loaded = new Set<string>()
   for (const message of history) {
-    if (message.role !== 'tool') continue
+    if (message.role !== 'tool' || typeof message.content !== 'string') continue
     const envelope = readSearchResult(message.content)
     if (!envelope) continue
     for (const name of envelope.loaded) loaded.add(name)

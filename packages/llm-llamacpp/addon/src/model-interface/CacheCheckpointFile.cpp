@@ -1,6 +1,6 @@
 #include "CacheCheckpointFile.hpp"
 
-#include <algorithm>
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <optional>
@@ -158,6 +158,7 @@ void cutBackQuietly(const std::string& path, uintmax_t size) noexcept {
 
 struct SectionEntry {
   int32_t nPast = 0;
+  uint32_t flags = 0;
   std::vector<llama_token> ledgerWords;
   uint64_t payloadOffset = 0;
   uint64_t payloadSize = 0;
@@ -168,13 +169,28 @@ struct SectionEntry {
 
 bool appendCheckpointSection(
     const std::string& path, const Checkpoints& checkpoints) noexcept {
-  // Newest last: `appendProcessCheckpoint` adds at the back.
-  const auto newest =
-      std::find_if(checkpoints.rbegin(), checkpoints.rend(), keepable);
-  if (newest == checkpoints.rend()) {
+  // The newest checkpoint serves the next tool round; the newest user-turn
+  // one, when older, serves the next user turn.
+  const Checkpoint* newest = nullptr;
+  const Checkpoint* userTurn = nullptr;
+  for (const Checkpoint& entry : checkpoints) {
+    if (!keepable(entry)) {
+      continue;
+    }
+    newest = &entry;
+    if (entry.endsAtUserTurn) {
+      userTurn = &entry;
+    }
+  }
+  if (newest == nullptr) {
     return true;
   }
-  const Checkpoint& checkpoint = *newest;
+  std::array<const Checkpoint*, 2> selected{newest, nullptr};
+  uint32_t kept = 1;
+  if (userTurn != nullptr && userTurn != newest) {
+    selected = {userTurn, newest};
+    kept = 2;
+  }
   std::optional<uintmax_t> baseSize;
   // Cuts the file back to the state and logs why; never throws.
   const auto fail = [&path, &baseSize](const char* reason) noexcept {
@@ -197,11 +213,6 @@ bool appendCheckpointSection(
       throw std::runtime_error("cannot read its size");
     }
     baseSize = size;
-    const utils::SequenceStateSnapshot& state = checkpoint.state;
-    const uint64_t payloadSize = state.targetBytes();
-    if (payloadSize == 0) {
-      throw std::runtime_error("the checkpoint has no payload");
-    }
     std::ofstream out(path, std::ios::binary | std::ios::app);
     if (!out) {
       throw std::runtime_error("cannot open the file");
@@ -209,28 +220,40 @@ bool appendCheckpointSection(
     SectionWriter writer(out);
     writer.value(CHECKPOINT_SECTION_MAGIC);
     writer.value(CHECKPOINT_SECTION_VERSION);
-    writer.value(static_cast<uint32_t>(1));
-    writer.value(static_cast<int32_t>(state.nPast));
-    const std::vector<llama_token> words = serialize(
-        checkpoint.ledger,
-        checkpoint.ledger.positions(),
-        checkpoint.ledger.cacheTokens());
-    writer.value(static_cast<uint32_t>(words.size()));
-    writer.words(words);
-    writer.value(payloadSize);
-    // A disk-backed payload is copied in bounded chunks, never held whole.
-    SectionHash payloadHash;
-    uint64_t written = 0;
-    const bool complete = utils::streamPartialSnapshot(
-        state, [&](const uint8_t* data, size_t chunkSize) {
-          writer.payload(data, chunkSize);
-          payloadHash.add(data, chunkSize);
-          written += chunkSize;
-        });
-    if (!complete || written != payloadSize) {
-      throw std::runtime_error("cannot read the checkpoint");
+    writer.value(kept);
+    // Oldest first, as `appendProcessCheckpoint` keeps them, so the reader
+    // trims them with the same policy.
+    for (uint32_t i = 0; i < kept; ++i) {
+      const Checkpoint* checkpoint = selected[i];
+      const utils::SequenceStateSnapshot& state = checkpoint->state;
+      const uint64_t payloadSize = state.targetBytes();
+      if (payloadSize == 0) {
+        throw std::runtime_error("the checkpoint has no payload");
+      }
+      writer.value(static_cast<int32_t>(state.nPast));
+      writer.value(
+          checkpoint->endsAtUserTurn ? CHECKPOINT_ENDS_AT_USER_TURN : 0U);
+      const std::vector<llama_token> words = serialize(
+          checkpoint->ledger,
+          checkpoint->ledger.positions(),
+          checkpoint->ledger.cacheTokens());
+      writer.value(static_cast<uint32_t>(words.size()));
+      writer.words(words);
+      writer.value(payloadSize);
+      // A disk-backed payload is copied in bounded chunks, never held whole.
+      SectionHash payloadHash;
+      uint64_t written = 0;
+      const bool complete = utils::streamPartialSnapshot(
+          state, [&](const uint8_t* data, size_t chunkSize) {
+            writer.payload(data, chunkSize);
+            payloadHash.add(data, chunkSize);
+            written += chunkSize;
+          });
+      if (!complete || written != payloadSize) {
+        throw std::runtime_error("cannot read the checkpoint");
+      }
+      writer.value(payloadHash.value());
     }
-    writer.value(payloadHash.value());
     writer.checksum();
     out.close();
     if (!out) {
@@ -278,10 +301,13 @@ Checkpoints readCheckpointSection(
     if (!reader.value(magic) || magic != CHECKPOINT_SECTION_MAGIC) {
       return reject("unrecognized data after the conversation state");
     }
-    if (!reader.value(version) || version != CHECKPOINT_SECTION_VERSION) {
+    if (!reader.value(version) || version == 0 ||
+        version > CHECKPOINT_SECTION_VERSION) {
       return reject("written by a newer version");
     }
-    if (!reader.value(count) || count > MAX_CONFIGURABLE_PROCESS_CHECKPOINTS) {
+    // Writers store at most two; this is the most the policy could keep.
+    if (!reader.value(count) ||
+        count > MAX_CONFIGURABLE_PROCESS_CHECKPOINTS + 1) {
       return reject("invalid checkpoint count");
     }
 
@@ -289,7 +315,9 @@ Checkpoints readCheckpointSection(
     std::vector<SectionEntry> entries(count);
     for (SectionEntry& entry : entries) {
       uint32_t wordCount = 0;
-      if (!reader.value(entry.nPast) || !reader.value(wordCount) ||
+      if (!reader.value(entry.nPast) ||
+          (version >= 2 && !reader.value(entry.flags)) ||
+          !reader.value(wordCount) ||
           !reader.words(entry.ledgerWords, wordCount) ||
           !reader.value(entry.payloadSize)) {
         return reject("truncated");
@@ -337,6 +365,8 @@ Checkpoints readCheckpointSection(
       // From the ledger, which `deserialize` checked against its header:
       // the same value every writer means, whatever it kept in memory.
       checkpoint.cacheTokens = checkpoint.ledger.cacheTokens();
+      checkpoint.endsAtUserTurn =
+          (entry.flags & CHECKPOINT_ENDS_AT_USER_TURN) != 0;
       SectionHash payloadHash;
       if (!utils::partialSnapshotFromStream(
               in,
@@ -363,9 +393,11 @@ Checkpoints readCheckpointSection(
         continue;
       }
       appendProcessCheckpoint(
-          result, std::move(checkpoint), policy, [](const Checkpoint& kept) {
-            return kept.state.bytes();
-          });
+          result,
+          std::move(checkpoint),
+          policy,
+          [](const Checkpoint& kept) { return kept.state.bytes(); },
+          [](const Checkpoint& kept) { return kept.endsAtUserTurn; });
     }
     return result;
   } catch (const std::exception& e) {

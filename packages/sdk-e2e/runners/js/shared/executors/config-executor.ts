@@ -1,4 +1,4 @@
-import { downloadAsset, cancel, WHISPER_TINY, BERGAMOT_ZH_EN } from '@qvac/sdk'
+import { downloadAsset, cancel, WHISPER_TINY_Q8_0, BERGAMOT_ZH_EN } from '@qvac/sdk'
 import { BaseExecutor, type TestResult } from '@qvac/test-suite'
 import {
   configRegistryDownloadSmoke,
@@ -39,7 +39,7 @@ export class ConfigExecutor extends BaseExecutor<typeof configTests> {
 
     try {
       const modelId = await downloadAsset({
-        assetSrc: WHISPER_TINY,
+        assetSrc: WHISPER_TINY_Q8_0,
         onProgress: () => {}
       })
       const elapsed = Date.now() - startTime
