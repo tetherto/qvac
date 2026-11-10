@@ -22,27 +22,50 @@ interface Fake {
   error?: Error
   // Thrown after the chunks, so the SSE headers are already out.
   streamError?: Error
+  // Yields the chunks, then never again; set when the route calls `return()`.
+  hang?: { returned: boolean }
 }
 
 function fakeOperations(fake: Fake): PluginOperations {
   /* lunte-disable require-await */
+  async function* chunkStream(options: InvokeOptions): AsyncGenerator<unknown> {
+    fake.calls.push(options)
+    if (fake.error) throw fake.error
+    for (const chunk of fake.chunks) {
+      fake.pulled = (fake.pulled ?? 0) + 1
+      yield chunk
+    }
+    if (fake.streamError) throw fake.streamError
+  }
+
   return {
     invoke: async (options) => {
       fake.calls.push(options)
       if (fake.error) throw fake.error
       return fake.result
     },
-    invokeStream: async function* (options) {
-      fake.calls.push(options)
-      if (fake.error) throw fake.error
-      for (const chunk of fake.chunks) {
-        fake.pulled = (fake.pulled ?? 0) + 1
-        yield chunk
-      }
-      if (fake.streamError) throw fake.streamError
-    }
+    invokeStream: (options) =>
+      fake.hang ? hangingStream(fake.chunks, fake.hang) : chunkStream(options)
   }
   /* lunte-enable require-await */
+}
+
+// Unlike an async generator, its `return()` answers while a `next()` is pending.
+function hangingStream(chunks: unknown[], hang: { returned: boolean }): AsyncGenerator<unknown> {
+  const queue = [...chunks]
+  const stream = {
+    next: () =>
+      queue.length > 0
+        ? Promise.resolve({ done: false, value: queue.shift() })
+        : new Promise<IteratorResult<unknown>>(() => {}),
+    return: () => {
+      hang.returned = true
+      return Promise.resolve({ done: true, value: undefined })
+    },
+    throw: (err: unknown) => Promise.reject(err),
+    [Symbol.asyncIterator]: () => stream
+  }
+  return stream as AsyncGenerator<unknown>
 }
 
 function sdkError(code: number, message: string): Error {
@@ -124,7 +147,13 @@ describe('plugin invoke with --enable-admin', () => {
     delete fake.pulled
     delete fake.error
     delete fake.streamError
+    delete fake.hang
   })
+
+  async function listen(): Promise<number> {
+    if (!app.server.listening) await app.listen({ port: 0, host: '127.0.0.1' })
+    return (app.server.address() as { port: number }).port
+  }
 
   function invoke(payload: Record<string, unknown>, url = URL) {
     return app.inject({ method: 'POST', url, payload })
@@ -256,8 +285,7 @@ describe('plugin invoke with --enable-admin', () => {
 
   it('stops pulling chunks while a slow client is not reading', async () => {
     fake.chunks = Array.from({ length: 200 }, () => ({ pad: 'x'.repeat(64 * 1024) }))
-    await app.listen({ port: 0, host: '127.0.0.1' })
-    const { port } = app.server.address() as { port: number }
+    const port = await listen()
     const req = request({
       port,
       host: '127.0.0.1',
@@ -277,5 +305,24 @@ describe('plugin invoke with --enable-admin', () => {
     const pulled = fake.pulled ?? 0
     req.destroy()
     assert.ok(pulled < fake.chunks.length, `pulled ${pulled} of ${fake.chunks.length}`)
+  })
+
+  it('lets go of the stream when the client leaves while a chunk is pending', async () => {
+    fake.chunks = [{ n: 1 }]
+    const hang = { returned: false }
+    fake.hang = hang
+    const port = await listen()
+    const req = request({
+      port,
+      host: '127.0.0.1',
+      method: 'POST',
+      path: URL,
+      headers: { 'content-type': 'application/json' }
+    })
+    req.on('error', () => {})
+    req.on('response', (res) => res.once('data', () => req.destroy()))
+    req.end(JSON.stringify({ model: 'echo', handler: 'count', stream: true }))
+    for (let i = 0; i < 50 && !hang.returned; i++) await sleep(20)
+    assert.equal(hang.returned, true)
   })
 })
