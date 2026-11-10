@@ -3,7 +3,7 @@ import { AbortController } from 'bare-abort-controller'
 
 import { ERR_CODES } from '../../src/index.js'
 import { SCAN_BATCH_SIZE } from '../../src/search.js'
-import { SPACE, doc, openRag, rejectsWithCode } from './helpers.js'
+import { SPACE, doc, openRag, rejectsWithCode, useScan } from './helpers.js'
 
 test('search ranks by exact dot product and honours k', async (t) => {
   const { rag, spaceId } = await openRag(t)
@@ -287,6 +287,7 @@ test('an aborted signal cancels the search', async (t) => {
 })
 
 test('an abort from the event loop stops a scan over cached rows', async (t) => {
+  useScan(t)
   const { rag, spaceId } = await openRag(t)
   const chunks: Array<[string, number[]]> = []
   for (let i = 0; i < SCAN_BATCH_SIZE * 4; i++) chunks.push([`chunk ${i}`, [1, 0, 0]])
