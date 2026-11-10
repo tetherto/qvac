@@ -48,7 +48,9 @@ test('LLM and embedding backend names match their addon allow-list', (t) => {
       t.is(schema.safeParse({ backend: [backend] }).success, false)
     }
   }
-  t.alike(llmConfigSchema.parse({ backend: ['xdna'] }).backend, ['xdna'])
+  const xdna = llmConfigSchema.safeParse({ backend: ['xdna'] })
+  t.ok(xdna.success)
+  t.alike(xdna.data?.backend, ['xdna'])
   t.is(llmConfigSchema.safeParse({ backend: ['XDNA'] }).success, false)
   t.is(embedConfigSchema.safeParse({ backend: ['xdna'] }).success, false)
 })
