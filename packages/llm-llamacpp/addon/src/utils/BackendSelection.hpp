@@ -93,8 +93,8 @@ std::pair<BackendType, std::string> chooseBackend(
 ///
 /// A @p preferredBackendType of NPU picks the first NPU device in ggml's
 /// registration order. With none listed it warns and continues as a GPU
-/// request: the GPU order, then the CPU. Finetuning on the NPU throws
-/// StatusError (InvalidArgument).
+/// request: the GPU order, then the CPU. Finetuning never reaches this with an
+/// NPU request: LlamaFinetuner rejects it before reloading the model.
 ///
 /// For BitNet models with TQ1_0/TQ2_0 quantization on Adreno GPUs:
 ///   - Adreno 800+: prefer Vulkan over OpenCL

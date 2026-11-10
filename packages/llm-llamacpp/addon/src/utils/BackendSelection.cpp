@@ -555,11 +555,6 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
   // back through the GPU order and then to the CPU.
   BackendType searchType = preferredBackendType;
   if (preferredBackendType == BackendType::NPU) {
-    if (isFinetuning) {
-      throw qvac_errors::StatusError(
-          qvac_errors::general_error::InvalidArgument,
-          "Finetuning does not run on the NPU; use device 'gpu' or 'cpu'.");
-    }
     // The first NPU in ggml's registration order wins. Each NPU is built into
     // its host's processor, so one host lists at most one NPU backend; the
     // rule only decides between several devices of that backend.

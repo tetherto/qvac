@@ -6,16 +6,20 @@
 
 - `device: "npu"` selects the AMD XDNA NPU as its own device class, beside
   `gpu` and `cpu`. It takes the first NPU fabric lists, falls back to the GPU
-  order and then the CPU with a warning when none is listed, and is rejected with `InvalidArgument` together with `backend`,
-  `devices`, `split-mode`, `main-gpu`, `rpc-servers` or finetuning. Runtime
-  stats report `backendDevice: "npu"` (native code `2`) for an NPU load,
-  including `devices: "XDNA0"`
+  order and then the CPU with a warning when none is listed, and is rejected
+  with `InvalidArgument` together with `backend`, `devices`, `split-mode`,
+  `main-gpu` or `rpc-servers`. Runtime stats report `backendDevice: "npu"`
+  (native code `2`) for an NPU load, including `devices: "XDNA0"`
   ([#5701](https://github.com/tetherto/qvac/pull/5701)).
 
 ### Changed
 
 - `backend` takes GPU families only: `device: "npu"` replaces
   `backend: "xdna"` from 0.69.0
+  ([#5701](https://github.com/tetherto/qvac/pull/5701)).
+- Finetuning is refused with `InvalidArgument` for a model loaded with
+  `device: "npu"` and for any load that runs on the NPU alone, such as
+  `devices: "XDNA0"`, which 0.69.0 allowed
   ([#5701](https://github.com/tetherto/qvac/pull/5701)).
 
 ## [0.69.0] - 2026-11-09

@@ -1717,19 +1717,6 @@ TEST_F(BackendSelectionTest, DeviceNpuFallbackKeepsAdrenoGuards) {
       mockBackend, BackendType::NPU, BackendType::CPU, "none", bitnetMeta);
 }
 
-TEST_F(BackendSelectionTest, DeviceNpuRejectsFinetuning) {
-  mockBackend.addDevice(createXdnaDevice());
-  BackendInterface bckI = mockBackend.toBackendInterface();
-  try {
-    chooseBackend(BackendType::NPU, bckI, nullptr, std::nullopt, nullptr, true);
-    FAIL() << "finetuning on the NPU must be rejected";
-  } catch (const qvac_errors::StatusError& error) {
-    EXPECT_NE(
-        std::string(error.what()).find("Finetuning does not run on the NPU"),
-        std::string::npos);
-  }
-}
-
 TEST_F(BackendSelectionTest, PreferredBackendTypeFromStringAcceptsNpu) {
   EXPECT_EQ(preferredBackendTypeFromString("gpu"), BackendType::GPU);
   EXPECT_EQ(preferredBackendTypeFromString("cpu"), BackendType::CPU);
