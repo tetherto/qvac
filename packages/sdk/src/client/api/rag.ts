@@ -212,7 +212,7 @@ async function runRagIngest(
  * ```typescript
  * // Segregated flow
  * const chunks = await ragChunk({ documents: ["text1", "text2"] });
- * const { embedding: embeddings } = await embed({ modelId, text: chunks.map(c => c.content) });
+ * const { embedding: embeddings } = await embedBatch({ modelId, inputs: chunks.map(c => c.content) });
  * const embeddedDocs = chunks.map((chunk, i) => ({
  *   ...chunk,
  *   embedding: embeddings[i],

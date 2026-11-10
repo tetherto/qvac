@@ -90,12 +90,6 @@ call fails with `RPC_INIT_TIMEOUT`. Re-running usually succeeds; to give every
 start more room, raise `rpcInitTimeoutMs` in `qvac.config.*` or set the
 `QVAC_RPC_INIT_TIMEOUT_MS` environment variable.
 
-For streaming RPC calls, the per-call `timeout` option limits the wait for each
-response chunk, including the first. A stalled read throws `OperationTimeoutError`
-and closes that request's response stream. Each read gets a fresh timeout budget.
-Omitting `timeout` leaves reads unbounded. A timeout does not stop an inference
-job on the worker; use `cancel({ requestId })` to stop it.
-
 ## Documentation
 
 The [QVAC SDK documentation](https://docs.qvac.tether.io/sdk/) covers each

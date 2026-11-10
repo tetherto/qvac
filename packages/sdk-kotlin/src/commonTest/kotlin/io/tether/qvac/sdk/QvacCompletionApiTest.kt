@@ -470,6 +470,43 @@ class QvacCompletionApiTest {
         }
     }
 
+    @Test
+    fun orderedPartsReachTheWireInOrder() = runTest {
+        val history = sentPayload(
+            listOf(
+                QvacMessage.user(
+                    listOf(
+                        QvacContentPart.Text("Compare"),
+                        QvacContentPart.Media("/a.jpg"),
+                        QvacContentPart.Text("with"),
+                        QvacContentPart.Media("/b.jpg"),
+                    ),
+                ),
+            ),
+        )["history"]!!.jsonArray.map { it.jsonObject }
+
+        assertEquals(
+            buildJsonArray {
+                add(buildJsonObject { put("type", "text"); put("text", "Compare") })
+                add(buildJsonObject { put("type", "media"); put("path", "/a.jpg") })
+                add(buildJsonObject { put("type", "text"); put("text", "with") })
+                add(buildJsonObject { put("type", "media"); put("path", "/b.jpg") })
+            },
+            history[0]["content"],
+        )
+        assertFalse("attachments" in history[0])
+    }
+
+    @Test
+    fun invalidPartsAreRejected() {
+        val parts = listOf(QvacContentPart.Text("hi"))
+        assertFailsWith<IllegalArgumentException> { QvacMessage("assistant", "", parts = parts) }
+        assertFailsWith<IllegalArgumentException> { QvacMessage("user", "hi", parts = parts) }
+        assertFailsWith<IllegalArgumentException> {
+            QvacMessage("user", "", attachments = listOf(QvacAttachment("/a.jpg")), parts = parts)
+        }
+    }
+
     private suspend fun sentPayload(history: List<QvacMessage>, tools: List<QvacTool> = emptyList()): JsonObject {
         val transport = ApiTransport(
             stream = flowOf(completionFrame(done = true, event("completionDone", 0) { put("stopReason", "eos") })),
