@@ -193,6 +193,9 @@ test('calcTokens accepts completion-compatible text histories', (t) => {
     ]
   })
   t.absent(withMediaContent.success)
+  if (!withMediaContent.success) {
+    t.ok(withMediaContent.error.message.includes('use completion() for media'))
+  }
 
   const withAttachment = calcTokensRequestSchema.safeParse({
     type: 'calcTokens',

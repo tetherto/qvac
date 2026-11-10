@@ -6,7 +6,9 @@ import {
 import { toolSchema } from '@/schemas/tools'
 
 const modelId = z.string().min(1).describe('Loaded language model to tokenize with.')
-const text = z.string().describe('Raw text, or the final user turn when history is present.')
+const text = z
+  .string()
+  .describe('Raw text, or the final user turn when history or enabled tools are present.')
 const history = z
   .array(historyMessageWithoutAttachmentsSchema.meta({ title: 'CalcTokensHistoryMessage' }))
   .describe('Text-only conversation to render with the loaded model chat template.')

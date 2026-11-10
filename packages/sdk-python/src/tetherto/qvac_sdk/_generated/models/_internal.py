@@ -3942,7 +3942,9 @@ class CalcTokensRequest(GeneratedBaseModel):
     ] = None
     text: Annotated[
         str | None,
-        Field(description="Raw text, or the final user turn when history is present."),
+        Field(
+            description="Raw text, or the final user turn when history or enabled tools are present."
+        ),
     ] = None
     history: Annotated[
         list[CalcTokensHistoryMessage] | None,

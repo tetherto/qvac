@@ -312,7 +312,9 @@ export const historyMessageSchema = historyMessageObjectSchema
 export const historyMessageWithoutAttachmentsSchema = historyMessageObjectSchema
   .extend({
     content: z
-      .union([z.string(), z.array(historyTextContentPartSchema)])
+      .union([z.string(), z.array(historyTextContentPartSchema)], {
+        error: 'calcTokens does not support media content; use completion() for media.'
+      })
       .nullish()
       .describe('Text-only message content to count without loading media.'),
     attachments: z

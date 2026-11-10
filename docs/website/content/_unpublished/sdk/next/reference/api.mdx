@@ -271,9 +271,9 @@ Otherwise, the conversation is rendered with the model's chat template and
 the model was loaded with `modelConfig.tools: true`.
 Media content and attachments are not supported.
 
-The count uses every supplied tool and the reasoning setting from model load. A named
+The count uses every supplied tool and the load-time reasoning setting. A named
 `generationParams.tool_choice` or `generationParams.reasoning_budget` override on
-`completion()` can change that request's prompt.
+`completion()` can render a different prompt.
 
 **Signature**:
 

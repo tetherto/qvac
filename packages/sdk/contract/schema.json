@@ -4100,7 +4100,7 @@
         },
         "text": {
           "type": "string",
-          "description": "Raw text, or the final user turn when history is present."
+          "description": "Raw text, or the final user turn when history or enabled tools are present."
         },
         "history": {
           "type": "array",

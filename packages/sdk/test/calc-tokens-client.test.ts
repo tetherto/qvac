@@ -76,6 +76,7 @@ test('calcTokens rejects invalid input before RPC', async (t) => {
   t.absent(called)
 
   let attachmentError = ''
+  let mediaError = ''
   await t.exception(() =>
     createCalcTokensCall(
       {
@@ -113,8 +114,12 @@ test('calcTokens rejects invalid input before RPC', async (t) => {
         called = true
         return { type: 'calcTokens', tokens: 1 }
       }
-    )
+    ).catch((error) => {
+      mediaError = String(error)
+      throw error
+    })
   )
+  t.ok(mediaError.includes('use completion() for media'))
   t.absent(called)
 })
 
