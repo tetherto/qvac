@@ -9,12 +9,9 @@ import { fileURLToPath } from 'node:url'
 // `@qvac/sdk` and `zod` from its node_modules.
 const WORKER_ENTRY = `
 import { z } from 'zod'
-import { initializeWorker, ensureRPCSetup } from '@qvac/sdk/worker-lifecycle'
-import { registerPlugin } from '@qvac/sdk/plugins'
+import { startWorker } from '@qvac/sdk/worker'
 
-const { hasRPCConfig } = initializeWorker()
-
-registerPlugin({
+const echoPlugin = {
   modelType: 'echo-plugin',
   displayName: 'Echo',
   addonPackage: '@qvac/echo-plugin',
@@ -41,9 +38,11 @@ registerPlugin({
       }
     }
   }
-})
+}
 
-if (hasRPCConfig) ensureRPCSetup()
+export default function start(ipc, ready) {
+  return startWorker(ipc, ready, { plugins: [echoPlugin] })
+}
 `
 
 const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
