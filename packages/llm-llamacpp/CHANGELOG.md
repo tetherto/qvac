@@ -9,12 +9,14 @@
   listed, and is rejected with `InvalidArgument` together with `backend`,
   `devices`, `split-mode`, `main-gpu`, `rpc-servers` or finetuning. Runtime
   stats report `backendDevice: "npu"` (native code `2`) for an NPU load,
-  including `devices: "XDNA0"`.
+  including `devices: "XDNA0"`
+  ([#5701](https://github.com/tetherto/qvac/pull/5701)).
 
 ### Deprecated
 
 - `backend: "xdna"`: use `device: "npu"`. It still selects the NPU, now
-  reported as `backendDevice: "npu"`, and logs a deprecation warning.
+  reported as `backendDevice: "npu"`, and logs a deprecation warning
+  ([#5701](https://github.com/tetherto/qvac/pull/5701)).
 
 ## [0.69.0] - 2026-11-09
 
