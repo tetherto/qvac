@@ -152,6 +152,7 @@ class Calls(
             "history" to withContent(params["history"]),
             "kvCache" to params["kvCache"],
             "prefill" to params["prefill"],
+            "seedFrom" to params["seedFrom"],
             "tools" to tools.ifEmpty { null },
             "stream" to (params["stream"] ?: true),
             "generationParams" to params["generationParams"],

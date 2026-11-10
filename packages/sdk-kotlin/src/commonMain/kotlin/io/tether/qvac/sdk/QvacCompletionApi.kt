@@ -222,6 +222,8 @@ data class QvacCompletionOptions(
     val requestId: String = qvacRequestId(),
     /** Evaluate the prompt without generating an answer; requires an enabled KV cache. */
     val prefill: Boolean? = null,
+    /** Name of another caller-managed cache to start this chat from; the model reuses the prefix it shares with the prompt. */
+    val seedFrom: String? = null,
     /** Limits for the built-in `tool_search`; only used when a tool sets [QvacTool.deferLoading]. */
     val toolSearch: QvacToolSearchLimits? = null,
 )
@@ -341,6 +343,7 @@ fun QvacCompletion.run(
         history = history.map { it.toStreamItem() },
         kvCache = options.kvCache?.toWire(),
         prefill = options.prefill,
+        seedFrom = options.seedFrom,
         modelId = modelId,
         requestId = options.requestId,
         responseFormat = options.responseFormat?.toStreamFormat(),
@@ -390,6 +393,7 @@ fun QvacCompletion.orchestrate(
         kvCache = options.kvCache?.toWire(),
         maxToolTurns = maxToolTurns.toLong(),
         prefill = options.prefill,
+        seedFrom = options.seedFrom,
         modelId = modelId,
         requestId = options.requestId,
         responseFormat = options.responseFormat?.toStreamFormat(),
