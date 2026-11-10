@@ -489,7 +489,7 @@ class Calls(
     private fun describeIndex(response: Map<String, Any?>): Map<String, Any?> {
         val indexId = response["indexId"].toString()
         indexes[indexId] = OpenIndex(response["dim"], response["storage"], response["length"])
-        return linkedMapOf("indexId" to indexId, "dim" to response["dim"], "storage" to response["storage"], "length" to response["length"])
+        return linkedMapOf("indexId" to indexId, "dim" to response["dim"], "storage" to response["storage"], "length" to response["length"], "calibrated" to response["calibrated"], "stagedSearch" to response["stagedSearch"])
     }
 
     // --- sessions: transcription and logs ---------------------------------------
@@ -811,12 +811,16 @@ class Calls(
             val open = index(p["indexId"])
             val response = vectorIndex("add", mapOf("indexId" to p["indexId"], "ids" to p["ids"], "vectors" to p["vectors"]))
             open.length = response["length"]
-            mapOf("length" to open.length)
+            mapOf("length" to open.length, "calibrated" to response["calibrated"], "stagedSearch" to response["stagedSearch"])
         },
         "vectorIndexSearch" to { p ->
             index(p["indexId"])
             val response = vectorIndex("search", mapOf("indexId" to p["indexId"], "queries" to listOf(p["query"]), "k" to p["k"]))
             mapOf("results" to (asList(response["results"]).firstOrNull() ?: emptyList<Any?>()))
+        },
+        "vectorIndexSetStagedSearch" to { p ->
+            index(p["indexId"])
+            vectorIndex("setStagedSearch", mapOf("indexId" to p["indexId"], "enabled" to p["enabled"]))
         },
         "vectorIndexRemove" to { p ->
             val open = index(p["indexId"])
