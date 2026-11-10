@@ -41,7 +41,9 @@ function buildRAGSchema(schemaDir: string = SCHEMA_DIR) {
       { name: 'spaceId', type: 'string', required: true },
       { name: 'revision', type: 'uint', required: true },
       { name: 'nextNativeId', type: 'buffer', required: true },
-      { name: 'createdAt', type: 'date', required: true }
+      { name: 'createdAt', type: 'date', required: true },
+      // Absent on namespaces created before the index existed; read as 'q8'.
+      { name: 'indexStorage', type: 'string', required: false }
     ]
   })
 

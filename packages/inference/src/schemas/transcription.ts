@@ -238,6 +238,29 @@ export const transcribeSegmentSchema = z.object({
     .optional()
     .describe(
       'Decoded text tokens with millisecond timing and probability; special tokens are left out. Whisper engine only, with `token_timestamps`.'
+    ),
+  tokenIds: z
+    .array(z.number().int())
+    .optional()
+    .describe('Native token ids of the segment. Parakeet streaming only.'),
+  isFinal: z
+    .boolean()
+    .optional()
+    .describe(
+      'Native finality of the segment, including empty final markers; prefer it over non-empty text to detect a finalized chunk. Parakeet streaming only.'
+    ),
+  chunkIndex: z
+    .number()
+    .int()
+    .optional()
+    .describe(
+      'Native streaming chunk index the segment belongs to; `-1` when unknown. Parakeet streaming only.'
+    ),
+  eotConfidence: z
+    .number()
+    .optional()
+    .describe(
+      'Native end-of-turn confidence of the segment; may be `0` when the model reports none. Parakeet EOU streaming only.'
     )
 })
 
@@ -254,6 +277,11 @@ export const vadStateEventSchema = z.object({
     .number()
     .optional()
     .describe('Parakeet: event time in seconds from the start of the streaming session.'),
+  chunkIndex: z
+    .number()
+    .int()
+    .optional()
+    .describe('Parakeet: native streaming chunk index of the event; `-1` when unavailable.'),
   source: z
     .enum(['silero', 'energy', 'sortformer'])
     .optional()
@@ -268,7 +296,20 @@ export const whisperEndOfTurnEventSchema = z.object({
 })
 
 export const parakeetEndOfTurnEventSchema = z.object({
-  source: z.literal('parakeet')
+  source: z.literal('parakeet'),
+  timestamp: z
+    .number()
+    .optional()
+    .describe('Native event time in seconds from the start of the streaming session.'),
+  chunkIndex: z
+    .number()
+    .int()
+    .optional()
+    .describe('Native streaming chunk index of the boundary; `-1` when unknown.'),
+  confidence: z
+    .number()
+    .optional()
+    .describe('Native end-of-turn confidence reported by the EOU model.')
 })
 
 const endOfTurnDiscriminatedSchema = z.discriminatedUnion('source', [

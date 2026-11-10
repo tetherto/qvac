@@ -302,6 +302,20 @@ test('BUILTIN: Pixel device gets cpu + flashAttention off', (t) => {
   t.alike(log?.appliedPatterns, ['Android devices (default)', 'Pixel devices (default)'])
   t.is(embedResult.device, 'cpu')
   t.is(embedResult.flashAttention, 'off')
+
+  const rerankResult = resolveModelConfigWithContext<Record<string, unknown>>(
+    ModelType.llamacppRerank,
+    {},
+    ctx,
+    [],
+    BUILTIN_DEVICE_PATTERNS,
+    (l) => {
+      log = l
+    }
+  )
+
+  t.alike(log?.appliedPatterns, ['Pixel devices (default)'])
+  t.is(rerankResult.device, 'cpu')
 })
 
 test('BUILTIN: Non-Pixel Android gets flashAttention off only', (t) => {

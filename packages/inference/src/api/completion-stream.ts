@@ -222,6 +222,7 @@ export function completion(params: CompletionParams): CompletionRun {
         kvCache: params.kvCache,
         prefill: params.prefill,
         tools: allTools.length > 0 ? allTools : undefined,
+        toolSearch: params.toolSearch,
         stream: params.stream ?? true,
         generationParams: params.generationParams,
         captureThinking: params.captureThinking,

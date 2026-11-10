@@ -2,7 +2,6 @@
 
 const test = require('brittle')
 const {
-  ADD_MODEL_RPC_TIMEOUT_MS,
   hasNewModelEntries,
   recoverAfterAmbiguousAdd,
   isAmbiguousRpcError,
@@ -10,10 +9,6 @@ const {
 } = require('../../scripts/sync-models')
 
 const MODEL_SOURCE = 'https://huggingface.co/org/repo/resolve/0123456789abcdef/model.gguf'
-
-test('add-model RPC timeout is one hour', (t) => {
-  t.is(ADD_MODEL_RPC_TIMEOUT_MS, 60 * 60 * 1000)
-})
 
 test('hasNewModelEntries detects a model absent from the registry', (t) => {
   t.ok(hasNewModelEntries([{ source: MODEL_SOURCE }], new Map()))
@@ -25,7 +20,12 @@ test('hasNewModelEntries ignores metadata-only changes to an existing model', (t
   t.absent(hasNewModelEntries([{ source: MODEL_SOURCE, description: 'Updated metadata' }], dbByKey))
 })
 
-test('isAmbiguousRpcError identifies transport timeouts and channel closes', (t) => {
+test('isAmbiguousRpcError identifies RPC deadlines, transport timeouts and channel closes', (t) => {
+  t.ok(
+    isAmbiguousRpcError(
+      Object.assign(new Error('timeout of 3600000ms exceeded'), { code: 'TIMEOUT_EXCEEDED' })
+    )
+  )
   t.ok(isAmbiguousRpcError(Object.assign(new Error('connection timed out'), { code: 'ETIMEDOUT' })))
   t.ok(isAmbiguousRpcError(Object.assign(new Error('closed'), { code: 'CHANNEL_CLOSED' })))
   t.ok(isAmbiguousRpcError(new Error('Channel closed')))
@@ -59,6 +59,38 @@ test('waitForModelAfterAmbiguousAdd polls until the model appears', async (t) =>
     [expected.path, expected.source],
     [expected.path, expected.source]
   ])
+})
+
+test('ambiguous add recovery stops after one hour independently of the RPC deadline', async (t) => {
+  const realNow = Date.now
+  let now = 0
+  let polls = 0
+  Date.now = () => now
+
+  try {
+    await t.exception(
+      waitForModelAfterAmbiguousAdd({
+        client: {
+          // lunte-disable-next-line require-await
+          async getModel() {
+            polls++
+            return null
+          }
+        },
+        sourceInfo: { path: 'repo/model.gguf', protocol: 'hf' },
+        pollIntervalMs: 15 * 60 * 1000,
+        // lunte-disable-next-line require-await
+        sleep: async (ms) => {
+          now += ms
+        }
+      }),
+      /Timed out waiting for model/
+    )
+  } finally {
+    Date.now = realNow
+  }
+
+  t.is(polls, 5, 'polls at 0, 15, 30, 45 and 60 minutes, then stops')
 })
 
 test('recoverAfterAmbiguousAdd reconnects even when polling times out', async (t) => {

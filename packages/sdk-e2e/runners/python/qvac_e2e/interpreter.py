@@ -744,6 +744,7 @@ async def _completion_stream(
         tool_dialect=params.get("toolDialect"),
         kv_cache=params.get("kvCache"),
         prefill=params.get("prefill"),
+        seed_from=params.get("seedFrom"),
         capture_thinking=params.get("captureThinking"),
         emit_raw_deltas=params.get("emitRawDeltas"),
     )
@@ -1537,6 +1538,9 @@ class Interpreter:
             evicted = self._call_params(body.get("params"), scope)
             await self._resources.evict(str(evicted["dep"]))
             return {"evicted": True}
+        if method == "close":
+            await self._resources.restart()
+            return None
         # A fresh directory the test may write into, and a look at what landed there.
         # Platform facts, not SDK calls, which is why they are handled here rather than
         # in the method tables.

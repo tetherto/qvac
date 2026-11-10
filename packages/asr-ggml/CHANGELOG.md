@@ -14,6 +14,8 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-11-10
+
 ### Added
 
 - `RuntimeStats.encoderUsedCoreml` after batch Nemotron 3 Diarization and
