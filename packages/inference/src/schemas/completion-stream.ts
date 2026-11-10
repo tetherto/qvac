@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { toolSchema } from '@/schemas/tools'
+import { toolSchema, toolSearchOptionsSchema } from '@/schemas/tools'
 import { TOOL_SEARCH_NAME } from '@/utils/tools/defer'
 import { completionEventSchema } from '@/schemas/completion-event'
 import { REASONING_BUDGET_MAX } from '@/schemas/llamacpp-config'
@@ -314,7 +314,14 @@ export const completionParamsSchema = z.object({
   prefill: z
     .boolean()
     .optional()
-    .describe('Evaluate the prompt without generating an answer. Requires an enabled KV cache.')
+    .describe('Evaluate the prompt without generating an answer. Requires an enabled KV cache.'),
+  seedFrom: z
+    .string()
+    .min(1, 'seedFrom cannot be empty string')
+    .optional()
+    .describe(
+      'Name of another caller-managed cache to start this chat from, such as a primed system prompt and tools. On the first turn of a chat whose `kvCache` key has no cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is processed; the source is never written. Ignored once the chat has a cache. Needs a string `kvCache` other than itself. Refused when no cache of that name exists for this model and system prompt, or when the model was not loaded with `cache_share_across_keys: true`, which is off by default.'
+    )
 })
 
 const completionClientParamsBaseSchema = completionParamsSchema.extend({
@@ -324,6 +331,7 @@ const completionClientParamsBaseSchema = completionParamsSchema.extend({
     .describe(
       'Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call.'
     ),
+  toolSearch: toolSearchOptionsSchema.optional(),
   stream: z
     .boolean()
     .describe('Whether to stream tokens (`true`) or return the complete response once (`false`).'),

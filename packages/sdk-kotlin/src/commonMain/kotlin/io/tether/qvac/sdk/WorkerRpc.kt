@@ -20,14 +20,14 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
-import to.holepunch.barerpc.BareRpc
-import to.holepunch.barerpc.Message
-import to.holepunch.barerpc.Messages
-import to.holepunch.barerpc.RemoteError
-import to.holepunch.barerpc.RemoteException
-import to.holepunch.compactencoding.State
-import to.holepunch.compactencoding.uint
-import to.holepunch.compactencoding.uint32
+import to.holepunch.bare.rpc.Message
+import to.holepunch.bare.rpc.Messages
+import to.holepunch.bare.rpc.RemoteError
+import to.holepunch.bare.rpc.RemoteException
+import to.holepunch.bare.rpc.Rpc
+import to.holepunch.compactEncoding.State
+import to.holepunch.compactEncoding.uint
+import to.holepunch.compactEncoding.uint32
 
 /** The worker broke the JSON contract on top of bare-rpc. */
 class QvacWorkerProtocolException(message: String) : Exception(message)
@@ -35,10 +35,9 @@ class QvacWorkerProtocolException(message: String) : Exception(message)
 /**
  * JSON requests to the worker over one bare-rpc connection.
  *
- * [read] returns the next bytes the transport received, or null once it ends.
- * [send] writes one frame. The read loop runs until the transport ends or a
- * frame cannot be read. [close] fails the pending and later calls; the owner
- * then closes the transport, which ends the loop.
+ * [data] is the bytes the transport receives; their end closes the
+ * connection. [send] writes one frame. [close] fails the pending and later
+ * calls; the owner then closes the transport.
  *
  * Frames are split here, before the library sees them, so that a frame over
  * [RpcLimits.maxFrameBytes] fails only the call it addresses: the library
@@ -46,7 +45,7 @@ class QvacWorkerProtocolException(message: String) : Exception(message)
  * dropped.
  */
 class WorkerRpc(
-    read: suspend () -> ByteArray?,
+    data: Flow<ByteArray>,
     send: suspend (ByteArray) -> Unit,
     private val limits: RpcLimits = RpcLimits(),
 ) {
@@ -56,28 +55,17 @@ class WorkerRpc(
     // pause, and a single frame must never trip the per-stream cap.
     private val maxBufferedBytes = 4 * maxFrameBytes
 
-    private val rpc = BareRpc(
-        send = send,
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val rpc = Rpc(
+        data = frames(data),
+        write = send,
+        scope = scope,
         maxFrameSize = maxFrameBytes.toUInt(),
         maxBufferedBytes = maxBufferedBytes.toUInt(),
     )
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val json = Json {
         ignoreUnknownKeys = true
         explicitNulls = false
-    }
-
-    init {
-        scope.launch {
-            try {
-                readFrames(read)
-            } catch (_: Throwable) {
-                // A frame receive already failed the connection with its cause; a
-                // transport read error means the owner is closing it.
-            } finally {
-                withContext(NonCancellable) { rpc.close() }
-            }
-        }
     }
 
     suspend fun call(payload: JsonObject): JsonObject {
@@ -133,19 +121,19 @@ class WorkerRpc(
         }
     })
 
-    /** Fails pending and later calls. The read loop ends when the owner closes the transport. */
+    /** Fails pending and later calls. The owner then closes the transport. */
     suspend fun close() = rpc.close()
 
-    private suspend fun readFrames(read: suspend () -> ByteArray?) {
+    /** The whole frames in [data], with each oversized frame replaced by [rejectOversized]'s. */
+    private fun frames(data: Flow<ByteArray>): Flow<ByteArray> = flow {
         val frames = FrameBuffer()
         var dropping = 0L
-        while (true) {
-            val chunk = read() ?: break
+        data.collect { chunk ->
             var from = 0
             if (dropping > 0) {
                 from = minOf(dropping, chunk.size.toLong()).toInt()
                 dropping -= from
-                if (from == chunk.size) continue
+                if (from == chunk.size) return@collect
             }
             frames.append(chunk, from)
             while (true) {
@@ -153,34 +141,32 @@ class WorkerRpc(
                 val frameBytes = FRAME_PREFIX_BYTES + length
                 if (frameBytes > maxFrameBytes) {
                     val head = frames.take(FRAME_PREFIX_BYTES + MAX_HEADER_BYTES) ?: break
-                    rejectOversized(head, frameBytes)
+                    emit(rejectOversized(head, frameBytes))
                     dropping = frames.drop(length - MAX_HEADER_BYTES)
                     if (dropping > 0) break
                     continue
                 }
-                val frame = frames.take(frameBytes) ?: break
-                rpc.receive(frame)
+                emit(frames.take(frameBytes) ?: break)
             }
         }
     }
 
     /**
-     * Fails the call an oversized frame addresses with the error the library
-     * would report for a peer error, so the library tears down only that call.
-     * [head] is the frame's length prefix and the start of its body; the body's
-     * first fields are the message type, the request id and, for a stream
-     * frame, its flags. An oversized frame that addresses no reply is fed to
-     * the library as is, which fails the connection with its own cap error.
+     * A frame failing the call an oversized frame addresses with the error the
+     * library would report for a peer error, so the library tears down only
+     * that call. [head] is the frame's length prefix and the start of its body;
+     * the body's first fields are the message type, the request id and, for a
+     * stream frame, its flags.
+     *
+     * @throws QvacWorkerProtocolException for an oversized frame that addresses
+     *   no reply, which fails the connection.
      */
-    private suspend fun rejectOversized(head: ByteArray, frameBytes: Long) {
+    private fun rejectOversized(head: ByteArray, frameBytes: Long): ByteArray {
         val state = State(head).apply { start = FRAME_PREFIX_BYTES.toInt() }
         val type = uint.decode(state)
         val id = uint.decode(state)
-        val error = RemoteError(
-            "frame of $frameBytes bytes exceeds the cap of $maxFrameBytes bytes",
-            FRAME_TOO_LARGE,
-            0,
-        )
+        val message = "frame of $frameBytes bytes exceeds the cap of $maxFrameBytes bytes"
+        val error = RemoteError(message, FRAME_TOO_LARGE, 0)
         val failure = when {
             id == 0uL -> null
             type == MESSAGE_RESPONSE -> Message.Response(id, 0u, null, error)
@@ -188,7 +174,7 @@ class WorkerRpc(
                 Message.Stream(id, STREAM_RESPONSE or STREAM_CLOSE or STREAM_ERROR, null, error)
             else -> null
         }
-        rpc.receive(if (failure == null) head.copyOf(FRAME_PREFIX_BYTES.toInt()) else Messages.encode(failure))
+        return Messages.encode(failure ?: throw QvacWorkerProtocolException(message))
     }
 
     private fun Throwable.unwrapped(): Throwable =

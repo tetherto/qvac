@@ -173,7 +173,7 @@ export const llmPlugin = definePlugin({
         // includes whatever an earlier `tool_search` loaded.
         const toolsByPosition = request.prompts.map(
           (prompt) =>
-            resolveDeferredTools(prompt.tools, prompt.history)?.toolsToRender ??
+            resolveDeferredTools(prompt.tools, prompt.history, prompt.toolSearch)?.toolsToRender ??
             prompt.tools?.map(toWireTool) ??
             []
         )
@@ -412,7 +412,9 @@ export const llmPlugin = definePlugin({
             modelId: request.modelId,
             kvCache: request.kvCache,
             prefill: request.prefill,
+            seedFrom: request.seedFrom,
             ...(toolsActive && request.tools && { tools: request.tools }),
+            ...(request.toolSearch && { toolSearch: request.toolSearch }),
             ...(request.generationParams && { generationParams: request.generationParams }),
             ...(toolsActive && { toolDialect: dialect }),
             ...(request.responseFormat && { responseFormat: request.responseFormat })
