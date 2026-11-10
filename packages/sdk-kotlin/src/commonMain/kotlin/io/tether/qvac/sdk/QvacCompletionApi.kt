@@ -190,10 +190,11 @@ data class QvacTool(
 }
 
 /**
- * Limits on what one `tool_search` call loads: [defaultLimit] when the model
- * passes no `limit` (3, or [maxLimit] when lower), [maxLimit] whatever it asks
- * for (8). The model is told these at the front of the prompt, so keep them the
- * same for a whole conversation.
+ * How many tool definitions one `tool_search` call loads. The model can ask for
+ * a number with the call's `limit` argument. [defaultLimit] is used when it does
+ * not (3, or [maxLimit] when lower); [maxLimit] is the most one call can load,
+ * and a larger request is lowered to it (8). The model is told these at the
+ * front of the prompt, so keep them the same for a whole conversation.
  */
 data class QvacToolSearchLimits(
     val defaultLimit: Int? = null,

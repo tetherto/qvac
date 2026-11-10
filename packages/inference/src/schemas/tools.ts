@@ -54,7 +54,7 @@ export const toolSearchOptionsSchema = z
       .min(1)
       .optional()
       .describe(
-        `Definitions one \`tool_search\` call loads when the model passes no \`limit\`. Defaults to ${DEFAULT_TOOL_SEARCH_LIMIT}, or \`maxLimit\` when that is lower.`
+        `How many tool definitions one \`tool_search\` call loads when the model does not ask for a number with its \`limit\` argument. Defaults to ${DEFAULT_TOOL_SEARCH_LIMIT}, or \`maxLimit\` when that is lower.`
       ),
     maxLimit: z
       .number()
@@ -62,7 +62,7 @@ export const toolSearchOptionsSchema = z
       .min(1)
       .optional()
       .describe(
-        `Most definitions one \`tool_search\` call may load, whatever \`limit\` the model asks for. Defaults to ${MAX_TOOL_SEARCH_LIMIT}.`
+        `The most tool definitions one \`tool_search\` call can load. A larger \`limit\` from the model is lowered to this. Defaults to ${MAX_TOOL_SEARCH_LIMIT}.`
       )
   })
   .strict()

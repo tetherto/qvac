@@ -119,6 +119,8 @@ def _normalize_tools(
 
 def _wire_tool_search(tool_search: dict[str, int]) -> dict[str, int]:
     """Map the snake_case keys a Python caller reaches for to the wire keys.
+    `default_limit` is how many definitions one `tool_search` call loads when
+    the model gives no `limit`; `max_limit` is the most one call can load.
     Limits are told to the model at the front of the prompt, so pass the same
     ones on every turn of a conversation."""
     aliases = {"default_limit": "defaultLimit", "max_limit": "maxLimit"}

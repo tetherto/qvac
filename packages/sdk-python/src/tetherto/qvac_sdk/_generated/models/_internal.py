@@ -2517,7 +2517,7 @@ class BatchCompletionStreamRequestPromptsItemToolSearch(GeneratedBaseModel):
         int | None,
         Field(
             alias="defaultLimit",
-            description="Definitions one `tool_search` call loads when the model passes no `limit`. Defaults to 3, or `maxLimit` when that is lower.",
+            description="How many tool definitions one `tool_search` call loads when the model does not ask for a number with its `limit` argument. Defaults to 3, or `maxLimit` when that is lower.",
             ge=1,
             le=9007199254740991,
         ),
@@ -2526,7 +2526,7 @@ class BatchCompletionStreamRequestPromptsItemToolSearch(GeneratedBaseModel):
         int | None,
         Field(
             alias="maxLimit",
-            description="Most definitions one `tool_search` call may load, whatever `limit` the model asks for. Defaults to 8.",
+            description="The most tool definitions one `tool_search` call can load. A larger `limit` from the model is lowered to this. Defaults to 8.",
             ge=1,
             le=9007199254740991,
         ),
@@ -4103,7 +4103,7 @@ class CompletionOrchestrateRequestToolSearch(GeneratedBaseModel):
         int | None,
         Field(
             alias="defaultLimit",
-            description="Definitions one `tool_search` call loads when the model passes no `limit`. Defaults to 3, or `maxLimit` when that is lower.",
+            description="How many tool definitions one `tool_search` call loads when the model does not ask for a number with its `limit` argument. Defaults to 3, or `maxLimit` when that is lower.",
             ge=1,
             le=9007199254740991,
         ),
@@ -4112,7 +4112,7 @@ class CompletionOrchestrateRequestToolSearch(GeneratedBaseModel):
         int | None,
         Field(
             alias="maxLimit",
-            description="Most definitions one `tool_search` call may load, whatever `limit` the model asks for. Defaults to 8.",
+            description="The most tool definitions one `tool_search` call can load. A larger `limit` from the model is lowered to this. Defaults to 8.",
             ge=1,
             le=9007199254740991,
         ),
@@ -4822,7 +4822,7 @@ class CompletionStreamRequestToolSearch(GeneratedBaseModel):
         int | None,
         Field(
             alias="defaultLimit",
-            description="Definitions one `tool_search` call loads when the model passes no `limit`. Defaults to 3, or `maxLimit` when that is lower.",
+            description="How many tool definitions one `tool_search` call loads when the model does not ask for a number with its `limit` argument. Defaults to 3, or `maxLimit` when that is lower.",
             ge=1,
             le=9007199254740991,
         ),
@@ -4831,7 +4831,7 @@ class CompletionStreamRequestToolSearch(GeneratedBaseModel):
         int | None,
         Field(
             alias="maxLimit",
-            description="Most definitions one `tool_search` call may load, whatever `limit` the model asks for. Defaults to 8.",
+            description="The most tool definitions one `tool_search` call can load. A larger `limit` from the model is lowered to this. Defaults to 8.",
             ge=1,
             le=9007199254740991,
         ),
