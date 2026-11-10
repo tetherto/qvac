@@ -14,7 +14,7 @@ import {
 
 const checker = fileURLToPath(new URL('./verify-prebuild-linking.mjs', import.meta.url))
 
-test('CUDA is opt-in for source builds and enabled for Linux release prebuilds', () => {
+test('CUDA is opt-in for source builds and enabled for Linux and Windows release prebuilds', () => {
   const manifest = JSON.parse(fs.readFileSync(new URL('../vcpkg.json', import.meta.url), 'utf8'))
   const project = JSON.parse(fs.readFileSync(new URL('../project.json', import.meta.url), 'utf8'))
   const dependency = manifest.dependencies.find((entry) => entry.name === 'stable-diffusion-cpp')
@@ -33,7 +33,11 @@ test('CUDA is opt-in for source builds and enabled for Linux release prebuilds',
   assert.match(cudaConfig, /if\(SD_CUDA\)\s+list\(APPEND VCPKG_MANIFEST_FEATURES "cuda"\)/)
   assert.equal(project.targets.build.options.ci.includeCuda, true)
   assert.equal(project.targets.build.options.ci.includeCudaArm64, true)
-  assert.equal(project.targets.build.options.ci.platformCmakeDefines, 'linux: -D SD_CUDA=ON')
+  assert.equal(project.targets.build.options.ci.includeCudaWin32, true)
+  assert.equal(
+    project.targets.build.options.ci.platformCmakeDefines,
+    'linux: -D SD_CUDA=ON\nwin32: -D SD_CUDA=ON'
+  )
 })
 
 // Real ELF64 section and symbol layouts, including symbol binding/definition.
@@ -132,7 +136,7 @@ for (const arch of ['arm64', 'x64']) {
   })
 }
 
-test('split publication retains CUDA and Vulkan in both Linux platform packages', (t) => {
+test('split publication retains CUDA and Vulkan in Linux and Windows platform packages', (t) => {
   const workdir = fs.mkdtempSync(path.join(os.tmpdir(), 'diffusion-slices-'))
   t.after(() => fs.rmSync(workdir, { recursive: true, force: true }))
   const meta = { name: '@qvac/diffusion-cpp', version: '0.30.0' }
@@ -143,6 +147,19 @@ test('split publication retains CUDA and Vulkan in both Linux platform packages'
       fs.mkdirSync(hostDir, { recursive: true })
       const addonName = expectedAddonFile(meta.name, host)
       fs.writeFileSync(path.join(hostDir, addonName), elf(['libc.so.6']))
+      if (host === 'win32-x64') {
+        const backends = path.join(hostDir, addonName.replace(/\.bare$/, ''))
+        fs.mkdirSync(backends)
+        fs.writeFileSync(path.join(hostDir, addonName), pe(['kernel32.dll']))
+        fs.writeFileSync(
+          path.join(backends, 'qvac-diffusion-ggml-vulkan.dll'),
+          pe(['vulkan-1.dll'])
+        )
+        fs.writeFileSync(
+          path.join(backends, 'qvac-diffusion-ggml-cuda.dll'),
+          pe(['cudart64_13.dll', 'cublas64_13.dll'])
+        )
+      }
       if (!host.startsWith('linux-')) continue
       const backends = path.join(hostDir, addonName.replace(/\.bare$/, ''))
       fs.mkdirSync(backends)
@@ -157,15 +174,15 @@ test('split publication retains CUDA and Vulkan in both Linux platform packages'
     }
   }
   const slices = slicePlatformPackages({ workdir, outDir: path.join(workdir, 'slices') })
-  for (const arch of ['x64', 'arm64']) {
-    const directory = slices.find((slice) => slice.endsWith(`-linux-${arch}`))
-    assert.ok(directory, `linux-${arch} platform package exists`)
+  for (const host of ['linux-x64', 'linux-arm64', 'win32-x64']) {
+    const directory = slices.find((slice) => slice.endsWith(`-${host}`))
+    assert.ok(directory, `${host} platform package exists`)
     const manifest = JSON.parse(fs.readFileSync(path.join(directory, 'package.json'), 'utf8'))
-    assert.equal(manifest.name, `@qvac/diffusion-cpp-linux-${arch}`)
+    assert.equal(manifest.name, `@qvac/diffusion-cpp-${host}`)
     assert.equal(manifest.version, meta.version)
     const result = spawnSync(process.execPath, [checker, path.join(directory, 'prebuilds')], {
       encoding: 'utf8',
-      env: { ...process.env, BUILD_PLATFORM: 'linux' }
+      env: { ...process.env, BUILD_PLATFORM: host.split('-')[0] }
     })
     assert.equal(result.status, 0, result.stdout + result.stderr)
   }
@@ -242,6 +259,7 @@ test('standalone and integration ELF readers reject the same runtime-symbol fail
 })
 
 async function integrationLayout({
+  platform = 'linux',
   arch = 'x64',
   env = {},
   cuda = null,
@@ -250,23 +268,26 @@ async function integrationLayout({
 } = {}) {
   const file = new URL('../test/integration/prebuild-dynamic-linking.test.js', import.meta.url)
   const directory = path.dirname(fileURLToPath(file))
-  const target = path.resolve(directory, '../../prebuilds', `linux-${arch}`)
-  const moduleName = `qvac__diffusion-cpp-linux-${arch}`
+  const target = path.resolve(directory, '../../prebuilds', `${platform}-${arch}`)
+  const moduleName = `qvac__diffusion-cpp-${platform}-${arch}`
   const addonPath = path.join(target, `${moduleName}.bare`)
-  const vulkanPath = path.join(target, moduleName, 'libqvac-diffusion-ggml-vulkan.so')
-  const cudaPath = path.join(target, moduleName, 'libqvac-diffusion-ggml-cuda.so')
+  const encode = platform === 'win32' ? pe : elf
+  const backendFile = (name) =>
+    platform === 'win32' ? `qvac-diffusion-ggml-${name}.dll` : `libqvac-diffusion-ggml-${name}.so`
+  const vulkanPath = path.join(target, moduleName, backendFile('vulkan'))
+  const cudaPath = path.join(target, moduleName, backendFile('cuda'))
   const files = new Map([
-    [addonPath, elf(addon)],
-    [vulkanPath, elf(vulkan)]
+    [addonPath, encode(addon)],
+    [vulkanPath, encode(vulkan)]
   ])
-  if (cuda) files.set(cudaPath, elf(cuda))
+  if (cuda) files.set(cudaPath, encode(cuda))
   const reads = []
   const comments = []
   const failures = []
   const tests = new Map()
   const modules = {
     'bare-path': path,
-    'bare-os': { platform: () => 'linux', arch: () => arch },
+    'bare-os': { platform: () => platform, arch: () => arch },
     'bare-process': { env },
     'bare-fs': {
       existsSync: (file) => files.has(file),
@@ -286,7 +307,9 @@ async function integrationLayout({
     }
   })
   const layout = tests.get(
-    'linux prebuild has no hard GPU-loader deps and ships DL backend modules'
+    platform === 'win32'
+      ? 'win32 prebuild has no hard GPU-loader imports and ships the Vulkan and CUDA backend DLLs'
+      : 'linux prebuild has no hard GPU-loader deps and ships DL backend modules'
   )
   assert.equal(typeof layout, 'function')
   await layout({
@@ -371,7 +394,15 @@ function pe(imports) {
 }
 
 // A merged artifact as the verify-prebuild-linking job sees it.
-function mergedFixture(t, { linux = ['x64', 'arm64'], win32 = true, addonImports } = {}) {
+function mergedFixture(
+  t,
+  {
+    linux = ['x64', 'arm64'],
+    win32 = true,
+    addonImports,
+    cudaImports = ['cublas64_13.dll', 'kernel32.dll']
+  } = {}
+) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'diffusion-merged-'))
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
   for (const arch of linux) {
@@ -403,6 +434,8 @@ function mergedFixture(t, { linux = ['x64', 'arm64'], win32 = true, addonImports
       path.join(backends, 'qvac-diffusion-ggml-vulkan.dll'),
       pe(['vulkan-1.dll', 'kernel32.dll'])
     )
+    if (cudaImports)
+      fs.writeFileSync(path.join(backends, 'qvac-diffusion-ggml-cuda.dll'), pe(cudaImports))
   }
   return (buildPlatform) => {
     const env = { ...process.env, BUILD_PLATFORM: buildPlatform ?? '' }
@@ -439,3 +472,68 @@ test('fails when the win32 addon imports cuBLASLt', (t) => {
   assert.equal(result.status, 1)
   assert.match(result.output, /addon imports cublaslt64/)
 })
+
+test('Windows prebuild job validates its own artifact without Linux artifacts', (t) => {
+  const result = mergedFixture(t, { linux: [] })('win32')
+  assert.equal(result.status, 0, result.output)
+})
+
+test('Windows prebuild job fails when its artifact is absent', (t) => {
+  const result = mergedFixture(t, { linux: [], win32: false })('win32')
+  assert.equal(result.status, 1)
+  assert.match(result.output, /no win32 prebuilds/)
+})
+
+for (const [name, cudaImports, error] of [
+  ['missing DLL', null, /CUDA DL backend module missing/],
+  ['missing cuBLAS', ['cudart64_13.dll'], /does not import cublas64/],
+  [
+    'dynamic CRT',
+    ['cudart64_13.dll', 'cublas64_13.dll', 'vcruntime140.dll'],
+    /CUDA module imports vcruntime/
+  ]
+]) {
+  test(`Windows CUDA rejects ${name}`, (t) => {
+    const result = mergedFixture(t, { cudaImports })()
+    assert.equal(result.status, 1, result.output)
+    assert.match(result.output, error)
+  })
+}
+
+for (const env of [{}, { CI: 'true' }, { QVAC_REQUIRE_CUDA_MODULE: 'true' }]) {
+  test(`Windows integration handles optional/missing CUDA with ${JSON.stringify(env)}`, async () => {
+    const result = await integrationLayout({
+      platform: 'win32',
+      env,
+      addon: ['kernel32.dll'],
+      vulkan: ['vulkan-1.dll']
+    })
+    assert.deepEqual(result.reads, [result.addonPath, result.vulkanPath])
+    assert.equal(result.failures.length, Object.keys(env).length ? 1 : 0)
+  })
+}
+
+test('Windows integration validates present CUDA and rejects dynamic CRT imports', async () => {
+  const options = {
+    platform: 'win32',
+    addon: ['kernel32.dll'],
+    vulkan: ['vulkan-1.dll'],
+    cuda: ['cublas64_13.dll', 'kernel32.dll']
+  }
+  const result = await integrationLayout(options)
+  assert.deepEqual(result.reads, [result.addonPath, result.vulkanPath, result.cudaPath])
+  await assert.rejects(
+    integrationLayout({ ...options, cuda: [...options.cuda, 'msvcp140.dll'] }),
+    /CUDA module must not import msvcp/
+  )
+})
+
+for (const cudaImports of [
+  ['cublas64_13.dll', 'kernel32.dll'],
+  ['cudart64_13.dll', 'cublas64_13.dll', 'kernel32.dll']
+]) {
+  test(`Windows CUDA accepts static or dynamic cudart: ${cudaImports.join(', ')}`, (t) => {
+    const result = mergedFixture(t, { linux: [], cudaImports })('win32')
+    assert.equal(result.status, 0, result.output)
+  })
+}

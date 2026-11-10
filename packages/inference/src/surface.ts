@@ -26,9 +26,17 @@ export {
   type EmbedInput,
   type EmbedInputPart,
   type EmbedMediaSource,
-  type EmbedParams,
+  type EmbedLegacyParams as EmbedParams,
+  type EmbedClientParams,
+  type EmbedClientInput,
+  type EmbedBatchClientParams as EmbedBatchParams,
+  type EmbedBatchClientParams,
+  type ImageEmbeddingConfig,
+  type ImageEmbeddingStats,
   VERBOSITY,
   type Attachment,
+  type HistoryContent,
+  type HistoryContentPart,
   type TranscribeStreamSession,
   type TranscribeStreamMetadataSession,
   type TranscribeStreamConversationSession,
@@ -118,6 +126,7 @@ export {
   type ModelRegistryEntryAddon,
   PLUGIN_LLM,
   PLUGIN_EMBEDDING,
+  PLUGIN_IMAGE_EMBEDDING,
   PLUGIN_WHISPER,
   PLUGIN_BCI,
   PLUGIN_NMT,
@@ -148,7 +157,9 @@ export {
   buildToolSearchTool,
   executeToolSearch,
   loadedToolNames,
-  searchDeferredTools
+  resolveToolSearchSource,
+  searchDeferredTools,
+  type ToolSearchSource
 } from '@/utils/tools/defer'
 export { untilAborted } from '@/utils/until-aborted'
 
@@ -189,6 +200,7 @@ export { SUPPORTED_AUDIO_FORMATS } from '@/constants/audio'
 // group below).
 export {
   RpcServerOperationError,
+  AudioEncodeFailedError,
   InferenceCancelledError,
   ContextOverflowError,
   type ContextOverflowErrorSizes,

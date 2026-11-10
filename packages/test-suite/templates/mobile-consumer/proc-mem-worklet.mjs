@@ -35,7 +35,6 @@
 // Samples are batched per tick and pushed to the React Native side over
 // bare-rpc, which publishes them on qvac/app-memory with their metric labels.
 
-/* global BareKit, Bare */
 import RPC from 'bare-rpc'
 import fs from 'bare-fs'
 
@@ -113,7 +112,7 @@ function readUssKb() {
 }
 
 const intervalMs = readIntervalMs()
-const rpc = new RPC(BareKit.IPC)
+const rpc = new RPC(Bare.IPC)
 
 // One-time ceiling for the mmap-region count. Null on devices that don't
 // expose it (older / locked-down kernels) — the count series still works,
