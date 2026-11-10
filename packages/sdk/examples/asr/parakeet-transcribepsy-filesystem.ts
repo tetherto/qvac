@@ -64,7 +64,8 @@ if (
   !audioFilePath ||
   (windowSeconds !== undefined && !(windowSeconds > 0)) ||
   (useEu && useCoreml) ||
-  (language !== undefined && (!useEu || !isEuLanguage(language)))
+  // `--language` needs a value, and only the full EU model has a route to pick.
+  (languageIndex !== -1 && (!useEu || !isEuLanguage(language)))
 ) {
   console.error(USAGE)
   process.exit(1)
