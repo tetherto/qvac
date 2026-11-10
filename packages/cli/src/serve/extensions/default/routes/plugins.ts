@@ -163,9 +163,6 @@ export function pluginRoutes(ops: PluginOperations = SDK_OPERATIONS): FastifyPlu
 
         initSSE(reply)
         const raw = reply.raw
-        const closed = new Promise<typeof CLOSED>((resolve) =>
-          raw.once('close', () => resolve(CLOSED))
-        )
         const base = { model: alias, handler }
         let next = first
         let index = 0
@@ -179,14 +176,8 @@ export function pluginRoutes(ops: PluginOperations = SDK_OPERATIONS): FastifyPlu
           // Hold the next chunk until a slow client catches up.
           if (raw.writableNeedDrain) await writable(raw)
           if (raw.destroyed) return release(chunks)
-          const read = chunks.next().catch((err: unknown) => {
-            throw toHttpError(err)
-          })
-          const step = await Promise.race([read, closed])
-          if (step === CLOSED) {
-            read.catch(() => {})
-            return release(chunks)
-          }
+          const step = await readOrClose(raw, chunks.next())
+          if (step === CLOSED) return release(chunks)
           next = step
         }
         sendSSE(raw, { object: 'plugin.invocation.done', ...base })
@@ -204,6 +195,29 @@ const CLOSED = Symbol('closed')
 function release(chunks: AsyncGenerator<unknown>): undefined {
   chunks.return(undefined).catch(() => {})
   return undefined
+}
+
+// The close listener goes with each read, so a long stream does not pile them up.
+function readOrClose(
+  raw: ServerResponse,
+  read: Promise<IteratorResult<unknown>>
+): Promise<IteratorResult<unknown> | typeof CLOSED> {
+  return new Promise((resolve, reject) => {
+    function onClose(): void {
+      resolve(CLOSED)
+    }
+    raw.once('close', onClose)
+    read.then(
+      (result) => {
+        raw.off('close', onClose)
+        resolve(result)
+      },
+      (err: unknown) => {
+        raw.off('close', onClose)
+        reject(toHttpError(err))
+      }
+    )
+  })
 }
 
 function writable(raw: ServerResponse): Promise<void> {
