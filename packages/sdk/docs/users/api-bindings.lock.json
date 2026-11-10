@@ -179,8 +179,191 @@
       "fn:startRpcServer": "15584833bdd42bf3",
       "fn:stopRpcServer": "2900fcc5e5b6d2e8"
     },
+    "reference/api/assessModelFit.mdx": {
+      "fn:assessModelFit": "088ab87d2a80844f"
+    },
+    "reference/api/audioEdit.mdx": {
+      "fn:audioEdit": "3d961805b196f6cd"
+    },
+    "reference/api/audioGen.mdx": {
+      "fn:audioGen": "847c9bca7f856b45"
+    },
+    "reference/api/audioUnderstand.mdx": {
+      "fn:audioUnderstand": "2c8234227c0f7b00"
+    },
+    "reference/api/batchCompletion.mdx": {
+      "fn:batchCompletion": "363c50188b44a928"
+    },
+    "reference/api/bciTranscribe.mdx": {
+      "fn:bciTranscribe": "3865dc83d69fb003"
+    },
+    "reference/api/bciTranscribeStream.mdx": {
+      "fn:bciTranscribeStream": "cd083d7ae3e48f60"
+    },
+    "reference/api/cancel.mdx": {
+      "fn:cancel": "f4654f3459c0ccc4"
+    },
+    "reference/api/classify.mdx": {
+      "fn:classify": "d81730002c315b6c"
+    },
+    "reference/api/completion.mdx": {
+      "fn:completion": "01b3537932aaee4a"
+    },
+    "reference/api/createVectorIndex.mdx": {
+      "fn:createVectorIndex": "b6755c02d77129f5"
+    },
+    "reference/api/decide.mdx": {
+      "fn:decide": "375c1fce1263d69c"
+    },
+    "reference/api/deleteCache.mdx": {
+      "fn:deleteCache": "4e603355d93a2fb7"
+    },
+    "reference/api/diffusion.mdx": {
+      "fn:diffusion": "235a0fc585bb99ca"
+    },
+    "reference/api/discoverRpcServers.mdx": {
+      "fn:discoverRpcServers": "4306db4add01ae55"
+    },
+    "reference/api/downloadAsset.mdx": {
+      "fn:downloadAsset": "4910b7a05761c7e3"
+    },
+    "reference/api/embed.mdx": {
+      "fn:embed": "85362ce0883ab6a7"
+    },
+    "reference/api/finetune.mdx": {
+      "fn:finetune": "9d26063b65c73276"
+    },
+    "reference/api/getLoadedModelInfo.mdx": {
+      "fn:getLoadedModelInfo": "28cf803723b2971f"
+    },
+    "reference/api/getModelInfo.mdx": {
+      "fn:getModelInfo": "474233bcf44debe7"
+    },
+    "reference/api/getSystemResources.mdx": {
+      "fn:getSystemResources": "a584c4d6c9866f9c"
+    },
+    "reference/api/heartbeat.mdx": {
+      "fn:heartbeat": "7d3d6a86adfc1ffc"
+    },
+    "reference/api/invokePlugin.mdx": {
+      "fn:invokePlugin": "306ba4d34c4d9e17"
+    },
+    "reference/api/invokePluginStream.mdx": {
+      "fn:invokePluginStream": "480c7a6cfd3c0687"
+    },
     "reference/api/loadModel.mdx": {
       "fn:loadModel": "5d142740d6c776a6"
+    },
+    "reference/api/loadVectorIndex.mdx": {
+      "fn:loadVectorIndex": "dcee2cfb00bbe3f7"
+    },
+    "reference/api/loggingStream.mdx": {
+      "fn:loggingStream": "ef5d172def4637ae"
+    },
+    "reference/api/modelRegistryGetModel.mdx": {
+      "fn:modelRegistryGetModel": "7ce9bffb89e9294e"
+    },
+    "reference/api/modelRegistryList.mdx": {
+      "fn:modelRegistryList": "2a7503800930d8df"
+    },
+    "reference/api/modelRegistrySearch.mdx": {
+      "fn:modelRegistrySearch": "32ef9908e7247ad4"
+    },
+    "reference/api/ocr.mdx": {
+      "fn:ocr": "37293f4270fba50b"
+    },
+    "reference/api/ragChunk.mdx": {
+      "fn:ragChunk": "4442cb517770a61e"
+    },
+    "reference/api/ragCloseWorkspace.mdx": {
+      "fn:ragCloseWorkspace": "5846845923dadddb"
+    },
+    "reference/api/ragDeleteEmbeddings.mdx": {
+      "fn:ragDeleteEmbeddings": "0c720d497c75a062"
+    },
+    "reference/api/ragDeleteWorkspace.mdx": {
+      "fn:ragDeleteWorkspace": "f8a8d1bb0f3a8ac0"
+    },
+    "reference/api/ragIngest.mdx": {
+      "fn:ragIngest": "c7020bf858d62b72"
+    },
+    "reference/api/ragListWorkspaces.mdx": {
+      "fn:ragListWorkspaces": "11db18fd26966636"
+    },
+    "reference/api/ragReindex.mdx": {
+      "fn:ragReindex": "fcd612f720cb0eb8"
+    },
+    "reference/api/ragSaveEmbeddings.mdx": {
+      "fn:ragSaveEmbeddings": "4f9bbaec1ebcf815"
+    },
+    "reference/api/ragSearch.mdx": {
+      "fn:ragSearch": "a91a8f3939cdd0ed"
+    },
+    "reference/api/rerank.mdx": {
+      "fn:rerank": "f1bc16a1685e5b6b"
+    },
+    "reference/api/resume.mdx": {
+      "fn:resume": "db2208be69625f8b"
+    },
+    "reference/api/startRpcServer.mdx": {
+      "fn:startRpcServer": "15584833bdd42bf3"
+    },
+    "reference/api/state.mdx": {
+      "fn:state": "3b82bd5b031cd11e"
+    },
+    "reference/api/stopRpcServer.mdx": {
+      "fn:stopRpcServer": "2900fcc5e5b6d2e8"
+    },
+    "reference/api/subscribeServerLogs.mdx": {
+      "fn:subscribeServerLogs": "d4fc271002e97d28"
+    },
+    "reference/api/suspend.mdx": {
+      "fn:suspend": "5a418101e3ee32f9"
+    },
+    "reference/api/textToSpeech.mdx": {
+      "fn:textToSpeech": "4f2459c4b10783ec"
+    },
+    "reference/api/textToSpeechStream.mdx": {
+      "fn:textToSpeechStream": "46304dedb6937dfd"
+    },
+    "reference/api/transcribe.mdx": {
+      "fn:transcribe": "b543a6e9ed33c2df"
+    },
+    "reference/api/transcribeStream.mdx": {
+      "fn:transcribeStream": "2f9e221dd09bd000"
+    },
+    "reference/api/translate.mdx": {
+      "fn:translate": "2308b73916bd592b"
+    },
+    "reference/api/unloadModel.mdx": {
+      "fn:unloadModel": "cd0edd42e880459d"
+    },
+    "reference/api/upscale.mdx": {
+      "fn:upscale": "f16a1a615f48d7da"
+    },
+    "reference/api/video.mdx": {
+      "fn:video": "1ad502115ebc9074"
+    },
+    "reference/api/vla.mdx": {
+      "fn:vla": "2929f37be622d099"
+    },
+    "reference/api/vlaHparams.mdx": {
+      "fn:vlaHparams": "d09635677b0bbba5"
+    },
+    "reference/api/vlaPadState.mdx": {
+      "fn:vlaPadState": "5978a48740c095a6"
+    },
+    "reference/api/vlaPreprocessImage.mdx": {
+      "fn:vlaPreprocessImage": "d9a821801daf5291"
+    },
+    "reference/api/vlaSetEmbodiment.mdx": {
+      "fn:vlaSetEmbodiment": "78968e11217c29d0"
+    },
+    "reference/api/worldCreateScene.mdx": {
+      "fn:worldCreateScene": "f1869d5a4aeec722"
+    },
+    "reference/api/worldStep.mdx": {
+      "fn:worldStep": "e3683e2d82c9bf55"
     },
     "runtime/cancellation.mdx": {
       "fn:cancel": "f4654f3459c0ccc4",
