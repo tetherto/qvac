@@ -281,7 +281,7 @@ const client = createVectorIndexClient(send)
  *   ['1', 'Saturn moon Titan has lakes of liquid methane.'],
  *   ['2', 'Solar panels turn sunlight into electricity.']
  * ])
- * const { embedding } = await embed({ modelId, text: [...documents.values()] })
+ * const { embedding } = await embedBatch({ modelId, inputs: [...documents.values()] })
  *
  * await using index = await createVectorIndex({ dim: embedding[0].length })
  * await index.add({ ids: [...documents.keys()], vectors: embedding })

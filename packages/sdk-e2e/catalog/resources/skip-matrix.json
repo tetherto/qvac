@@ -773,6 +773,7 @@
   "desktop-python": [
     "error-invalid-response-type",
     "error-structured-error-code",
+    "image-embedding-megaloc-mixed",
     "model-load-llm-cache-checkpoints-out-of-range-rejected",
     "no-lingering-bare-close",
     "no-lingering-bare-ipc-disconnect",
@@ -859,6 +860,7 @@
     "http-sharded-embed-inference",
     "http-sharded-embed-load",
     "http-sharded-embed-progress",
+    "image-embedding-megaloc-mixed",
     "kv-cache-seed-different-system-prompt",
     "kv-cache-seed-ignored-once-cached",
     "kv-cache-seed-missing-source",

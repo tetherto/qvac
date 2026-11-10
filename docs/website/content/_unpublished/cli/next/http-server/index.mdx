@@ -1555,14 +1555,32 @@ shape has no field for it.
 
 #### Message content
 
-`messages[].content` accepts both the plain string form and the OpenAI **array-of-parts** form (`[{ "type": "text", "text": "…" }, …]`) that modern clients such as Cline and Open WebUI send. Parts of type `text` are concatenated into a single string; non-text parts (`image_url`, `input_audio`, `file`) are **silently dropped** — the chat surface is text-only and vision is out of scope. Both shapes below are valid:
+`messages[].content` accepts a plain string or an OpenAI array of `text` and
+`image_url` parts. User messages with images preserve the order of every text and
+image part, so each image reaches the model where the client placed it. Text-only
+arrays are joined into one string without separators. On other roles, images are
+sent as attachments before the joined text.
+
+Both shapes below are valid.
 
 ```jsonc
 // string form
 { "role": "user", "content": "Describe a sunset." }
 
-// array form (non-text parts ignored)
-{ "role": "user", "content": [{ "type": "text", "text": "Describe a sunset." }] }
+// array form, preserving text and image order
+{
+  "role": "user",
+  "content": [
+    { "type": "text", "text": "Describe this image: " },
+    {
+      "type": "image_url",
+      "image_url": {
+        "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+      }
+    },
+    { "type": "text", "text": " What colors do you see?" }
+  ]
+}
 ```
 
 #### Generation parameters

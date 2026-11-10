@@ -14,6 +14,14 @@ type Rule = {
 
 const RULES: Rule[] = [
   {
+    match: /^image-embedding-/,
+    skip: {
+      reason:
+        'MegaLoc inference uses a shared JS executor; Python and Kotlin runners do not implement it.',
+      platforms: ['desktop-python', 'kotlin-android']
+    }
+  },
+  {
     match: /^tts-moss-/,
     skip: {
       reason:

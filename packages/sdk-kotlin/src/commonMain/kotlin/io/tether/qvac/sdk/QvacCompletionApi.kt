@@ -7,6 +7,10 @@ import io.tether.qvac.sdk.generated.schema.CompletionOrchestrateResponseToolCall
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequest
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestGenerationParams
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContent
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContentItemMedia
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContentItemText
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContentVariant2Item
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemAttachmentsItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemToolCallsItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestKvCache
@@ -47,9 +51,19 @@ import kotlin.random.Random
 data class QvacAttachment(val path: String)
 
 /**
+ * One ordered piece of a user turn. A [Media] part keeps its place next to the
+ * text that refers to it; [QvacMessage.attachments] are always sent before the text.
+ */
+sealed class QvacContentPart {
+    data class Text(val text: String) : QvacContentPart()
+    data class Media(val path: String) : QvacContentPart()
+}
+
+/**
  * A history entry. An assistant turn can carry the [toolCalls] it made, and a tool
  * turn the [toolCallId] / [toolName] it answers; the model's chat template renders
- * them in its own tool-call format.
+ * them in its own tool-call format. A user turn may send ordered [parts] in place
+ * of [content] and [attachments].
  */
 data class QvacMessage(
     val role: String,
@@ -58,8 +72,13 @@ data class QvacMessage(
     val toolCalls: List<QvacToolCall> = emptyList(),
     val toolCallId: String? = null,
     val toolName: String? = null,
+    val parts: List<QvacContentPart> = emptyList(),
 ) {
     init {
+        require(parts.isEmpty() || role == "user") { "parts are only valid on a user message" }
+        require(parts.isEmpty() || (content.isEmpty() && attachments.isEmpty())) {
+            "pass either parts or content/attachments, not both"
+        }
         require(toolCalls.isEmpty() || role == "assistant") {
             "toolCalls is only valid on an assistant message"
         }
@@ -72,6 +91,7 @@ data class QvacMessage(
         fun system(content: String) = QvacMessage("system", content)
         fun user(content: String, attachments: List<QvacAttachment> = emptyList()) =
             QvacMessage("user", content, attachments)
+        fun user(parts: List<QvacContentPart>) = QvacMessage("user", "", parts = parts)
         fun assistant(content: String, toolCalls: List<QvacToolCall> = emptyList()) =
             QvacMessage("assistant", content, toolCalls = toolCalls)
         fun tool(content: String, toolCallId: String? = null, toolName: String? = null) =
@@ -535,7 +555,11 @@ private fun CompletionStreamResponseEventsItemCompletionStatsStats.toCompletionS
 
 private fun QvacMessage.toStreamItem() = CompletionStreamRequestHistoryItem(
     role = role,
-    content = content,
+    content = if (parts.isEmpty()) {
+        CompletionStreamRequestHistoryItemContent.Variant1(content)
+    } else {
+        CompletionStreamRequestHistoryItemContent.Variant2(parts.map { it.toWire() })
+    },
     attachments = attachments.takeIf { it.isNotEmpty() }
         ?.map { CompletionStreamRequestHistoryItemAttachmentsItem(path = it.path) },
     toolCalls = toolCalls.takeIf { it.isNotEmpty() }?.map { call ->
@@ -544,6 +568,15 @@ private fun QvacMessage.toStreamItem() = CompletionStreamRequestHistoryItem(
     toolCallId = toolCallId,
     toolName = toolName,
 )
+
+private fun QvacContentPart.toWire(): CompletionStreamRequestHistoryItemContentVariant2Item = when (this) {
+    is QvacContentPart.Text -> CompletionStreamRequestHistoryItemContentVariant2Item.CompletionStreamRequestHistoryItemContentItemText(
+        CompletionStreamRequestHistoryItemContentItemText(text = text),
+    )
+    is QvacContentPart.Media -> CompletionStreamRequestHistoryItemContentVariant2Item.CompletionStreamRequestHistoryItemContentItemMedia(
+        CompletionStreamRequestHistoryItemContentItemMedia(path = path),
+    )
+}
 
 private fun QvacGenerationOptions.toStreamParams() = CompletionStreamRequestGenerationParams(
     temp = temperature,

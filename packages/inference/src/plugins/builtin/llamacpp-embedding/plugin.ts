@@ -5,6 +5,8 @@ import {
   defineHandler,
   embedRequestSchema,
   embedResponseSchema,
+  embedBatchRequestSchema,
+  embedBatchResponseSchema,
   ModelType,
   embedLoadConfigSchema,
   ADDON_EMBEDDING,
@@ -108,6 +110,24 @@ export const embeddingsPlugin = definePlugin({
   },
 
   handlers: {
+    embedBatch: defineHandler({
+      requestSchema: embedBatchRequestSchema,
+      responseSchema: embedBatchResponseSchema,
+      streaming: false,
+      cancel: { scope: 'model', hard: true },
+      handler: async (request) => {
+        const result = await embed(request, request.requestId)
+        return forwardModelExecution(
+          {
+            type: 'embedBatch' as const,
+            success: true,
+            embedding: result.embedding as number[][],
+            ...(result.stats && { stats: result.stats })
+          },
+          result
+        )
+      }
+    }),
     embed: defineHandler({
       requestSchema: embedRequestSchema,
       responseSchema: embedResponseSchema,
@@ -117,12 +137,7 @@ export const embeddingsPlugin = definePlugin({
       cancel: { scope: 'model', hard: true },
 
       handler: async function (request) {
-        const embedResult = await embed(
-          request.inputs !== undefined
-            ? { modelId: request.modelId, inputs: request.inputs }
-            : { modelId: request.modelId, text: request.text },
-          request.requestId
-        )
+        const embedResult = await embed(request, request.requestId)
 
         return forwardModelExecution(
           {
