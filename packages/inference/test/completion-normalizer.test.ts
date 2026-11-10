@@ -122,6 +122,124 @@ test('captureThinking true: strips <think> content and emits thinkingDelta event
   t.is(n.getAccumulated().thinkingText, 'thought')
 })
 
+test('captureThinking true: drops the blank line between </think> and the answer', (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({ capabilities: THINKING_CAPS, captureThinking: true })
+  )
+  const events = [
+    ...pushAll(n, ['<think>\n', 'plan it', '\n', '</think>', '\n\n', 'Answer', '\n\nMore']),
+    ...n.finish()
+  ]
+
+  t.is(texts(events, 'contentDelta')[0], 'Answer', 'first content delta starts with the answer')
+  t.is(n.getAccumulated().contentText, 'Answer\n\nMore', 'whitespace inside the answer is kept')
+  t.is(n.getAccumulated().thinkingText, 'plan it', 'reasoning loses its framing newlines')
+})
+
+test('captureThinking true: reasoning drops edge whitespace but keeps its own', (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({ capabilities: THINKING_CAPS, captureThinking: true })
+  )
+  const events = [
+    ...pushAll(n, ['<think>', '\n', 'step one', '\n\n', 'step two', ' \n', '</think>', 'Answer']),
+    ...n.finish()
+  ]
+
+  t.is(n.getAccumulated().thinkingText, 'step one\n\nstep two')
+  t.ok(
+    texts(events, 'thinkingDelta').every((text) => text.trim().length > 0),
+    'no whitespace-only thinking delta is emitted'
+  )
+  t.is(n.getAccumulated().contentText, 'Answer')
+})
+
+test('captureThinking true: separate reasoning blocks stay on separate lines', (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({ capabilities: THINKING_CAPS, captureThinking: true })
+  )
+  const events = [
+    ...pushAll(n, [
+      '<think>first\n</think>answer',
+      '<think>\n',
+      'second',
+      '\n</think>',
+      '<think>\n\n</think>'
+    ]),
+    ...n.finish()
+  ]
+
+  t.is(n.getAccumulated().thinkingText, 'first\nsecond', 'an empty block adds no separator')
+  t.is(texts(events, 'thinkingDelta').join(''), 'first\nsecond', 'deltas carry the separator')
+  t.is(n.getAccumulated().contentText, 'answer')
+})
+
+test('captureThinking true: reasoning cut off before its close drops trailing whitespace', (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({ capabilities: THINKING_CAPS, captureThinking: true })
+  )
+  pushAll(n, ['<think>\n', 'half way', '\n'])
+  n.finish()
+
+  t.is(n.getAccumulated().thinkingText, 'half way')
+})
+
+test('captureThinking true: an empty think block leaves no leading whitespace', (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({ capabilities: THINKING_CAPS, captureThinking: true })
+  )
+  const events = [...pushAll(n, ['<think>\n\n</think>\n', '\n', ' ', 'Answer']), ...n.finish()]
+
+  t.is(n.getAccumulated().contentText, 'Answer')
+  t.ok(
+    texts(events, 'contentDelta').every((text) => text.trim().length > 0),
+    'no whitespace-only content delta is emitted'
+  )
+})
+
+test('captureThinking true: a think block inside the answer keeps surrounding spaces', (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({ capabilities: THINKING_CAPS, captureThinking: true })
+  )
+  pushAll(n, ['The answer is <think>check</think> 42.'])
+  n.finish()
+
+  t.is(n.getAccumulated().contentText, 'The answer is  42.')
+})
+
+test('captureThinking false: think tags and the blank line stay in content', (t) => {
+  const n = createCompletionNormalizer(baseConfig({ capabilities: THINKING_CAPS }))
+  pushAll(n, ['<think>\nx\n</think>', '\n\n', 'Answer'])
+  n.finish()
+
+  t.is(n.getAccumulated().contentText, '<think>\nx\n</think>\n\nAnswer')
+})
+
+test('gemma4 thought frame: blank line after the frame is dropped', (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({ capabilities: NONE_CAPS, toolDialect: 'gemma4', captureThinking: true })
+  )
+  pushAll(n, ['<|channel>thoughtplan<channel|>', '\n\nafter'])
+  n.finish()
+
+  t.is(n.getAccumulated().contentText, 'after')
+})
+
+test('harmony: framing newlines are dropped from the analysis and final channels', (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({ capabilities: NONE_CAPS, toolDialect: 'harmony', captureThinking: true })
+  )
+  pushAll(n, [
+    '<|channel|>analysis<|message|>\nplan\n<|end|>',
+    '<|start|>assistant<|channel|>final<|message|>',
+    '\n\nAnswer',
+    '<|return|>'
+  ])
+  n.finish()
+
+  t.is(n.getAccumulated().contentText, 'Answer')
+  t.is(n.getAccumulated().thinkingText, 'plan')
+})
+
 test('valid framed tool call: emits toolCall, no content for markup', (t) => {
   const n = createCompletionNormalizer(
     baseConfig({ capabilities: TEXT_PARSE_CAPS, tools: [ECHO_TOOL] })
