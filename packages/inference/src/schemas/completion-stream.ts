@@ -44,13 +44,15 @@ export const attachmentSchema = z.object({
  * the turn, so text that refers to "this image" sits next to it; `attachments`
  * cannot express that because every attachment is sent before the text.
  */
+const historyTextContentPartSchema = z
+  .object({
+    type: z.literal('text'),
+    text: z.string().describe('Text rendered at this position in the turn.')
+  })
+  .strict()
+
 export const historyContentPartSchema = z.discriminatedUnion('type', [
-  z
-    .object({
-      type: z.literal('text'),
-      text: z.string().describe('Text rendered at this position in the turn.')
-    })
-    .strict(),
+  historyTextContentPartSchema,
   z
     .object({
       type: z.literal('media'),
@@ -309,21 +311,16 @@ export const historyMessageSchema = historyMessageObjectSchema
 
 export const historyMessageWithoutAttachmentsSchema = historyMessageObjectSchema
   .extend({
+    content: z
+      .union([z.string(), z.array(historyTextContentPartSchema)])
+      .nullish()
+      .describe('Text-only message content to count without loading media.'),
     attachments: z
       .array(attachmentSchema)
       .max(0, 'calcTokens does not support attachments; use completion() for attachments.')
       .optional()
   })
-  .superRefine((message, ctx) => {
-    refineHistoryMessage(message, ctx)
-    if (Array.isArray(message.content) && message.content.some((part) => part.type === 'media')) {
-      ctx.addIssue({
-        code: 'custom',
-        message: 'calcTokens does not support media content; use completion() for media.',
-        path: ['content']
-      })
-    }
-  })
+  .superRefine(refineHistoryMessage)
 
 export type HistoryMessage = z.infer<typeof historyMessageSchema>
 

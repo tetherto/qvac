@@ -4112,7 +4112,7 @@
                 "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`, `\"tool\"`)."
               },
               "content": {
-                "description": "Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string. A user turn may instead pass an ordered array of text/media parts, so each image keeps its position in the turn.",
+                "description": "Text-only message content to count without loading media.",
                 "anyOf": [
                   {
                     "anyOf": [
@@ -4122,41 +4122,20 @@
                       {
                         "type": "array",
                         "items": {
-                          "oneOf": [
-                            {
-                              "type": "object",
-                              "properties": {
-                                "type": {
-                                  "type": "string",
-                                  "const": "text"
-                                },
-                                "text": {
-                                  "type": "string",
-                                  "description": "Text rendered at this position in the turn."
-                                }
-                              },
-                              "required": ["type", "text"],
-                              "additionalProperties": false,
-                              "title": "CalcTokensHistoryMessageContentItemText"
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "text"
                             },
-                            {
-                              "type": "object",
-                              "properties": {
-                                "type": {
-                                  "type": "string",
-                                  "const": "media"
-                                },
-                                "path": {
-                                  "type": "string",
-                                  "minLength": 1,
-                                  "description": "Absolute or resolvable path to the media file (e.g., image for multimodal models)."
-                                }
-                              },
-                              "required": ["type", "path"],
-                              "additionalProperties": false,
-                              "title": "CalcTokensHistoryMessageContentItemMedia"
+                            "text": {
+                              "type": "string",
+                              "description": "Text rendered at this position in the turn."
                             }
-                          ]
+                          },
+                          "required": ["type", "text"],
+                          "additionalProperties": false,
+                          "title": "CalcTokensHistoryMessageContentItem"
                         }
                       }
                     ]

@@ -3839,27 +3839,13 @@ class CalcTokensTool(GeneratedBaseModel):
     ]
 
 
-class CalcTokensHistoryMessageContentItemText(GeneratedBaseModel):
+class CalcTokensHistoryMessageContentItem(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["text"] = "text"
     text: Annotated[
         str, Field(description="Text rendered at this position in the turn.")
-    ]
-
-
-class CalcTokensHistoryMessageContentItemMedia(GeneratedBaseModel):
-    model_config = ConfigDict(
-        extra="forbid",
-    )
-    type: Literal["media"] = "media"
-    path: Annotated[
-        str,
-        Field(
-            description="Absolute or resolvable path to the media file (e.g., image for multimodal models).",
-            min_length=1,
-        ),
     ]
 
 
@@ -3907,15 +3893,8 @@ class CalcTokensHistoryMessage(GeneratedBaseModel):
         ),
     ]
     content: Annotated[
-        str
-        | list[
-            CalcTokensHistoryMessageContentItemText
-            | CalcTokensHistoryMessageContentItemMedia
-        ]
-        | None,
-        Field(
-            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string. A user turn may instead pass an ordered array of text/media parts, so each image keeps its position in the turn."
-        ),
+        str | list[CalcTokensHistoryMessageContentItem] | None,
+        Field(description="Text-only message content to count without loading media."),
     ] = None
     attachments: Annotated[
         list[CalcTokensHistoryMessageAttachmentsItem] | None, Field(max_length=0)

@@ -101,6 +101,21 @@ test('calcTokens rejects invalid input before RPC', async (t) => {
   )
   t.ok(attachmentError.includes('use completion() for attachments'))
   t.absent(called)
+
+  await t.exception(() =>
+    createCalcTokensCall(
+      {
+        modelId: 'llm',
+        history: [{ role: 'user', content: [{ type: 'media', path: '/tmp/image.png' }] }]
+      },
+      undefined,
+      async () => {
+        called = true
+        return { type: 'calcTokens', tokens: 1 }
+      }
+    )
+  )
+  t.absent(called)
 })
 
 test('calcTokens rejects malformed responses', async (t) => {

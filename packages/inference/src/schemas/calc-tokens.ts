@@ -1,5 +1,8 @@
 import { z } from 'zod'
-import { historyMessageWithoutAttachmentsSchema } from '@/schemas/completion-stream'
+import {
+  historyMessageWithoutAttachmentsSchema,
+  type CompletionClientParams
+} from '@/schemas/completion-stream'
 import { toolSchema } from '@/schemas/tools'
 
 const modelId = z.string().min(1).describe('Loaded language model to tokenize with.')
@@ -50,11 +53,10 @@ export const calcTokensResponseSchema = z.object({
 })
 
 type CalcTokensParamsShape = z.infer<typeof calcTokensParamsSchema>
-type CalcTokensHistoryMessage = NonNullable<CalcTokensParamsShape['history']>[number]
+type CalcTokensParamsBase = Omit<CalcTokensParamsShape, 'text' | 'history'>
+type CompletionHistory = CompletionClientParams['history']
 export type CalcTokensParams =
-  | (Omit<CalcTokensParamsShape, 'text'> & { text: string })
-  | (Omit<CalcTokensParamsShape, 'history'> & {
-      history: CalcTokensHistoryMessage[]
-    })
+  | (CalcTokensParamsBase & { text: string; history?: CompletionHistory })
+  | (CalcTokensParamsBase & { text?: string; history: CompletionHistory })
 export type CalcTokensRequest = z.infer<typeof calcTokensRequestSchema>
 export type CalcTokensResponse = z.infer<typeof calcTokensResponseSchema>

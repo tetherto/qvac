@@ -1104,71 +1104,36 @@ data class CalcTokensHistoryMessage(
 @Serializable(with = CalcTokensHistoryMessageContentSerializer::class)
 sealed class CalcTokensHistoryMessageContent {
     data class Variant1(val value: String) : CalcTokensHistoryMessageContent()
-    data class Variant2(val value: List<CalcTokensHistoryMessageContentVariant2Item>) : CalcTokensHistoryMessageContent()
+    data class Variant2(val value: List<CalcTokensHistoryMessageContentItem>) : CalcTokensHistoryMessageContent()
 }
 internal object CalcTokensHistoryMessageContentSerializer : KSerializer<CalcTokensHistoryMessageContent> {
     override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("CalcTokensHistoryMessageContent")
     private val shapes = listOf(
         Json.parseToJsonElement("{\"type\":\"string\"}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"oneOf\":[{\"type\":\"object\",\"required\":[\"type\",\"text\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"},\"text\":{\"type\":\"string\"}}},{\"type\":\"object\",\"required\":[\"type\",\"path\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"media\"},\"path\":{\"type\":\"string\"}}}]}}").jsonObject,
+        Json.parseToJsonElement("{\"type\":\"array\",\"items\":{\"type\":\"object\",\"required\":[\"type\",\"text\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"},\"text\":{\"type\":\"string\"}}}}").jsonObject,
     )
     override fun deserialize(decoder: Decoder): CalcTokensHistoryMessageContent {
         val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
         val element = input.decodeJsonElement()
         return when (selectWireVariant(element, shapes)) {
             0 -> CalcTokensHistoryMessageContent.Variant1(input.json.decodeFromJsonElement(serializer<String>(), element))
-            1 -> CalcTokensHistoryMessageContent.Variant2(input.json.decodeFromJsonElement(serializer<List<CalcTokensHistoryMessageContentVariant2Item>>(), element))
+            1 -> CalcTokensHistoryMessageContent.Variant2(input.json.decodeFromJsonElement(serializer<List<CalcTokensHistoryMessageContentItem>>(), element))
             else -> throw SerializationException("No matching CalcTokensHistoryMessageContent variant")
         }
     }
     override fun serialize(encoder: Encoder, value: CalcTokensHistoryMessageContent) {
         when (value) {
             is CalcTokensHistoryMessageContent.Variant1 -> encoder.encodeSerializableValue(serializer<String>(), value.value)
-            is CalcTokensHistoryMessageContent.Variant2 -> encoder.encodeSerializableValue(serializer<List<CalcTokensHistoryMessageContentVariant2Item>>(), value.value)
-        }
-    }
-}
-
-@Serializable(with = CalcTokensHistoryMessageContentVariant2ItemSerializer::class)
-sealed class CalcTokensHistoryMessageContentVariant2Item {
-    data class CalcTokensHistoryMessageContentItemText(val value: io.tether.qvac.sdk.generated.schema.CalcTokensHistoryMessageContentItemText) : CalcTokensHistoryMessageContentVariant2Item()
-    data class CalcTokensHistoryMessageContentItemMedia(val value: io.tether.qvac.sdk.generated.schema.CalcTokensHistoryMessageContentItemMedia) : CalcTokensHistoryMessageContentVariant2Item()
-}
-internal object CalcTokensHistoryMessageContentVariant2ItemSerializer : KSerializer<CalcTokensHistoryMessageContentVariant2Item> {
-    override val descriptor = kotlinx.serialization.descriptors.buildClassSerialDescriptor("CalcTokensHistoryMessageContentVariant2Item")
-    private val shapes = listOf(
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"text\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"text\"},\"text\":{\"type\":\"string\"}}}").jsonObject,
-        Json.parseToJsonElement("{\"type\":\"object\",\"required\":[\"type\",\"path\"],\"properties\":{\"type\":{\"type\":\"string\",\"const\":\"media\"},\"path\":{\"type\":\"string\"}}}").jsonObject,
-    )
-    override fun deserialize(decoder: Decoder): CalcTokensHistoryMessageContentVariant2Item {
-        val input = decoder as? JsonDecoder ?: throw SerializationException("QVAC unions require JSON")
-        val element = input.decodeJsonElement()
-        return when (selectWireVariant(element, shapes)) {
-            0 -> CalcTokensHistoryMessageContentVariant2Item.CalcTokensHistoryMessageContentItemText(input.json.decodeFromJsonElement(serializer<CalcTokensHistoryMessageContentItemText>(), element))
-            1 -> CalcTokensHistoryMessageContentVariant2Item.CalcTokensHistoryMessageContentItemMedia(input.json.decodeFromJsonElement(serializer<CalcTokensHistoryMessageContentItemMedia>(), element))
-            else -> throw SerializationException("No matching CalcTokensHistoryMessageContentVariant2Item variant")
-        }
-    }
-    override fun serialize(encoder: Encoder, value: CalcTokensHistoryMessageContentVariant2Item) {
-        when (value) {
-            is CalcTokensHistoryMessageContentVariant2Item.CalcTokensHistoryMessageContentItemText -> encoder.encodeSerializableValue(serializer<CalcTokensHistoryMessageContentItemText>(), value.value)
-            is CalcTokensHistoryMessageContentVariant2Item.CalcTokensHistoryMessageContentItemMedia -> encoder.encodeSerializableValue(serializer<CalcTokensHistoryMessageContentItemMedia>(), value.value)
+            is CalcTokensHistoryMessageContent.Variant2 -> encoder.encodeSerializableValue(serializer<List<CalcTokensHistoryMessageContentItem>>(), value.value)
         }
     }
 }
 
 @Serializable
-data class CalcTokensHistoryMessageContentItemText(
+data class CalcTokensHistoryMessageContentItem(
     @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     @SerialName("type") val `type`: String = "text",
     @SerialName("text") val `text`: String,
-)
-
-@Serializable
-data class CalcTokensHistoryMessageContentItemMedia(
-    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
-    @SerialName("type") val `type`: String = "media",
-    @SerialName("path") val `path`: String,
 )
 
 @Serializable
