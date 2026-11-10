@@ -19,7 +19,7 @@
         "@qvac/diffusion-cpp": "0.31.0",
         "@qvac/embed-llamacpp": "0.53.1",
         "@qvac/ggml-rpc-server": "0.7.1",
-        "@qvac/harness": "1.0.0-rc.18",
+        "@qvac/harness": "1.0.0-rc.19",
         "@qvac/inference": "0.23.0",
         "@qvac/langdetect-text": "^0.1.2",
         "@qvac/llm-llamacpp": "0.65.1",
@@ -49,19 +49,19 @@
         "bare-path": "3.1.2",
         "bare-pdfium": "1.8.0",
         "bare-process": "4.5.1",
-        "bare-runtime": "1.34.0",
+        "bare-runtime": "1.36.0",
         "bare-semver": "^1.1.0",
-        "bare-sidecar": "0.5.7",
+        "bare-sidecar": "0.5.15",
         "bare-stow": "0.1.7",
         "bare-subprocess": "^6.1.0",
         "bare-supervisor": "^0.1.1",
-        "bare-thread": "1.2.7",
+        "bare-thread": "1.4.0",
         "bare-tls": "3.2.0",
         "bare-tty": "^5.1.2",
         "bare-tui": "0.3.0",
         "bare-tui-updater": "0.0.1",
         "bare-url": "^2.5.6",
-        "bare-worker": "4.5.0",
+        "bare-worker": "4.5.3",
         "barevisor": "0.1.0",
         "compact-encoding": "^3.4.0",
         "corestore": "7.16.1",
@@ -1149,6 +1149,29 @@
         "bare-env": "^3.0.0"
       }
     },
+    "node_modules/@qvac/core/node_modules/bare-thread": {
+      "version": "1.2.8",
+      "resolved": "https://registry.npmjs.org/bare-thread/-/bare-thread-1.2.8.tgz",
+      "integrity": "sha512-kEN+vIvyDCFj64xBXOjylsc0nmv8hI9JshPbBjWWcttrUwb4zvr6W0XbbICMLEYwowqICzFUrXVmG9qlq1FVPw==",
+      "license": "Apache-2.0",
+      "dependencies": {
+        "bare-bundle": "^1.9.0",
+        "bare-module-resolve": "^1.11.2",
+        "bare-module-traverse": "^2.0.0",
+        "bare-url": "^2.4.2"
+      },
+      "engines": {
+        "bare": ">=1.33.0"
+      },
+      "peerDependencies": {
+        "bare-buffer": "*"
+      },
+      "peerDependenciesMeta": {
+        "bare-buffer": {
+          "optional": true
+        }
+      }
+    },
     "node_modules/@qvac/decoder-audio": {
       "version": "0.8.1",
       "resolved": "https://registry.npmjs.org/@qvac/decoder-audio/-/decoder-audio-0.8.1.tgz",
@@ -1472,9 +1495,9 @@
       }
     },
     "node_modules/@qvac/harness": {
-      "version": "1.0.0-rc.18",
-      "resolved": "https://registry.npmjs.org/@qvac/harness/-/harness-1.0.0-rc.18.tgz",
-      "integrity": "sha512-gckhVxGpbNBGBphZ1fEyhUYMjhWylG9FMRmk5g7pf2l8IpJ+Ra4E7fVO9Bdn6HPN7f7HpPbAKBjQMqbPATgNmA==",
+      "version": "1.0.0-rc.19",
+      "resolved": "https://registry.npmjs.org/@qvac/harness/-/harness-1.0.0-rc.19.tgz",
+      "integrity": "sha512-u6B8fNvQRrdPIUyxjncs/KuNfWbQ+X+WWI2BUu3Wdm+eNCpfe60BozqifSQIzeq3VJmZgB7vL7IgUHlTUB3Lzw==",
       "license": "Apache-2.0",
       "dependencies": {
         "@qvac/error": "^0.1.1",
@@ -1495,12 +1518,11 @@
         "bare-gpu-info": "^0.1.3",
         "bare-http1": "4.5.9",
         "bare-https": "^3.0.0",
-        "bare-module": "~7.1.0",
         "bare-os": "^3.9.1",
         "bare-path": "^3.0.1",
         "bare-pdfium": "^1.6.0",
         "bare-process": "4.5.1",
-        "bare-sidecar": "0.5.7",
+        "bare-sidecar": "0.5.15",
         "bare-storage": "^1.1.0",
         "bare-stow": "^0.1.7",
         "bare-stream": "^2.13.3",
@@ -1509,7 +1531,7 @@
         "bare-tls": "^3.1.13",
         "bare-tty": "^5.1.2",
         "bare-url": "^2.5.6",
-        "bare-worker": "4.5.0",
+        "bare-worker": "^4.5.3",
         "bare-zlib": "^1.4.1",
         "compact-encoding": "^3.4.0",
         "hrpc": "^4.3.0",
@@ -1655,33 +1677,6 @@
           "optional": true
         },
         "bare-url": {
-          "optional": true
-        }
-      }
-    },
-    "node_modules/@qvac/harness/node_modules/bare-module": {
-      "version": "7.1.0",
-      "resolved": "https://registry.npmjs.org/bare-module/-/bare-module-7.1.0.tgz",
-      "integrity": "sha512-L6eBhjhr/ymH7O3bZgropXvBVk26Mq+fvTSMtllcthevfQ7ImtCl0Or6KwriVO/SHVgkVfN3QDRups/blulDFg==",
-      "license": "Apache-2.0",
-      "dependencies": {
-        "bare-bundle": "^1.11.0",
-        "bare-module-lexer": "^1.6.1",
-        "bare-module-resolve": "^1.12.3",
-        "bare-module-traverse": "~2.5.5",
-        "bare-path": "^3.0.0",
-        "bare-type-stripper": "^0.1.2",
-        "bare-url": "^2.0.1",
-        "promaphore": "^1.0.0"
-      },
-      "engines": {
-        "bare": ">=1.32.0"
-      },
-      "peerDependencies": {
-        "bare-buffer": "*"
-      },
-      "peerDependenciesMeta": {
-        "bare-buffer": {
           "optional": true
         }
       }
@@ -3985,9 +3980,9 @@
       }
     },
     "node_modules/bare-runtime": {
-      "version": "1.34.0",
-      "resolved": "https://registry.npmjs.org/bare-runtime/-/bare-runtime-1.34.0.tgz",
-      "integrity": "sha512-xfut278Lq20N4yv2bKviKk+WR9LIh8wGo0baTWeAgjzZSpMHQuIrhBGwZhOfkfNBhk3e6gx4YA6O0/lMg4IuRQ==",
+      "version": "1.36.0",
+      "resolved": "https://registry.npmjs.org/bare-runtime/-/bare-runtime-1.36.0.tgz",
+      "integrity": "sha512-Y4CAdEX8vPDq+o6g7Iqbm2rtiFOa/CJF1b3RmiwLjpZUzCme6sYUX6qjVDywDeKDHTzJorFJN5MyidC4Zx7QZA==",
       "license": "Apache-2.0",
       "workspaces": [
         "npm/*"
@@ -4003,25 +3998,25 @@
         "bare": "bin/bare"
       },
       "optionalDependencies": {
-        "bare-runtime-android-arm": "1.34.0",
-        "bare-runtime-android-arm64": "1.34.0",
-        "bare-runtime-android-ia32": "1.34.0",
-        "bare-runtime-android-x64": "1.34.0",
-        "bare-runtime-darwin-arm64": "1.34.0",
-        "bare-runtime-darwin-x64": "1.34.0",
-        "bare-runtime-ios-arm64": "1.34.0",
-        "bare-runtime-ios-arm64-simulator": "1.34.0",
-        "bare-runtime-ios-x64-simulator": "1.34.0",
-        "bare-runtime-linux-arm64": "1.34.0",
-        "bare-runtime-linux-x64": "1.34.0",
-        "bare-runtime-win32-arm64": "1.34.0",
-        "bare-runtime-win32-x64": "1.34.0"
+        "bare-runtime-android-arm": "1.36.0",
+        "bare-runtime-android-arm64": "1.36.0",
+        "bare-runtime-android-ia32": "1.36.0",
+        "bare-runtime-android-x64": "1.36.0",
+        "bare-runtime-darwin-arm64": "1.36.0",
+        "bare-runtime-darwin-x64": "1.36.0",
+        "bare-runtime-ios-arm64": "1.36.0",
+        "bare-runtime-ios-arm64-simulator": "1.36.0",
+        "bare-runtime-ios-x64-simulator": "1.36.0",
+        "bare-runtime-linux-arm64": "1.36.0",
+        "bare-runtime-linux-x64": "1.36.0",
+        "bare-runtime-win32-arm64": "1.36.0",
+        "bare-runtime-win32-x64": "1.36.0"
       }
     },
     "node_modules/bare-runtime-android-arm": {
-      "version": "1.34.0",
-      "resolved": "https://registry.npmjs.org/bare-runtime-android-arm/-/bare-runtime-android-arm-1.34.0.tgz",
-      "integrity": "sha512-RNOdKnUgdr5hzogt+3JvzFwl4H1W3xn58GSqdgoqBtAYocDmkdmjObRDrgVpMkTqS41WEfJzaZbrbDleKOhPwg==",
+      "version": "1.36.0",
+      "resolved": "https://registry.npmjs.org/bare-runtime-android-arm/-/bare-runtime-android-arm-1.36.0.tgz",
+      "integrity": "sha512-s4L6NArDfd5KLMPHw/rYV007yDTlS/jimqV2SeuMxg7Grs5eMYhM2o437nBQIg+uZr1aaA72/c4JmtMZMk2AZw==",
       "cpu": [
         "arm"
       ],
@@ -4038,9 +4033,9 @@
       }
     },
     "node_modules/bare-runtime-android-arm64": {
-      "version": "1.34.0",
-      "resolved": "https://registry.npmjs.org/bare-runtime-android-arm64/-/bare-runtime-android-arm64-1.34.0.tgz",
-      "integrity": "sha512-IPVVH2POg8F6S97VLgj9+My8IYNXo7ntBYvxUgXoQy9S5VXY4J3T3bvF8VZ5cR72gCMoPBuP2xs51GuJuKh6wA==",
+      "version": "1.36.0",
+      "resolved": "https://registry.npmjs.org/bare-runtime-android-arm64/-/bare-runtime-android-arm64-1.36.0.tgz",
+      "integrity": "sha512-/vyJbqyBSzkSXUA8AbnjROIZG3AgvkPKSNtBkxqaG6/H8QsCYkoYFD5vwIG4hHThRylS5KAzawthgFNYpJnb8w==",
       "cpu": [
         "arm64"
       ],
@@ -4057,9 +4052,9 @@
       }
     },
     "node_modules/bare-runtime-android-ia32": {
-      "version": "1.34.0",
-      "resolved": "https://registry.npmjs.org/bare-runtime-android-ia32/-/bare-runtime-android-ia32-1.34.0.tgz",
-      "integrity": "sha512-RWvFHZskVM8rXW8ifg2V4ruYVN+e9e1gYYA+wdQt6iwiYzcQvQP7X/WRDLiCa1A/9LidtnjHNm19QnekQcRyAQ==",
+      "version": "1.36.0",
+      "resolved": "https://registry.npmjs.org/bare-runtime-android-ia32/-/bare-runtime-android-ia32-1.36.0.tgz",
+      "integrity": "sha512-aV3kajmuxAVslOrnN5zflpFw58WlMlQUrIET1k2xfA7mqndyNvmyA1BnNFvnTZ17IQDM2mPdydrabgINeAMWlg==",
       "cpu": [
         "ia32"
       ],
@@ -4076,9 +4071,9 @@
       }
     },
     "node_modules/bare-runtime-android-x64": {
-      "version": "1.34.0",
-      "resolved": "https://registry.npmjs.org/bare-runtime-android-x64/-/bare-runtime-android-x64-1.34.0.tgz",
-      "integrity": "sha512-5+HQvEJTcYJVfo6QodKRE87HzfxQLbDjDarb77D2dfWJNOsyXcVmTBsAd9w90xYweo7cDdrfP1zQDYe2RwaIqQ==",
+      "version": "1.36.0",
+      "resolved": "https://registry.npmjs.org/bare-runtime-android-x64/-/bare-runtime-android-x64-1.36.0.tgz",
+      "integrity": "sha512-ltCbpzPjH1lnv4G7J1coXyNVp0EFsThPqoRhcly0DuCEUyV8hzGPhrEV7JxymC0lQcbN7Ggdov8uQVYapZWoBw==",
       "cpu": [
         "x64"
       ],
@@ -4095,9 +4090,9 @@
       }
     },
     "node_modules/bare-runtime-darwin-arm64": {
-      "version": "1.34.0",
-      "resolved": "https://registry.npmjs.org/bare-runtime-darwin-arm64/-/bare-runtime-darwin-arm64-1.34.0.tgz",
-      "integrity": "sha512-u/WhtFdPUtK/phCGuTUyihL3botTJK1TKpSfz9eC0En0mebEXzrruuCRBOcuTUaYAqSdhk8OIpC4UtkMl0w+Nw==",
+      "version": "1.36.0",
+      "resolved": "https://registry.npmjs.org/bare-runtime-darwin-arm64/-/bare-runtime-darwin-arm64-1.36.0.tgz",
+      "integrity": "sha512-knSbWQ8ONUo0C6C1h3HxCIHEJ6t1tf7pcKxtLdJfR9oQaByHiFBWRFdukZ095kUBxCW9ABPVo0XiJruJWwmqyw==",
       "cpu": [
         "arm64"
       ],
@@ -4114,9 +4109,9 @@
       }
     },
     "node_modules/bare-runtime-darwin-x64": {
-      "version": "1.34.0",
-      "resolved": "https://registry.npmjs.org/bare-runtime-darwin-x64/-/bare-runtime-darwin-x64-1.34.0.tgz",
-      "integrity": "sha512-LkKOezphDfldEee3LL2HyJAvluDOFOFbK6vdZH9D7/CmHaI9DQqIDQE6VrghfRFua04C+pxePPsf7rALzDZyFw==",
+      "version": "1.36.0",
+      "resolved": "https://registry.npmjs.org/bare-runtime-darwin-x64/-/bare-runtime-darwin-x64-1.36.0.tgz",
+      "integrity": "sha512-FfjECSDEVhXOcV/2D7K8zfxKZeIB4Voa5r/sm3mlYmOHcmW29QYv3/i3rXxUgWMk9yNY8E90fCl7ZC70Wlc8AQ==",
       "cpu": [
         "x64"
       ],
@@ -4133,9 +4128,9 @@
       }
     },
     "node_modules/bare-runtime-ios-arm64": {
-      "version": "1.34.0",
-      "resolved": "https://registry.npmjs.org/bare-runtime-ios-arm64/-/bare-runtime-ios-arm64-1.34.0.tgz",
-      "integrity": "sha512-BjbcxRN+lv64Y3+UDstSo1SOcpoW9lBGmwkg8ijYjn6sKsRblMsEZR/emPK3wjHbp+kIArPSpwC/0d8qJFgS+A==",
+      "version": "1.36.0",
+      "resolved": "https://registry.npmjs.org/bare-runtime-ios-arm64/-/bare-runtime-ios-arm64-1.36.0.tgz",
+      "integrity": "sha512-Hlm0unQ7RFvYYohaW3jrKAHLd4KM+oZ1eSqROoIR/Ztd9MtaJid87p6z2E/pxtoefv8GuG8ydf9kbZWS+JCaSA==",
       "cpu": [
         "arm64"
       ],
@@ -4152,9 +4147,9 @@
       }
     },
     "node_modules/bare-runtime-ios-arm64-simulator": {
-      "version": "1.34.0",
-      "resolved": "https://registry.npmjs.org/bare-runtime-ios-arm64-simulator/-/bare-runtime-ios-arm64-simulator-1.34.0.tgz",
-      "integrity": "sha512-TV72Ctd7d9c93MK4/uixQwRlAFJNUqeMtQ3MF6HSsMtdFb/9VuULgMygglaTwNXv/2DygUPcHAMAa/IPCIWc8w==",
+      "version": "1.36.0",
+      "resolved": "https://registry.npmjs.org/bare-runtime-ios-arm64-simulator/-/bare-runtime-ios-arm64-simulator-1.36.0.tgz",
+      "integrity": "sha512-13PT/FpZLJTrM/DslF8OEmCNN51wO4XqWWf0mJlXscRNUCRZ+aWKWSqAq7UqpvQHaDytgY88FiYnO3xtLRoywg==",
       "cpu": [
         "arm64"
       ],
@@ -4171,9 +4166,9 @@
       }
     },
     "node_modules/bare-runtime-ios-x64-simulator": {
-      "version": "1.34.0",
-      "resolved": "https://registry.npmjs.org/bare-runtime-ios-x64-simulator/-/bare-runtime-ios-x64-simulator-1.34.0.tgz",
-      "integrity": "sha512-e8VsIH+DdAZZOnSXxcp7NzFuO0Q0H5Rl/1xIHwhkpv2YX15hM0G6KHE4qVgYqiy9b5KZXFMJYlm0aQMVy5tASw==",
+      "version": "1.36.0",
+      "resolved": "https://registry.npmjs.org/bare-runtime-ios-x64-simulator/-/bare-runtime-ios-x64-simulator-1.36.0.tgz",
+      "integrity": "sha512-k89gUIaapqSdrcjMMA01p06dgWS1s6IEsK6Pz64da73m4B9BPod6VbDzeTFLygHgQC8JTiMep+1NOqqEdPDB/g==",
       "cpu": [
         "x64"
       ],
@@ -4190,9 +4185,9 @@
       }
     },
     "node_modules/bare-runtime-linux-arm64": {
-      "version": "1.34.0",
-      "resolved": "https://registry.npmjs.org/bare-runtime-linux-arm64/-/bare-runtime-linux-arm64-1.34.0.tgz",
-      "integrity": "sha512-OtbNUv/FhHoFNCuprPFtSAmT//FeZUrTCnprCoCke2V30aXYllGj6JlbJnzw5yrm2bYNWxKVCNP6RwxGfyvvlQ==",
+      "version": "1.36.0",
+      "resolved": "https://registry.npmjs.org/bare-runtime-linux-arm64/-/bare-runtime-linux-arm64-1.36.0.tgz",
+      "integrity": "sha512-dUaH9f2EwCZOjEm0SD5HLPLMwIEDs71dhq81XBqz3yslExhNhUh2eUcBB+ujDqMbMoXmm4hNOivckuQIj23Czg==",
       "cpu": [
         "arm64"
       ],
@@ -4209,9 +4204,9 @@
       }
     },
     "node_modules/bare-runtime-linux-x64": {
-      "version": "1.34.0",
-      "resolved": "https://registry.npmjs.org/bare-runtime-linux-x64/-/bare-runtime-linux-x64-1.34.0.tgz",
-      "integrity": "sha512-pxHaaTZMBoTVABqlDVDONAvwFqZGXIf/cgPpF6uon9K680nHqsI9ZnZC5nu9GXVdRZxV3rYaAfW5+nD0McujUQ==",
+      "version": "1.36.0",
+      "resolved": "https://registry.npmjs.org/bare-runtime-linux-x64/-/bare-runtime-linux-x64-1.36.0.tgz",
+      "integrity": "sha512-PBywp7WONAjuqsKc4VPqlmr33Ij4ugbNPd/xw2kwIO6OxsWhRT3t2HkHhvySjaxq7R6FDybec/fveW0EcBpKQQ==",
       "cpu": [
         "x64"
       ],
@@ -4228,9 +4223,9 @@
       }
     },
     "node_modules/bare-runtime-win32-arm64": {
-      "version": "1.34.0",
-      "resolved": "https://registry.npmjs.org/bare-runtime-win32-arm64/-/bare-runtime-win32-arm64-1.34.0.tgz",
-      "integrity": "sha512-SFl/uNUv7skTcFD9aouTiUKrktE8TNcMkLK5+C0YcL7wBHj2fEWftUNw2eU/UmL/KGIkTUPmJK2ZhNp/V3GYxQ==",
+      "version": "1.36.0",
+      "resolved": "https://registry.npmjs.org/bare-runtime-win32-arm64/-/bare-runtime-win32-arm64-1.36.0.tgz",
+      "integrity": "sha512-s+jN8WZCb0bsP+BrYzwln5eILjMcdMTdyXVbOmhEIWEJApua4OHb1ysv1R4D4HRiuOG/fpsNyPTm3rLWnKo4OQ==",
       "cpu": [
         "arm64"
       ],
@@ -4247,9 +4242,9 @@
       }
     },
     "node_modules/bare-runtime-win32-x64": {
-      "version": "1.34.0",
-      "resolved": "https://registry.npmjs.org/bare-runtime-win32-x64/-/bare-runtime-win32-x64-1.34.0.tgz",
-      "integrity": "sha512-vGTC85wlKprDGKOAcpu2/FGJthXAtCdIbG733i9byxELV9rEVegDbrrvbNZjpaf9MRWSccErQc0HWfunAxaWRA==",
+      "version": "1.36.0",
+      "resolved": "https://registry.npmjs.org/bare-runtime-win32-x64/-/bare-runtime-win32-x64-1.36.0.tgz",
+      "integrity": "sha512-Cd+iWHdR4NZmNV5jUB92cqZd826IBEUxVs0aD2aLkZFxTMw5IMKd0EuZtDUNMbTSUxuzsUBaJRgoCXfmEttLsA==",
       "cpu": [
         "x64"
       ],
@@ -4272,19 +4267,72 @@
       "license": "Apache-2.0"
     },
     "node_modules/bare-sidecar": {
-      "version": "0.5.7",
-      "resolved": "https://registry.npmjs.org/bare-sidecar/-/bare-sidecar-0.5.7.tgz",
-      "integrity": "sha512-XoHrDVSP5oc7EnjWqYzMNShPKzYZw5cyJViyzmtB/orvZ8vNYEclinvrm8Gjbihc/kP5abPKHjeLBJgyvjZb3w==",
+      "version": "0.5.15",
+      "resolved": "https://registry.npmjs.org/bare-sidecar/-/bare-sidecar-0.5.15.tgz",
+      "integrity": "sha512-7V1dnUxuwxtl0CFW0Rd4qt9Q/ANTn5StoxA7y6u4P91N+QUnE1B0X2/mPbZNTDhStagBB3c1LoSJXrbmRk9Wpg==",
       "license": "Apache-2.0",
       "dependencies": {
         "bare-fs": "^4.5.1",
-        "bare-module": "^7.0.3",
+        "bare-module": "^7.5.0",
         "bare-path": "^3.0.0",
         "bare-pipe": "^4.1.3",
         "bare-stream": "^2.7.0",
-        "bare-subprocess": "^6.0.0",
+        "bare-subprocess": "^6.2.2",
         "bare-url": "^2.3.2",
         "require-asset": "^1.1.0"
+      }
+    },
+    "node_modules/bare-sidecar/node_modules/bare-module": {
+      "version": "7.5.0",
+      "resolved": "https://registry.npmjs.org/bare-module/-/bare-module-7.5.0.tgz",
+      "integrity": "sha512-TvcHjJFyaJuLRNhSQosJBsj99NEki86M1CRsp9yqqhH+iLuG95hingxVnqlIzq11TO0nK0IdiO2FthM4aZ3UFw==",
+      "license": "Apache-2.0",
+      "dependencies": {
+        "bare-bundle": "^1.11.0",
+        "bare-module-lexer": "^1.7.0",
+        "bare-module-resolve": "^1.12.6",
+        "bare-module-traverse": "~2.7.0",
+        "bare-path": "^3.0.0",
+        "bare-type-stripper": "^0.1.2",
+        "bare-url": "^2.0.1",
+        "bare-wasm-abi": "^0.1.0",
+        "promaphore": "^1.0.0"
+      },
+      "engines": {
+        "bare": ">=1.35.0"
+      },
+      "peerDependencies": {
+        "bare-buffer": "*"
+      },
+      "peerDependenciesMeta": {
+        "bare-buffer": {
+          "optional": true
+        }
+      }
+    },
+    "node_modules/bare-sidecar/node_modules/bare-module-traverse": {
+      "version": "2.7.4",
+      "resolved": "https://registry.npmjs.org/bare-module-traverse/-/bare-module-traverse-2.7.4.tgz",
+      "integrity": "sha512-K+r/K4TzcqS+WbaoVsif1S2Mm5CgWXhpOVGJ3xObhCZQm+KmDMW2tk3nI9VftbqCg5m32PxHy55Gnqaw5MCo0w==",
+      "license": "Apache-2.0",
+      "dependencies": {
+        "bare-addon-resolve": "^1.11.1",
+        "bare-bundle": "^1.11.0",
+        "bare-mime": "^1.0.0",
+        "bare-module-lexer": "^1.6.0",
+        "bare-module-resolve": "^1.7.0"
+      },
+      "peerDependencies": {
+        "bare-buffer": "*",
+        "bare-url": "*"
+      },
+      "peerDependenciesMeta": {
+        "bare-buffer": {
+          "optional": true
+        },
+        "bare-url": {
+          "optional": true
+        }
       }
     },
     "node_modules/bare-signals": {
@@ -4298,6 +4346,12 @@
       "engines": {
         "bare": ">=1.7.0"
       }
+    },
+    "node_modules/bare-sleep": {
+      "version": "1.0.0",
+      "resolved": "https://registry.npmjs.org/bare-sleep/-/bare-sleep-1.0.0.tgz",
+      "integrity": "sha512-/+5JfrKvH9M4DpFBBZeHvMFP83D3sOdvideiWFHOtgJsHT+ZQDsyiJIOFa/syjctfIw8veAHMQ44JumvVmTTcg==",
+      "license": "Apache-2.0"
     },
     "node_modules/bare-stdio": {
       "version": "1.0.3",
@@ -4493,9 +4547,9 @@
       }
     },
     "node_modules/bare-thread": {
-      "version": "1.2.7",
-      "resolved": "https://registry.npmjs.org/bare-thread/-/bare-thread-1.2.7.tgz",
-      "integrity": "sha512-JBvjp7wCekpSrbQRh+tfEiY4sPy92neKVw5wdXvL/zqC7T7ltcWC0YAoKrVsDY73bTcFw9PTdzrT3BEZAJ6uWw==",
+      "version": "1.4.0",
+      "resolved": "https://registry.npmjs.org/bare-thread/-/bare-thread-1.4.0.tgz",
+      "integrity": "sha512-WkLdv7BRdGlChAdM3rLPgM2/1kRHk2dlDyf1Jedfc2LbUjzY6kjJ2W5IHB0DfVjY0r+XdfpCk4PomcpINeBW6w==",
       "license": "Apache-2.0",
       "dependencies": {
         "bare-bundle": "^1.9.0",
@@ -4504,7 +4558,7 @@
         "bare-url": "^2.4.2"
       },
       "engines": {
-        "bare": ">=1.32.0"
+        "bare": ">=1.33.0"
       },
       "peerDependencies": {
         "bare-buffer": "*"
@@ -4697,6 +4751,42 @@
         }
       }
     },
+    "node_modules/bare-wasi": {
+      "version": "0.1.3",
+      "resolved": "https://registry.npmjs.org/bare-wasi/-/bare-wasi-0.1.3.tgz",
+      "integrity": "sha512-G19m8Ybu8B5AbrZKRJUDC3W/odR4CcLnS6uAo8XfPXnjvvbT/1u27srli1/jtXfk49URLsHmLB/HQyN6xyaUJg==",
+      "license": "Apache-2.0",
+      "dependencies": {
+        "bare-hrtime": "^2.1.2",
+        "bare-sleep": "^1.0.0",
+        "bare-wasm": "^0.1.0"
+      },
+      "peerDependencies": {
+        "bare-directory": "*"
+      },
+      "peerDependenciesMeta": {
+        "bare-directory": {
+          "optional": true
+        }
+      }
+    },
+    "node_modules/bare-wasm": {
+      "version": "0.1.1",
+      "resolved": "https://registry.npmjs.org/bare-wasm/-/bare-wasm-0.1.1.tgz",
+      "integrity": "sha512-fkulwnM0ccGPIC369d3tGH95hZiG54AE4PMmSUcJpasmiBM6+HcKnpQOVCb0BeuwXzg3KJdxVhPik3KWo/zM9g==",
+      "license": "Apache-2.0"
+    },
+    "node_modules/bare-wasm-abi": {
+      "version": "0.1.2",
+      "resolved": "https://registry.npmjs.org/bare-wasm-abi/-/bare-wasm-abi-0.1.2.tgz",
+      "integrity": "sha512-kDJ7Om196H3UFcWNldJzJM8Ur+hUuecJlTAv1vJYcCgbKt96vudi8hpi3KUS/KNCFISkQVAuLVzKvu4h9iRqgA==",
+      "license": "Apache-2.0",
+      "dependencies": {
+        "bare-type": "^1.4.0",
+        "bare-wasi": "^0.1.0",
+        "bare-wasm": "^0.1.0"
+      }
+    },
     "node_modules/bare-webp": {
       "version": "1.4.1",
       "resolved": "https://registry.npmjs.org/bare-webp/-/bare-webp-1.4.1.tgz",
@@ -4704,17 +4794,18 @@
       "license": "Apache-2.0"
     },
     "node_modules/bare-worker": {
-      "version": "4.5.0",
-      "resolved": "https://registry.npmjs.org/bare-worker/-/bare-worker-4.5.0.tgz",
-      "integrity": "sha512-lMs1LskNXplwN5Q+FwNbEhuDhDViS3dGuJ96vawsrtIz/wZzNkuC6CYCJQho2ZMJr8sf+q+QYXQPD2B2kM3BvA==",
+      "version": "4.5.3",
+      "resolved": "https://registry.npmjs.org/bare-worker/-/bare-worker-4.5.3.tgz",
+      "integrity": "sha512-foRSBht6nr/6NbmNy8Cw2No0uozzG1pMEZX1q1a5IiubboRL4eTUbiQPhUtW/LwQZTeTZ5/ct6n+52akb59cMQ==",
       "license": "Apache-2.0",
       "dependencies": {
         "bare-broadcast-channel": "^0.2.0",
+        "bare-bundle": "^1.11.0",
         "bare-channel": "^5.1.5",
         "bare-events": "^2.2.1",
-        "bare-module": "^7.0.3",
+        "bare-module": "^7.4.0",
         "bare-stream": "^2.13.3",
-        "bare-thread": "^1.2.2"
+        "bare-thread": "^1.3.0"
       }
     },
     "node_modules/bare-ws": {
