@@ -106,8 +106,10 @@ jobs:
 
     env:
       WORKDIR: ${{ inputs.workdir }}
-      # BridgeDepth parity runs on Metal on the macOS GPU runner, CPU elsewhere.
+      # BridgeDepth parity and the measured footprint checks run on Metal on
+      # the macOS GPU runner, CPU elsewhere.
       QVAC_BRIDGEDEPTH_BACKEND: ${{ matrix.bridgedepth_backend || 'CPU' }}
+      QVAC_FOOTPRINT_BACKEND: ${{ matrix.bridgedepth_backend || 'CPU' }}
 
     steps:
       - name: Manual Workspace Cleanup
@@ -189,9 +191,10 @@ jobs:
           platform: ${{ matrix.platform }}
           arch: ${{ matrix.arch }}
 
-      # The BridgeDepth reference tests in addon-test skip without the converted
-      # weights, so stage only that model from the shared manifest.
-      - name: Select BridgeDepth test model
+      # The BridgeDepth reference tests and the MegaLoc and BridgeDepth
+      # footprint tests in addon-test skip without the converted weights, so
+      # stage those models from the shared manifest.
+      - name: Select BridgeDepth and MegaLoc test models
         id: bridgedepth-model
         if: hashFiles(format('{0}/test/unit/bridgedepth_test.cpp', env.WORKDIR)) != ''
         shell: bash
@@ -199,13 +202,14 @@ jobs:
           MODEL_MANIFEST: ${{ needs.test-models.outputs.manifest }}
         run: |
           node -e '
+            const names = ["bridgedepth-vits-f32.gguf", "megaloc-f16.gguf", "megaloc-mixed.gguf"];
             const all = JSON.parse(process.env.MODEL_MANIFEST);
-            const picked = all.filter((e) => e.dest.endsWith("/bridgedepth-vits-f32.gguf"));
-            if (picked.length !== 1) throw new Error("BridgeDepth model missing from the manifest");
+            const picked = all.filter((e) => names.some((n) => e.dest.endsWith("/" + n)));
+            if (picked.length !== names.length) throw new Error("BridgeDepth or MegaLoc model missing from the manifest");
             require("fs").appendFileSync(process.env.GITHUB_OUTPUT, "manifest=" + JSON.stringify(picked) + "\n");
           '
 
-      - name: Stage BridgeDepth test model
+      - name: Stage BridgeDepth and MegaLoc test models
         if: steps.bridgedepth-model.outcome == 'success'
         uses: tetherto/qvac/.github/actions/stage-integration-models@94eb8ef3e888f8bc1f1717d5e31f55b14d4ac915
         with:
@@ -214,7 +218,7 @@ jobs:
           bucket: ${{ secrets.MODEL_S3_BUCKET }}
           s3-manifest: ${{ steps.bridgedepth-model.outputs.manifest }}
 
-      - name: Verify BridgeDepth test model
+      - name: Verify BridgeDepth and MegaLoc test models
         if: steps.bridgedepth-model.outcome == 'success'
         working-directory: ${{ env.WORKDIR }}
         shell: bash
@@ -224,13 +228,19 @@ jobs:
           node --input-type=module -e '
             import { createHash } from "node:crypto";
             import { createReadStream, appendFileSync } from "node:fs";
-            import { resolve } from "node:path";
-            const [{ dest, sha256 }] = JSON.parse(process.env.MODEL_MANIFEST);
-            const hash = createHash("sha256");
-            for await (const chunk of createReadStream(dest)) hash.update(chunk);
-            if (hash.digest("hex") !== sha256) throw new Error("Checksum mismatch: " + dest);
-            appendFileSync(process.env.GITHUB_ENV, "QVAC_BRIDGEDEPTH_MODEL_PATH=" + resolve(dest) + "\n");
-            console.log("Verified " + dest);
+            import { basename, resolve } from "node:path";
+            const envNames = {
+              "bridgedepth-vits-f32.gguf": "QVAC_BRIDGEDEPTH_MODEL_PATH",
+              "megaloc-f16.gguf": "QVAC_MEGALOC_F16_MODEL_PATH",
+              "megaloc-mixed.gguf": "QVAC_MEGALOC_MIXED_MODEL_PATH"
+            };
+            for (const { dest, sha256 } of JSON.parse(process.env.MODEL_MANIFEST)) {
+              const hash = createHash("sha256");
+              for await (const chunk of createReadStream(dest)) hash.update(chunk);
+              if (hash.digest("hex") !== sha256) throw new Error("Checksum mismatch: " + dest);
+              appendFileSync(process.env.GITHUB_ENV, envNames[basename(dest)] + "=" + resolve(dest) + "\n");
+              console.log("Verified " + dest);
+            }
           '
 
       # Non-Linux: unit tests only (fuzzing is Linux-only — libFuzzer + ASan,

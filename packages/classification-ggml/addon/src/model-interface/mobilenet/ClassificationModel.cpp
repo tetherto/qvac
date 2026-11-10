@@ -23,6 +23,7 @@
 #include <qvac-fabric.h>
 
 #include "MobileNetGraph.hpp"
+#include "model-interface/GgmlBackend.hpp"
 #include "model-interface/ImagePreprocessor.hpp"
 
 namespace classification_ggml {
@@ -115,27 +116,21 @@ bool traceEnabled() {
 
 } // namespace
 
-void ClassificationModel::load() {
-  std::scoped_lock lock(mutex_);
-  if (loaded_) {
-    return;
-  }
-  if (modelPath_.empty()) {
-    throw StatusError(
-        InvalidArgument,
-        "ClassificationModel requires a path to mobilenetv3 FP16 GGUF weights");
-  }
-
+namespace {
+ggml_backend_t initCpuBackend(const std::string& backendsDir) {
+  const std::lock_guard<std::mutex> lock(backendRegistryMutex());
 #if defined(GGML_BACKEND_DL)
   // Under GGML_BACKEND_DL @qvac/fabric ships CPU variants and GPU backends as
   // modules, which must be opened before the registry can hand out a device.
   // Fabric finds the ones it ships itself; config.backendsDir only overrides
   // that with a directory holding the modules.
-  if (!backendsDir_.empty()) {
-    ggml_backend_load_all_from_path(backendsDir_.c_str());
+  if (!backendsDir.empty()) {
+    ggml_backend_load_all_from_path(backendsDir.c_str());
   } else {
     qvac_fabric_load_backends();
   }
+#else
+  (void)backendsDir;
 #endif
 
   // Acquire the CPU backend through the generic registry API on every platform.
@@ -150,10 +145,48 @@ void ClassificationModel::load() {
   if (cpuDev == nullptr) {
     throw StatusError(InternalError, "No CPU backend device registered");
   }
-  backend_ = ggml_backend_dev_init(cpuDev, /*params=*/nullptr);
-  if (backend_ == nullptr) {
+  ggml_backend_t backend = ggml_backend_dev_init(cpuDev, /*params=*/nullptr);
+  if (backend == nullptr) {
     throw StatusError(InternalError, "Failed to initialize ggml CPU backend");
   }
+  return backend;
+}
+} // namespace
+
+MeasuredBuffers ClassificationModel::measure(
+    const std::string& modelPath, const std::string& backendsDir) {
+  if (modelPath.empty()) {
+    throw StatusError(
+        InvalidArgument,
+        "ClassificationModel requires a path to mobilenetv3 FP16 GGUF weights");
+  }
+  const std::unique_ptr<ggml_backend, decltype(&ggml_backend_free)> backend(
+      initCpuBackend(backendsDir), ggml_backend_free);
+  MeasuredBuffers result = graph::measureBuffers(modelPath, backend.get());
+  result.deviceName = deviceName(backend.get());
+  return result;
+}
+
+BufferFootprint ClassificationModel::allocatedBuffers() const {
+  std::scoped_lock lock(mutex_);
+  if (!loaded_) {
+    throw StatusError(InternalError, "ClassificationModel is not loaded");
+  }
+  return graph::allocatedBuffers(weights_, compute_, backend_);
+}
+
+void ClassificationModel::load() {
+  std::scoped_lock lock(mutex_);
+  if (loaded_) {
+    return;
+  }
+  if (modelPath_.empty()) {
+    throw StatusError(
+        InvalidArgument,
+        "ClassificationModel requires a path to mobilenetv3 FP16 GGUF weights");
+  }
+
+  backend_ = initCpuBackend(backendsDir_);
 
   labels_.clear();
   weights_ = graph::loadWeights(modelPath_, backend_, labels_);

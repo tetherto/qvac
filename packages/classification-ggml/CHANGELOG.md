@@ -9,6 +9,17 @@ and this project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- `assessFit(request)` checks whether a MobileNet, MegaLoc or BridgeDepth GGUF
+  fits in the memory free now, from the GGUF metadata alone. It returns
+  `{ status, devices, stats }`: `fits`, `does-not-fit` or `unknown`, and the
+  selected device, then the host CPU, each with the measured bytes the load
+  and one inference take. BridgeDepth is sized for `workload`, 1280x720 by
+  default. On an iOS device, unified memory is capped at the app's memory
+  limit. An unreadable model or an invalid request rejects with an
+  `InvalidArgument` error.
+
 ## [0.37.0] - 2026-11-10
 
 ### Added
