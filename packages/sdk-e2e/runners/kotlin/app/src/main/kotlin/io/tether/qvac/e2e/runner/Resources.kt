@@ -117,11 +117,10 @@ class Resources(
         loaded.values.removeAll { it == modelId }
     }
 
-    /** Never throws: an unload error is logged. */
+    /** Never throws: an unload error is logged. Skips ids no longer test-scoped. */
     suspend fun releaseTestScope() {
-        while (testScoped.isNotEmpty()) {
-            val modelId = testScoped.first()
-            testScoped -= modelId
+        for (modelId in testScoped.toList()) {
+            if (!testScoped.remove(modelId)) continue
             log("releasing test-scoped model $modelId")
             unload(modelId, modelId)
         }

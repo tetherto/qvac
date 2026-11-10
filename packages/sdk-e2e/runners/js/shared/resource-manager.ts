@@ -312,10 +312,13 @@ export class ResourceManager {
     this.unregister(modelId)
   }
 
-  /** Never throws: an unload error is logged. */
+  /**
+   * Never throws: an unload error is logged. A timed-out test's release can overlap the next test,
+   * so it unloads only ids it started with that are still test-scoped.
+   */
   async releaseTestScope(): Promise<void> {
     for (const modelId of Array.from(this.testScoped)) {
-      this.testScoped.delete(modelId)
+      if (!this.testScoped.delete(modelId)) continue
       console.info(`🧹 Releasing test-scoped model ${modelId}`)
       await this.unload(modelId, modelId)
     }

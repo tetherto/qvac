@@ -205,9 +205,10 @@ class ResourceManager:
             del self._loaded[dep]
 
     async def release_test_scope(self) -> None:
-        """Never raises: an unload error is logged."""
-        while self._test_scoped:
-            model_id = next(iter(self._test_scoped))
+        """Never raises: an unload error is logged. Skips ids no longer test-scoped."""
+        for model_id in list(self._test_scoped):
+            if model_id not in self._test_scoped:
+                continue
             del self._test_scoped[model_id]
             self._log(f"releasing test-scoped model {model_id}")
             try:
