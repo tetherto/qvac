@@ -28,6 +28,7 @@ import {
 } from '@/utils/errors-client'
 import { loadTargetPackage } from '@/commands/bundle/targets'
 import { parseBareKitPins } from '@/commands/verify/bare-kit-runtime'
+import { bundleTargetOf } from '@/client/rpc/bundle-stamp'
 import { linkDependency } from './fixtures/link-dependency'
 
 const SDK_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -356,6 +357,7 @@ describe('bundleSdk', () => {
     const harness = path.join(outputDir, 'src', 'main', 'kotlin', 'com', 'example', 'worker')
     assert.match(fs.readFileSync(path.join(harness, 'Harness.kt'), 'utf8'), /suspend fun start/)
     assert.match(fs.readFileSync(path.join(outputDir, 'build.gradle'), 'utf8'), /bare-kit-kotlin/)
+    assert.equal(bundleTargetOf(result.bundlePath), 'bare-kit')
   })
 
   it('bundles for pear-runtime with the target package the SDK installs', async (t) => {

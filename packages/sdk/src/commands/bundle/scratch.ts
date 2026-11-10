@@ -49,7 +49,10 @@ export async function removeStaleScratch(dir: string) {
   try {
     entries = await fsp.readdir(parent)
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+    const code = (error as NodeJS.ErrnoException).code
+    // No scratch folder can exist under a parent that is missing or is a file;
+    // making the new scratch folder reports that parent.
+    if (code === 'ENOENT' || code === 'ENOTDIR') return
     throw error
   }
   for (const entry of entries) {
@@ -106,15 +109,21 @@ export async function replaceAll(staged: Staged[]) {
       replaced.push(entry)
     }
   } catch (error) {
-    let failure = error
+    const failures: unknown[] = []
     for (const entry of replaced.reverse()) {
       try {
         await putBack(entry, error)
       } catch (putBackError) {
-        failure = putBackError
+        failures.push(putBackError)
       }
     }
-    throw failure
+    if (failures.length === 0) throw error
+    if (failures.length === 1) throw failures[0]
+    throw new Error(
+      `Could not put back ${failures.length} folders after a failed replace: ` +
+        failures.map(errorMessage).join(' '),
+      { cause: error }
+    )
   }
 }
 

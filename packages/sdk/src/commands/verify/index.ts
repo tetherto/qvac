@@ -35,7 +35,7 @@ import {
   type FetchPackageMetadata
 } from '@/commands/verify/engines-advice'
 import type { PackageRecord } from '@/commands/verify/addon-source'
-import { bundledTarget } from '@/client/rpc/bundle-stamp'
+import { bundleTargetOf } from '@/client/rpc/bundle-stamp'
 import { isBundleTarget, type BundleTarget } from '@/commands/bundle/targets'
 
 export type DesktopRuntime = 'bare-sidecar' | 'pear-runtime' | 'bare-kit-kotlin'
@@ -332,9 +332,9 @@ export async function verifyBundle(options: VerifyBundleOptions): Promise<Verify
   }
 }
 
-/** The desktop runtime of the target `bundleSdk` recorded in the harness package next to a bundle. */
+/** The desktop runtime of the target `bundleSdk` recorded in the harness package of a bundle. */
 function stampedDesktopRuntime(bundlePath: string): DesktopRuntime | undefined {
-  const target = bundledTarget(path.dirname(bundlePath))
+  const target = bundleTargetOf(bundlePath)
   return target !== undefined && isBundleTarget(target) ? DESKTOP_RUNTIMES[target] : undefined
 }
 

@@ -286,6 +286,30 @@ async def test_cancelling_connect_terminates_a_worker_that_is_not_ready(
     await asyncio.wait_for(worker.terminated.wait(), timeout=2)
 
 
+async def test_close_during_start_stops_the_worker_and_fails_connect_as_shutdown(
+    fake_worker, monkeypatch, tmp_path
+) -> None:
+    worker = fake_worker(answer_init_config)
+    spawned = asyncio.Event()
+
+    async def spawn(*args: object, **kwargs: object) -> _Sidecar:
+        spawned.set()
+        return _Sidecar(worker)
+
+    monkeypatch.setattr(client_module, "spawn", spawn)
+    start = UnbundledWorker(tmp_path / "shim.js", tmp_path / "worker.js").start
+    transport = BareRpcTransport(start)
+    connecting = asyncio.ensure_future(transport.connect(timeout=30))
+    await asyncio.wait_for(spawned.wait(), timeout=2)
+
+    await asyncio.wait_for(transport.close(), timeout=2)
+
+    with pytest.raises(WorkerShutdownError):
+        await asyncio.wait_for(connecting, timeout=2)
+    # bare-stow-host closes a cancelled start in a background task.
+    await asyncio.wait_for(worker.terminated.wait(), timeout=2)
+
+
 async def test_connect_terminates_the_worker_when_init_config_fails(
     fake_worker,
 ) -> None:

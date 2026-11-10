@@ -144,6 +144,7 @@ class BareRpcTransport:
             merged_config["cacheDirectory"] = cache_dir
         self._config: dict[str, Any] = merged_config
         self._closing = False
+        self._starting: asyncio.Future[IPC] | None = None
         self.ipc: IPC | None = None
         self.rpc: bare_rpc.RPC | None = None
 
@@ -164,10 +165,23 @@ class BareRpcTransport:
         self.rpc = None
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout
+        # Held so close() can cancel a start that has not signalled ready;
+        # bare-stow-host closes the worker of a cancelled start.
+        starting = asyncio.ensure_future(self._start(timeout))
+        self._starting = starting
         try:
-            self.ipc = await self._start(timeout)
+            self.ipc = await starting
+        except asyncio.CancelledError as err:
+            if not (self._closing and starting.cancelled()):
+                raise
+            raise WorkerShutdownError(cause=err) from err
         except WorkerError as err:
             raise _startup_failed(err) from err
+        finally:
+            self._starting = None
+        if self._closing:
+            await self.ipc.close()
+            raise WorkerShutdownError()
         self.rpc = bare_rpc.RPC(self.ipc)
         try:
             init: dict[str, Any] = {
@@ -200,6 +214,8 @@ class BareRpcTransport:
 
     async def close(self) -> None:
         self._closing = True
+        if self._starting is not None:
+            self._starting.cancel()
         if self.rpc is not None:
             await self.rpc.close()
         elif self.ipc is not None:

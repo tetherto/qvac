@@ -58,7 +58,11 @@ import {
 } from '@/commands/verify/index'
 import { formatRuntimeSource } from '@/commands/verify/abi'
 import { formatEnginesAdvice } from '@/commands/verify/engines-advice'
-import { BUNDLED_SDK_VERSION_FIELD, BUNDLED_TARGET_FIELD } from '@/client/rpc/bundle-stamp'
+import {
+  BUNDLE_RECORD_FILE,
+  BUNDLED_SDK_VERSION_FIELD,
+  BUNDLED_TARGET_FIELD
+} from '@/client/rpc/bundle-stamp'
 import type { Logger } from '@/logging/types'
 
 export interface BundleSdkOptions {
@@ -354,16 +358,31 @@ export function describeMissingAddonBuild(error: unknown, hosts: string[]): Erro
 /** Files an older `@qvac/sdk` wrote into `qvac/`, which nothing reads now. */
 const STALE_QVAC_FILES = ['worker.bundle.js', 'addons.manifest.json']
 
-/** Records the SDK version and the target in the harness package.json, for the client to check. */
-async function stampBundle(harnessDir: string, sdkPath: string, target: BundleTarget) {
+/**
+ * Records the SDK version and the target in the harness package.json, for the
+ * client and `verifyBundle` to check. A Kotlin or Python harness has no
+ * package.json, so they go in a record file at its root.
+ */
+async function stampBundle(
+  harnessDir: string,
+  sdkPath: string,
+  target: BundleTarget,
+  language: BundleLanguage
+) {
   const sdk = JSON.parse(await fsp.readFile(path.join(sdkPath, 'package.json'), 'utf8')) as {
     version?: unknown
   }
-  const manifestPath = path.join(harnessDir, 'package.json')
-  const manifest = JSON.parse(await fsp.readFile(manifestPath, 'utf8')) as Record<string, unknown>
-  if (typeof sdk.version === 'string') manifest[BUNDLED_SDK_VERSION_FIELD] = sdk.version
-  manifest[BUNDLED_TARGET_FIELD] = target
-  await fsp.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+  const stampPath = path.join(
+    harnessDir,
+    language === 'javascript' ? 'package.json' : BUNDLE_RECORD_FILE
+  )
+  const stamp =
+    language === 'javascript'
+      ? (JSON.parse(await fsp.readFile(stampPath, 'utf8')) as Record<string, unknown>)
+      : {}
+  if (typeof sdk.version === 'string') stamp[BUNDLED_SDK_VERSION_FIELD] = sdk.version
+  stamp[BUNDLED_TARGET_FIELD] = target
+  await fsp.writeFile(stampPath, `${JSON.stringify(stamp, null, 2)}\n`)
 }
 
 /**
@@ -590,7 +609,7 @@ export async function bundleSdk(options: BundleSdkOptions = {}): Promise<BundleS
     }
 
     const scratchBundlePath = await stowBundle({ ...stowOptions, outputDir: scratch })
-    if (language === 'javascript') await stampBundle(scratch, sdkPath, target)
+    await stampBundle(scratch, sdkPath, target, language)
     bundlePath = path.join(outputDir, path.relative(scratch, scratchBundlePath))
 
     const stats = await fsp.stat(scratchBundlePath)

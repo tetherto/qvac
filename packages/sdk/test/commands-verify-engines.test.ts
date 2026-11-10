@@ -780,6 +780,34 @@ describe('verifyBundle engines.bare against the phone runtimes', () => {
     })
   })
 
+  it('checks a Kotlin desktop bundle against bare-kit-kotlin from the target recorded at its harness root', async () => {
+    await withTempDir(async (dir) => {
+      const { bundlePath: written, bareStowDir } = writeMixedHostBundle(dir, {
+        linkedOnDesktop: true
+      })
+      const harnessRoot = path.join(dir, 'jvm', 'worker')
+      const bundlePath = path.join(harnessRoot, 'src', 'main', 'resources', 'com', 'example')
+      fs.mkdirSync(bundlePath, { recursive: true })
+      fs.renameSync(written, path.join(bundlePath, 'index.bundle'))
+      writeFile(
+        path.join(harnessRoot, 'qvac-bundle.json'),
+        JSON.stringify({ qvacTarget: 'bare-kit' })
+      )
+      writeSidecar(dir, '1.40.0')
+
+      const result = await verifyBundle({
+        projectRoot: dir,
+        addonsSource: path.join(bundlePath, 'index.bundle'),
+        hosts: ['darwin-arm64'],
+        bareStowDir,
+        network: false
+      })
+      const mismatches = result.issues.filter((issue) => issue.code === 'abi-mismatch')
+      assert.equal(mismatches.length, 1)
+      assert.match(mismatches[0]!.message, /runtime is 1\.36\.2 \(from bare-kit-kotlin/)
+    })
+  })
+
   it('finds the bare-sidecar next to a pnpm-linked pear-runtime', async () => {
     await withTempDir(async (dir) => {
       const bareStowDir = writeMobileProject(dir, { hosts: ['darwin-arm64'] })
