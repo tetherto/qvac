@@ -67,7 +67,11 @@ test('LLM xdna backend survives public options, wire requests, and the transform
     t.alike(defaults[modelType]?.['backend'], backend)
     t.is(transformLlmConfig(llmConfigSchema.parse({ backend }))['backend'], backend.join(', '))
   }
-  for (const modelType of [ModelType.llamacppEmbedding, ModelType.ggmlVla]) {
+  for (const modelType of [
+    ModelType.llamacppEmbedding,
+    ModelType.llamacppRerank,
+    ModelType.ggmlVla
+  ]) {
     const input = { modelType, modelSrc: 'model.gguf', modelConfig: { backend: ['xdna'] } }
     t.is(loadModelOptionsToRequestSchema.safeParse(input).success, false)
     t.is(loadModelSrcRequestSchema.safeParse({ ...input, type: 'loadModel' }).success, false)
