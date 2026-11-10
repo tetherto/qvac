@@ -15,4 +15,5 @@ test/mobile/integration.auto.cjs
 index.js
 addon.js
 megaloc.js
+bridgedepth.js
 src
