@@ -2509,6 +2509,30 @@ class BatchCompletionStreamRequestPromptsItemResponseFormatJsonSchema(
     ]
 
 
+class BatchCompletionStreamRequestPromptsItemToolSearch(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    default_limit: Annotated[
+        int | None,
+        Field(
+            alias="defaultLimit",
+            description="How many tool definitions one `tool_search` call loads when the model does not ask for a number with its `limit` argument. Defaults to 3, or `maxLimit` when that is lower.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+    max_limit: Annotated[
+        int | None,
+        Field(
+            alias="maxLimit",
+            description="The most tool definitions one `tool_search` call can load. A larger `limit` from the model is lowered to this. Defaults to 8.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+
+
 class BatchCompletionStreamRequestPromptsItemToolsItemParametersPropertiesValueType(
     Enum
 ):
@@ -2653,6 +2677,14 @@ class BatchCompletionStreamRequestPromptsItem(GeneratedBaseModel):
         Field(
             alias="responseFormat",
             description="Optional per-prompt structured-output constraint.",
+        ),
+    ] = None
+    tool_search: Annotated[
+        BatchCompletionStreamRequestPromptsItemToolSearch | None,
+        Field(
+            alias="toolSearch",
+            description="Limits on what the built-in `tool_search` loads per call. Only used when a tool sets `deferLoading`. The limits are stated in the `tool_search` definition at the front of the prompt, so set them once per conversation: changing them re-prefills from there.",
+            title="BatchCompletionStreamRequestPromptsItemToolSearch",
         ),
     ] = None
     tools: Annotated[
@@ -4063,6 +4095,30 @@ class CompletionOrchestrateRequestToolsItem(GeneratedBaseModel):
     ]
 
 
+class CompletionOrchestrateRequestToolSearch(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    default_limit: Annotated[
+        int | None,
+        Field(
+            alias="defaultLimit",
+            description="How many tool definitions one `tool_search` call loads when the model does not ask for a number with its `limit` argument. Defaults to 3, or `maxLimit` when that is lower.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+    max_limit: Annotated[
+        int | None,
+        Field(
+            alias="maxLimit",
+            description="The most tool definitions one `tool_search` call can load. A larger `limit` from the model is lowered to this. Defaults to 8.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+
+
 class CompletionOrchestrateRequestGenerationParams(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -4232,6 +4288,14 @@ class CompletionOrchestrateRequest(GeneratedBaseModel):
         list[CompletionOrchestrateRequestToolsItem] | None,
         Field(
             description="Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call."
+        ),
+    ] = None
+    tool_search: Annotated[
+        CompletionOrchestrateRequestToolSearch | None,
+        Field(
+            alias="toolSearch",
+            description="Limits on what the built-in `tool_search` loads per call. Only used when a tool sets `deferLoading`. The limits are stated in the `tool_search` definition at the front of the prompt, so set them once per conversation: changing them re-prefills from there.",
+            title="CompletionOrchestrateRequestToolSearch",
         ),
     ] = None
     stream: Annotated[
@@ -4758,6 +4822,30 @@ class CompletionStreamRequestToolsItem(GeneratedBaseModel):
     ]
 
 
+class CompletionStreamRequestToolSearch(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    default_limit: Annotated[
+        int | None,
+        Field(
+            alias="defaultLimit",
+            description="How many tool definitions one `tool_search` call loads when the model does not ask for a number with its `limit` argument. Defaults to 3, or `maxLimit` when that is lower.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+    max_limit: Annotated[
+        int | None,
+        Field(
+            alias="maxLimit",
+            description="The most tool definitions one `tool_search` call can load. A larger `limit` from the model is lowered to this. Defaults to 8.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+
+
 class CompletionStreamRequestGenerationParams(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -4925,6 +5013,14 @@ class CompletionStreamRequest(GeneratedBaseModel):
         list[CompletionStreamRequestToolsItem] | None,
         Field(
             description="Optional array of tools (full `Tool` objects or Zod-schema `ToolInput` definitions) the model can call."
+        ),
+    ] = None
+    tool_search: Annotated[
+        CompletionStreamRequestToolSearch | None,
+        Field(
+            alias="toolSearch",
+            description="Limits on what the built-in `tool_search` loads per call. Only used when a tool sets `deferLoading`. The limits are stated in the `tool_search` definition at the front of the prompt, so set them once per conversation: changing them re-prefills from there.",
+            title="CompletionStreamRequestToolSearch",
         ),
     ] = None
     stream: Annotated[

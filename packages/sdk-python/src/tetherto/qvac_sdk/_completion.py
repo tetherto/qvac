@@ -117,6 +117,16 @@ def _normalize_tools(
     return wire_tools, handlers
 
 
+def _wire_tool_search(tool_search: dict[str, int]) -> dict[str, int]:
+    """Map the snake_case keys a Python caller reaches for to the wire keys.
+    `default_limit` is how many definitions one `tool_search` call loads when
+    the model gives no `limit`; `max_limit` is the most one call can load.
+    Limits are told to the model at the front of the prompt, so pass the same
+    ones on every turn of a conversation."""
+    aliases = {"default_limit": "defaultLimit", "max_limit": "maxLimit"}
+    return {aliases.get(key, key): value for key, value in tool_search.items()}
+
+
 def _fold_events(
     events: list[Any], handlers: dict[str, ToolHandler]
 ) -> tuple[CompletionFinal, str | None, bool]:
@@ -226,6 +236,7 @@ def completion(
     model_id: str,
     history: list[dict[str, Any]],
     tools: list[dict[str, Any]] | None = None,
+    tool_search: dict[str, int] | None = None,
     stream: bool = True,
     generation_params: dict[str, Any] | None = None,
     kv_cache: Any = None,
@@ -254,6 +265,8 @@ def completion(
     }
     if wire_tools:
         payload["tools"] = wire_tools
+    if tool_search is not None:
+        payload["toolSearch"] = _wire_tool_search(tool_search)
     if generation_params is not None:
         payload["generationParams"] = generation_params
     if kv_cache is not None:
@@ -327,6 +340,7 @@ def completion_orchestrate(
     model_id: str,
     history: list[dict[str, Any]],
     tools: list[dict[str, Any]],
+    tool_search: dict[str, int] | None = None,
     max_tool_turns: int | None = None,
     stream: bool = True,
     generation_params: dict[str, Any] | None = None,
@@ -372,6 +386,8 @@ def completion_orchestrate(
     }
     if wire_tools:
         payload["tools"] = wire_tools
+    if tool_search is not None:
+        payload["toolSearch"] = _wire_tool_search(tool_search)
     if max_tool_turns is not None:
         payload["maxToolTurns"] = max_tool_turns
     if kv_cache is not None:
