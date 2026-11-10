@@ -8,6 +8,7 @@ on:
       - 'packages/inference/package.json'
       - 'packages/inference/src/schemas/**'
       - 'packages/sdk/src/worker/**'
+      - 'packages/sdk/src/commands/**'
       - 'packages/sdk-e2e/catalog/conformance/**'
       - 'packages/sdk/contract/**'
       - 'packages/sdk/package.json'
@@ -49,10 +50,8 @@ jobs:
           # Drops `tools` from the action's default: the obsolete SDK Tools
           # package is gone from Google's repository and fails provisioning.
           packages: platform-tools
-      - name: Build the same workspace worker as Python
-        run: python3 ../sdk-python/scripts/build_worker.py --force
       - name: Run shared cross-client corpus
-        run: ./gradlew --no-daemon jvmTest --tests '*WorkerConformanceTest' --rerun-tasks
+        run: ./gradlew --no-daemon :jvm-barekit:test --tests '*WorkerConformanceTest' --rerun-tasks
         env:
           QVAC_RUN_CONFORMANCE: '1'
       - name: Upload conformance reports
@@ -60,4 +59,4 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # 7.0.0
         with:
           name: kotlin-worker-conformance
-          path: packages/sdk-kotlin/build/reports/tests/jvmTest
+          path: packages/sdk-kotlin/jvm-barekit/build/reports/tests/test

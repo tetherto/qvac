@@ -26,6 +26,7 @@ from collections.abc import Coroutine
 from typing import Any
 
 from ._generated import methods as _methods
+from ._streams import tts_samples
 from ._transport import Transport
 from .errors import EmbedFailedError
 from .schemas import (
@@ -300,7 +301,7 @@ class SyncClient:
             # Python floats across the whole (potentially long) synthesis.
             chunks: list[Any] = []
             async for response in _methods.text_to_speech(self._transport, request):
-                chunks.append(numpy.asarray(response.buffer, dtype=numpy.float32))
+                chunks.append(numpy.asarray(tts_samples(response), dtype=numpy.float32))
                 if response.done:
                     break
             return chunks

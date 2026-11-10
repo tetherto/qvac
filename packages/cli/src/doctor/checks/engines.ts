@@ -7,11 +7,11 @@ const LABEL = 'Bare engine requirements (engines.bare)'
 /** One representative per platform: every host of a platform runs the same Bare build. */
 const MOBILE_HOSTS = ['android-arm64', 'ios-arm64']
 
-const ENGINES_ISSUE_CODES = new Set(['abi-mismatch', 'engines-mismatch'])
-
 export interface CheckBareEnginesOptions {
   network?: boolean | undefined
   onProgress?: ((message: string) => void) | undefined
+  /** Test seam: the bare-stow whose Bare Kit pins are read, instead of the SDK's. */
+  bareStowDir?: string | undefined
 }
 
 function findNodeModules(projectRoot: string) {
@@ -35,8 +35,10 @@ function indent(lines: string[]) {
 }
 
 /**
- * Compares every package's engines.bare with the Bare build each target runs:
- * the one inside react-native-bare-kit for mobile, bare-runtime for desktop.
+ * Compares every package's engines.bare with the Bare the worker runs on: in
+ * a phone project, the Bare that Bare Kit runs on Android and iOS, as pinned
+ * by the project's bare-stow; otherwise the Bare of the project's bare-sidecar
+ * on this machine.
  * Reads the generated worker bundle when there is one, since it names exactly
  * what ships; otherwise scans node_modules, which also includes build tools.
  */
@@ -69,12 +71,14 @@ export async function checkBareEngines(
     }
   }
 
-  // A project with react-native-bare-kit ships to phones, where the desktop
-  // bare-runtime never runs; any other project runs on this host's Bare.
-  const hosts = commands.isReactNativeBareKitInstalled(projectRoot)
-    ? MOBILE_HOSTS
-    : [`${process.platform}-${process.arch}`]
-  const bundlePath = path.join(projectRoot, 'qvac', 'worker.bundle.js')
+  const phone = commands.isReactNativeBareKitInstalled(projectRoot)
+  const hosts = phone ? MOBILE_HOSTS : [`${process.platform}-${process.arch}`]
+  const bundlePath = path.join(
+    projectRoot,
+    'qvac',
+    'worker',
+    phone ? 'index.bundle.mjs' : 'index.bundle'
+  )
   const addonsSource = fs.existsSync(bundlePath) ? bundlePath : nodeModules
 
   const result = await commands.verifyBundle({
@@ -82,50 +86,66 @@ export async function checkBareEngines(
     addonsSource,
     hosts,
     ...(options.network !== undefined ? { network: options.network } : {}),
-    ...(options.onProgress !== undefined ? { onProgress: options.onProgress } : {})
+    ...(options.onProgress !== undefined ? { onProgress: options.onProgress } : {}),
+    ...(options.bareStowDir !== undefined ? { bareStowDir: options.bareStowDir } : {})
   })
 
-  const runtimes = (result.runtimes ?? []).map((group) =>
-    group.resolution.resolved
-      ? `${group.hosts.join(', ')}: Bare ${group.resolution.runtime.version} (${commands.formatRuntimeSource(group.resolution.runtime)})`
-      : `${group.hosts.join(', ')}: unknown (${group.resolution.error.reason})`
+  const hostList = hosts.join(', ')
+  const runtimes = result.runtimes.map(({ hosts, resolution }) =>
+    resolution.resolved
+      ? `${hosts.join(', ')}: Bare ${resolution.runtime.version} (${commands.formatRuntimeSource(resolution.runtime)})`
+      : `${hosts.join(', ')}: unknown (${resolution.error.reason})`
   )
   const source = `Checked ${path.relative(projectRoot, addonsSource) || addonsSource}`
-  const errors = result.issues.filter((issue) => ENGINES_ISSUE_CODES.has(issue.code))
+  const detail = [source, ...runtimes].join('\n')
+  const addons = result.issues.filter((issue) => issue.code === 'abi-mismatch')
+  const packages = result.issues.filter((issue) => issue.code === 'engines-mismatch')
 
-  if (errors.length > 0) {
+  if (addons.length > 0 || packages.length > 0) {
     const hint = [
-      `These packages need a newer Bare than ${hosts.join(', ')} run${hosts.length === 1 ? 's' : ''}, so they fail to load there:`,
-      ...errors.map((issue) => `  - ${issue.message}`),
-      ''
+      ...(addons.length > 0
+        ? [
+            'These addons are built for a newer Bare than the worker runs, so they fail to load there:',
+            ...addons.map((issue) => `  - ${issue.message}`),
+            ''
+          ]
+        : []),
+      ...(packages.length > 0
+        ? [
+            'These packages declare a newer Bare than the worker runs:',
+            ...packages.map((issue) => `  - ${issue.message}`),
+            ''
+          ]
+        : [])
     ]
-    for (const advice of result.advice ?? []) hint.push(...commands.formatEnginesAdvice(advice))
+    for (const advice of result.advice) hint.push(...commands.formatEnginesAdvice(advice))
+    const count = addons.length > 0 ? addons.length : packages.length
     return {
       id: 'project-bare-engines',
       label: LABEL,
-      status: 'fail',
-      severity: 'required',
-      code: 'engines-mismatch',
-      value: `${errors.length} package${errors.length === 1 ? '' : 's'} need a newer Bare`,
+      status: addons.length > 0 ? 'fail' : 'warn',
+      severity: addons.length > 0 ? 'required' : 'recommended',
+      code: addons.length > 0 ? 'abi-mismatch' : 'engines-mismatch',
+      value: `${count} ${addons.length > 0 ? 'addon' : 'package'}${count === 1 ? '' : 's'} need a newer Bare`,
       hint: indent(hint),
-      detail: [source, ...runtimes].join('\n')
+      detail
     }
   }
 
-  const unchecked = (result.runtimes ?? []).flatMap((group) =>
-    group.resolution.resolved
+  const unknown = result.runtimes.flatMap(({ hosts, resolution }) =>
+    resolution.resolved
       ? []
-      : [`engines.bare not checked for ${group.hosts.join(', ')}: ${group.resolution.error.reason}`]
+      : [`engines.bare not checked for ${hosts.join(', ')}: ${resolution.error.reason}`]
   )
-  if (unchecked.length > 0) {
+  if (unknown.length > 0) {
     return {
       id: 'project-bare-engines',
       label: LABEL,
       status: 'warn',
       severity: 'recommended',
       value: 'runtime version unknown, not checked',
-      hint: indent(unchecked),
-      detail: [source, ...runtimes].join('\n')
+      hint: indent(unknown),
+      detail
     }
   }
 
@@ -134,7 +154,7 @@ export async function checkBareEngines(
     label: LABEL,
     status: 'pass',
     severity: 'recommended',
-    value: runtimes.join('; '),
+    value: runtimes.length > 0 ? runtimes.join('; ') : hostList,
     detail: source
   }
 }

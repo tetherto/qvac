@@ -1,12 +1,14 @@
 import { promises as fsp } from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import semver from 'semver'
 import {
   BARE_KIT_BARE_VERSIONS,
-  REACT_NATIVE_BARE_KIT_RUNTIMES
+  BARE_KIT_KOTLIN_BARE_KITS,
+  BARE_KIT_SWIFT_BARE_KITS
 } from '@/commands/verify/bare-kit-runtimes'
 import { findInAncestorNodeModules } from '@/expo/plugins/find-in-ancestor-node-modules'
-import type { BareRuntimeResolution } from '@/commands/verify/abi'
+import type { BareKitBinding, BareRuntimeResolution } from '@/commands/verify/abi'
 
 export const REACT_NATIVE_BARE_KIT = 'react-native-bare-kit'
 
@@ -14,25 +16,42 @@ export const NETWORK_TIMEOUT_MS = 5000
 
 const RAW_GITHUB_BASE = 'https://raw.githubusercontent.com/holepunchto'
 
-/**
- * The iOS framework ships inside the npm package, and its bundle version is
- * the bare-kit release it was built from, so it identifies the embedded
- * runtime without a network request.
- */
-const BARE_KIT_INFO_PLIST = path.join(
-  'ios',
-  'BareKit.xcframework',
-  'ios-arm64',
-  'BareKit.framework',
-  'Info.plist'
-)
+/** The bare-stow file that pins the Bare Kit bindings phone apps link. */
+const BARE_KIT_TARGET = path.join('lib', 'target', 'bare-kit.js')
+
+export type BareKitPlatform = 'android' | 'ios'
+
+export const BARE_KIT_PLATFORMS: BareKitPlatform[] = ['android', 'ios']
+
+interface BindingInfo {
+  name: BareKitBinding
+  bareKits: Record<string, string>
+  pin: RegExp
+}
+
+const BINDINGS: Record<BareKitPlatform, BindingInfo> = {
+  android: {
+    name: 'bare-kit-kotlin',
+    bareKits: BARE_KIT_KOTLIN_BARE_KITS,
+    pin: /['"]com\.github\.holepunchto\.bare-kit-kotlin:bare-kit-kotlin['"]\s*:\s*['"]v?(\d+\.\d+\.\d+[^'"\s]*)['"]/
+  },
+  ios: {
+    name: 'bare-kit-swift',
+    bareKits: BARE_KIT_SWIFT_BARE_KITS,
+    pin: /['"]https:\/\/github\.com\/holepunchto\/bare-kit-swift(?:\.git)?['"]\s*,\s*from\s*:\s*['"]v?(\d+\.\d+\.\d+[^'"\s]*)['"]/
+  }
+}
 
 export type FetchText = (url: string) => Promise<string>
 
 export type ProgressFn = (message: string) => void
 
-export interface ResolveMobileBareRuntimeOptions {
-  projectRoot: string
+export interface ResolveBareKitRuntimeOptions {
+  platform: BareKitPlatform
+  /** The project whose `@qvac/sdk` decides which bare-stow's pins are read. */
+  projectRoot?: string | undefined
+  /** Directory of the bare-stow package whose pins are read, instead of the project's. */
+  bareStowDir?: string | undefined
   network?: boolean | undefined
   onProgress?: ProgressFn | undefined
   fetchText?: FetchText | undefined
@@ -42,17 +61,16 @@ export function isReactNativeBareKitInstalled(projectRoot: string) {
   return findInAncestorNodeModules(projectRoot, REACT_NATIVE_BARE_KIT) !== null
 }
 
+export function bareKitPlatformOf(host: string): BareKitPlatform | null {
+  if (host.startsWith('android-')) return 'android'
+  if (host.startsWith('ios-')) return 'ios'
+  return null
+}
+
 export async function fetchText(url: string) {
   const response = await fetch(url, { signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS) })
   if (!response.ok) throw new Error(`GET ${url} returned HTTP ${response.status}`)
   return response.text()
-}
-
-export function parseBareKitReleaseVersion(cmakeLists: string) {
-  const match = /holepunchto\/bare-kit\/releases\/download\/v(\d+\.\d+\.\d+[^/"\s]*)\//.exec(
-    cmakeLists
-  )
-  return match?.[1] ?? null
 }
 
 export function parseBareVersion(cmakeLists: string) {
@@ -62,20 +80,28 @@ export function parseBareVersion(cmakeLists: string) {
   return match?.[1] ?? null
 }
 
-export function parseInfoPlistVersion(plist: string) {
-  const match =
-    /<key>CFBundleShortVersionString<\/key>\s*<string>(\d+\.\d+\.\d+[^<]*)<\/string>/.exec(plist)
+export function parseBareKitVersion(cmakeLists: string) {
+  const match = /fetch_package\(\s*"github:holepunchto\/bare-kit@(\d+\.\d+\.\d+[^"\s]*)"/.exec(
+    cmakeLists
+  )
   return match?.[1] ?? null
 }
 
-export async function fetchBareKitVersionFromGitHub(
-  reactNativeBareKitVersion: string,
+/** The binding version bare-stow pins for each platform, or null where none is found. */
+export function parseBareKitPins(source: string): Record<BareKitPlatform, string | null> {
+  return {
+    android: BINDINGS.android.pin.exec(source)?.[1] ?? null,
+    ios: BINDINGS.ios.pin.exec(source)?.[1] ?? null
+  }
+}
+
+export async function fetchBindingBareKitFromGitHub(
+  binding: BareKitBinding,
+  version: string,
   fetch: FetchText = fetchText
 ) {
-  const cmakeLists = await fetch(
-    `${RAW_GITHUB_BASE}/${REACT_NATIVE_BARE_KIT}/v${reactNativeBareKitVersion}/CMakeLists.txt`
-  )
-  return parseBareKitReleaseVersion(cmakeLists)
+  const cmakeLists = await fetch(`${RAW_GITHUB_BASE}/${binding}/v${version}/CMakeLists.txt`)
+  return parseBareKitVersion(cmakeLists)
 }
 
 export async function fetchBareVersionFromGitHub(
@@ -84,10 +110,6 @@ export async function fetchBareVersionFromGitHub(
 ) {
   const cmakeLists = await fetch(`${RAW_GITHUB_BASE}/bare-kit/v${bareKitVersion}/CMakeLists.txt`)
   return parseBareVersion(cmakeLists)
-}
-
-export function bareVersionForBareKit(bareKitVersion: string) {
-  return BARE_KIT_BARE_VERSIONS[bareKitVersion] ?? null
 }
 
 function newestKey(record: Record<string, unknown>) {
@@ -104,169 +126,133 @@ function isNewerThanTable(version: string, record: Record<string, unknown>) {
   return newest === null || semver.valid(version) === null || semver.gt(version, newest)
 }
 
-/**
- * The oldest react-native-bare-kit release newer than `currentVersion` whose
- * embedded Bare satisfies every range, or null if the table has none.
- */
-export function findReactNativeBareKitUpgrade(currentVersion: string, ranges: string[]) {
-  const candidates = Object.entries(REACT_NATIVE_BARE_KIT_RUNTIMES)
-    .filter(([version]) => semver.valid(version) !== null && semver.prerelease(version) === null)
-    .sort(([a], [b]) => semver.compare(a, b))
-
-  for (const [version, runtime] of candidates) {
-    if (semver.valid(currentVersion) !== null && !semver.gt(version, currentVersion)) continue
-    if (ranges.every((range) => semver.satisfies(runtime.bare, range))) {
-      return { version, bareKit: runtime.bareKit, bare: runtime.bare }
-    }
-  }
-  return null
+/** The bare-stow of the project's `@qvac/sdk`, which bundles its app, else this SDK's. */
+function resolveBareStowDir(projectRoot: string | undefined) {
+  const projectSdk =
+    projectRoot === undefined ? null : findInAncestorNodeModules(projectRoot, '@qvac/sdk')
+  const from = projectSdk ? path.join(projectSdk, 'package.json') : import.meta.url
+  return path.dirname(createRequire(from).resolve('bare-stow/package'))
 }
 
-async function readJsonVersion(packageJsonPath: string) {
-  try {
-    const parsed = JSON.parse(await fsp.readFile(packageJsonPath, 'utf8')) as { version?: unknown }
-    return typeof parsed.version === 'string' ? parsed.version : null
-  } catch {
-    return null
-  }
-}
-
-async function readInfoPlistVersion(packageDir: string) {
-  try {
-    return parseInfoPlistVersion(
-      await fsp.readFile(path.join(packageDir, BARE_KIT_INFO_PLIST), 'utf8')
-    )
-  } catch {
-    return null
-  }
+function unresolved(reason: string, triedPaths: string[]): BareRuntimeResolution {
+  return { resolved: false, error: { reason, triedPaths } }
 }
 
 function resolved(
+  platform: BareKitPlatform,
+  bare: string,
   version: string,
-  reactNativeBareKitVersion: string,
-  bareKitVersion: string,
-  via: 'table' | 'info-plist' | 'github'
+  bareKit: string,
+  viaGitHub: boolean
 ): BareRuntimeResolution {
+  const binding = BINDINGS[platform].name
+  const pinned = platform === 'ios' ? `${version} or newer` : version
   return {
     resolved: true,
     runtime: {
-      version,
-      source: 'react-native-bare-kit',
-      packageVersion: reactNativeBareKitVersion,
+      version: bare,
+      source: binding,
+      packageVersion: version,
       detail:
-        `react-native-bare-kit@${reactNativeBareKitVersion} embeds bare-kit ${bareKitVersion}` +
-        (via === 'github' ? ', looked up on GitHub' : '')
+        `bare-stow pins ${binding} ${pinned}, built from bare-kit ${bareKit}` +
+        (viaGitHub ? ', looked up on GitHub' : '')
     }
   }
 }
 
 /**
- * Bare version the app runs on mobile: the one compiled into the bare-kit
- * binaries that react-native-bare-kit ships, not any `bare-runtime` package
- * in node_modules.
+ * Bare version a phone platform runs: the one in the bare-kit that the Bare
+ * Kit binding pinned by the SDK's bare-stow is built from. Android links
+ * bare-kit-kotlin at an exact version; iOS links bare-kit-swift from a
+ * minimum version, which this resolves at that minimum.
  *
- * Checks the built-in table, then the installed iOS framework's Info.plist,
- * and only then GitHub.
+ * Checks the built-in tables, and only then GitHub.
  */
-export async function resolveMobileBareRuntime(
-  options: ResolveMobileBareRuntimeOptions
+export async function resolveBareKitRuntime(
+  options: ResolveBareKitRuntimeOptions
 ): Promise<BareRuntimeResolution> {
-  const { projectRoot, network = true, onProgress, fetchText: fetch = fetchText } = options
+  const { platform, network = true, onProgress, fetchText: fetch = fetchText } = options
+  const binding = BINDINGS[platform]
 
-  const packageDir = findInAncestorNodeModules(projectRoot, REACT_NATIVE_BARE_KIT)
-  if (packageDir === null) {
-    return {
-      resolved: false,
-      error: {
-        reason: `${REACT_NATIVE_BARE_KIT} is not installed, so the mobile Bare version is unknown`,
-        triedPaths: [path.join(projectRoot, 'node_modules', REACT_NATIVE_BARE_KIT)]
-      }
-    }
+  let bareStowDir: string
+  try {
+    bareStowDir = options.bareStowDir ?? resolveBareStowDir(options.projectRoot)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return unresolved(
+      `bare-stow could not be resolved from the SDK, so the ${platform} Bare version is unknown: ${message}`,
+      []
+    )
   }
 
-  const packageJsonPath = path.join(packageDir, 'package.json')
-  const version = await readJsonVersion(packageJsonPath)
+  const targetPath = path.join(bareStowDir, BARE_KIT_TARGET)
+  let source: string
+  try {
+    source = await fsp.readFile(targetPath, 'utf8')
+  } catch {
+    return unresolved(`Could not read ${targetPath}, so the ${platform} Bare version is unknown`, [
+      targetPath
+    ])
+  }
+
+  const version = parseBareKitPins(source)[platform]
   if (version === null) {
-    return {
-      resolved: false,
-      error: {
-        reason: `Could not read the version of ${REACT_NATIVE_BARE_KIT}`,
-        triedPaths: [packageJsonPath]
-      }
-    }
+    return unresolved(
+      `${targetPath} pins no ${binding.name} version, so the ${platform} Bare version is unknown`,
+      [targetPath]
+    )
   }
 
-  const known = REACT_NATIVE_BARE_KIT_RUNTIMES[version]
-  if (known !== undefined) return resolved(known.bare, version, known.bareKit, 'table')
-
-  let bareKitVersion = await readInfoPlistVersion(packageDir)
-  if (bareKitVersion !== null) {
-    const bare = bareVersionForBareKit(bareKitVersion)
-    if (bare !== null) return resolved(bare, version, bareKitVersion, 'info-plist')
+  const tableBareKit = binding.bareKits[version] ?? null
+  const tableBare = tableBareKit === null ? null : (BARE_KIT_BARE_VERSIONS[tableBareKit] ?? null)
+  if (tableBareKit !== null && tableBare !== null) {
+    return resolved(platform, tableBare, version, tableBareKit, false)
   }
 
   const canLookUp =
-    bareKitVersion === null
-      ? isNewerThanTable(version, REACT_NATIVE_BARE_KIT_RUNTIMES)
-      : isNewerThanTable(bareKitVersion, BARE_KIT_BARE_VERSIONS)
+    tableBareKit === null
+      ? isNewerThanTable(version, binding.bareKits)
+      : isNewerThanTable(tableBareKit, BARE_KIT_BARE_VERSIONS)
   if (!canLookUp) {
-    return {
-      resolved: false,
-      error: {
-        reason:
-          `The Bare version of ${REACT_NATIVE_BARE_KIT}@${version} could not be determined: ` +
-          (bareKitVersion === null
-            ? 'the release does not record its bare-kit version and its iOS framework Info.plist could not be read'
-            : `bare-kit ${bareKitVersion} does not name its Bare version in CMakeLists.txt`),
-        triedPaths: [packageJsonPath, path.join(packageDir, BARE_KIT_INFO_PLIST)]
-      }
-    }
+    return unresolved(
+      `The Bare version of ${binding.name}@${version} could not be determined: ` +
+        (tableBareKit === null
+          ? 'its CMakeLists.txt names no bare-kit version'
+          : `bare-kit ${tableBareKit} does not name its Bare version in CMakeLists.txt`),
+      [targetPath]
+    )
   }
 
   if (!network) {
-    return {
-      resolved: false,
-      error: {
-        reason:
-          `${REACT_NATIVE_BARE_KIT}@${version} is not in the built-in runtime table ` +
-          'and network lookups are disabled',
-        triedPaths: [packageJsonPath]
-      }
-    }
+    return unresolved(
+      `${tableBareKit === null ? `${binding.name}@${version}` : `bare-kit ${tableBareKit}`} ` +
+        'is not in the built-in runtime table and network lookups are disabled',
+      [targetPath]
+    )
   }
 
   onProgress?.(
-    `Looking up the Bare version embedded in ${REACT_NATIVE_BARE_KIT}@${version} on ` +
-      `raw.githubusercontent.com (not in the built-in table, timeout ${NETWORK_TIMEOUT_MS / 1000}s per request)...`
+    `Looking up the Bare version of ${binding.name}@${version} on raw.githubusercontent.com ` +
+      `(not in the built-in table, timeout ${NETWORK_TIMEOUT_MS / 1000}s per request)...`
   )
 
   try {
-    if (bareKitVersion === null) {
-      bareKitVersion = await fetchBareKitVersionFromGitHub(version, fetch)
-    }
+    const bareKit =
+      tableBareKit ?? (await fetchBindingBareKitFromGitHub(binding.name, version, fetch))
     const bare =
-      bareKitVersion === null
+      bareKit === null
         ? null
-        : (bareVersionForBareKit(bareKitVersion) ??
-          (await fetchBareVersionFromGitHub(bareKitVersion, fetch)))
-    if (bareKitVersion !== null && bare !== null) {
-      return resolved(bare, version, bareKitVersion, 'github')
-    }
-    return {
-      resolved: false,
-      error: {
-        reason: `Could not find the bare-kit or Bare version in the CMakeLists.txt of ${REACT_NATIVE_BARE_KIT}@${version}`,
-        triedPaths: [packageJsonPath]
-      }
-    }
+        : (BARE_KIT_BARE_VERSIONS[bareKit] ?? (await fetchBareVersionFromGitHub(bareKit, fetch)))
+    if (bareKit !== null && bare !== null) return resolved(platform, bare, version, bareKit, true)
+    return unresolved(
+      `Could not find the bare-kit or Bare version in the CMakeLists.txt of ${binding.name}@${version}`,
+      [targetPath]
+    )
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    return {
-      resolved: false,
-      error: {
-        reason: `Could not look up the Bare version of ${REACT_NATIVE_BARE_KIT}@${version}: ${message}`,
-        triedPaths: [packageJsonPath]
-      }
-    }
+    return unresolved(
+      `Could not look up the Bare version of ${binding.name}@${version}: ${message}`,
+      [targetPath]
+    )
   }
 }

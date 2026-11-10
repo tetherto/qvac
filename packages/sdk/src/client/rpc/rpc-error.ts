@@ -8,7 +8,8 @@ import {
   RequestIdConflictError,
   RequestNotFoundError,
   RequestRejectedByPolicyError,
-  TranslationFailedError
+  TranslationFailedError,
+  AudioEncodeFailedError
 } from '@/utils/errors-server'
 
 export class RPCError extends Error {
@@ -190,6 +191,15 @@ const RECONSTRUCTORS: Record<string, ErrorReconstructor> = {
   // class -- matching the Python client's reconstructor.
   TRANSLATION_FAILED: (response) => {
     return new TranslationFailedError(response.message, response.cause)
+  },
+  // An encoder the inference host lacks fails an `outputFormat` request in the
+  // worker; the format and the encoder's own message come back as fields.
+  AUDIO_ENCODE_FAILED: (response) => {
+    return new AudioEncodeFailedError(
+      readStringField(response.typedFields, 'format', ''),
+      readOptionalStringField(response.typedFields, 'details'),
+      response.cause
+    )
   }
 }
 
