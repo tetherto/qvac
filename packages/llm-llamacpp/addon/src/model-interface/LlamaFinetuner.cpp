@@ -449,14 +449,23 @@ std::string LlamaFinetuner::finetune(
 
 void LlamaFinetuner::validateModelForFinetuning() {
   // Checked before finetune() reloads the model: a reload that throws leaves
-  // it with no context.
+  // it with no context. Covers both NPU routes: device 'npu', even when it fell
+  // back to a GPU, and a load that runs on the NPU alone (devices: 'XDNA0'),
+  // which reports backendDevice 2.
   const auto& config = model_.constructionArgs_.configFilemap;
-  if (const auto it = config.find("device");
-      it != config.end() && it->second == "npu") {
+  const auto deviceIt = config.find("device");
+  const bool requestedNpu =
+      deviceIt != config.end() && deviceIt->second == "npu";
+  bool loadedOnNpu = false;
+  {
+    std::shared_lock lock(model_.stateMtx_);
+    loadedOnNpu = model_.runtimeBackendDevice_ == 2;
+  }
+  if (requestedNpu || loadedOnNpu) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
-        "Finetuning does not run on the NPU; load the model with device 'gpu' "
-        "or 'cpu'.");
+        "Finetuning does not run on the NPU; load the model on a GPU or the "
+        "CPU.");
   }
 
   auto fileType = model_.metadata_.tryGetU32("general.file_type");

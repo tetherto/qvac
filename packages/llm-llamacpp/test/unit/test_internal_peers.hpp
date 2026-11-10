@@ -147,6 +147,11 @@ public:
           state) {
     finetuner.setCurrentCheckpointStateShared(std::move(state));
   }
+
+  /// The model checks finetune() runs before it reloads the model.
+  static void validateModelForFinetuning(LlamaFinetuner& finetuner) {
+    finetuner.validateModelForFinetuning();
+  }
 };
 
 class ContinuousBatchSchedulerTestPeer {

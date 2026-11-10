@@ -218,3 +218,47 @@ TEST(FinetunePendingPauseTest, InternalReloadDoesNotRequestFinetunePause) {
   EXPECT_FALSE(state->pauseRequested.load())
       << "an ordinary finetune must start without a pause from its own reload";
 }
+
+namespace {
+
+LlamaModel makeUnloadedModelOn(const std::string& device) {
+  std::unordered_map<std::string, std::string> config;
+  config["device"] = device;
+  return LlamaModel("nonexistent_model.gguf", "", std::move(config));
+}
+
+// Empty when validation passes or fails for another reason: an unloaded model
+// has no metadata, so the architecture check rejects it after the NPU check.
+std::string npuRejection(LlamaFinetuner& finetuner) {
+  try {
+    LlamaFinetunerTestPeer::validateModelForFinetuning(finetuner);
+  } catch (const std::exception& error) {
+    const std::string message = error.what();
+    if (message.find("Finetuning does not run on the NPU") !=
+        std::string::npos) {
+      return message;
+    }
+  }
+  return "";
+}
+
+} // namespace
+
+// Rejected before finetune() reloads the model, for both NPU routes.
+TEST(FinetuneNpuTest, DeviceNpuIsRejected) {
+  LlamaModel model = makeUnloadedModelOn("npu");
+  EXPECT_FALSE(npuRejection(model.finetuner()).empty());
+}
+
+// devices: 'XDNA0' loads on the NPU alone and reports backendDevice 2.
+TEST(FinetuneNpuTest, LoadOnTheNpuIsRejected) {
+  LlamaModel model = makeUnloadedModelOn("gpu");
+  LlamaModelTestPeer::setRuntimeBackendDevice(model, 2);
+  EXPECT_FALSE(npuRejection(model.finetuner()).empty());
+}
+
+TEST(FinetuneNpuTest, GpuLoadIsNotRejectedForTheNpu) {
+  LlamaModel model = makeUnloadedModelOn("gpu");
+  LlamaModelTestPeer::setRuntimeBackendDevice(model, 1);
+  EXPECT_TRUE(npuRejection(model.finetuner()).empty());
+}

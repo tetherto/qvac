@@ -141,6 +141,11 @@ bool usesBackendFamily(
     const std::vector<backend_selection::SplitDevice>& splitDevices,
     std::string_view family);
 
+// True when every device of a non-empty explicit or split set is the NPU, so
+// the load reports as an NPU load. A mixed set such as XDNA0,Vulkan0 is a GPU
+// load.
+bool runsOnNpuOnly(const std::vector<backend_selection::SplitDevice>& devices);
+
 void validateMobileMultiDeviceConfig(
     const ConfigMap& configFilemap, llama_split_mode splitMode);
 

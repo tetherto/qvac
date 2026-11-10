@@ -732,6 +732,16 @@ bool usesBackendFamily(
               splitDevices, matches, &backend_selection::SplitDevice::name));
 }
 
+bool runsOnNpuOnly(const std::vector<backend_selection::SplitDevice>& devices) {
+  return !devices.empty() &&
+         std::ranges::all_of(
+             devices,
+             [](const std::string& name) {
+               return toLowerAscii(name).find("xdna") != std::string::npos;
+             },
+             &backend_selection::SplitDevice::name);
+}
+
 void tuneLoadConfigMap(
     std::unordered_map<std::string, std::string>& configFilemap,
     const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
@@ -1708,13 +1718,9 @@ NormalizedLoad normalizeLoadForFit(
           }
         }
         // `devices: 'XDNA0'` runs on the NPU alone, so it reports as one.
-        const bool onlyNpu = std::ranges::all_of(
-            devices, [](const backend_selection::SplitDevice& device) {
-              return toLowerAscii(device.name).find("xdna") !=
-                     std::string::npos;
-            });
         selected = {
-            .type = onlyNpu ? BackendType::NPU : BackendType::GPU,
+            .type =
+                runsOnNpuOnly(devices) ? BackendType::NPU : BackendType::GPU,
             .name = primary.name,
             .adrenoVersion = maxAdrenoVersion,
             .isOpenCl = anyDevice(&backend_selection::SplitDevice::isOpenCl),

@@ -2582,6 +2582,25 @@ TEST(UsesBackendFamilyTest, FalseWithoutXdnaDevice) {
   EXPECT_TRUE(lfn::usesBackendFamily(true, "CUDA0", {}, "cuda"));
 }
 
+// The explicit `devices` path cannot reach the end of normalization in unit
+// tests (fabric's --device parser refuses every name but "none"), so the
+// classification it applies is tested directly.
+TEST(RunsOnNpuOnlyTest, NpuAloneIsAnNpuLoad) {
+  EXPECT_TRUE(lfn::runsOnNpuOnly({{.name = "XDNA0"}}));
+}
+
+TEST(RunsOnNpuOnlyTest, MixedSplitIsAGpuLoad) {
+  const std::vector<backend_selection::SplitDevice> split{
+      {.name = "XDNA0"}, {.name = "Vulkan0"}};
+  EXPECT_FALSE(lfn::runsOnNpuOnly(split));
+  EXPECT_TRUE(lfn::usesBackendFamily(true, "XDNA0", split, "xdna"));
+}
+
+TEST(RunsOnNpuOnlyTest, GpuOnlyOrEmptyIsNotAnNpuLoad) {
+  EXPECT_FALSE(lfn::runsOnNpuOnly({{.name = "Vulkan0"}}));
+  EXPECT_FALSE(lfn::runsOnNpuOnly({}));
+}
+
 // Fabric's --device parser refuses any device name in the unit tests but
 // "none", so XDNA0 sits in the mock's automatic split, which pins the devices
 // without --device. Both defaults read only the participating device names.

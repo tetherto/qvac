@@ -63,9 +63,12 @@ process can read and write its `/dev/accel` node; otherwise fabric logs that it 
 
 - The NPU is its own device class, beside `gpu` and `cpu`, and `device: "gpu"` never picks it.
   Select it with `device: "npu"`, which takes the first NPU fabric lists. When none is listed it
-  warns and falls back to the normal GPU order, then the CPU. `device: "npu"` cannot be combined with `backend`, `devices`, `split-mode`,
-  `main-gpu`, `rpc-servers` or finetuning. Runtime stats report `backendDevice: "npu"`.
-- `devices: "XDNA0"` also selects the NPU explicitly. `backend` takes GPU families only.
+  warns and falls back to the normal GPU order, then the CPU. `device: "npu"` cannot be combined
+  with `backend`, `devices`, `split-mode`, `main-gpu`, `rpc-servers` or finetuning. Runtime stats
+  report `backendDevice: "npu"`.
+- `device: "gpu"` with `devices: "XDNA0"` also runs on the NPU alone and reports
+  `backendDevice: "npu"`; a mixed list such as `XDNA0,Vulkan0` is a GPU load. Finetuning is
+  rejected for any load that runs on the NPU alone. `backend` takes GPU families only.
 - Fabric lists the NPU without opening it. The first load that uses `XDNA0` opens it and
   registers its kernels, and the process then holds an NPU context. An NPU that fails to open
   stays listed but takes no work: the load runs on the CPU and fabric logs
