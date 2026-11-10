@@ -17,9 +17,9 @@ interface LockFile extends AsyncDisposable {
 
 const NO_WRITE_ACCESS = new Set(['EACCES', 'EPERM', 'EROFS'])
 
-// `null` for a models directory this process cannot write, such as a prefilled
-// read-only cache: it can neither download nor delete there. A writable models
-// directory whose lock cannot be created fails instead of running unlocked.
+// `null` when this process can change nothing in the models directory, such as
+// a prefilled read-only cache: it can then only load cached models. Anywhere it
+// could write, a lock that cannot be created fails instead of running unlocked.
 async function openLockFile(resourceKey: string): Promise<LockFile | null> {
   const modelsDir = getModelsCacheDir()
   const lockDir = path.join(modelsDir, LOCK_DIR_NAME)
@@ -33,7 +33,12 @@ async function openLockFile(resourceKey: string): Promise<LockFile | null> {
     )
   } catch (error) {
     if (!NO_WRITE_ACCESS.has((error as { code?: string }).code ?? '')) throw error
-    if (await isWritable(modelsDir)) throw error
+    if (await canChangeModels(modelsDir)) {
+      logger.error(`❌ Cannot lock ${resourceKey}: its lock file in ${lockDir} is not writable`, {
+        error
+      })
+      throw error
+    }
     logger.warn(`⚠️ The models directory is read-only; reading ${resourceKey} without a lock`, {
       error
     })
@@ -49,8 +54,33 @@ async function openLockFile(resourceKey: string): Promise<LockFile | null> {
   }
 }
 
-function isWritable(dir: string): Promise<boolean> {
-  return fsPromises.access(dir, fs.constants.W_OK).then(
+// Downloads and deletes only add, rename or remove directory entries and write
+// `.part` files, so a process can change a model only through a writable folder
+// or `.part` file anywhere under `dir`. Lock files cannot change a model. A link
+// counts if its target is writable; it is not entered, so cycles cannot loop.
+async function canChangeModels(dir: string, isRoot = true): Promise<boolean> {
+  if (await hasAccess(dir, fs.constants.W_OK)) return true
+  let entries: Array<{ name: string; isDirectory(): boolean; isSymbolicLink(): boolean }>
+  try {
+    entries = (await fsPromises.readdir(dir, { withFileTypes: true })) as unknown as typeof entries
+  } catch {
+    // An unlistable folder's entries are out of reach only if it cannot be searched.
+    return hasAccess(dir, fs.constants.X_OK)
+  }
+  for (const entry of entries) {
+    if (isRoot && entry.name === LOCK_DIR_NAME) continue
+    const entryPath = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      if (await canChangeModels(entryPath, false)) return true
+    } else if (entry.isSymbolicLink() || entry.name.endsWith('.part')) {
+      if (await hasAccess(entryPath, fs.constants.W_OK)) return true
+    }
+  }
+  return false
+}
+
+function hasAccess(target: string, mode: number): Promise<boolean> {
+  return fsPromises.access(target, mode).then(
     () => true,
     () => false
   )

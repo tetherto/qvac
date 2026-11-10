@@ -27,7 +27,7 @@ import { getShardedModelCacheDir, getSingleFileCachePath } from '@/utils/cache/p
 import { parsePatternBasedShardUrl } from '@/utils/shard-utils'
 import { getQvacPath } from '@/utils/qvac-paths'
 import { initEnv } from '@/runtime/env'
-import { QWEN3_600M_INST_Q4 } from '@/models/registry/index'
+import { models, QWEN3_600M_INST_Q4, type RegistryItem } from '@/models/registry/index'
 import {
   calculateCachedFileChecksum,
   calculateFileChecksum,
@@ -271,20 +271,39 @@ test('tryAcquireDownloadLocks: releases the locks it took when a later one canno
   await lock?.[Symbol.asyncDispose]()
 })
 
-// Makes each directory read-only until `restore()`. `effective` is false when
-// that has no effect, for example when running as root.
-function makeReadOnly(dirs: string[]): { effective: boolean; restore: () => void } {
-  const modes = dirs.map((dir) => fs.statSync(dir).mode & 0o777)
-  for (const dir of dirs) fs.chmodSync(dir, 0o555)
-  const effective = dirs.every((dir) => {
+// Makes each path read-only until `restore()`. `effective` is false when that
+// has no effect, for example when running as root.
+function makeReadOnly(paths: string[]): { effective: boolean; restore: () => void } {
+  const modes = paths.map((target) => fs.statSync(target).mode & 0o777)
+  paths.forEach((target, i) => fs.chmodSync(target, modes[i]! & 0o555))
+  const effective = paths.every((target) => {
     try {
-      fs.accessSync(dir, fs.constants.W_OK)
+      fs.accessSync(target, fs.constants.W_OK)
       return false
     } catch {
       return true
     }
   })
-  return { effective, restore: () => dirs.forEach((dir, i) => fs.chmodSync(dir, modes[i]!)) }
+  return {
+    effective,
+    restore: () => paths.forEach((target, i) => fs.chmodSync(target, modes[i]!))
+  }
+}
+
+// `root` and everything under it. Test files share one cache directory, so a
+// read-only case must cover what earlier files left there.
+function treeOf(root: string): string[] {
+  const entries = fs.readdirSync(root, { withFileTypes: true }) as unknown as Array<{
+    name: string
+    isDirectory(): boolean
+  }>
+  return [
+    root,
+    ...entries.flatMap((entry) => {
+      const entryPath = path.join(root, entry.name)
+      return entry.isDirectory() ? treeOf(entryPath) : [entryPath]
+    })
+  ]
 }
 
 test('downloadModelFromHttp: a cached model still loads from a read-only models directory', async (t) => {
@@ -295,7 +314,8 @@ test('downloadModelFromHttp: a cached model still loads from a read-only models 
   const lockDir = path.join(cacheDir, '.locks')
   fs.mkdirSync(lockDir, { recursive: true })
   fs.writeFileSync(modelPath, CONTENT)
-  const readOnly = makeReadOnly([cacheDir, lockDir])
+  // A writable model file is fine: downloads only replace files through folders.
+  const readOnly = makeReadOnly(treeOf(cacheDir).filter((target) => target !== modelPath))
   t.teardown(async () => {
     readOnly.restore()
     await server.close()
@@ -327,7 +347,8 @@ test('a writable models directory without a writable lock refuses downloads and 
   const lockDir = path.join(cacheDir, '.locks')
   fs.mkdirSync(path.dirname(registryPartial), { recursive: true })
   fs.writeFileSync(registryPartial, 'another process download')
-  const readOnly = makeReadOnly([lockDir])
+  fs.mkdirSync(lockDir, { recursive: true })
+  const readOnly = makeReadOnly(treeOf(lockDir))
   t.teardown(async () => {
     readOnly.restore()
     await server.close()
@@ -352,6 +373,45 @@ test('a writable models directory without a writable lock refuses downloads and 
   })
   t.is(deletion.success, false, 'deletion is refused')
   t.ok(fs.existsSync(registryPartial), 'the other download partial file is untouched')
+})
+
+test('a read-only models directory with a writable folder inside refuses downloads and deletion', async (t) => {
+  const cacheDir = useTestCacheDir()
+  stubClient(t, { clearBlob: async () => {} })
+  const server = await startGatedServer()
+  const url = `${server.base}/ro-shards-${Math.random().toString(16).slice(2)}/model-00001-of-00002.gguf`
+  const shardDir = getShardedModelCacheDir(parsePatternBasedShardUrl(url).cacheKey)
+  const sharded = (models as readonly RegistryItem[]).find((model) => model.shardMetadata?.length)!
+  const registryShardDir = getShardedModelCacheDir(generateShortHash(sharded.registryPath))
+  const registryShard = path.join(registryShardDir, sharded.shardMetadata![0]!.filename)
+  fs.writeFileSync(registryShard, 'another process shard')
+  fs.mkdirSync(path.join(cacheDir, '.locks'), { recursive: true })
+  const writable = new Set([shardDir, registryShardDir, registryShard])
+  const readOnly = makeReadOnly(treeOf(cacheDir).filter((target) => !writable.has(target)))
+  t.teardown(async () => {
+    readOnly.restore()
+    await server.close()
+    fs.rmSync(shardDir, { recursive: true, force: true })
+    fs.rmSync(registryShardDir, { recursive: true, force: true })
+  })
+  if (!readOnly.effective) {
+    t.comment('directories stay writable for this user, so the case cannot be set up')
+    return
+  }
+  // Serve in full, so a download that wrongly runs without the lock finishes fast.
+  server.release()
+
+  const result = await downloadModelFromHttp(url).catch((error: unknown) => error)
+  t.ok(result instanceof Error, 'the download fails instead of running without the lock')
+  t.is(server.gets(), 0, 'nothing is downloaded')
+  t.alike(fs.readdirSync(shardDir), [], 'nothing is written to the writable folder')
+
+  const deletion = await handleDeleteCache({
+    type: 'deleteCache',
+    modelSrc: `registry://${sharded.registrySource}/${sharded.registryPath}`
+  })
+  t.is(deletion.success, false, 'deletion is refused')
+  t.ok(fs.existsSync(registryShard), 'the shard in the writable folder is untouched')
 })
 
 test('downloadModelFromHttp: an archive download holds its lock until the archive is written', async (t) => {
