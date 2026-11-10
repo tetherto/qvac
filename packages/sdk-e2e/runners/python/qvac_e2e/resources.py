@@ -138,6 +138,7 @@ class ResourceManager:
     async def restart(self) -> None:
         """Stops the worker with the models it holds and starts a new one."""
         self._loaded.clear()
+        self._test_scoped.clear()
         await self._client.close()
         await self._client.connect()
 
@@ -218,7 +219,7 @@ class ResourceManager:
             del self._test_scoped[model_id]
             self._log(f"releasing test-scoped model {model_id}")
             try:
-                await unload_model(self._transport, model_id)
+                await unload_model(self.transport, model_id)
             except Exception as error:  # noqa: BLE001 - a release must not fail a test
                 self._log(f"releasing {model_id} failed (continuing): {error}")
 

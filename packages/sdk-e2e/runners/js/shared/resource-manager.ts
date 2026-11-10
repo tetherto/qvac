@@ -455,5 +455,6 @@ export class ResourceManager {
   /** Drops every tracked model without unloading it, once the worker that held them is gone. */
   forgetAll(): void {
     this.models.clear()
+    this.testScoped.clear()
   }
 }

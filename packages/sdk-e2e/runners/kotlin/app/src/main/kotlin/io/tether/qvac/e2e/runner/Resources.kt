@@ -182,7 +182,10 @@ class Resources(
     suspend fun close() = evictAllExcept(emptySet())
 
     /** Drops every model from the table without unloading it, for a worker that is about to stop. */
-    fun forgetLoaded() = loaded.clear()
+    fun forgetLoaded() {
+        loaded.clear()
+        testScoped.clear()
+    }
 
     /**
      * Runs to the end, within a bound, even when the test is cancelled: a model left in the worker
