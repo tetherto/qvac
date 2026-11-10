@@ -10,7 +10,9 @@ const files = [
   'megaloc.js',
   'megaloc.d.ts',
   'bridgedepth.js',
-  'bridgedepth.d.ts'
+  'bridgedepth.d.ts',
+  'ggml-model.js',
+  'ggml-model.d.ts'
 ]
 const result = spawnSync(
   'git',
