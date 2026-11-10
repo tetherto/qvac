@@ -172,6 +172,69 @@ test('uploadFile returns a qvac reference and language models resolve it through
   assert.match(JSON.stringify(chatBody), /data:image\/png;base64,iVBORw0KGgo=/)
 })
 
+test('a baseURL with trailing slashes yields the same endpoint URLs on every surface', async () => {
+  const calls: string[] = []
+  const imageBytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10])
+  const wavBytes = Uint8Array.from([
+    82, 73, 70, 70, 36, 0, 0, 0, 87, 65, 86, 69, 102, 109, 116, 32, 16, 0, 0, 0, 1, 0, 1, 0, 128,
+    62, 0, 0, 0, 125, 0, 0, 2, 0, 16, 0, 100, 97, 116, 97, 0, 0, 0, 0
+  ])
+  const customFetch: typeof fetch = (input, init) => {
+    const url =
+      typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+    calls.push(url)
+    if (url === 'http://127.0.0.1:55555/v1/files' && init?.method === 'POST') {
+      return Promise.resolve(Response.json({ id: 'file-local-1' }))
+    }
+    if (url === 'http://127.0.0.1:55555/v1/files/file-local-1/content') {
+      return Promise.resolve(new Response(imageBytes, { headers: { 'content-type': 'image/png' } }))
+    }
+    if (url === 'http://127.0.0.1:55555/v1/chat/completions') {
+      return Promise.resolve(
+        Response.json({
+          id: 'cmpl-slashes',
+          object: 'chat.completion',
+          created: 0,
+          model: 'vision',
+          choices: [
+            { index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }
+          ],
+          usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }
+        })
+      )
+    }
+    if (url === 'http://127.0.0.1:55555/v1/audio/speech') {
+      return Promise.resolve(new Response(wavBytes, { headers: { 'content-type': 'audio/wav' } }))
+    }
+    return Promise.resolve(new Response('not found', { status: 404 }))
+  }
+  const provider = createQvac({ baseURL: 'http://127.0.0.1:55555/v1///', fetch: customFetch })
+  const { generateSpeech, generateText, uploadFile } = await import('ai')
+
+  const uploaded = await uploadFile({ api: provider, data: imageBytes, mediaType: 'image/png' })
+  await generateText({
+    model: provider('vision'),
+    messages: [
+      {
+        role: 'user',
+        content: [{ type: 'file', mediaType: 'image/png', data: uploaded.providerReference }]
+      }
+    ]
+  })
+  await generateSpeech({
+    model: provider.speechModel('tts-local'),
+    text: 'Local speech check.',
+    outputFormat: 'wav'
+  })
+
+  assert.deepEqual(calls, [
+    'http://127.0.0.1:55555/v1/files',
+    'http://127.0.0.1:55555/v1/files/file-local-1/content',
+    'http://127.0.0.1:55555/v1/chat/completions',
+    'http://127.0.0.1:55555/v1/audio/speech'
+  ])
+})
+
 test('uploadFile accepts every file data variant and forwards per-call options', async () => {
   const uploaded: Array<{
     bytes: Uint8Array

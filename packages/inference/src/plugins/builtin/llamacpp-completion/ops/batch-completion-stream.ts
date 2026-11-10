@@ -2,6 +2,7 @@ import type { AbortSignal } from 'bare-abort-controller'
 import type {
   BatchCompletionStreamPrompt,
   CompletionStats,
+  HistoryContent,
   ResponseFormat,
   Tool
 } from '@/schemas/index'
@@ -36,7 +37,7 @@ type BatchCompletionRunOptions = {
 
 type HistoryMessage = {
   role: string
-  content: string
+  content: HistoryContent
   attachments?: { path: string }[] | undefined
 }
 
