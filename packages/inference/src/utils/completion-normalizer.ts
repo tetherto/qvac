@@ -123,6 +123,12 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   // Content frame: inner streamed as it arrives; partial close tail buffered.
   let activeContentFrame: FrameSpec | null = null
 
+  // Set when a thinking frame closes before any content. Reasoning templates
+  // put a blank line between the close marker and the answer; it belongs to
+  // the framing, not the answer, so whitespace is dropped until the answer's
+  // first visible character.
+  let trimAfterThinking = false
+
   // Trailing chars that could be a prefix of a watched marker, so markers
   // split across token pushes aren't missed by indexOf.
   let contentTail = ''
@@ -178,6 +184,10 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     let normalized = text
     for (const token of contentDropTokens) {
       normalized = normalized.split(token).join('')
+    }
+    if (trimAfterThinking) {
+      normalized = normalized.replace(/^\s+/, '')
+      if (normalized) trimAfterThinking = false
     }
     if (!normalized) return
     contentParts.push(normalized)
@@ -361,6 +371,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
           emitThinking(events, buf.slice(0, closeIdx))
           buf = buf.slice(closeIdx + closeMarker.length)
           activeThinkingFrame = null
+          trimAfterThinking = contentParts.length === 0
           state = 'content'
           continue
         }
@@ -406,6 +417,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
         }
 
         const entry = markerToEntry.get(hit.marker)!
+        trimAfterThinking = false
         if (entry.kind === 'tool') {
           toolCallBuffer = hit.marker
           activeToolFrame = entry.spec
