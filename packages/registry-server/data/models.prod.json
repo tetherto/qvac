@@ -10090,7 +10090,7 @@
     "params": "250M",
     "licenseId": "Apache-2.0",
     "tags": ["transcription", "parakeet", "transcribepsy", "ggml", "multilingual"],
-    "notes": "Q8_0 GGUF build of qvac/TranscribePsy-250M-EU with six CAFE adapters and the language gate embedded. Use language en for English, other for non-English, or auto for automatic routing. Core ML is not supported for this model.",
+    "notes": "Q8_0 GGUF build of qvac/TranscribePsy-250M-EU with six CAFE adapters and the language gate embedded. Use language en for English or auto for automatic routing, including non-English audio. Core ML is not supported for this model.",
     "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU"
   },
   {
