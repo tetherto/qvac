@@ -199,7 +199,7 @@ export const llmConfigBaseSchema = z.object({
     .min(1)
     .optional()
     .describe(
-      "Explicit ordered native device names, for example RPC0,RPC1, or XDNA0 for the AMD XDNA NPU. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order."
+      "Explicit ordered native device names, for example RPC0,RPC1, or XDNA0 for the AMD XDNA NPU; naming XDNA0 without a listed NPU fails the load. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order."
     ),
   'split-mode': z
     .enum(['none', 'layer', 'tensor'])
