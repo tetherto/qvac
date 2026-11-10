@@ -64,6 +64,10 @@ test('manifest lists every method with its call shape', (t) => {
   const names = manifest.methods.map((method) => method.name)
 
   t.alike(names, Object.keys(methodShapes).sort(), 'one manifest entry per method, sorted')
+  t.alike(
+    names.filter((name) => name.startsWith('embed')),
+    ['embed', 'embedBatch']
+  )
 
   for (const method of manifest.methods) {
     t.is(

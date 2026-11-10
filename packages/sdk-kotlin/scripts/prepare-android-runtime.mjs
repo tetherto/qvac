@@ -24,6 +24,7 @@ const profileName = process.env.QVAC_KOTLIN_PROFILE ?? path.basename(configPath,
 const pluginCapabilities = new Map([
   ['@qvac/sdk/llamacpp-completion/plugin', ['LLM']],
   ['@qvac/sdk/llamacpp-embedding/plugin', ['EMBEDDINGS']],
+  ['@qvac/sdk/ggml-image-embedding/plugin', ['IMAGE_EMBEDDINGS']],
   ['@qvac/sdk/llamacpp-decision/plugin', ['DECISION']],
   ['@qvac/sdk/llamacpp-rerank/plugin', ['RERANK']],
   ['@qvac/sdk/whispercpp-transcription/plugin', ['TRANSCRIPTION']],

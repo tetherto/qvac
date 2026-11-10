@@ -2,7 +2,7 @@ import fs from 'bare-fs'
 import type { AbortSignal } from 'bare-abort-controller'
 import Buffer from 'bare-buffer'
 import type { EmbedRunInput, EmbedMultimodalInput } from '@qvac/embed-llamacpp'
-import type { EmbedInput } from '@/schemas/embed'
+import type { EmbedInputPart } from '@/schemas/embed'
 import { getModel } from '@/runtime/model-registry'
 import { type EmbedParams, type EmbedStats, embedParamsSchema } from '@/schemas/index'
 import { buildUnaryResult } from '@/profiling/model-execution'
@@ -37,6 +37,15 @@ export async function embed(params: EmbedParams, requestId?: string): Promise<Em
 
 export async function embed(params: EmbedParams, requestId?: string): Promise<EmbedResult> {
   const parsed = embedParamsSchema.parse(params)
+  const inputs = parsed.input !== undefined ? [parsed.input] : parsed.inputs
+  const mediaInputs = inputs?.map((input) => {
+    if (typeof input === 'object' && !Array.isArray(input)) {
+      throw new EmbedFailedError(
+        'This model accepts text and ordered media parts, not raw RGB image inputs'
+      )
+    }
+    return input
+  })
   const { modelId } = parsed
 
   // Open a request-scoped lifecycle. The registry routes
@@ -59,7 +68,7 @@ export async function embed(params: EmbedParams, requestId?: string): Promise<Em
 
   const model = getModel(modelId)
 
-  const hasMedia = parsed.inputs?.some(
+  const hasMedia = mediaInputs?.some(
     (input) => Array.isArray(input) && input.some((part) => typeof part !== 'string')
   )
   if (hasMedia && !modelsWithProjector.has(model)) {
@@ -69,8 +78,8 @@ export async function embed(params: EmbedParams, requestId?: string): Promise<Em
   }
 
   const input =
-    parsed.inputs !== undefined
-      ? await prepareEmbedInputs(parsed.inputs, ctx.signal, ctx.requestId)
+    mediaInputs !== undefined
+      ? await prepareEmbedInputs(mediaInputs, ctx.signal, ctx.requestId)
       : parsed.text
   if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
 
@@ -122,7 +131,7 @@ export async function embed(params: EmbedParams, requestId?: string): Promise<Em
 
   const embeddingsArray = rawEmbeddings[0]
 
-  if (parsed.inputs !== undefined || Array.isArray(parsed.text)) {
+  if (parsed.input === undefined && (parsed.inputs !== undefined || Array.isArray(parsed.text))) {
     if (!embeddingsArray || embeddingsArray.length === 0) {
       throw new EmbedNoEmbeddingsError()
     }
@@ -181,7 +190,7 @@ export function normalizeVector(vector: Float32Array) {
 }
 
 async function prepareEmbedInputs(
-  inputs: EmbedInput[],
+  inputs: Array<string | EmbedInputPart[]>,
   signal: AbortSignal,
   requestId: string
 ): Promise<EmbedRunInput> {
