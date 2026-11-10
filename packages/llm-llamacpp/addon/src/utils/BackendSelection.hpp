@@ -89,8 +89,7 @@ std::pair<BackendType, std::string> chooseBackend(
 /// families in priority order (e.g. {"cuda", "vulkan"}). Entries with no device
 /// present are skipped; if none match, selection falls through to the normal
 /// cascade rather than failing, because an absent device is not a config error.
-/// The deprecated `xdna` family still reaches the AMD XDNA NPU, returned as
-/// BackendType::NPU; the cascade never picks it.
+/// Neither the override nor the cascade ever picks the AMD XDNA NPU.
 ///
 /// A @p preferredBackendType of NPU picks the first XDNA device and falls back
 /// to CPU with a warning when there is none. Finetuning on the NPU throws

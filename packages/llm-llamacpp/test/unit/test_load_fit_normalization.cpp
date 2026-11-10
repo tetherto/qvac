@@ -2699,30 +2699,22 @@ TEST_F(LoadFitNormalizationTest, NpuRejectsRpcServers) {
   EXPECT_TRUE(registrations.empty());
 }
 
-// The deprecated spelling still loads on the NPU, with a warning.
-TEST_F(LoadFitNormalizationTest, BackendXdnaWarnsDeprecatedAndRunsOnNpu) {
-  using qvac_lib_inference_addon_cpp::logger::Priority;
+// `backend` takes GPU families only; the NPU is `device: 'npu'`.
+TEST_F(LoadFitNormalizationTest, BackendXdnaIsRejected) {
   auto config = baseConfig();
   config["backend"] = "xdna";
-
-  auto& verbosity = qvac_lib_inference_addon_llama::logging::g_verbosityLevel;
-  const Priority previous = verbosity;
-  verbosity = Priority::WARNING;
-  ::testing::internal::CaptureStdout();
-  const auto result = lfn::normalizeLoadForFit(
-      "/tmp/model.gguf",
-      std::move(config),
-      metadata_,
-      {},
-      backend({.type = backend_selection::NPU, .name = "none"}));
-  const std::string output = ::testing::internal::GetCapturedStdout();
-  verbosity = previous;
-
-  EXPECT_EQ(result.runtimeBackendDevice, 2);
-  EXPECT_THAT(
-      output,
-      ::testing::HasSubstr(
-          "[LlamaModel] backend 'xdna' is deprecated; use device: 'npu'"));
+  try {
+    static_cast<void>(lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::GPU, .name = "none"})));
+    FAIL() << "backend 'xdna' must be rejected";
+  } catch (const qvac_errors::StatusError& error) {
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("unknown backend 'xdna'"));
+    EXPECT_THAT(error.what(), ::testing::HasSubstr("device 'npu'"));
+  }
 }
 
 TEST_F(LoadFitNormalizationTest, MmprojUseGpuOverridesXdnaProjectorDefault) {

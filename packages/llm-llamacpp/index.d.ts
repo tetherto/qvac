@@ -153,7 +153,7 @@ declare namespace LlmLlamacpp {
          * Accepted names: cuda, vulkan, metal, opencl, plus
          * `auto` for no preference. An unrecognised name is rejected; a recognised
          * one with no device present is skipped. Use `device: 'cpu'` to run on CPU.
-         * `xdna` is a deprecated alias of `device: 'npu'`.
+         * Use `device: 'npu'` for the AMD XDNA NPU.
          */
         backend?: string;
         gpu_layers?: NumericLike;

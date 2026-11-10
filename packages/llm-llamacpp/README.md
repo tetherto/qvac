@@ -65,9 +65,7 @@ process can read and write its `/dev/accel` node; otherwise fabric logs that it 
   Select it with `device: "npu"`, which falls back to the CPU with a warning when no NPU is
   listed. `device: "npu"` cannot be combined with `backend`, `devices`, `split-mode`,
   `main-gpu`, `rpc-servers` or finetuning. Runtime stats report `backendDevice: "npu"`.
-- `backend: "xdna"` is a deprecated alias of `device: "npu"`. It still selects the NPU and
-  logs a deprecation warning; without a listed NPU it is skipped like any other absent backend.
-  `devices: "XDNA0"` also selects the NPU explicitly.
+- `devices: "XDNA0"` also selects the NPU explicitly. `backend` takes GPU families only.
 - Fabric lists the NPU without opening it. The first load that uses `XDNA0` opens it and
   registers its kernels, and the process then holds an NPU context. An NPU that fails to open
   stays listed but takes no work: the load runs on the CPU and fabric logs
@@ -216,7 +214,7 @@ const config = {
 | verbosity         | 0 – 3 (0=ERROR, 1=WARNING, 2=INFO, 3=DEBUG) | 0                            | Logging verbosity level                               |
 | image-max-megapixels | positive integer                            | 50                           | Maximum reported image pixel count in millions, checked before decode. Alias: `image_max_megapixels`. |
 | main-gpu          | integer, `"integrated"`, or `"dedicated"`   | —                            | GPU selection for multi-GPU systems                   |
-| backend           | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, or `auto` | N/A | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU. Cannot be combined with `split-mode` or `devices`. `xdna` is a deprecated alias of `device: "npu"` |
+| backend           | comma-separated list of `cuda`, `vulkan`, `metal`, `opencl`, or `auto` | N/A | Overrides which GPU backend is used, in priority order (e.g. `"cuda,vulkan"`). `auto` means no preference. An unrecognised name is rejected; a recognised one with no device present is skipped. Use `device: "cpu"` to run on CPU. Cannot be combined with `split-mode` or `devices`. Use `device: "npu"` for the AMD XDNA NPU |
 | split-mode        | `"none"`, `"layer"`, or `"tensor"` | `"none"`                     | How to split the model across GPUs. `"tensor"` is EXPERIMENTAL and desktop-only; `"row"` is rejected ([details](./docs/multi-gpu.md)) |
 | tensor-split      | comma-separated proportions (e.g. `"1,1"`)  | —                            | GPU split ratios for the multi-GPU split modes ([details](./docs/multi-gpu.md)) |
 | parallel          | integer                                     | 1                            | Concurrent sequence slots for continuous batching. Values `>= 2` enable batch `run()` and split the KV cache uniformly across slots ([details](./docs/continuous-batching.md)) |

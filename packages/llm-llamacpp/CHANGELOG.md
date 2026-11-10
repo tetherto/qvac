@@ -12,10 +12,10 @@
   including `devices: "XDNA0"`
   ([#5701](https://github.com/tetherto/qvac/pull/5701)).
 
-### Deprecated
+### Changed
 
-- `backend: "xdna"`: use `device: "npu"`. It still selects the NPU, now
-  reported as `backendDevice: "npu"`, and logs a deprecation warning
+- `backend` takes GPU families only: `device: "npu"` replaces
+  `backend: "xdna"` from 0.69.0
   ([#5701](https://github.com/tetherto/qvac/pull/5701)).
 
 ## [0.69.0] - 2026-11-09

@@ -1570,12 +1570,6 @@ NormalizedLoad normalizeLoadForFit(
           "device 'npu' cannot be combined with 'split-mode', 'devices', "
           "'backend' or 'main-gpu'.");
     }
-    if (preferredBackend == BackendType::GPU &&
-        std::ranges::find(backendOverride, "xdna") != backendOverride.end()) {
-      QLOG_IF(
-          Priority::WARNING,
-          "[LlamaModel] backend 'xdna' is deprecated; use device: 'npu'\n");
-    }
     // The split and explicit-device paths below do not apply the override, so
     // reject the combination rather than silently run on another backend.
     if (preferredBackend == BackendType::GPU && !backendOverride.empty() &&

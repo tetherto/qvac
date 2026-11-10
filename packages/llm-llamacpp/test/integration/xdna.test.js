@@ -3,9 +3,8 @@
 // AMD XDNA NPU (Linux x64, fabric >= 0.28.0).
 //
 // Two kinds of test:
-//   - Fallback smoke tests that run on every desktop host without an NPU:
-//     `device: 'npu'` finds no device and falls back to the CPU, and the
-//     deprecated `backend: 'xdna'` falls back to the normal backend order.
+//   - A fallback smoke test that runs on every desktop host without an NPU:
+//     `device: 'npu'` finds no device and falls back to the CPU.
 //   - Hardware tests that run only on a host whose accel device is bound to the
 //     amdxdna driver. They also need XRT 2.25 or newer under /opt/xilinx/xrt
 //     and read/write access to the /dev/accel node; without either fabric does
@@ -68,9 +67,6 @@ const PROMPT = [
 
 const CHOSEN_NPU_RE = /Chosen NPU Backend/
 const NO_NPU_RE = /No NPU device found; falling back to CPU/
-const CHOSEN_XDNA_RE = /Chosen xdna Backend \(backend override\)/
-const XDNA_DEPRECATED_RE = /backend 'xdna' is deprecated; use device: 'npu'/
-const OVERRIDE_MISS_RE = /backend override matched no available device/
 // llama.cpp names each weight buffer after its buffer type; the XDNA device's
 // is XDNA_Host.
 const XDNA_BUFFER_RE = /\bXDNA\w*\s+model buffer size\s*=/i
@@ -172,16 +168,14 @@ safeTest(
 )
 
 safeTest(
-  'xdna: deprecated backend override falls back when no NPU is present',
-  { timeout: 900_000, skip: isMobile || hasNpu },
+  'xdna: backend xdna is rejected, the NPU is device npu',
+  { timeout: 900_000, skip: isMobile },
   async (t) => {
-    const result = await loadAndRun(FALLBACK_MODEL, { backend: 'xdna' })
-
-    t.ok(result.output.length > 0, 'fallback run produced output')
-    t.ok(XDNA_DEPRECATED_RE.test(result.logText), 'deprecation was logged')
-    t.ok(OVERRIDE_MISS_RE.test(result.logText), 'override miss was logged')
-    t.absent(CHOSEN_XDNA_RE.test(result.logText), 'XDNA was not chosen')
-    t.absent(XDNA_BUFFER_RE.test(result.logText), 'no weights were placed in an XDNA buffer')
+    await t.exception(
+      loadAndRun(FALLBACK_MODEL, { backend: 'xdna' }),
+      /unknown backend 'xdna'/,
+      'backend takes GPU families only'
+    )
   }
 )
 
@@ -194,21 +188,6 @@ safeTest(
     t.ok(
       CHOSEN_NPU_RE.test(result.logText),
       'NPU chosen through device npu (needs XRT 2.25+ under /opt/xilinx/xrt)'
-    )
-    assertRanOnNpu(t, result)
-  }
-)
-
-safeTest(
-  'xdna: deprecated backend override runs the model on the NPU',
-  { timeout: 900_000, skip: !hasNpu },
-  async (t) => {
-    const result = await loadAndRun(NPU_MODEL, { backend: 'xdna' })
-
-    t.ok(XDNA_DEPRECATED_RE.test(result.logText), 'deprecation was logged')
-    t.ok(
-      CHOSEN_XDNA_RE.test(result.logText),
-      'XDNA chosen through the backend override (needs XRT 2.25+ under /opt/xilinx/xrt)'
     )
     assertRanOnNpu(t, result)
   }
@@ -232,7 +211,6 @@ safeTest(
 
     t.ok(result.output.length > 0, 'default run produced output')
     t.absent(CHOSEN_NPU_RE.test(result.logText), 'the NPU was not chosen by device gpu')
-    t.absent(CHOSEN_XDNA_RE.test(result.logText), 'XDNA was not chosen without an override')
     t.absent(XDNA_BUFFER_RE.test(result.logText), 'no weights were placed in an XDNA buffer')
     t.not(result.backendDevice, 'npu', 'stats do not report the NPU')
   }
