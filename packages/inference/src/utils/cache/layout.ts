@@ -199,9 +199,10 @@ export type ModelCacheLayout = {
 }
 
 /**
- * Where the loader keeps `model`, or `undefined` for a sharded model or a Core
- * ML model whose bundles the catalog lacks: their files can come from the live
- * registry. `shortHash` is generateShortHash, passed in to avoid bare-crypto.
+ * Where the loader keeps `model`, or `undefined` for a sharded model (its
+ * `sharded/` directory is not described here) or a Core ML model whose bundles
+ * the catalog lacks (the loader asks the live registry). `shortHash` is
+ * generateShortHash, passed in to avoid bare-crypto.
  */
 export function getModelCacheLayout(
   model: RegistryItem,

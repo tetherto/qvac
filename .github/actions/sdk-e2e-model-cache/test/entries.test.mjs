@@ -128,8 +128,10 @@ test('a plan from another schema, or writing outside the cache root, is rejected
   const file = (filePath) => ({ ...single, files: [{ path: filePath, size: 1, sha256: sha('x') }] })
   assert.throws(() => validatePlan(plan(file('c/../../etc/x'))), /not inside/)
   assert.throws(() => validatePlan(plan(file('elsewhere/x'))), /not inside/)
+  assert.throws(() => validatePlan(plan(file('c/..\\..\\evil'))), /not inside/)
   assert.throws(() => validatePlan(plan(single, '/abs')), /cacheRoot/)
   assert.throws(() => validatePlan(plan(single, '../c')), /cacheRoot/)
+  assert.throws(() => validatePlan(plan(single, 'c\\..\\..')), /cacheRoot/)
 })
 
 test('drift lists cache items no entry covers, but not dotfiles or shards', () => {

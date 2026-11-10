@@ -30,7 +30,7 @@ test('a single-file model is <shortHash(registryPath)>_<filename>', (t) => {
   })
 })
 
-test('a sharded model has no layout before download', (t) => {
+test('a sharded model has no layout', (t) => {
   const model = { ...catalog[0]!, registryPath: 'x/big-00001-of-00004.gguf' }
   t.is(layoutOf(model, 'linux'), undefined)
 })

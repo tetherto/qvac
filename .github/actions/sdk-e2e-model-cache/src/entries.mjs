@@ -81,12 +81,14 @@ export function validatePlan(plan) {
     throw new Error('not a version 1 model-cache plan')
   }
   const root = plan.cacheRoot
-  if (typeof root !== 'string' || !root || path.isAbsolute(root) || root.includes('..')) {
+  // A `\` would be a separator on Windows, past the `..` check.
+  const unsafe = (value) => value.includes('\\') || value.split('/').includes('..')
+  if (typeof root !== 'string' || !root || path.isAbsolute(root) || unsafe(root)) {
     throw new Error(`cacheRoot must be a workspace-relative path, got ${JSON.stringify(root)}`)
   }
   for (const entry of plan.entries) {
     for (const file of entry.files) {
-      if (!file.path.startsWith(`${root}/`) || file.path.split('/').includes('..')) {
+      if (!file.path.startsWith(`${root}/`) || unsafe(file.path)) {
         throw new Error(`${JSON.stringify(file.path)} is not inside ${root}`)
       }
     }

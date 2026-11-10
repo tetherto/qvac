@@ -350,12 +350,13 @@ jobs:
             npx qvac-test "run:bootstrap:$CONSUMER" --config=.
           fi
 
-      # Trusted events only, never PR code. Also after a failed bootstrap, to keep what downloaded.
+      # Trusted events testing their own commit only. Also after a failed bootstrap.
       - name: Save models cache
         if: >-
           !cancelled() &&
           steps.models-cache.outputs.complete == 'false' &&
-          contains(fromJSON('["push","schedule","workflow_dispatch","merge_group"]'), github.event_name)
+          contains(fromJSON('["push","schedule","workflow_dispatch","merge_group"]'), github.event_name) &&
+          (inputs.test-version == '' || inputs.test-version == github.sha)
         continue-on-error: true
         uses: ./.sdk-e2e-workflow/.github/actions/sdk-e2e-model-cache
         with:
