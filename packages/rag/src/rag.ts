@@ -1,4 +1,5 @@
 import HyperDB from 'hyperdb'
+import { parseRagMetadata } from 'rag-extract/chunk'
 import qvacCrypto from '#crypto'
 
 import dbSpec from './db/hyperspec/hyperdb/index.js'
@@ -316,16 +317,18 @@ export function createRag(options: CreateRagOptions): Rag {
     documents.length = 0
     await withSnapshot(instance, (reader) => findUnchanged(reader, namespace, jobs))
     const queue: Array<{ job: IngestJob; ordinal: number }> = []
-    function enqueue(job: IngestJob): void {
-      job.missing = 0
+    let start = 0
+    // Inserts at `start`: a requeued job blocks every later commit, so it is embedded next.
+    function enqueue(job: IngestJob, at: number): void {
+      const missing: Array<{ job: IngestJob; ordinal: number }> = []
       job.vectors.forEach((vector, ordinal) => {
-        if (vector) return
-        queue.push({ job, ordinal })
-        job.missing++
+        if (!vector) missing.push({ job, ordinal })
       })
+      job.missing = missing.length
+      queue.splice(at, 0, ...missing)
     }
     for (const job of jobs) {
-      if (job.missing > 0) enqueue(job)
+      if (job.missing > 0) enqueue(job, queue.length)
     }
 
     const results: IngestedDocument[] = []
@@ -359,7 +362,7 @@ export function createRag(options: CreateRagOptions): Rag {
         }
         if (!committed) return false
         if (committed === 'changed') {
-          enqueue(job)
+          enqueue(job, start)
           return true
         }
         // A large call would otherwise hold every vector it embedded until it returns.
@@ -376,7 +379,6 @@ export function createRag(options: CreateRagOptions): Rag {
     try {
       cancelled = !(await commitReady())
       // commitReady can requeue a document, so the queue may grow while this runs.
-      let start = 0
       while (!cancelled && start < queue.length) {
         if (signal?.aborted) {
           cancelled = true
@@ -807,19 +809,11 @@ function hashContent(
 }
 
 // rag-extract stamps every chunk with the time it was chunked, which would make
-// the same text a change on every ingest.
+// the same text a change on every ingest. Other metadata is compared as is.
 function comparableMetadata(metadataJson: string | undefined): string | null {
   if (metadataJson === undefined) return null
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(metadataJson)
-  } catch {
-    return metadataJson
-  }
-  if (typeof parsed !== 'object' || parsed === null || !('indexedAt' in parsed)) {
-    return metadataJson
-  }
-  const { indexedAt: _indexedAt, ...rest } = parsed as Record<string, unknown>
+  if (!parseRagMetadata(metadataJson)) return metadataJson
+  const { indexedAt: _indexedAt, ...rest } = JSON.parse(metadataJson) as Record<string, unknown>
   return JSON.stringify(rest)
 }
 

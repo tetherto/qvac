@@ -330,6 +330,32 @@ test('a document found unchanged is rechecked at commit', async (t) => {
   t.is(hits[0].content, 'dog', 'this call wrote its content back')
 })
 
+test('a document that changed before its commit is embedded next', async (t) => {
+  const store = await openStore(t)
+  const { port, pause, paused, release } = pausingPort()
+  const rag = await openWithPort(t, store, port)
+  await rag.ingest({ namespace: 'ns', documents: [{ id: 'a', text: 'cat' }] })
+  const before = port.batches.length
+
+  const later = Array.from({ length: 40 }, (_, i) => ({ id: `doc${i}`, text: `fish ${i}` }))
+  pause()
+  // 'a' waits behind doc0, so it is still uncommitted when the delete lands.
+  const [first, ...rest] = later
+  const pending = rag.ingest({
+    namespace: 'ns',
+    documents: [first, { id: 'a', text: 'cat' }, ...rest]
+  })
+  await paused
+  await rag.deleteDocuments({ namespace: 'ns', documentIds: ['a'] })
+  release()
+
+  const result = await pending
+  t.is(result.documents.length, 41)
+  const batches = port.batches.slice(before)
+  t.is(batches.length, 2)
+  t.is(batches[1][0], 'cat', 'ahead of the documents still waiting')
+})
+
 test('an unchanged result reports the revision a concurrent call reached', async (t) => {
   const store = await openStore(t)
   const { port, pause, paused, release } = pausingPort()
@@ -352,7 +378,8 @@ test("a rag-extract chunk's indexedAt alone is not a change", async (t) => {
   const port = fakePort()
   const rag = await openWithPort(t, store, port)
   function chunk(indexedAt: string, title = 'Guide') {
-    return { id: 'guide:0', content: 'cat', metadataJson: JSON.stringify({ title, indexedAt }) }
+    const metadata = { documentId: 'guide', title, chunkIndex: 0, tokenCount: 1, indexedAt }
+    return { id: 'guide:0', content: 'cat', metadataJson: JSON.stringify(metadata) }
   }
 
   await rag.ingest({ namespace: 'ns', documents: [{ id: 'guide', chunks: [chunk('2026-01-01')] }] })
@@ -367,4 +394,22 @@ test("a rag-extract chunk's indexedAt alone is not a change", async (t) => {
     documents: [{ id: 'guide', chunks: [chunk('2026-02-01', 'Handbook')] }]
   })
   t.is(retitled.documents[0].status, 'replaced', 'any other metadata field is a change')
+})
+
+test('indexedAt in metadata rag-extract did not write is a change', async (t) => {
+  const store = await openStore(t)
+  const port = fakePort()
+  const rag = await openWithPort(t, store, port)
+  function chunk(indexedAt: string) {
+    return { id: 'own:0', content: 'cat', metadataJson: JSON.stringify({ indexedAt, src: 'x' }) }
+  }
+
+  await rag.ingest({ namespace: 'ns', documents: [{ id: 'own', chunks: [chunk('t1')] }] })
+  const result = await rag.ingest({
+    namespace: 'ns',
+    documents: [{ id: 'own', chunks: [chunk('t2')] }]
+  })
+  t.is(result.documents[0].status, 'replaced')
+  const [hit] = await rag.search({ scope: { namespace: 'ns' }, query: 'cat', k: 1 })
+  t.is(hit.metadataJson, JSON.stringify({ indexedAt: 't2', src: 'x' }))
 })
