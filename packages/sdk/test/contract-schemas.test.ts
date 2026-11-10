@@ -42,7 +42,6 @@ test('contract backend config: ordered arrays and addon allow-lists', (t) => {
     for (const name of ['cpu', 'hip', 'rocm', 'sycl']) {
       t.is(validate({ backend: [name] }), modelType === 'GgmlVla')
     }
-    t.is(validate({ backend: ['xdna'] }), modelType === 'LlamacppCompletion')
   }
 })
 
@@ -172,14 +171,15 @@ test('contract completionStream.response: validates streaming event chunks', (t)
   const contract = contractValidate('completionStream.response', statsChunk)
   t.ok(contract.valid, `contract accepts stats + done chunk: ${contract.errors}`)
 
-  const badDevice = {
+  const withDevice = (backendDevice: string) => ({
     type: 'completionStream',
     events: [
-      { type: 'completionStats', seq: 0, stats: { backendDevice: 'npu' } },
+      { type: 'completionStats', seq: 0, stats: { backendDevice } },
       { type: 'completionDone', seq: 1 }
     ]
-  }
-  t.is(contractValidate('completionStream.response', badDevice).valid, false)
+  })
+  t.ok(contractValidate('completionStream.response', withDevice('npu')).valid)
+  t.is(contractValidate('completionStream.response', withDevice('tpu')).valid, false)
 
   const extraKey = {
     type: 'completionStream',

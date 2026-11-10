@@ -43,23 +43,6 @@ describe('configure: param-schemas', () => {
     }
   })
 
-  it('accepts the xdna backend for LLM only', () => {
-    for (const addon of ['llm', 'embeddings', 'vla']) {
-      const schema = configSchemaForAddon(addon)
-      assert.ok(schema)
-      const backend = paramFields(schema).find((field) => field.name === 'backend')
-      assert.ok(backend)
-      assert.equal(validateParam(backend, 'xdna,vulkan') === true, addon === 'llm')
-    }
-    const schema = configSchemaForAddon('llm')
-    assert.ok(schema)
-    const backend = paramFields(schema).find((field) => field.name === 'backend')
-    assert.ok(backend)
-    const parsed = schema.parse({ backend: coerceParam('xdna,vulkan', backend) })
-    assert.ok(parsed && typeof parsed === 'object' && 'backend' in parsed)
-    assert.deepEqual(parsed.backend, ['xdna', 'vulkan'])
-  })
-
   it('exposes the decision device and accepts the generated starter', () => {
     const schema = configSchemaForAddon('llamacpp-decision')
     assert.ok(schema)

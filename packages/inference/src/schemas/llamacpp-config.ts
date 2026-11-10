@@ -20,13 +20,12 @@ const verbositySchema = z.enum(VERBOSITY)
 // Base schema - validates types, all fields optional (for input validation)
 export const llmConfigBaseSchema = z.object({
   backend: z
-    .array(z.enum(['cuda', 'vulkan', 'metal', 'opencl', 'xdna', 'auto']))
+    .array(z.enum(['cuda', 'vulkan', 'metal', 'opencl', 'auto']))
     .min(1)
     .optional()
     .describe(
       "Ordered GPU backend names, such as ['cuda', 'vulkan']. " +
-        'Accepted names: cuda, vulkan, metal, opencl, xdna, and auto for no preference. ' +
-        'xdna is the AMD XDNA2 NPU on Linux x64. It requires XRT 2.25 or newer and is listed only when the process can read and write its /dev/accel node. It is never selected automatically, only when named here or in devices as XDNA0, and a listed NPU that fails to open runs the load on the CPU. ' +
+        'Accepted names: cuda, vulkan, metal, opencl, and auto for no preference. ' +
         'If unset, uses the native default order. ' +
         'If none of the specified names has a corresponding available device, selection falls back to the native default order. ' +
         "Use device: 'cpu' for CPU. " +
@@ -66,7 +65,9 @@ export const llmConfigBaseSchema = z.object({
   device: z
     .string()
     .optional()
-    .describe("Device to run inference on: `'gpu'` or `'cpu'`. Default `'gpu'`."),
+    .describe(
+      "Device class to run inference on: `'gpu'`, `'cpu'` or `'npu'`. Default `'gpu'`. `'npu'` is the AMD XDNA2 NPU on Linux x64, which needs XRT 2.25 or newer and read/write access to its /dev/accel node; GPU selection never picks it. With no NPU listed, `'npu'` falls back to the GPU order, then the CPU. It cannot be combined with backend, devices, split-mode, main-gpu or rpc-servers, and a listed NPU that fails to open runs the load on the CPU."
+    ),
   predict: z
     .union([
       z.literal(-1), // special: until stop token
@@ -199,7 +200,7 @@ export const llmConfigBaseSchema = z.object({
     .min(1)
     .optional()
     .describe(
-      "Explicit ordered native device names, for example RPC0,RPC1, or XDNA0 for the AMD XDNA NPU; naming XDNA0 without a listed NPU fails the load. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order."
+      "Explicit ordered native device names, for example RPC0,RPC1, or XDNA0 for the AMD XDNA NPU alone, which reports `backendDevice` `'npu'`; naming XDNA0 without a listed NPU fails the load. RPC indices enumerate every device in this load's rpc-servers endpoint order, starting at RPC0 for each load. Pass exactly those endpoints in that order to getRpcDeviceMap, including on reused workers. tensor-split weights follow the selected devices order."
     ),
   'split-mode': z
     .enum(['none', 'layer', 'tensor'])

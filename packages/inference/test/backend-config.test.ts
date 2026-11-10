@@ -48,38 +48,21 @@ test('LLM and embedding backend names match their addon allow-list', (t) => {
       t.is(schema.safeParse({ backend: [backend] }).success, false)
     }
   }
-  const xdna = llmConfigSchema.safeParse({ backend: ['xdna'] })
-  t.ok(xdna.success)
-  t.alike(xdna.data?.backend, ['xdna'])
-  t.is(llmConfigSchema.safeParse({ backend: ['XDNA'] }).success, false)
-  t.is(embedConfigSchema.safeParse({ backend: ['xdna'] }).success, false)
+  for (const schema of [llmConfigSchema, embedConfigSchema]) {
+    t.is(schema.safeParse({ backend: ['xdna'] }).success, false)
+  }
 })
 
-test('LLM xdna backend survives public options, wire requests, and the transform', (t) => {
+test('LLM device npu survives public options, wire requests, and the transform', (t) => {
   const modelType = ModelType.llamacppCompletion
-  for (const backend of [['xdna'], ['xdna', 'vulkan']]) {
-    const input = { modelType, modelSrc: 'model.gguf', modelConfig: { backend } }
-    const options = loadModelOptionsToRequestSchema.parse(input)
-    t.alike((options.modelConfig as { backend?: string[] }).backend, backend)
-    const wire = loadModelSrcRequestSchema.parse({ ...input, type: 'loadModel' })
-    t.alike((wire.modelConfig as { backend?: string[] }).backend, backend)
-    const defaults = deviceConfigDefaultsSchema.parse({ [modelType]: { backend } })
-    t.alike(defaults[modelType]?.['backend'], backend)
-    t.is(transformLlmConfig(llmConfigSchema.parse({ backend }))['backend'], backend.join(', '))
-  }
-  for (const modelType of [
-    ModelType.llamacppEmbedding,
-    ModelType.llamacppRerank,
-    ModelType.ggmlVla
-  ]) {
-    const input = { modelType, modelSrc: 'model.gguf', modelConfig: { backend: ['xdna'] } }
-    t.is(loadModelOptionsToRequestSchema.safeParse(input).success, false)
-    t.is(loadModelSrcRequestSchema.safeParse({ ...input, type: 'loadModel' }).success, false)
-    t.is(
-      deviceConfigDefaultsSchema.safeParse({ [modelType]: { backend: ['xdna'] } }).success,
-      false
-    )
-  }
+  const input = { modelType, modelSrc: 'model.gguf', modelConfig: { device: 'npu' } }
+  const options = loadModelOptionsToRequestSchema.parse(input)
+  t.is((options.modelConfig as { device?: string }).device, 'npu')
+  const wire = loadModelSrcRequestSchema.parse({ ...input, type: 'loadModel' })
+  t.is((wire.modelConfig as { device?: string }).device, 'npu')
+  const defaults = deviceConfigDefaultsSchema.parse({ [modelType]: { device: 'npu' } })
+  t.is(defaults[modelType]?.['device'], 'npu')
+  t.is(transformLlmConfig(llmConfigSchema.parse({ device: 'npu' }))['device'], 'npu')
 })
 
 test('LLM and embedding transforms join backend arrays without adding defaults', (t) => {
