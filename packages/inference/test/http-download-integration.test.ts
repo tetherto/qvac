@@ -3,6 +3,7 @@ import http from 'bare-http1'
 import fs from 'bare-fs'
 import Buffer from 'bare-buffer'
 import { downloadModelFromHttp, isResumableTransferError } from '@/handlers/load-model/http'
+import { partialDownloadPath } from '@/handlers/load-model/download-lock'
 import {
   ChecksumUnavailableError,
   ChecksumValidationFailedError,
@@ -98,15 +99,43 @@ test('downloadModelFromHttp: resumes a partial download via a Range/206 request'
   const url = `${server.base}/range-model.gguf`
   const modelPath = await downloadModelFromHttp(url)
 
-  // Truncate the cached file to a partial, then re-download: the size mismatch
-  // forces a Range request the server answers with 206, appending the remainder.
-  fs.writeFileSync(modelPath, CONTENT.subarray(0, CONTENT.length / 2))
+  // Leave half the file as an interrupted download's partial, then re-download:
+  // the partial forces a Range request the server answers with 206, appending
+  // the remainder before the file is moved into place.
+  fs.rmSync(modelPath)
+  fs.writeFileSync(partialDownloadPath(modelPath), CONTENT.subarray(0, CONTENT.length / 2))
   const resumedPath = await downloadModelFromHttp(url)
 
   t.ok(server.served206(), 'server answered a Range request with 206')
   t.ok(
     bytesEqual(fs.readFileSync(resumedPath) as Buffer, CONTENT),
     'resumed file is complete and correct'
+  )
+  t.absent(fs.existsSync(partialDownloadPath(modelPath)), 'the partial file was moved into place')
+})
+
+test('downloadModelFromHttp: replaces an incomplete file at the model path instead of appending', async (t) => {
+  const cacheDir = useTestCacheDir()
+  fs.rmSync(cacheDir, { recursive: true, force: true })
+  const server = await startServer()
+  t.teardown(async () => {
+    await server.close()
+    fs.rmSync(cacheDir, { recursive: true, force: true })
+  })
+
+  const url = `${server.base}/in-place-model.gguf`
+  const modelPath = await downloadModelFromHttp(url)
+
+  // An older SDK wrote downloads in place, so a half file at the model path may
+  // be another process's download in progress. Appending to it is what
+  // corrupted shared caches; a fresh download replaces it instead.
+  fs.writeFileSync(modelPath, CONTENT.subarray(0, CONTENT.length / 2))
+  const replacedPath = await downloadModelFromHttp(url)
+
+  t.absent(server.served206(), 'no Range request was made against the in-place file')
+  t.ok(
+    bytesEqual(fs.readFileSync(replacedPath) as Buffer, CONTENT),
+    'the model path now holds the complete file'
   )
 })
 

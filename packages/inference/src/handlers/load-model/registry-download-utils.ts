@@ -10,6 +10,7 @@ import { buildRegistryClientOptions } from '@/handlers/load-model/registry-clien
 import { ChecksumValidationFailedError, DownloadCancelledError } from '@/errors/index'
 import { getEngineLogger } from '@/logging/index'
 import type { DownloadHooks } from '@/handlers/load-model/types'
+import { partialDownloadPath, publishDownload } from '@/handlers/load-model/download-lock'
 
 const logger = getEngineLogger()
 
@@ -39,6 +40,10 @@ export function buildBlobBinding(meta: {
 
 /**
  * Validate a cached file against expected size and checksum.
+ *
+ * Never deletes: a mismatched file may be another process's download in
+ * progress (from an SDK version that writes in place). A fresh download
+ * replaces it through `publishDownload`.
  */
 export async function validateCachedFile(
   modelPath: string,
@@ -69,14 +74,12 @@ export async function validateCachedFile(
     }
 
     logger.warn(
-      `🗑️ Removing incomplete cached file (expected ${expectedSize}, got ${localSize}): ${modelPath}`
+      `📥 Cached file is incomplete (expected ${expectedSize}, got ${localSize}); downloading: ${modelPath}`
     )
-    await fsPromises.unlink(modelPath)
     return null
   } catch (error) {
     if (error instanceof ChecksumValidationFailedError) {
-      logger.warn(`🗑️ Removing corrupted cached file: ${modelPath}`)
-      await fsPromises.unlink(modelPath).catch(() => {})
+      logger.warn(`📥 Cached file failed checksum validation; downloading: ${modelPath}`)
     }
     return null
   }
@@ -86,6 +89,9 @@ export async function validateCachedFile(
  * Download a single file from the registry to filesystem.
  * When blobBinding is provided, uses direct blob download (skips metadata sync).
  * Otherwise falls back to metadata-based downloadModel.
+ *
+ * The file is written to its partial path and moved to `modelPath` only after
+ * the size and checksum checks pass. Callers hold the download lock.
  */
 export async function downloadSingleFileFromRegistry(
   registryPath: string,
@@ -123,9 +129,10 @@ export async function downloadSingleFileFromRegistry(
       }
     : undefined
 
+  const partialPath = partialDownloadPath(modelPath)
   const clientOptions = buildRegistryClientOptions({
     config: getConfig(),
-    outputFile: modelPath,
+    outputFile: partialPath,
     onProgress,
     signal,
     shouldClearCache
@@ -139,26 +146,27 @@ export async function downloadSingleFileFromRegistry(
     await client.downloadModel(registryPath, registrySource, clientOptions)
   }
 
-  logger.info(`✅ Downloaded to ${modelPath}`)
-
-  const stats = await fsPromises.stat(modelPath)
+  const stats = await fsPromises.stat(partialPath)
   if (expectedSize && stats.size !== expectedSize) {
-    await fsPromises.unlink(modelPath).catch(() => {})
+    await fsPromises.unlink(partialPath).catch(() => {})
     throw new ChecksumValidationFailedError(
       `${modelFileName}. File size mismatch: expected ${expectedSize}, got ${stats.size}`
     )
   }
 
   if (expectedChecksum && expectedChecksum.length === 64) {
-    const checksum = await measureChecksum(modelPath, hooks)
+    const checksum = await measureChecksum(partialPath, hooks)
     if (checksum !== expectedChecksum) {
-      await fsPromises.unlink(modelPath)
+      await fsPromises.unlink(partialPath).catch(() => {})
       throw new ChecksumValidationFailedError(
         `${modelFileName}. Expected: ${expectedChecksum}. Actual: ${checksum}`
       )
     }
     logger.info(`✅ Checksum validated for ${modelFileName}`)
   }
+
+  await publishDownload(modelPath)
+  logger.info(`✅ Downloaded to ${modelPath}`)
 
   if (progressCallback) {
     progressCallback({

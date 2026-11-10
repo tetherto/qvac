@@ -33,6 +33,11 @@ import {
   applyJoinedDownloadStats
 } from '@/handlers/load-model/download-manager'
 import {
+  acquireDownloadLock,
+  partialDownloadPath,
+  publishDownload
+} from '@/handlers/load-model/download-lock'
+import {
   ChecksumUnavailableError,
   ChecksumValidationFailedError,
   DownloadCancelledError,
@@ -93,6 +98,11 @@ function extractFilenameFromUrl(url: string): string {
 // cache entry from before this shipped, or one written down the warn-and-proceed
 // path, is served as-is: tightening requireHttpChecksum does not retroactively
 // verify the cache — clear it to force a fresh, verified download.
+//
+// Downloads land at the model path only once complete (see `publishDownload`),
+// so the offline header check never sees another download's partial. A file an
+// older SDK left at the model path is not deleted here; a fresh download
+// replaces it.
 async function validateCachedFile(
   modelPath: string,
   url: string,
@@ -506,6 +516,34 @@ async function performHttpDownloadWithResume(
   }
 }
 
+/**
+ * Download `url` to the partial path for `finalPath`, resuming any partial left
+ * by an earlier attempt, verify it, then move it into place. Callers hold the
+ * download lock, so the partial belongs to this process.
+ */
+async function downloadVerifyAndPublish(
+  url: string,
+  finalPath: string,
+  downloadKey: string,
+  requireSecureTransport: boolean,
+  requireChecksum: boolean,
+  progressCallback: ((progress: ModelProgressUpdate) => void) | undefined,
+  signal: AbortSignal,
+  hooks?: DownloadHooks
+): Promise<void> {
+  const partialPath = partialDownloadPath(finalPath)
+  const meta = await performHttpDownloadWithResume(
+    url,
+    partialPath,
+    downloadKey,
+    requireSecureTransport,
+    progressCallback,
+    signal
+  )
+  await verifyHttpModelFile(url, partialPath, meta.hubSha256, requireChecksum, hooks)
+  await publishDownload(finalPath)
+}
+
 export async function downloadModelFromHttp(
   url: string,
   progressCallback?: (progress: ModelProgressUpdate) => void,
@@ -534,6 +572,7 @@ export async function downloadModelFromHttp(
   const result = startOrJoinDownload(
     downloadKey,
     async (ctx) => {
+      await using _downloadLock = await acquireDownloadLock(downloadKey, ctx.signal)
       try {
         // Check if already cached
         const cached = await validateCachedFile(modelPath, url, requireSecureTransport, ctx.signal)
@@ -561,16 +600,16 @@ export async function downloadModelFromHttp(
         // Download the file
         hooks?.markCacheMiss?.()
         ctx.setCacheHit(false)
-        const meta = await performHttpDownloadWithResume(
+        await downloadVerifyAndPublish(
           url,
           modelPath,
           downloadKey,
           requireSecureTransport,
+          requireChecksum,
           ctx.broadcastProgress,
-          ctx.signal
+          ctx.signal,
+          hooks
         )
-
-        await verifyHttpModelFile(url, modelPath, meta.hubSha256, requireChecksum, hooks)
 
         try {
           const stats = await fsPromises.stat(modelPath)
@@ -599,12 +638,13 @@ export async function downloadModelFromHttp(
         if (error instanceof DownloadCancelledError) {
           if (ctx.shouldClearCache()) {
             logger.info('🗑️ Clearing cache - deleting partial file')
+            const partialPath = partialDownloadPath(modelPath)
             try {
-              await fsPromises.unlink(modelPath)
-              logger.info(`✅ Deleted partial file: ${modelPath}`)
+              await fsPromises.unlink(partialPath)
+              logger.info(`✅ Deleted partial file: ${partialPath}`)
             } catch (error) {
               logger.debug('Failed to delete partial file during cleanup', {
-                path: modelPath,
+                path: partialPath,
                 error
               })
             }
@@ -645,6 +685,7 @@ async function downloadShardedModelFromHttp(
   const result = startOrJoinDownload(
     downloadKey,
     async (ctx) => {
+      await using _downloadLock = await acquireDownloadLock(downloadKey, ctx.signal)
       try {
         const shardStates: ShardDownloadState[] = await Promise.all(
           shardInfos.map(async (shard, index) => {
@@ -790,6 +831,7 @@ async function downloadShardedModelFromArchive(
   const result = startOrJoinDownload(
     downloadKey,
     async (ctx) => {
+      await using _downloadLock = await acquireDownloadLock(downloadKey, ctx.signal)
       try {
         await fsPromises.mkdir(extractDir, { recursive: true })
 
@@ -877,18 +919,18 @@ async function downloadShardedModelFromArchive(
       }
 
       async function downloadAndExtractArchive() {
-        const meta = await performHttpDownloadWithResume(
+        // Verify the downloaded archive before extraction so tampered bytes
+        // never reach the extractor.
+        await downloadVerifyAndPublish(
           archiveUrl,
           archivePath,
           downloadKey,
           requireSecureTransport,
+          requireChecksum,
           ctx.broadcastProgress,
-          ctx.signal
+          ctx.signal,
+          hooks
         )
-
-        // Verify the downloaded archive before extraction so tampered bytes
-        // never reach the extractor.
-        await verifyHttpModelFile(archiveUrl, archivePath, meta.hubSha256, requireChecksum, hooks)
 
         logger.info(`✅ Archive downloaded, extracting to: ${extractDir}`)
 
@@ -944,11 +986,12 @@ async function downloadShardsWithConcurrency(
       const downloadPromise = (async () => {
         logger.info(`📥 Downloading shard ${state.index + 1}: ${state.shard.filename}`)
 
-        const meta = await performHttpDownloadWithResume(
+        await downloadVerifyAndPublish(
           state.shard.url,
           state.shardPath,
           downloadKey,
           requireSecureTransport,
+          requireChecksum,
           (progress) => {
             state.downloadedBytes = progress.downloaded
 
@@ -972,14 +1015,7 @@ async function downloadShardsWithConcurrency(
               })
             }
           },
-          signal
-        )
-
-        await verifyHttpModelFile(
-          state.shard.url,
-          state.shardPath,
-          meta.hubSha256,
-          requireChecksum,
+          signal,
           hooks
         )
 
