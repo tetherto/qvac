@@ -241,7 +241,6 @@ test('RPC inventory timeout and cancellation close stalled queries', async (t) =
   t.alike(logs.warnings, [], 'unreachable peers are not reported as protocol mismatches')
 })
 
-
 test('RPC inventory warns for short and oversized HELLO frames before parsing inventory', async (t) => {
   for (const length of [0, 2, 27, 29, 65536]) {
     for (const splitAt of [[], [3, 8], [3, 10]]) {
