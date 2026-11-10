@@ -353,6 +353,24 @@ export const parakeetTranscribePsyEuCorruptedWav = createParakeetTest(
   60000
 )
 
+// A German clip on the automatic route: the gate has to pick the non-English
+// adapters, which is what the full model adds over EU-sub. The fixture is a
+// native speaker reading "Deutschland ist ein bundesstaatlich verfasstes Land
+// in Mitteleuropa, das aus den 16 deutschen Ländern gebildet wird." (Wikimedia
+// Commons, File:DE-Deutschland-sentence-Labtec-AM-232-external-mic.flac by
+// MartinThoma, CC0; resampled to 16 kHz mono); any one of its distinctive
+// words in the transcript shows the adapters decoded German.
+export const parakeetTranscribePsyEuDeWav = createParakeetTest(
+  'parakeet-transcribepsy-eu-de-wav',
+  'parakeet-transcribepsy-eu',
+  'transcription-short-de.wav',
+  {
+    validation: 'contains-any',
+    contains: ['deutschland', 'mitteleuropa', 'bundesstaatlich', 'ländern', 'land']
+  },
+  120000
+)
+
 // `language: "en"` skips the gate and decodes on the English trunk; the
 // resource loads the same GGUF with that route pinned.
 export const parakeetTranscribePsyEuEnWav = createParakeetTest(
@@ -463,6 +481,7 @@ export const parakeetTranscribePsyEuTests = [
   parakeetTranscribePsyEuMp3,
   parakeetTranscribePsyEuSilence,
   parakeetTranscribePsyEuCorruptedWav,
+  parakeetTranscribePsyEuDeWav,
   parakeetTranscribePsyEuEnWav
 ]
 
