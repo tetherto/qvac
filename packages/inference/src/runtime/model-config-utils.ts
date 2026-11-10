@@ -79,7 +79,8 @@ export const BUILTIN_DEVICE_PATTERNS: DevicePattern[] = [
     },
     defaults: {
       [ModelType.llamacppCompletion]: { device: 'cpu' },
-      [ModelType.llamacppEmbedding]: { device: 'cpu' }
+      [ModelType.llamacppEmbedding]: { device: 'cpu' },
+      [ModelType.llamacppRerank]: { device: 'cpu' }
     }
   }
 ]
