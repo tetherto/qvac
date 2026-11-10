@@ -99,6 +99,138 @@ TEST(SpeculativeConfigTest, ParsesDraftDflashWithItsDraftModel) {
   EXPECT_TRUE(config.empty());
 }
 
+TEST(SpeculativeConfigTest, ParsesDraftDsparkWithItsDraftModel) {
+  const std::string draftPath = absoluteModelPath("dspark.gguf");
+  ConfigMap config{
+      {"spec-type", "draft-dspark"},
+      {"spec_draft_model", draftPath},
+      {"spec-draft-n-max", "9"},
+      {"spec-draft-p-min", "0.5"}};
+  const SpeculativeConfig parsed = parseSpeculativeConfig(config);
+  EXPECT_TRUE(parsed.enabled());
+  EXPECT_EQ(parsed.type, COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK);
+  EXPECT_EQ(parsed.draftModelPath, draftPath);
+  EXPECT_EQ(parsed.draftNMax, 9);
+  ASSERT_TRUE(parsed.draftPMin.has_value());
+  EXPECT_FLOAT_EQ(*parsed.draftPMin, 0.5F);
+  EXPECT_TRUE(config.empty());
+}
+
+TEST(SpeculativeConfigTest, DsparkNeedsAnAbsoluteDraftModel) {
+  EXPECT_THROW(parse({{"spec-type", "draft-dspark"}}), std::invalid_argument);
+  EXPECT_THROW(
+      parse(
+          {{"spec-type", "draft-dspark"}, {"spec-draft-model", "dspark.gguf"}}),
+      std::invalid_argument);
+  EXPECT_THROW(
+      parse({{"spec-type", "draft-dspark"}, {"spec_draft_model", ""}}),
+      std::invalid_argument);
+}
+
+TEST(SpeculativeConfigTest, UnknownTypeNamesEveryAcceptedType) {
+  try {
+    parse({{"spec-type", "draft-eagle3"}});
+    FAIL() << "draft-eagle3 was accepted";
+  } catch (const std::invalid_argument& e) {
+    EXPECT_NE(
+        std::string(e.what()).find(
+            R"("none", "draft-mtp", "draft-dflash" or "draft-dspark")"),
+        std::string::npos)
+        << e.what();
+  }
+}
+
+TEST(SpeculativeConfigTest, ADsparkDrafterMustBeADsparkModel) {
+  GgufShape dspark{.arch = "dflash", .markovHead = true};
+  EXPECT_EQ(dsparkDrafterMismatch(dspark, 0.0F), "");
+  EXPECT_EQ(dsparkDrafterMismatch(dspark, 0.5F), "");
+
+  // A plain DFlash model would run with DSpark's block layout.
+  const GgufShape dflash{.arch = "dflash"};
+  EXPECT_EQ(
+      dsparkDrafterMismatch(dflash, 0.0F),
+      "it has no DSpark Markov head (markov_w1); a DFlash drafter takes "
+      "spec-type \"draft-dflash\"");
+
+  const GgufShape other{.arch = "qwen3", .markovHead = true};
+  EXPECT_EQ(
+      dsparkDrafterMismatch(other, 0.0F),
+      "it is a qwen3 model, not a DSpark drafter");
+
+  // Confidence truncation needs the confidence head; without truncation the
+  // model drafts fine.
+  dspark.confidenceHead = false;
+  EXPECT_EQ(dsparkDrafterMismatch(dspark, 0.0F), "");
+  EXPECT_EQ(
+      dsparkDrafterMismatch(dspark, 0.5F),
+      "it has no confidence head, which spec-draft-p-min needs; set "
+      "spec-draft-p-min to 0");
+
+  // An unreadable header is left to the load to report.
+  EXPECT_EQ(dsparkDrafterMismatch(GgufShape{}, 0.5F), "");
+}
+
+TEST(SpeculativeConfigTest, ADsparkDrafterIsReadFromItsHeader) {
+  const auto write = [](const char* name, bool markov, const char* confidence) {
+    gguf_context* ctx = gguf_init_empty();
+    gguf_set_val_str(ctx, "general.architecture", "dflash");
+    if (confidence != nullptr) {
+      gguf_set_val_str(ctx, "dflash.has_confidence_head", confidence);
+    }
+    ggml_init_params init{
+        .mem_size = ggml_tensor_overhead(),
+        .mem_buffer = nullptr,
+        .no_alloc = true};
+    ggml_context* meta = ggml_init(init);
+    if (markov) {
+      ggml_tensor* tensor = ggml_new_tensor_1d(meta, GGML_TYPE_F32, 4);
+      ggml_set_name(tensor, "markov_w1.weight");
+      gguf_add_tensor(ctx, tensor);
+    }
+    const std::string path = absoluteModelPath(name);
+    EXPECT_TRUE(gguf_write_to_file(ctx, path.c_str(), true)) << path;
+    gguf_free(ctx);
+    ggml_free(meta);
+    return path;
+  };
+
+  const std::string dspark = write("dspark-head.gguf", true, nullptr);
+  const GgufShape dsparkShape = readGgufShape(dspark);
+  EXPECT_EQ(dsparkShape.arch, "dflash");
+  EXPECT_TRUE(dsparkShape.markovHead);
+  // Absent, fabric takes the confidence head as present.
+  EXPECT_TRUE(dsparkShape.confidenceHead);
+
+  const std::string noConfidence =
+      write("dspark-no-confidence.gguf", true, "false");
+  EXPECT_FALSE(readGgufShape(noConfidence).confidenceHead);
+
+  const std::string dflash = write("dflash-head.gguf", false, nullptr);
+  EXPECT_FALSE(readGgufShape(dflash).markovHead);
+
+  // The load and the fit read the drafter the params load.
+  common_params params;
+  applySpeculativeConfig(
+      SpeculativeConfig{
+          .type = COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK,
+          .draftModelPath = dflash},
+      params);
+  EXPECT_NE(draftModelMismatch(params.speculative), "");
+  params.speculative.draft.mparams.path = dspark;
+  EXPECT_EQ(draftModelMismatch(params.speculative), "");
+  params.speculative.draft.mparams.path = noConfidence;
+  EXPECT_EQ(draftModelMismatch(params.speculative), "");
+  params.speculative.draft.p_min = 0.25F;
+  EXPECT_NE(draftModelMismatch(params.speculative), "");
+  // Only draft-dspark is judged.
+  params.speculative.types = {COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH};
+  EXPECT_EQ(draftModelMismatch(params.speculative), "");
+
+  std::filesystem::remove(dspark);
+  std::filesystem::remove(noConfidence);
+  std::filesystem::remove(dflash);
+}
+
 TEST(SpeculativeConfigTest, ParsesDraftMtpWithAnExternalHead) {
   const std::string headPath = absoluteModelPath("mtp-head.gguf");
   ConfigMap config{{"spec-type", "draft-mtp"}, {"spec_draft_model", headPath}};
@@ -409,6 +541,27 @@ TEST(SpeculativeConfigTest, FitCountsTheDflashModelOnItsOwn) {
   EXPECT_NE(extra->cparams->ctx_type, LLAMA_CONTEXT_TYPE_MTP);
   EXPECT_FALSE(fit->isMtp());
   EXPECT_EQ(extra->cparams->n_rs_seq, 0u);
+}
+
+TEST(SpeculativeConfigTest, FitCountsTheDsparkModelOnItsOwn) {
+  common_params params;
+  params.model.path = "/models/target.gguf";
+  params.n_gpu_layers = 12;
+  applySpeculativeConfig(
+      SpeculativeConfig{
+          .type = COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK,
+          .draftModelPath = "/models/dspark.gguf"},
+      params);
+  EXPECT_EQ(params.speculative.types[0], COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK);
+  // Placed like the target, as llama-server's -md.
+  EXPECT_EQ(params.speculative.draft.mparams.path, "/models/dspark.gguf");
+  EXPECT_EQ(params.speculative.draft.n_gpu_layers, 12);
+  const auto fit = SpeculativeFitModel::create(params);
+  ASSERT_NE(fit, nullptr);
+  const common_fit_extra_model* extra = fit->extra();
+  EXPECT_FALSE(extra->shares_model);
+  EXPECT_STREQ(extra->path_model, "/models/dspark.gguf");
+  EXPECT_FALSE(fit->isMtp());
 }
 
 TEST(SpeculativeConfigTest, FitCountsAnExternalMtpHeadOnItsOwn) {

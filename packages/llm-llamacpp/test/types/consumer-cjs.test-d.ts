@@ -100,6 +100,18 @@ void flashAttnUnderscore;
 const badFlashAttn: LlmLlamacpp.LlamaConfig = { device: "gpu", "flash-attn": "yes" };
 void badFlashAttn;
 
+// DSpark drafts with the model given as spec_draft_model.
+const dsparkConfig: LlmLlamacpp.LlamaConfig = {
+  device: "gpu",
+  spec_type: "draft-dspark",
+  spec_draft_model: "/models/dspark.gguf",
+};
+void dsparkConfig;
+
+// @ts-expect-error - not a speculative type the addon accepts
+const badSpecType: LlmLlamacpp.LlamaConfig = { device: "gpu", spec_type: "draft-eagle3" };
+void badSpecType;
+
 const generationParams: LlmLlamacpp.GenerationParams = {
   temp: 0.7,
   json_schema: { type: "object" },

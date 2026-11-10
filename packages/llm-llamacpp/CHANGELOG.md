@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- DSpark speculative decoding: `spec-type: 'draft-dspark'` with
+  `spec-draft-model`, as llama-server's `--spec-type draft-dspark -md
+  <model>`. A DSpark model is a DFlash model with a Markov head and a
+  confidence head; it drafts up to its block size per step, and
+  `spec-draft-p-min` is the confidence threshold that ends a draft. It is
+  loaded, placed, fitted and run like a DFlash model, on single prompts,
+  multimodal prompts, continuous batching and `cacheKey` conversations. The
+  load fails, and `assessFit` rejects, a `draft-dspark` drafter that is not a
+  DSpark model, or `spec-draft-p-min` above 0 with one that has no confidence
+  head. A DSpark model given to `draft-dflash` loads with a warning. Fabric
+  already ships DSpark in `qvac-fabric` `11739.1.1`, so no dependency changes.
+
 ## [0.69.0] - 2026-11-09
 
 ### Added

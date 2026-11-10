@@ -231,6 +231,21 @@ test(
   }
 )
 
+test(
+  'a draft-dspark drafter that is not a DSpark model rejects',
+  { timeout: 600_000, skip: isMobile },
+  async (t) => {
+    await t.exception(
+      assess(await localModel(MTP_MODEL), {
+        'spec-type': 'draft-dspark',
+        'spec-draft-model': await localModel(NO_MTP_MODEL)
+      }),
+      /not a DSpark drafter/,
+      'the load fails the same way'
+    )
+  }
+)
+
 test('draft-mtp on a model without MTP layers rejects', { timeout: 600_000 }, async (t) => {
   // Qwen3 has no MTP layers, so the load cannot create the MTP context.
   await t.exception(

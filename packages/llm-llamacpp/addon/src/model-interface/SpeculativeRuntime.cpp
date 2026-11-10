@@ -42,6 +42,10 @@ float parseProbability(const std::string& raw, const std::string& option) {
   return value;
 }
 
+// The types `spec-draft-model` and the `spec-draft-*` options apply to.
+constexpr const char* SPEC_TYPES_WITH_DRAFT =
+    "\"draft-mtp\", \"draft-dflash\" or \"draft-dspark\"";
+
 bool hasType(
     const common_params_speculative& params, common_speculative_type type) {
   for (const auto candidate : params.types) {
@@ -62,7 +66,7 @@ int64_t readGgufU32(const gguf_context* ctx, const std::string& key) {
 }
 
 // The speculative types the addon creates a draft context for: MTP, on the
-// target's layers or an external head, or a DFlash model.
+// target's layers or an external head, or a DFlash or DSpark model.
 bool hasDraftContext(const common_params_speculative& params) {
   return hasType(params, COMMON_SPECULATIVE_TYPE_DRAFT_MTP) || params.has_dft();
 }
@@ -114,7 +118,18 @@ GgufShape readGgufShape(const std::string& path) {
       shape.width = readGgufU32(ctx, prefix + ".embedding_length");
     }
     shape.mtpLayers = readGgufU32(ctx, prefix + ".nextn_predict_layers");
+    // As fabric's `llama_model_meta_val_str` check: absent, or "true".
+    const int64_t confidence =
+        gguf_find_key(ctx, (prefix + ".has_confidence_head").c_str());
+    if (confidence >= 0) {
+      const auto type = gguf_get_kv_type(ctx, confidence);
+      shape.confidenceHead =
+          (type == GGUF_TYPE_BOOL && gguf_get_val_bool(ctx, confidence)) ||
+          (type == GGUF_TYPE_STRING &&
+           std::string(gguf_get_val_str(ctx, confidence)) == "true");
+    }
   }
+  shape.markovHead = gguf_find_tensor(ctx, "markov_w1.weight") >= 0;
   const int64_t tokens = gguf_find_key(ctx, "tokenizer.ggml.tokens");
   if (tokens >= 0 && gguf_get_kv_type(ctx, tokens) == GGUF_TYPE_ARRAY) {
     shape.vocab = static_cast<int64_t>(gguf_get_arr_n(ctx, tokens));
@@ -132,21 +147,23 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config) {
       result.type = COMMON_SPECULATIVE_TYPE_DRAFT_MTP;
     } else if (type->second == "draft-dflash") {
       result.type = COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH;
+    } else if (type->second == "draft-dspark") {
+      result.type = COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK;
     } else if (type->second != "none") {
       throw std::invalid_argument(
           type->first +
-          " must be \"none\", \"draft-mtp\" or \"draft-dflash\", got: \"" +
+          " must be \"none\", \"draft-mtp\", \"draft-dflash\" or "
+          "\"draft-dspark\", got: \"" +
           type->second + "\"");
     }
   }
   if (const auto draftModel = takeConfigKey(
           config, SPEC_DRAFT_MODEL_KEY, SPEC_DRAFT_MODEL_KEY_DASHED)) {
-    // A DFlash model, or an external MTP head (llama-server's
+    // A DFlash or DSpark model, or an external MTP head (llama-server's
     // `--spec-type draft-mtp -md`).
     if (!result.enabled()) {
       throw std::invalid_argument(
-          draftModel->first +
-          " requires spec-type \"draft-mtp\" or \"draft-dflash\"");
+          draftModel->first + " requires spec-type " + SPEC_TYPES_WITH_DRAFT);
     }
     const std::string& path = draftModel->second;
     const auto isSeparator = [](char c) { return c == '/' || c == '\\'; };
@@ -160,10 +177,15 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config) {
     }
     result.draftModelPath = path;
   }
-  if (result.type == COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH &&
-      result.draftModelPath.empty()) {
-    throw std::invalid_argument(
-        "spec-type \"draft-dflash\" requires spec-draft-model");
+  if (result.draftModelPath.empty()) {
+    if (result.type == COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH) {
+      throw std::invalid_argument(
+          "spec-type \"draft-dflash\" requires spec-draft-model");
+    }
+    if (result.type == COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK) {
+      throw std::invalid_argument(
+          "spec-type \"draft-dspark\" requires spec-draft-model");
+    }
   }
   const common_params_speculative_draft defaults;
   if (const auto nMax = takeConfigKey(
@@ -185,8 +207,8 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config) {
                               result.draftPMin.has_value();
   if (hasDraftOption && !result.enabled()) {
     throw std::invalid_argument(
-        "spec-draft-* options require spec-type \"draft-mtp\" or "
-        "\"draft-dflash\"");
+        std::string("spec-draft-* options require spec-type ") +
+        SPEC_TYPES_WITH_DRAFT);
   }
   const int32_t nMax = result.draftNMax.value_or(defaults.n_max);
   if (result.draftNMin.value_or(defaults.n_min) > nMax) {
@@ -225,6 +247,33 @@ std::string mtpHeadMismatch(
   return reason;
 }
 
+std::string dsparkDrafterMismatch(const GgufShape& drafter, float pMin) {
+  if (drafter.arch.empty()) {
+    return "";
+  }
+  if (drafter.arch != "dflash") {
+    return "it is a " + drafter.arch + " model, not a DSpark drafter";
+  }
+  if (!drafter.markovHead) {
+    return "it has no DSpark Markov head (markov_w1); a DFlash drafter takes "
+           "spec-type \"draft-dflash\"";
+  }
+  if (pMin > 0.0F && !drafter.confidenceHead) {
+    return "it has no confidence head, which spec-draft-p-min needs; set "
+           "spec-draft-p-min to 0";
+  }
+  return "";
+}
+
+std::string draftModelMismatch(const common_params_speculative& params) {
+  if (!hasType(params, COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK) ||
+      !params.has_dft()) {
+    return "";
+  }
+  return dsparkDrafterMismatch(
+      readGgufShape(params.draft.mparams.path), params.draft.p_min);
+}
+
 void applySpeculativeConfig(
     const SpeculativeConfig& config, common_params& params) {
   if (!config.enabled()) {
@@ -250,8 +299,8 @@ void applySpeculativeConfig(
 
   // Every generating sequence feeds its sample plus its whole draft in one
   // step: the batch scheduler grants a sequence at most one ubatch and drops
-  // a draft that does not fit, and DFlash drafts every sequence in one batch
-  // of n_batch tokens, which fabric asserts on overflow.
+  // a draft that does not fit, and DFlash and DSpark draft every sequence in
+  // one batch of n_batch tokens, which fabric asserts on overflow.
   const int32_t perSeqTokens = std::min(
       std::min(params.n_ubatch, params.n_batch),
       params.n_batch / std::max<int32_t>(1, params.n_parallel));
@@ -405,6 +454,25 @@ std::unique_ptr<SpeculativeRuntime> SpeculativeRuntime::create(
             "[Speculative] the MTP head '" + paramsDft.model.path +
                 "' does not match the model: " + mismatch + "\n");
       }
+    }
+    if (const std::string mismatch = draftModelMismatch(params.speculative);
+        !mismatch.empty()) {
+      throw qvac_errors::StatusError(
+          ADDON_ID,
+          toString(UnableToLoadModel),
+          "[Speculative] '" + paramsDft.model.path +
+              "' cannot draft for spec-type \"draft-dspark\": " + mismatch +
+              "\n");
+    }
+    if (hasType(params.speculative, COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH) &&
+        params.speculative.has_dft() &&
+        readGgufShape(paramsDft.model.path).markovHead) {
+      // Fabric runs the Markov head either way, but drafts with DFlash's
+      // block layout and without confidence truncation.
+      QLOG_IF(
+          Priority::WARNING,
+          "[Speculative] the draft model has a DSpark Markov head; spec-type "
+          "\"draft-dspark\" drafts with it as trained\n");
     }
     runtime->specInit_ =
         common_speculative_init_from_params(paramsDft, modelTgt, ctxTgt);

@@ -16,6 +16,9 @@
 //   - QVAC_RUN_SPECULATIVE_MTP_HEADS=1: external MTP heads on other models, a
 //     Gemma 4 assistant on Gemma 4 E2B and unsloth's MTP quant on its
 //     Qwen3.5-2B (about 6 GB of models).
+//   - QVAC_RUN_SPECULATIVE_DSPARK=1: DSpark (`spec-type: 'draft-dspark'`) on
+//     LiquidAI's LFM2.5-1.2B-Instruct with its DSpark drafter (about 1 GB of
+//     models).
 //
 // QVAC_SPECULATIVE_TOLERATE_DIVERGENCE=1 lets greedy output differ from plain
 // decoding and between runs, for GPU backends (e.g. RADV Vulkan) whose batched
@@ -33,6 +36,8 @@
 // prestage-ignore: gemma-4-E2B-it-assistant-Q8_0.gguf — opt-in via QVAC_RUN_SPECULATIVE_MTP_HEADS=1, desktop-only
 // prestage-ignore: Qwen3.5-2B-Q4_0.gguf — opt-in via QVAC_RUN_SPECULATIVE_MTP_HEADS=1, desktop-only
 // prestage-ignore: Qwen3.5-2B-MTP-Q4_0.gguf — opt-in via QVAC_RUN_SPECULATIVE_MTP_HEADS=1, desktop-only
+// prestage-ignore: LFM2.5-1.2B-Instruct-Q4_K_M.gguf — opt-in via QVAC_RUN_SPECULATIVE_DSPARK=1, desktop-only
+// prestage-ignore: LFM2.5-1.2B-Instruct-DSpark-Q8_0.gguf — opt-in via QVAC_RUN_SPECULATIVE_DSPARK=1, desktop-only
 
 const path = require('bare-path')
 const os = require('bare-os')
@@ -74,6 +79,7 @@ const LARGE_TARGET = 'Qwen3.8-27B-UD-Q4_K_XL.gguf'
 const skipDflash = optIn('QVAC_RUN_SPECULATIVE_DFLASH', 'DFlash on Qwen3-4B')
 const skipLarge = optIn('QVAC_RUN_SPECULATIVE_27B', 'Speculative decoding on Qwen3.8-27B')
 const skipMtpHeads = optIn('QVAC_RUN_SPECULATIVE_MTP_HEADS', 'External MTP heads')
+const skipDspark = optIn('QVAC_RUN_SPECULATIVE_DSPARK', 'DSpark on LFM2.5-1.2B')
 const tolerateDivergence =
   platform === 'android' || readEnv('QVAC_SPECULATIVE_TOLERATE_DIVERGENCE') === '1'
 
@@ -124,6 +130,16 @@ const VARIANTS = [
     type: 'draft-mtp',
     draft: 'Qwen3.5-2B-MTP-Q4_0.gguf',
     skip: skipMtpHeads
+  },
+  {
+    // The drafter's block is 9 tokens; the default n-max of 3 would use a
+    // third of it.
+    label: 'DSpark',
+    target: 'LFM2.5-1.2B-Instruct-Q4_K_M.gguf',
+    type: 'draft-dspark',
+    draft: 'LFM2.5-1.2B-Instruct-DSpark-Q8_0.gguf',
+    extra: { 'spec-draft-n-max': '9' },
+    skip: skipDspark
   }
 ]
 
@@ -151,7 +167,7 @@ async function modelPath(name) {
 
 async function variantConfig(variant, extra = {}) {
   const draft = variant.draft ? { 'spec-draft-model': await modelPath(variant.draft) } : {}
-  return baseConfig({ 'spec-type': variant.type, ...draft, ...extra })
+  return baseConfig({ 'spec-type': variant.type, ...draft, ...variant.extra, ...extra })
 }
 
 async function loadModel(target, config, files = {}) {
@@ -449,7 +465,7 @@ for (const variant of VARIANTS.filter((v) => v.draft)) {
 }
 
 safeTest(
-  'spec-type rejects types other than draft-mtp and draft-dflash',
+  'spec-type rejects types other than draft-mtp, draft-dflash and draft-dspark',
   { timeout: 300_000 },
   async (t) => {
     const model = new LlmLlamacpp({
@@ -457,20 +473,44 @@ safeTest(
       config: baseConfig({ 'spec-type': 'ngram-simple' }),
       logger: null
     })
-    await t.exception(model.load(), /must be "none", "draft-mtp" or "draft-dflash"/)
+    await t.exception(model.load(), /must be "none", "draft-mtp", "draft-dflash" or "draft-dspark"/)
     await model.unload().catch(() => {})
   }
 )
 
-safeTest('draft-dflash requires spec-draft-model', { timeout: 300_000 }, async (t) => {
-  const model = new LlmLlamacpp({
-    files: { model: [await modelPath(MTP_MODEL)] },
-    config: baseConfig({ 'spec-type': 'draft-dflash' }),
-    logger: null
+for (const type of ['draft-dflash', 'draft-dspark']) {
+  safeTest(`${type} requires spec-draft-model`, { timeout: 300_000 }, async (t) => {
+    const model = new LlmLlamacpp({
+      files: { model: [await modelPath(MTP_MODEL)] },
+      config: baseConfig({ 'spec-type': type }),
+      logger: null
+    })
+    await t.exception(model.load(), /requires spec-draft-model/)
+    await model.unload().catch(() => {})
   })
-  await t.exception(model.load(), /requires spec-draft-model/)
-  await model.unload().catch(() => {})
-})
+}
+
+// Checked from the drafter's header before fabric loads it: fabric would run
+// any DFlash-architecture model with DSpark's block layout.
+safeTest(
+  'draft-dspark fails to load a drafter that is not a DSpark model',
+  { timeout: 300_000 },
+  async (t) => {
+    const model = new LlmLlamacpp({
+      files: { model: [await modelPath(MTP_MODEL)] },
+      config: baseConfig({
+        'spec-type': 'draft-dspark',
+        'spec-draft-model': await modelPath(NO_MTP_MODEL)
+      }),
+      logger: null
+    })
+    await t.exception(
+      model.load(),
+      /cannot draft for spec-type "draft-dspark": it is a \w+ model, not a DSpark drafter/
+    )
+    await model.unload().catch(() => {})
+  }
+)
 
 safeTest('draft-mtp fails to load a model without MTP layers', { timeout: 300_000 }, async (t) => {
   const model = new LlmLlamacpp({
