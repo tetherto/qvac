@@ -19066,7 +19066,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3(GeneratedBaseModel):
         list[ForceSpeechToken] | None,
         Field(
             alias="forceSpeechTokens",
-            description="Speech-token trajectory to replay instead of generating, as a previous run returned it in `speechTokenIds`; an empty array restores generation.",
+            description="Speech-token trajectory of ONE native synthesis to replay instead of generating, as a previous batch run, native chunk stream or single sentence returned it in `speechTokenIds`. Fixed at load: every synthesis of the model replays this same array, so a joined sentence stream cannot be replayed sentence by sentence. An empty array restores generation.",
         ),
     ] = None
     use_gpu: Annotated[
@@ -26739,7 +26739,7 @@ class TextToSpeechResponse(GeneratedBaseModel):
         list[SpeechTokenId] | None,
         Field(
             alias="speechTokenIds",
-            description="CosyVoice3: the speech tokens of this synthesis. Batch synthesis carries them with the PCM; native chunk streaming on a final `isLast` frame with no audio. Pass them back as `forceSpeechTokens` to replay the trajectory.",
+            description="CosyVoice3: the speech tokens of this native synthesis. Batch synthesis carries them with the PCM; native chunk streaming on a final `isLast` frame with no audio; the sentence paths once per sentence. Pass one array back as `forceSpeechTokens` to replay that synthesis (a joined sentence stream cannot be replayed as one).",
         ),
     ] = None
     stop_reason: Annotated[
@@ -27377,7 +27377,7 @@ class TextToSpeechStreamResponse(GeneratedBaseModel):
         list[SpeechTokenId] | None,
         Field(
             alias="speechTokenIds",
-            description="CosyVoice3: the speech tokens of this synthesis. Batch synthesis carries them with the PCM; native chunk streaming on a final `isLast` frame with no audio. Pass them back as `forceSpeechTokens` to replay the trajectory.",
+            description="CosyVoice3: the speech tokens of this native synthesis. Batch synthesis carries them with the PCM; native chunk streaming on a final `isLast` frame with no audio; the sentence paths once per sentence. Pass one array back as `forceSpeechTokens` to replay that synthesis (a joined sentence stream cannot be replayed as one).",
         ),
     ] = None
     stop_reason: Annotated[

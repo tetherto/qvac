@@ -97,7 +97,15 @@ test('sentence streaming carries each sentence’s tokens on chunkUpdates and co
     updates.map((u) => u.speechTokenIds),
     [[12, 480], [3]]
   )
-  assert.deepEqual(await run.speechTokenIds, [12, 480, 3])
+  const trajectory = await run.speechTokenIds
+  assert.deepEqual(trajectory, [12, 480, 3])
+  // The run's trajectory grows in one owned array; the per-sentence arrays
+  // handed out on chunkUpdates are neither aliased nor appended to.
+  assert.notEqual(trajectory, updates[0].speechTokenIds)
+  assert.deepEqual(
+    updates.map((u) => u.speechTokenIds),
+    [[12, 480], [3]]
+  )
 })
 
 test('engines that emit no tokens resolve speechTokenIds to undefined', async () => {

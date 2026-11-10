@@ -477,8 +477,15 @@ argmax speech token instead of sampling, and the run hands its speech-token
 trajectory back as `speechTokenIds` (on the result, and on each frame that
 carried it: with the PCM in batch synthesis, on a final `isLast` frame with no
 audio under native chunk streaming, once per sentence on `chunkUpdates`).
-Pass that array back as `forceSpeechTokens` in `modelConfig` to replay the
-trajectory through the flow and vocoder; an empty array restores generation.
+Pass the array of **one native synthesis** back as `forceSpeechTokens` in
+`modelConfig` to replay it through the flow and vocoder: a batch run, a native
+chunk stream, or a single sentence's array from `chunkUpdates`. An empty array
+restores generation. `forceSpeechTokens` is fixed at load and every synthesis
+the model runs replays that same array, so a sentence stream's result
+(`speechTokenIds` concatenated across its sentences) cannot be replayed as one:
+each sentence would start its own synthesis from the whole joined array and the
+original segmentation is lost. Replay a sentence stream sentence by sentence
+instead, loading the model once per array.
 
 ```ts
 const take = textToSpeech({ modelId, text: "Hello.", stream: false });

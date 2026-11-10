@@ -341,7 +341,10 @@ export function createTtsSideChannel(): TtsSideChannel {
       if (response.stats !== undefined) latestStats = response.stats
       if (response.stopReason !== undefined) seenStopReason = response.stopReason
       if (response.speechTokenIds !== undefined) {
-        seenSpeechTokenIds = [...(seenSpeechTokenIds ?? []), ...response.speechTokenIds]
+        // Append into one owned array: a spread per frame would copy every
+        // token collected so far on each sentence of a long stream.
+        seenSpeechTokenIds ??= []
+        for (const id of response.speechTokenIds) seenSpeechTokenIds.push(id)
       }
     },
     settle() {

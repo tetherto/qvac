@@ -898,7 +898,7 @@ const ttsCosyvoice3RuntimeConfigShape = {
     .array(ttsInt32Schema)
     .optional()
     .describe(
-      'Speech-token trajectory to replay instead of generating, as a previous run returned it in `speechTokenIds`; an empty array restores generation.'
+      'Speech-token trajectory of ONE native synthesis to replay instead of generating, as a previous batch run, native chunk stream or single sentence returned it in `speechTokenIds`. Fixed at load: every synthesis of the model replays this same array, so a joined sentence stream cannot be replayed sentence by sentence. An empty array restores generation.'
     ),
   useGPU: z.boolean().optional().describe(TTS_USE_GPU_DESC),
   outputSampleRate: ttsOutputSampleRateSchema.optional(),
@@ -2031,13 +2031,14 @@ const ttsResponseSampleRateSchema = z
 
 // CosyVoice3 owns its speech-token trajectory and hands it back: with the PCM
 // in batch synthesis, on a final `isLast` frame with no audio under native
-// chunk streaming. The same array replays the synthesis through the load
-// config's `forceSpeechTokens`.
+// chunk streaming. One frame's array replays that one native synthesis through
+// the load config's `forceSpeechTokens`; the sentence paths run one synthesis
+// per sentence, so their arrays replay sentence by sentence, not joined.
 const ttsResponseSpeechTokenIdsSchema = z
   .array(z.number().int())
   .optional()
   .describe(
-    'CosyVoice3: the speech tokens of this synthesis. Batch synthesis carries them with the PCM; native chunk streaming on a final `isLast` frame with no audio. Pass them back as `forceSpeechTokens` to replay the trajectory.'
+    'CosyVoice3: the speech tokens of this native synthesis. Batch synthesis carries them with the PCM; native chunk streaming on a final `isLast` frame with no audio; the sentence paths once per sentence. Pass one array back as `forceSpeechTokens` to replay that synthesis (a joined sentence stream cannot be replayed as one).'
   )
 
 export const ttsResponseSchema = z.object({
@@ -2167,7 +2168,10 @@ export type TtsSentenceChunkUpdate = {
   chunkIndex?: number
   sentenceChunk?: string
   isLast?: boolean
-  /** CosyVoice3: the speech tokens of this sentence's synthesis, when the frame carried them. */
+  /**
+   * CosyVoice3: the speech tokens of this sentence's synthesis, when the frame
+   * carried them. Each array replays its own sentence through `forceSpeechTokens`.
+   */
   speechTokenIds?: number[]
 }
 
@@ -2219,8 +2223,13 @@ export interface TextToSpeechStreamResult {
   /**
    * CosyVoice3: every speech token the run emitted, in order (one native
    * synthesis per batch run; one array per sentence, concatenated, on the
-   * chunked paths). Replays the same text and segmentation through the load
-   * config's `forceSpeechTokens`. `undefined` when no frame carried any.
+   * chunked paths). `undefined` when no frame carried any.
+   *
+   * Replay through the load config's `forceSpeechTokens` works for ONE native
+   * synthesis: a batch run, a native chunk stream, or a single sentence's
+   * array from `chunkUpdates`. `forceSpeechTokens` is fixed at load and every
+   * sentence of a chunked run starts its own synthesis with that same array,
+   * so replaying this concatenation does not restore the sentences it joined.
    */
   speechTokenIds: Promise<number[] | undefined>
 }

@@ -79,6 +79,30 @@ test('speechTokenIds concatenates every array the frames carried, in order, at s
   t.is(await none.speechTokenIds, undefined, 'engines that emit no tokens resolve undefined')
 })
 
+test('speechTokenIds appends into one owned array without touching the frames', async (t) => {
+  // Long sentence streams carry one array per sentence; the trajectory grows
+  // in place rather than being re-copied per frame, and the frames' own arrays
+  // stay as the addon sent them.
+  const first = [12, 480]
+  const second = [3]
+  const side = createTtsSideChannel()
+  side.observe(frame({ buffer: [3], speechTokenIds: first }))
+  side.observe(frame({ buffer: [], isLast: true, speechTokenIds: second }))
+  side.settle()
+  const result = await side.speechTokenIds
+  t.alike(result, [12, 480, 3])
+  t.alike(first, [12, 480], 'the first frame keeps its own tokens')
+  t.alike(second, [3], 'the second frame keeps its own tokens')
+  t.not(result, first, 'the result is not an alias of a frame array')
+
+  const single = createTtsSideChannel()
+  const only = [7, 8]
+  single.observe(frame({ buffer: [1], speechTokenIds: only }))
+  single.settle()
+  t.alike(await single.speechTokenIds, [7, 8])
+  t.not(await single.speechTokenIds, only, 'a lone frame is copied too')
+})
+
 test('MOSS-Speech reply text settles even when no PCM was emitted', async (t) => {
   const side = createTtsSideChannel()
   side.observe(frame({ text: 'Hello.' }))
