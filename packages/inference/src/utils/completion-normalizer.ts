@@ -133,6 +133,8 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   // with `<think>\n` and close with `\n</think>`. Leading whitespace is dropped
   // until the reasoning's first visible character; trailing whitespace is held
   // back and only emitted once more reasoning follows it, so a close drops it.
+  // A later frame's reasoning starts on a new line, so separate frames don't
+  // run together once their edges are trimmed.
   let trimThinkingStart = false
   let pendingThinkingWhitespace = ''
 
@@ -208,7 +210,9 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     let normalized = text
     if (trimThinkingStart) {
       normalized = normalized.replace(/^\s+/, '')
-      if (normalized) trimThinkingStart = false
+      if (!normalized) return
+      trimThinkingStart = false
+      if (thinkingParts.length > 0) normalized = '\n' + normalized
     }
     if (!normalized) return
     const body = normalized.replace(/\s+$/, '')

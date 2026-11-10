@@ -153,6 +153,30 @@ test('captureThinking true: reasoning drops edge whitespace but keeps its own', 
   t.is(n.getAccumulated().contentText, 'Answer')
 })
 
+test('captureThinking true: separate reasoning blocks stay on separate lines', (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({ capabilities: THINKING_CAPS, captureThinking: true })
+  )
+  const events = [
+    ...pushAll(n, ['<think>first\n</think>answer', '<think>\n', 'second', '\n</think>']),
+    ...n.finish()
+  ]
+
+  t.is(n.getAccumulated().thinkingText, 'first\nsecond')
+  t.is(texts(events, 'thinkingDelta').join(''), 'first\nsecond', 'deltas carry the separator')
+  t.is(n.getAccumulated().contentText, 'answer')
+})
+
+test('captureThinking true: an empty second reasoning block adds no separator', (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({ capabilities: THINKING_CAPS, captureThinking: true })
+  )
+  pushAll(n, ['<think>first</think>answer<think>\n\n</think>'])
+  n.finish()
+
+  t.is(n.getAccumulated().thinkingText, 'first')
+})
+
 test('captureThinking true: reasoning cut off before its close drops trailing whitespace', (t) => {
   const n = createCompletionNormalizer(
     baseConfig({ capabilities: THINKING_CAPS, captureThinking: true })
