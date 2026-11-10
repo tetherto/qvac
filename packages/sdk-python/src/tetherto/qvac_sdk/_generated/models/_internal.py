@@ -5369,10 +5369,24 @@ class TtsEngine(Enum):
     moss_speech = "moss-speech"
 
 
+class TtsLavasrCoremlComputeUnits(Enum):
+    cpu_only = "CPU_ONLY"
+    cpu_and_gpu = "CPU_AND_GPU"
+    cpu_and_ne = "CPU_AND_NE"
+    all = "ALL"
+
+
 class TtsPace(Enum):
     slow = "slow"
     moderate = "moderate"
     fast = "fast"
+
+
+class TtsParlerCoremlComputeUnits(Enum):
+    all = "all"
+    cpu_and_ane = "cpu_and_ane"
+    cpu_and_gpu = "cpu_and_gpu"
+    cpu_only = "cpu_only"
 
 
 class TtsParlerEmotion(Enum):
@@ -5428,6 +5442,13 @@ class TtsSupertonicLanguage(Enum):
     tr = "tr"
     uk = "uk"
     vi = "vi"
+
+
+class TtsSupertonicPrecision(Enum):
+    auto = "auto"
+    f32 = "f32"
+    f16 = "f16"
+    q8_0 = "q8_0"
 
 
 class VectorIndexStorage(Enum):
@@ -16541,6 +16562,24 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrc(
     ] = None
 
 
+class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerCoremlComputeUnits(
+    Enum
+):
+    cpu_only = "CPU_ONLY"
+    cpu_and_gpu = "CPU_AND_GPU"
+    cpu_and_ne = "CPU_AND_NE"
+    all = "ALL"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserCoremlComputeUnits(
+    Enum
+):
+    cpu_only = "CPU_ONLY"
+    cpu_and_gpu = "CPU_AND_GPU"
+    cpu_and_ne = "CPU_AND_NE"
+    all = "ALL"
+
+
 class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -16776,6 +16815,13 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
             le=2147483647,
         ),
     ] = None
+    backend: Annotated[
+        str | None,
+        Field(
+            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+            min_length=1,
+        ),
+    ] = None
     backends_dir: Annotated[
         str | None,
         Field(
@@ -16836,6 +16882,40 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterbox(GeneratedBaseModel):
         Field(
             alias="lavasrDenoiserModelSrc",
             description="LavaSR denoiser model source; runs before the enhancer, rate-preserving (batch synthesis only).",
+        ),
+    ] = None
+    lavasr_enhancer_coreml_model_path: Annotated[
+        str | None,
+        Field(
+            alias="lavasrEnhancerCoremlModelPath",
+            description="macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR enhancer’s neural core; requires `lavasrEnhancerModelSrc` and `lavasrEnhancerCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+            min_length=1,
+        ),
+    ] = None
+    lavasr_enhancer_coreml_compute_units: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerCoremlComputeUnits
+        | None,
+        Field(
+            alias="lavasrEnhancerCoremlComputeUnits",
+            description="macOS / iOS: Core ML compute policy for the LavaSR enhancer; required with `lavasrEnhancerCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+            title="LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerCoremlComputeUnits",
+        ),
+    ] = None
+    lavasr_denoiser_coreml_model_path: Annotated[
+        str | None,
+        Field(
+            alias="lavasrDenoiserCoremlModelPath",
+            description="macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR denoiser’s neural core; requires `lavasrDenoiserModelSrc` and `lavasrDenoiserCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+            min_length=1,
+        ),
+    ] = None
+    lavasr_denoiser_coreml_compute_units: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserCoremlComputeUnits
+        | None,
+        Field(
+            alias="lavasrDenoiserCoremlComputeUnits",
+            description="macOS / iOS: Core ML compute policy for the LavaSR denoiser; required with `lavasrDenoiserCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+            title="LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserCoremlComputeUnits",
         ),
     ] = None
     tts_supertonic_multilingual: Annotated[
@@ -16905,6 +16985,29 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicPace(Enum):
     slow = "slow"
     moderate = "moderate"
     fast = "fast"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigSupertonicPrecision(Enum):
+    auto = "auto"
+    f32 = "f32"
+    f16 = "f16"
+    q8_0 = "q8_0"
+
+
+class F16WeightsDenyListItem(RootModel[str]):
+    root: Annotated[str, Field(min_length=1)]
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigSupertonicVulkanEnvOverrides(
+    RootModel[dict[str, str]]
+):
+    root: Annotated[
+        dict[str, str],
+        Field(
+            description="Vulkan environment overrides (string values) passed to the engine; explicit entries win over the `vulkanCacheDir` convenience setting.",
+            title="LoadModelSrcRequestTtsGgmlModelConfigSupertonicVulkanEnvOverrides",
+        ),
+    ]
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon(Enum):
@@ -17129,6 +17232,24 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc(
             description="Inference addon / capability category this model belongs to."
         ),
     ] = None
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerCoremlComputeUnits(
+    Enum
+):
+    cpu_only = "CPU_ONLY"
+    cpu_and_gpu = "CPU_AND_GPU"
+    cpu_and_ne = "CPU_AND_NE"
+    all = "ALL"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserCoremlComputeUnits(
+    Enum
+):
+    cpu_only = "CPU_ONLY"
+    cpu_and_gpu = "CPU_AND_GPU"
+    cpu_and_ne = "CPU_AND_NE"
+    all = "ALL"
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigSupertonicVoiceJsonSrcAddon(Enum):
@@ -17495,6 +17616,78 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
             le=2147483647,
         ),
     ] = None
+    precision: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigSupertonicPrecision | None,
+        Field(
+            description="Weight precision the engine loads at: `auto` keeps the GGUF’s own, `f32` / `f16` / `q8_0` convert on load and change the weight footprint.",
+            title="LoadModelSrcRequestTtsGgmlModelConfigSupertonicPrecision",
+        ),
+    ] = None
+    f16_attn: Annotated[
+        int | None,
+        Field(
+            alias="f16Attn",
+            description="Attention precision override: `-1` automatic (default), `0` f32, `1` f16.",
+            ge=-2147483648,
+            le=2147483647,
+        ),
+    ] = None
+    f16_weights: Annotated[
+        int | None,
+        Field(
+            alias="f16Weights",
+            description="Weight precision override: `-1` automatic (default), `0` off, `1` f16.",
+            ge=-2147483648,
+            le=2147483647,
+        ),
+    ] = None
+    kv_attn_type: Annotated[
+        int | None,
+        Field(
+            alias="kvAttnType",
+            description="Native KV attention type code; `-1` leaves the automatic selection.",
+            ge=-2147483648,
+            le=2147483647,
+        ),
+    ] = None
+    f16_weights_deny_list: Annotated[
+        list[F16WeightsDenyListItem] | None,
+        Field(
+            alias="f16WeightsDenyList",
+            description="Tensor-name patterns kept at their original precision when `f16Weights` is on.",
+        ),
+    ] = None
+    vulkan_env_overrides: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigSupertonicVulkanEnvOverrides | None,
+        Field(
+            alias="vulkanEnvOverrides",
+            description="Vulkan environment overrides (string values) passed to the engine; explicit entries win over the `vulkanCacheDir` convenience setting.",
+            title="LoadModelSrcRequestTtsGgmlModelConfigSupertonicVulkanEnvOverrides",
+        ),
+    ] = None
+    voice_style_ttl: Annotated[
+        list[float] | None,
+        Field(
+            alias="voiceStyleTtl",
+            description="In-memory voice: the flattened `style_ttl` tensor of a cloned voice. Paired with `voiceStyleDp`; the engine checks the sizes against the model, and the pair wins over `voiceJsonSrc` and the baked `voice`.",
+            min_length=1,
+        ),
+    ] = None
+    voice_style_dp: Annotated[
+        list[float] | None,
+        Field(
+            alias="voiceStyleDp",
+            description="In-memory voice: the flattened `style_dp` tensor, paired with `voiceStyleTtl`.",
+            min_length=1,
+        ),
+    ] = None
+    backend: Annotated[
+        str | None,
+        Field(
+            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+            min_length=1,
+        ),
+    ] = None
     backends_dir: Annotated[
         str | None,
         Field(
@@ -17527,6 +17720,40 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonic(GeneratedBaseModel):
         Field(
             alias="lavasrDenoiserModelSrc",
             description="LavaSR denoiser model source; runs before the enhancer, rate-preserving (batch synthesis only).",
+        ),
+    ] = None
+    lavasr_enhancer_coreml_model_path: Annotated[
+        str | None,
+        Field(
+            alias="lavasrEnhancerCoremlModelPath",
+            description="macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR enhancer’s neural core; requires `lavasrEnhancerModelSrc` and `lavasrEnhancerCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+            min_length=1,
+        ),
+    ] = None
+    lavasr_enhancer_coreml_compute_units: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerCoremlComputeUnits
+        | None,
+        Field(
+            alias="lavasrEnhancerCoremlComputeUnits",
+            description="macOS / iOS: Core ML compute policy for the LavaSR enhancer; required with `lavasrEnhancerCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+            title="LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerCoremlComputeUnits",
+        ),
+    ] = None
+    lavasr_denoiser_coreml_model_path: Annotated[
+        str | None,
+        Field(
+            alias="lavasrDenoiserCoremlModelPath",
+            description="macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR denoiser’s neural core; requires `lavasrDenoiserModelSrc` and `lavasrDenoiserCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+            min_length=1,
+        ),
+    ] = None
+    lavasr_denoiser_coreml_compute_units: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserCoremlComputeUnits
+        | None,
+        Field(
+            alias="lavasrDenoiserCoremlComputeUnits",
+            description="macOS / iOS: Core ML compute policy for the LavaSR denoiser; required with `lavasrDenoiserCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+            title="LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserCoremlComputeUnits",
         ),
     ] = None
     voice_json_src: Annotated[
@@ -17602,6 +17829,13 @@ class MaxFrames(RootModel[int]):
             le=2147483647,
         ),
     ]
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigParlerCoremlComputeUnits(Enum):
+    all = "all"
+    cpu_and_ane = "cpu_and_ane"
+    cpu_and_gpu = "cpu_and_gpu"
+    cpu_only = "cpu_only"
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon(Enum):
@@ -17828,6 +18062,20 @@ class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc(
     ] = None
 
 
+class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerCoremlComputeUnits(Enum):
+    cpu_only = "CPU_ONLY"
+    cpu_and_gpu = "CPU_AND_GPU"
+    cpu_and_ne = "CPU_AND_NE"
+    all = "ALL"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserCoremlComputeUnits(Enum):
+    cpu_only = "CPU_ONLY"
+    cpu_and_gpu = "CPU_AND_GPU"
+    cpu_and_ne = "CPU_AND_NE"
+    all = "ALL"
+
+
 class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -18005,6 +18253,35 @@ class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
             description="Parler prompt digit expansion (engine default: enabled).",
         ),
     ] = None
+    coreml_decoder: Annotated[
+        bool | None,
+        Field(
+            alias="coremlDecoder",
+            description="macOS / iOS: run the decoder steps on the `<model>-decoder.mlmodelc` sidecar beside the GGUF (the DAC sidecar is picked up by presence); unset keeps the engine default.",
+        ),
+    ] = None
+    coreml_compute_units: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigParlerCoremlComputeUnits | None,
+        Field(
+            alias="coremlComputeUnits",
+            description="macOS / iOS: Core ML compute policy for the Parler sidecars; unset inherits the engine’s environment default.",
+            title="LoadModelSrcRequestTtsGgmlModelConfigParlerCoremlComputeUnits",
+        ),
+    ] = None
+    coreml_strict: Annotated[
+        bool | None,
+        Field(
+            alias="coremlStrict",
+            description="macOS / iOS: `true` fails the load when a sidecar is unusable instead of falling back to ggml, `false` permits the fallback; unset inherits the engine’s strict mode.",
+        ),
+    ] = None
+    backend: Annotated[
+        str | None,
+        Field(
+            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+            min_length=1,
+        ),
+    ] = None
     backends_dir: Annotated[
         str | None,
         Field(
@@ -18025,6 +18302,40 @@ class LoadModelSrcRequestTtsGgmlModelConfigParler(GeneratedBaseModel):
         Field(
             alias="lavasrDenoiserModelSrc",
             description="LavaSR denoiser model source; runs before the enhancer, rate-preserving (batch synthesis only).",
+        ),
+    ] = None
+    lavasr_enhancer_coreml_model_path: Annotated[
+        str | None,
+        Field(
+            alias="lavasrEnhancerCoremlModelPath",
+            description="macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR enhancer’s neural core; requires `lavasrEnhancerModelSrc` and `lavasrEnhancerCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+            min_length=1,
+        ),
+    ] = None
+    lavasr_enhancer_coreml_compute_units: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerCoremlComputeUnits
+        | None,
+        Field(
+            alias="lavasrEnhancerCoremlComputeUnits",
+            description="macOS / iOS: Core ML compute policy for the LavaSR enhancer; required with `lavasrEnhancerCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+            title="LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerCoremlComputeUnits",
+        ),
+    ] = None
+    lavasr_denoiser_coreml_model_path: Annotated[
+        str | None,
+        Field(
+            alias="lavasrDenoiserCoremlModelPath",
+            description="macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR denoiser’s neural core; requires `lavasrDenoiserModelSrc` and `lavasrDenoiserCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+            min_length=1,
+        ),
+    ] = None
+    lavasr_denoiser_coreml_compute_units: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserCoremlComputeUnits
+        | None,
+        Field(
+            alias="lavasrDenoiserCoremlComputeUnits",
+            description="macOS / iOS: Core ML compute policy for the LavaSR denoiser; required with `lavasrDenoiserCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+            title="LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserCoremlComputeUnits",
         ),
     ] = None
 
@@ -18107,6 +18418,10 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Instruct(GeneratedBaseModel
             title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3InstructStyle",
         ),
     ] = None
+
+
+class ForceSpeechToken(RootModel[int]):
+    root: Annotated[int, Field(ge=-2147483648, le=2147483647)]
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon(Enum):
@@ -18331,6 +18646,24 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc(
             description="Inference addon / capability category this model belongs to."
         ),
     ] = None
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerCoremlComputeUnits(
+    Enum
+):
+    cpu_only = "CPU_ONLY"
+    cpu_and_gpu = "CPU_AND_GPU"
+    cpu_and_ne = "CPU_AND_NE"
+    all = "ALL"
+
+
+class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserCoremlComputeUnits(
+    Enum
+):
+    cpu_only = "CPU_ONLY"
+    cpu_and_gpu = "CPU_AND_GPU"
+    cpu_and_ne = "CPU_AND_NE"
+    all = "ALL"
 
 
 class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon(Enum):
@@ -18723,6 +19056,19 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3(GeneratedBaseModel):
             le=2147483647,
         ),
     ] = None
+    greedy: Annotated[
+        bool | None,
+        Field(
+            description="Greedy LM decoding: take the argmax speech token instead of sampling (engine default off)."
+        ),
+    ] = None
+    force_speech_tokens: Annotated[
+        list[ForceSpeechToken] | None,
+        Field(
+            alias="forceSpeechTokens",
+            description="Speech-token trajectory to replay instead of generating, as a previous run returned it in `speechTokenIds`; an empty array restores generation.",
+        ),
+    ] = None
     use_gpu: Annotated[
         bool | None,
         Field(
@@ -18782,6 +19128,13 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3(GeneratedBaseModel):
             le=2147483647,
         ),
     ] = None
+    backend: Annotated[
+        str | None,
+        Field(
+            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+            min_length=1,
+        ),
+    ] = None
     backends_dir: Annotated[
         str | None,
         Field(
@@ -18814,6 +19167,40 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3(GeneratedBaseModel):
         Field(
             alias="lavasrDenoiserModelSrc",
             description="LavaSR denoiser model source; runs before the enhancer, rate-preserving (batch synthesis only).",
+        ),
+    ] = None
+    lavasr_enhancer_coreml_model_path: Annotated[
+        str | None,
+        Field(
+            alias="lavasrEnhancerCoremlModelPath",
+            description="macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR enhancer’s neural core; requires `lavasrEnhancerModelSrc` and `lavasrEnhancerCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+            min_length=1,
+        ),
+    ] = None
+    lavasr_enhancer_coreml_compute_units: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerCoremlComputeUnits
+        | None,
+        Field(
+            alias="lavasrEnhancerCoremlComputeUnits",
+            description="macOS / iOS: Core ML compute policy for the LavaSR enhancer; required with `lavasrEnhancerCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+            title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerCoremlComputeUnits",
+        ),
+    ] = None
+    lavasr_denoiser_coreml_model_path: Annotated[
+        str | None,
+        Field(
+            alias="lavasrDenoiserCoremlModelPath",
+            description="macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR denoiser’s neural core; requires `lavasrDenoiserModelSrc` and `lavasrDenoiserCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+            min_length=1,
+        ),
+    ] = None
+    lavasr_denoiser_coreml_compute_units: Annotated[
+        LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserCoremlComputeUnits
+        | None,
+        Field(
+            alias="lavasrDenoiserCoremlComputeUnits",
+            description="macOS / iOS: Core ML compute policy for the LavaSR denoiser; required with `lavasrDenoiserCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+            title="LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserCoremlComputeUnits",
         ),
     ] = None
     reference_audio_src: Annotated[
@@ -19268,6 +19655,13 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8(GeneratedBaseModel):
             description="RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
             ge=-2147483648,
             le=2147483647,
+        ),
+    ] = None
+    backend: Annotated[
+        str | None,
+        Field(
+            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+            min_length=1,
         ),
     ] = None
     backends_dir: Annotated[
@@ -19771,9 +20165,9 @@ class LoadModelSrcRequestTtsGgmlModelConfigMoss(GeneratedBaseModel):
         int | None,
         Field(
             alias="durationTokens",
-            description="Target length of each synthesis in codec frames (12.5 per second, so 38 ≈ 3 s), 0–2015; 0 or unset keeps the length free.",
+            description="Target length of each synthesis in codec frames (12.5 per second, so 38 ≈ 3 s), at most `maxNewTokens` − 33 (2015 by default); 0 or unset keeps the length free.",
             ge=0,
-            le=2015,
+            le=2147483647,
         ),
     ] = None
     stream_chunk_tokens: Annotated[
@@ -19783,6 +20177,84 @@ class LoadModelSrcRequestTtsGgmlModelConfigMoss(GeneratedBaseModel):
             description="Codec frames per native streaming chunk (12.5 per second, so 25 ≈ 2 s); 0 or unset synthesizes the whole text before emitting.",
             ge=0,
             le=2147483647,
+        ),
+    ] = None
+    n_ctx: Annotated[
+        int | None,
+        Field(
+            alias="nCtx",
+            description="Context capacity of the backbone in rows; unset keeps the native value.",
+            gt=0,
+            le=2147483647,
+        ),
+    ] = None
+    max_new_tokens: Annotated[
+        int | None,
+        Field(
+            alias="maxNewTokens",
+            description="Generation budget in rows (engine default 2048), of which 33 are delay/EOS rows; bounds `durationTokens`.",
+            gt=0,
+            le=2147483647,
+        ),
+    ] = None
+    text_temperature: Annotated[
+        float | None,
+        Field(
+            alias="textTemperature",
+            description="Text-channel sampling temperature; unset keeps the engine default.",
+            ge=0.0,
+        ),
+    ] = None
+    text_top_p: Annotated[
+        float | None,
+        Field(
+            alias="textTopP",
+            description="Text-channel top-p (nucleus) cutoff, 0 < p ≤ 1; unset keeps the engine default.",
+            gt=0.0,
+            le=1.0,
+        ),
+    ] = None
+    text_top_k: Annotated[
+        int | None,
+        Field(
+            alias="textTopK",
+            description="Text-channel top-k cutoff; unset keeps the engine default.",
+            ge=0,
+            le=2147483647,
+        ),
+    ] = None
+    audio_temperature: Annotated[
+        float | None,
+        Field(
+            alias="audioTemperature",
+            description="Audio-channel sampling temperature; unset keeps the engine default.",
+            ge=0.0,
+        ),
+    ] = None
+    audio_top_p: Annotated[
+        float | None,
+        Field(
+            alias="audioTopP",
+            description="Audio-channel top-p (nucleus) cutoff, 0 < p ≤ 1; unset keeps the engine default.",
+            gt=0.0,
+            le=1.0,
+        ),
+    ] = None
+    audio_top_k: Annotated[
+        int | None,
+        Field(
+            alias="audioTopK",
+            description="Audio-channel top-k cutoff; unset keeps the engine default.",
+            ge=0,
+            le=2147483647,
+        ),
+    ] = None
+    audio_repetition_penalty: Annotated[
+        float | None,
+        Field(
+            alias="audioRepetitionPenalty",
+            description="Audio-channel repetition penalty; 1 = off, unset keeps the engine default.",
+            gt=0.0,
         ),
     ] = None
     use_gpu: Annotated[
@@ -19815,6 +20287,13 @@ class LoadModelSrcRequestTtsGgmlModelConfigMoss(GeneratedBaseModel):
             description="RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
             ge=-2147483648,
             le=2147483647,
+        ),
+    ] = None
+    backend: Annotated[
+        str | None,
+        Field(
+            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+            min_length=1,
         ),
     ] = None
     backends_dir: Annotated[
@@ -19896,6 +20375,13 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossSfx(GeneratedBaseModel):
             description="RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
             ge=-2147483648,
             le=2147483647,
+        ),
+    ] = None
+    backend: Annotated[
+        str | None,
+        Field(
+            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+            min_length=1,
         ),
     ] = None
     backends_dir: Annotated[
@@ -20095,6 +20581,13 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossSpeech(GeneratedBaseModel):
             description="RNG seed for the engine’s stochastic stages (e.g. Chatterbox CFM/SineGen, Supertonic latent generation).",
             ge=-2147483648,
             le=2147483647,
+        ),
+    ] = None
+    backend: Annotated[
+        str | None,
+        Field(
+            description="Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+            min_length=1,
         ),
     ] = None
     backends_dir: Annotated[
@@ -25932,7 +26425,13 @@ class TextToSpeechResponseStats(GeneratedBaseModel):
     total_samples: Annotated[float | None, Field(alias="totalSamples")] = None
     generated_frames: Annotated[float | None, Field(alias="generatedFrames")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
-    backend_id: Annotated[float | None, Field(alias="backendId")] = None
+    backend_id: Annotated[
+        float | None,
+        Field(
+            alias="backendId",
+            description="Backend family the engine ran on: `0` CPU, `1` Metal, `2` CUDA, `3` Vulkan, `4` OpenCL, `5` WebGPU, `99` other.",
+        ),
+    ] = None
     gpu_unsupported: Annotated[float | None, Field(alias="gpuUnsupported")] = None
     enhancer_backend_device: Annotated[
         float | None, Field(alias="enhancerBackendDevice")
@@ -25966,6 +26465,34 @@ class TextToSpeechResponseStats(GeneratedBaseModel):
         Field(
             alias="codecOnCoreml",
             description="Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports.",
+        ),
+    ] = None
+    decoder_sidecar_loaded: Annotated[
+        float | None,
+        Field(
+            alias="decoderSidecarLoaded",
+            description="Parler on macOS / iOS: `1` while the Core ML decoder sidecar is attached, `0` once a fallback retired it.",
+        ),
+    ] = None
+    dac_sidecar_loaded: Annotated[
+        float | None,
+        Field(
+            alias="dacSidecarLoaded",
+            description="Parler on macOS / iOS: `1` while the Core ML DAC sidecar is attached, `0` once a fallback retired it.",
+        ),
+    ] = None
+    decoder_on_coreml: Annotated[
+        float | None,
+        Field(
+            alias="decoderOnCoreml",
+            description="Parler: `1` when this synthesis ran its decoder steps on Core ML, `0` for ggml or a mixed run.",
+        ),
+    ] = None
+    dac_on_coreml: Annotated[
+        float | None,
+        Field(
+            alias="dacOnCoreml",
+            description="Parler: `1` when this synthesis ran its DAC on Core ML, `0` for ggml or a mixed run.",
         ),
     ] = None
     t3_ms: Annotated[
@@ -26159,6 +26686,10 @@ class TextToSpeechResponseStats(GeneratedBaseModel):
     ] = None
 
 
+class SpeechTokenId(RootModel[int]):
+    root: Annotated[int, Field(ge=-9007199254740991, le=9007199254740991)]
+
+
 class TextToSpeechResponseStopReason(Enum):
     completed = "completed"
     cancelled = "cancelled"
@@ -26202,6 +26733,13 @@ class TextToSpeechResponse(GeneratedBaseModel):
         Field(
             alias="isLast",
             description="True on the final audio-bearing chunk of a pre-chunked synthesis. Absent when the chunk count is not known up front (streamed text in).",
+        ),
+    ] = None
+    speech_token_ids: Annotated[
+        list[SpeechTokenId] | None,
+        Field(
+            alias="speechTokenIds",
+            description="CosyVoice3: the speech tokens of this synthesis. Batch synthesis carries them with the PCM; native chunk streaming on a final `isLast` frame with no audio. Pass them back as `forceSpeechTokens` to replay the trajectory.",
         ),
     ] = None
     stop_reason: Annotated[
@@ -26532,7 +27070,13 @@ class TextToSpeechStreamResponseStats(GeneratedBaseModel):
     total_samples: Annotated[float | None, Field(alias="totalSamples")] = None
     generated_frames: Annotated[float | None, Field(alias="generatedFrames")] = None
     backend_device: Annotated[float | None, Field(alias="backendDevice")] = None
-    backend_id: Annotated[float | None, Field(alias="backendId")] = None
+    backend_id: Annotated[
+        float | None,
+        Field(
+            alias="backendId",
+            description="Backend family the engine ran on: `0` CPU, `1` Metal, `2` CUDA, `3` Vulkan, `4` OpenCL, `5` WebGPU, `99` other.",
+        ),
+    ] = None
     gpu_unsupported: Annotated[float | None, Field(alias="gpuUnsupported")] = None
     enhancer_backend_device: Annotated[
         float | None, Field(alias="enhancerBackendDevice")
@@ -26566,6 +27110,34 @@ class TextToSpeechStreamResponseStats(GeneratedBaseModel):
         Field(
             alias="codecOnCoreml",
             description="Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports.",
+        ),
+    ] = None
+    decoder_sidecar_loaded: Annotated[
+        float | None,
+        Field(
+            alias="decoderSidecarLoaded",
+            description="Parler on macOS / iOS: `1` while the Core ML decoder sidecar is attached, `0` once a fallback retired it.",
+        ),
+    ] = None
+    dac_sidecar_loaded: Annotated[
+        float | None,
+        Field(
+            alias="dacSidecarLoaded",
+            description="Parler on macOS / iOS: `1` while the Core ML DAC sidecar is attached, `0` once a fallback retired it.",
+        ),
+    ] = None
+    decoder_on_coreml: Annotated[
+        float | None,
+        Field(
+            alias="decoderOnCoreml",
+            description="Parler: `1` when this synthesis ran its decoder steps on Core ML, `0` for ggml or a mixed run.",
+        ),
+    ] = None
+    dac_on_coreml: Annotated[
+        float | None,
+        Field(
+            alias="dacOnCoreml",
+            description="Parler: `1` when this synthesis ran its DAC on Core ML, `0` for ggml or a mixed run.",
         ),
     ] = None
     t3_ms: Annotated[
@@ -26799,6 +27371,13 @@ class TextToSpeechStreamResponse(GeneratedBaseModel):
         Field(
             alias="isLast",
             description="True on the final audio-bearing chunk of a pre-chunked synthesis. Absent when the chunk count is not known up front (streamed text in).",
+        ),
+    ] = None
+    speech_token_ids: Annotated[
+        list[SpeechTokenId] | None,
+        Field(
+            alias="speechTokenIds",
+            description="CosyVoice3: the speech tokens of this synthesis. Batch synthesis carries them with the PCM; native chunk streaming on a final `isLast` frame with no audio. Pass them back as `forceSpeechTokens` to replay the trajectory.",
         ),
     ] = None
     stop_reason: Annotated[

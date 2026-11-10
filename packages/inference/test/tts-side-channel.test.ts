@@ -60,6 +60,25 @@ test('settle() is idempotent and a late observe() cannot change a settled value'
   t.is(await side.stats, undefined)
 })
 
+test('speechTokenIds concatenates every array the frames carried, in order, at settle()', async (t) => {
+  // CosyVoice3 batch synthesis hands one array over with the PCM; the chunked
+  // paths run one native synthesis per sentence, so the run's trajectory is
+  // their concatenation. A frame without ids (the audio frames of a native
+  // stream) adds nothing.
+  const side = createTtsSideChannel()
+  side.observe(frame({ buffer: [1, 2] }))
+  side.observe(frame({ buffer: [3], speechTokenIds: [12, 480] }))
+  side.observe(frame({ buffer: [], isLast: true, speechTokenIds: [3] }))
+  t.is(await isPending(side.speechTokenIds), true, 'the trajectory waits for settle()')
+  side.settle()
+  t.alike(await side.speechTokenIds, [12, 480, 3])
+
+  const none = createTtsSideChannel()
+  none.observe(frame({ buffer: [1] }))
+  none.settle()
+  t.is(await none.speechTokenIds, undefined, 'engines that emit no tokens resolve undefined')
+})
+
 test('MOSS-Speech reply text settles even when no PCM was emitted', async (t) => {
   const side = createTtsSideChannel()
   side.observe(frame({ text: 'Hello.' }))

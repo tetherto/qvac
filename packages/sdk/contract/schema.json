@@ -5922,11 +5922,23 @@
         "MOSS_SPEECH"
       ]
     },
+    "constants.TtsLavasrCoremlComputeUnits": {
+      "title": "TtsLavasrCoremlComputeUnits",
+      "type": "string",
+      "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
+      "x-enum-varnames": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"]
+    },
     "constants.TtsPace": {
       "title": "TtsPace",
       "type": "string",
       "enum": ["slow", "moderate", "fast"],
       "x-enum-varnames": ["SLOW", "MODERATE", "FAST"]
+    },
+    "constants.TtsParlerCoremlComputeUnits": {
+      "title": "TtsParlerCoremlComputeUnits",
+      "type": "string",
+      "enum": ["all", "cpu_and_ane", "cpu_and_gpu", "cpu_only"],
+      "x-enum-varnames": ["ALL", "CPU_AND_ANE", "CPU_AND_GPU", "CPU_ONLY"]
     },
     "constants.TtsParlerEmotion": {
       "title": "TtsParlerEmotion",
@@ -6035,6 +6047,12 @@
         "UK",
         "VI"
       ]
+    },
+    "constants.TtsSupertonicPrecision": {
+      "title": "TtsSupertonicPrecision",
+      "type": "string",
+      "enum": ["auto", "f32", "f16", "q8_0"],
+      "x-enum-varnames": ["AUTO", "F32", "F16", "Q8_0"]
     },
     "constants.VectorIndexStorage": {
       "title": "VectorIndexStorage",
@@ -16857,6 +16875,11 @@
                           "minimum": -2147483648,
                           "maximum": 2147483647
                         },
+                        "backend": {
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "type": "string",
+                          "minLength": 1
+                        },
                         "backendsDir": {
                           "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                           "type": "string",
@@ -17461,6 +17484,28 @@
                             }
                           ]
                         },
+                        "lavasrEnhancerCoremlModelPath": {
+                          "description": "macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR enhancer’s neural core; requires `lavasrEnhancerModelSrc` and `lavasrEnhancerCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "lavasrEnhancerCoremlComputeUnits": {
+                          "description": "macOS / iOS: Core ML compute policy for the LavaSR enhancer; required with `lavasrEnhancerCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+                          "type": "string",
+                          "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerCoremlComputeUnits"
+                        },
+                        "lavasrDenoiserCoremlModelPath": {
+                          "description": "macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR denoiser’s neural core; requires `lavasrDenoiserModelSrc` and `lavasrDenoiserCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "lavasrDenoiserCoremlComputeUnits": {
+                          "description": "macOS / iOS: Core ML compute policy for the LavaSR denoiser; required with `lavasrDenoiserCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+                          "type": "string",
+                          "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserCoremlComputeUnits"
+                        },
                         "ttsSupertonicMultilingual": {},
                         "ttsTokenizerSrc": {},
                         "ttsSpeechEncoderSrc": {},
@@ -17613,6 +17658,70 @@
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 2147483647
+                        },
+                        "precision": {
+                          "description": "Weight precision the engine loads at: `auto` keeps the GGUF’s own, `f32` / `f16` / `q8_0` convert on load and change the weight footprint.",
+                          "type": "string",
+                          "enum": ["auto", "f32", "f16", "q8_0"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigSupertonicPrecision"
+                        },
+                        "f16Attn": {
+                          "description": "Attention precision override: `-1` automatic (default), `0` f32, `1` f16.",
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "f16Weights": {
+                          "description": "Weight precision override: `-1` automatic (default), `0` off, `1` f16.",
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "kvAttnType": {
+                          "description": "Native KV attention type code; `-1` leaves the automatic selection.",
+                          "type": "integer",
+                          "minimum": -2147483648,
+                          "maximum": 2147483647
+                        },
+                        "f16WeightsDenyList": {
+                          "description": "Tensor-name patterns kept at their original precision when `f16Weights` is on.",
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        },
+                        "vulkanEnvOverrides": {
+                          "description": "Vulkan environment overrides (string values) passed to the engine; explicit entries win over the `vulkanCacheDir` convenience setting.",
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "string"
+                          },
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigSupertonicVulkanEnvOverrides"
+                        },
+                        "voiceStyleTtl": {
+                          "description": "In-memory voice: the flattened `style_ttl` tensor of a cloned voice. Paired with `voiceStyleDp`; the engine checks the sizes against the model, and the pair wins over `voiceJsonSrc` and the baked `voice`.",
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        },
+                        "voiceStyleDp": {
+                          "description": "In-memory voice: the flattened `style_dp` tensor, paired with `voiceStyleTtl`.",
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          }
+                        },
+                        "backend": {
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "type": "string",
+                          "minLength": 1
                         },
                         "backendsDir": {
                           "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
@@ -17821,6 +17930,28 @@
                               "title": "LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrc"
                             }
                           ]
+                        },
+                        "lavasrEnhancerCoremlModelPath": {
+                          "description": "macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR enhancer’s neural core; requires `lavasrEnhancerModelSrc` and `lavasrEnhancerCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "lavasrEnhancerCoremlComputeUnits": {
+                          "description": "macOS / iOS: Core ML compute policy for the LavaSR enhancer; required with `lavasrEnhancerCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+                          "type": "string",
+                          "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerCoremlComputeUnits"
+                        },
+                        "lavasrDenoiserCoremlModelPath": {
+                          "description": "macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR denoiser’s neural core; requires `lavasrDenoiserModelSrc` and `lavasrDenoiserCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "lavasrDenoiserCoremlComputeUnits": {
+                          "description": "macOS / iOS: Core ML compute policy for the LavaSR denoiser; required with `lavasrDenoiserCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+                          "type": "string",
+                          "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserCoremlComputeUnits"
                         },
                         "voiceJsonSrc": {
                           "description": "External voice JSON source (`{ style_ttl, style_dp }`, e.g. a cloned voice) that overrides the baked `voice` preset; the engine checks the tensor sizes against the loaded model.",
@@ -18192,6 +18323,25 @@
                           "description": "Parler prompt digit expansion (engine default: enabled).",
                           "type": "boolean"
                         },
+                        "coremlDecoder": {
+                          "description": "macOS / iOS: run the decoder steps on the `<model>-decoder.mlmodelc` sidecar beside the GGUF (the DAC sidecar is picked up by presence); unset keeps the engine default.",
+                          "type": "boolean"
+                        },
+                        "coremlComputeUnits": {
+                          "description": "macOS / iOS: Core ML compute policy for the Parler sidecars; unset inherits the engine’s environment default.",
+                          "type": "string",
+                          "enum": ["all", "cpu_and_ane", "cpu_and_gpu", "cpu_only"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerCoremlComputeUnits"
+                        },
+                        "coremlStrict": {
+                          "description": "macOS / iOS: `true` fails the load when a sidecar is unusable instead of falling back to ggml, `false` permits the fallback; unset inherits the engine’s strict mode.",
+                          "type": "boolean"
+                        },
+                        "backend": {
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "type": "string",
+                          "minLength": 1
+                        },
                         "backendsDir": {
                           "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                           "type": "string",
@@ -18394,6 +18544,28 @@
                               "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrc"
                             }
                           ]
+                        },
+                        "lavasrEnhancerCoremlModelPath": {
+                          "description": "macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR enhancer’s neural core; requires `lavasrEnhancerModelSrc` and `lavasrEnhancerCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "lavasrEnhancerCoremlComputeUnits": {
+                          "description": "macOS / iOS: Core ML compute policy for the LavaSR enhancer; required with `lavasrEnhancerCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+                          "type": "string",
+                          "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerCoremlComputeUnits"
+                        },
+                        "lavasrDenoiserCoremlModelPath": {
+                          "description": "macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR denoiser’s neural core; requires `lavasrDenoiserModelSrc` and `lavasrDenoiserCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "lavasrDenoiserCoremlComputeUnits": {
+                          "description": "macOS / iOS: Core ML compute policy for the LavaSR denoiser; required with `lavasrDenoiserCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+                          "type": "string",
+                          "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserCoremlComputeUnits"
                         }
                       },
                       "required": ["ttsEngine"],
@@ -18487,6 +18659,19 @@
                           "minimum": -1,
                           "maximum": 2147483647
                         },
+                        "greedy": {
+                          "description": "Greedy LM decoding: take the argmax speech token instead of sampling (engine default off).",
+                          "type": "boolean"
+                        },
+                        "forceSpeechTokens": {
+                          "description": "Speech-token trajectory to replay instead of generating, as a previous run returned it in `speechTokenIds`; an empty array restores generation.",
+                          "type": "array",
+                          "items": {
+                            "type": "integer",
+                            "minimum": -2147483648,
+                            "maximum": 2147483647
+                          }
+                        },
                         "useGPU": {
                           "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
                           "type": "boolean"
@@ -18526,6 +18711,11 @@
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
+                        },
+                        "backend": {
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "type": "string",
+                          "minLength": 1
                         },
                         "backendsDir": {
                           "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
@@ -18734,6 +18924,28 @@
                               "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrc"
                             }
                           ]
+                        },
+                        "lavasrEnhancerCoremlModelPath": {
+                          "description": "macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR enhancer’s neural core; requires `lavasrEnhancerModelSrc` and `lavasrEnhancerCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "lavasrEnhancerCoremlComputeUnits": {
+                          "description": "macOS / iOS: Core ML compute policy for the LavaSR enhancer; required with `lavasrEnhancerCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+                          "type": "string",
+                          "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerCoremlComputeUnits"
+                        },
+                        "lavasrDenoiserCoremlModelPath": {
+                          "description": "macOS / iOS: compiled Core ML model directory (`.mlmodelc`) on the inference host for the LavaSR denoiser’s neural core; requires `lavasrDenoiserModelSrc` and `lavasrDenoiserCoremlComputeUnits`. A model that cannot load fails the load rather than falling back to ggml.",
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "lavasrDenoiserCoremlComputeUnits": {
+                          "description": "macOS / iOS: Core ML compute policy for the LavaSR denoiser; required with `lavasrDenoiserCoremlModelPath`. Stats then report the stage as device `2` (Core ML-managed), backend `99`.",
+                          "type": "string",
+                          "enum": ["CPU_ONLY", "CPU_AND_GPU", "CPU_AND_NE", "ALL"],
+                          "title": "LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserCoremlComputeUnits"
                         },
                         "referenceAudioSrc": {
                           "description": "CosyVoice3 voice-cloning reference recording source (wav; 0.5–30 s, 5–15 s of clean speech recommended). Replaces the baked voice.",
@@ -19105,6 +19317,11 @@
                           "minimum": -2147483648,
                           "maximum": 2147483647
                         },
+                        "backend": {
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "type": "string",
+                          "minLength": 1
+                        },
                         "backendsDir": {
                           "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                           "type": "string",
@@ -19426,16 +19643,67 @@
                           "minLength": 1
                         },
                         "durationTokens": {
-                          "description": "Target length of each synthesis in codec frames (12.5 per second, so 38 ≈ 3 s), 0–2015; 0 or unset keeps the length free.",
+                          "description": "Target length of each synthesis in codec frames (12.5 per second, so 38 ≈ 3 s), at most `maxNewTokens` − 33 (2015 by default); 0 or unset keeps the length free.",
                           "type": "integer",
                           "minimum": 0,
-                          "maximum": 2015
+                          "maximum": 2147483647
                         },
                         "streamChunkTokens": {
                           "description": "Codec frames per native streaming chunk (12.5 per second, so 25 ≈ 2 s); 0 or unset synthesizes the whole text before emitting.",
                           "type": "integer",
                           "minimum": 0,
                           "maximum": 2147483647
+                        },
+                        "nCtx": {
+                          "description": "Context capacity of the backbone in rows; unset keeps the native value.",
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "maxNewTokens": {
+                          "description": "Generation budget in rows (engine default 2048), of which 33 are delay/EOS rows; bounds `durationTokens`.",
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "textTemperature": {
+                          "description": "Text-channel sampling temperature; unset keeps the engine default.",
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "textTopP": {
+                          "description": "Text-channel top-p (nucleus) cutoff, 0 < p ≤ 1; unset keeps the engine default.",
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1
+                        },
+                        "textTopK": {
+                          "description": "Text-channel top-k cutoff; unset keeps the engine default.",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "audioTemperature": {
+                          "description": "Audio-channel sampling temperature; unset keeps the engine default.",
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "audioTopP": {
+                          "description": "Audio-channel top-p (nucleus) cutoff, 0 < p ≤ 1; unset keeps the engine default.",
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 1
+                        },
+                        "audioTopK": {
+                          "description": "Audio-channel top-k cutoff; unset keeps the engine default.",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "audioRepetitionPenalty": {
+                          "description": "Audio-channel repetition penalty; 1 = off, unset keeps the engine default.",
+                          "type": "number",
+                          "exclusiveMinimum": 0
                         },
                         "useGPU": {
                           "description": "Route inference through a GPU backend (Metal / CUDA / Vulkan / OpenCL) when available. Default false.",
@@ -19458,6 +19726,11 @@
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
+                        },
+                        "backend": {
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "type": "string",
+                          "minLength": 1
                         },
                         "backendsDir": {
                           "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
@@ -19900,6 +20173,11 @@
                           "minimum": -2147483648,
                           "maximum": 2147483647
                         },
+                        "backend": {
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "type": "string",
+                          "minLength": 1
+                        },
                         "backendsDir": {
                           "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
                           "type": "string",
@@ -19967,6 +20245,11 @@
                           "type": "integer",
                           "minimum": -2147483648,
                           "maximum": 2147483647
+                        },
+                        "backend": {
+                          "description": "Explicit native backend: `auto`, `cpu`, `opencl`, `webgpu`, or an exact registered device name such as `MTL0`, `CUDA0` or `Vulkan0` (device names depend on the host). An unavailable explicit backend fails the load; unset keeps the `useGPU` policy. WebGPU is available to Supertonic 3, Parler, CosyVoice3 and Audio8 only.",
+                          "type": "string",
+                          "minLength": 1
                         },
                         "backendsDir": {
                           "description": "Directory scanned as given for dynamically-loaded ggml backend `.so` files. Unset scans the directory the native module was loaded from.",
@@ -25721,6 +26004,7 @@
               "type": "number"
             },
             "backendId": {
+              "description": "Backend family the engine ran on: `0` CPU, `1` Metal, `2` CUDA, `3` Vulkan, `4` OpenCL, `5` WebGPU, `99` other.",
               "type": "number"
             },
             "gpuUnsupported": {
@@ -25746,6 +26030,22 @@
             },
             "codecOnCoreml": {
               "description": "Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports.",
+              "type": "number"
+            },
+            "decoderSidecarLoaded": {
+              "description": "Parler on macOS / iOS: `1` while the Core ML decoder sidecar is attached, `0` once a fallback retired it.",
+              "type": "number"
+            },
+            "dacSidecarLoaded": {
+              "description": "Parler on macOS / iOS: `1` while the Core ML DAC sidecar is attached, `0` once a fallback retired it.",
+              "type": "number"
+            },
+            "decoderOnCoreml": {
+              "description": "Parler: `1` when this synthesis ran its decoder steps on Core ML, `0` for ggml or a mixed run.",
+              "type": "number"
+            },
+            "dacOnCoreml": {
+              "description": "Parler: `1` when this synthesis ran its DAC on Core ML, `0` for ggml or a mixed run.",
               "type": "number"
             },
             "t3Ms": {
@@ -25871,6 +26171,15 @@
         "isLast": {
           "description": "True on the final audio-bearing chunk of a pre-chunked synthesis. Absent when the chunk count is not known up front (streamed text in).",
           "type": "boolean"
+        },
+        "speechTokenIds": {
+          "description": "CosyVoice3: the speech tokens of this synthesis. Batch synthesis carries them with the PCM; native chunk streaming on a final `isLast` frame with no audio. Pass them back as `forceSpeechTokens` to replay the trajectory.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
         },
         "stopReason": {
           "type": "string",
@@ -26198,6 +26507,7 @@
               "type": "number"
             },
             "backendId": {
+              "description": "Backend family the engine ran on: `0` CPU, `1` Metal, `2` CUDA, `3` Vulkan, `4` OpenCL, `5` WebGPU, `99` other.",
               "type": "number"
             },
             "gpuUnsupported": {
@@ -26223,6 +26533,22 @@
             },
             "codecOnCoreml": {
               "description": "Audio8: `1` when this synthesis ran its codec on the Core ML sidecar, `0` when it ran on the ggml backend `backendId` reports.",
+              "type": "number"
+            },
+            "decoderSidecarLoaded": {
+              "description": "Parler on macOS / iOS: `1` while the Core ML decoder sidecar is attached, `0` once a fallback retired it.",
+              "type": "number"
+            },
+            "dacSidecarLoaded": {
+              "description": "Parler on macOS / iOS: `1` while the Core ML DAC sidecar is attached, `0` once a fallback retired it.",
+              "type": "number"
+            },
+            "decoderOnCoreml": {
+              "description": "Parler: `1` when this synthesis ran its decoder steps on Core ML, `0` for ggml or a mixed run.",
+              "type": "number"
+            },
+            "dacOnCoreml": {
+              "description": "Parler: `1` when this synthesis ran its DAC on Core ML, `0` for ggml or a mixed run.",
               "type": "number"
             },
             "t3Ms": {
@@ -26348,6 +26674,15 @@
         "isLast": {
           "description": "True on the final audio-bearing chunk of a pre-chunked synthesis. Absent when the chunk count is not known up front (streamed text in).",
           "type": "boolean"
+        },
+        "speechTokenIds": {
+          "description": "CosyVoice3: the speech tokens of this synthesis. Batch synthesis carries them with the PCM; native chunk streaming on a final `isLast` frame with no audio. Pass them back as `forceSpeechTokens` to replay the trajectory.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
         },
         "stopReason": {
           "type": "string",
