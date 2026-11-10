@@ -14,6 +14,14 @@ type Rule = {
 
 const RULES: Rule[] = [
   {
+    match: /^image-embedding-/,
+    skip: {
+      reason:
+        'MegaLoc inference uses a shared JS executor; Python and Kotlin runners do not implement it.',
+      platforms: ['desktop-python', 'kotlin-android']
+    }
+  },
+  {
     match: /^tts-moss-/,
     skip: {
       reason:
@@ -133,6 +141,14 @@ const RULES: Rule[] = [
     match: ['kv-cache-warm-tool-choice-required'],
     skip: {
       reason: 'The forced tool call reasons past the Device Farm test timeout',
+      platforms: ['mobile']
+    }
+  },
+  {
+    match: ['kv-cache-shared-prefix-default-isolated', 'kv-cache-shared-prefix-opt-in'],
+    skip: {
+      reason:
+        'Defined only as steps, which the JS mobile consumer does not run; Kotlin inherits the skip because it shares the Android device. Covered by desktop and Python e2e',
       platforms: ['mobile']
     }
   },

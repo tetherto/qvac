@@ -3,6 +3,7 @@ import Buffer from 'bare-buffer'
 import { registerModel, unregisterModel } from '@/runtime/model-registry'
 import { textToSpeech } from '@/plugins/builtin/tts-ggml/ops/text-to-speech'
 import { textToSpeechStream } from '@/plugins/builtin/tts-ggml/ops/text-to-speech-stream'
+import { withDecodedTtsPcm } from '@/schemas/tts-pcm'
 
 // Audio8 0.14 emits several codec windows from one sentence. A window must
 // reach the caller before synthesis finishes, without a final waveform replay.
@@ -75,10 +76,18 @@ for (const mode of ['stream', 'sentence', 'duplex'] as const) {
       ])
       clearTimeout(timer)
       t.is(first.done, false)
-      t.alike(first.value, { buffer: [10, 20], sampleRate: 44100, chunkIndex: 0 })
+      if (first.done) throw new Error('Expected a codec window before the terminal frame')
+      // Int16 engine audio travels as base64 `pcm`; the samples are the same.
+      t.is(typeof first.value.pcm, 'string', 'int16 window is carried as pcm')
+      t.alike(withDecodedTtsPcm(first.value), {
+        buffer: [10, 20],
+        sampleRate: 44100,
+        chunkIndex: 0
+      })
       release()
       const second = await op.next()
-      t.alike(second.value, {
+      if (second.done) throw new Error('Expected the final codec window before the terminal frame')
+      t.alike(withDecodedTtsPcm(second.value), {
         buffer: [30, 40],
         sampleRate: 44100,
         chunkIndex: 1,

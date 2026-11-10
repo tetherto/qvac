@@ -394,6 +394,7 @@ void MtmdLlmContext::tokenizeChat(
   if (cacheReconciliationEnabled_) {
     const auto& lastRole = chatMsgs.back().role;
     isLastMessageFromUser = lastRole == "user" || lastRole == "tool";
+    historyEndsAtUserTurn_ = lastRole == "user";
     addSpecial = true;
   } else if (current_.pos == 0 && !isCacheLoaded) {
     const auto& lastRole = chatMsgs.back().role;
@@ -1853,7 +1854,8 @@ void MtmdLlmContext::commitCacheRequest() {
         cacheCheckpoints_,
         std::move(*pendingHistoryCheckpoint_),
         cacheCheckpointPolicy_,
-        [](const CacheCheckpoint& entry) { return entry.state.bytes(); });
+        [](const CacheCheckpoint& entry) { return entry.state.bytes(); },
+        [](const CacheCheckpoint& entry) { return entry.endsAtUserTurn; });
     pendingHistoryCheckpoint_.reset();
   }
   cacheRequestActive_ = false;
@@ -1881,7 +1883,8 @@ void MtmdLlmContext::captureHistoryCheckpoint(llama_pos pos) {
   CacheCheckpoint checkpoint{
       .ledger = std::move(ledger),
       .cacheTokens =
-          pendingPromptLedger_.cacheTokens(historyCheckpointEntries_)};
+          pendingPromptLedger_.cacheTokens(historyCheckpointEntries_),
+      .endsAtUserTurn = historyEndsAtUserTurn_};
   if (!snapshotSequenceState(
           modelCtx_.lctx,
           seqId_,

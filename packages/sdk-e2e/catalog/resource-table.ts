@@ -8,6 +8,12 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: { verbosity: 0, ctx_size: 2048 }
   },
 
+  'llm-shared-cache': {
+    constant: { $const: 'LLAMA_3_2_1B_INST_Q4_0' },
+    type: 'llamacpp-completion',
+    config: { verbosity: 0, ctx_size: 2048, cache_share_across_keys: true }
+  },
+
   'llm-small-ctx': {
     constant: { $const: 'LLAMA_3_2_1B_INST_Q4_0' },
     type: 'llamacpp-completion',
@@ -80,6 +86,13 @@ export const RESOURCE_TABLE: ResourceTable = {
       batchSize: 2048
     },
     configOn: { 'mobile-android': { flashAttention: 'off' } }
+  },
+
+  'image-embedding': {
+    on: ['desktop-macos', 'desktop-linux', 'desktop-windows', 'mobile', 'electron', 'snap'],
+    constant: { $const: 'MEGALOC_MIXED' },
+    type: 'ggml-image-embedding',
+    config: { backend: 'CPU', threads: 4 }
   },
 
   // The reranker the addon's own tests use, pinned until a reranker is in the registry.
