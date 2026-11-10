@@ -138,12 +138,13 @@ std::any BridgeDepthModel::process(const std::any& input) {
   uint32_t height = 0;
   uint32_t rightWidth = 0;
   uint32_t rightHeight = 0;
+  // Decoding counts, as MegaLoc's total_time_ms includes its preprocess().
+  const auto start = std::chrono::steady_clock::now();
   const auto left = toPlanarRgb(pair->left, width, height);
   const auto right = toPlanarRgb(pair->right, rightWidth, rightHeight);
   check(
       width == rightWidth && height == rightHeight,
       "left and right images must have the same size");
-  const auto start = std::chrono::steady_clock::now();
   DisparityOutput output{width, height, {}};
   try {
     output.disparity = impl_->graph->infer(
