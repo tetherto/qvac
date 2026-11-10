@@ -133,7 +133,7 @@ const commonAudioGenRuntimeConfigShape = {
     .boolean()
     .optional()
     .describe(
-      'Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the backend actually used.'
+      'Run on a GPU backend (CUDA, Vulkan, Metal, …) when usable; falls back to CPU. `stats.backendDevice` reports the primary backend a run used.'
     ),
   threads: z
     .number()
@@ -197,12 +197,12 @@ const acestepRuntimeConfigShape = {
   backend: hostStringSchema('backend')
     .optional()
     .describe(
-      "Advanced: ACE-Step's primary backend, by backend or device name (`cpu`, `MTL0`, `CUDA0`, …). Unset or `auto` keeps the placement `useGPU` and `nGpuLayers` select. A named backend the host cannot provide fails the load instead of falling back."
+      "Advanced: ACE-Step's primary backend, by backend or device name (`cpu`, `MTL0`, `CUDA0`, …). Unset or `auto` keeps the placement `useGPU` and `nGpuLayers` select; any other value overrides both, so `useGPU: false` with `backend: 'CUDA0'` runs on CUDA0. A named backend the host cannot provide fails the load instead of falling back."
     ),
   lmBackend: hostStringSchema('lmBackend')
     .optional()
     .describe(
-      "Advanced: the backend ACE-Step's language model runs on, chosen independently of `backend` and named the same way. Unset or `auto` keeps the engine's own placement. A named backend the host cannot provide fails the load instead of falling back."
+      "Advanced: the backend ACE-Step's language model runs on, chosen independently of `backend` and named the same way. Unset or `auto` keeps the engine's own placement for the LM; any other value overrides it. A named backend the host cannot provide fails the load instead of falling back."
     ),
   dumpStagesDir: hostStringSchema('dumpStagesDir')
     .optional()
@@ -981,8 +981,18 @@ export const audioGenStatsSchema = z.object({
   audioDurationMs: z.number().optional(),
   totalTimeMs: z.number().optional(),
   realTimeFactor: z.number().optional(),
-  backendDevice: z.number().optional(),
-  backendId: z.number().optional(),
+  backendDevice: z
+    .number()
+    .optional()
+    .describe(
+      'The primary backend the run used: 0 CPU, 1 GPU. The device an ACE-Step `lmBackend` names is not reported here.'
+    ),
+  backendId: z
+    .number()
+    .optional()
+    .describe(
+      'The primary backend the run used, as the engine codes it: 0 CPU, 1 Metal, 2 CUDA, 3 Vulkan, 4 OpenCL, 99 other.'
+    ),
   gpuFallbackReason: z
     .number()
     .optional()

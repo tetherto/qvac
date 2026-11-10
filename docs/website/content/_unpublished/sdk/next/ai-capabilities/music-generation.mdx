@@ -134,11 +134,11 @@ const modelId = await loadModel({
 | `lmBackend` | The backend the language model runs on, named the same way and chosen independently of `backend`. Unset or `"auto"` keeps the engine's own placement. |
 | `dumpStagesDir` | Diagnostics. An existing directory on the inference host that receives each stage's intermediate tensors. The engine does not create it, and writes nothing when the field is unset. |
 
-A named backend is a requirement, not a preference: when the host cannot provide it, the load fails instead of running somewhere else. The engine's own checks still apply, so a backend that cannot run a stage's operations is refused as well. `stats.backendDevice` and `stats.backendId` report the backend a run used. [`assessModelFit()`](/sdk/models/assess-model-fit) projects the same placement, counting the device the LM runs on as well as the primary one.
+A named backend is a requirement, not a preference: when the host cannot provide it, the load fails instead of running somewhere else. The engine's own checks still apply, so a backend that cannot run a stage's operations is refused as well. `stats.backendDevice` and `stats.backendId` report the primary backend a run used; the device `lmBackend` names is not reported. [`assessModelFit()`](/sdk/models/assess-model-fit) projects the same placement, counting the device the LM runs on as well as the primary one.
 
 #### Core ML VAE decoder on Apple
 
-On macOS and iOS, the SDK downloads a compiled Core ML bundle with `AUDIOGEN_VAE_BF16` and stages it beside the GGUF, where the engine picks it up for the VAE decode. There is nothing to configure. A VAE loaded from your own file path uses a bundle only when one sits next to the GGUF under the name the engine looks for, which is `vae-decoder.mlmodelc` for `vae-BF16.gguf`. Without the bundle, and on every other platform, the VAE decodes on the backend the load selected. [`assessModelFit()`](/sdk/models/assess-model-fit) sizes the native VAE and does not count the Core ML bundle's memory.
+On macOS and iOS, the SDK downloads a compiled Core ML bundle with `AUDIOGEN_VAE_BF16` and stages it beside the GGUF, where the engine picks it up for the VAE decode. There is nothing to configure. The bundle lives in a companion directory with its GGUF, so a VAE that was already in the cache is downloaded once more on these platforms (337 MB), as happens for the Parakeet and Audio8 sidecars. A VAE loaded from your own file path uses a bundle only when one sits next to the GGUF under the name the engine looks for, which is `vae-decoder.mlmodelc` for `vae-BF16.gguf`. Without the bundle, and on every other platform, the VAE decodes on the backend the load selected. [`assessModelFit()`](/sdk/models/assess-model-fit) sizes the native VAE and does not count the Core ML bundle's memory.
 
 ### MiniMax-Music3
 
@@ -205,7 +205,7 @@ const modelId = await loadModel({
 
 This is not the full Core ML profile and does not need `coremlProfileDir` or `coremlComputeUnits`. The load fails when the bundle is invalid or the build cannot use it, and the SDK refuses the field on any platform other than macOS before resolving the model files. [`assessModelFit()`](/sdk/models/assess-model-fit) cannot size a load that names a conditioner.
 
-Every run reports where it ran: `stats.backendDevice` (0 CPU, 1 GPU) and `stats.backendId` (0 CPU, 1 Metal, 2 CUDA, 3 Vulkan, 4 OpenCL) describe the backend the engine used, not the one requested, and `stats.gpuFallbackReason` carries the engine's code for a GPU request that landed on the CPU (0 none, 1 not requested, 2 no devices, 3 init failed). The run's `diagnostics` promise names the same backend, and `diagnostics.fallback.reason` names a lost GPU (`"no-devices"` or `"init-failed"`), so a Metal fallback is distinguishable from a slow run.
+Every run reports where it ran: `stats.backendDevice` (0 CPU, 1 GPU) and `stats.backendId` (0 CPU, 1 Metal, 2 CUDA, 3 Vulkan, 4 OpenCL) describe the primary backend the engine used, not the one requested, and `stats.gpuFallbackReason` carries the engine's code for a GPU request that landed on the CPU (0 none, 1 not requested, 2 no devices, 3 init failed). The run's `diagnostics` promise names the same backend, and `diagnostics.fallback.reason` names a lost GPU (`"no-devices"` or `"init-failed"`), so a Metal fallback is distinguishable from a slow run.
 
 ## Generate audio
 

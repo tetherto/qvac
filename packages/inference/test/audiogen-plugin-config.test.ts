@@ -370,7 +370,7 @@ test('AudioGen rejects the MiniMax Core ML conditioner off macOS before resolvin
     }
     await t.exception(
       () => resolveAudioGenConfig(MINIMAX_CONDITIONER, context),
-      /Core ML conditioner requires macOS/
+      /Core ML conditioner is available on macOS only/
     )
     t.is(resolveCalls, 0, `${platform}: the guard runs before either model download`)
   }
