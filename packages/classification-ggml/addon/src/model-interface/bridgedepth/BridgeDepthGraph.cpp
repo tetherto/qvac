@@ -1027,10 +1027,22 @@ struct BridgeDepthGraph::Impl {
         ctx,
         ggml_step(ctx, bigger),
         ggml_step(ctx, ggml_scale_bias(ctx, prob, 1.0f, -eps)));
+    // torch sets non-maxima to exactly eps, so most rows have several entries
+    // tied at eps, and torch.topk takes the lowest index among them. ggml's
+    // top_k has no tie order, and a per-pixel mix of tie choices costs
+    // accuracy: on ETH3D, torch with a random tie-break per pixel moves bad 1.0
+    // from 1.61% to 1.76%, while one fixed rule (lowest or highest index) does
+    // not. So the masked value is eps minus one float32 ulp of eps per index:
+    // exact (prob - prob is 0, the steps stay in eps's binade), distinct, and
+    // highest at the lowest index. An unmasked value within D (40) ulp below
+    // eps, about 5e-9, would sort differently from torch.
+    const float tieStep = std::ldexp(1.0f, -33); // float32 ulp in [2^-10, 2^-9)
+    T* tieValue = ggml_scale_bias(
+        ctx, ggml_reshape_1d(ctx, in.arange, dDim), -tieStep, eps); // [D]
     T* probMasked = ggml_add(
         ctx,
-        prob,
-        ggml_mul(ctx, nonLocal, ggml_scale_bias(ctx, prob, -1.0f, eps)));
+        ggml_sub(ctx, prob, ggml_mul(ctx, nonLocal, prob)),
+        ggml_mul(ctx, nonLocal, tieValue));
     outs.emplace_back("dpn.prob_masked", probMasked);
     T* seeds;
     if (in.seedsOverride) {

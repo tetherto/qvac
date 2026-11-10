@@ -366,9 +366,10 @@ TEST_F(BridgeDepthReference, MatchesTorchWithReferenceSeeds) {
   }
 }
 
-// The production path: decode, own top-k seeds, unpad. Measured 2026-11-03:
-// 99.8% within 0.2 px on CPU, Metal, CUDA and Vulkan; the misses follow top-k
-// tie breaks.
+// The production path: decode, own top-k seeds, unpad. Measured 2026-11-10:
+// 99.76% within 0.2 px on CPU, 99.77% on Metal. The seeds break top-k ties at
+// the lowest index; torch.topk does so in 98.6% of this fixture's rows, and
+// the misses follow the other rows.
 TEST_F(BridgeDepthReference, ModelMatchesTorchWithOwnSeeds) {
   bd::BridgeDepthModel model({modelPath_, "", backend_, 4});
   model.load();
