@@ -259,6 +259,94 @@ test('an unchanged document is skipped like any other on abort, and comes back a
   t.is(result.revision, 3)
 })
 
+// After pause(), holds the next embedDocuments call until release() so another
+// call can write meanwhile.
+function pausingPort() {
+  const port = fakePort()
+  let release = () => {}
+  let entered = () => {}
+  const gate = new Promise<void>((resolve) => (release = resolve))
+  const paused = new Promise<void>((resolve) => (entered = resolve))
+  let armed = false
+  const embedDocuments = port.embedDocuments.bind(port)
+  port.embedDocuments = async (texts, options) => {
+    if (armed) {
+      armed = false
+      entered()
+      await gate
+    }
+    return embedDocuments(texts, options)
+  }
+  function pause() {
+    armed = true
+  }
+  return { port, pause, paused, release }
+}
+
+test('a document found unchanged is rechecked at commit', async (t) => {
+  const store = await openStore(t)
+  const { port, pause, paused, release } = pausingPort()
+  const rag = await openWithPort(t, store, port)
+  await rag.ingest({
+    namespace: 'ns',
+    documents: [
+      { id: 'gone', text: 'cat' },
+      { id: 'edited', text: 'dog' },
+      { id: 'kept', text: 'fish' }
+    ]
+  })
+
+  pause()
+  const pending = rag.ingest({
+    namespace: 'ns',
+    documents: [
+      { id: 'new', text: 'bird' },
+      { id: 'gone', text: 'cat' },
+      { id: 'edited', text: 'dog' },
+      { id: 'kept', text: 'fish' }
+    ]
+  })
+  await paused
+  await rag.deleteDocuments({ namespace: 'ns', documentIds: ['gone'] })
+  await rag.ingest({ namespace: 'ns', documents: [{ id: 'edited', text: 'horse' }] })
+  release()
+
+  const result = await pending
+  t.alike(result.documents, [
+    { id: 'new', generation: 1, chunkCount: 1, status: 'created' },
+    { id: 'gone', generation: 1, chunkCount: 1, status: 'created' },
+    { id: 'edited', generation: 3, chunkCount: 1, status: 'replaced', removedChunks: 1 },
+    { id: 'kept', generation: 1, chunkCount: 1, status: 'unchanged' }
+  ])
+  t.is(result.revision, 8, 'the latest revision, including the concurrent writes')
+  t.alike(
+    port.batches.slice(1).flat().sort(),
+    ['bird', 'cat', 'dog', 'horse'],
+    'only the changed documents were embedded'
+  )
+
+  const hits = await rag.search({ scope: { namespace: 'ns' }, query: 'dog', k: 1 })
+  t.is(hits[0].documentId, 'edited')
+  t.is(hits[0].content, 'dog', 'this call wrote its content back')
+})
+
+test('an unchanged result reports the revision a concurrent call reached', async (t) => {
+  const store = await openStore(t)
+  const { port, pause, paused, release } = pausingPort()
+  const rag = await openWithPort(t, store, port)
+
+  pause()
+  const pending = rag.ingest({ namespace: 'ns', documents: [{ id: 'a', text: 'cat' }] })
+  await paused
+  const other = await rag.ingest({ namespace: 'ns', documents: [{ id: 'a', text: 'cat' }] })
+  t.is(other.revision, 1)
+  release()
+
+  const result = await pending
+  t.alike(result.documents, [{ id: 'a', generation: 1, chunkCount: 1, status: 'unchanged' }])
+  t.is(result.revision, 1)
+})
+
 test("a rag-extract chunk's indexedAt alone is not a change", async (t) => {
   const store = await openStore(t)
   const port = fakePort()

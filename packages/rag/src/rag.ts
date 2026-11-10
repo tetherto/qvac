@@ -316,10 +316,16 @@ export function createRag(options: CreateRagOptions): Rag {
     documents.length = 0
     await withSnapshot(instance, (reader) => findUnchanged(reader, namespace, jobs))
     const queue: Array<{ job: IngestJob; ordinal: number }> = []
-    for (const job of jobs) {
+    function enqueue(job: IngestJob): void {
+      job.missing = 0
       job.vectors.forEach((vector, ordinal) => {
-        if (!vector) queue.push({ job, ordinal })
+        if (vector) return
+        queue.push({ job, ordinal })
+        job.missing++
       })
+    }
+    for (const job of jobs) {
+      if (job.missing > 0) enqueue(job)
     }
 
     const results: IngestedDocument[] = []
@@ -333,10 +339,15 @@ export function createRag(options: CreateRagOptions): Rag {
         // Checked once the lock is held, so an abort while waiting for another
         // write still skips this document.
         const job = jobs[next]
-        let committed: Committed | null
-        if (job.unchanged) {
-          if (signal?.aborted) return false
-          committed = { document: unchangedResult(job.unchanged), revision: null }
+        let committed: Committed | 'changed' | null
+        if (job.vectors.includes(undefined)) {
+          // Found unchanged before embedding; another call may have replaced
+          // or deleted the document since.
+          committed = await withTransaction(instance, (tx) =>
+            signal?.aborted
+              ? Promise.resolve(null)
+              : recheckUnchanged(tx, namespace, job.id, job.contentHash)
+          )
         } else {
           const document = toValidDocument(job, space.spaceId)
           checkChunks(namespace, ns, space, document)
@@ -347,11 +358,15 @@ export function createRag(options: CreateRagOptions): Rag {
           )
         }
         if (!committed) return false
+        if (committed === 'changed') {
+          enqueue(job)
+          return true
+        }
         // A large call would otherwise hold every vector it embedded until it returns.
         job.chunks = []
         job.vectors = []
         results.push(committed.document)
-        if (committed.revision !== null) revision = committed.revision
+        revision = committed.revision
         next++
         onProgress?.({ stage: 'commit', done: next, total: jobs.length })
       }
@@ -360,7 +375,9 @@ export function createRag(options: CreateRagOptions): Rag {
 
     try {
       cancelled = !(await commitReady())
-      for (let start = 0; !cancelled && start < queue.length; start += EMBED_BATCH_SIZE) {
+      // commitReady can requeue a document, so the queue may grow while this runs.
+      let start = 0
+      while (!cancelled && start < queue.length) {
         if (signal?.aborted) {
           cancelled = true
           break
@@ -374,7 +391,8 @@ export function createRag(options: CreateRagOptions): Rag {
           job.vectors[ordinal] = rows[row]
           job.missing--
         })
-        onProgress?.({ stage: 'embed', done: start + batch.length, total: queue.length })
+        start += batch.length
+        onProgress?.({ stage: 'embed', done: start, total: queue.length })
         cancelled = !(await commitReady())
       }
     } catch (error) {
@@ -532,14 +550,11 @@ interface IngestJob {
   vectors: Array<Float32Array | undefined>
   missing: number
   contentHash: string
-  // The stored document, when it already holds this content.
-  unchanged?: DocumentRecord
 }
 
 interface Committed {
   document: IngestedDocument
-  // Null when nothing was written.
-  revision: number | null
+  revision: number
 }
 
 // Chunks every text document before anything is written, so text that yields
@@ -579,7 +594,7 @@ function prepareJobs(
 }
 
 // Runs before anything is embedded, so an unchanged text document costs no
-// embedding calls.
+// embedding calls. Its chunks are kept in case it changes before the commit.
 async function findUnchanged(
   reader: HyperDBReader,
   namespace: string,
@@ -587,12 +602,21 @@ async function findUnchanged(
 ): Promise<void> {
   for (const job of jobs) {
     const stored = await reader.get<DocumentRecord>(DOCUMENTS, { namespace, documentId: job.id })
-    if (stored?.contentHash !== job.contentHash) continue
-    job.unchanged = stored
-    job.chunks = []
-    job.vectors = []
-    job.missing = 0
+    if (stored?.contentHash === job.contentHash) job.missing = 0
   }
+}
+
+async function recheckUnchanged(
+  tx: HyperDBTransaction,
+  namespace: string,
+  documentId: string,
+  contentHash: string
+): Promise<Committed | 'changed'> {
+  const ns = await getNamespace(tx, namespace)
+  const stored = await tx.get<DocumentRecord>(DOCUMENTS, { namespace, documentId })
+  return stored?.contentHash === contentHash
+    ? { document: unchangedResult(stored), revision: ns.revision }
+    : 'changed'
 }
 
 function unchangedResult(stored: DocumentRecord): IngestedDocument {
@@ -629,7 +653,7 @@ async function commitDocument(
   const previous = await tx.get<DocumentRecord>(DOCUMENTS, { namespace, documentId: document.id })
   // A concurrent call may have written the same content since findUnchanged.
   if (previous?.contentHash === contentHash) {
-    return { document: unchangedResult(previous), revision: null }
+    return { document: unchangedResult(previous), revision: ns.revision }
   }
   const removed = previous ? await deleteGeneration(tx, previous) : []
   const generation = previous ? previous.generation + 1 : 1
