@@ -2,8 +2,8 @@ name: SDK e2e model cache
 description: |
   Caches SDK e2e models one actions/cache entry per model, from a plan written by
   packages/sdk-e2e/scripts/model-cache-plan.mjs, keyed by the registry sha256 of the model's
-  files. `save` uploads only entries the cache lacks, only on push, schedule, workflow_dispatch
-  and merge_group, and only files whose sha256 matches the registry.
+  files. `save` (on-merge-sdk-e2e-model-cache.yml) uploads only entries the cache lacks, only on
+  main, and only files whose sha256 matches the registry.
 
   The runner executes dist/. After editing src/, run `npm ci && npm run build` and commit dist/.
 

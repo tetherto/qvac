@@ -366,10 +366,9 @@ one copy of a model:
    `@qvac/inference/model-cache-layout`.
 2. `.github/actions/sdk-e2e-model-cache` restores those entries, and `scripts/model-cache-bootstrap.mjs`
    downloads only what the restore did not provide.
-3. Only `main` saves, and only files whose sha256 matches the registry:
-   `on-merge-sdk-e2e-model-cache.yml` (push, every two days, dispatch) and a `test-sdk.yml` dispatch on
-   `main`. Every PR and branch reads those entries. A model a PR adds is downloaded on that PR's runs
-   until it reaches `main`.
+3. Only `on-merge-sdk-e2e-model-cache.yml` on `main` saves (push, every two days, dispatch), and only
+   files whose sha256 matches the registry. Test jobs run with `cache-mode: read`. Every PR and branch
+   reads those entries. A model a PR adds is downloaded on that PR's runs until it reaches `main`.
 
 To see what a selection would restore, with `@qvac/inference` built from the branch:
 

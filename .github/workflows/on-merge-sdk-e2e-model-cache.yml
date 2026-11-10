@@ -71,7 +71,7 @@ jobs:
 
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
         with:
-          node-version: 22
+          node-version: 24
 
       - name: Pack inference
         id: inference
@@ -143,10 +143,6 @@ jobs:
             .github/actions/sdk-e2e-node-prepare
             .github/actions/sdk-e2e-prepare-inference
             .github/actions/sdk-e2e-prepare-test-suite
-
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # 6.3.0
-        with:
-          node-version: 22
 
       - name: Install and build
         uses: ./.github/actions/sdk-e2e-node-prepare
