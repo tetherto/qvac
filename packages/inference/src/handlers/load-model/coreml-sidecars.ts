@@ -66,7 +66,10 @@ const SIDECAR_FAMILIES: readonly SidecarFamily[] = [
   {
     // The pinned ASR addon supports these encoder sidecars. The other bundles
     // in the registry (CTC, Indic CTC, Nemotron, and TDT 1.1B) must not be
-    // downloaded until the addon can actually use them.
+    // downloaded until the addon can actually use them. Nor is the EOU bundle:
+    // it is compiled for one fixed 1101-frame (11 s) input, and the engine
+    // runs an EOU encoder sidecar only on an input of exactly that length,
+    // which the default streaming windows never are.
     source: 's3',
     root: 'qvac_models_compiled/ggml/parakeet/2026-09-28/',
     pathPattern: /\/ggml\/parakeet\//,
@@ -77,9 +80,6 @@ const SIDECAR_FAMILIES: readonly SidecarFamily[] = [
       ],
       'parakeet-unified-en-0.6b': [
         { sourceName: 'parakeet-unified-en-0.6b-encoder', targetSuffix: '-encoder' }
-      ],
-      'parakeet-eou-120m-v1': [
-        { sourceName: 'parakeet_realtime_eou_120m-v1-encoder', targetSuffix: '-encoder' }
       ],
       'diar_streaming_sortformer_4spk-v2.1': [
         { sourceName: 'diar_streaming_sortformer_4spk-v2.1-encoder', targetSuffix: '-encoder' },

@@ -87,15 +87,56 @@ test('Core ML companions: Apple TDT uses one GGUF constant and a colocated encod
   )
 })
 
-test('Core ML companions: EOU source name is mapped to the GGUF-derived name', async (t) => {
-  const set = await findCoremlCompanionSet(
-    client(bundle('parakeet_realtime_eou_120m-v1-encoder')),
-    primary('parakeet-eou-120m-v1.q8_0.gguf'),
-    'ios'
+// The registry publishes an EOU encoder bundle compiled for one fixed input
+// length that EOU's streaming windows never match, so no EOU GGUF stages it.
+const EOU_BUNDLE = 'parakeet_realtime_eou_120m-v1-encoder'
+const APPLE_PLATFORMS = ['darwin', 'ios']
+
+test('Core ML companions: EOU GGUFs load without the published EOU bundle', async (t) => {
+  const published = client(bundle(EOU_BUNDLE))
+  // The catalog's name, and the name EOU GGUFs carried before the 2026-09-30
+  // refresh, which the SDK used to map to that bundle.
+  for (const filename of [
+    'parakeet_realtime_eou_120m-v1.q8_0.gguf',
+    'parakeet-eou-120m-v1.q8_0.gguf'
+  ]) {
+    const model = primary(filename)
+    for (const platform of APPLE_PLATFORMS) {
+      t.absent(
+        getCoremlSidecarSpec(model.registryPath, 's3', platform),
+        `${filename} on ${platform} has no sidecar spec`
+      )
+      t.absent(
+        await findCoremlCompanionSet(published, model, platform),
+        `${filename} on ${platform} stages no companion set`
+      )
+    }
+  }
+})
+
+test('Core ML companions: no catalog model stages the EOU bundle', (t) => {
+  const isEouComponent = (registryPath: string) =>
+    registryPath.startsWith(`${ROOT}${EOU_BUNDLE}.mlmodelc/`)
+  t.is(
+    models.filter((entry) => isEouComponent(entry.registryPath)).length,
+    COMPONENTS.length,
+    'the catalog still lists the published EOU bundle'
   )
 
-  t.ok(set)
-  t.is(set!.files[1]!.targetName, 'parakeet-eou-120m-v1-encoder.mlmodelc/analytics/coremldata.bin')
+  const eouModels = models.filter((entry) => entry.name.startsWith('PARAKEET_EOU_120M_V1_'))
+  t.ok(eouModels.length > 0, 'the catalog lists EOU GGUFs')
+
+  const staged: string[] = []
+  for (const model of models) {
+    for (const platform of APPLE_PLATFORMS) {
+      const set = findCatalogCoremlCompanionSet(model, platform)
+      if (eouModels.includes(model) && set) staged.push(`${model.name} on ${platform}`)
+      if (set?.files.some((file) => isEouComponent(file.registryPath))) {
+        staged.push(`${model.name} on ${platform} stages ${EOU_BUNDLE}`)
+      }
+    }
+  }
+  t.alike(staged, [])
 })
 
 test('Core ML companions: Sortformer stages both batch and AOSC bundles', async (t) => {
