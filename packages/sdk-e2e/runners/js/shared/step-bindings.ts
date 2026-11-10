@@ -155,7 +155,14 @@ const CALLS: Record<string, (params: never) => Promise<unknown>> = {
   loadVectorIndex: async (params) => describeIndex(await loadVectorIndex(params)),
   vectorIndexAdd: async (params: never) => {
     const p = params as { indexId: string; ids: unknown[]; vectors: number[][] }
-    return await vectorIndex(p.indexId).add({ ids: p.ids as never, vectors: p.vectors })
+    const index = vectorIndex(p.indexId)
+    const added = await index.add({ ids: p.ids as never, vectors: p.vectors })
+    // The wire response carries the post-add state; the handle keeps it off the method result.
+    return { ...added, calibrated: index.calibrated, stagedSearch: index.stagedSearch }
+  },
+  vectorIndexSetStagedSearch: async (params: never) => {
+    const p = params as { indexId: string; enabled: boolean }
+    return await vectorIndex(p.indexId).setStagedSearch({ enabled: p.enabled })
   },
   vectorIndexSearch: async (params: never) => {
     const p = params as { indexId: string; query: number[]; k: number }
@@ -766,7 +773,14 @@ const VECTOR_INDEXES = new Map<string, Awaited<ReturnType<typeof createVectorInd
 
 const describeIndex = (index: Awaited<ReturnType<typeof createVectorIndex>>) => {
   VECTOR_INDEXES.set(index.indexId, index)
-  return { indexId: index.indexId, dim: index.dim, storage: index.storage, length: index.length }
+  return {
+    indexId: index.indexId,
+    dim: index.dim,
+    storage: index.storage,
+    length: index.length,
+    calibrated: index.calibrated,
+    stagedSearch: index.stagedSearch
+  }
 }
 
 const vectorIndex = (indexId: string) => {

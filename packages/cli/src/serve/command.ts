@@ -72,7 +72,7 @@ function resolveExtensionNames(options: ServeOptions): string[] {
 function addServeOptions(command: Command): Command {
   return command
     .option('-c, --config <path>', 'Config file path (default: auto-detect qvac.config.*)')
-    .option('-p, --port <number>', 'Port to listen on', '11434')
+    .option('-p, --port <number>', 'Port to listen on', '11435')
     .option('-H, --host <address>', 'Host to bind to', '127.0.0.1')
     .option(
       '--model <alias>',

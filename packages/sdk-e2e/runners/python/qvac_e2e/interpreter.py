@@ -677,6 +677,9 @@ CALLS: dict[str, Callable[[Any, dict[str, Any]], Any]] = {
     "vectorIndexAdd": _request(
         VectorIndexRequest, "vectorIndex", vector_index, operation="add"
     ),
+    "vectorIndexSetStagedSearch": _request(
+        VectorIndexRequest, "vectorIndex", vector_index, operation="setStagedSearch"
+    ),
     "vectorIndexRemove": _request(
         VectorIndexRequest, "vectorIndex", vector_index, operation="remove"
     ),
