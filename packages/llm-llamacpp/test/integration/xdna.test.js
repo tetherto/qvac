@@ -16,6 +16,13 @@
 // read them from the native logs, as kv-cache-type-defaults.test.js does. The
 // device class is, as stats.backendDevice.
 //
+// XDNA_TEST_MODELS picks the models the hardware tests run, as a comma-separated
+// list of models.manifest.json names (default: the 0.8B Q4_K_M), for example
+//   XDNA_TEST_MODELS=Qwen3.5-0.8B-Q4_K_M.gguf,Qwen3.5-2B-Q4_K_M.gguf,Qwen3.5-4B-Q4_K_M.gguf,Qwen3.5-9B-Q4_K_M.gguf
+// Only a 1024-wide model (Qwen3.5-0.8B) reaches the fused NPU decode layer.
+// A wider one (2B 2048, 4B 2560, 9B 4096) keeps the NPU for prefill and runs
+// its decode on the host, and fabric warns once, naming its width.
+//
 // Desktop only: not scheduled on mobile (see isOverrideOnly in
 // scripts/lib/validate-test-groups.js).
 
@@ -61,6 +68,20 @@ const FALLBACK_MODEL = 'Llama-3.2-1B-Instruct-Q4_0.gguf'
 // Qwen3.5-0.8B-Q8_0.gguf) is refused at the first decode.
 const NPU_MODEL = 'Qwen3.5-0.8B-Q4_K_M.gguf'
 
+function npuModels() {
+  const fromEnv = (process.env && process.env.XDNA_TEST_MODELS) || ''
+  const names = fromEnv
+    .split(',')
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0)
+  return names.length > 0 ? names : [NPU_MODEL]
+}
+
+// The fused decode layer is built for one residual width, Qwen3.5-0.8B's.
+function hasFusedWidth(modelName) {
+  return /^Qwen3\.5-0\.8B-/i.test(modelName)
+}
+
 const PROMPT = [
   { role: 'system', content: 'You are a helpful assistant.' },
   { role: 'user', content: 'What is 2+2? Answer in one word.' }
@@ -76,6 +97,9 @@ const FUSED_REFUSAL_RE = /unsupported fused weight set|needs the .*-bit activati
 // output stays correct, so these are what show the NPU had kernels to run.
 const KERNELS_FOUND_RE = /GEMM geometries: decode=gemm_/
 const KERNELS_MISSING_RE = /no GEMM kernels found|not built for design tag|no fused_layer artifact/
+// Fabric logs this once per process, for the first wider model.
+const WIDER_MODEL_RE =
+  /the fused decode layers are built for a 1024-wide residual stream, this model's is (\d+)/
 
 // Fabric logs its kernel discovery once per process, on the first load that
 // uses the NPU, so every load's native log is also kept here.
@@ -140,12 +164,19 @@ async function loadAndRun(modelName, extraConfig) {
   }
 }
 
-function assertRanOnNpu(t, { output, kvTypes, backendDevice, logText }) {
+function assertRanOnNpu(t, modelName, { output, kvTypes, backendDevice, logText }) {
   const processText = processLogs.join('\n')
   t.is(backendDevice, 'npu', 'stats report the NPU device class')
   t.ok(KERNELS_FOUND_RE.test(processText), 'fabric found its NPU GEMM kernels')
   t.absent(KERNELS_MISSING_RE.test(processText), 'NPU kernel artifacts are present and current')
   t.absent(FUSED_REFUSAL_RE.test(logText), 'fused decode layer accepted the model weights')
+  if (hasFusedWidth(modelName)) {
+    t.absent(WIDER_MODEL_RE.test(logText), 'the model fits the fused decode layer')
+  } else {
+    const wider = processText.match(WIDER_MODEL_RE)
+    t.ok(wider, 'fabric reported a model wider than the fused decode layer')
+    if (wider) t.comment(`${modelName}: first wider residual width seen, ${wider[1]}`)
+  }
   t.ok(XDNA_BUFFER_RE.test(logText), 'model weights were placed in an XDNA buffer')
   t.ok(kvTypes, 'KV-cache allocation line was logged')
   t.is(kvTypes?.k, 'f16', 'cache-type-k stays f16 on the NPU')
@@ -183,35 +214,37 @@ safeTest(
   }
 )
 
-safeTest(
-  'xdna: device npu runs the model on the NPU',
-  { timeout: 900_000, skip: !hasNpu },
-  async (t) => {
-    const result = await loadAndRun(NPU_MODEL, { device: 'npu' })
+for (const modelName of npuModels()) {
+  safeTest(
+    `xdna: device npu runs ${modelName} on the NPU`,
+    { timeout: 1_800_000, skip: !hasNpu },
+    async (t) => {
+      const result = await loadAndRun(modelName, { device: 'npu' })
 
-    t.ok(
-      CHOSEN_NPU_RE.test(result.logText),
-      'NPU chosen through device npu (needs XRT 2.25+ under /opt/xilinx/xrt)'
-    )
-    assertRanOnNpu(t, result)
-  }
-)
+      t.ok(
+        CHOSEN_NPU_RE.test(result.logText),
+        'NPU chosen through device npu (needs XRT 2.25+ under /opt/xilinx/xrt)'
+      )
+      assertRanOnNpu(t, modelName, result)
+    }
+  )
 
-safeTest(
-  'xdna: devices XDNA0 selects the NPU explicitly',
-  { timeout: 900_000, skip: !hasNpu },
-  async (t) => {
-    const result = await loadAndRun(NPU_MODEL, { devices: 'XDNA0' })
+  safeTest(
+    `xdna: devices XDNA0 runs ${modelName} on the NPU`,
+    { timeout: 1_800_000, skip: !hasNpu },
+    async (t) => {
+      const result = await loadAndRun(modelName, { devices: 'XDNA0' })
 
-    assertRanOnNpu(t, result)
-  }
-)
+      assertRanOnNpu(t, modelName, result)
+    }
+  )
+}
 
 safeTest(
   'xdna: default selection never picks the NPU',
   { timeout: 900_000, skip: !hasNpu },
   async (t) => {
-    const result = await loadAndRun(NPU_MODEL, {})
+    const result = await loadAndRun(npuModels()[0], {})
 
     t.ok(result.output.length > 0, 'default run produced output')
     t.absent(CHOSEN_NPU_RE.test(result.logText), 'the NPU was not chosen by device gpu')
