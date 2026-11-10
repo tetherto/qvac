@@ -1,3 +1,4 @@
+import { requestParent, type PluginHandlerContext } from '@/schemas/plugin'
 import { type AnyModel, getModel, getModelConfig, getModelEntry } from '@/runtime/model-registry'
 import {
   ModelType,
@@ -13,7 +14,7 @@ import type ASRGgml from '@qvac/asr-ggml'
 import type Buffer from 'bare-buffer'
 import { createAudioStream } from '@/utils/audio-input'
 import { getEngineLogger } from '@/logging/index'
-import { TranscriptionFailedError } from '@/errors/index'
+import { InferenceCancelledError, TranscriptionFailedError } from '@/errors/index'
 import type { TranscribeResponse } from '@/utils/addon-responses'
 import { nowMs } from '@/profiling/index'
 import { buildStreamResult } from '@/profiling/model-execution'
@@ -202,15 +203,21 @@ function mapTranscribeStats(stats: TranscribeResponse['stats']): TranscribeStats
 
 export function transcribe(
   params: TranscribeParams & { metadata: true },
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<TranscribeSegment, TranscribeReturn, void>
 export function transcribe(
   params: TranscribeParams,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<string, TranscribeReturn, void>
 export async function* transcribe(
   params: TranscribeParams,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<string | TranscribeSegment, TranscribeReturn, void> {
   const { modelId, metadata } = params
 
@@ -220,9 +227,14 @@ export async function* transcribe(
   // caller didn't send one.
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRandomRequestId(),
+    sessionId,
+    ...requestParent(context),
     kind: 'transcribe',
     modelId
   })
+  // A request cancelled while it queued holds no slot; the model-wide
+  // `addon.cancel()` below would stop the job that does.
+  if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
   const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
   const engineType = getEngineModelType(modelId)
@@ -352,7 +364,9 @@ export function transcribeStream(
   prompt: string | undefined,
   metadata: true,
   opts?: TranscribeStreamOpts,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<TranscribeSegment | TranscribeStreamEvent, TranscribeReturn, void>
 export function transcribeStream(
   modelId: string,
@@ -360,7 +374,9 @@ export function transcribeStream(
   prompt?: string,
   metadata?: boolean,
   opts?: TranscribeStreamOpts,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<string | TranscribeStreamEvent, TranscribeReturn, void>
 export async function* transcribeStream(
   modelId: string,
@@ -368,7 +384,9 @@ export async function* transcribeStream(
   prompt?: string,
   metadata?: boolean,
   opts?: TranscribeStreamOpts,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
+  context?: PluginHandlerContext
 ): AsyncGenerator<string | TranscribeSegment | TranscribeStreamEvent, TranscribeReturn, void> {
   // Same `kind: "transcribe"` as the unary variant — the registry
   // doesn't distinguish streaming vs non-streaming variants of the same
@@ -376,9 +394,12 @@ export async function* transcribeStream(
   // either shape.
   await using ctx = await getRequestRegistry().begin({
     requestId: requestId ?? generateRandomRequestId(),
+    sessionId,
+    ...requestParent(context),
     kind: 'transcribe',
     modelId
   })
+  if (ctx.signal.aborted) throw new InferenceCancelledError(ctx.requestId)
   const requestLogger = withRequestContext(getEngineLogger(), ctx)
 
   const engineType = getEngineModelType(modelId)

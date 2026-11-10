@@ -201,6 +201,16 @@ function installDefaultPolicies(r: RequestRegistry): void {
     onOverflow: 'queue',
     maxQueueDepthPerModel: 256
   })
+  // Whisper, Parakeet and MOSS run one job per model and cancel it model-wide,
+  // with no job id. A second request waiting inside the addon would stop the
+  // active one when it is cancelled, which crosses sessions. Waiting in the
+  // registry instead keeps a cancelled waiter away from the addon.
+  r.policy({
+    kind: 'transcribe',
+    maxConcurrentPerModel: 1,
+    onOverflow: 'queue',
+    maxQueueDepthPerModel: 64
+  })
   // Diffusion has one native job per model and model-wide cancellation.
   r.policy({
     kind: 'diffusion',

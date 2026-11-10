@@ -64,7 +64,7 @@ export const mossTranscribePlugin = definePlugin({
       streaming: true,
       cancel: { scope: 'model', hard: true },
 
-      handler: async function* (request) {
+      handler: async function* (request, _inputStream, context) {
         const metadata = request.metadata === true
         const stream = metadata
           ? transcribe(
@@ -76,7 +76,9 @@ export const mossTranscribePlugin = definePlugin({
                 maxNewTokens: request.maxNewTokens,
                 metadata: true
               },
-              request.requestId
+              request.requestId,
+              request.sessionId,
+              context
             )
           : transcribe(
               {
@@ -86,7 +88,9 @@ export const mossTranscribePlugin = definePlugin({
                 hotwords: request.hotwords,
                 maxNewTokens: request.maxNewTokens
               },
-              request.requestId
+              request.requestId,
+              request.sessionId,
+              context
             )
 
         try {
