@@ -68,7 +68,8 @@ process can read and write its `/dev/accel` node; otherwise fabric logs that it 
   report `backendDevice: "npu"`.
 - `device: "gpu"` with `devices: "XDNA0"` also runs on the NPU alone and reports
   `backendDevice: "npu"`; a mixed list such as `XDNA0,Vulkan0` is a GPU load. Finetuning is
-  rejected for any load that runs on the NPU alone. `backend` takes GPU families only.
+  rejected for any load with `XDNA0` in `devices`, alone or in a mixed split. `backend` takes
+  GPU families only.
 - Fabric lists the NPU without opening it. The first load that uses `XDNA0` opens it and
   registers its kernels, and the process then holds an NPU context. An NPU that fails to open
   stays listed but takes no work: the load runs on the CPU and fabric logs
@@ -78,9 +79,10 @@ process can read and write its `/dev/accel` node; otherwise fabric logs that it 
   load time. Fabric looks for them in `GGML_XDNA_KERNEL_DIR` when set, then next to that
   library. If they are missing, fabric logs `no GEMM kernels found` and the matrix
   multiplications run on the CPU.
-- On an XDNA load the NPU runs the ops it supports and the CPU runs the rest. The GPU is not
-  used, so another model can run on it at the same time. All loads in a process share one NPU
-  context and take turns on it.
+- On an XDNA load the NPU runs the ops it supports and the CPU runs the rest. The LLM layers do
+  not use the GPU; a vision model's projector does by default (see below), and
+  `mmproj-use-gpu: false` keeps the GPU free. All loads in a process share one NPU context and
+  take turns on it.
 - With `device: "npu"`, or `XDNA0` first in `devices`, a vision model's projector runs on a GPU:
   one in `devices` if the list has one, else the first local GPU the multi-GPU split would use
   (RPC devices do not count). With no GPU it runs on the CPU; it is untested on the NPU.
@@ -233,7 +235,7 @@ const config = {
 | flash-attn        | `"on"`/`"enabled"`/`"true"`/`"1"`, `"off"`/`"disabled"`/`"false"`/`"0"`, or `"auto"` | `"on"`, except when finetuning or on a BitNet model, where it is forced off | Flash attention. The four truthy and four falsey spellings are equivalent; `"auto"` is a third state that defers to qvac-fabric's runtime capability probe. Lower-case only — matching is case-sensitive and any other value is rejected. Affects the KV-cache auto-default — see below. Also accepted as `flash_attn`; supplying both spellings is an error |
 | cache-type-k      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **key** quantization type. Unset = auto-default (see KV-cache type below) |
 | cache-type-v      | `f16`, `f32`, `bf16`, `q8_0`, `q4_0`, …      | auto (see below)             | KV-cache **value** quantization type. Quantizing V requires `flash-attn` on |
-| mmproj-use-gpu    | `"true"`/`"on"`/`"1"` or `"false"`/`"off"`/`"0"` | auto (see below)         | Run the multimodal projector (mmproj / vision encoder) on the GPU. Only honoured when a GPU backend is selected (ignored with a warning on CPU / GPU-fallback). Unset = auto-default (see mmproj backend below) |
+| mmproj-use-gpu    | `"true"`/`"on"`/`"1"` or `"false"`/`"off"`/`"0"` | auto (see below)         | Run the multimodal projector (mmproj / vision encoder) on the GPU. Only honoured when a GPU or NPU backend is selected (ignored with a warning on CPU / GPU-fallback). Unset = auto-default (see mmproj backend below) |
 | spec-type         | `"none"`, `"draft-mtp"` or `"draft-dflash"` | `"none"`                     | Speculative decoding, as llama-server's `--spec-type`: `draft-mtp` drafts with the model's own multi-token-prediction head, `draft-dflash` with the DFlash model in `spec-draft-model` (see [Speculative decoding](#speculative-decoding-mtp-dflash) below). Also accepted as `spec_type` |
 | spec-draft-model  | absolute path                               | –                            | Draft model, as llama-server's `--spec-draft-model` (`-md`): the DFlash model, required by `spec-type: "draft-dflash"`, or an external MTP head for `spec-type: "draft-mtp"`. Placed like the model (`device`, `gpu-layers`). Also accepted as `spec_draft_model` |
 | spec-draft-n-max  | 1 – 64                                      | 3                            | Longest draft per step. Also accepted as `spec_draft_n_max` |

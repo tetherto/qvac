@@ -18,8 +18,8 @@
   `backend: "xdna"` from 0.69.0
   ([#5701](https://github.com/tetherto/qvac/pull/5701)).
 - Finetuning is refused with `InvalidArgument` for a model loaded with
-  `device: "npu"` and for any load that runs on the NPU alone, such as
-  `devices: "XDNA0"`, which 0.69.0 allowed
+  `device: "npu"` and for any load with `XDNA0` in `devices`, alone or in a
+  mixed split such as `XDNA0,Vulkan0`, which 0.69.0 allowed
   ([#5701](https://github.com/tetherto/qvac/pull/5701)).
 - When the NPU leads a load, a vision model's projector now defaults to a GPU
   beside it (a GPU in `devices`, else the first local GPU) instead of the CPU,

@@ -2,6 +2,8 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include <gtest/gtest.h>
 #include <inference-addon-cpp/Errors.hpp>
@@ -260,13 +262,32 @@ TEST(FinetuneNpuTest, LoadOnTheNpuIsRejected) {
   const std::unordered_map<std::string, std::string> config{
       {"device", "gpu"}, {"devices", "XDNA0"}};
   const std::string message = npuRejection(config, 2);
-  EXPECT_TRUE(contains(message, "running on the NPU alone cannot be finetuned"))
+  EXPECT_TRUE(contains(message, "XDNA0 in devices cannot be finetuned"))
       << message;
-  EXPECT_TRUE(contains(message, "without XDNA0 in devices")) << message;
+  EXPECT_TRUE(contains(message, "reload it without XDNA0 in devices"))
+      << message;
+}
+
+// A mixed split reports device class 1 but still puts layers on the NPU. The
+// list is matched case-insensitively, under either key.
+TEST(FinetuneNpuTest, MixedSplitWithTheNpuIsRejected) {
+  for (const auto& [key, names] :
+       std::vector<std::pair<std::string, std::string>>{
+           {"devices", "XDNA0,Vulkan0"},
+           {"devices", "vulkan0, xdna0"},
+           {"device-list", "XDNA0,CUDA0"}}) {
+    const std::unordered_map<std::string, std::string> config{
+        {"device", "gpu"}, {"split-mode", "layer"}, {key, names}};
+    const std::string message = npuRejection(config, 1);
+    EXPECT_TRUE(contains(message, "alone or in a mixed split"))
+        << key << "=" << names << ": " << message;
+  }
 }
 
 TEST(FinetuneNpuTest, GpuAndCpuLoadsAreAccepted) {
   EXPECT_NO_THROW(LlamaFinetuner::rejectNpuTarget({{"device", "gpu"}}, 1));
   EXPECT_NO_THROW(LlamaFinetuner::rejectNpuTarget({{"device", "cpu"}}, 0));
   EXPECT_NO_THROW(LlamaFinetuner::rejectNpuTarget({}, 0));
+  EXPECT_NO_THROW(LlamaFinetuner::rejectNpuTarget(
+      {{"device", "gpu"}, {"devices", "Vulkan0,CUDA0"}}, 1));
 }
