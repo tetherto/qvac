@@ -177,6 +177,22 @@ test('gemma4 thought frame: blank line after the frame is dropped', (t) => {
   t.is(n.getAccumulated().contentText, 'after')
 })
 
+test('harmony final frame: blank line after the analysis channel is dropped', (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({ capabilities: NONE_CAPS, toolDialect: 'harmony', captureThinking: true })
+  )
+  pushAll(n, [
+    '<|channel|>analysis<|message|>plan<|end|>',
+    '<|start|>assistant<|channel|>final<|message|>',
+    '\n\nAnswer',
+    '<|return|>'
+  ])
+  n.finish()
+
+  t.is(n.getAccumulated().contentText, 'Answer')
+  t.is(n.getAccumulated().thinkingText, 'plan')
+})
+
 test('valid framed tool call: emits toolCall, no content for markup', (t) => {
   const n = createCompletionNormalizer(
     baseConfig({ capabilities: TEXT_PARSE_CAPS, tools: [ECHO_TOOL] })

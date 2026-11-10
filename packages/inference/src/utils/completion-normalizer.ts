@@ -417,7 +417,9 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
         }
 
         const entry = markerToEntry.get(hit.marker)!
-        trimAfterThinking = false
+        // A content frame (Harmony's final channel) carries the answer itself,
+        // so the trim carries into it; any other frame ends it.
+        if (entry.kind !== 'content') trimAfterThinking = false
         if (entry.kind === 'tool') {
           toolCallBuffer = hit.marker
           activeToolFrame = entry.spec
