@@ -4,7 +4,7 @@
 //
 //   npm run build
 //   bare scripts/bench-index.ts ingest  <dir> [--chunks 100000] [--dims 768] [--storage q8]
-//   bare scripts/bench-index.ts rebuild <dir>
+//   bare scripts/bench-index.ts rebuild <dir>   # later phases reuse ingest's settings
 //   bare scripts/bench-index.ts cold    <dir>
 //   bare scripts/bench-index.ts scan    <dir>
 import fs from 'bare-fs'
@@ -30,9 +30,33 @@ function option(name: string, fallback: string): string {
   return at === -1 ? fallback : rest[at + 1]
 }
 
-const chunks = Number(option('chunks', '100000'))
-const dims = Number(option('dims', '768'))
-const storage = option('storage', 'q8') as 'f32' | 'q8' | 'turbovec-q4' | 'turbovec-q2'
+interface Settings {
+  chunks: number
+  dims: number
+  storage: 'f32' | 'q8' | 'turbovec-q4' | 'turbovec-q2'
+}
+
+// Ingest records its settings next to the store, so later phases open the
+// namespace with the same space instead of the defaults.
+const settingsPath = `${dir}/bench.json`
+const { chunks, dims, storage }: Settings =
+  phase === 'ingest'
+    ? {
+        chunks: Number(option('chunks', '100000')),
+        dims: Number(option('dims', '768')),
+        storage: option('storage', 'q8') as Settings['storage']
+      }
+    : readSettings()
+
+function readSettings(): Settings {
+  try {
+    return JSON.parse(fs.readFileSync(settingsPath, 'utf8') as string) as Settings
+  } catch {
+    console.log(`no ${settingsPath}; run the ingest phase first`)
+    Bare.exit(1)
+    throw new Error('unreachable')
+  }
+}
 const space = {
   model: 'bench',
   revision: '1',
@@ -95,6 +119,8 @@ async function searchLatency(
 
 if (phase === 'ingest') {
   fs.rmSync(dir, { recursive: true, force: true })
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(settingsPath, JSON.stringify({ chunks, dims, storage }))
   const { corestore, rag } = await open()
   const { spaceId } = await rag.createNamespace({ name: 'bench', space, index: { storage } })
   const start = Date.now()
