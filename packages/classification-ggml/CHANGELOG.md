@@ -9,6 +9,8 @@ and this project adheres to
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-11-10
+
 ### Added
 
 - `BridgeDepth`: stereo disparity from a rectified left/right pair, with the
