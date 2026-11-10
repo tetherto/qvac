@@ -2629,7 +2629,8 @@ TEST_F(LoadFitNormalizationTest, XdnaLoadKeepsF16KvAndCpuProjector) {
 
 // Fabric's --device parser accepts "none" in the unit tests, so it stands in
 // for XDNA0. The NPU places layers like a GPU, but reports device class 2 and
-// keeps the GPU-only defaults off.
+// keeps the GPU-only defaults off. With no GPU on the host, its projector runs
+// on the CPU.
 TEST_F(LoadFitNormalizationTest, NpuLoadKeepsF16KvAndCpuProjector) {
   for (const auto type : {backend_selection::GPU, backend_selection::NPU}) {
     const bool isNpu = type == backend_selection::NPU;
@@ -2642,7 +2643,7 @@ TEST_F(LoadFitNormalizationTest, NpuLoadKeepsF16KvAndCpuProjector) {
         std::move(config),
         metadata_,
         {},
-        backend({.type = type, .name = "none"}));
+        backend({.type = type, .name = "none"}, {}));
 
     EXPECT_EQ(result.params.split_mode, LLAMA_SPLIT_MODE_NONE);
     EXPECT_EQ(result.runtimeBackendDevice, isNpu ? 2 : 1);
@@ -2651,6 +2652,97 @@ TEST_F(LoadFitNormalizationTest, NpuLoadKeepsF16KvAndCpuProjector) {
     EXPECT_EQ(result.params.cache_type_k == GGML_TYPE_Q8_0, !isNpu);
     EXPECT_EQ(result.params.cache_type_v == GGML_TYPE_Q8_0, !isNpu);
   }
+}
+
+// An NPU-led load runs its projector on a local GPU when the host has one.
+// RPC devices do not count.
+TEST_F(LoadFitNormalizationTest, NpuProjectorDefaultsToALocalGpu) {
+  auto config = baseConfig();
+  config["device"] = "npu";
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend(
+          {.type = backend_selection::NPU, .name = "none"},
+          {"RPC0", "Vulkan0"}));
+
+  EXPECT_EQ(result.runtimeBackendDevice, 2);
+  EXPECT_TRUE(result.params.mmproj_use_gpu);
+  EXPECT_EQ(result.params.mmproj_backend, "Vulkan0");
+}
+
+TEST_F(LoadFitNormalizationTest, NpuProjectorWithOnlyRpcDevicesStaysOnCpu) {
+  auto config = baseConfig();
+  config["device"] = "npu";
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend({.type = backend_selection::NPU, .name = "none"}, {"RPC0"}));
+
+  EXPECT_FALSE(result.params.mmproj_use_gpu);
+}
+
+// mmproj-use-gpu still decides: false keeps the projector on the CPU beside a
+// GPU, and true with no GPU puts it on the NPU.
+TEST_F(LoadFitNormalizationTest, MmprojUseGpuOverridesTheNpuProjectorDefault) {
+  {
+    auto config = baseConfig();
+    config["device"] = "npu";
+    config["mmproj-use-gpu"] = "false";
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::NPU, .name = "none"}, {"Vulkan0"}));
+    EXPECT_FALSE(result.params.mmproj_use_gpu);
+  }
+  {
+    auto config = baseConfig();
+    config["device"] = "npu";
+    config["mmproj-use-gpu"] = "true";
+    const auto result = lfn::normalizeLoadForFit(
+        "/tmp/model.gguf",
+        std::move(config),
+        metadata_,
+        {},
+        backend({.type = backend_selection::NPU, .name = "none"}, {}));
+    EXPECT_TRUE(result.params.mmproj_use_gpu);
+    EXPECT_EQ(result.params.mmproj_backend, "none");
+  }
+}
+
+// A mixed split led by the NPU runs its projector on the split's own GPU.
+TEST_F(LoadFitNormalizationTest, MixedSplitProjectorUsesTheSplitGpu) {
+  auto config = baseConfig();
+  config["split-mode"] = "layer";
+
+  const auto result = lfn::normalizeLoadForFit(
+      "/tmp/model.gguf",
+      std::move(config),
+      metadata_,
+      {},
+      backend(
+          {.type = backend_selection::GPU, .name = "XDNA0"},
+          {"XDNA0", "vulkan0"}));
+
+  EXPECT_EQ(result.runtimeBackendDevice, 1);
+  EXPECT_TRUE(result.params.mmproj_use_gpu);
+  EXPECT_EQ(result.params.mmproj_backend, "vulkan0");
+}
+
+TEST(FirstLocalGpuTest, SkipsTheNpuAndRpcDevices) {
+  const std::vector<backend_selection::SplitDevice> devices{
+      {.name = "XDNA0"}, {.name = "RPC0", .isRpc = true}, {.name = "Vulkan0"}};
+  EXPECT_EQ(lfn::firstLocalGpu(devices), "Vulkan0");
+  EXPECT_EQ(lfn::firstLocalGpu({{.name = "XDNA0"}}), "");
+  EXPECT_EQ(lfn::firstLocalGpu({}), "");
 }
 
 // With no NPU, chooseBackend resolves an NPU request through the GPU order;

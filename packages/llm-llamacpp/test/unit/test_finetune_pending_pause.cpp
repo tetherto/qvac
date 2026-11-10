@@ -220,24 +220,49 @@ TEST(FinetunePendingPauseTest, InternalReloadDoesNotRequestFinetunePause) {
       << "an ordinary finetune must start without a pause from its own reload";
 }
 
+namespace {
+
+// The rejection message, or empty when the check passes.
+std::string npuRejection(
+    const std::unordered_map<std::string, std::string>& config,
+    int64_t runtimeBackendDevice) {
+  try {
+    LlamaFinetuner::rejectNpuTarget(config, runtimeBackendDevice);
+  } catch (const qvac_errors::StatusError& error) {
+    return error.what();
+  }
+  return "";
+}
+
+bool contains(const std::string& text, const std::string& part) {
+  return text.find(part) != std::string::npos;
+}
+
+} // namespace
+
 // finetune() runs this check before it reloads the model, for both NPU
 // routes. The runtime device class: 0 = CPU, 1 = GPU, 2 = NPU.
 TEST(FinetuneNpuTest, DeviceNpuIsRejectedEvenAfterFallback) {
   const std::unordered_map<std::string, std::string> config{{"device", "npu"}};
   for (const int64_t device : {0, 1, 2}) {
-    EXPECT_THROW(
-        LlamaFinetuner::rejectNpuTarget(config, device),
-        qvac_errors::StatusError)
-        << device;
+    const std::string message = npuRejection(config, device);
+    EXPECT_TRUE(
+        contains(message, "loaded with device 'npu' cannot be finetuned"))
+        << device << ": " << message;
+    EXPECT_TRUE(contains(message, "reload it with device 'gpu' or 'cpu'"))
+        << device << ": " << message;
   }
 }
 
-// devices: 'XDNA0' loads on the NPU alone and reports device class 2.
+// devices: 'XDNA0' loads on the NPU alone and reports device class 2. The
+// caller asked for device 'gpu', so the hint is about the device list.
 TEST(FinetuneNpuTest, LoadOnTheNpuIsRejected) {
   const std::unordered_map<std::string, std::string> config{
       {"device", "gpu"}, {"devices", "XDNA0"}};
-  EXPECT_THROW(
-      LlamaFinetuner::rejectNpuTarget(config, 2), qvac_errors::StatusError);
+  const std::string message = npuRejection(config, 2);
+  EXPECT_TRUE(contains(message, "running on the NPU alone cannot be finetuned"))
+      << message;
+  EXPECT_TRUE(contains(message, "without XDNA0 in devices")) << message;
 }
 
 TEST(FinetuneNpuTest, GpuAndCpuLoadsAreAccepted) {

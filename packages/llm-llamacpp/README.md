@@ -81,8 +81,11 @@ process can read and write its `/dev/accel` node; otherwise fabric logs that it 
 - On an XDNA load the NPU runs the ops it supports and the CPU runs the rest. The GPU is not
   used, so another model can run on it at the same time. All loads in a process share one NPU
   context and take turns on it.
-- A vision model's projector runs on the CPU with `device: "npu"` or with `XDNA0` first in
-  `devices`; it is untested on the NPU. `mmproj-use-gpu: true` moves it there.
+- With `device: "npu"`, or `XDNA0` first in `devices`, a vision model's projector runs on a GPU:
+  one in `devices` if the list has one, else the first local GPU the multi-GPU split would use
+  (RPC devices do not count). With no GPU it runs on the CPU; it is untested on the NPU.
+  `mmproj-use-gpu: false` keeps it on the CPU, and `mmproj-use-gpu: true` on a host with no GPU
+  moves it to the NPU.
 - The backend is built around Qwen3.5. A model whose `ssm_out` quantization the fused decode
   layer does not cover, such as Qwen's own Qwen3.5-0.8B `Q4_K_M` GGUF with `Q8_0` `ssm_out`, fails at
   the first decode with `unsupported fused weight set` instead of falling back. Requantize
@@ -272,7 +275,7 @@ For vision (VLM) models, the projector / image-encoder backend is auto-selected 
 | Android — Arm Mali | **CPU** | Projector encode measured slower on the Mali GPU than on CPU (QVAC-21257). |
 | Android — Adreno < 800 (e.g. Adreno 740) | **CPU** | Weaker tiers not yet benchmarked; conservative default (may be relaxed once benchmarked). |
 | Android — undetectable Adreno tier | **CPU** | Conservative default when the GPU's Adreno version can't be parsed. |
-| Linux x64 — AMD XDNA NPU (`XDNA0`) | **CPU** | The projector is untested on the NPU. |
+| Linux x64 — AMD XDNA NPU (`XDNA0`) | **GPU** beside the NPU, else **CPU** | The projector is untested on the NPU; the LLM layers stay on the NPU. |
 
 In every Android **CPU** case above the LLM layers still run on the GPU — only the projector stays on CPU.
 
