@@ -128,6 +128,7 @@ public:
   const std::string& getEncoderBackend() const { return encoder_backend_; }
   int getEncoderOnCoreml() const { return encoder_on_coreml_; }
   void recordTranscriptionResult(const pkt::EngineResult& result);
+  void recordDiarizationResult(const pkt::DiarizationResult& result);
   int getStreamingChunkMs() const {
     return resolveStreamingChunkMs(cfg_.modelType, cfg_.streamingChunkMs);
   }

@@ -1,4 +1,4 @@
-import type { Command } from 'commander'
+import { Option, type Command } from 'commander'
 import { collect } from '@/cli/options'
 import { handleError } from '@/errors'
 
@@ -12,7 +12,22 @@ export function registerBundleCommand(program: Command): void {
     .description('Generate a tree-shaken Bare worker bundle with selected plugins')
     .option('-c, --config <path>', 'Config file path (default: auto-detect qvac.config.*)')
     .option('--sdk-path <path>', 'Path to SDK package (default: auto-detect in node_modules)')
-    .option('--host <target>', 'Target host (repeatable)', collect, [])
+    .addOption(
+      new Option('--target <target>', 'Where the worker runs')
+        .choices(['bare-sidecar', 'react-native', 'pear-runtime'])
+        .default('bare-sidecar')
+    )
+    .addOption(
+      new Option('--language <language>', 'Language of the app that starts the worker')
+        .choices(['javascript', 'python'])
+        .default('javascript')
+    )
+    .option(
+      '--host <host>',
+      'Host to bundle for (repeatable; default depends on --target)',
+      collect,
+      []
+    )
     .option('--defer <module>', 'Defer a module (repeatable)', collect, [])
     .option(
       '--no-install',
@@ -25,6 +40,8 @@ export function registerBundleCommand(program: Command): void {
       async (options: {
         config?: string
         sdkPath?: string
+        target: 'bare-sidecar' | 'react-native' | 'pear-runtime'
+        language: 'javascript' | 'python'
         host: string[]
         defer: string[]
         install: boolean
@@ -39,6 +56,8 @@ export function registerBundleCommand(program: Command): void {
             projectRoot: process.cwd(),
             configPath: options.config,
             sdkPath: options.sdkPath,
+            target: options.target,
+            language: options.language,
             hosts: options.host.length > 0 ? options.host : undefined,
             defer: options.defer.length > 0 ? options.defer : undefined,
             quiet: options.quiet,

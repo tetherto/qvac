@@ -14,6 +14,14 @@ type Rule = {
 
 const RULES: Rule[] = [
   {
+    match: /^image-embedding-/,
+    skip: {
+      reason:
+        'MegaLoc inference uses a shared JS executor; Python and Kotlin runners do not implement it.',
+      platforms: ['desktop-python', 'kotlin-android']
+    }
+  },
+  {
     match: /^tts-moss-/,
     skip: {
       reason:
@@ -137,6 +145,14 @@ const RULES: Rule[] = [
     }
   },
   {
+    match: ['kv-cache-shared-prefix-default-isolated', 'kv-cache-shared-prefix-opt-in'],
+    skip: {
+      reason:
+        'Defined only as steps, which the JS mobile consumer does not run; Kotlin inherits the skip because it shares the Android device. Covered by desktop and Python e2e',
+      platforms: ['mobile']
+    }
+  },
+  {
     match: /^tools-(?!simple-function$|no-function-match$)/,
     skip: { reason: 'Tools test disabled on mobile', platforms: ['mobile'] }
   },
@@ -212,6 +228,20 @@ const RULES: Rule[] = [
       reason:
         'Redundant CosyVoice3 e2e coverage overlapping other TTS tests, and slow on Device Farm; only tts-cosyvoice3-default and tts-cosyvoice3-invalid-emotion are kept on mobile',
       platforms: ['mobile']
+    }
+  },
+  {
+    match: [
+      'tts-parler-emotion-conditioning',
+      'tts-parler-default-description',
+      'tts-parler-streaming',
+      'tts-parler-sentence-streaming',
+      'tts-parler-duplex-streaming'
+    ],
+    skip: {
+      reason:
+        'Parler Mini (English) is left off mobile; tts-parler-indic-multilingual covers Parler there',
+      platforms: ['mobile', 'kotlin-android']
     }
   },
 

@@ -3,255 +3,210 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { execFileSync } from 'node:child_process'
-import { bundleSdk } from '@/commands/bundle'
+import { bundleSdk, describeMissingAddonBuild } from '@/commands/bundle'
 import {
   BARE_PACK_NODE_ENGINES,
-  isBarePackNodeSupported,
-  runBarePack
-} from '@/commands/bundle/bare-pack'
-import { BarePackNodeUnsupportedError } from '@/utils/errors-client'
+  assertNodeCanBundle,
+  isBarePackNodeSupported
+} from '@/commands/bundle/node-support'
 import { SDK_CLIENT_ERROR_CODES } from '@/schemas/sdk-errors-client'
-import { selectExportTarget, createSdkImportResolver } from '@/commands/bundle/resolve-sdk-import'
-import { generateWorkerEntries, generateWorkerEntry } from '@/commands/bundle/entry-gen'
+import { generateWorkerEntry } from '@/commands/bundle/entry-gen'
 import { resolvePluginSpecifiers } from '@/commands/bundle/plugins'
+import { listBundledAddons } from '@/commands/bundle/addons'
+import { bundleRoot, readBundle } from '@/commands/bundle/read-bundle'
 import { getClientLogger } from '@/logging'
 import {
-  generateAddonsManifest,
-  extractPackedString,
-  extractBarePackHeader
-} from '@/commands/bundle/manifest'
+  BarePackNodeUnsupportedError,
+  BundleFailedError,
+  BundleTargetNotInstalledError,
+  BundleVerificationFailedError,
+  HostPrebuildsMissingError
+} from '@/utils/errors-client'
+import { loadTargetPackage } from '@/commands/bundle/targets'
+import { parseBareKitPins } from '@/commands/verify/bare-kit-runtime'
+import { linkDependency } from './fixtures/link-dependency'
 
-function fakeBundleSdkProject(t: { after: (fn: () => void) => void }) {
-  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-bundle-project-'))
-  const sdkPath = path.join(projectRoot, 'external-sdk')
-  const sdkDistPath = path.join(sdkPath, 'dist')
-  const configPath = path.join(projectRoot, 'qvac.config.json')
+const SDK_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const HOST = `${process.platform}-${process.arch}`
 
-  t.after(() => fs.rmSync(projectRoot, { recursive: true, force: true }))
-  fs.mkdirSync(sdkDistPath, { recursive: true })
-  fs.writeFileSync(
-    path.join(sdkPath, 'package.json'),
-    `${JSON.stringify({
-      name: '@qvac/sdk',
-      type: 'module',
-      exports: {
-        './worker-lifecycle': './dist/worker-lifecycle.js',
-        './plugins': './dist/plugins.js',
-        './logging': './dist/logging.js',
-        './llamacpp-completion/plugin': './dist/llm-plugin.js'
-      }
-    })}\n`
-  )
-  fs.writeFileSync(path.join(sdkPath, 'bare-imports.json'), '{}\n')
-  fs.writeFileSync(
-    path.join(sdkDistPath, 'worker-lifecycle.js'),
-    'export function initializeWorker() { return { hasRPCConfig: false } }\n' +
-      'export function ensureRPCSetup() {}\n'
-  )
-  fs.writeFileSync(path.join(sdkDistPath, 'plugins.js'), 'export function registerPlugin() {}\n')
-  fs.writeFileSync(
-    path.join(sdkDistPath, 'logging.js'),
-    'export function getServerLogger() { return { info() {} } }\n'
-  )
-  fs.writeFileSync(path.join(sdkDistPath, 'llm-plugin.js'), 'export const llmPlugin = {}\n')
-
-  const inferenceDist = path.join(sdkPath, 'node_modules', '@qvac', 'inference', 'dist', 'plugins')
-  fs.mkdirSync(inferenceDist, { recursive: true })
-  fs.writeFileSync(
-    path.join(sdkPath, 'node_modules', '@qvac', 'inference', 'package.json'),
-    `${JSON.stringify({
-      name: '@qvac/inference',
-      type: 'module',
-      exports: {
-        './package': './package.json',
-        './plugins': './dist/plugins/index.js'
-      }
-    })}\n`
-  )
-  fs.writeFileSync(path.join(inferenceDist, 'index.js'), 'export function registerPlugin() {}\n')
-
-  fs.writeFileSync(
-    configPath,
-    `${JSON.stringify({ plugins: ['@qvac/sdk/llamacpp-completion/plugin'] })}\n`
-  )
-
-  return {
-    projectRoot,
-    sdkPath,
-    configPath,
-    outputDir: path.join(projectRoot, 'qvac')
-  }
+function writeFile(filePath: string, contents: string) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true })
+  fs.writeFileSync(filePath, contents)
 }
 
-describe('selectExportTarget', () => {
-  it('returns a plain string target', () => {
-    assert.equal(selectExportTarget('./dist/index.js'), './dist/index.js')
-  })
+function writeFakeSdk(sdkPath: string) {
+  writeFile(
+    path.join(sdkPath, 'package.json'),
+    JSON.stringify({
+      name: '@qvac/sdk',
+      version: '1.2.3',
+      type: 'module',
+      exports: {
+        './worker': './dist/worker.js',
+        './llamacpp-completion/plugin': './dist/llm-plugin.js'
+      }
+    })
+  )
+  writeFile(path.join(sdkPath, 'bare-imports.json'), '{}\n')
+  writeFile(
+    path.join(sdkPath, 'dist', 'worker.js'),
+    'export function startWorker(ipc, ready) { ready(); return async () => {} }\n'
+  )
+  writeFile(path.join(sdkPath, 'dist', 'llm-plugin.js'), 'export const llmPlugin = {}\n')
+}
 
-  it('resolves the import condition', () => {
-    assert.equal(selectExportTarget({ import: './dist/x.js' }), './dist/x.js')
-  })
+function fakeBundleSdkProject(t: { after: (fn: () => void) => void }) {
+  const projectRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-bundle-')))
+  const sdkPath = path.join(projectRoot, 'node_modules', '@qvac', 'sdk')
+  const configPath = path.join(projectRoot, 'qvac.config.json')
+  t.after(() => fs.rmSync(projectRoot, { recursive: true, force: true }))
 
-  it('prefers the bare condition over import', () => {
-    assert.equal(
-      selectExportTarget({ import: './dist/x.js', bare: './dist/x.bare.js' }),
-      './dist/x.bare.js'
-    )
-  })
+  writeFakeSdk(sdkPath)
+  writeFile(configPath, JSON.stringify({ plugins: ['@qvac/sdk/llamacpp-completion/plugin'] }))
 
-  it('descends into nested conditions', () => {
-    assert.equal(selectExportTarget({ node: { import: './dist/node.js' } }), './dist/node.js')
-  })
+  linkDependency(projectRoot, 'bare-stow-runtime', SDK_DIR)
+  linkDependency(projectRoot, 'bare-stow-host', SDK_DIR)
+  linkDependency(projectRoot, 'bare-sidecar', SDK_DIR)
 
-  it('returns null for missing or unknown-only conditions', () => {
-    assert.equal(selectExportTarget(undefined), null)
-    assert.equal(selectExportTarget({ types: './dist/x.d.ts' }), null)
-  })
-})
+  return { projectRoot, sdkPath, configPath, workerDir: path.join(projectRoot, 'qvac', 'worker') }
+}
 
-describe('createSdkImportResolver', () => {
-  function fakeSdk(
-    t: { after: (fn: () => void) => void },
-    opts: { withInference?: boolean } = {}
-  ): {
-    realDir: string
-    linkDir: string
-  } {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-sdk-import-'))
-    t.after(() => fs.rmSync(root, { recursive: true, force: true }))
-    const realDir = path.join(root, 'real', 'sdk')
-    fs.mkdirSync(realDir, { recursive: true })
-    fs.writeFileSync(
-      path.join(realDir, 'package.json'),
-      JSON.stringify({
-        name: '@qvac/sdk',
-        exports: {
-          './worker-lifecycle': { import: './dist/server/worker-lifecycle.js' },
-          './plugins': { import: './dist/server/plugins/index.js' }
-        }
-      })
-    )
-    if (opts.withInference) {
-      const inferenceDir = path.join(realDir, 'node_modules', '@qvac', 'inference')
-      fs.mkdirSync(inferenceDir, { recursive: true })
-      fs.writeFileSync(
-        path.join(inferenceDir, 'package.json'),
-        JSON.stringify({
-          name: '@qvac/inference',
-          exports: {
-            './package': './package.json',
-            './plugins': { import: './dist/plugins/index.js' }
-          }
-        })
-      )
-    }
-    const linkDir = path.join(root, 'node_modules', '@qvac', 'sdk')
-    fs.mkdirSync(path.dirname(linkDir), { recursive: true })
-    fs.symlinkSync(realDir, linkDir)
-    return { realDir, linkDir }
-  }
+function addPlugin(sdkPath: string, suffix: string, file: string, source: string) {
+  const manifestPath = path.join(sdkPath, 'package.json')
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+  manifest.exports[`./${suffix}/plugin`] = `./dist/${file}`
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest))
+  writeFile(path.join(sdkPath, 'dist', file), source)
+}
 
-  it('resolves an SDK subpath to a file URL anchored at the realpath, not the symlink', (t) => {
-    const { realDir, linkDir } = fakeSdk(t)
-    const resolve = createSdkImportResolver(linkDir, '@qvac/sdk')
-
-    const expected = pathToFileURL(
-      path.join(fs.realpathSync(realDir), 'dist', 'server', 'worker-lifecycle.js')
-    ).href
-    assert.equal(resolve('@qvac/sdk/worker-lifecycle'), expected)
-    assert.ok(!resolve('@qvac/sdk/worker-lifecycle').includes('node_modules'))
-  })
-
-  it('passes through non-SDK specifiers unchanged', (t) => {
-    const { linkDir } = fakeSdk(t)
-    const resolve = createSdkImportResolver(linkDir, '@qvac/sdk')
-    assert.equal(resolve('react'), 'react')
-    assert.equal(resolve('my-pkg/plugin'), 'my-pkg/plugin')
-  })
-
-  it('leaves SDK subpaths that are not in exports unchanged', (t) => {
-    const { linkDir } = fakeSdk(t)
-    const resolve = createSdkImportResolver(linkDir, '@qvac/sdk')
-    assert.equal(resolve('@qvac/sdk/not-exported'), '@qvac/sdk/not-exported')
-  })
-
-  it('does not anchor @qvac/inference subpaths even when inference is resolvable', (t) => {
-    const { linkDir } = fakeSdk(t, { withInference: true })
-    const resolve = createSdkImportResolver(linkDir, '@qvac/sdk')
-    assert.equal(resolve('@qvac/inference/plugins'), '@qvac/inference/plugins')
-  })
-
-  it('leaves @qvac/inference specifiers unchanged', (t) => {
-    const { linkDir } = fakeSdk(t)
-    const resolve = createSdkImportResolver(linkDir, '@qvac/sdk')
-    assert.equal(resolve('@qvac/inference/plugins'), '@qvac/inference/plugins')
-  })
-})
+function addAddon(dir: string, name: string, extra: Record<string, unknown> = {}) {
+  writeFile(
+    path.join(dir, 'package.json'),
+    JSON.stringify({ name, version: '1.0.0', main: 'index.js', addon: true, ...extra })
+  )
+  writeFile(path.join(dir, 'index.js'), 'module.exports = {}')
+}
 
 describe('generateWorkerEntry', () => {
-  const tag = (specifier: string): string =>
-    specifier.startsWith('@qvac/sdk') ? `RESOLVED:${specifier}` : specifier
+  it('starts the worker with the selected built-in plugins', () => {
+    const entry = generateWorkerEntry(['@qvac/sdk/llamacpp-completion/plugin'], '@qvac/sdk')
+    assert.match(entry, /import \{ startWorker \} from "@qvac\/sdk\/worker"/)
+    assert.match(entry, /import \{ llmPlugin \} from "@qvac\/sdk\/llamacpp-completion\/plugin"/)
+    assert.match(entry, /export default function start\(ipc, ready\)/)
+    assert.match(entry, /startWorker\(ipc, ready, \{ plugins: \[llmPlugin\] \}\)/)
+  })
+
+  it('imports custom plugins by their default export', () => {
+    const entry = generateWorkerEntry(
+      ['@qvac/sdk/llamacpp-completion/plugin', 'my-pkg/plugin'],
+      '@qvac/sdk'
+    )
+    assert.match(entry, /import customPlugin1 from "my-pkg\/plugin"/)
+    assert.match(entry, /plugins: \[llmPlugin, customPlugin1\]/)
+  })
 
   it('leaves RPC native imports out of a model-only worker', () => {
     const entry = generateWorkerEntry(['@qvac/sdk/nmtcpp-translation/plugin'], '@qvac/sdk')
-    assert.doesNotMatch(entry, /rpc-server|RpcServerProvider/)
+    assert.doesNotMatch(entry, /rpcServerProvider/)
   })
 
-  it('assembles a server-only worker with an explicit provider and no model plugin', () => {
+  it('passes an explicit provider to a server-only worker', () => {
     const plugins = resolvePluginSpecifiers(
       { plugins: [], rpcServerProvider: '@qvac/sdk/ggml-rpc-server/provider' },
       '@qvac/sdk',
       getClientLogger({ enableConsole: false })
     )
     assert.deepEqual(plugins, [])
-    const { runtimeEntry, bundleEntry } = generateWorkerEntries(
-      plugins,
-      '@qvac/sdk',
-      tag,
-      '@qvac/sdk/ggml-rpc-server/provider'
-    )
-    assert.match(runtimeEntry, /from "@qvac\/sdk\/ggml-rpc-server\/provider"/)
-    assert.match(bundleEntry, /from "RESOLVED:@qvac\/sdk\/ggml-rpc-server\/provider"/)
-    assert.match(runtimeEntry, /registerRpcServerProvider\(rpcServerProvider\)/)
-    assert.doesNotMatch(runtimeEntry, /registerPlugin\(/)
+    const entry = generateWorkerEntry(plugins, '@qvac/sdk', '@qvac/sdk/ggml-rpc-server/provider')
+    assert.match(entry, /import rpcServerProvider from "@qvac\/sdk\/ggml-rpc-server\/provider"/)
+    assert.match(entry, /\{ plugins: \[\], rpcServerProvider \}/)
   })
 
-  it('quotes custom provider specifiers as module strings', () => {
-    const entry = generateWorkerEntry([], '@qvac/sdk', tag, 'custom"provider')
-    assert.ok(entry.includes('from "custom\\"provider";'))
+  it('quotes specifiers as module strings', () => {
+    const entry = generateWorkerEntry([], '@qvac/sdk', 'custom"provider')
+    assert.ok(entry.includes('from "custom\\"provider"'))
   })
 
-  it('routes SDK imports through the resolver and registers plugins via @qvac/sdk/plugins', () => {
-    const entry = generateWorkerEntry([], '@qvac/sdk', tag)
-    assert.match(entry, /from "RESOLVED:@qvac\/sdk\/worker-lifecycle"/)
-    assert.match(entry, /from "RESOLVED:@qvac\/sdk\/logging"/)
-    assert.match(entry, /from "RESOLVED:@qvac\/sdk\/plugins"/)
-  })
-
-  it('routes builtin plugin imports through the resolver and keeps custom plugins', () => {
+  it('imports through the given resolver', () => {
     const entry = generateWorkerEntry(
       ['@qvac/sdk/llamacpp-completion/plugin', 'my-pkg/plugin'],
       '@qvac/sdk',
-      tag
+      undefined,
+      (specifier) => specifier.replace('@qvac/sdk/', 'file:///sdk/')
     )
-    assert.match(entry, /from "RESOLVED:@qvac\/sdk\/llamacpp-completion\/plugin"/)
-    assert.match(entry, /from "my-pkg\/plugin"/)
+    assert.match(entry, /import \{ startWorker \} from "file:\/\/\/sdk\/worker"/)
+    assert.match(entry, /import \{ llmPlugin \} from "file:\/\/\/sdk\/llamacpp-completion\/plugin"/)
+    assert.match(entry, /import customPlugin1 from "my-pkg\/plugin"/)
+  })
+})
+
+describe('loadTargetPackage', () => {
+  it('names a target package neither the project nor the SDK has', async (t) => {
+    const projectRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-target-')))
+    t.after(() => fs.rmSync(projectRoot, { recursive: true, force: true }))
+
+    await assert.rejects(
+      loadTargetPackage('pear-runtime', 'qvac-missing-stow-target', projectRoot),
+      (error: unknown) =>
+        error instanceof BundleTargetNotInstalledError &&
+        error.message.includes('qvac-missing-stow-target')
+    )
   })
 
-  it('defaults to an identity resolver (imports stay bare specifiers)', () => {
-    const entry = generateWorkerEntry([], '@qvac/sdk')
-    assert.match(entry, /from "@qvac\/sdk\/worker-lifecycle"/)
+  it('loads the target package the project installed', async (t) => {
+    const projectRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-target-')))
+    t.after(() => fs.rmSync(projectRoot, { recursive: true, force: true }))
+    const targetDir = path.join(projectRoot, 'node_modules', 'qvac-project-stow-target')
+    writeFile(
+      path.join(targetDir, 'package.json'),
+      JSON.stringify({ name: 'qvac-project-stow-target', main: 'index.js' })
+    )
+    writeFile(path.join(targetDir, 'index.js'), "exports.name = 'project-target'\n")
+
+    const target = await loadTargetPackage('pear-runtime', 'qvac-project-stow-target', projectRoot)
+
+    assert.equal((target as { name?: string }).name, 'project-target')
+  })
+})
+
+describe('describeMissingAddonBuild', () => {
+  it('names the scoped addon and only the hosts the bundler reports missing', () => {
+    const error = Object.assign(
+      new Error(
+        "Cannot find addon '.' imported from 'x' for hosts 'win32-arm64', 'linux-arm64'\nCandidates:"
+      ),
+      {
+        code: 'ADDON_NOT_FOUND',
+        referrer: { href: 'file:///app/node_modules/@qvac/sdk/node_modules/@qvac/ocr/index.js' }
+      }
+    )
+
+    assert.match(
+      describeMissingAddonBuild(error, ['darwin-arm64', 'win32-arm64', 'linux-arm64'])!.message,
+      /^@qvac\/ocr has no native build for win32-arm64, linux-arm64\./
+    )
   })
 
-  it('keeps the runtime entry relocatable while resolving the bundle entry', () => {
-    const { runtimeEntry, bundleEntry } = generateWorkerEntries([], '@qvac/sdk', tag)
+  it('leaves any other error alone', () => {
+    assert.equal(describeMissingAddonBuild(new Error('boom'), ['linux-x64']), null)
+  })
+})
 
-    assert.match(runtimeEntry, /from "@qvac\/sdk\/worker-lifecycle"/)
-    assert.doesNotMatch(runtimeEntry, /RESOLVED:/)
-    assert.match(bundleEntry, /from "RESOLVED:@qvac\/sdk\/worker-lifecycle"/)
+describe('bundleRoot', () => {
+  it('is the project root for a bundle based there', () => {
+    assert.equal(bundleRoot('/qvac/__main__.cjs', '/work/app'), '/work/app')
+  })
+
+  it('climbs to the base above the project that the bundle names', () => {
+    assert.equal(bundleRoot('/packages/app/qvac/__main__.cjs', '/work/packages/app'), '/work')
+  })
+
+  it('falls back to the project root for a bundle with another main', () => {
+    assert.equal(bundleRoot('/entry.mjs', '/work/app'), '/work/app')
+    assert.equal(bundleRoot(null, '/work/app'), '/work/app')
   })
 })
 
@@ -269,32 +224,13 @@ describe('inference native dependency boundary', () => {
       recursive: true
     })
     const manifest = JSON.parse(fs.readFileSync(inferenceManifest, 'utf8'))
-    function linkDependency(dependency: string, from: string, optional = false) {
-      const target = path.join(projectRoot, 'node_modules', dependency)
-      if (fs.existsSync(target)) return
-      let parent = from
-      let source = path.join(parent, 'node_modules', dependency)
-      while (!fs.existsSync(source) && parent !== path.dirname(parent)) {
-        parent = path.dirname(parent)
-        source = path.join(parent, 'node_modules', dependency)
-      }
-      if (optional && !fs.existsSync(source)) return
-      source = fs.realpathSync(source)
-      fs.mkdirSync(path.dirname(target), { recursive: true })
-      fs.symlinkSync(source, target, 'junction')
-      const pkg = JSON.parse(fs.readFileSync(path.join(source, 'package.json'), 'utf8'))
-      for (const child of Object.keys(pkg.dependencies ?? {})) linkDependency(child, source)
-      for (const child of Object.keys({ ...pkg.optionalDependencies, ...pkg.peerDependencies })) {
-        linkDependency(child, source, true)
-      }
-    }
     // Include the selected model addon, its language detector, and runtime dependencies.
     for (const dependency of [
       ...Object.keys(manifest.dependencies),
       '@qvac/translation-nmtcpp',
       '@qvac/langdetect-text'
     ]) {
-      linkDependency(dependency, inferenceRoot)
+      linkDependency(projectRoot, dependency, inferenceRoot)
     }
     const isolatedRequire = createRequire(path.join(isolatedRoot, 'package.json'))
     assert.throws(() => isolatedRequire.resolve('@qvac/ggml-rpc-server'))
@@ -308,19 +244,19 @@ describe('inference native dependency boundary', () => {
         'await heartbeat();'
       ].join('\n')
     )
-    const bundlePath = path.join(projectRoot, 'worker.bundle.js')
+    const bundlePath = path.join(projectRoot, 'index.bundle')
+    const base = path.parse(fs.realpathSync(projectRoot)).root
     const packBin = path.join(path.dirname(require.resolve('bare-pack/package')), 'bin.js')
     execFileSync(
       packBin,
-      ['--host', `${process.platform}-${process.arch}`, '--linked', '--out', bundlePath, entryPath],
+      ['--host', HOST, '--linked', '--base', base, '--out', bundlePath, entryPath],
       { stdio: 'pipe' }
     )
-    const header = extractBarePackHeader(extractPackedString(fs.readFileSync(bundlePath, 'utf8')))
-    assert.doesNotMatch(JSON.stringify(header.resolutions), /ggml-rpc-server|rpc\/ggml-provider/)
-    const { addons } = await generateAddonsManifest({
+    const bundle = await readBundle(bundlePath)
+    assert.doesNotMatch(JSON.stringify(bundle.resolutions), /ggml-rpc-server|rpc\/ggml-provider/)
+    const addons = await listBundledAddons({
       bundlePath,
-      outputDir: projectRoot,
-      projectRoot,
+      projectRoot: base,
       logger: getClientLogger({ enableConsole: false })
     })
     assert.ok(addons.some((addon) => addon.includes('translation-nmtcpp')))
@@ -328,22 +264,17 @@ describe('inference native dependency boundary', () => {
   })
 })
 
-function assertDecoderExcludedFromBundle(result: Awaited<ReturnType<typeof bundleSdk>>): void {
+async function assertDecoderExcludedFromBundle(
+  result: Awaited<ReturnType<typeof bundleSdk>>
+): Promise<void> {
   assert.ok(!result.addons.includes('bare-ffmpeg'))
-  const header = extractBarePackHeader(
-    extractPackedString(fs.readFileSync(result.bundlePath, 'utf8'))
-  )
-  const resolutions = header.resolutions ?? {}
+  assert.ok(!result.addonModules.some((file) => file.includes(`${path.sep}bare-ffmpeg${path.sep}`)))
+  const { resolutions } = await readBundle(result.bundlePath)
   assert.ok(
     !Object.keys(resolutions).some((key) => key.includes('/node_modules/bare-ffmpeg/')),
     'bare-ffmpeg module must not be in the bundle graph'
   )
   assert.ok(JSON.stringify(resolutions).includes('deferred:bare-ffmpeg'))
-  assert.ok(
-    !JSON.stringify(JSON.parse(fs.readFileSync(result.manifestPath, 'utf8'))).includes(
-      'bare-ffmpeg'
-    )
-  )
 }
 
 describe('isBarePackNodeSupported', () => {
@@ -364,96 +295,191 @@ describe('isBarePackNodeSupported', () => {
   })
 })
 
-describe('runBarePack', () => {
-  it('throws BARE_PACK_NODE_UNSUPPORTED before spawning on an unsupported Node', async (t) => {
-    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-bare-pack-node-'))
-    t.after(() => fs.rmSync(projectRoot, { recursive: true, force: true }))
-    const entryPath = path.join(projectRoot, 'entry.mjs')
-    const outputPath = path.join(projectRoot, 'worker.bundle.js')
-    fs.writeFileSync(entryPath, 'export {}\n')
-
-    await assert.rejects(
-      runBarePack({
-        entryPath,
-        outputPath,
-        hosts: [`${process.platform}-${process.arch}`],
-        importsMapPath: path.join(projectRoot, 'bare-imports.json'),
-        deferModules: [],
-        quiet: true,
-        logger: getClientLogger({ enableConsole: false }),
-        nodeVersions: { node: '22.20.0' }
-      }),
+describe('assertNodeCanBundle', () => {
+  it('throws BARE_PACK_NODE_UNSUPPORTED on an unsupported Node', () => {
+    assert.throws(
+      () => assertNodeCanBundle({ node: '22.20.0' }),
       (error: unknown) =>
         error instanceof BarePackNodeUnsupportedError &&
         error.code === SDK_CLIENT_ERROR_CODES.BARE_PACK_NODE_UNSUPPORTED &&
         /\^22\.21\.0 \|\| >=24\.9\.0/.test(error.message) &&
         /v22\.20\.0/.test(error.message)
     )
-    assert.ok(!fs.existsSync(outputPath))
+  })
+
+  it('does not check Bun, which reports an emulated Node version', () => {
+    assert.doesNotThrow(() => assertNodeCanBundle({ node: '22.20.0', bun: '1.4.2' }))
   })
 })
 
-describe('bundleSdk worker entries', () => {
-  it('omits bare-ffmpeg from the addon manifest when audio decoding is disabled', async (t) => {
-    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-audio-manifest-'))
-    t.after(() => fs.rmSync(projectRoot, { recursive: true, force: true }))
-    const addonRoot = path.join(projectRoot, 'node_modules', 'bare-ffmpeg')
-    fs.mkdirSync(addonRoot, { recursive: true })
-    fs.writeFileSync(path.join(addonRoot, 'package.json'), JSON.stringify({ addon: true }))
-    const bundlePath = path.join(projectRoot, 'worker.bundle.js')
-    const packed =
-      'bundle\n' +
-      JSON.stringify({
-        id: 'audio-manifest',
-        resolutions: { '/node_modules/bare-ffmpeg/index.js': {} }
-      })
-    fs.writeFileSync(bundlePath, `module.exports = ${JSON.stringify(packed)};`)
-    const logger = getClientLogger({ enableConsole: false })
-    const enabled = await generateAddonsManifest({
-      bundlePath,
-      outputDir: projectRoot,
+describe('bundleSdk', () => {
+  it('writes the entry, the harness and the bundle for this host', async (t) => {
+    const { projectRoot, configPath, workerDir } = fakeBundleSdkProject(t)
+
+    const result = await bundleSdk({ projectRoot, configPath, quiet: true })
+
+    assert.equal(result.target, 'bare-sidecar')
+    assert.deepEqual(result.hosts, [HOST])
+    assert.equal(result.entryPath, path.join(projectRoot, 'qvac', 'worker.entry.mjs'))
+    assert.equal(result.outputDir, workerDir)
+    assert.equal(result.bundlePath, path.join(workerDir, 'index.bundle'))
+    assert.match(fs.readFileSync(result.entryPath, 'utf8'), /from "@qvac\/sdk\/worker"/)
+    assert.match(fs.readFileSync(path.join(result.outputDir, 'index.js'), 'utf8'), /bare-sidecar/)
+    const { main } = await readBundle(result.bundlePath)
+    assert.equal(bundleRoot(main, projectRoot), path.parse(projectRoot).root)
+  })
+
+  it("writes bare-stow's Kotlin module for bare-kit to the given folder", async (t) => {
+    const { projectRoot, configPath } = fakeBundleSdkProject(t)
+    const outputDir = path.join(projectRoot, 'android', 'worker')
+
+    const result = await bundleSdk({
       projectRoot,
-      logger
+      configPath,
+      target: 'bare-kit',
+      language: 'kotlin',
+      languageOptions: { package: 'com.example.worker' },
+      outputDir,
+      quiet: true
     })
-    assert.deepEqual(enabled.addons, ['bare-ffmpeg'])
-    const disabled = await generateAddonsManifest({
-      bundlePath,
-      outputDir: projectRoot,
-      projectRoot,
-      logger,
-      includeAudioDecoder: false
-    })
-    assert.deepEqual(disabled.addons, [])
-    assert.deepEqual(JSON.parse(fs.readFileSync(disabled.manifestPath, 'utf8')).addons, [])
+
+    assert.equal(result.language, 'kotlin')
+    assert.deepEqual(result.hosts, ['android-arm64'])
+    assert.equal(result.outputDir, outputDir)
+    assert.equal(
+      result.bundlePath,
+      path.join(outputDir, 'src', 'main', 'assets', 'com', 'example', 'worker', 'index.bundle')
+    )
+    const harness = path.join(outputDir, 'src', 'main', 'kotlin', 'com', 'example', 'worker')
+    assert.match(fs.readFileSync(path.join(harness, 'Harness.kt'), 'utf8'), /suspend fun start/)
+    assert.match(fs.readFileSync(path.join(outputDir, 'build.gradle'), 'utf8'), /bare-kit-kotlin/)
+  })
+
+  it('bundles for pear-runtime with the target package the SDK installs', async (t) => {
+    const { projectRoot, configPath, workerDir } = fakeBundleSdkProject(t)
+
+    const result = await bundleSdk({ projectRoot, configPath, target: 'pear-runtime', quiet: true })
+
+    assert.equal(result.target, 'pear-runtime')
+    assert.equal(result.bundlePath, path.join(workerDir, 'index.bundle'))
+    assert.match(fs.readFileSync(path.join(workerDir, 'index.js'), 'utf8'), /pear\.run\(bundle,/)
+    assert.match(fs.readFileSync(result.bundlePath, 'latin1'), /bare-stow-runtime\/process/)
+  })
+
+  it('bundles an SDK from outside the project, with its own bare-stow runtime', async (t) => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-bundle-outside-')))
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+    const sdkPath = path.join(root, 'sdk')
+    const projectRoot = path.join(root, 'app')
+    const configPath = path.join(projectRoot, 'qvac.config.json')
+    writeFakeSdk(sdkPath)
+    linkDependency(sdkPath, 'bare-stow-runtime', SDK_DIR)
+    linkDependency(projectRoot, 'bare-stow-runtime', SDK_DIR)
+    linkDependency(projectRoot, 'bare-stow-host', SDK_DIR)
+    linkDependency(projectRoot, 'bare-sidecar', SDK_DIR)
+    writeFile(configPath, JSON.stringify({ plugins: ['@qvac/sdk/llamacpp-completion/plugin'] }))
+
+    const result = await bundleSdk({ projectRoot, configPath, sdkPath, quiet: true })
+
+    const entry = fs.readFileSync(result.entryPath, 'utf8')
+    assert.ok(
+      entry.includes(JSON.stringify(pathToFileURL(path.join(sdkPath, 'dist', 'worker.js')).href))
+    )
+    const { main, resolutions } = await readBundle(result.bundlePath)
+    assert.ok(main?.endsWith('/app/qvac/__main__.cjs'))
+    assert.ok(Object.keys(resolutions).some((key) => key.endsWith('/sdk/dist/worker.js')))
+  })
+
+  it("copies an outside SDK's addon resources beside the offloaded binary", async (t) => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-bundle-outside-')))
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+    const sdkPath = path.join(root, 'sdk')
+    const projectRoot = path.join(root, 'app')
+    const configPath = path.join(projectRoot, 'qvac.config.json')
+    writeFakeSdk(sdkPath)
+    linkDependency(sdkPath, 'bare-stow-runtime', SDK_DIR)
+    linkDependency(projectRoot, 'bare-stow-runtime', SDK_DIR)
+    linkDependency(projectRoot, 'bare-stow-host', SDK_DIR)
+    linkDependency(projectRoot, 'bare-sidecar', SDK_DIR)
+    const addonDir = path.join(sdkPath, 'node_modules', 'resource-addon')
+    addAddon(addonDir, 'resource-addon')
+    writeFile(path.join(addonDir, 'index.js'), 'module.exports = require.addon()')
+    writeFile(path.join(addonDir, 'prebuilds', HOST, 'resource-addon.bare'), 'binary')
+    writeFile(path.join(addonDir, 'prebuilds', HOST, 'resource-addon', 'backend.so'), 'backend')
+    addPlugin(
+      sdkPath,
+      'llamacpp-completion',
+      'llm-plugin.js',
+      "import addon from 'resource-addon'\nexport const llmPlugin = { addon }\n"
+    )
+    writeFile(configPath, JSON.stringify({ plugins: ['@qvac/sdk/llamacpp-completion/plugin'] }))
+
+    const result = await bundleSdk({ projectRoot, configPath, sdkPath, quiet: true })
+
+    const offloaded = fs
+      .readdirSync(path.dirname(result.bundlePath), { recursive: true, encoding: 'utf8' })
+      .find((file) => file.endsWith(`${path.sep}resource-addon.bare`))
+    assert.ok(offloaded, 'the addon binary is offloaded beside the bundle')
+    const backend = path.join(
+      path.dirname(result.bundlePath),
+      offloaded.slice(0, -'.bare'.length),
+      'backend.so'
+    )
+    assert.equal(fs.readFileSync(backend, 'utf8'), 'backend')
+  })
+
+  it('replaces the output of an earlier run', async (t) => {
+    const { projectRoot, configPath, workerDir } = fakeBundleSdkProject(t)
+    writeFile(path.join(workerDir, 'stale.bare'), '')
+
+    await bundleSdk({ projectRoot, configPath, quiet: true })
+
+    assert.ok(!fs.existsSync(path.join(workerDir, 'stale.bare')))
+  })
+
+  it('records the SDK version in the bundled worker', async (t) => {
+    const { projectRoot, configPath, workerDir } = fakeBundleSdkProject(t)
+
+    await bundleSdk({ projectRoot, configPath, quiet: true })
+
+    const manifest = JSON.parse(fs.readFileSync(path.join(workerDir, 'package.json'), 'utf8'))
+    assert.equal(manifest.qvacSdkVersion, '1.2.3')
+  })
+
+  it('refuses a given output folder that has files, and keeps them', async (t) => {
+    const { projectRoot, configPath } = fakeBundleSdkProject(t)
+    const outputDir = path.join(projectRoot, 'src')
+    writeFile(path.join(outputDir, 'app.js'), '')
+
+    await assert.rejects(
+      bundleSdk({ projectRoot, configPath, outputDir, quiet: true }),
+      (error: unknown) =>
+        error instanceof BundleFailedError && error.message.includes('must be empty or not exist')
+    )
+    assert.ok(fs.existsSync(path.join(outputDir, 'app.js')))
+  })
+
+  it('bundles into a given empty output folder', async (t) => {
+    const { projectRoot, configPath } = fakeBundleSdkProject(t)
+    const outputDir = path.join(projectRoot, 'out')
+    fs.mkdirSync(outputDir)
+
+    const result = await bundleSdk({ projectRoot, configPath, outputDir, quiet: true })
+
+    assert.ok(fs.existsSync(path.join(outputDir, 'index.js')))
+    assert.equal(result.bundlePath, path.join(outputDir, 'index.bundle'))
   })
 
   it('bundles a PCM-only audio plugin without linking bare-ffmpeg', async (t) => {
-    const { projectRoot, sdkPath, configPath, outputDir } = fakeBundleSdkProject(t)
-    const addonPath = path.join(sdkPath, 'node_modules', 'bare-ffmpeg')
-    fs.writeFileSync(
-      path.join(sdkPath, 'dist', 'plugins.js'),
-      'export function registerPlugin(plugin) { globalThis.plugin = plugin }'
-    )
-    fs.mkdirSync(addonPath, { recursive: true })
-    fs.writeFileSync(
-      path.join(addonPath, 'package.json'),
-      JSON.stringify({
-        name: 'bare-ffmpeg',
-        version: '1.0.0',
-        main: 'index.js',
-        addon: true
-      })
-    )
-    fs.writeFileSync(path.join(addonPath, 'index.js'), 'module.exports = {}')
-    const sdkManifestPath = path.join(sdkPath, 'package.json')
-    const sdkManifest = JSON.parse(fs.readFileSync(sdkManifestPath, 'utf8'))
-    sdkManifest.exports['./whispercpp-transcription/plugin'] = './dist/whisper-plugin.js'
-    fs.writeFileSync(sdkManifestPath, JSON.stringify(sdkManifest))
-    fs.writeFileSync(
-      path.join(sdkPath, 'dist', 'whisper-plugin.js'),
+    const { projectRoot, sdkPath, configPath } = fakeBundleSdkProject(t)
+    addAddon(path.join(sdkPath, 'node_modules', 'bare-ffmpeg'), 'bare-ffmpeg')
+    addPlugin(
+      sdkPath,
+      'whispercpp-transcription',
+      'whisper-plugin.js',
       "export const whisperPlugin = { decode: () => require('bare-ffmpeg') };"
     )
-    fs.writeFileSync(
+    writeFile(
       configPath,
       JSON.stringify({
         plugins: ['@qvac/sdk/whispercpp-transcription/plugin'],
@@ -461,19 +487,10 @@ describe('bundleSdk worker entries', () => {
       })
     )
 
-    const result = await bundleSdk({
-      projectRoot,
-      sdkPath,
-      configPath,
-      hosts: [`${process.platform}-${process.arch}`],
-      quiet: true,
-      checkEngines: false
-    })
+    const result = await bundleSdk({ projectRoot, configPath, quiet: true })
+    await assertDecoderExcludedFromBundle(result)
 
-    assertDecoderExcludedFromBundle(result)
-    assert.ok(fs.existsSync(path.join(outputDir, 'worker.bundle.js')))
-
-    fs.writeFileSync(
+    writeFile(
       configPath,
       JSON.stringify({ plugins: ['@qvac/sdk/whispercpp-transcription/plugin'] })
     )
@@ -490,85 +507,354 @@ describe('bundleSdk worker entries', () => {
     }
     const explicitlyDeferred = await bundleSdk({
       projectRoot,
-      sdkPath,
       configPath,
-      hosts: [`${process.platform}-${process.arch}`],
-      defer: ['bare-ffmpeg'],
-      checkEngines: false
+      defer: ['bare-ffmpeg']
     })
-    assertDecoderExcludedFromBundle(explicitlyDeferred)
+    await assertDecoderExcludedFromBundle(explicitlyDeferred)
     assert.ok(warnings.some((message) => message.includes('cannot decode compressed audio files')))
   })
 
-  it('bundles an audiogen plugin with bare-ffmpeg deferred', async (t) => {
+  it('leaves bare-ffmpeg out of the bundle when audio decoding is disabled', async (t) => {
     const { projectRoot, sdkPath, configPath } = fakeBundleSdkProject(t)
-    const addonPath = path.join(sdkPath, 'node_modules', 'bare-ffmpeg')
-    fs.mkdirSync(addonPath, { recursive: true })
-    fs.writeFileSync(
-      path.join(addonPath, 'package.json'),
-      JSON.stringify({ name: 'bare-ffmpeg', version: '1.0.0', main: 'index.js', addon: true })
+    addAddon(path.join(sdkPath, 'node_modules', 'bare-ffmpeg'), 'bare-ffmpeg')
+    addPlugin(
+      sdkPath,
+      'audiogen-ggml',
+      'audiogen-plugin.js',
+      "export const audioGenPlugin = { encode: () => require('bare-ffmpeg') }"
     )
-    fs.writeFileSync(path.join(addonPath, 'index.js'), 'module.exports = {}')
-    const sdkManifestPath = path.join(sdkPath, 'package.json')
-    const sdkManifest = JSON.parse(fs.readFileSync(sdkManifestPath, 'utf8'))
-    sdkManifest.exports['./audiogen-ggml/plugin'] = './dist/audiogen-plugin.js'
-    fs.writeFileSync(sdkManifestPath, JSON.stringify(sdkManifest))
-    fs.writeFileSync(
-      path.join(sdkPath, 'dist', 'audiogen-plugin.js'),
-      "export const audiogenPlugin = { encode: () => require('bare-ffmpeg') }"
-    )
-    fs.writeFileSync(
+    writeFile(
       configPath,
+      JSON.stringify({ plugins: ['@qvac/sdk/audiogen-ggml/plugin'], includeAudioDecoder: false })
+    )
+
+    const result = await bundleSdk({ projectRoot, configPath, quiet: true })
+
+    await assertDecoderExcludedFromBundle(result)
+  })
+
+  it('rejects a bundle that leaves an import unresolved', async (t) => {
+    const { projectRoot, configPath } = fakeBundleSdkProject(t)
+    writeFile(configPath, JSON.stringify({ plugins: ['missing-package/plugin'] }))
+
+    await assert.rejects(
+      bundleSdk({ projectRoot, configPath, quiet: true }),
+      (error: unknown) =>
+        error instanceof BundleFailedError && error.message.includes('missing-package/plugin')
+    )
+  })
+
+  it('imports an SDK installed under a symlinked project path by name', async (t) => {
+    const { projectRoot, configPath } = fakeBundleSdkProject(t)
+    const linkedRoot = `${projectRoot}-link`
+    fs.symlinkSync(projectRoot, linkedRoot, 'dir')
+    t.after(() => fs.rmSync(linkedRoot, { force: true }))
+
+    const result = await bundleSdk({ projectRoot: linkedRoot, configPath, quiet: true })
+
+    assert.match(fs.readFileSync(result.entryPath, 'utf8'), /from "@qvac\/sdk\/worker"/)
+  })
+
+  it('bundles a custom plugin that imports the SDK by name under a linked SDK', async (t) => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'qvac-bundle-linked-')))
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+    const sdkPath = path.join(root, 'sdk')
+    const projectRoot = path.join(root, 'app')
+    const configPath = path.join(projectRoot, 'qvac.config.json')
+    writeFakeSdk(sdkPath)
+    addPlugin(sdkPath, 'plugin-utils', 'plugin-utils.js', "export * from 'fake-inference'\n")
+    const manifestPath = path.join(sdkPath, 'package.json')
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
+    manifest.exports['./plugin-utils'] = './dist/plugin-utils.js'
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest))
+    writeFile(
+      path.join(sdkPath, 'node_modules', 'fake-inference', 'package.json'),
+      JSON.stringify({ name: 'fake-inference', main: 'index.js' })
+    )
+    writeFile(
+      path.join(sdkPath, 'node_modules', 'fake-inference', 'index.js'),
+      'exports.definePlugin = (plugin) => plugin\n'
+    )
+    linkDependency(sdkPath, 'bare-stow-runtime', SDK_DIR)
+    fs.mkdirSync(path.join(projectRoot, 'node_modules', '@qvac'), { recursive: true })
+    fs.symlinkSync(sdkPath, path.join(projectRoot, 'node_modules', '@qvac', 'sdk'), 'dir')
+    linkDependency(projectRoot, 'bare-stow-runtime', SDK_DIR)
+    linkDependency(projectRoot, 'bare-stow-host', SDK_DIR)
+    linkDependency(projectRoot, 'bare-sidecar', SDK_DIR)
+    writeFile(
+      path.join(projectRoot, 'node_modules', 'my-plugin', 'package.json'),
+      JSON.stringify({ name: 'my-plugin', exports: { './plugin': './plugin.js' } })
+    )
+    writeFile(
+      path.join(projectRoot, 'node_modules', 'my-plugin', 'plugin.js'),
+      "const { definePlugin } = require('@qvac/sdk/plugin-utils')\nmodule.exports = definePlugin({})\n"
+    )
+    writeFile(configPath, JSON.stringify({ plugins: ['my-plugin/plugin'] }))
+
+    const result = await bundleSdk({ projectRoot, configPath, quiet: true })
+
+    const { resolutions } = await readBundle(result.bundlePath)
+    assert.ok(Object.keys(resolutions).some((key) => key.endsWith('/fake-inference/index.js')))
+  })
+
+  it('names the missing platform package of a desktop host', async (t) => {
+    const { projectRoot, sdkPath, configPath } = fakeBundleSdkProject(t)
+    const addonDir = path.join(sdkPath, 'node_modules', 'split-addon')
+    writeFile(
+      path.join(addonDir, 'package.json'),
       JSON.stringify({
-        plugins: ['@qvac/sdk/audiogen-ggml/plugin'],
-        includeAudioDecoder: false
+        name: 'split-addon',
+        version: '1.0.0',
+        main: 'index.js',
+        imports: {
+          '#host-addon': {
+            [process.platform]: { [process.arch]: `split-addon-${HOST}` },
+            default: './addon-unavailable.js'
+          }
+        }
       })
     )
-
-    const result = await bundleSdk({
-      projectRoot,
+    writeFile(path.join(addonDir, 'index.js'), "module.exports = require('#host-addon')\n")
+    writeFile(path.join(addonDir, 'addon-unavailable.js'), 'module.exports = null\n')
+    addPlugin(
       sdkPath,
-      configPath,
-      hosts: [`${process.platform}-${process.arch}`],
-      quiet: true,
-      checkEngines: false
-    })
+      'llamacpp-completion',
+      'llm-plugin.js',
+      "import addon from 'split-addon'\nexport const llmPlugin = { addon }\n"
+    )
 
-    assertDecoderExcludedFromBundle(result)
+    await assert.rejects(
+      bundleSdk({ projectRoot, configPath, quiet: true }),
+      (error: unknown) =>
+        error instanceof HostPrebuildsMissingError &&
+        error.dependencies[`split-addon-${HOST}`] === '1.0.0'
+    )
   })
 
-  it('uses resolved imports for bare-pack but writes a relocatable runtime entry', async (t) => {
-    const { projectRoot, sdkPath, configPath, outputDir } = fakeBundleSdkProject(t)
-
-    await bundleSdk({
-      projectRoot,
+  it('fails verification for an addon with no prebuild for a bundled host', async (t) => {
+    const { projectRoot, sdkPath, configPath } = fakeBundleSdkProject(t)
+    linkDependency(projectRoot, 'react-native-bare-kit', SDK_DIR)
+    addAddon(path.join(sdkPath, 'node_modules', 'phone-addon'), 'phone-addon')
+    writeFile(
+      path.join(sdkPath, 'node_modules', 'phone-addon', 'index.js'),
+      'module.exports = require.addon()'
+    )
+    addPlugin(
       sdkPath,
-      configPath,
-      hosts: [`${process.platform}-${process.arch}`],
-      quiet: true
-    })
-
-    const runtimeEntry = fs.readFileSync(path.join(outputDir, 'worker.entry.mjs'), 'utf8')
-    assert.match(runtimeEntry, /from "@qvac\/sdk\/worker-lifecycle"/)
-    assert.doesNotMatch(runtimeEntry, new RegExp(pathToFileURL(sdkPath).href))
-    assert.ok(fs.existsSync(path.join(outputDir, 'worker.bundle.js')))
-    assert.ok(!fs.existsSync(path.join(outputDir, 'worker.bundle.entry.mjs')))
-  })
-
-  it('removes the temporary bundle entry when bare-pack fails', async (t) => {
-    const { projectRoot, sdkPath, configPath, outputDir } = fakeBundleSdkProject(t)
-    fs.writeFileSync(configPath, `${JSON.stringify({ plugins: ['missing-package/plugin'] })}\n`)
+      'llamacpp-completion',
+      'llm-plugin.js',
+      "import addon from 'phone-addon'\nexport const llmPlugin = { addon }\n"
+    )
 
     await assert.rejects(
       bundleSdk({
         projectRoot,
-        sdkPath,
         configPath,
-        hosts: [`${process.platform}-${process.arch}`],
+        target: 'react-native',
+        hosts: ['android-arm64'],
+        link: false,
         quiet: true
-      })
+      }),
+      (error: unknown) =>
+        error instanceof BundleVerificationFailedError &&
+        error.cause instanceof Error &&
+        error.cause.message.includes('phone-addon@1.0.0 for android-arm64')
+    )
+  })
+
+  it('checks a phone bundle against the Bare Kit of the bare-stow that bundled it', async (t) => {
+    const { projectRoot, sdkPath, configPath } = fakeBundleSdkProject(t)
+    linkDependency(projectRoot, 'react-native-bare-kit', SDK_DIR)
+    linkDependency(projectRoot, 'bare-stow-target-react-native', SDK_DIR)
+    // The project's SDK has its own bare-stow, pinning a Bare Kit with no known Bare.
+    const projectBareStow = path.join(sdkPath, 'node_modules', 'bare-stow')
+    writeFile(
+      path.join(projectBareStow, 'package.json'),
+      JSON.stringify({ name: 'bare-stow', version: '0.0.1' })
+    )
+    writeFile(
+      path.join(projectBareStow, 'lib', 'target', 'bare-kit.js'),
+      "const bareKitKotlin = { 'com.github.holepunchto.bare-kit-kotlin:bare-kit-kotlin': 'v0.0.1' }\n"
+    )
+    const bundlerBareStow = path.dirname(
+      createRequire(import.meta.url).resolve('bare-stow/package')
+    )
+    const bundlerPins = parseBareKitPins(
+      fs.readFileSync(path.join(bundlerBareStow, 'lib', 'target', 'bare-kit.js'), 'utf8')
     )
 
-    assert.ok(!fs.existsSync(path.join(outputDir, 'worker.bundle.entry.mjs')))
+    const result = await bundleSdk({
+      projectRoot,
+      configPath,
+      target: 'react-native',
+      hosts: ['android-arm64'],
+      link: false,
+      network: false,
+      quiet: true
+    })
+
+    const resolution = result.verification?.runtimes.find((runtime) =>
+      runtime.hosts.includes('android-arm64')
+    )?.resolution
+    assert.ok(resolution?.resolved === true)
+    assert.equal(resolution.runtime.packageVersion, bundlerPins.android)
+  })
+
+  it('names the addon and hosts a desktop bundle has no native build for', async (t) => {
+    const { projectRoot, sdkPath, configPath } = fakeBundleSdkProject(t)
+    addAddon(path.join(sdkPath, 'node_modules', 'desktop-addon'), 'desktop-addon')
+    writeFile(
+      path.join(sdkPath, 'node_modules', 'desktop-addon', 'index.js'),
+      'module.exports = require.addon()'
+    )
+    addPlugin(
+      sdkPath,
+      'llamacpp-completion',
+      'llm-plugin.js',
+      "import addon from 'desktop-addon'\nexport const llmPlugin = { addon }\n"
+    )
+
+    await assert.rejects(
+      bundleSdk({ projectRoot, configPath, quiet: true }),
+      (error: unknown) =>
+        error instanceof BundleFailedError &&
+        error.message.includes(`desktop-addon has no native build for ${HOST}`) &&
+        !error.message.includes('Candidates')
+    )
+  })
+
+  it('fails a phone bundle without react-native-bare-kit', async (t) => {
+    const { projectRoot, configPath } = fakeBundleSdkProject(t)
+
+    await assert.rejects(
+      bundleSdk({ projectRoot, configPath, target: 'react-native', quiet: true }),
+      (error: unknown) =>
+        error instanceof BundleFailedError &&
+        error.message.includes("imports 'react-native-bare-kit'")
+    )
+  })
+
+  it('fails when the harness cannot resolve a package it imports', async (t) => {
+    const { projectRoot, configPath } = fakeBundleSdkProject(t)
+    fs.rmSync(path.join(projectRoot, 'node_modules', 'bare-sidecar'))
+
+    await assert.rejects(
+      bundleSdk({ projectRoot, configPath, quiet: true }),
+      (error: unknown) =>
+        error instanceof BundleFailedError && error.message.includes("imports 'bare-sidecar'")
+    )
+  })
+
+  it('keeps the last good bundle when a later bundle fails', async (t) => {
+    const { projectRoot, configPath, workerDir } = fakeBundleSdkProject(t)
+    await bundleSdk({ projectRoot, configPath, quiet: true })
+    const harness = fs.readFileSync(path.join(workerDir, 'index.js'), 'utf8')
+    fs.rmSync(path.join(projectRoot, 'node_modules', 'bare-sidecar'))
+
+    await assert.rejects(
+      bundleSdk({ projectRoot, configPath, quiet: true }),
+      (error: unknown) => error instanceof BundleFailedError
+    )
+
+    assert.equal(fs.readFileSync(path.join(workerDir, 'index.js'), 'utf8'), harness)
+    assert.ok(fs.existsSync(path.join(workerDir, 'index.bundle')))
+    assert.deepEqual(
+      fs.readdirSync(path.dirname(workerDir)).filter((name) => name.startsWith('.')),
+      []
+    )
+  })
+
+  it('keeps the last good bundle when the new one fails verification', async (t) => {
+    const { projectRoot, sdkPath, configPath, workerDir } = fakeBundleSdkProject(t)
+    linkDependency(projectRoot, 'react-native-bare-kit', SDK_DIR)
+    linkDependency(projectRoot, 'bare-stow-target-react-native', SDK_DIR)
+    const options = {
+      projectRoot,
+      configPath,
+      target: 'react-native' as const,
+      hosts: ['android-arm64'],
+      link: false,
+      quiet: true
+    }
+    await bundleSdk(options)
+    const files = fs.readdirSync(workerDir)
+    const contents = files.map((file) => fs.readFileSync(path.join(workerDir, file)))
+    addAddon(path.join(sdkPath, 'node_modules', 'phone-addon'), 'phone-addon')
+    writeFile(
+      path.join(sdkPath, 'node_modules', 'phone-addon', 'index.js'),
+      'module.exports = require.addon()'
+    )
+    addPlugin(
+      sdkPath,
+      'llamacpp-completion',
+      'llm-plugin.js',
+      "import addon from 'phone-addon'\nexport const llmPlugin = { addon }\n"
+    )
+
+    await assert.rejects(
+      bundleSdk(options),
+      (error: unknown) => error instanceof BundleVerificationFailedError
+    )
+
+    assert.deepEqual(fs.readdirSync(workerDir), files)
+    files.forEach((file, index) => {
+      assert.ok(fs.readFileSync(path.join(workerDir, file)).equals(contents[index]!))
+    })
+    assert.deepEqual(
+      fs.readdirSync(path.dirname(workerDir)).filter((name) => name.startsWith('.')),
+      []
+    )
+  })
+
+  it('keeps the last good bundle when the native module cannot be written', async (t) => {
+    const { projectRoot, configPath, workerDir } = fakeBundleSdkProject(t)
+    linkDependency(projectRoot, 'react-native-bare-kit', SDK_DIR)
+    linkDependency(projectRoot, 'bare-stow-target-react-native', SDK_DIR)
+    const options = {
+      projectRoot,
+      configPath,
+      target: 'react-native' as const,
+      hosts: ['android-arm64'],
+      verify: false,
+      quiet: true
+    }
+    await bundleSdk({ ...options, link: false })
+    writeFile(path.join(workerDir, 'first-bundle'), '')
+    writeFile(path.join(projectRoot, 'android'), 'a file where the Android project belongs')
+
+    await assert.rejects(bundleSdk(options), (error: unknown) =>
+      String((error as Error).message).includes('qvac-bare-kit')
+    )
+
+    assert.ok(fs.existsSync(path.join(workerDir, 'first-bundle')))
+  })
+
+  it('leaves folders next to the output folder alone', async (t) => {
+    const { projectRoot, configPath, workerDir } = fakeBundleSdkProject(t)
+    const neighbours = [`${workerDir}.staging`, path.join(path.dirname(workerDir), 'worker-scan')]
+    for (const neighbour of neighbours) writeFile(path.join(neighbour, 'keep.txt'), 'kept')
+
+    await bundleSdk({ projectRoot, configPath, quiet: true })
+
+    for (const neighbour of neighbours) {
+      assert.equal(fs.readFileSync(path.join(neighbour, 'keep.txt'), 'utf8'), 'kept')
+    }
+  })
+
+  it('reports a module the phone bundle cannot resolve', async (t) => {
+    const { projectRoot, configPath } = fakeBundleSdkProject(t)
+    linkDependency(projectRoot, 'bare-stow-target-react-native', SDK_DIR)
+    writeFile(configPath, JSON.stringify({ plugins: ['missing-package/plugin'] }))
+
+    await assert.rejects(
+      bundleSdk({
+        projectRoot,
+        configPath,
+        target: 'react-native',
+        quiet: true,
+        verify: false
+      }),
+      (error: unknown) => error instanceof BundleFailedError
+    )
   })
 })

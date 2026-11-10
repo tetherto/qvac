@@ -16,10 +16,10 @@ QVAC capability through a unified, type-safe API.
 
 ## Requirements
 
-- Node.js `>= v22.17` (bundling for mobile needs `^22.21.0 || >=24.9.0`)
+- Node.js `>= v22.17` (bundling the worker, for any target, needs `^22.21.0 || >=24.9.0`)
 - npm `>= v10.9`
-- [Bare](https://bare.pears.com) `>= v1.30.3` (if targeting Bare)
-- [Expo](https://expo.dev) `>= v54` (if targeting mobile)
+- [Bare](https://bare.pears.com) `>= v1.32.0` (if targeting Bare)
+- [Expo](https://expo.dev) `>= v58` (if targeting mobile)
 
 For host-level requirements (OS versions, GPU drivers, Vulkan runtime), see [System requirements](/sdk/system-requirements).
 
@@ -38,7 +38,7 @@ npm i @qvac/sdk
 Install peer dependencies:
 
 ```bash
-npm i 'react-native-bare-kit@^0.16.0'
+npm i 'react-native-bare-kit@^0.17.1'
 npx expo install expo-file-system expo-build-properties expo-device
 ```
 
@@ -75,7 +75,7 @@ Prebuild your project to generate the native files:
 npx expo prebuild
 ```
 
-Prebuild also links QVAC's native addons into `react-native-bare-kit`. Reinstalling packages clears them, so run `npx expo prebuild` again after an install before building.
+Prebuild also writes Bare Kit and QVAC's native addons into `android/qvac-bare-kit` and `ios/QvacBareKit`, and adds them to the app. Builds download Bare Kit from JitPack on Android and from GitHub on iOS.
 </Step>
 
 <Step>
@@ -86,6 +86,8 @@ npx expo run:ios --device
 # or
 npx expo run:android --device
 ```
+
+The worker runs in the app's process. A worker that stops before its cleanup finishes, because it was killed or died, makes later SDK calls fail with `WORKER_STARTUP_FAILED` until the app restarts.
 </Step>
 </Steps>
 
@@ -213,7 +215,7 @@ module.exports = {
   httpConnectionTimeoutMs: 10000,
   registryDownloadMaxRetries: 3,
   registryStreamTimeoutMs: 60000,
-  rpcInitTimeoutMs: 30000,
+  rpcInitTimeoutMs: 60000,
   deviceDefaults: [
     {
       name: "Samsung Galaxy force CPU",
@@ -221,7 +223,6 @@ module.exports = {
       defaults: { llm: { device: "cpu" } },
     },
   ],
-  bareRuntimeVersion: "<x.y.z>",
   serve: {
     models: {
       "<model_alias>": {
@@ -255,7 +256,7 @@ const config: QvacConfig = {
   httpConnectionTimeoutMs: 10000,
   registryDownloadMaxRetries: 3,
   registryStreamTimeoutMs: 60000,
-  rpcInitTimeoutMs: 30000,
+  rpcInitTimeoutMs: 60000,
   deviceDefaults: [
     {
       name: "Samsung Galaxy force CPU",
@@ -263,7 +264,6 @@ const config: QvacConfig = {
       defaults: { llm: { device: "cpu" } },
     },
   ],
-  bareRuntimeVersion: "<x.y.z>",
   serve: {
     models: {
       "<model_alias>": {

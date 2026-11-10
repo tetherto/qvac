@@ -10,17 +10,6 @@ export class OperationTimeoutError extends Error {
 }
 
 /**
- * Creates a timeout promise that rejects after the specified duration
- */
-function createTimeoutPromise(timeoutMs: number): Promise<never> {
-  return new Promise<never>((_, reject) => {
-    setTimeout(() => {
-      reject(new OperationTimeoutError(timeoutMs))
-    }, timeoutMs)
-  })
-}
-
-/**
  * Wraps a promise with an optional timeout
  * If no timeout is provided, returns the original promise unchanged
  */
@@ -29,8 +18,17 @@ export async function withTimeout<T>(promise: Promise<T>, timeoutMs?: number): P
     return promise
   }
 
-  const timeoutPromise = createTimeoutPromise(timeoutMs)
-  return Promise.race([promise, timeoutPromise])
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new OperationTimeoutError(timeoutMs)), timeoutMs)
+      })
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 /**
@@ -46,10 +44,23 @@ export async function* withTimeoutStream<T>(
     return
   }
 
-  for await (const item of generator) {
-    const itemPromise = Promise.resolve(item)
-    const timeoutPromise = createTimeoutPromise(timeoutMs)
-    const result = await Promise.race([itemPromise, timeoutPromise])
-    yield result
+  let timedOut = false
+  try {
+    while (true) {
+      const result = await withTimeout(generator.next(), timeoutMs)
+      if (result.done) return
+      yield result.value
+    }
+  } catch (error) {
+    timedOut = error instanceof OperationTimeoutError
+    throw error
+  } finally {
+    const closing = generator.return(undefined)
+    if (timedOut) {
+      // return() queues behind a pending next(); waiting would hide the timeout.
+      void closing.catch(() => {})
+    } else {
+      await closing
+    }
   }
 }
