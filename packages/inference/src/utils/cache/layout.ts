@@ -201,10 +201,11 @@ export type ModelCacheLayout = {
 }
 
 /**
- * Where the loader keeps `model` on `platform`, or `undefined` when that is
- * only known once it downloads: a sharded model (its `.tensors.txt` is written
- * on download), or a Core ML model whose bundles the catalog lacks (the loader
- * then asks the live registry). Same order as downloadModelFromRegistry:
+ * Where the loader keeps `model` on `platform`, or `undefined` for what this
+ * does not describe: a sharded model (kept under `sharded/`; without catalog
+ * shard metadata the loader lists its shards from the live registry), or a
+ * Core ML model whose bundles the catalog lacks (the loader then asks the live
+ * registry). Same order as downloadModelFromRegistry:
  * sharded, Core ML set, companion set, single file.
  *
  * `shortHash` is generateShortHash; it is a parameter because that one runs on

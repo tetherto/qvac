@@ -68,7 +68,7 @@ export function validatePlan(plan) {
 
 /**
  * Cache-root items no entry covers: after a bootstrap, drift between the plan and the SDK.
- * `sharded/` is never planned (the SDK writes an unpinned tensors file there), so it is skipped.
+ * `sharded/` is never planned (getModelCacheLayout leaves sharded models out), so it is skipped.
  */
 export function unplannedPaths(plan, cwd = process.cwd()) {
   const covered = new Set(plan.entries.map((entry) => entry.path))
