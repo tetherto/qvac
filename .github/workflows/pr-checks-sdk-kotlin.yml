@@ -11,16 +11,30 @@ on:
   # source of truth for "is this a Kotlin-relevant change", shared with the merge
   # gate's workflow_call run (which ignores event path filters). A `paths:` list
   # here would be a second list that could silently drift from the detect step.
+  #
+  # A PR into a release-train-* branch is checked by release-train.yml, which
+  # calls this workflow for a train with the sdk-kotlin check.
   pull_request:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches:
       - main
       - release-*
+      - "!release-train-*"
       - feature-*
       - tmp-*
   workflow_dispatch:
-  # Lets pr-gate-merge.yml run these checks as a required merge-gate input.
+  # Lets pr-gate-merge.yml run these checks as a required merge-gate input, and
+  # release-train.yml run them before a train publishes.
   workflow_call:
+    inputs:
+      release:
+        description: "Skip change detection and build every published runtime profile, as for a release"
+        type: boolean
+        default: false
+      ref:
+        description: "Commit to check out and test; empty for the PR head"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -44,6 +58,7 @@ jobs:
       # edit the path list to exclude itself from its own checks. Mirrors
       # pr-checks-sdk-pod.yml.
       - name: Checkout base
+        if: ${{ !inputs.release }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
           ref: ${{ github.event.pull_request.base.sha || github.ref }}
@@ -56,15 +71,16 @@ jobs:
         shell: bash
         env:
           EVENT: ${{ github.event_name }}
+          RELEASE: ${{ inputs.release }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
 
-          if [ "$EVENT" = "workflow_dispatch" ]; then
+          if [ "$EVENT" = "workflow_dispatch" ] || [ "$RELEASE" = "true" ]; then
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::workflow_dispatch - running Kotlin SDK checks."
+            echo "::notice::${EVENT} (release: ${RELEASE:-false}) - running Kotlin SDK checks."
             exit 0
           fi
 
@@ -108,7 +124,7 @@ jobs:
         if: steps.detect.outputs.has_changes == 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.ref }}
           persist-credentials: false
 
       - name: Setup Python
@@ -153,11 +169,11 @@ jobs:
         shell: bash
         env:
           # Passed as -PqvacProfile to both Gradle runs. PRs into a release
-          # branch, and manual runs, leave it empty and build every published
-          # runtime profile. Other PRs build the all-in-one profile only; the
-          # other profiles are subsets of it. Under Merge Guard's workflow_call
-          # the pull_request context is the caller's PR.
-          QVAC_PROFILE: ${{ !(github.event_name == 'workflow_dispatch' || startsWith(github.event.pull_request.base.ref, 'release-')) && 'aio' || '' }}
+          # branch, release trains and manual runs leave it empty and build
+          # every published runtime profile. Other PRs build the all-in-one
+          # profile only; the other profiles are subsets of it. Under Merge
+          # Guard's workflow_call the pull_request context is the caller's PR.
+          QVAC_PROFILE: ${{ !(inputs.release || github.event_name == 'workflow_dispatch' || startsWith(github.event.pull_request.base.ref, 'release-')) && 'aio' || '' }}
         run: |
           set -euo pipefail
 
