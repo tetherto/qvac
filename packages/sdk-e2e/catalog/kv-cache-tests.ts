@@ -614,15 +614,18 @@ export const kvCacheToolSetChange: TestDefinition = {
 }
 
 /**
- * `tool_choice: 'required'` on a warm turn forces a call: the grammar is armed from the tool block
- * every turn carries, so a prompt that would otherwise be answered in prose calls the tool.
+ * `tool_choice: 'required'` on a warm turn arms the tool grammar from the tool block every turn
+ * carries: the addon refuses a `required` turn it cannot arm, so this one completing with a call
+ * shows the grammar was armed over the cached prefix. The turn asks for a calculation because the
+ * grammar only forbids ending without a call, and a prose answer can loop until the context fills
+ * before the model reaches one.
  */
 export const kvCacheWarmToolChoiceRequired: TestDefinition = {
   testId: 'kv-cache-warm-tool-choice-required',
   params: {
     cacheKey: 'warm-tool-choice-required-session',
     tools: [CALCULATOR_TOOL],
-    messages: ['What is 10 + 20?', 'Say hello.'],
+    messages: ['What is 10 + 20?', 'Now what is 5 + 5?'],
     stream: true,
     generationParams: { temp: 0, top_k: 1, seed: 42 },
     requiredGenerationParams: { temp: 0, top_k: 1, seed: 42, tool_choice: 'required' },
