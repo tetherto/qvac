@@ -96089,8 +96089,7 @@ async function mapWithConcurrency(items, limit, worker) {
 
 
 
-// A13: only main saves, never PR code, even if a caller is mis-wired. pull_request_target runs
-// on refs/heads/main too, so the event is checked as well.
+// A13: only main saves. pull_request_target also runs on refs/heads/main, hence the event check.
 const TRUSTED_EVENTS = new Set(['push', 'schedule', 'workflow_dispatch', 'merge_group'])
 const CONCURRENCY = 4
 

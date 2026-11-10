@@ -205,7 +205,7 @@ jobs:
 
       # Also after a failed download, to keep what arrived.
       - name: Save models cache
-        if: ${{ !cancelled() && steps.models-cache.outputs.complete == 'false' && github.ref == 'refs/heads/main' }}
+        if: ${{ !cancelled() && steps.models-cache.outputs.complete == 'false' }}
         uses: ./.github/actions/sdk-e2e-model-cache
         with:
           mode: save
