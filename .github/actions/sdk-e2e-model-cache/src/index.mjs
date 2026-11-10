@@ -82,9 +82,10 @@ async function saveEntry(entry, lookupAttempts) {
     core.warning(`Not saving ${label(entry)}: ${mismatch} does not match its registry checksum`)
     return 'skipped'
   }
-  // saveCache swallows its errors and returns -1; a lookup decides whether the entry exists.
-  if ((await cache.saveCache(cachePaths(entry), cacheKey(entry), {}, true)) !== -1) return 'saved'
-  if (await exists(entry, lookupAttempts)) return 'present'
+  // saveCache swallows upload errors, and on cache service v1 still returns the reserved id, so
+  // only a lookup shows whether the entry exists. -1 with an entry: another job saved it.
+  const id = await cache.saveCache(cachePaths(entry), cacheKey(entry), {}, true)
+  if (await exists(entry, lookupAttempts)) return id === -1 ? 'present' : 'saved'
   core.warning(`Save of ${label(entry)} under ${cacheKey(entry)} did not create an entry`)
   return 'failed'
 }
