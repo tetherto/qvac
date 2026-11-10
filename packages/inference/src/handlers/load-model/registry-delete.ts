@@ -73,7 +73,7 @@ export async function deleteRegistryModelCache(modelSrc: string): Promise<void> 
       assertNotLoaded(modelSrc, plan.targets)
       for (const target of plan.targets) {
         await fsPromises.rm(target, { recursive: true, force: true })
-        // A paused single-file download is kept beside its target until it completes.
+        // A paused download's partial file.
         await fsPromises.rm(partialDownloadPath(target), { force: true })
       }
     })
@@ -87,8 +87,7 @@ function assertNotDownloading(modelSrc: string, cacheKeys: string[]): void {
   }
 }
 
-// Downloads in other processes are invisible to assertNotDownloading but hold
-// their download locks. Holding the locks also keeps one from starting mid-delete.
+// Other processes' downloads hold their locks; holding them blocks new ones mid-delete.
 async function lockOutOtherProcesses(
   modelSrc: string,
   cacheKeys: string[]

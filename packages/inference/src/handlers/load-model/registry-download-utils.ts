@@ -39,11 +39,8 @@ export function buildBlobBinding(meta: {
 }
 
 /**
- * Validate a cached file against expected size and checksum.
- *
- * Never deletes: a mismatched file may be another process's download in
- * progress (from an SDK version that writes in place). A fresh download
- * replaces it through `publishDownload`.
+ * Validate a cached file against expected size and checksum. Never deletes: a
+ * mismatched file may be an older SDK's download in progress.
  */
 export async function validateCachedFile(
   modelPath: string,
@@ -89,9 +86,7 @@ export async function validateCachedFile(
  * Download a single file from the registry to filesystem.
  * When blobBinding is provided, uses direct blob download (skips metadata sync).
  * Otherwise falls back to metadata-based downloadModel.
- *
- * The file is written to its partial path and moved to `modelPath` only after
- * the size and checksum checks pass. Callers hold the download lock.
+ * Publishes to `modelPath` only after the checks pass. Callers hold the lock.
  */
 export async function downloadSingleFileFromRegistry(
   registryPath: string,

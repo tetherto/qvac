@@ -462,8 +462,7 @@ async function downloadAndValidateFile(
   let writeStream: Writable | undefined
 
   try {
-    // Download blocks and stream to the partial file; it is published below
-    // only after the size and checksum checks pass.
+    // Stream to the partial file; it is published after the checks below.
     drive.download(targetPath)
     readStream = drive.createReadStream(targetPath) as unknown as Readable
     writeStream = fs.createWriteStream(partialPath) as unknown as Writable

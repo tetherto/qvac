@@ -97,10 +97,8 @@ function extractFilenameFromUrl(url: string): string {
 // path, is served as-is: tightening requireHttpChecksum does not retroactively
 // verify the cache — clear it to force a fresh, verified download.
 //
-// Downloads land at the model path only once complete (see `publishDownload`),
-// so the offline header check never sees another download's partial. A file an
-// older SDK left at the model path is not deleted here; a fresh download
-// replaces it.
+// Downloads land here only once verified (see `publishDownload`), but a partial
+// an older SDK wrote in place can still pass the offline header check.
 async function validateCachedFile(
   modelPath: string,
   url: string,
@@ -514,11 +512,7 @@ async function performHttpDownloadWithResume(
   }
 }
 
-/**
- * Download `url` to the partial path for `finalPath`, resuming any partial left
- * by an earlier attempt, verify it, then move it into place. Callers hold the
- * download lock, so the partial belongs to this process.
- */
+/** Download to the partial path, resuming it, then verify and publish. Callers hold the lock. */
 async function downloadVerifyAndPublish(
   url: string,
   finalPath: string,
@@ -940,9 +934,8 @@ async function downloadShardsWithConcurrency(
 ) {
   const queue = [...shardsToDownload]
   const inFlight = new Set<Promise<void>>()
-  // A failed or cancelled shard stops the others, and every started shard
-  // settles before this returns, so none is still written once the caller
-  // releases its download lock.
+  // A failed or cancelled shard stops the rest, and all settle before this
+  // returns, so nothing writes after the caller releases its lock.
   const shardsController = new AbortController()
   const stopShards = () => shardsController.abort(undefined)
   signal.addEventListener('abort', stopShards, { once: true })

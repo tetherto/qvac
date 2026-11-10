@@ -78,8 +78,7 @@ test('registry cache: warm reuse still rejects a changed expected checksum', asy
   t.is(await validateCachedFile(file, 'model.gguf', size, digest), file)
   t.is(reads(), 1, 'download-time digest is reused on the first cache hit')
   t.is(await validateCachedFile(file, 'model.gguf', size, '0'.repeat(64)), null)
-  // Another process may own the file, so a mismatch is only a cache miss; the
-  // download that follows replaces the file once it is verified.
+  // Another process may own the file, so a mismatch is only a cache miss.
   t.ok(fs.existsSync(file), 'checksum mismatch is a cache miss and does not delete the file')
 })
 

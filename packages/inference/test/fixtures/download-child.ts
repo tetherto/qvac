@@ -1,6 +1,5 @@
-// A separate engine process for the cross-process download tests. It shares a
-// models directory with the parent test and writes its outcome as JSON to
-// <resultFile>, so the parent never depends on stdout flushing before exit.
+// A separate engine process for the cross-process tests. It reports its outcome
+// as JSON in <resultFile>, so the parent never depends on stdout flushing.
 //
 // argv: download <cacheDir> <resultFile> <url>
 //         Write <resultFile>.started, then download the URL into the models
@@ -9,9 +8,9 @@
 //         Take the download lock, report it, then exit after <holdMs> without
 //         releasing it, as a crashed process would.
 //       registry-download <cacheDir> <resultFile> <registryPath> <gateFile>
-//         Download a registry model with its own SDK home and a stubbed client
-//         that writes half the file, creates <resultFile>.half, and finishes
-//         once <gateFile> exists. Reports how many downloads the client ran.
+//         Download with its own SDK home and a stubbed client that writes half
+//         the file, creates <resultFile>.half, and finishes once <gateFile>
+//         exists. Reports how many downloads the client ran.
 import fs from 'bare-fs'
 import crypto from 'bare-crypto'
 import { AbortController } from 'bare-abort-controller'

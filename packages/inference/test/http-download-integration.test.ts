@@ -99,9 +99,7 @@ test('downloadModelFromHttp: resumes a partial download via a Range/206 request'
   const url = `${server.base}/range-model.gguf`
   const modelPath = await downloadModelFromHttp(url)
 
-  // Leave half the file as an interrupted download's partial, then re-download:
-  // the partial forces a Range request the server answers with 206, appending
-  // the remainder before the file is moved into place.
+  // An interrupted download's partial forces a Range request answered with 206.
   fs.rmSync(modelPath)
   fs.writeFileSync(partialDownloadPath(modelPath), CONTENT.subarray(0, CONTENT.length / 2))
   const resumedPath = await downloadModelFromHttp(url)
@@ -126,9 +124,8 @@ test('downloadModelFromHttp: replaces an incomplete file at the model path inste
   const url = `${server.base}/in-place-model.gguf`
   const modelPath = await downloadModelFromHttp(url)
 
-  // An older SDK wrote downloads in place, so a half file at the model path may
-  // be another process's download in progress. Appending to it is what
-  // corrupted shared caches; a fresh download replaces it instead.
+  // A half file at the model path may be an older SDK's download in progress;
+  // appending to it corrupted shared caches, so it is replaced instead.
   fs.writeFileSync(modelPath, CONTENT.subarray(0, CONTENT.length / 2))
   const replacedPath = await downloadModelFromHttp(url)
 

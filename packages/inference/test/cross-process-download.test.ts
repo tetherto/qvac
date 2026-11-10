@@ -39,9 +39,8 @@ import { useTestCacheDir } from './fixtures/test-cache'
 import { stubClient } from './fixtures/registry-client-stub'
 import { MODEL_CONTENT } from './fixtures/xproc-content'
 
-// Several processes (an app, `qvac sdk serve`, a TUI) can share one models
-// directory. These tests cover the download lock and the partial-file layout
-// that keep them from corrupting or deleting each other's model files.
+// Processes sharing one models directory must not corrupt or delete each
+// other's model files.
 
 // The suite runs from the package root, so the compiled child sits here.
 const CHILD_SCRIPT = path.resolve(os.cwd(), 'test/dist/test/fixtures/download-child.js')
@@ -433,9 +432,8 @@ test('two processes downloading the same URL into one models directory leave one
   const firstChild = startChild(['download', cacheDir, first, url])
   await waitUntil(() => server.halfSent())
 
-  // The second process starts while the first is mid-download. Without the
-  // lock it would range-resume onto the first process's partial file. Waiting
-  // for it to start keeps a slow spawn from turning this into a cache hit.
+  // Without the lock the second process would range-resume onto the first
+  // one's partial. Waiting for it to start keeps a slow spawn from racing.
   const secondChild = startChild(['download', cacheDir, second, url])
   await waitUntil(() => fs.existsSync(`${second}.started`))
   await sleep(1_000)
@@ -460,8 +458,7 @@ test('two processes downloading the same URL into one models directory leave one
 })
 
 test('two processes downloading the same registry model into one models directory leave one intact file', async (t) => {
-  // Each process has its own SDK home and registry store, like the TUI next to
-  // `qvac sdk serve`, and both share one models directory.
+  // Separate SDK homes sharing one models directory, like a TUI next to `qvac sdk serve`.
   const cacheDir = makeTempDir('registry-models')
   const resultDir = makeTempDir('registry-results')
   const gate = path.join(resultDir, 'gate')
@@ -483,8 +480,7 @@ test('two processes downloading the same registry model into one models director
   })
   await waitUntil(() => fs.existsSync(`${first}.half`))
 
-  // Without the lock the second process misses the cache and rewrites the
-  // first one's partial file.
+  // Without the lock the second process would rewrite the first one's partial.
   secondChild = startChild(['registry-download', cacheDir, second, registryPath, gate])
   await waitUntil(() => fs.existsSync(`${second}.started`))
   await sleep(1_000)
@@ -514,8 +510,7 @@ test('downloadModelFromHyperdrive: waits for another process, never exposes a pa
   const resultFile = path.join(resultDir, 'result.json')
   useTempSdkHome(t)
 
-  // A drive whose blocks are already in this home's corestore, so the download
-  // reads them locally without a peer.
+  // The drive's blocks are already in this home's corestore, so no peer is needed.
   const seedDir = path.join(resultDir, 'seed-store')
   const store = new Corestore(seedDir)
   const drive = new Hyperdrive(store)

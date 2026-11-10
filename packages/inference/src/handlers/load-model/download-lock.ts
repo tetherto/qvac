@@ -34,7 +34,7 @@ async function openLockFile(resourceKey: string): Promise<LockFile> {
 }
 
 // False while another holder has the lock. A filesystem without lock support
-// counts as granted, so work there proceeds without cross-process coordination.
+// counts as granted.
 function tryLock(lock: LockFile, resourceKey: string): boolean {
   try {
     return fsx.tryLock(lock.fd)
@@ -48,17 +48,9 @@ function tryLock(lock: LockFile, resourceKey: string): boolean {
 }
 
 /**
- * Hold the cross-process lock for one cached download until disposed.
- *
- * Processes that share a models directory (an app, `qvac sdk serve`, a TUI)
- * each run their own download manager, which only joins downloads inside one
- * process. Each download therefore also holds an OS file lock named after the
- * cache resource it writes. A second holder waits here, then finds the finished
- * file through its normal cache check. The OS releases the lock when the holder
- * exits, so a crashed process never leaves a stale lock.
- *
- * Cancelling while waiting rejects with `DownloadCancelledError` and touches no
- * download files.
+ * Hold the cross-process lock for one cached resource until disposed, waiting
+ * while another holder has it. The OS releases it if the holder exits.
+ * Cancelling while waiting rejects with `DownloadCancelledError`.
  */
 export async function acquireDownloadLock(
   resourceKey: string,
@@ -82,11 +74,7 @@ export async function acquireDownloadLock(
   }
 }
 
-/**
- * Take the download locks for every key without waiting, or none of them.
- * Returns `null` while any of them is held, for example by a download in
- * another process.
- */
+/** Take every key's lock without waiting, or none; `null` while any is held. */
 export async function tryAcquireDownloadLocks(
   resourceKeys: string[]
 ): Promise<AsyncDisposable | null> {
@@ -122,19 +110,12 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
   })
 }
 
-/**
- * Where a download is written until it is complete and verified. Nothing reads
- * this path as a cached model, so an interrupted or in-progress download is
- * never mistaken for a finished one.
- */
+/** Where a download is written until it is complete and verified. */
 export function partialDownloadPath(finalPath: string): string {
   return `${finalPath}.part`
 }
 
-/**
- * Move a complete, verified download into place. The rename is atomic within
- * the models directory, so other processes see either no file or the whole file.
- */
+/** Atomically move a verified download into place. */
 export async function publishDownload(finalPath: string): Promise<void> {
   await renameWithCachedChecksum(partialDownloadPath(finalPath), finalPath)
 }
