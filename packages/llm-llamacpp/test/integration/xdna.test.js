@@ -355,9 +355,14 @@ safeTest(
     t.ok(result.output.length > 0, 'fallback run produced output')
     t.ok(NO_NPU_RE.test(result.logText), 'missing NPU was logged')
     t.absent(CHOSEN_NPU_RE.test(result.logText), 'the NPU was not chosen')
-    t.ok(
-      result.backendDevice === 'gpu' || result.backendDevice === 'cpu',
-      `stats report the GPU or CPU fallback (got ${result.backendDevice})`
+    // The fallback is the GPU order: a GPU when the host has an eligible one,
+    // the CPU only when it has none.
+    const choseGpu = /Chosen i?GPU /.test(result.logText)
+    t.ok(choseGpu || /Chosen CPU/.test(result.logText), 'the fallback logged its choice')
+    t.is(
+      result.backendDevice,
+      choseGpu ? 'gpu' : 'cpu',
+      `stats report the ${choseGpu ? 'GPU' : 'CPU'} the fallback chose`
     )
     t.absent(XDNA_BUFFER_RE.test(result.logText), 'no weights were placed in an XDNA buffer')
   }

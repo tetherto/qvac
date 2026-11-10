@@ -1,5 +1,7 @@
 #include "LlamaFinetuner.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <memory>
 #include <mutex>
@@ -10,7 +12,6 @@
 
 #ifndef STANDALONE_TEST_BUILD
 
-#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdint>
@@ -986,11 +987,23 @@ void LlamaFinetuner::rejectNpuTarget(
         "on the NPU or fell back to a GPU or the CPU; reload it with device "
         "'gpu' or 'cpu'.");
   }
-  if (runtimeBackendDevice == 2) {
+  // An explicit device list that names the NPU puts layers on it, alone
+  // (backendDevice 2) or in a mixed split with a GPU (backendDevice 1).
+  bool listsNpu = runtimeBackendDevice == 2;
+  for (const char* key : {"devices", "device-list"}) {
+    if (const auto it = config.find(key); it != config.end()) {
+      std::string names = it->second;
+      std::ranges::transform(names, names.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+      });
+      listsNpu = listsNpu || names.find("xdna") != std::string::npos;
+    }
+  }
+  if (listsNpu) {
     throw qvac_errors::StatusError(
         qvac_errors::general_error::InvalidArgument,
-        "A model running on the NPU alone cannot be finetuned; reload it "
-        "without XDNA0 in devices.");
+        "A model with XDNA0 in devices cannot be finetuned, alone or in a "
+        "mixed split; reload it without XDNA0 in devices.");
   }
 }
 
