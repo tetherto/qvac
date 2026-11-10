@@ -2,7 +2,7 @@
 
 Embedded ingestion and retrieval for QVAC apps. `@qvac/rag` stores document chunks and their embeddings in HyperDB and answers scoped vector searches over them. It runs on Bare and Node, and does not depend on `@qvac/sdk` or `@qvac/inference`.
 
-This release accepts chunks with precomputed embeddings. Search uses a TurboVec index per namespace when `@qvac/turbovec-ggml` is installed, and an exact scan of HyperDB otherwise. Text chunking and an embeddings port are not in this release yet.
+It ingests text, pre-chunked text or chunks with precomputed embeddings. Text is chunked with [`rag-extract/chunk`](https://github.com/tetherto/rag-extract) and embedded through an embeddings port you supply. Search uses a TurboVec index per namespace when `@qvac/turbovec-ggml` is installed, and an exact scan of HyperDB otherwise.
 
 ## Installation
 
@@ -65,13 +65,42 @@ const hits = await rag.search({
 await rag.close()
 ```
 
+With an embeddings port, ingest and search take text instead of vectors:
+
+```ts
+const rag = createRag({ corestore, embeddings: port }) // port.space is the namespace's space
+
+await rag.ingest(
+  { namespace: 'handbook', documents: [{ id: 'leave-policy', text: policyText }] },
+  { signal, onProgress: ({ stage, done, total }) => console.log(stage, done, total) }
+)
+const hits = await rag.search({
+  scope: { namespace: 'handbook' },
+  query: 'How many leave days?',
+  k: 5
+})
+```
+
 See [`examples/quickstart.ts`](examples/quickstart.ts) for a runnable version.
 
 ## API
 
-### `createRag({ corestore, index? })`
+### `createRag({ corestore, embeddings?, chunking?, index? })`
 
-Creates a RAG instance on a caller-owned Corestore.
+Creates a RAG instance on a caller-owned Corestore. `embeddings` is an `EmbeddingsPort`, needed only for text and pre-chunked ingest and for text query search:
+
+```ts
+interface EmbeddingsPort {
+  space: EmbeddingSpace
+  // One row per text, row-major, each with `space.dimensions` values.
+  embedDocuments(texts: string[], options?: { signal?: AbortSignal }): Promise<Float32Array>
+  embedQuery(text: string, options?: { signal?: AbortSignal }): Promise<Float32Array>
+}
+```
+
+The port must be in the namespace's space: `computeSpaceId(port.space)` has to equal the namespace's `spaceId`, or text ingest and text search fail with `EMBEDDING_SPACE_MISMATCH` before anything is embedded. Without a port they fail with `DEPENDENCY_REQUIRED`. A port that throws surfaces as `EMBEDDING_FAILED`, and one that returns the wrong number of values as `EMBEDDING_DIMENSION_MISMATCH`.
+
+`chunking` is `{ chunkSize?, chunkOverlap? }` in tokens, passed to `rag-extract/chunk` for text documents (defaults 256 and 50). `chunkOverlap` must be smaller than `chunkSize`.
 
 `index` configures the vector index, used only when `@qvac/turbovec-ggml` loads:
 
@@ -84,7 +113,7 @@ The index is derived from HyperDB and never trusted on its own. On open it loads
 
 Creates a namespace pinned to one embedding space and returns `{ name, spaceId, revision, index: { storage } }`. `spaceId` is a hash of every field of `space`, so two spaces with the same dimensions but a different model, encoding or metric never match. Calling it again with the same space returns the existing namespace; a different space fails with `NAMESPACE_EXISTS`.
 
-`documentEncoding`, `queryEncoding` and `preprocessing` only identify the space; `@qvac/rag` never applies them. Add the document and query prefixes yourself before embedding. Nothing checks that you did, and skipping them only makes results worse.
+`documentEncoding`, `queryEncoding` and `preprocessing` only identify the space; `@qvac/rag` never applies them. Add the document and query prefixes yourself before embedding, or in your embeddings port. Nothing checks that you did, and skipping them only makes results worse.
 
 `computeSpaceId(space)` returns the same ID without touching storage.
 
@@ -96,24 +125,32 @@ Creates a namespace pinned to one embedding space and returns `{ name, spaceId, 
 | `f32`                        | any                           | full precision                                                   |
 | `turbovec-q4`, `turbovec-q2` | divisible by 8, at most 1,024 | TurboVec 4- and 2-bit; embedding components must stay below 1e16 |
 
-### `ingest({ namespace, documents })`
+### `ingest({ namespace, documents }, { signal?, onProgress? }?)`
 
-Each document is `{ id, metadata?, chunks }`, and each chunk is `{ id?, content, metadataJson?, embedding, spaceId }`. A chunk's `spaceId` must equal the namespace's, and its embedding must have the space's dimensions. Chunk IDs default to `<documentId>:<ordinal>`. Omit `metadataJson` rather than passing an empty string, which is rejected.
+Each document is one of:
 
-- The whole call is validated before anything is written.
-- Each document commits in its own HyperDB batch. If a later document fails, earlier ones stay committed.
+- **Text** `{ id, text, metadata? }`: chunked with `rag-extract/chunk` using the `chunking` options, so chunk IDs are `<id>:<index>` and each chunk carries `rag-extract`'s `metadataJson`. Text that is empty or only whitespace is rejected.
+- **Pre-chunked** `{ id, metadata?, chunks: [{ id?, content, metadataJson? }] }`: segmentation and chunk IDs are kept exactly. A chunk list from `rag-extract` goes in as-is; its `tokenCount` is accepted and not stored.
+- **Precomputed** `{ id, metadata?, spaceId?, chunks: [{ id?, content, metadataJson?, embedding, spaceId? }] }`: needs no port. Each chunk takes its own `spaceId` or the document's, and it must equal the namespace's; the embedding must have the space's dimensions. A `rag-extract` artifact's chunks go in as-is with `spaceId` on the document.
+
+Within one document, either every chunk has an `embedding` or none does. Chunk IDs default to `<documentId>:<ordinal>`. Omit `metadataJson` rather than passing an empty string, which is rejected. Text and pre-chunked chunks are sent to the port in batches of 32.
+
+- The whole call is validated, and text is chunked, before anything is written.
+- Each document commits in its own HyperDB batch, in input order, as soon as all its chunks are embedded. If a later document fails, earlier ones stay committed.
+- `signal` is checked between embedding batches and before each document's commit. An abort does not throw: committed documents stay, the rest are listed in `skipped`, and `cancelled` is `true`.
+- `onProgress({ stage, done, total })` reports `chunk` (text documents chunked), `embed` (chunks embedded, once per batch) and `commit` (documents written).
 - Ingesting an existing document ID replaces it: the new chunks get a new generation and the old chunks are deleted in the same batch.
 - There is no content deduplication. Identical text in two documents is stored and returned twice.
 
-Returns `{ documents: [{ id, generation, chunkCount }], revision }`.
+Returns `{ documents: [{ id, generation, chunkCount }], skipped, cancelled, revision }`.
 
 ### `deleteDocuments({ namespace, documentIds })`
 
 Deletes the documents and their chunks in one batch. Unknown IDs are ignored. Returns `{ deleted, revision }`.
 
-### `search({ scope, vector, spaceId, k, signal? })`
+### `search({ scope, vector, spaceId, k, signal? })` / `search({ scope, query, k, signal? })`
 
-Returns up to `k` hits `{ namespace, documentId, chunkId, ordinal, content, metadataJson?, documentMetadata?, score }`, best first. `metadataJson` is the chunk's and `documentMetadata` is the document's `metadata` from ingest. `spaceId` is the space the query was embedded in; a different one fails with `EMBEDDING_SPACE_MISMATCH`, even when its dimensions match. The score is the dot product, or the cosine similarity for `cosine` spaces, computed from the stored float32 vectors either way. With the index, candidates come from TurboVec and are rescored exactly; a candidate HyperDB no longer maps to a current chunk is dropped. An aborted `signal` fails with `OPERATION_CANCELLED`; the scan checks it between batches, and a search waiting for an index to load or rebuild stops waiting, while the rebuild finishes for later searches. Equal scores rank in scope order for a `documentIds` list and in document ID order otherwise, with and without the index.
+A text `query` is embedded with the port's `embedQuery` and searched in the port's space, so it takes no `spaceId`. Returns up to `k` hits `{ namespace, documentId, chunkId, ordinal, content, metadataJson?, documentMetadata?, score }`, best first. `metadataJson` is the chunk's and `documentMetadata` is the document's `metadata` from ingest. `spaceId` is the space the query was embedded in; a different one fails with `EMBEDDING_SPACE_MISMATCH`, even when its dimensions match. The score is the dot product, or the cosine similarity for `cosine` spaces, computed from the stored float32 vectors either way. With the index, candidates come from TurboVec and are rescored exactly; a candidate HyperDB no longer maps to a current chunk is dropped. An aborted `signal` fails with `OPERATION_CANCELLED`; the scan checks it between batches, and a search waiting for an index to load or rebuild stops waiting, while the rebuild finishes for later searches. Equal scores rank in scope order for a `documentIds` list and in document ID order otherwise, with and without the index.
 
 `scope` is `{ namespace, documentIds? }`. Only chunks inside the scope are read and ranked, so a restricted search fills its top `k` from allowed documents. Search fails closed:
 
@@ -124,7 +161,7 @@ Returns up to `k` hits `{ namespace, documentId, chunkId, ordinal, content, meta
 
 ### `scoped(scope)`
 
-Returns `{ search }` bound to `scope`. The `scope` passed to its `search` is optional and is intersected with the bound one: it can narrow to fewer documents but never add a document or switch namespace. Its `search` takes the same `vector`, `spaceId`, `k` and `signal` as `search`. A handle never fails on document identity: an ID that the namespace does not have, whether it was never ingested or has since been deleted, is skipped, so a handle whose documents are gone returns no hits instead of an error. Only the shape of the scope can fail (`INVALID_SCOPE`), and a namespace that does not exist fails with `NAMESPACE_NOT_FOUND`.
+Returns `{ search }` bound to `scope`. The `scope` passed to its `search` is optional and is intersected with the bound one: it can narrow to fewer documents but never add a document or switch namespace. Its `search` takes the same `vector` and `spaceId`, or `query`, plus `k` and `signal`, as `search`. A handle never fails on document identity: an ID that the namespace does not have, whether it was never ingested or has since been deleted, is skipped, so a handle whose documents are gone returns no hits instead of an error. Only the shape of the scope can fail (`INVALID_SCOPE`), and a namespace that does not exist fails with `NAMESPACE_NOT_FOUND`.
 
 ```ts
 const reader = rag.scoped({ namespace: 'handbook', documentIds: ['leave-policy', 'travel'] })
