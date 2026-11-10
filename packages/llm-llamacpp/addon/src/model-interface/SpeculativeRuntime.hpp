@@ -81,8 +81,12 @@ struct GgufShape {
   int64_t vocab = 0;
   int64_t mtpLayers = 0;
   /// A DSpark Markov head (`markov_w1.weight`), which tells a DSpark model
-  /// from a plain DFlash one, as fabric's type detection does.
+  /// from a plain DFlash one, as fabric's type detection does. Looked for in
+  /// every shard of a split model, as fabric's loader assembles them.
   bool markovHead = false;
+  /// False when a split model's other shards could not all be read, so a
+  /// tensor not found may still be in one of them.
+  bool tensorsComplete = true;
   /// `dflash.has_confidence_head`, which fabric reads as present when the
   /// key is absent.
   bool confidenceHead = true;
@@ -91,7 +95,10 @@ struct GgufShape {
 /// The architecture, the hidden-state width an MTP head reads, its vocabulary
 /// size, its MTP layers (`nextn_predict_layers`) and its DSpark heads, from a
 /// GGUF's header, empty or 0 when absent. The width is `embedding_length_out`
-/// when set, as fabric's `n_embd_out()`, else `embedding_length`.
+/// when set, as fabric's `n_embd_out()`, else `embedding_length`. Metadata
+/// comes from `path`, the first shard of a split model; tensors are looked
+/// for in every shard, found by fabric's own split naming
+/// (`llama_split_prefix` / `llama_split_path`).
 GgufShape readGgufShape(const std::string& path);
 
 /// Why an external MTP head cannot draft for the target, or empty. Fabric
@@ -105,7 +112,8 @@ std::string mtpHeadMismatch(
 /// model, which fabric would run with DSpark's block layout and draft
 /// poorly), or `pMin` asks for confidence truncation from a model without a
 /// confidence head (fabric then refuses to start speculation). An unreadable
-/// header (no architecture) is not judged: the load reports it.
+/// header (no architecture), or a Markov head that may be in a shard that
+/// could not be read, is not judged: the load reports it.
 std::string dsparkDrafterMismatch(const GgufShape& drafter, float pMin);
 
 /// `dsparkDrafterMismatch` for the draft model `params` loads, read from its

@@ -128,6 +128,58 @@ bool allowsPositionGaps(const llama_model* model) {
   }
 }
 
+// Whether `tensor` is in another shard of the split model whose shard
+// `splitNo` of `splitCount` is `path`. The shards are named as fabric's
+// loader finds them (`llama_get_list_splits`). `complete` turns false when a
+// shard cannot be read, so absence is then unknown.
+bool tensorInOtherShards(
+    const std::string& path, uint64_t splitNo, uint64_t splitCount,
+    const char* tensor, bool& complete) {
+  // split.count is a u16 in fabric; a larger value is not a model it loads.
+  if (splitCount > UINT16_MAX || splitNo >= splitCount) {
+    complete = false;
+    return false;
+  }
+  std::vector<char> buf(path.size() + 64, 0);
+  const int32_t prefixLen = llama_split_prefix(
+      buf.data(),
+      buf.size(),
+      path.c_str(),
+      static_cast<int32_t>(splitNo),
+      static_cast<int32_t>(splitCount));
+  if (prefixLen <= 0) {
+    complete = false;
+    return false;
+  }
+  const std::string prefix(buf.data(), static_cast<size_t>(prefixLen));
+  for (uint64_t shard = 0; shard < splitCount; ++shard) {
+    if (shard == splitNo) {
+      continue;
+    }
+    const int32_t len = llama_split_path(
+        buf.data(),
+        buf.size(),
+        prefix.c_str(),
+        static_cast<int32_t>(shard),
+        static_cast<int32_t>(splitCount));
+    gguf_init_params init = {};
+    init.no_alloc = true;
+    gguf_context* ctx = gguf_init_from_file(
+        std::string(buf.data(), static_cast<size_t>(std::max(len, 0))).c_str(),
+        init);
+    if (ctx == nullptr) {
+      complete = false;
+      continue;
+    }
+    const bool found = gguf_find_tensor(ctx, tensor) >= 0;
+    gguf_free(ctx);
+    if (found) {
+      return true;
+    }
+  }
+  return false;
+}
+
 } // namespace
 
 GgufShape readGgufShape(const std::string& path) {
@@ -165,7 +217,15 @@ GgufShape readGgufShape(const std::string& path) {
   if (tokens >= 0 && gguf_get_kv_type(ctx, tokens) == GGUF_TYPE_ARRAY) {
     shape.vocab = static_cast<int64_t>(gguf_get_arr_n(ctx, tokens));
   }
+  const uint64_t splitCount = readGgufUnsigned(ctx, "split.count").value_or(1);
+  const uint64_t splitNo = readGgufUnsigned(ctx, "split.no").value_or(0);
   gguf_free(ctx);
+  // Fabric's loader assembles every shard's tensors into one model, so a
+  // tensor of a split model may be in any of them.
+  if (!shape.markovHead && splitCount > 1) {
+    shape.markovHead = tensorInOtherShards(
+        path, splitNo, splitCount, "markov_w1.weight", shape.tensorsComplete);
+  }
   return shape;
 }
 
@@ -292,7 +352,8 @@ std::string dsparkDrafterMismatch(const GgufShape& drafter, float pMin) {
   if (drafter.arch != "dflash") {
     return "it is a " + drafter.arch + " model, not a DSpark drafter";
   }
-  if (!drafter.markovHead) {
+  // Not found in a shard set that could not all be read is not absent.
+  if (!drafter.markovHead && drafter.tensorsComplete) {
     return "it has no DSpark Markov head (markov_w1); a DFlash drafter takes "
            "spec-type \"draft-dflash\"";
   }

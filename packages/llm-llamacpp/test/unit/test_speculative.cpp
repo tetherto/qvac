@@ -474,6 +474,79 @@ TEST(SpeculativeAutoTest, ApplyFailsWhenNothingIsDetected) {
   EXPECT_EQ(params.speculative.types[0], COMMON_SPECULATIVE_TYPE_NONE);
 }
 
+namespace {
+
+// One shard of a two-shard dflash model, named as fabric's loader finds the
+// shards; the first carries the metadata, either may carry the Markov head.
+std::string writeDsparkShard(const char* prefix, int no, bool markov) {
+  const std::string name =
+      std::string(prefix) + "-0000" + std::to_string(no + 1) + "-of-00002.gguf";
+  return writeGguf(
+      name.c_str(), [no, markov](gguf_context* ctx, ggml_context* m) {
+        if (no == 0) {
+          gguf_set_val_str(ctx, "general.architecture", "dflash");
+        }
+        gguf_set_val_u16(ctx, "split.no", static_cast<uint16_t>(no));
+        gguf_set_val_u16(ctx, "split.count", 2);
+        if (markov) {
+          addTensor(ctx, m, "markov_w1.weight");
+        }
+      });
+}
+
+// draftModelMismatch for an explicit draft-dspark on `path`, as the load and
+// assessFit run it.
+std::string explicitDsparkMismatch(const std::string& path) {
+  common_params params;
+  applySpeculativeConfig(
+      SpeculativeConfig{
+          .type = COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK, .draftModelPath = path},
+      params);
+  return draftModelMismatch(params.speculative);
+}
+
+} // namespace
+
+TEST(SpeculativeConfigTest, ADsparkDrafterSplitAcrossShardsIsFound) {
+  // The Markov head in the second shard: fabric's loader assembles both, so
+  // the drafter is a DSpark model.
+  const std::string first = writeDsparkShard("dspark-split", 0, false);
+  const std::string second = writeDsparkShard("dspark-split", 1, true);
+  const GgufShape shape = readGgufShape(first);
+  EXPECT_TRUE(shape.markovHead);
+  EXPECT_TRUE(shape.tensorsComplete);
+  EXPECT_EQ(explicitDsparkMismatch(first), "");
+  // `auto` refuses the shard, so the type has to be given, as here.
+  EXPECT_NE(
+      detectError(first).find("one shard of a split model"), std::string::npos);
+  std::filesystem::remove(second);
+}
+
+TEST(SpeculativeConfigTest, ASplitDflashDrafterIsStillRejected) {
+  // No Markov head in any shard: a plain DFlash model.
+  const std::string first = writeDsparkShard("dflash-split", 0, false);
+  const std::string second = writeDsparkShard("dflash-split", 1, false);
+  const GgufShape shape = readGgufShape(first);
+  EXPECT_FALSE(shape.markovHead);
+  EXPECT_TRUE(shape.tensorsComplete);
+  EXPECT_NE(
+      explicitDsparkMismatch(first).find("no DSpark Markov head"),
+      std::string::npos);
+  std::filesystem::remove(first);
+  std::filesystem::remove(second);
+}
+
+TEST(SpeculativeConfigTest, AMissingShardLeavesTheMarkovHeadToTheLoad) {
+  // The second shard is missing, so the head may be there: not judged, and
+  // fabric's load reports the missing shard instead.
+  const std::string first = writeDsparkShard("dspark-missing", 0, false);
+  const GgufShape shape = readGgufShape(first);
+  EXPECT_FALSE(shape.markovHead);
+  EXPECT_FALSE(shape.tensorsComplete);
+  EXPECT_EQ(explicitDsparkMismatch(first), "");
+  std::filesystem::remove(first);
+}
+
 TEST(SpeculativeConfigTest, ParsesDraftMtpWithAnExternalHead) {
   const std::string headPath = absoluteModelPath("mtp-head.gguf");
   ConfigMap config{{"spec-type", "draft-mtp"}, {"spec_draft_model", headPath}};
