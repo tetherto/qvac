@@ -58,6 +58,7 @@ import io.tether.qvac.sdk.generated.Models
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequest
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestGenerationParams
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItem
+import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemContent
 import io.tether.qvac.sdk.generated.schema.CompletionStreamRequestHistoryItemAttachmentsItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItem
 import io.tether.qvac.sdk.generated.schema.CompletionStreamResponseEventsItemCompletionDoneStopReason
@@ -418,7 +419,7 @@ class MiniAssistantScreen(
         appendMessage("user", displayPrompt + if (imagePath == null) "" else "\n[Image attached]")
         history += CompletionStreamRequestHistoryItem(
             role = "user",
-            content = displayPrompt,
+            content = CompletionStreamRequestHistoryItemContent.Variant1(displayPrompt),
             attachments = imagePath?.let { listOf(CompletionStreamRequestHistoryItemAttachmentsItem(path = it)) },
         )
         selectedImagePath = null
@@ -460,7 +461,7 @@ class MiniAssistantScreen(
             if (responseText.isEmpty()) {
                 updateMessage(bubbleId, "No response was returned. Try again.")
             }
-            history += CompletionStreamRequestHistoryItem(role = "assistant", content = responseText.toString())
+            history += CompletionStreamRequestHistoryItem(role = "assistant", content = CompletionStreamRequestHistoryItemContent.Variant1(responseText.toString()))
             if (lengthLimited) {
                 setStatus("The model context window is full", StatusTone.Danger)
             }

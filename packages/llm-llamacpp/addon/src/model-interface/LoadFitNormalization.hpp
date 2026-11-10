@@ -4,6 +4,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <variant>
@@ -130,7 +131,14 @@ void tuneLoadConfigMap(
     const std::optional<int>& adrenoVersion,
     const FinetuneConfigOverrides& finetuneOverrides = {},
     bool isOpenCl = false, bool isMetal = false, bool isGpu = false,
-    bool isCuda = false, bool isTensorSplit = false);
+    bool isCuda = false, bool isTensorSplit = false, bool isXdna = false);
+
+// True when a GPU load runs on a device of `family` (lowercase, e.g. "xdna"):
+// the selected backend or any device of the split.
+bool usesBackendFamily(
+    bool isGpu, const std::string& selectedName,
+    const std::vector<backend_selection::SplitDevice>& splitDevices,
+    std::string_view family);
 
 void validateMobileMultiDeviceConfig(
     const ConfigMap& configFilemap, llama_split_mode splitMode);
