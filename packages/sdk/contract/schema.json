@@ -4178,7 +4178,7 @@
                 "description": "Message role (e.g., `\"user\"`, `\"assistant\"`, `\"system\"`, `\"tool\"`)."
               },
               "content": {
-                "description": "Text-only message content to count without loading media.",
+                "description": "Message content to count; media parts are rejected with guidance to use completion().",
                 "anyOf": [
                   {
                     "anyOf": [

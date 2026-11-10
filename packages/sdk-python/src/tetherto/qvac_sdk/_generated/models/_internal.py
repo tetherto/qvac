@@ -4009,7 +4009,9 @@ class CalcTokensHistoryMessage(GeneratedBaseModel):
             | CalcTokensHistoryMessageContentItemMedia
         ]
         | None,
-        Field(description="Text-only message content to count without loading media."),
+        Field(
+            description="Message content to count; media parts are rejected with guidance to use completion()."
+        ),
     ] = None
     attachments: Annotated[
         list[CalcTokensHistoryMessageAttachmentsItem] | None, Field(max_length=0)
