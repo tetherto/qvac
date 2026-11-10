@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../cli-kit/docs/assets/ducks-small.png" alt="" width="200">
+  <img src="docs/assets/ducks-small.png" alt="" width="200">
 </p>
 
 <h1 align="center">QV.AC CLI</h1>
@@ -34,7 +34,7 @@
 and the [QV.AC Harness](https://github.com/tetherto/qvac-harness). Core keeps your agents and
 devices in a replicated mesh; the harness runs the model, the tools and the plugins on the device
 you choose. `qvac` serves this machine's models to the workspace and manages it: devices, models,
-workspaces, invites. The chat is [`duck`](../duck), which talks to the agent on this device or on
+workspaces, invites. The chat is `duck`, which talks to the agent on this device or on
 any device paired with it. Nothing goes to a server.
 
 ## Quick start
@@ -117,7 +117,7 @@ Flags: `--create`, `--account-name`, `--device-name` (`--name`), `--join`, `--de
 commands that need Core refuse to run beside another `qvac` on the same `--data-dir`; `qvac status`
 beside a running `qvac serve` reads the copy serve keeps.
 
-For a chat from a script, `duck -p "prompt"` prints the answer; see [duck](../duck).
+For a chat from a script, `duck -p "prompt"` prints the answer.
 
 ## QVAC SDK commands
 
@@ -183,14 +183,14 @@ qvac (Bare, bare-tui) ── Client ──► Core sidecar ──► harness wor
 
 The dashboard is a client like any other: everything goes through Core's `Client`, and inference
 happens only in the harness. Core and the harness are npm packages, `@qvac/core` and
-`@qvac/harness`, pinned to exact versions in `package.json`; the branding, terminal text and
-`qvac.config` handling the two products share are [`@qvac/cli-kit`](../cli-kit).
+`@qvac/harness`, pinned to exact versions in `package.json`.
 
 ## Development
 
 The CLI lives in the monorepo's `packages/cli`. Sources are strict TypeScript:
 `src/cli` owns command parsing and dispatch, `src/product` owns the dashboard, and
-`src/lib` holds the Core and harness host, and the SDK and server code behind `qvac sdk`.
+`src/lib` holds the Core and harness host, configuration, and the SDK and server code behind
+`qvac sdk`.
 
 We retain the existing CLI's `tsc` + `tsc-alias` build. Modern Bare can run
 TypeScript directly, but both launchers and the packaged application use the

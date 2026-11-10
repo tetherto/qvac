@@ -1,5 +1,0 @@
-dist
-
-# Generated runtime, standalone binaries, and external benchmark checkouts
-output/
-out/

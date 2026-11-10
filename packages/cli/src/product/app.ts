@@ -11,7 +11,7 @@ import {
 import { PAGES as DASHBOARD_PAGES } from './dashboard/pages.js'
 import { PAGES as ONBOARDING_PAGES } from './onboarding/pages.js'
 import { MODAL as ONBOARDING_MODAL, ENTER as ONBOARDING_ENTER } from './onboarding/keys.js'
-import { paint } from '@qvac/cli-kit/brand'
+import { paint } from './theme.js'
 import { PAGES as MANAGEMENT_PAGES } from './management/pages.js'
 import { PAGES as MANAGEMENT_KEYS, SHORTCUTS as MANAGEMENT_SHORTCUTS } from './management/keys.js'
 import { COMMANDS } from './management/commands.js'

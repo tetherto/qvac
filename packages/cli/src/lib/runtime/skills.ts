@@ -1,4 +1,4 @@
-import type { Agent } from '@qvac/cli-kit/config'
+import type { Agent } from '../types.js'
 import type { Capabilities } from '@qvac/core/client'
 // fs is passed in (bare-fs or node:fs) so core-host and the tests share one module.
 const parent = (file: string) => String(file).replace(/[\\/][^\\/]*$/, '')

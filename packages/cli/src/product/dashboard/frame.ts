@@ -1,6 +1,7 @@
 import type { Frame } from '../app-types.js'
 import type { Dashboard } from './app.js'
-import { paint, strong, paragraph, keyHints } from '@qvac/cli-kit/brand'
+import { paint } from '../theme.js'
+import { strong, paragraph, keyHints } from '../ink.js'
 
 // The dashboard frame: header, the page a product names, and the footer with its key hints.
 export interface Page {

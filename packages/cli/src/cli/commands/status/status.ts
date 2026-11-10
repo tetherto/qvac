@@ -5,7 +5,7 @@ type Status = Awaited<ReturnType<typeof readStatus>> & {
 }
 import type { RuntimeOptions, CoreHost } from '../../../lib/types.js'
 import type { CommandIO } from '../../io.js'
-import { bytes } from '@qvac/cli-kit/brand'
+import { bytes } from '../../../product/theme.js'
 import fs from 'bare-fs'
 import path from 'bare-path'
 import process from 'bare-process'

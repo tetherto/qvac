@@ -10,8 +10,10 @@ import type { RpcResult, WatchFrame, Frame } from '../app-types.js'
 import type { ChatLinks, Dashboard } from './app.js'
 import type { snapshot } from '../data.js'
 import { hex } from '../data.js'
-import { wrap, modelParts, modelKind } from '@qvac/cli-kit/tui'
-import { palette, paint, bytes, count, strong, paragraph } from '@qvac/cli-kit/brand'
+import { wrap } from '../../lib/terminal/text.js'
+import { modelParts, modelKind } from '../model-label.js'
+import { palette, paint, bytes, count } from '../theme.js'
+import { strong, paragraph } from '../ink.js'
 import type { Page, PageView } from './frame.js'
 
 const MODEL_HINTS: [string, string][] = [

@@ -5,7 +5,9 @@ import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
-import { describeConfig, loadConfig, runtimeJson } from '@qvac/cli-kit/config'
+import { describeConfig } from '../../dist/lib/runtime/config-merge.js'
+import { loadConfig } from '../../dist/lib/runtime/config.js'
+import { runtimeJson } from '../../dist/lib/runtime/config-json.js'
 
 const bare = createRequire(import.meta.url)('bare-runtime')()
 const fixture = new URL('./fixtures/config-inline-plugins.mjs', import.meta.url).pathname

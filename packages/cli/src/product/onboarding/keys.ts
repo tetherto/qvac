@@ -1,6 +1,6 @@
 import type { KeyMessage, Command } from '../app-types.js'
 import type { Dashboard } from '../dashboard/app.js'
-import { plain } from '@qvac/cli-kit/brand'
+import { plain } from '../theme.js'
 import { joinAndWait } from '../../cli/join.js'
 import { FORMS } from './pages.js'
 

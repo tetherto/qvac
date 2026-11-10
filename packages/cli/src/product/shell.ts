@@ -1,4 +1,4 @@
-import type { Agent } from '@qvac/cli-kit/config'
+import type { Agent } from '../lib/types.js'
 import type { Capabilities } from '@qvac/core/client'
 import type {
   Command,
@@ -14,10 +14,13 @@ import type {
   UpdateBanner,
   WatchFrame
 } from './app-types.js'
-import { canvas, paint, plain, logo, strong, paragraph, bootLines } from '@qvac/cli-kit/brand'
+import { canvas, paint, plain, logo } from './theme.js'
+import { strong, paragraph } from './ink.js'
+import { bootLines } from './splash.js'
 import { snapshot, hex } from './data.js'
 import * as session from './session.js'
-import { selectionText, paintSelection, DownloadRate } from '@qvac/cli-kit/tui'
+import { selectionText, paintSelection } from './select.js'
+import { DownloadRate } from './download-rate.js'
 import { RECEIVERS } from './receive.js'
 
 export const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']

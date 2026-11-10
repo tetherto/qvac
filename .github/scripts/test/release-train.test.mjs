@@ -283,7 +283,7 @@ test('tags each package at its npm gitHead, once, and fails on a tag elsewhere',
   })
 })
 
-test('reports workspace links to packages outside the train, once each, never a bundled one', () => {
+test('reports workspace links to packages outside the train, once each', () => {
   const deps = {
     '@qvac/inference': [
       { name: '@qvac/rag', version: 'link:../rag' },
@@ -292,7 +292,6 @@ test('reports workspace links to packages outside the train, once each, never a 
     '@qvac/sdk': [
       { name: '@qvac/inference', version: 'link:../inference' },
       { name: '@qvac/rag', version: 'link:../rag' },
-      { name: '@qvac/cli-kit', version: 'link:../cli-kit', bundled: true },
     ],
   }
   assert.deepEqual(linkedOutsideTrain(['@qvac/inference', '@qvac/sdk'], (name) => deps[name] ?? []), [

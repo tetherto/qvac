@@ -7,22 +7,22 @@ import { pathToFileURL } from 'bare-url'
 import { Agent } from '@qvac/harness/agent'
 import { ExternalAgents } from '@qvac/harness/plugins/external-agents'
 import { sharedImports } from '@qvac/harness/user-plugins'
+import { BUILT_IN_PLUGINS, PLUGIN_CATALOG, type CatalogPlugin } from './plugin-catalog.js'
+import { inlinePlugin } from './config-merge.js'
 import {
-  BUILT_IN_PLUGINS,
-  PLUGIN_CATALOG,
-  inlinePlugin,
   emptyPluginState,
   readPluginState,
   resolvePlugins,
   withConfigPlugins,
+  type PluginState,
+  type McpServer
+} from './plugin-state.js'
+import {
   type HarnessConfig,
   type PluginEntry,
   type WorkbenchConfig,
-  type LoadedConfig,
-  type CatalogPlugin,
-  type PluginState,
-  type McpServer
-} from '@qvac/cli-kit/config'
+  type LoadedConfig
+} from '../types.js'
 import { hostShell } from './host-shell.js'
 import type { Harness, HarnessPlugin, CompletionContext, CompletionEvent } from '@qvac/harness'
 import type Module from 'bare-module'

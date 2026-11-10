@@ -19,20 +19,10 @@
     "tests_bare": true
   },
   {
-    "package": "cli-kit",
-    "path": "packages/cli-kit"
-  },
-  {
     "package": "cli",
     "path": "packages/cli",
     "sdk_sources": ["workspace"],
-    "sdk_sources_release": ["workspace", "published"],
-    "depends_on": ["packages/cli-kit"]
-  },
-  {
-    "package": "duck",
-    "path": "packages/duck",
-    "depends_on": ["packages/cli-kit"]
+    "sdk_sources_release": ["workspace", "published"]
   },
   {
     "package": "rag",

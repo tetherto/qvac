@@ -5,7 +5,7 @@ import type { RuntimeOptions, CoreHost } from '../../../lib/types.js'
 import { CommandError } from '../../errors.js'
 import { table } from '../../format.js'
 import { downloadMeter, progressReporter } from '../../progress.js'
-import { bytes } from '@qvac/cli-kit/brand'
+import { bytes } from '../../../product/theme.js'
 import type { Capabilities } from '@qvac/core/client'
 
 export function models(host: CoreHost, options: RuntimeOptions, io: CommandIO) {

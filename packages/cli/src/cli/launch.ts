@@ -1,5 +1,7 @@
 import type { CommandTree, LaunchOptions, ParsedCommand } from '../lib/types.js'
-import { type LoadedConfig, type CoreConfig, loadConfig, runtimeJson } from '@qvac/cli-kit/config'
+import { type LoadedConfig, type CoreConfig } from '../lib/types.js'
+import { loadConfig } from '../lib/runtime/config.js'
+import { runtimeJson } from '../lib/runtime/config-json.js'
 // Runtime-agnostic: bin/qvac.mjs runs it on Node, bin/qvac-bare.mjs on Bare; each starts the app.
 import fs from '#fs'
 import path from '#path'

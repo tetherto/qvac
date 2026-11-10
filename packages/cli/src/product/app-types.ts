@@ -1,8 +1,9 @@
-import type { PluginState, Agent } from '@qvac/cli-kit/config'
+import type { PluginState } from '../lib/runtime/plugin-state.js'
+import type { Agent } from '../lib/types.js'
 import type { Capabilities } from '@qvac/core/client'
 import type { CoreHost, LaunchOptions } from '../lib/types.js'
 import type { Screen, ScreenPanel, ScreenPrompt, ScreenRow } from './screen.js'
-import type { canvas } from '@qvac/cli-kit/brand'
+import type { canvas } from './theme.js'
 
 export type Frame = ReturnType<typeof canvas>
 export type Command =

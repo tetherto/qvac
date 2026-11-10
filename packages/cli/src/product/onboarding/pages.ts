@@ -2,8 +2,12 @@ type Model = NonNullable<RpcResult<'listModels'>['models']>[number]
 type Download = NonNullable<WatchFrame<'modelDownloadsWatch'>['downloads']>[number]
 import type { RpcResult, WatchFrame, Frame } from '../app-types.js'
 import type { Dashboard } from '../dashboard/app.js'
-import { wrap, qrLines, modelParts, modelKind, remainingText } from '@qvac/cli-kit/tui'
-import { paint, plain, logo, bytes, highlight, strong, paragraph } from '@qvac/cli-kit/brand'
+import { wrap } from '../../lib/terminal/text.js'
+import { qrLines } from '../qr.js'
+import { modelParts, modelKind } from '../model-label.js'
+import { remainingText } from '../download-rate.js'
+import { paint, plain, logo, bytes, highlight } from '../theme.js'
+import { strong, paragraph } from '../ink.js'
 import type { Page, PageView } from '../dashboard/frame.js'
 import { percentOf } from '../dashboard/pages.js'
 

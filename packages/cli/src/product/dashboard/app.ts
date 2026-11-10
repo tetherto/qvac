@@ -7,7 +7,7 @@ import type {
   ProductOptions
 } from '../app-types.js'
 import { Shell, TABS } from '../shell.js'
-import { plain } from '@qvac/cli-kit/brand'
+import { plain } from '../theme.js'
 import { FORMS, SETUP_PAGES } from '../onboarding/pages.js'
 import { RECEIVERS } from './receive.js'
 

@@ -4,8 +4,9 @@ import type { Frame } from '../app-types.js'
 import type { Dashboard } from '../dashboard/app.js'
 import type { Page, PageView } from '../dashboard/frame.js'
 import { hex } from '../data.js'
-import { wrap } from '@qvac/cli-kit/tui'
-import { paint, count, strong } from '@qvac/cli-kit/brand'
+import { wrap } from '../../lib/terminal/text.js'
+import { paint, count } from '../theme.js'
+import { strong } from '../ink.js'
 
 // The host's own pages: every device, the workspaces it serves, and its status.
 export const PAGES: Record<string, PageView> = {

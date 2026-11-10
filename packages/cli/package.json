@@ -45,7 +45,7 @@
   },
   "homepage": "https://qvac.tether.io",
   "scripts": {
-    "prepublishOnly": "node scripts/check-publish-ready.mjs",
+    "prepublishOnly": "node scripts/check-publish-ready.cjs",
     "build": "rm -rf dist && tsc && tsc-alias -p tsconfig.alias.json && node scripts/copy-vendor.mjs",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
@@ -82,7 +82,6 @@
   },
   "dependencies": {
     "@qvac/asr-ggml": "0.10.0",
-    "@qvac/cli-kit": "workspace:*",
     "@qvac/audiogen-ggml": "0.8.0",
     "@qvac/bci-whispercpp": "0.12.0",
     "@qvac/classification-ggml": "0.31.1",
@@ -174,9 +173,6 @@
     "pyodide": "314.0.2",
     "quickjs-emscripten-core": "0.32.0"
   },
-  "bundleDependencies": [
-    "@qvac/cli-kit"
-  ],
   "imports": {
     "#abort-controller": {
       "bare": "bare-abort-controller",
@@ -185,6 +181,10 @@
     "#child_process": {
       "bare": "bare-subprocess",
       "default": "child_process"
+    },
+    "#config-import": {
+      "bare": "./dist/lib/runtime/config-import.bare.js",
+      "default": "./dist/lib/runtime/config-import.js"
     },
     "#fs": {
       "bare": "bare-fs",

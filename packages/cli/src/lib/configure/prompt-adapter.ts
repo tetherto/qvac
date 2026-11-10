@@ -1,4 +1,5 @@
-import { Editor, wrap } from '@qvac/cli-kit/tui'
+import { Editor } from '../terminal/editor.js'
+import { wrap } from '../terminal/text.js'
 import { emitKeypressEvents, type Key } from 'node:readline'
 import { spawn } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'

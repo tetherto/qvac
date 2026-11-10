@@ -1,6 +1,6 @@
-import type { palette } from '@qvac/cli-kit/brand'
+import type { palette } from './theme.js'
 import type { Capabilities } from '@qvac/core/client'
-import type { Agent } from '@qvac/cli-kit/config'
+import type { Agent } from '../lib/types.js'
 import type { ProductOptions } from './app-types.js'
 
 export const SCREEN_KEYS = '↑↓ choose  space toggle  enter open  esc back'

@@ -1,4 +1,4 @@
-import { importConfig } from '@qvac/cli-kit/config'
+import { importConfig } from '#config-import'
 import fs, { promises as fsp } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'

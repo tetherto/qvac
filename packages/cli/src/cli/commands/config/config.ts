@@ -1,11 +1,8 @@
 import type { ParsedCommand, LauncherKit, LaunchOptions } from '../../../lib/types.js'
-import {
-  type LoadedConfig,
-  applyPluginState,
-  describeConfig,
-  readPluginState,
-  runtimeJson
-} from '@qvac/cli-kit/config'
+import { type LoadedConfig } from '../../../lib/types.js'
+import { applyPluginState, describeConfig } from '../../../lib/runtime/config-merge.js'
+import { readPluginState } from '../../../lib/runtime/plugin-state.js'
+import { runtimeJson } from '../../../lib/runtime/config-json.js'
 
 // `qvac config`: the merged configuration, one `key = value · source` line each.
 export function configText({ config, sources, configPath }: LoadedConfig, { json }: LaunchOptions) {

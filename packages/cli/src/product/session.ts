@@ -1,5 +1,5 @@
 import type { Capabilities } from '@qvac/core/client'
-import type { Agent } from '@qvac/cli-kit/config'
+import type { Agent } from '../lib/types.js'
 import b4a from 'b4a'
 
 const UPLOAD_FRAME_BYTES = 64 * 1024

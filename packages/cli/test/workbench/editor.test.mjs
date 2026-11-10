@@ -1,4 +1,4 @@
-import { cellWidth } from '@qvac/cli-kit/tui'
+import { cellWidth } from '../../dist/lib/terminal/text.js'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { Editor } from '../../dist/lib/terminal/editor.js'
