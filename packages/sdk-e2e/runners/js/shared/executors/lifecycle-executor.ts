@@ -2,6 +2,7 @@ import {
   suspend,
   resume,
   state,
+  close,
   completion,
   modelRegistryList,
   type LifecycleState
@@ -18,7 +19,8 @@ import {
   lifecycleSuspendDuringInference,
   lifecycleStateTransitions,
   lifecycleBlockedCompletion,
-  lifecycleBlockedRegistry
+  lifecycleBlockedRegistry,
+  lifecycleCloseRestart
 } from '../../../../catalog/lifecycle-tests.js'
 
 const formatError = (error: unknown): string =>
@@ -98,6 +100,9 @@ export class LifecycleExecutor extends AbstractModelExecutor<typeof lifecycleTes
 
       case lifecycleBlockedRegistry.testId:
         return await this.runBlockedRegistry()
+
+      case lifecycleCloseRestart.testId:
+        return await this.runCloseRestart()
 
       default:
         throw new Error(`Unknown lifecycle test: ${testId}`)
@@ -300,5 +305,33 @@ export class LifecycleExecutor extends AbstractModelExecutor<typeof lifecycleTes
     const models = await modelRegistryList()
 
     return `Blocked registry verified: ${BLOCKED_ERROR_NAME} while suspended, ${models.length} models after resume`
+  }
+
+  private async runCloseRestart(): Promise<string> {
+    let modelId = await this.resources.ensureLoaded('llm')
+
+    const textBefore = await completion({
+      modelId,
+      history: [{ role: 'user', content: 'What is 2+2? Answer with only the number.' }],
+      stream: false
+    }).text
+
+    if (!textBefore?.trim()) throw new Error('Pre-close completion returned empty text')
+
+    await close()
+    this.resources.forgetAll()
+    this.registryWarmed = false
+
+    modelId = await this.resources.ensureLoaded('llm')
+
+    const textAfter = await completion({
+      modelId,
+      history: [{ role: 'user', content: 'What is 3+3? Answer with only the number.' }],
+      stream: false
+    }).text
+
+    if (!textAfter?.trim()) throw new Error('Post-restart completion returned empty text')
+
+    return `Worker closed and started again, pre and post completions non-empty`
   }
 }
