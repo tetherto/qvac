@@ -25,13 +25,21 @@ export function toVadStateEvent(event: ASRGgml.VadEvent) {
     probability: event.score,
     source: event.source,
     ...(event.timestamp !== undefined && { timestamp: event.timestamp }),
+    ...(event.chunkIndex !== undefined && { chunkIndex: event.chunkIndex }),
     ...(event.speakerId !== undefined && { speakerId: event.speakerId })
   } satisfies VadStateEvent
 }
 
 export function toEndOfTurnEvent(event: ASRGgml.EndOfTurnEvent) {
   if (event.source === 'model-eou') {
-    return { source: 'parakeet' } satisfies EndOfTurnEvent
+    // The native EOU boundary carries its own timing and confidence; a
+    // boundary the addon synthesizes from a segment has none to forward.
+    return {
+      source: 'parakeet',
+      ...(event.timestamp !== undefined && { timestamp: event.timestamp }),
+      ...(event.chunkIndex !== undefined && { chunkIndex: event.chunkIndex }),
+      ...(event.confidence !== undefined && { confidence: event.confidence })
+    } satisfies EndOfTurnEvent
   }
   if (event.silenceDurationMs === undefined) {
     return null

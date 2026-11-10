@@ -3571,6 +3571,29 @@
                 "additionalProperties": false,
                 "title": "BciTranscribeResponseSegmentTokensItem"
               }
+            },
+            "tokenIds": {
+              "description": "Native token ids of the segment. Parakeet streaming only.",
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "isFinal": {
+              "description": "Native finality of the segment, including empty final markers; prefer it over non-empty text to detect a finalized chunk. Parakeet streaming only.",
+              "type": "boolean"
+            },
+            "chunkIndex": {
+              "description": "Native streaming chunk index the segment belongs to; `-1` when unknown. Parakeet streaming only.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "eotConfidence": {
+              "description": "Native end-of-turn confidence of the segment; may be `0` when the model reports none. Parakeet EOU streaming only.",
+              "type": "number"
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -3967,6 +3990,29 @@
                 "additionalProperties": false,
                 "title": "BciTranscribeStreamResponseSegmentTokensItem"
               }
+            },
+            "tokenIds": {
+              "description": "Native token ids of the segment. Parakeet streaming only.",
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "isFinal": {
+              "description": "Native finality of the segment, including empty final markers; prefer it over non-empty text to detect a finalized chunk. Parakeet streaming only.",
+              "type": "boolean"
+            },
+            "chunkIndex": {
+              "description": "Native streaming chunk index the segment belongs to; `-1` when unknown. Parakeet streaming only.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "eotConfidence": {
+              "description": "Native end-of-turn confidence of the segment; may be `0` when the model reports none. Parakeet EOU streaming only.",
+              "type": "number"
             },
             "windowStartTimestep": {
               "description": "Absolute index of the 20 ms timestep at which this segment's owning decode window began. Emitted with `emit: 'delta'` only: the segment's own timestamps are window-local, so add `windowStartTimestep * 20` ms to `startMs` / `endMs` to place them on the stream timeline.",
@@ -14872,6 +14918,134 @@
                       "description": "Enable the ggml GPU backend. Default false.",
                       "type": "boolean"
                     },
+                    "backend": {
+                      "description": "Native backend selector: `auto` (default), `cpu`, `cuda`, `vulkan`, `opencl`, `metal`, or an exact ggml device name such as `CUDA0` or `MTL0`. An explicit selection overrides `useGPU` and the load fails if it is unavailable instead of falling back. Applies to the speaker-attribution diarization model too, and reaches `assessModelFit`.",
+                      "type": "string"
+                    },
+                    "speakerAttribution": {
+                      "description": "Transcribe each speaker turn found by a separate diarization model, reporting `speakerId` per segment. Batch `transcribe()` only; cannot be combined with `streaming`.",
+                      "type": "object",
+                      "properties": {
+                        "modelSrc": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "src": {
+                                  "type": "string",
+                                  "description": "Location of the model file: a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI."
+                                },
+                                "name": {
+                                  "description": "Display name for this model instance; overrides the name derived from the source.",
+                                  "type": "string"
+                                },
+                                "modelId": {
+                                  "description": "Unique identifier used to reference the model in QVAC calls.",
+                                  "type": "string"
+                                },
+                                "registryPath": {
+                                  "description": "Registry-relative path to the model (set for registry-backed models).",
+                                  "type": "string"
+                                },
+                                "registrySource": {
+                                  "description": "Registry source identifier, e.g. `huggingface`.",
+                                  "type": "string"
+                                },
+                                "blobCoreKey": {
+                                  "description": "Hyperdrive blob core key for the model file.",
+                                  "type": "string"
+                                },
+                                "blobIndex": {
+                                  "description": "Internal: index of this shard within its Hyperdrive blob core, for sharded models.",
+                                  "type": "number"
+                                },
+                                "engine": {
+                                  "description": "Canonical inference engine identifier, e.g. `llamacpp-completion`.",
+                                  "type": "string"
+                                },
+                                "expectedSize": {
+                                  "description": "Expected total size of the model file in bytes.",
+                                  "type": "number"
+                                },
+                                "sha256Checksum": {
+                                  "description": "Expected SHA-256 checksum of the model file.",
+                                  "type": "string"
+                                },
+                                "addon": {
+                                  "description": "Inference addon / capability category this model belongs to.",
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "enum": [
+                                        "llamacpp-completion",
+                                        "whispercpp-transcription",
+                                        "bci-whispercpp-transcription",
+                                        "llamacpp-embedding",
+                                        "llamacpp-decision",
+                                        "llamacpp-rerank",
+                                        "nmtcpp-translation",
+                                        "onnx-tts",
+                                        "tts-ggml",
+                                        "parakeet-transcription",
+                                        "moss-transcribe",
+                                        "ggml-ocr",
+                                        "sdcpp-generation",
+                                        "audiogen-ggml",
+                                        "ggml-vla",
+                                        "ggml-image-embedding",
+                                        "ggml-classification",
+                                        "llm",
+                                        "whisper",
+                                        "bci",
+                                        "embeddings",
+                                        "nmt",
+                                        "parakeet",
+                                        "tts",
+                                        "ocr",
+                                        "diffusion",
+                                        "audiogen",
+                                        "vla",
+                                        "classification"
+                                      ],
+                                      "title": "LoadModelSrcRequestParakeetTranscriptionModelConfigSpeakerAttributionModelSrcAddon"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "vad"
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": ["src"],
+                              "title": "LoadModelSrcRequestParakeetTranscriptionModelConfigSpeakerAttributionModelSrc"
+                            }
+                          ],
+                          "description": "Diarization model (Sortformer or Nemotron 3 Diarization GGUF) loaded beside the ASR model, as `loadModel` takes a `modelSrc`."
+                        },
+                        "mergeSameSpeaker": {
+                          "description": "Merge adjacent retained turns assigned to the same speaker. Default true.",
+                          "type": "boolean"
+                        },
+                        "minSegmentMs": {
+                          "description": "Minimum padded turn duration, in ms, before it is sent to ASR; `0` keeps short turns. Default 200.",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        },
+                        "padSegmentMs": {
+                          "description": "Extend the ASR audio slice around each turn, in ms; returned timestamps still describe the diarized turn. Default 0.",
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 2147483647
+                        }
+                      },
+                      "required": ["modelSrc"],
+                      "additionalProperties": false,
+                      "title": "LoadModelSrcRequestParakeetTranscriptionModelConfigSpeakerAttribution"
+                    },
                     "sampleRate": {
                       "description": "Input audio sample rate in Hz. Default 16000.",
                       "type": "integer",
@@ -14951,9 +15125,9 @@
                       "maximum": 9007199254740991
                     },
                     "language": {
-                      "description": "Indic CTC language id or Nemotron locale alias (e.g. `hi`, `ta`, `en-US`, `hi-IN`, or `auto`). Empty selects `auto` for Nemotron and keeps full-vocabulary CTC decoding.",
+                      "description": "Indic CTC language id, Nemotron locale alias (e.g. `hi`, `ta`, `en-US`, `hi-IN`, or `auto`), or the TranscribePsy EU route: `en` for the English trunk, `other` for the non-English adapters, `auto` to route automatically. Empty selects `auto` for Nemotron and TranscribePsy EU and keeps full-vocabulary CTC decoding.",
                       "type": "string",
-                      "pattern": "^(|auto|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$"
+                      "pattern": "^(|auto|other|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$"
                     },
                     "streamingSpeakerVad": {
                       "description": "Emit speaker-activity VAD events with the dominant speaker id during diarization streaming. Default false.",
@@ -26728,6 +26902,29 @@
                 "additionalProperties": false,
                 "title": "TranscribeResponseSegmentTokensItem"
               }
+            },
+            "tokenIds": {
+              "description": "Native token ids of the segment. Parakeet streaming only.",
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "isFinal": {
+              "description": "Native finality of the segment, including empty final markers; prefer it over non-empty text to detect a finalized chunk. Parakeet streaming only.",
+              "type": "boolean"
+            },
+            "chunkIndex": {
+              "description": "Native streaming chunk index the segment belongs to; `-1` when unknown. Parakeet streaming only.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "eotConfidence": {
+              "description": "Native end-of-turn confidence of the segment; may be `0` when the model reports none. Parakeet EOU streaming only.",
+              "type": "number"
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -26752,6 +26949,12 @@
             "timestamp": {
               "description": "Parakeet: event time in seconds from the start of the streaming session.",
               "type": "number"
+            },
+            "chunkIndex": {
+              "description": "Parakeet: native streaming chunk index of the event; `-1` when unavailable.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             },
             "source": {
               "description": "Detector behind the event: `'silero'` for Whisper, `'energy'` for Parakeet energy VAD, or `'sortformer'` for Sortformer speaker activity.",
@@ -26787,6 +26990,20 @@
                 "source": {
                   "type": "string",
                   "const": "parakeet"
+                },
+                "timestamp": {
+                  "description": "Native event time in seconds from the start of the streaming session.",
+                  "type": "number"
+                },
+                "chunkIndex": {
+                  "description": "Native streaming chunk index of the boundary; `-1` when unknown.",
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "confidence": {
+                  "description": "Native end-of-turn confidence reported by the EOU model.",
+                  "type": "number"
                 }
               },
               "required": ["source"],
@@ -27262,6 +27479,29 @@
                 "additionalProperties": false,
                 "title": "TranscribeStreamResponseSegmentTokensItem"
               }
+            },
+            "tokenIds": {
+              "description": "Native token ids of the segment. Parakeet streaming only.",
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "isFinal": {
+              "description": "Native finality of the segment, including empty final markers; prefer it over non-empty text to detect a finalized chunk. Parakeet streaming only.",
+              "type": "boolean"
+            },
+            "chunkIndex": {
+              "description": "Native streaming chunk index the segment belongs to; `-1` when unknown. Parakeet streaming only.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "eotConfidence": {
+              "description": "Native end-of-turn confidence of the segment; may be `0` when the model reports none. Parakeet EOU streaming only.",
+              "type": "number"
             }
           },
           "required": ["text", "startMs", "endMs", "append", "id"],
@@ -27286,6 +27526,12 @@
             "timestamp": {
               "description": "Parakeet: event time in seconds from the start of the streaming session.",
               "type": "number"
+            },
+            "chunkIndex": {
+              "description": "Parakeet: native streaming chunk index of the event; `-1` when unavailable.",
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
             },
             "source": {
               "description": "Detector behind the event: `'silero'` for Whisper, `'energy'` for Parakeet energy VAD, or `'sortformer'` for Sortformer speaker activity.",
@@ -27321,6 +27567,20 @@
                 "source": {
                   "type": "string",
                   "const": "parakeet"
+                },
+                "timestamp": {
+                  "description": "Native event time in seconds from the start of the streaming session.",
+                  "type": "number"
+                },
+                "chunkIndex": {
+                  "description": "Native streaming chunk index of the boundary; `-1` when unknown.",
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "confidence": {
+                  "description": "Native end-of-turn confidence reported by the EOU model.",
+                  "type": "number"
                 }
               },
               "required": ["source"],
