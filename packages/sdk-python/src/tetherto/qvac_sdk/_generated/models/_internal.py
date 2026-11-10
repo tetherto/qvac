@@ -4340,6 +4340,14 @@ class CompletionOrchestrateRequest(GeneratedBaseModel):
             description="Evaluate the prompt without generating an answer. Requires an enabled KV cache."
         ),
     ] = None
+    seed_from: Annotated[
+        str | None,
+        Field(
+            alias="seedFrom",
+            description="Name of another caller-managed cache to start this chat from, such as a primed system prompt and tools. On the first turn of a chat whose `kvCache` key has no cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is processed; the source is never written. Ignored once the chat has a cache. Needs a string `kvCache` other than itself. Refused when no cache of that name exists for this model and system prompt, or when the model was not loaded with `cache_share_across_keys: true`, which is off by default.",
+            min_length=1,
+        ),
+    ] = None
     tools: Annotated[
         list[CompletionOrchestrateRequestToolsItem] | None,
         Field(
@@ -5055,6 +5063,14 @@ class CompletionStreamRequest(GeneratedBaseModel):
         bool | None,
         Field(
             description="Evaluate the prompt without generating an answer. Requires an enabled KV cache."
+        ),
+    ] = None
+    seed_from: Annotated[
+        str | None,
+        Field(
+            alias="seedFrom",
+            description="Name of another caller-managed cache to start this chat from, such as a primed system prompt and tools. On the first turn of a chat whose `kvCache` key has no cache yet, the model reads that cache and reuses the prefix it shares with the prompt, so only the rest is processed; the source is never written. Ignored once the chat has a cache. Needs a string `kvCache` other than itself. Refused when no cache of that name exists for this model and system prompt, or when the model was not loaded with `cache_share_across_keys: true`, which is off by default.",
+            min_length=1,
         ),
     ] = None
     tools: Annotated[
@@ -6677,7 +6693,7 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     init_images: Annotated[
         list[InitImage] | None,
         Field(
-            description="Ordered base64-encoded PNG/JPEG references for models with reference editing, including FLUX.2 and Qwen-Image-2.1. Native model detection validates support. Qwen-Image-2.1 requires projectionModelSrc, preserves alpha, and does not need FLUX @imageN tags or a prediction override. Mutually exclusive with init_image.",
+            description="Ordered base64-encoded PNG/JPEG references for models with reference editing, including FLUX.2, FLUX.3 and Qwen-Image-2.1. Native model detection validates support. FLUX.3 and Qwen-Image-2.1 do not need FLUX.2 @imageN tags or a prediction override; Qwen-Image-2.1 requires projectionModelSrc and preserves alpha. Mutually exclusive with init_image.",
             min_length=1,
         ),
     ] = None
@@ -6704,7 +6720,7 @@ class DiffusionStreamRequest(GeneratedBaseModel):
     strength: Annotated[
         float | None,
         Field(
-            description="img2img denoising strength for SD/SDXL SDEdit. Does not control reference-editing strength for FLUX.2 or Qwen-Image-2.1; these models start the target from noise.",
+            description="img2img denoising strength for SD/SDXL SDEdit. Does not control reference-editing strength for FLUX.2, FLUX.3 or Qwen-Image-2.1; these models start the target from noise.",
             ge=0.0,
             le=1.0,
         ),
@@ -22769,7 +22785,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         str | LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrc | None,
         Field(
             alias="llmModelSrc",
-            description="LLM text encoder model — required for FLUX.2 [klein] (Qwen3), Qwen-Image-2.1 and Ideogram 4 (Qwen3-VL), LTX-2 video (Gemma), and MiniMax-H3 (H3-specific Qwen3-VL).",
+            description="LLM text encoder model — required for FLUX.2 [klein] (Qwen3), FLUX.3 Image Klein, Qwen-Image-2.1 and Ideogram 4 (Qwen3-VL), LTX-2 video (Gemma), and MiniMax-H3 (H3-specific Qwen3-VL).",
         ),
     ] = None
     projection_model_src: Annotated[
@@ -22783,7 +22799,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfig(GeneratedBaseModel):
         str | LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrc | None,
         Field(
             alias="vaeModelSrc",
-            description="VAE decoder model, required for Qwen-Image-2.1, FLUX.2 [klein], Ideogram 4, LTX-2 video, and MiniMax-H3 video; optional for SDXL.",
+            description="VAE decoder model, required for Qwen-Image-2.1, FLUX.2 [klein], FLUX.3 Image Klein, Ideogram 4, LTX-2 video, and MiniMax-H3 video; optional for SDXL.",
         ),
     ] = None
     high_noise_diffusion_model_src: Annotated[
