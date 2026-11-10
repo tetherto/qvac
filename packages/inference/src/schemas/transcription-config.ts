@@ -261,7 +261,7 @@ export const whisperConfigSchema = z.object({
 
 export type WhisperConfig = z.infer<typeof whisperConfigSchema>
 
-const PARAKEET_LANGUAGE_PATTERN = /^(|auto|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$/
+const PARAKEET_LANGUAGE_PATTERN = /^(|auto|other|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$/
 
 // === Parakeet (NVIDIA NeMo GGML) engine config ===
 //
@@ -359,7 +359,7 @@ export const parakeetRuntimeConfigSchema = z.object({
     .regex(PARAKEET_LANGUAGE_PATTERN)
     .optional()
     .describe(
-      'Indic CTC language id or Nemotron locale alias (e.g. `hi`, `ta`, `en-US`, `hi-IN`, or `auto`). Empty selects `auto` for Nemotron and keeps full-vocabulary CTC decoding.'
+      'Indic CTC language id, Nemotron locale alias (e.g. `hi`, `ta`, `en-US`, `hi-IN`, or `auto`), or the TranscribePsy EU route: `en` for the English trunk, `other` for the non-English adapters, `auto` to route automatically. Empty selects `auto` for Nemotron and TranscribePsy EU and keeps full-vocabulary CTC decoding.'
     ),
 
   streamingSpeakerVad: z

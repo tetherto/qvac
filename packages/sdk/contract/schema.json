@@ -14891,9 +14891,9 @@
                       "maximum": 9007199254740991
                     },
                     "language": {
-                      "description": "Indic CTC language id or Nemotron locale alias (e.g. `hi`, `ta`, `en-US`, `hi-IN`, or `auto`). Empty selects `auto` for Nemotron and keeps full-vocabulary CTC decoding.",
+                      "description": "Indic CTC language id, Nemotron locale alias (e.g. `hi`, `ta`, `en-US`, `hi-IN`, or `auto`), or the TranscribePsy EU route: `en` for the English trunk, `other` for the non-English adapters, `auto` to route automatically. Empty selects `auto` for Nemotron and TranscribePsy EU and keeps full-vocabulary CTC decoding.",
                       "type": "string",
-                      "pattern": "^(|auto|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$"
+                      "pattern": "^(|auto|other|[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?)$"
                     },
                     "streamingSpeakerVad": {
                       "description": "Emit speaker-activity VAD events with the dominant speaker id during diarization streaming. Default false.",

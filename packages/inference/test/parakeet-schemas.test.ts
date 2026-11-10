@@ -95,15 +95,17 @@ test('parakeetRuntimeConfigSchema: accepts backend loader directories', (t) => {
   t.is(result.openclCacheDir, '/tmp/qvac-opencl-cache')
 })
 
-test('parakeetRuntimeConfigSchema: accepts Indic ids and Nemotron locale aliases', (t) => {
-  for (const language of ['hi', 'ta', 'en-US', 'hi-IN', 'auto', ''] as const) {
+test('parakeetRuntimeConfigSchema: accepts Indic ids, Nemotron locale aliases and the TranscribePsy EU route', (t) => {
+  // `other` selects TranscribePsy-250M-EU's non-English adapters; `en` its
+  // English trunk and `auto` the model's own routing.
+  for (const language of ['hi', 'ta', 'en-US', 'hi-IN', 'auto', 'other', ''] as const) {
     const result = parakeetRuntimeConfigSchema.parse({ language })
     t.is(result.language, language)
   }
 })
 
 test('parakeetRuntimeConfigSchema: rejects invalid language values', (t) => {
-  for (const language of ['english', 'en_US', 'en-US-extra', 'auto-US']) {
+  for (const language of ['english', 'en_US', 'en-US-extra', 'auto-US', 'others', 'other-EU']) {
     t.exception(() => parakeetRuntimeConfigSchema.parse({ language }), language)
   }
 })
