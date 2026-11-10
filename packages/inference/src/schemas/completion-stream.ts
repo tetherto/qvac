@@ -312,9 +312,7 @@ export const historyMessageSchema = historyMessageObjectSchema
 export const historyMessageWithoutAttachmentsSchema = historyMessageObjectSchema
   .extend({
     content: z
-      .union([z.string(), z.array(historyTextContentPartSchema)], {
-        error: 'calcTokens does not support media content; use completion() for media.'
-      })
+      .union([z.string(), z.array(historyContentPartSchema)])
       .nullish()
       .describe('Text-only message content to count without loading media.'),
     attachments: z
@@ -322,7 +320,16 @@ export const historyMessageWithoutAttachmentsSchema = historyMessageObjectSchema
       .max(0, 'calcTokens does not support attachments; use completion() for attachments.')
       .optional()
   })
-  .superRefine(refineHistoryMessage)
+  .superRefine((message, ctx) => {
+    refineHistoryMessage(message, ctx)
+    if (Array.isArray(message.content) && message.content.some((part) => part.type === 'media')) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'calcTokens does not support media content; use completion() for media.',
+        path: ['content']
+      })
+    }
+  })
 
 export type HistoryMessage = z.infer<typeof historyMessageSchema>
 

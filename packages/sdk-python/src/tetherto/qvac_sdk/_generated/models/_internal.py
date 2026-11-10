@@ -3935,13 +3935,27 @@ class CalcTokensTool(GeneratedBaseModel):
     ]
 
 
-class CalcTokensHistoryMessageContentItem(GeneratedBaseModel):
+class CalcTokensHistoryMessageContentItemText(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
     type: Literal["text"] = "text"
     text: Annotated[
         str, Field(description="Text rendered at this position in the turn.")
+    ]
+
+
+class CalcTokensHistoryMessageContentItemMedia(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["media"] = "media"
+    path: Annotated[
+        str,
+        Field(
+            description="Absolute or resolvable path to the media file (e.g., image for multimodal models).",
+            min_length=1,
+        ),
     ]
 
 
@@ -3989,7 +4003,12 @@ class CalcTokensHistoryMessage(GeneratedBaseModel):
         ),
     ]
     content: Annotated[
-        str | list[CalcTokensHistoryMessageContentItem] | None,
+        str
+        | list[
+            CalcTokensHistoryMessageContentItemText
+            | CalcTokensHistoryMessageContentItemMedia
+        ]
+        | None,
         Field(description="Text-only message content to count without loading media."),
     ] = None
     attachments: Annotated[

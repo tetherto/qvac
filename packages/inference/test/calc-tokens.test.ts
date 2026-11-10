@@ -1,7 +1,8 @@
 import test from 'brittle'
 import { calcTokens } from '@/plugins/builtin/llamacpp-completion/ops/calc-tokens'
 import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
-import { calcTokensRequestSchema, ModelType } from '@/schemas/index'
+import { calcTokensRequestSchema, ModelType, requestSchema } from '@/schemas/index'
+import { formatZodError } from '@/utils/zod-error'
 
 type TestContext = { teardown(cleanup: () => void): void }
 
@@ -195,6 +196,31 @@ test('calcTokens accepts completion-compatible text histories', (t) => {
   t.absent(withMediaContent.success)
   if (!withMediaContent.success) {
     t.ok(withMediaContent.error.message.includes('use completion() for media'))
+  }
+
+  const workerMediaContent = requestSchema.safeParse({
+    type: 'calcTokens',
+    modelId: 'llm',
+    history: [
+      {
+        role: 'user',
+        content: [{ type: 'media', path: '/tmp/image.png' }]
+      }
+    ]
+  })
+  t.absent(workerMediaContent.success)
+  if (!workerMediaContent.success) {
+    t.ok(formatZodError(workerMediaContent.error).includes('use completion() for media'))
+  }
+
+  const invalidContent = requestSchema.safeParse({
+    type: 'calcTokens',
+    modelId: 'llm',
+    history: [{ role: 'user', content: 5 }]
+  })
+  t.absent(invalidContent.success)
+  if (!invalidContent.success) {
+    t.absent(formatZodError(invalidContent.error).includes('does not support media content'))
   }
 
   const withAttachment = calcTokensRequestSchema.safeParse({

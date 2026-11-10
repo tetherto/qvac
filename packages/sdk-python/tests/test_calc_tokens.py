@@ -103,19 +103,21 @@ def test_calc_tokens_rejects_attachments() -> None:
         )
 
 
-def test_calc_tokens_rejects_media_content() -> None:
-    with pytest.raises(ValidationError):
-        CalcTokensRequest.model_validate(
-            {
-                "modelId": "llm",
-                "history": [
-                    {
-                        "role": "user",
-                        "content": [{"type": "media", "path": "/tmp/image.png"}],
-                    }
-                ],
-            }
-        )
+def test_calc_tokens_generated_model_accepts_media_for_worker_validation() -> None:
+    request = CalcTokensRequest.model_validate(
+        {
+            "modelId": "llm",
+            "history": [
+                {
+                    "role": "user",
+                    "content": [{"type": "media", "path": "/tmp/image.png"}],
+                }
+            ],
+        }
+    )
+
+    assert request.history is not None
+    assert request.history[0].content is not None
 
 
 def test_calc_tokens_accepts_completion_compatible_empty_attachments() -> None:
