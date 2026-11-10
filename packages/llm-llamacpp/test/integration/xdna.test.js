@@ -72,8 +72,16 @@ const FALLBACK_MODEL = 'Llama-3.2-1B-Instruct-Q4_0.gguf'
 // Qwen3.5-0.8B-Q8_0.gguf) is refused at the first decode.
 const NPU_MODEL = 'Qwen3.5-0.8B-Q4_K_M.gguf'
 
+// Bare has no global `process`, so read through bare-os first, as
+// kv-cache-extended.test.js does.
+function readEnv(key) {
+  if (typeof os.getEnv === 'function') return os.getEnv(key) || ''
+  if (typeof process !== 'undefined' && process.env) return process.env[key] || ''
+  return ''
+}
+
 function npuModels() {
-  const fromEnv = (process.env && process.env.XDNA_TEST_MODELS) || ''
+  const fromEnv = readEnv('XDNA_TEST_MODELS')
   const names = fromEnv
     .split(',')
     .map((name) => name.trim())
