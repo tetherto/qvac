@@ -157,7 +157,9 @@ export {
   buildToolSearchTool,
   executeToolSearch,
   loadedToolNames,
-  searchDeferredTools
+  resolveToolSearchSource,
+  searchDeferredTools,
+  type ToolSearchSource
 } from '@/utils/tools/defer'
 export { untilAborted } from '@/utils/until-aborted'
 
@@ -209,6 +211,9 @@ export {
   ModelNotLoadedError,
   ModelRegistryModelNotFoundError,
   TranslationFailedError,
+  InvalidSeedFromParamsError,
+  KvCacheSeedSourceNotFoundError,
+  KvCacheSeedSharingDisabledError,
   PluginDefinitionInvalidError,
   PluginModelTypeReservedError,
   PluginAlreadyRegisteredError,

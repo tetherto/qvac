@@ -19,6 +19,7 @@ from typing import Any
 
 from tetherto.qvac_sdk import (
     BciTranscribeRequest,
+    CalcTokensRequest,
     DownloadAssetRequest,
     EmbedRequest,
     FinetuneRequest,
@@ -35,6 +36,7 @@ from tetherto.qvac_sdk import (
     VectorIndexRequest,
     bci_transcribe,
     bci_transcribe_stream_session,
+    calc_tokens,
     cancel,
     completion,
     delete_cache,
@@ -374,6 +376,12 @@ async def _get_loaded_model_info(transport: Any, params: dict[str, Any]) -> Any:
     return _jsonable(response.info)
 
 
+async def _calc_tokens(transport: Any, params: dict[str, Any]) -> Any:
+    request = CalcTokensRequest.model_validate({"type": "calcTokens", **params})
+    response = await calc_tokens(transport, request)
+    return response.tokens
+
+
 async def _vla_hparams(transport: Any, params: dict[str, Any]) -> Any:
     """The loaded VLA model's hyperparameters, named the way JS names them."""
     hparams, backend_name = await vla_hparams(transport, model_id=params["modelId"])
@@ -604,6 +612,7 @@ CALLS: dict[str, Callable[[Any, dict[str, Any]], Any]] = {
     ),
     "getModelInfo": _get_model_info,
     "getLoadedModelInfo": _get_loaded_model_info,
+    "calcTokens": _calc_tokens,
     # --- registry ------------------------------------------------------------
     "modelRegistryList": lambda transport, params: model_registry_list(transport),
     "modelRegistrySearch": lambda transport, params: model_registry_search(
@@ -667,6 +676,9 @@ CALLS: dict[str, Callable[[Any, dict[str, Any]], Any]] = {
     # the id the worker assigned.
     "vectorIndexAdd": _request(
         VectorIndexRequest, "vectorIndex", vector_index, operation="add"
+    ),
+    "vectorIndexSetStagedSearch": _request(
+        VectorIndexRequest, "vectorIndex", vector_index, operation="setStagedSearch"
     ),
     "vectorIndexRemove": _request(
         VectorIndexRequest, "vectorIndex", vector_index, operation="remove"
@@ -744,6 +756,7 @@ async def _completion_stream(
         tool_dialect=params.get("toolDialect"),
         kv_cache=params.get("kvCache"),
         prefill=params.get("prefill"),
+        seed_from=params.get("seedFrom"),
         capture_thinking=params.get("captureThinking"),
         emit_raw_deltas=params.get("emitRawDeltas"),
     )
