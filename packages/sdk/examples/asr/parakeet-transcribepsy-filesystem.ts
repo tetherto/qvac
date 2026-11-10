@@ -2,7 +2,7 @@
  * TranscribePsy transcription from an audio file.
  *
  * Usage:
- *   npx tsx examples/asr/parakeet-transcribepsy-filesystem.ts <audio-file> [--coreml] [--window-sec <seconds>]
+ *   npx tsx examples/asr/parakeet-transcribepsy-filesystem.ts <audio-file> [--eu [--language en|other|auto]] [--coreml] [--window-sec <seconds>]
  *
  * TranscribePsy-250M-EU-sub is a 254M Parakeet-TDT distilled for Dutch,
  * English, French, German, Italian, Polish, Portuguese and Spanish; the engine
@@ -12,6 +12,13 @@
  * (`PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0`): the SDK downloads its
  * encoder and decoder bundles with the GGUF, and both stages run on the Neural
  * Engine. Anywhere else that constant is refused at load time.
+ *
+ * `--eu` loads the full 25-language TranscribePsy-250M-EU instead
+ * (`PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0`): one GGUF with its CAFE language
+ * adapters and gate embedded, ggml on every platform, no Core ML distribution.
+ * `--language` picks its route: `en` for the English trunk, `other` for the
+ * non-English adapters, or `auto` (the default) to let the gate decide from
+ * the first seconds of the recording.
  *
  * Long recordings are encoded in overlapping windows, so memory stays flat
  * however long the file is. Without `--window-sec` the engine uses the 60 s
@@ -24,23 +31,42 @@ import {
   unloadModel,
   transcribe,
   PARAKEET_TRANSCRIBEPSY_250M_Q8_0,
-  PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0
+  PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0,
+  PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0
 } from '@qvac/sdk'
 
 const ENCODER_FRAMES_PER_SECOND = 12.5
 const RECOMMENDED_OVERLAP = 0.25
+const EU_LANGUAGES = ['en', 'other', 'auto'] as const
+type EuLanguage = (typeof EU_LANGUAGES)[number]
+
+const USAGE =
+  'Usage: npx tsx examples/asr/parakeet-transcribepsy-filesystem.ts <audio-file> ' +
+  '[--eu [--language en|other|auto]] [--coreml] [--window-sec <seconds>]'
 
 const args = process.argv.slice(2)
-const audioFilePath = args.find((arg) => !arg.startsWith('--'))
+const valueFlags = new Set(['--window-sec', '--language'])
+const audioFilePath = args.find(
+  (arg, index) => !arg.startsWith('--') && !valueFlags.has(args[index - 1] ?? '')
+)
 const useCoreml = args.includes('--coreml')
+const useEu = args.includes('--eu')
 const windowIndex = args.indexOf('--window-sec')
 const windowSeconds = windowIndex === -1 ? undefined : Number(args[windowIndex + 1])
+const languageIndex = args.indexOf('--language')
+const language = languageIndex === -1 ? undefined : args[languageIndex + 1]
 
-if (!audioFilePath || (windowSeconds !== undefined && !(windowSeconds > 0))) {
-  console.error(
-    'Usage: npx tsx examples/asr/parakeet-transcribepsy-filesystem.ts <audio-file> ' +
-      '[--coreml] [--window-sec <seconds>]'
-  )
+function isEuLanguage(value: string | undefined): value is EuLanguage {
+  return (EU_LANGUAGES as readonly string[]).includes(value ?? '')
+}
+
+if (
+  !audioFilePath ||
+  (windowSeconds !== undefined && !(windowSeconds > 0)) ||
+  (useEu && useCoreml) ||
+  (language !== undefined && (!useEu || !isEuLanguage(language)))
+) {
+  console.error(USAGE)
   process.exit(1)
 }
 
@@ -56,16 +82,27 @@ const longForm =
         )
       }
 
-const modelSrc = useCoreml
-  ? PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0
-  : PARAKEET_TRANSCRIBEPSY_250M_Q8_0
+// The EU route only means something to the full model; EU-sub has no gate.
+const route = useEu && language !== undefined ? { language } : {}
+
+const modelSrc = useEu
+  ? PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0
+  : useCoreml
+    ? PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0
+    : PARAKEET_TRANSCRIBEPSY_250M_Q8_0
+
+const variant = useEu
+  ? `EU, 25 languages, route ${language ?? 'auto'}`
+  : useCoreml
+    ? 'EU-sub, Core ML distribution'
+    : 'EU-sub, ggml'
 
 try {
-  console.log(`▸ Loading TranscribePsy (${useCoreml ? 'Core ML distribution' : 'ggml'})...`)
+  console.log(`▸ Loading TranscribePsy (${variant})...`)
   const modelId = await loadModel({
     modelSrc,
     modelType: 'parakeet-transcription',
-    modelConfig: longForm,
+    modelConfig: { ...longForm, ...route },
     onProgress: (p) => {
       const mb = (n: number) => (n / 1e6).toFixed(1)
       const line = `▸ Downloading ${p.percentage.toFixed(0)}% (${mb(p.downloaded)}/${mb(p.total)} MB)`
