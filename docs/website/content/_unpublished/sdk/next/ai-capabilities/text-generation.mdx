@@ -348,6 +348,31 @@ On hybrid and recurrent models (Qwen3.5, Jamba, DeepSeek V4) and on sliding-wind
 - `cache_ram_mib`: host-RAM budget, in MiB, for cached conversations that are not running, so switching back to a caller-managed `kvCache` key skips reading its cache file. Default `0` (off).
 - `cache_share_across_keys`: whether requests may reuse a prefix held by another conversation. Default `false`; set `true` to opt in to model-wide sharing.
 
+#### Start a chat from a primed cache
+
+In-memory reuse only helps while the base conversation is still loaded. To start a chat from a caller-managed cache that may no longer be in memory, such as a system prompt and tools primed with `prefill` in an earlier session, pass its key as `seedFrom`:
+
+```js
+// The model is loaded with `cache_share_across_keys: true` in its modelConfig.
+// Prime the base once.
+await completion({ modelId, history: systemAndTools, stream: false, kvCache: "base", prefill: true }).final;
+
+// Each new chat starts from it and processes only its own message.
+completion({
+  modelId,
+  history: [...systemAndTools, { role: "user", content: "First question" }],
+  stream: true,
+  kvCache: "chat-2",
+  seedFrom: "base",
+});
+```
+
+- `seedFrom` needs a string `kvCache` other than itself; it has no meaning for the auto cache.
+- The model reads the `seedFrom` cache and reuses the prefix it shares with the prompt, so a history that does not continue the base reuses less, down to nothing on hybrid and recurrent models. The source is never written; the chat's own key is.
+- It applies only while the chat's `kvCache` key has no cache. Once the chat has one, later turns ignore it.
+- The call is refused when no cache named `seedFrom` exists for the model and system prompt, or when the model was not loaded with `cache_share_across_keys: true`, which is off by default.
+- The source must have been saved by a model loaded with the same `parallel` value.
+
 #### Prepare the system prompt and tools ahead of time
 
 Use `prefill: true` to evaluate a prompt before the first question arrives. It requires `kvCache: true` or a nonempty named key and finishes with stats, no answer and no tool calls. Await the priming run before sending the question:

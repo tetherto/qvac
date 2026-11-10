@@ -241,6 +241,7 @@ def completion(
     generation_params: dict[str, Any] | None = None,
     kv_cache: Any = None,
     prefill: bool | None = None,
+    seed_from: str | None = None,
     capture_thinking: bool | None = None,
     emit_raw_deltas: bool | None = None,
     tool_dialect: str | None = None,
@@ -272,6 +273,8 @@ def completion(
         payload["kvCache"] = kv_cache
     if prefill is not None:
         payload["prefill"] = prefill
+    if seed_from is not None:
+        payload["seedFrom"] = seed_from
     if capture_thinking is not None:
         payload["captureThinking"] = capture_thinking
     if emit_raw_deltas is not None:
@@ -343,6 +346,7 @@ def completion_orchestrate(
     generation_params: dict[str, Any] | None = None,
     kv_cache: Any = None,
     prefill: bool | None = None,
+    seed_from: str | None = None,
     capture_thinking: bool | None = None,
     tool_dialect: str | None = None,
     request_id: str | None = None,
@@ -390,6 +394,8 @@ def completion_orchestrate(
         payload["kvCache"] = kv_cache
     if prefill is not None:
         payload["prefill"] = prefill
+    if seed_from is not None:
+        payload["seedFrom"] = seed_from
     if generation_params is not None:
         payload["generationParams"] = generation_params
     if capture_thinking is not None:
