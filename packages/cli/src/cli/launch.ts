@@ -19,7 +19,7 @@ const kitRoot = import.meta.url.startsWith('file:')
 
 // tree: the product's commands; name: the bin, as usage errors say it; root and version: the
 // product's package; dataDir: where its state goes unless a flag or qvac.config says;
-// launcher: how the app calls back; runApp starts it
+// launcher: how the app calls back; runApp starts it; release: a standalone's release.json
 export async function launch(
   args: string[],
   {
@@ -30,6 +30,7 @@ export async function launch(
     dataDir: defaultDataDir,
     launcher,
     runApp,
+    release,
     node = process.execPath
   }: {
     tree: CommandTree
@@ -39,6 +40,7 @@ export async function launch(
     dataDir: string
     launcher: LaunchOptions['launcher'] | null
     runApp(options: LaunchOptions, env: NodeJS.ProcessEnv): Promise<void> | void
+    release?: string
     node?: string
   }
 ) {
@@ -68,7 +70,7 @@ export async function launch(
 
   const { command, action, words, options, where } = parsed
   if (command === 'version') {
-    console.log(versionText(root))
+    console.log(versionText(root, release))
     return
   }
 

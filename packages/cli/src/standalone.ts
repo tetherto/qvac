@@ -28,6 +28,7 @@ await launch(Bare.argv.slice(1), {
   version: packageVersion(root),
   dataDir: path.join(os.homedir(), '.qvac', 'cli'),
   launcher: null,
+  release: fileURLToPath(entries.release),
   node: 'node',
   async runApp(options: LaunchOptions, env) {
     Object.assign(process.env, env)

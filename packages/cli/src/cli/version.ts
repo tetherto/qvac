@@ -5,12 +5,17 @@ export function packageVersion(root: string) {
   return readJson(path.join(root, 'package.json'))!.version
 }
 
-export function versionText(root: string) {
+// release: the standalone's release.json, which names what it was built from; it has no
+// node_modules to read
+export function versionText(root: string, release?: string) {
   const { name, version } = readJson(path.join(root, 'package.json'))!
   const lines = [`${name} ${version}`]
+  const built: Record<string, string> | null = release
+    ? JSON.parse(fs.readFileSync(release, 'utf8')).versions
+    : null
   for (const name of ['core', 'harness']) {
-    const installed = installedVersion(root, `@qvac/${name}`)
-    lines.push(`${name.padEnd(8)} ${installed ? installed.version : 'not installed'}`)
+    const installed = built?.[`@qvac/${name}`] ?? installedVersion(root, `@qvac/${name}`)?.version
+    lines.push(`${name.padEnd(8)} ${installed ?? 'not installed'}`)
   }
 
   const bare = installedVersion(root, 'bare-runtime')
