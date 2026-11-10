@@ -14,6 +14,14 @@ type Rule = {
 
 const RULES: Rule[] = [
   {
+    match: /^image-embedding-/,
+    skip: {
+      reason:
+        'MegaLoc inference uses a shared JS executor; Python and Kotlin runners do not implement it.',
+      platforms: ['desktop-python', 'kotlin-android']
+    }
+  },
+  {
     match: /^tts-moss-/,
     skip: {
       reason:
@@ -77,6 +85,18 @@ const RULES: Rule[] = [
       reason:
         'Asserts on Bare worker processes outside the packaged app lifecycle, on Electron and Snap alike',
       platforms: ['electron', 'snap']
+    }
+  },
+  {
+    match: [
+      'kv-cache-seed-ignored-once-cached',
+      'kv-cache-seed-without-named-key',
+      'kv-cache-seed-missing-source',
+      'kv-cache-seed-different-system-prompt'
+    ],
+    skip: {
+      reason: 'Step-based with no hand-written body: the React Native runner has no step bindings',
+      platforms: ['mobile-ios', 'mobile-android']
     }
   },
   {

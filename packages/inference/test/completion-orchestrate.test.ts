@@ -414,7 +414,8 @@ test('orchestrateCompletion: runs tool_search itself and never asks the client',
   const searchResult = seenHistories[1]?.at(-1)
   t.is(searchResult?.role, 'tool', 'the search result was appended as a tool message')
   t.ok(
-    searchResult?.content.includes('"loaded":["create_issue"]'),
+    typeof searchResult?.content === 'string' &&
+      searchResult.content.includes('"loaded":["create_issue"]'),
     'the next turn reads the loaded tool back from the history'
   )
   t.ok(
@@ -451,4 +452,50 @@ test('orchestrateCompletion: a caller-declared tool_search goes to the client wh
   const callbacks = frames.filter((frame) => frame.toolCallback)
   t.is(callbacks.length, 1, 'the call is delegated to the caller')
   t.is(callbacks[0]?.toolCallback?.name, 'tool_search')
+})
+
+test('orchestrateCompletion: tool_search applies the request toolSearch limits', async (t) => {
+  const tools = Array.from({ length: 6 }, (_, index) => ({
+    type: 'function' as const,
+    name: `repo_tool_${index}`,
+    description: 'Act on a repository',
+    deferLoading: true,
+    parameters: { type: 'object' as const, properties: {} }
+  }))
+
+  let turn = 0
+  const seenHistories: CompletionStreamRequest['history'][] = []
+  const seenToolSearch: CompletionStreamRequest['toolSearch'][] = []
+  async function* runTurn(request: CompletionStreamRequest) {
+    seenHistories.push(request.history)
+    seenToolSearch.push(request.toolSearch)
+    turn++
+    if (turn === 1) yield toolTurn('call-1', 'tool_search', { query: 'repository' })
+    else if (turn === 2) yield toolTurn('call-2', 'tool_search', { query: 'repository', limit: 9 })
+    else yield contentTurn('Done.')
+  }
+
+  await collect(
+    orchestrateCompletion(
+      baseRequest({ tools, toolSearch: { defaultLimit: 1, maxLimit: 2 } }),
+      runTurn,
+      stubReader({})
+    )
+  )
+
+  const result = (content: unknown) =>
+    (
+      JSON.parse(typeof content === 'string' ? content : '{}') as {
+        tool_search: { loaded: string[]; already_loaded: string[] }
+      }
+    ).tool_search
+  t.alike(result(seenHistories[1]?.at(-1)?.content).loaded, ['repo_tool_0'], 'defaultLimit applies')
+  t.alike(
+    result(seenHistories[2]?.at(-1)?.content),
+    { query: 'repository', loaded: ['repo_tool_1'], already_loaded: ['repo_tool_0'] },
+    'a larger limit is capped at maxLimit'
+  )
+  for (const toolSearch of seenToolSearch) {
+    t.alike(toolSearch, { defaultLimit: 1, maxLimit: 2 }, 'every turn renders the same limits')
+  }
 })
