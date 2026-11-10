@@ -129,6 +129,13 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   // first visible character.
   let trimAfterThinking = false
 
+  // The same framing whitespace sits inside a thinking frame: templates open
+  // with `<think>\n` and close with `\n</think>`. Leading whitespace is dropped
+  // until the reasoning's first visible character; trailing whitespace is held
+  // back and only emitted once more reasoning follows it, so a close drops it.
+  let trimThinkingStart = false
+  let pendingThinkingWhitespace = ''
+
   // Trailing chars that could be a prefix of a watched marker, so markers
   // split across token pushes aren't missed by indexOf.
   let contentTail = ''
@@ -198,11 +205,29 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
   // is false (e.g. harmony's analysis channel, to strip markers from
   // `contentDelta`) — drop the inner here instead of buffering it.
   function emitThinking(events: CompletionEvent[], text: string) {
-    if (!text) return
-    if (config.captureThinking) {
-      thinkingParts.push(text)
-      events.push({ type: 'thinkingDelta', seq: nextSeq(), text })
+    let normalized = text
+    if (trimThinkingStart) {
+      normalized = normalized.replace(/^\s+/, '')
+      if (normalized) trimThinkingStart = false
     }
+    if (!normalized) return
+    const body = normalized.replace(/\s+$/, '')
+    if (!body) {
+      pendingThinkingWhitespace += normalized
+      return
+    }
+    const out = pendingThinkingWhitespace + body
+    pendingThinkingWhitespace = normalized.slice(body.length)
+    if (config.captureThinking) {
+      thinkingParts.push(out)
+      events.push({ type: 'thinkingDelta', seq: nextSeq(), text: out })
+    }
+  }
+
+  function endThinkingFrame() {
+    activeThinkingFrame = null
+    trimThinkingStart = false
+    pendingThinkingWhitespace = ''
   }
 
   function getToolCallKey(call: ToolCall) {
@@ -370,7 +395,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
         if (closeIdx >= 0) {
           emitThinking(events, buf.slice(0, closeIdx))
           buf = buf.slice(closeIdx + closeMarker.length)
-          activeThinkingFrame = null
+          endThinkingFrame()
           trimAfterThinking = contentParts.length === 0
           state = 'content'
           continue
@@ -426,6 +451,8 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
           state = 'toolFraming'
         } else if (entry.kind === 'thinking') {
           activeThinkingFrame = entry.spec
+          trimThinkingStart = true
+          pendingThinkingWhitespace = ''
           state = 'thinkingFraming'
         } else {
           activeContentFrame = entry.spec
@@ -490,7 +517,7 @@ export function createCompletionNormalizer(config: NormalizerConfig) {
     } else if (state === 'contentFraming') {
       activeContentFrame = null
     }
-    activeThinkingFrame = null
+    endThinkingFrame()
     state = 'content'
 
     if (!opts?.error) {

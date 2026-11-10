@@ -133,7 +133,44 @@ test('captureThinking true: drops the blank line between </think> and the answer
 
   t.is(texts(events, 'contentDelta')[0], 'Answer', 'first content delta starts with the answer')
   t.is(n.getAccumulated().contentText, 'Answer\n\nMore', 'whitespace inside the answer is kept')
-  t.is(n.getAccumulated().thinkingText, '\nplan it\n', 'reasoning text is unchanged')
+  t.is(n.getAccumulated().thinkingText, 'plan it', 'reasoning loses its framing newlines')
+})
+
+test('captureThinking true: reasoning drops edge whitespace but keeps its own', (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({ capabilities: THINKING_CAPS, captureThinking: true })
+  )
+  const events = [
+    ...pushAll(n, ['<think>', '\n', 'step one', '\n\n', 'step two', ' \n', '</think>', 'Answer']),
+    ...n.finish()
+  ]
+
+  t.is(n.getAccumulated().thinkingText, 'step one\n\nstep two')
+  t.ok(
+    texts(events, 'thinkingDelta').every((text) => text.trim().length > 0),
+    'no whitespace-only thinking delta is emitted'
+  )
+  t.is(n.getAccumulated().contentText, 'Answer')
+})
+
+test('captureThinking true: reasoning cut off before its close drops trailing whitespace', (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({ capabilities: THINKING_CAPS, captureThinking: true })
+  )
+  pushAll(n, ['<think>\n', 'half way', '\n'])
+  n.finish()
+
+  t.is(n.getAccumulated().thinkingText, 'half way')
+})
+
+test('harmony analysis frame: edge newlines in the reasoning are dropped', (t) => {
+  const n = createCompletionNormalizer(
+    baseConfig({ capabilities: NONE_CAPS, toolDialect: 'harmony', captureThinking: true })
+  )
+  pushAll(n, ['<|channel|>analysis<|message|>\nplan\n<|end|>'])
+  n.finish()
+
+  t.is(n.getAccumulated().thinkingText, 'plan')
 })
 
 test('captureThinking true: an empty think block leaves no leading whitespace', (t) => {
