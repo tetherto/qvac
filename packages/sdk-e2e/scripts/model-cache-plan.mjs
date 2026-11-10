@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 /**
- * Plan the models a CI leg needs and where the SDK keeps each one, for
- * .github/actions/sdk-e2e-model-cache. Selection: the run's tests (`selectRunTests`), their
- * deps, then every model constant the bootstrap would download. Where each model lives comes
- * from `@qvac/inference/model-cache-layout`, so the inference build the run loads decides.
+ * Plan the models a CI leg's tests need and where the SDK keeps each one, for
+ * .github/actions/sdk-e2e-model-cache.
  *
  *   node scripts/model-cache-plan.mjs --family desktop --suite smoke --out plan.json
  *   node scripts/model-cache-plan.mjs --family desktop,python,electron --out plan.json   # seed
@@ -18,11 +16,14 @@
  *
  * Must run after `npm run build`: it reads the compiled catalog and runners.
  */
-import { createHash } from 'node:crypto'
 import { mkdirSync, writeFileSync, appendFileSync } from 'node:fs'
 import { dirname, resolve, relative } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
+import {
+  planEntries,
+  shortHash
+} from '../../../.github/actions/sdk-e2e-model-cache/src/entries.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const projectDir = resolve(here, '..')
@@ -153,48 +154,19 @@ for (const family of families) {
   )
 }
 
-const sha256 = (text) => createHash('sha256').update(text, 'utf8').digest('hex')
-const shortHash = (text) => sha256(text).slice(0, 16)
 const byPath = new Map(
   sdk.models.map((item) => [`${item.registrySource}:${item.registryPath}`, item])
 )
-const byName = new Map(sdk.models.map((item) => [item.name, item]))
-
-// One entry per cached path; aliases of a registry model, and the seed's legs, share it.
-const byLayout = new Map()
+const layouts = []
 const unresolved = new Set()
 for (const { constant } of constants) {
-  const item =
-    byPath.get(`${constant.registrySource}:${constant.registryPath}`) ?? byName.get(constant.name)
+  const item = byPath.get(`${constant.registrySource}:${constant.registryPath}`)
   const layout = item && getModelCacheLayout(item, INFERENCE_PLATFORM[values.os], shortHash)
-  if (!layout) {
-    unresolved.add(constant.name)
-    continue
-  }
-  const known = byLayout.get(layout.path)
-  if (known) {
-    if (!known.models.includes(constant.name)) known.models.push(constant.name)
-    continue
-  }
-  const single = layout.files.length === 1 && layout.files[0].path === layout.path
-  byLayout.set(layout.path, {
-    // The key: a file's own checksum, or a digest of a set's file names and checksums.
-    contentId: single
-      ? layout.files[0].sha256
-      : sha256(
-          layout.files
-            .map((file) => `${file.path.slice(layout.path.length)}:${file.sha256}`)
-            .sort()
-            .join('\n')
-        ),
-    path: `${cacheRoot}/${layout.path}`,
-    files: layout.files.map((file) => ({ ...file, path: `${cacheRoot}/${file.path}` })),
-    size: layout.files.reduce((sum, file) => sum + file.size, 0),
-    models: [constant.name]
-  })
+  if (layout) layouts.push({ name: constant.name, layout })
+  else unresolved.add(constant.name)
 }
 
-const entries = [...byLayout.values()].sort((a, b) => (a.path < b.path ? -1 : 1))
+const entries = planEntries(cacheRoot, layouts)
 const plan = { version: 1, cacheRoot, legs, entries, unresolved: [...unresolved].sort() }
 const bytes = entries.reduce((sum, entry) => sum + entry.size, 0)
 

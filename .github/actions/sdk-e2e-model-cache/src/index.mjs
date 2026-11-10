@@ -1,4 +1,3 @@
-// See action.yml for the contract.
 import * as cache from '@actions/cache'
 import * as core from '@actions/core'
 import fs from 'node:fs'
@@ -13,12 +12,11 @@ import {
   validatePlan
 } from './entries.mjs'
 
-// Never save from PR code (A13). Callers gate the step too; this catches a mis-wired caller.
+// A13: never save from PR code, even if a caller is mis-wired.
 const TRUSTED_EVENTS = new Set(['push', 'schedule', 'workflow_dispatch', 'merge_group'])
 const CONCURRENCY = 4
 
-// After saveCache returns -1, a seed waits for another job finalizing the same entry; a test leg
-// checks once, so a server rejecting writes does not cost it minutes.
+// A seed waits for a parallel save to finalize; a test leg looks once.
 const SEED_LOOKUP_ATTEMPTS = 3
 const LOOKUP_DELAY_MS = 20_000
 
@@ -53,7 +51,6 @@ async function restore(plan, lookupOnly) {
     })
   )
   const restored = plan.entries.filter((_, index) => hits[index])
-  // Unresolved constants have no entry; the bootstrap still fetches them.
   const toDownload = [
     ...plan.entries.filter((_, index) => !hits[index]).flatMap((entry) => entry.models),
     ...plan.unresolved
@@ -82,8 +79,7 @@ async function saveEntry(entry, lookupAttempts) {
     core.warning(`Not saving ${label(entry)}: ${mismatch} does not match its registry checksum`)
     return 'skipped'
   }
-  // saveCache swallows upload errors, and on cache service v1 still returns the reserved id, so
-  // only a lookup shows whether the entry exists. -1 with an entry: another job saved it.
+  // On cache service v1, saveCache returns an id even when the upload fails.
   const id = await cache.saveCache(cachePaths(entry), cacheKey(entry), {}, true)
   if (await exists(entry, lookupAttempts)) return id === -1 ? 'present' : 'saved'
   core.warning(`Save of ${label(entry)} under ${cacheKey(entry)} did not create an entry`)

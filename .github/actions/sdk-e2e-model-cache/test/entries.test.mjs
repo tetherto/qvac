@@ -10,6 +10,8 @@ import {
   firstChecksumMismatch,
   isComplete,
   mapWithConcurrency,
+  planEntries,
+  shortHash,
   unplannedPaths,
   validatePlan
 } from '../src/entries.mjs'
@@ -47,6 +49,48 @@ test('the key is the content id; the archive is the exact file list', () => {
   assert.equal(cacheKey(single), `sdk-e2e-model-v1-${sha('abcd')}`)
   assert.deepEqual(cachePaths(single), ['c/0123_m.gguf'])
   assert.deepEqual(cachePaths(set), ['c/sets/s1/a.bin', 'c/sets/s1/b.mlmodelc/weight.bin'])
+})
+
+// Golden values: a change here makes every saved entry miss.
+test('planned keys and file lists stay stable', () => {
+  const file = {
+    path: '0123_m.gguf',
+    files: [{ path: '0123_m.gguf', size: 4, sha256: sha('abcd') }]
+  }
+  const files = {
+    path: 'sets/s1',
+    files: [
+      { path: 'sets/s1/b.mlmodelc/weight.bin', size: 3, sha256: sha('bbb') },
+      { path: 'sets/s1/a.bin', size: 2, sha256: sha('aa') }
+    ]
+  }
+  const entries = planEntries(root, [
+    { name: 'S', layout: files },
+    { name: 'M', layout: file },
+    { name: 'M2', layout: file }
+  ])
+  assert.deepEqual(
+    entries.map((entry) => [cacheKey(entry), cachePaths(entry), entry.models, entry.size]),
+    [
+      [
+        'sdk-e2e-model-v1-88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589',
+        ['c/0123_m.gguf'],
+        ['M', 'M2'],
+        4
+      ],
+      [
+        'sdk-e2e-model-v1-5b142a4a34bec46ecd2d0deff02254995ea3a77d53c2f68f506e12886b268f0d',
+        ['c/sets/s1/a.bin', 'c/sets/s1/b.mlmodelc/weight.bin'],
+        ['S'],
+        5
+      ]
+    ]
+  )
+})
+
+// packages/inference/test/cache-layout.test.ts pins the same vector.
+test('shortHash matches generateShortHash', () => {
+  assert.equal(shortHash('qvac'), '2b1b75c24c602c43')
 })
 
 test('complete means every pinned file at its exact size', () => {

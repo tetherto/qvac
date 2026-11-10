@@ -1,9 +1,7 @@
 import { models, type RegistryItem } from '@/models/registry/models'
 
-// Where the models cache keeps each registry model, as pure functions of the
-// catalog: no fs, no runtime state, no bare-* imports, so a Node script can
-// plan around the cache before anything is downloaded. The loader uses the
-// same rules (paths.ts, shard-utils.ts, coreml-sidecars.ts).
+// Where the models cache keeps each registry model. Pure (no fs or bare-*
+// imports) so Node can load it; the loader uses the same rules.
 
 /** detectShardedModel's filename pattern: `<base>-00001-of-00004.gguf`. */
 export const SHARD_FILENAME_PATTERN = /^(.+)-(\d{5})-of-(\d{5})(\.\w+)$/
@@ -201,15 +199,9 @@ export type ModelCacheLayout = {
 }
 
 /**
- * Where the loader keeps `model` on `platform`, or `undefined` for what this
- * does not describe: a sharded model (kept under `sharded/`; without catalog
- * shard metadata the loader lists its shards from the live registry), or a
- * Core ML model whose bundles the catalog lacks (the loader then asks the live
- * registry). Same order as downloadModelFromRegistry:
- * sharded, Core ML set, companion set, single file.
- *
- * `shortHash` is generateShortHash; it is a parameter because that one runs on
- * bare-crypto, and this module must load in Node too.
+ * Where the loader keeps `model`, or `undefined` for a sharded model or a Core
+ * ML model whose bundles the catalog lacks: their files can come from the live
+ * registry. `shortHash` is generateShortHash, passed in to avoid bare-crypto.
  */
 export function getModelCacheLayout(
   model: RegistryItem,

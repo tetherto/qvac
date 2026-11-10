@@ -14,9 +14,7 @@ import { modelInputToSrcSchema, registryUrlSchema } from '@/schemas/index'
 import { promises as fsPromises } from 'bare-fs'
 import { z } from 'zod'
 
-// The Core ML family table and the catalog lookups live in utils/cache/layout.ts,
-// which plans the cache layout without fs. This file adds the cache metadata
-// and the live registry lookup.
+// Family table and catalog lookups: utils/cache/layout.ts.
 export { getCoremlSidecarSpec, type CoremlSidecarSpec }
 
 type CompanionSet = NonNullable<RegistryItem['companionSet']>

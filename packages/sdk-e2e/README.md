@@ -368,7 +368,8 @@ one copy of a model:
    downloads only what the restore did not provide.
 3. Only trusted runs save, and only files whose sha256 matches the registry:
    `on-merge-sdk-e2e-model-cache.yml` (push to `main`, every two days, dispatch) and a `test-sdk.yml`
-   dispatch. A model a PR adds is downloaded on that PR's runs until it reaches `main`.
+   dispatch on `main`. A dispatch on another branch saves into that branch's cache scope, which PR
+   runs do not read. A model a PR adds is downloaded on that PR's runs until it reaches `main`.
 
 To see what a selection would restore, with `@qvac/inference` built from the branch:
 

@@ -1,9 +1,7 @@
 name: On Merge SDK E2E Model Cache
 
-# Seeds the per-model SDK e2e cache (.github/actions/sdk-e2e-model-cache). PR legs only restore,
-# so this and a test-sdk.yml dispatch write entries. Each OS leg plans the whole catalog, probes
-# the cache and downloads and saves only what is missing. Legs run in sequence so a later one
-# reuses what an earlier one saved (Linux and Windows share entries; macOS adds Core ML sets).
+# Seeds the per-model SDK e2e cache with what it lacks. Legs run in sequence so a later one
+# reuses an earlier one's entries (Linux and Windows share them; macOS adds Core ML sets).
 
 on:
   push:

@@ -213,6 +213,7 @@ jobs:
             ${{ inputs.working-directory }}
             packages/inference
             .github/actions/sdk-e2e-fail-on-failures
+            .github/actions/sdk-e2e-model-cache/src
             .github/actions/sdk-e2e-prepare-inference
             .github/actions/sdk-e2e-prepare-test-suite
 

@@ -1,23 +1,53 @@
-// Pure helpers for the cache action, free of @actions/* so they run under `node --test`.
+// No @actions/* imports: also used by scripts/model-cache-plan.mjs and the tests.
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 
 const KEY_PREFIX = 'sdk-e2e-model-v1'
 
+const sha256 = (text) => createHash('sha256').update(text, 'utf8').digest('hex')
+
+/** @qvac/inference's generateShortHash, which needs bare-crypto. */
+export const shortHash = (text) => sha256(text).slice(0, 16)
+
+/** One entry per cached path. contentId and file paths are the cache key and version. */
+export function planEntries(cacheRoot, models) {
+  const byPath = new Map()
+  for (const { name, layout } of models) {
+    const known = byPath.get(layout.path)
+    if (known) {
+      if (!known.models.includes(name)) known.models.push(name)
+      continue
+    }
+    const single = layout.files.length === 1 && layout.files[0].path === layout.path
+    byPath.set(layout.path, {
+      contentId: single
+        ? layout.files[0].sha256
+        : sha256(
+            layout.files
+              .map((file) => `${file.path.slice(layout.path.length)}:${file.sha256}`)
+              .sort()
+              .join('\n')
+          ),
+      path: `${cacheRoot}/${layout.path}`,
+      files: layout.files.map((file) => ({ ...file, path: `${cacheRoot}/${file.path}` })),
+      size: layout.files.reduce((sum, file) => sum + file.size, 0),
+      models: [name]
+    })
+  }
+  return [...byPath.values()].sort((a, b) => (a.path < b.path ? -1 : 1))
+}
+
 export function cacheKey(entry) {
   return `${KEY_PREFIX}-${entry.contentId}`
 }
 
-/**
- * The entry's exact files, sorted. Not the directory: actions/cache would tar it whole, `!`
- * exclusions included. The cache version hashes this list, so restore and save must match.
- */
+/** Exact files, not the directory, which actions/cache would tar whole. */
 export function cachePaths(entry) {
   return entry.files.map((file) => file.path).sort()
 }
 
-/** Every file on disk at its exact size, so a truncated restore is not a hit. */
+/** Exact sizes: a truncated restore is not a hit. */
 export function isComplete(entry, cwd = process.cwd()) {
   return entry.files.every((file) => {
     try {
@@ -39,7 +69,6 @@ function sha256File(file) {
   })
 }
 
-/** The first file whose sha256 is not the registry's, or `undefined`. */
 export async function firstChecksumMismatch(entry, cwd = process.cwd()) {
   for (const file of entry.files) {
     if ((await sha256File(path.resolve(cwd, file.path))) !== file.sha256) return file.path
@@ -47,7 +76,6 @@ export async function firstChecksumMismatch(entry, cwd = process.cwd()) {
   return undefined
 }
 
-/** Reject a plan from another schema, or one that would write outside the cache root. */
 export function validatePlan(plan) {
   if (plan?.version !== 1 || !Array.isArray(plan.entries) || !Array.isArray(plan.unresolved)) {
     throw new Error('not a version 1 model-cache plan')
@@ -66,10 +94,7 @@ export function validatePlan(plan) {
   return plan
 }
 
-/**
- * Cache-root items no entry covers: after a bootstrap, drift between the plan and the SDK.
- * `sharded/` is never planned (getModelCacheLayout leaves sharded models out), so it is skipped.
- */
+/** Cache-root items no entry covers (plan/SDK drift). `sharded/` is never planned. */
 export function unplannedPaths(plan, cwd = process.cwd()) {
   const covered = new Set(plan.entries.map((entry) => entry.path))
   const root = plan.cacheRoot
@@ -95,7 +120,6 @@ export function unplannedPaths(plan, cwd = process.cwd()) {
   return found
 }
 
-/** `worker` over `items`, at most `limit` at a time, results in input order. */
 export async function mapWithConcurrency(items, limit, worker) {
   const results = new Array(items.length)
   let next = 0

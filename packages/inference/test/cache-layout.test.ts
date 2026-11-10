@@ -12,6 +12,11 @@ const catalog: readonly RegistryItem[] = models
 const layoutOf = (model: RegistryItem, platform: string) =>
   getModelCacheLayout(model, platform, generateShortHash)
 
+// .github/actions/sdk-e2e-model-cache pins the same vector for its Node copy.
+test('generateShortHash matches the e2e cache planner', (t) => {
+  t.is(generateShortHash('qvac'), '2b1b75c24c602c43')
+})
+
 test('a single-file model is <shortHash(registryPath)>_<filename>', (t) => {
   const model = catalog.find(
     (entry) =>
