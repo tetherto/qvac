@@ -21,6 +21,10 @@
   `device: "npu"` and for any load that runs on the NPU alone, such as
   `devices: "XDNA0"`, which 0.69.0 allowed
   ([#5701](https://github.com/tetherto/qvac/pull/5701)).
+- When the NPU leads a load, a vision model's projector now defaults to a GPU
+  beside it (a GPU in `devices`, else the first local GPU) instead of the CPU,
+  and to the CPU only when there is no GPU. `mmproj-use-gpu` still overrides
+  it ([#5701](https://github.com/tetherto/qvac/pull/5701)).
 
 ## [0.69.0] - 2026-11-09
 

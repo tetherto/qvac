@@ -146,6 +146,11 @@ bool usesBackendFamily(
 // load.
 bool runsOnNpuOnly(const std::vector<backend_selection::SplitDevice>& devices);
 
+// The first local GPU of a device set: not RPC and not the NPU. Empty when
+// there is none. An NPU-led load runs its projector there.
+std::string
+firstLocalGpu(const std::vector<backend_selection::SplitDevice>& devices);
+
 void validateMobileMultiDeviceConfig(
     const ConfigMap& configFilemap, llama_split_mode splitMode);
 

@@ -1364,7 +1364,9 @@ namespace LlmLlamacpp {
      * per device class: GPU on desktop/iOS and Android Adreno 800+; CPU on all other
      * Android GPUs (Arm Mali, Adreno <800, and GPUs whose Adreno tier can't be
      * detected) — the LLM layers still run on the GPU while the projector stays on
-     * CPU. Only honoured when a GPU backend is selected (ignored with a warning on CPU).
+     * CPU. On an NPU load it defaults to a GPU beside the NPU, else the CPU; `true`
+     * with no GPU runs it on the NPU. Only honoured when a GPU or NPU backend is
+     * selected (ignored with a warning on CPU).
      */
     "mmproj-use-gpu"?: string;
     /** Writable directory for OpenCL kernel binary cache. Required on Android for fast GPU startup. */

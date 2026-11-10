@@ -742,6 +742,16 @@ bool runsOnNpuOnly(const std::vector<backend_selection::SplitDevice>& devices) {
              &backend_selection::SplitDevice::name);
 }
 
+std::string
+firstLocalGpu(const std::vector<backend_selection::SplitDevice>& devices) {
+  const auto gpu = std::ranges::find_if(
+      devices, [](const backend_selection::SplitDevice& device) {
+        return !device.isRpc &&
+               toLowerAscii(device.name).find("xdna") == std::string::npos;
+      });
+  return gpu != devices.end() ? gpu->name : std::string();
+}
+
 void tuneLoadConfigMap(
     std::unordered_map<std::string, std::string>& configFilemap,
     const ModelMetaData& metadata, const std::optional<int>& adrenoVersion,
@@ -1818,7 +1828,7 @@ NormalizedLoad normalizeLoadForFit(
           mmprojAdrenoVersion.has_value() &&
           mmprojAdrenoVersion.value() >= kAdrenoMmprojGpuThreshold;
       bool mmprojUseGpu = isAdreno800Plus;
-      const char* mmprojDefaultReason =
+      const std::string mmprojDefaultReason =
           isAdreno800Plus ? "auto-default, Adreno 800+"
                           : (selected.isMaliGpu
                                  ? "auto-default, Mali GPU"
@@ -1826,24 +1836,45 @@ NormalizedLoad normalizeLoadForFit(
                                         ? "auto-default, Adreno <800"
                                         : "auto-default, non-Adreno-800+ GPU"));
 #else
-      // The projector is untested on the XDNA NPU, so it stays on the CPU
-      // unless mmproj-use-gpu asks for the NPU.
+      // The projector is untested on the XDNA NPU. When the NPU leads the load,
+      // it runs on a GPU: one of the split, else the first local GPU the split
+      // rules pick. With no GPU it runs on the CPU; mmproj-use-gpu: true then
+      // puts it on the NPU.
       const bool projectorOnXdna =
           useNpu || usesBackendFamily(true, selected.name, {}, "xdna");
-      bool mmprojUseGpu = !projectorOnXdna;
-      const char* mmprojDefaultReason =
-          projectorOnXdna ? "auto-default, XDNA NPU" : "auto-default";
+      bool mmprojUseGpu = true;
+      std::string mmprojDefaultReason = "auto-default";
+      if (projectorOnXdna) {
+        std::string projectorGpu = firstLocalGpu(splitSelection.devices);
+        if (projectorGpu.empty() && dependencies.splitDevices) {
+          projectorGpu = firstLocalGpu(dependencies.splitDevices().devices);
+        }
+        if (!projectorGpu.empty()) {
+          params.mmproj_backend = projectorGpu;
+          mmprojDefaultReason = "auto-default, a GPU beside the XDNA NPU";
+        } else {
+          mmprojUseGpu = false;
+          mmprojDefaultReason = "auto-default, XDNA NPU without a GPU";
+        }
+      }
 #endif
       if (mmprojUseGpuOverride.has_value()) {
         mmprojUseGpu = mmprojUseGpuOverride.value();
       }
+      const bool projectorOnNpu =
+          mmprojUseGpu &&
+          usesBackendFamily(true, params.mmproj_backend, {}, "xdna");
+      const std::string projectorDevice =
+          mmprojUseGpu
+              ? (projectorOnNpu ? "NPU " : "GPU ") + params.mmproj_backend
+              : "CPU";
       QLOG_IF(
           Priority::INFO,
           string_format(
               "[LlamaModel] multimodal projector backend: %s (%s)\n",
-              mmprojUseGpu ? (useNpu ? "NPU" : "GPU") : "CPU",
+              projectorDevice.c_str(),
               mmprojUseGpuOverride.has_value() ? "mmproj-use-gpu override"
-                                               : mmprojDefaultReason));
+                                               : mmprojDefaultReason.c_str()));
       params.mmproj_use_gpu = mmprojUseGpu;
 
       params.split_mode = splitMode;
