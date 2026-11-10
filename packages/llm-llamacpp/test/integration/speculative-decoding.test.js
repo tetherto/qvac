@@ -19,6 +19,9 @@
 //   - QVAC_RUN_SPECULATIVE_DSPARK=1: DSpark (`spec-type: 'draft-dspark'`) on
 //     LiquidAI's LFM2.5-1.2B-Instruct with its DSpark drafter (about 1 GB of
 //     models).
+//   - QVAC_RUN_SPECULATIVE_DSPARK_VL=1: DSpark after an image prompt, on
+//     LiquidAI's LFM2.5-VL-3B with its projector and DSpark drafter (about
+//     2.8 GB of models).
 //
 // QVAC_SPECULATIVE_TOLERATE_DIVERGENCE=1 lets greedy output differ from plain
 // decoding and between runs, for GPU backends (e.g. RADV Vulkan) whose batched
@@ -38,6 +41,9 @@
 // prestage-ignore: Qwen3.5-2B-MTP-Q4_0.gguf — opt-in via QVAC_RUN_SPECULATIVE_MTP_HEADS=1, desktop-only
 // prestage-ignore: LFM2.5-1.2B-Instruct-Q4_K_M.gguf — opt-in via QVAC_RUN_SPECULATIVE_DSPARK=1, desktop-only
 // prestage-ignore: LFM2.5-1.2B-Instruct-DSpark-Q8_0.gguf — opt-in via QVAC_RUN_SPECULATIVE_DSPARK=1, desktop-only
+// prestage-ignore: LFM2.5-VL-3B-Q4_K_M.gguf — opt-in via QVAC_RUN_SPECULATIVE_DSPARK_VL=1, desktop-only
+// prestage-ignore: mmproj-LFM2.5-VL-3B-Q8_0.gguf — opt-in via QVAC_RUN_SPECULATIVE_DSPARK_VL=1, desktop-only
+// prestage-ignore: LFM2.5-VL-3B-DSpark-F16.gguf — opt-in via QVAC_RUN_SPECULATIVE_DSPARK_VL=1, desktop-only
 
 const path = require('bare-path')
 const os = require('bare-os')
@@ -80,6 +86,9 @@ const skipDflash = optIn('QVAC_RUN_SPECULATIVE_DFLASH', 'DFlash on Qwen3-4B')
 const skipLarge = optIn('QVAC_RUN_SPECULATIVE_27B', 'Speculative decoding on Qwen3.8-27B')
 const skipMtpHeads = optIn('QVAC_RUN_SPECULATIVE_MTP_HEADS', 'External MTP heads')
 const skipDspark = optIn('QVAC_RUN_SPECULATIVE_DSPARK', 'DSpark on LFM2.5-1.2B')
+const skipDsparkVl = optIn('QVAC_RUN_SPECULATIVE_DSPARK_VL', 'DSpark on LFM2.5-VL-3B')
+const DSPARK_TARGET = 'LFM2.5-1.2B-Instruct-Q4_K_M.gguf'
+const DSPARK_DRAFT = 'LFM2.5-1.2B-Instruct-DSpark-Q8_0.gguf'
 const tolerateDivergence =
   platform === 'android' || readEnv('QVAC_SPECULATIVE_TOLERATE_DIVERGENCE') === '1'
 
@@ -122,6 +131,10 @@ const VARIANTS = [
     target: 'google_gemma-4-E2B-it-Q4_K_M.gguf',
     type: 'draft-mtp',
     draft: 'gemma-4-E2B-it-assistant-Q8_0.gguf',
+    // Its MTP tensors are nextn_proj_pre/post, not the nextn.eh_proj that
+    // fabric's type detection looks for, so `auto` refuses it, as
+    // llama-server does.
+    autoDetects: false,
     skip: skipMtpHeads
   },
   {
@@ -434,6 +447,147 @@ safeTest('MTP with an image prompt', { timeout: 900_000 }, async (t) => {
   }
 })
 
+// Speculation after an image: fabric fixed both llama-server's drafting after
+// an image and DFlash's decoding of image chunks, which the addon mirrors in
+// its own batch path. The drafter takes the target's hidden states for the
+// image positions too. A one-sentence answer, like the MTP image test's: a
+// longer description reaches near-ties that batched verification can flip
+// (fabric's llama-server flips the same one), which
+// QVAC_SPECULATIVE_TOLERATE_DIVERGENCE covers as for every other variant.
+safeTest(
+  'DSpark drafts after an image prompt as plain decoding answers',
+  { timeout: 1_200_000, skip: skipDsparkVl },
+  async (t) => {
+    const VL_TARGET = 'LFM2.5-VL-3B-Q4_K_M.gguf'
+    const files = { projectionModel: await modelPath('mmproj-LFM2.5-VL-3B-Q8_0.gguf') }
+    const prompt = [
+      { role: 'user', type: 'media', content: getMediaPath('elephant.jpg') },
+      { role: 'user', content: 'What animal is in the image? Answer in one sentence.' }
+    ]
+    async function run(config) {
+      const model = await loadModel(VL_TARGET, config, files)
+      try {
+        return await runOnce(model, prompt)
+      } finally {
+        await model.unload()
+      }
+    }
+    const plain = await run(baseConfig({ 'spec-type': 'none' }))
+    const speculative = await run(
+      baseConfig({
+        'spec-type': 'draft-dspark',
+        'spec-draft-model': await modelPath('LFM2.5-VL-3B-DSpark-F16.gguf'),
+        'spec-draft-n-max': '8'
+      })
+    )
+    t.ok(/elephant/i.test(speculative.output), 'recognised the elephant')
+    assertDrafted(t, speculative.stats, 'after an image')
+    if (tolerateDivergence) {
+      if (speculative.output !== plain.output) {
+        t.comment(
+          `diverged from plain at character ${commonPrefixLength(speculative.output, plain.output)}`
+        )
+      }
+    } else {
+      t.is(speculative.output, plain.output, 'same output as plain decoding')
+    }
+  }
+)
+
+// A prompt several times longer than the drafter's block, fresh and then as a
+// cached second turn, so the prompt end the drafter is given moves with the
+// cache. (LFM2.5's drafter has no attention window; a windowed drafter, such
+// as DeepSeek V4's, is what exercises fabric's window cut-off.)
+safeTest(
+  'DSpark on a long prompt and its cached follow-up',
+  { timeout: 900_000, skip: skipDspark },
+  async (t) => {
+    const passage = Array.from(
+      { length: 24 },
+      (_, i) =>
+        `Paragraph ${i + 1}: speculative decoding drafts several tokens with a small model and verifies them with the large one in a single pass, which helps most when decoding is bound by memory bandwidth.`
+    ).join('\n')
+    const cacheKey = path.join(os.tmpdir(), `qvac-dspark-long-${Date.now()}.bin`)
+    cleanupIntegrationCacheFiles(cacheKey)
+    const model = await loadModel(
+      DSPARK_TARGET,
+      baseConfig({
+        'spec-type': 'draft-dspark',
+        'spec-draft-model': await modelPath(DSPARK_DRAFT),
+        'spec-draft-n-max': '9',
+        n_predict: '96'
+      })
+    )
+    try {
+      const history = [
+        { role: 'user', content: `Summarize this text in three bullet points.\n\n${passage}` }
+      ]
+      const first = await runOnce(model, history, { cacheKey })
+      t.ok(first.stats.promptTokens > 600, `long prompt: ${first.stats.promptTokens} tokens`)
+      assertDrafted(t, first.stats, 'long prompt')
+      history.push({ role: 'assistant', content: first.output })
+      history.push({ role: 'user', content: 'Now give it a one-line title.' })
+      const second = await runOnce(model, history, { cacheKey })
+      const reused =
+        second.stats.CacheTokens - second.stats.promptTokens - second.stats.generatedTokens
+      t.ok(reused > 600, `follow-up reused ${reused} cached tokens`)
+      assertDrafted(t, second.stats, 'cached follow-up')
+    } finally {
+      await model.unload()
+      cleanupIntegrationCacheFiles(cacheKey)
+    }
+  }
+)
+
+// Four sequences, two of them sharing the prefix of a request just served,
+// so drafting runs alongside cached and fresh prompts in the same batch.
+safeTest(
+  'DSpark with four sequences and mixed cache hits',
+  { timeout: 900_000, skip: skipDspark },
+  async (t) => {
+    const model = await loadModel(
+      DSPARK_TARGET,
+      baseConfig({
+        'spec-type': 'draft-dspark',
+        'spec-draft-model': await modelPath(DSPARK_DRAFT),
+        'spec-draft-n-max': '6',
+        parallel: '4',
+        ctx_size: '16384'
+      })
+    )
+    try {
+      // Warm the prefix the "hit" sequences share.
+      await runOnce(model, PROMPT, { generationParams: { predict: 8 } })
+      const jobs = [
+        { id: 'hit-a', prompt: PROMPT },
+        {
+          id: 'hit-b',
+          prompt: [
+            ...PROMPT,
+            { role: 'assistant', content: 'Sure.' },
+            { role: 'user', content: 'Add type hints.' }
+          ]
+        },
+        { id: 'miss-a', prompt: [{ role: 'user', content: 'Explain how a hash map works.' }] },
+        { id: 'miss-b', prompt: [{ role: 'user', content: 'Write a haiku about the sea.' }] }
+      ].map((job) => ({ ...job, runOptions: { generationParams: { predict: 48 } } }))
+      const response = await model.run(jobs)
+      const outputs = new Map()
+      response.onUpdate(({ id, chunk }) => outputs.set(id, (outputs.get(id) || '') + chunk))
+      await response.await()
+      for (const { id } of jobs) t.ok((outputs.get(id) || '').length > 0, `${id} produced output`)
+      // A short answer may end before its budget; a draft must never overrun it.
+      t.ok(
+        response.stats.generatedTokens <= 4 * 48,
+        `no sequence ran past its budget (${response.stats.generatedTokens} tokens)`
+      )
+      assertDrafted(t, response.stats, 'four sequences')
+    } finally {
+      await model.unload()
+    }
+  }
+)
+
 // A projection with a draft model is a verdict, and the draft model is in
 // its figures, including one that borrows from the model (a Gemma 4
 // assistant, a DFlash drafter). Kept here rather than in fit.test.js because
@@ -464,8 +618,76 @@ for (const variant of VARIANTS.filter((v) => v.draft)) {
   )
 }
 
+// `spec-type: 'auto'` reads the type from the drafter's header and must then
+// run exactly as the explicit type: same tokens, same drafts. The external
+// MTP head on Qwen3.5-0.8B runs in CI; the other drafters are opt-in.
+const AUTO_CASES = [
+  {
+    label: 'an external MTP head',
+    target: NO_MTP_MODEL,
+    type: 'draft-mtp',
+    draft: MTP_MODEL
+  },
+  ...VARIANTS.filter((v) => v.draft)
+]
+
+for (const variant of AUTO_CASES) {
+  safeTest(
+    `spec-type auto drafts like ${variant.type} for ${variant.label}`,
+    { timeout: Math.max(600_000, variant.timeout || 0), skip: variant.skip },
+    async (t) => {
+      async function run(type) {
+        const model = await loadModel(
+          variant.target,
+          baseConfig({
+            'spec-type': type,
+            'spec-draft-model': await modelPath(variant.draft),
+            ...variant.extra
+          })
+        )
+        try {
+          return await runOnce(model, PROMPT)
+        } finally {
+          await model.unload()
+        }
+      }
+      if (variant.autoDetects === false) {
+        await t.exception(run('auto'), /spec-type "auto" cannot read the type of/)
+        return
+      }
+      const explicit = await run(variant.type)
+      const detected = await run('auto')
+      assertDrafted(t, detected.stats, 'auto')
+      t.is(detected.output, explicit.output, `same output as ${variant.type}`)
+      t.is(detected.stats.draftTokens, explicit.stats.draftTokens, 'same drafted tokens')
+      t.is(
+        detected.stats.draftAcceptedTokens,
+        explicit.stats.draftAcceptedTokens,
+        'same accepted tokens'
+      )
+    }
+  )
+}
+
+safeTest('spec-type auto fails to load a drafter of no type', { timeout: 300_000 }, async (t) => {
+  // A plain Qwen3.5 model: no MTP layers, not a DFlash model.
+  const model = new LlmLlamacpp({
+    files: { model: [await modelPath(MTP_MODEL)] },
+    config: baseConfig({
+      'spec-type': 'auto',
+      'spec-draft-model': await modelPath(NO_MTP_MODEL)
+    }),
+    logger: null
+  })
+  await t.exception(
+    model.load(),
+    /spec-type "auto" cannot read the type of '.*': it is neither a DFlash or DSpark model nor a model with MTP layers/
+  )
+  await model.unload().catch(() => {})
+})
+
 safeTest(
-  'spec-type rejects types other than draft-mtp, draft-dflash and draft-dspark',
+  'spec-type rejects types other than draft-mtp, draft-dflash, draft-dspark and auto',
   { timeout: 300_000 },
   async (t) => {
     const model = new LlmLlamacpp({
@@ -473,12 +695,15 @@ safeTest(
       config: baseConfig({ 'spec-type': 'ngram-simple' }),
       logger: null
     })
-    await t.exception(model.load(), /must be "none", "draft-mtp", "draft-dflash" or "draft-dspark"/)
+    await t.exception(
+      model.load(),
+      /must be "none", "draft-mtp", "draft-dflash", "draft-dspark" or "auto"/
+    )
     await model.unload().catch(() => {})
   }
 )
 
-for (const type of ['draft-dflash', 'draft-dspark']) {
+for (const type of ['draft-dflash', 'draft-dspark', 'auto']) {
   safeTest(`${type} requires spec-draft-model`, { timeout: 300_000 }, async (t) => {
     const model = new LlmLlamacpp({
       files: { model: [await modelPath(MTP_MODEL)] },

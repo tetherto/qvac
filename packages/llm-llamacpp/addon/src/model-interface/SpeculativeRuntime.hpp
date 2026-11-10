@@ -36,8 +36,12 @@ inline constexpr unsigned MAX_SPEC_DRAFT_N_MAX = 64;
 /// Speculative-decoding options from the load config. Absent keys keep
 /// llama.cpp's `common_params_speculative` defaults.
 struct SpeculativeConfig {
-  /// `COMMON_SPECULATIVE_TYPE_NONE` when `spec-type` is absent or "none".
+  /// `COMMON_SPECULATIVE_TYPE_NONE` when `spec-type` is absent, "none" or
+  /// "auto" (until `applySpeculativeConfig` detects it).
   common_speculative_type type = COMMON_SPECULATIVE_TYPE_NONE;
+  /// `spec-type: "auto"`: the type is read from the draft model's header, as
+  /// llama-server does for `-md` without `--spec-type`.
+  bool autoDetect = false;
   std::optional<int32_t> draftNMax;
   std::optional<int32_t> draftNMin;
   std::optional<float> draftPMin;
@@ -45,8 +49,9 @@ struct SpeculativeConfig {
   /// DFlash or DSpark model, or an external MTP head for `draft-mtp`.
   std::string draftModelPath;
 
+  /// True for a resolved type and for an unresolved `auto`.
   [[nodiscard]] bool enabled() const {
-    return type != COMMON_SPECULATIVE_TYPE_NONE;
+    return autoDetect || type != COMMON_SPECULATIVE_TYPE_NONE;
   }
 };
 
@@ -54,13 +59,15 @@ struct SpeculativeConfig {
 /// `none`, `draft-mtp`, which drafts with the target model's own
 /// next-token heads or with the external MTP head given as
 /// `spec-draft-model`, `draft-dflash`, which drafts with the DFlash model
-/// given as `spec-draft-model`, and `draft-dspark`, which drafts with the
+/// given as `spec-draft-model`, `draft-dspark`, which drafts with the
 /// DSpark model (a DFlash model with a Markov head) given as
-/// `spec-draft-model`. Throws std::invalid_argument for an unknown type, a
-/// malformed or out-of-range value, both spellings of one key, draft options
-/// without a type, `draft-dflash` or `draft-dspark` without
-/// `spec-draft-model`, a `spec-draft-model` that is not an absolute local
-/// path, or one without a type.
+/// `spec-draft-model`, and `auto`, which reads one of the three from the
+/// `spec-draft-model` header (see `detectSpeculativeType`). Throws
+/// std::invalid_argument for an unknown type, a malformed or out-of-range
+/// value, both spellings of one key, draft options without a type,
+/// `draft-dflash`, `draft-dspark` or `auto` without `spec-draft-model`, a
+/// `spec-draft-model` that is not an absolute local path, or one without a
+/// type.
 SpeculativeConfig
 parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config);
 
@@ -105,7 +112,20 @@ std::string dsparkDrafterMismatch(const GgufShape& drafter, float pMin);
 /// header; empty unless `params` asks for `draft-dspark` with a draft model.
 std::string draftModelMismatch(const common_params_speculative& params);
 
-/// Copies `config` into `params.speculative` and sizes the target context's
+/// The speculative type the draft model at `path` drafts with, read by
+/// fabric's `common_speculative_types_from_gguf` so it matches llama-server:
+/// `draft-dspark` for a `dflash` model with a Markov head, `draft-dflash` for
+/// one without, `draft-mtp` for a model whose last block has MTP layers. The
+/// header is checked first for what fabric's reader assumes without checking
+/// (a string architecture and, outside `dflash`, a positive u32
+/// `<arch>.block_count`), so a malformed file is an error instead of an
+/// abort. Throws std::invalid_argument for an unreadable file, one shard of a
+/// split model (fabric reads only the first shard; give the type
+/// explicitly), malformed metadata, or a model none of the three fits.
+common_speculative_type detectSpeculativeType(const std::string& path);
+
+/// Resolves `spec-type: "auto"` with `detectSpeculativeType`, then copies
+/// `config` into `params.speculative` and sizes the target context's
 /// output buffers for a verification batch, exactly as llama-server does
 /// before it creates the target context (`server_output_limits`). A draft
 /// model (DFlash, DSpark or an external MTP head) is placed like the target

@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <unordered_map>
 #include <utility>
@@ -44,7 +45,37 @@ float parseProbability(const std::string& raw, const std::string& option) {
 
 // The types `spec-draft-model` and the `spec-draft-*` options apply to.
 constexpr const char* SPEC_TYPES_WITH_DRAFT =
-    "\"draft-mtp\", \"draft-dflash\" or \"draft-dspark\"";
+    "\"draft-mtp\", \"draft-dflash\", \"draft-dspark\" or \"auto\"";
+
+// A non-negative integer stored as any GGUF unsigned or signed integer type,
+// or nullopt when `key` is absent or not an integer.
+std::optional<uint64_t>
+readGgufUnsigned(const gguf_context* ctx, const char* key) {
+  const int64_t id = gguf_find_key(ctx, key);
+  if (id < 0) {
+    return std::nullopt;
+  }
+  switch (gguf_get_kv_type(ctx, id)) {
+  case GGUF_TYPE_UINT8:
+    return gguf_get_val_u8(ctx, id);
+  case GGUF_TYPE_UINT16:
+    return gguf_get_val_u16(ctx, id);
+  case GGUF_TYPE_UINT32:
+    return gguf_get_val_u32(ctx, id);
+  case GGUF_TYPE_UINT64:
+    return gguf_get_val_u64(ctx, id);
+  case GGUF_TYPE_INT8:
+    return std::max<int64_t>(0, gguf_get_val_i8(ctx, id));
+  case GGUF_TYPE_INT16:
+    return std::max<int64_t>(0, gguf_get_val_i16(ctx, id));
+  case GGUF_TYPE_INT32:
+    return std::max<int64_t>(0, gguf_get_val_i32(ctx, id));
+  case GGUF_TYPE_INT64:
+    return std::max<int64_t>(0, gguf_get_val_i64(ctx, id));
+  default:
+    return std::nullopt;
+  }
+}
 
 bool hasType(
     const common_params_speculative& params, common_speculative_type type) {
@@ -149,11 +180,13 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config) {
       result.type = COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH;
     } else if (type->second == "draft-dspark") {
       result.type = COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK;
+    } else if (type->second == "auto") {
+      result.autoDetect = true;
     } else if (type->second != "none") {
       throw std::invalid_argument(
           type->first +
-          " must be \"none\", \"draft-mtp\", \"draft-dflash\" or "
-          "\"draft-dspark\", got: \"" +
+          " must be \"none\", \"draft-mtp\", \"draft-dflash\", "
+          "\"draft-dspark\" or \"auto\", got: \"" +
           type->second + "\"");
     }
   }
@@ -185,6 +218,11 @@ parseSpeculativeConfig(std::unordered_map<std::string, std::string>& config) {
     if (result.type == COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK) {
       throw std::invalid_argument(
           "spec-type \"draft-dspark\" requires spec-draft-model");
+    }
+    if (result.autoDetect) {
+      throw std::invalid_argument(
+          "spec-type \"auto\" requires spec-draft-model, whose header it "
+          "reads the type from");
     }
   }
   const common_params_speculative_draft defaults;
@@ -274,10 +312,63 @@ std::string draftModelMismatch(const common_params_speculative& params) {
       readGgufShape(params.draft.mparams.path), params.draft.p_min);
 }
 
+common_speculative_type detectSpeculativeType(const std::string& path) {
+  const std::string prefix =
+      "spec-type \"auto\" cannot read the type of '" + path + "': ";
+  gguf_init_params init = {};
+  init.no_alloc = true;
+  gguf_context* ctx = gguf_init_from_file(path.c_str(), init);
+  if (ctx == nullptr) {
+    throw std::invalid_argument(prefix + "it is not a readable GGUF file");
+  }
+  // Everything fabric's reader takes for granted, checked here so a
+  // malformed header is an error rather than a GGML_ASSERT.
+  std::string reason;
+  const int64_t archId = gguf_find_key(ctx, "general.architecture");
+  if (archId < 0 || gguf_get_kv_type(ctx, archId) != GGUF_TYPE_STRING) {
+    reason = "general.architecture is missing or not a string";
+  } else if (readGgufUnsigned(ctx, "split.count").value_or(1) > 1) {
+    reason = "it is one shard of a split model, of which fabric reads only "
+             "the first; set spec-type explicitly";
+  } else {
+    const std::string arch = gguf_get_val_str(ctx, archId);
+    if (arch != "dflash") {
+      const std::string key = arch + ".block_count";
+      const int64_t id = gguf_find_key(ctx, key.c_str());
+      if (id < 0 || gguf_get_kv_type(ctx, id) != GGUF_TYPE_UINT32 ||
+          gguf_get_val_u32(ctx, id) == 0) {
+        reason = key + " is missing, not a u32 or 0";
+      }
+    }
+  }
+  gguf_free(ctx);
+  if (!reason.empty()) {
+    throw std::invalid_argument(prefix + reason);
+  }
+  const auto types = common_speculative_types_from_gguf(path);
+  if (types.empty()) {
+    throw std::invalid_argument(
+        prefix +
+        "it is neither a DFlash or DSpark model nor a model with MTP layers");
+  }
+  return types.front();
+}
+
 void applySpeculativeConfig(
-    const SpeculativeConfig& config, common_params& params) {
-  if (!config.enabled()) {
+    const SpeculativeConfig& requested, common_params& params) {
+  if (!requested.enabled()) {
     return;
+  }
+  SpeculativeConfig config = requested;
+  if (config.autoDetect) {
+    config.type = detectSpeculativeType(config.draftModelPath);
+    config.autoDetect = false;
+    QLOG_IF(
+        Priority::INFO,
+        string_format(
+            "[Speculative] spec-type \"auto\" detected \"%s\" from '%s'\n",
+            common_speculative_type_to_str(config.type).c_str(),
+            config.draftModelPath.c_str()));
   }
   params.speculative.types = {config.type};
   if (config.draftNMax.has_value()) {

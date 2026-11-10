@@ -396,13 +396,16 @@ declare namespace LlmLlamacpp {
          * the head must ship MTP layers (`blk.N.nextn.*`), or the load fails.
          * `'draft-dflash'` drafts with the DFlash model given as
          * `spec_draft_model`, and `'draft-dspark'` with the DSpark model (a
-         * DFlash model with a Markov head) given as `spec_draft_model`. Either
-         * way the model verifies the draft, so the output keeps the distribution
-         * of plain decoding. `'none'` (default) decodes one token per step. Works
-         * on single prompts, multimodal prompts and continuous batching. Also
-         * accepted as `spec-type`.
+         * DFlash model with a Markov head) given as `spec_draft_model`. `'auto'`
+         * reads which of the three from the `spec_draft_model` header, as
+         * llama-server does for `-md` without `--spec-type`; it fails the load
+         * for a split model's shard or a model none of them fits. Either way the
+         * model verifies the draft, so the output keeps the distribution of plain
+         * decoding. `'none'` (default) decodes one token per step. Works on single
+         * prompts, multimodal prompts and continuous batching. Also accepted as
+         * `spec-type`.
          */
-        spec_type?: "none" | "draft-mtp" | "draft-dflash" | "draft-dspark";
+        spec_type?: "none" | "draft-mtp" | "draft-dflash" | "draft-dspark" | "auto";
         /**
          * Absolute path of the draft model, as llama-server's
          * `--spec-draft-model` (`-md`): the DFlash or DSpark model, required by

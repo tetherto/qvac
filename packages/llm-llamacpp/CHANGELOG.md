@@ -15,6 +15,18 @@
   DSpark model, or `spec-draft-p-min` above 0 with one that has no confidence
   head. A DSpark model given to `draft-dflash` loads with a warning. Fabric
   already ships DSpark in `qvac-fabric` `11739.1.1`, so no dependency changes.
+  Known limit: with `parallel >= 2`, some large models (LFM2.5-24B-A2B,
+  Qwen3.8-27B) fail the request with `FailedToDecode`, from a fabric
+  `11739.1.1` bug that aborts llama-server the same way.
+- `spec-type: 'auto'` with `spec-draft-model` reads the speculative type from
+  the drafter's header with fabric's own detection, as llama-server does for
+  `-md` without `--spec-type`: `draft-dspark`, `draft-dflash` or `draft-mtp`.
+  This applies to DFlash models and external MTP heads as well as DSpark. The
+  header is checked first, so an unreadable file, a split model's shard,
+  malformed metadata or a model of no type fails the load with
+  `InvalidArgument` (and `assessFit` rejects it) instead of aborting in
+  fabric's reader. A Gemma 4 assistant is not detected, as in llama-server;
+  give it `draft-mtp`.
 
 ## [0.69.0] - 2026-11-09
 

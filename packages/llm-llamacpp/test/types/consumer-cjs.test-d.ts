@@ -108,6 +108,14 @@ const dsparkConfig: LlmLlamacpp.LlamaConfig = {
 };
 void dsparkConfig;
 
+// 'auto' reads the type from the drafter's header.
+const autoSpecConfig: LlmLlamacpp.LlamaConfig = {
+  device: "gpu",
+  spec_type: "auto",
+  spec_draft_model: "/models/dspark.gguf",
+};
+void autoSpecConfig;
+
 // @ts-expect-error - not a speculative type the addon accepts
 const badSpecType: LlmLlamacpp.LlamaConfig = { device: "gpu", spec_type: "draft-eagle3" };
 void badSpecType;

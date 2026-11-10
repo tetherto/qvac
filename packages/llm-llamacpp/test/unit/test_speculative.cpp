@@ -1,5 +1,7 @@
 #include <array>
 #include <filesystem>
+#include <fstream>
+#include <functional>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -134,7 +136,7 @@ TEST(SpeculativeConfigTest, UnknownTypeNamesEveryAcceptedType) {
   } catch (const std::invalid_argument& e) {
     EXPECT_NE(
         std::string(e.what()).find(
-            R"("none", "draft-mtp", "draft-dflash" or "draft-dspark")"),
+            R"("none", "draft-mtp", "draft-dflash", "draft-dspark" or "auto")"),
         std::string::npos)
         << e.what();
   }
@@ -229,6 +231,247 @@ TEST(SpeculativeConfigTest, ADsparkDrafterIsReadFromItsHeader) {
   std::filesystem::remove(dspark);
   std::filesystem::remove(noConfidence);
   std::filesystem::remove(dflash);
+}
+
+namespace {
+
+// A header-only GGUF built by `fill`, which sets keys on the gguf context and
+// creates tensors (metadata only) in the ggml context; `tensor` adds one.
+using GgufFill = std::function<void(gguf_context*, ggml_context*)>;
+
+void addTensor(gguf_context* ctx, ggml_context* meta, const char* name) {
+  ggml_tensor* tensor = ggml_new_tensor_1d(meta, GGML_TYPE_F32, 4);
+  ggml_set_name(tensor, name);
+  gguf_add_tensor(ctx, tensor);
+}
+
+std::string writeGguf(const char* name, const GgufFill& fill) {
+  gguf_context* ctx = gguf_init_empty();
+  ggml_init_params init{
+      .mem_size = 8 * ggml_tensor_overhead(),
+      .mem_buffer = nullptr,
+      .no_alloc = true};
+  ggml_context* meta = ggml_init(init);
+  fill(ctx, meta);
+  const std::string path = absoluteModelPath(name);
+  EXPECT_TRUE(gguf_write_to_file(ctx, path.c_str(), true)) << path;
+  gguf_free(ctx);
+  ggml_free(meta);
+  return path;
+}
+
+// Fabric's detection rules, as fixtures.
+std::string dsparkFixture() {
+  return writeGguf("auto-dspark.gguf", [](gguf_context* ctx, ggml_context* m) {
+    gguf_set_val_str(ctx, "general.architecture", "dflash");
+    addTensor(ctx, m, "markov_w1.weight");
+  });
+}
+
+std::string dflashFixture() {
+  return writeGguf("auto-dflash.gguf", [](gguf_context* ctx, ggml_context*) {
+    gguf_set_val_str(ctx, "general.architecture", "dflash");
+  });
+}
+
+// MTP is the last block's NextN tensor, not the `nextn_predict_layers` key.
+std::string mtpFixture() {
+  return writeGguf("auto-mtp.gguf", [](gguf_context* ctx, ggml_context* m) {
+    gguf_set_val_str(ctx, "general.architecture", "qwen35");
+    gguf_set_val_u32(ctx, "qwen35.block_count", 3);
+    addTensor(ctx, m, "blk.2.nextn.eh_proj.weight");
+  });
+}
+
+common_speculative_type detect(const std::string& path) {
+  const common_speculative_type type = detectSpeculativeType(path);
+  std::filesystem::remove(path);
+  return type;
+}
+
+// detectSpeculativeType's message, or "" when it does not throw.
+std::string detectError(const std::string& path) {
+  std::string message;
+  try {
+    detectSpeculativeType(path);
+  } catch (const std::invalid_argument& e) {
+    message = e.what();
+  }
+  std::filesystem::remove(path);
+  return message;
+}
+
+} // namespace
+
+TEST(SpeculativeAutoTest, DetectsEachTypeLikeFabric) {
+  EXPECT_EQ(detect(dsparkFixture()), COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK);
+  EXPECT_EQ(detect(dflashFixture()), COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH);
+  EXPECT_EQ(detect(mtpFixture()), COMMON_SPECULATIVE_TYPE_DRAFT_MTP);
+  // The Markov tensor outside a dflash model is not DSpark.
+  EXPECT_NE(
+      detectError(writeGguf(
+          "auto-markov-qwen.gguf",
+          [](gguf_context* ctx, ggml_context* m) {
+            gguf_set_val_str(ctx, "general.architecture", "qwen3");
+            gguf_set_val_u32(ctx, "qwen3.block_count", 2);
+            addTensor(ctx, m, "markov_w1.weight");
+          })),
+      "");
+}
+
+TEST(SpeculativeAutoTest, MtpMetadataWithoutTheTensorIsNotMtp) {
+  EXPECT_NE(
+      detectError(writeGguf(
+                      "auto-mtp-meta-only.gguf",
+                      [](gguf_context* ctx, ggml_context*) {
+                        gguf_set_val_str(ctx, "general.architecture", "qwen35");
+                        gguf_set_val_u32(ctx, "qwen35.block_count", 3);
+                        gguf_set_val_u32(ctx, "qwen35.nextn_predict_layers", 1);
+                      }))
+          .find("neither a DFlash or DSpark model nor a model with MTP"),
+      std::string::npos);
+  // An MTP tensor on another block than the last does not count either.
+  EXPECT_NE(
+      detectError(writeGguf(
+          "auto-mtp-wrong-block.gguf",
+          [](gguf_context* ctx, ggml_context* m) {
+            gguf_set_val_str(ctx, "general.architecture", "qwen35");
+            gguf_set_val_u32(ctx, "qwen35.block_count", 3);
+            addTensor(ctx, m, "blk.1.nextn.eh_proj.weight");
+          })),
+      "");
+}
+
+TEST(SpeculativeAutoTest, MalformedHeadersAreErrorsNotAborts) {
+  const auto fails =
+      [](const char* name, const GgufFill& fill, const char* expected) {
+        const std::string message = detectError(writeGguf(name, fill));
+        EXPECT_NE(message.find(expected), std::string::npos)
+            << name << ": " << message;
+      };
+  fails(
+      "auto-no-arch.gguf",
+      [](gguf_context*, ggml_context*) {},
+      "general.architecture is missing or not a string");
+  fails(
+      "auto-arch-u32.gguf",
+      [](gguf_context* ctx, ggml_context*) {
+        gguf_set_val_u32(ctx, "general.architecture", 7);
+      },
+      "general.architecture is missing or not a string");
+  // Fabric's reader would GGML_ASSERT on each of these.
+  fails(
+      "auto-no-block-count.gguf",
+      [](gguf_context* ctx, ggml_context*) {
+        gguf_set_val_str(ctx, "general.architecture", "qwen35");
+      },
+      "qwen35.block_count is missing, not a u32 or 0");
+  fails(
+      "auto-block-count-str.gguf",
+      [](gguf_context* ctx, ggml_context*) {
+        gguf_set_val_str(ctx, "general.architecture", "qwen35");
+        gguf_set_val_str(ctx, "qwen35.block_count", "3");
+      },
+      "qwen35.block_count is missing, not a u32 or 0");
+  fails(
+      "auto-block-count-u16.gguf",
+      [](gguf_context* ctx, ggml_context*) {
+        gguf_set_val_str(ctx, "general.architecture", "qwen35");
+        gguf_set_val_u16(ctx, "qwen35.block_count", 3);
+      },
+      "qwen35.block_count is missing, not a u32 or 0");
+  fails(
+      "auto-block-count-zero.gguf",
+      [](gguf_context* ctx, ggml_context*) {
+        gguf_set_val_str(ctx, "general.architecture", "qwen35");
+        gguf_set_val_u32(ctx, "qwen35.block_count", 0);
+      },
+      "qwen35.block_count is missing, not a u32 or 0");
+  // A shard: fabric reads only the first one.
+  fails(
+      "auto-shard.gguf",
+      [](gguf_context* ctx, ggml_context* m) {
+        gguf_set_val_str(ctx, "general.architecture", "dflash");
+        gguf_set_val_u16(ctx, "split.count", 2);
+        addTensor(ctx, m, "markov_w1.weight");
+      },
+      "one shard of a split model");
+  // A single-file model may carry split.count = 1.
+  EXPECT_EQ(
+      detect(writeGguf(
+          "auto-split-one.gguf",
+          [](gguf_context* ctx, ggml_context*) {
+            gguf_set_val_str(ctx, "general.architecture", "dflash");
+            gguf_set_val_u16(ctx, "split.count", 1);
+          })),
+      COMMON_SPECULATIVE_TYPE_DRAFT_DFLASH);
+  // A plain model has nothing to draft with.
+  fails(
+      "auto-plain.gguf",
+      [](gguf_context* ctx, ggml_context*) {
+        gguf_set_val_str(ctx, "general.architecture", "llama");
+        gguf_set_val_u32(ctx, "llama.block_count", 2);
+      },
+      "neither a DFlash or DSpark model nor a model with MTP layers");
+}
+
+TEST(SpeculativeAutoTest, UnreadableFilesAreErrors) {
+  EXPECT_NE(
+      detectError(absoluteModelPath("auto-missing.gguf"))
+          .find("not a readable GGUF file"),
+      std::string::npos);
+  const std::string text = absoluteModelPath("auto-not-gguf.gguf");
+  std::ofstream(text) << "not a gguf file";
+  EXPECT_NE(
+      detectError(text).find("not a readable GGUF file"), std::string::npos);
+}
+
+TEST(SpeculativeAutoTest, AutoSurvivesParsingUntilApplied) {
+  const std::string path = dsparkFixture();
+  ConfigMap config{
+      {"spec-type", "auto"},
+      {"spec-draft-model", path},
+      {"spec-draft-n-max", "6"}};
+  const SpeculativeConfig parsed = parseSpeculativeConfig(config);
+  EXPECT_TRUE(parsed.autoDetect);
+  EXPECT_TRUE(parsed.enabled());
+  EXPECT_EQ(parsed.type, COMMON_SPECULATIVE_TYPE_NONE);
+  EXPECT_NO_THROW(requireDraftModelFile(parsed));
+
+  common_params params;
+  applySpeculativeConfig(parsed, params);
+  ASSERT_EQ(params.speculative.types.size(), 1u);
+  EXPECT_EQ(params.speculative.types[0], COMMON_SPECULATIVE_TYPE_DRAFT_DSPARK);
+  EXPECT_EQ(params.speculative.draft.mparams.path, path);
+  EXPECT_EQ(params.speculative.draft.n_max, 6);
+  // Resolved before the DSpark checks, so they see the detected type.
+  EXPECT_EQ(draftModelMismatch(params.speculative), "");
+  std::filesystem::remove(path);
+}
+
+TEST(SpeculativeAutoTest, AutoNeedsADraftModel) {
+  EXPECT_THROW(parse({{"spec-type", "auto"}}), std::invalid_argument);
+  EXPECT_THROW(
+      parse({{"spec-type", "auto"}, {"spec-draft-model", "d.gguf"}}),
+      std::invalid_argument);
+  // With a type, the spec-draft-* options are accepted.
+  EXPECT_NO_THROW(parse(
+      {{"spec-type", "auto"},
+       {"spec-draft-model", absoluteModelPath("d.gguf")},
+       {"spec-draft-p-min", "0.5"}}));
+}
+
+TEST(SpeculativeAutoTest, ApplyFailsWhenNothingIsDetected) {
+  common_params params;
+  EXPECT_THROW(
+      applySpeculativeConfig(
+          SpeculativeConfig{
+              .autoDetect = true,
+              .draftModelPath = absoluteModelPath("auto-missing.gguf")},
+          params),
+      std::invalid_argument);
+  // Speculation stays off in the params it could not resolve for.
+  EXPECT_EQ(params.speculative.types[0], COMMON_SPECULATIVE_TYPE_NONE);
 }
 
 TEST(SpeculativeConfigTest, ParsesDraftMtpWithAnExternalHead) {

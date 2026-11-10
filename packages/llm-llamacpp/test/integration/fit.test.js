@@ -205,6 +205,42 @@ test(
 )
 
 test(
+  'spec-type auto projects like the type it detects',
+  { timeout: 600_000, skip: isMobile },
+  async (t) => {
+    const file = await localModel(NO_MTP_MODEL)
+    const head = await localModel(MTP_MODEL)
+    const explicit = await assess(file, {
+      ...PINNED,
+      'spec-type': 'draft-mtp',
+      'spec-draft-model': head
+    })
+    const detected = await assess(file, {
+      ...PINNED,
+      'spec-type': 'auto',
+      'spec-draft-model': head
+    })
+    t.is(detected.status, explicit.status, 'same verdict')
+    t.is(totalUsed(detected), totalUsed(explicit), 'same figures')
+  }
+)
+
+test(
+  'spec-type auto with a drafter of no type rejects',
+  { timeout: 600_000, skip: isMobile },
+  async (t) => {
+    await t.exception(
+      assess(await localModel(MTP_MODEL), {
+        'spec-type': 'auto',
+        'spec-draft-model': await localModel(NO_MTP_MODEL)
+      }),
+      /neither a DFlash or DSpark model nor a model with MTP layers/,
+      'the load fails the same way'
+    )
+  }
+)
+
+test(
   'an external head without MTP layers rejects',
   { timeout: 600_000, skip: isMobile },
   async (t) => {
