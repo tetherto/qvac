@@ -307,9 +307,7 @@ function recordPerformance(label, totalTime, extra) {
   const promptTokens = stats ? _num(stats.promptTokens) : null
 
   const reportedDevice =
-    stats && ['cpu', 'gpu', 'npu'].includes(stats.backendDevice)
-      ? stats.backendDevice
-      : null
+    stats && ['cpu', 'gpu', 'npu'].includes(stats.backendDevice) ? stats.backendDevice : null
 
   const labelDevice = /\[gpu\]/i.test(label) ? 'gpu' : /\[cpu\]/i.test(label) ? 'cpu' : null
   const effectiveDevice = reportedDevice || (extra && extra.deviceId) || labelDevice
