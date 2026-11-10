@@ -384,7 +384,7 @@ See [Decisions API](docs/serve/openai.md#post-v1decisions) for setup and request
 | Flag                             | Description                                                                                                                          |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `-c, --config <path>`            | Config file path (default: auto-detect `qvac.config.*`).                                                                             |
-| `-p, --port <number>`            | Port to listen on (default: `11434`).                                                                                                |
+| `-p, --port <number>`            | Port to listen on (default: `11435`).                                                                                                |
 | `-H, --host <address>`           | Host to bind to (default: `127.0.0.1`).                                                                                              |
 | `--model <alias>`                | Force a model alias to preload at startup (repeatable; must be in config). Models not preloaded still load lazily on first request.  |
 | `--api-key <key>`                | Require Bearer authentication. Recommended for every non-loopback bind.                                                              |

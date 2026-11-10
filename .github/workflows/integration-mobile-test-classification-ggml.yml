@@ -243,8 +243,7 @@ jobs:
           # resolves empty, leaving the artifact-first path untouched.
           prebuild-run-id: ${{ inputs.prebuild_run_id }}
 
-      # Keep current MobileNet-only source compatible before MegaLoc lands.
-      - name: Stage MegaLoc test models
+      - name: Stage classification test models
         if: hashFiles(format('addon/{0}/test/integration/megaloc.test.js', inputs.workdir || 'packages/classification-ggml')) != ''
         uses: ./.github/actions/stage-integration-models
         with:
@@ -253,7 +252,7 @@ jobs:
           bucket: ${{ secrets.MODEL_S3_BUCKET }}
           s3-manifest: ${{ needs.test-models.outputs.manifest }}
 
-      - name: Verify MegaLoc test models
+      - name: Verify classification test models
         if: hashFiles(format('addon/{0}/test/integration/megaloc.test.js', inputs.workdir || 'packages/classification-ggml')) != ''
         working-directory: addon/${{ inputs.workdir || 'packages/classification-ggml' }}
         shell: bash
@@ -264,7 +263,7 @@ jobs:
             import { createHash } from "node:crypto";
             import { createReadStream } from "node:fs";
             const expected = JSON.parse(process.env.MODEL_MANIFEST);
-            if (expected.length !== 2) throw new Error("Expected both MegaLoc test models");
+            if (expected.length !== 3) throw new Error("Expected the MegaLoc and BridgeDepth test models");
             for (const { dest, sha256 } of expected) {
               const hash = createHash("sha256");
               for await (const chunk of createReadStream(dest)) hash.update(chunk);
@@ -287,6 +286,9 @@ jobs:
       # mobilenetv3_3class_v3_fp16.gguf.bin". See scripts/copy-mobile-test-assets.js.
       - name: Copy mobile test assets (weights + images)
         working-directory: addon/${{ inputs.workdir || 'packages/classification-ggml' }}
+        env:
+          # A manual tests filter leaves out models no selected runner needs.
+          MOBILE_TESTS_FILTER: ${{ inputs.platform != '' && inputs.tests || '' }}
         run: npm run mobile:copy-prebuilds
 
       - name: Build mobile app
