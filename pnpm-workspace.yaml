@@ -176,3 +176,8 @@ minimumReleaseAgeExclude:
   - bare-worker
   - bare-ws
   - bare-zlib
+
+# Runtime compatibility patches, applied by pnpm before linking packages.
+patchedDependencies:
+  "pyodide@314.0.2": patches/pyodide@314.0.2.patch
+  "unpdf@1.6.2": patches/unpdf@1.6.2.patch

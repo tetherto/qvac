@@ -1,0 +1,94 @@
+{
+  "name": "@qvac/cli-kit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "What the QV.AC terminal products share: branding, terminal text and editing, qvac.config, and the build scripts",
+  "author": "Tether",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    "./brand": "./dist/brand.js",
+    "./tui": "./dist/tui.js",
+    "./config": "./dist/config.js",
+    "./testing": "./test/workbench/helpers/vt.mjs",
+    "./build": "./build/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/**/*",
+    "build",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": "^22.21.0 || >=24.9.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tetherto/qvac.git",
+    "directory": "packages/cli-kit"
+  },
+  "homepage": "https://qvac.tether.io",
+  "bugs": "https://github.com/tetherto/qvac/issues",
+  "scripts": {
+    "build": "rm -rf dist && tsc && node scripts/copy-vendor.mjs",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "lint": "lunte",
+    "lint:fix": "lunte --fix",
+    "typecheck": "tsc -p tsconfig.test.json --noEmit",
+    "test": "npm run test:workbench",
+    "test:unit": "npm run test:workbench",
+    "test:workbench": "npm run build && node --test test/workbench/*.test.mjs",
+    "build:splash": "node scripts/build-splash.mjs"
+  },
+  "dependencies": {
+    "bare-fs": "^4.7.2",
+    "bare-os": "^3.9.1",
+    "bare-path": "3.0.1",
+    "bare-process": "4.5.1",
+    "bare-url": "^2.4.5"
+  },
+  "devDependencies": {
+    "@qvac/core": "1.0.0-rc.2",
+    "@qvac/harness": "1.0.0-rc.10",
+    "@types/node": "^25.3.3",
+    "bare-buffer": "3.7.1",
+    "bare-runtime": "1.34.0",
+    "bare-tui": "0.3.0",
+    "lunte": "^1.8.2",
+    "lunte-plugin-qvac": "^0.2.0",
+    "prettier": "^3.9.4",
+    "prettier-config-holepunch": "^2.0.0",
+    "typescript": "^5.9.3"
+  },
+  "imports": {
+    "#config-import": {
+      "bare": "./dist/lib/runtime/config-import.bare.js",
+      "default": "./dist/lib/runtime/config-import.js"
+    },
+    "#fs": {
+      "bare": "bare-fs",
+      "default": "fs"
+    },
+    "#os": {
+      "bare": "bare-os",
+      "default": "os"
+    },
+    "#path": {
+      "bare": "bare-path",
+      "default": "path"
+    },
+    "#process": {
+      "bare": "bare-process",
+      "default": "process"
+    },
+    "#url": {
+      "bare": "bare-url",
+      "default": "url"
+    }
+  },
+  "overrides": {
+    "@qvac/harness": "$@qvac/harness"
+  }
+}

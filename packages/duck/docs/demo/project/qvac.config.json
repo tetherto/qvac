@@ -1,0 +1,8 @@
+{
+  "core": {
+    "model": "Qwen3.5-9B-Q4_K_M",
+    "autoDownloadModels": false,
+    "folders": [{ "path": ".", "write": true }]
+  },
+  "tui": { "theme": "qvac" }
+}
