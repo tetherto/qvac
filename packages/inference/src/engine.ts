@@ -20,7 +20,7 @@ export {
   type DuplexReadable
 } from '@/dispatch'
 export { setConfig, setRuntimeContext } from '@/runtime/state'
-export { initialize, cleanupForTerminate } from '@/runtime/lifecycle'
+export { initialize, cleanupForTerminate, type InitializeOptions } from '@/runtime/lifecycle'
 
 // The wire transport a request needs: reply, stream, progress, or duplex.
 // Returns undefined for an unknown type. A host reads it to pick the matching
