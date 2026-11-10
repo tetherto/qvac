@@ -10083,6 +10083,17 @@
     "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU-sub-gguf"
   },
   {
+    "source": "s3:///qvac_models_compiled/ggml/transcribepsy/2026-11-09/transcribepsy-250m-eu.gguf",
+    "engine": "@qvac/transcription-parakeet",
+    "description": "TranscribePsy 250M EU GGUF for 25 European languages",
+    "quantization": "q8_0",
+    "params": "250M",
+    "licenseId": "Apache-2.0",
+    "tags": ["transcription", "parakeet", "transcribepsy", "ggml", "multilingual"],
+    "notes": "Q8_0 GGUF build of qvac/TranscribePsy-250M-EU with six CAFE adapters and the language gate embedded. Use language en for English or auto for automatic routing, including non-English audio. Core ML is not supported for this model.",
+    "link": "https://huggingface.co/qvac/TranscribePsy-250M-EU"
+  },
+  {
     "source": "https://huggingface.co/unsloth/Qwen3.5-0.8B-MTP-GGUF/resolve/cf8a611f6ed2c2060046219a19f12cd3d5ecd67c/Qwen3.5-0.8B-Q4_K_M.gguf",
     "engine": "@qvac/llm-llamacpp",
     "description": "Qwen 3.5 0.8B multimodal model with MTP layers",
