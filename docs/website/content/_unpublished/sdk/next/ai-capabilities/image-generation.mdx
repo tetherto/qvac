@@ -27,6 +27,7 @@ For how to use each function, see [SDK — API reference](/sdk/reference/api/).
 Supported model families and their file layouts:
 
 - **FLUX.2-klein**: split layout — diffusion model `*.gguf` + LLM text encoder `*.gguf` (via `llmModelSrc`) + VAE `*.safetensors` (via `vaeModelSrc`).
+- **FLUX.3 Image Klein**: split layout — diffusion model `*.gguf` + Qwen3-VL 4B text encoder `*.gguf` (via `llmModelSrc`) + FLUX.2 VAE `*.safetensors` (via `vaeModelSrc`). Leave `prediction` unset; the engine detects FLUX.3 from the weights. QVAC provides no registry entry or model constant for these weights.
 - **Qwen-Image-2.1 and Qwen-Image-2.1-Turbo** use local diffusion weights as `modelSrc`, the matching Qwen3-VL encoder as `llmModelSrc`, and the 2.1 VAE as `vaeModelSrc`. Reference editing with the GGUF encoder also needs its vision projector as `projectionModelSrc`. QVAC provides no registry entry or model constant for these weights.
 - **Ideogram 4**: split layout — diffusion model `*.gguf` + unconditional diffusion model `*.gguf` (via `uncondModelSrc`) + LLM text encoder `*.gguf` (via `llmModelSrc`) + VAE `*.safetensors` (via `vaeModelSrc`).
 - **SD1.x, SD2.x**: single all-in-one `*.gguf` file. No companion files needed.
@@ -68,6 +69,45 @@ The following script shows text-to-image generation using FLUX.2-klein with its 
 <WrapCode>
 
 ```python file=<rootDir>/packages/sdk-python/examples/diffusion_flux2_klein.py title="diffusion_flux2_klein.py" lineNumbers
+```
+</WrapCode>
+</Tab>
+</Tabs>
+
+### FLUX.3 Image Klein
+
+FLUX.3 Image Klein uses the same split layout as FLUX.2-klein: the FLUX.3 diffusion model as `modelSrc`, a Qwen3-VL 4B text encoder as `llmModelSrc`, and the FLUX.2 VAE as `vaeModelSrc`. The examples use the recommended 16 Euler steps at `cfg_scale: 1` for the distilled model. A reference image passed through `init_image`, or up to 10 through `init_images`, switches generation to editing; no `@imageN` tags or `prediction` override are needed. More than 10 references fail in the native engine.
+
+The FLUX.3 diffusion weights are under the [FLUX Kommunity License](https://huggingface.co/black-forest-labs/flux-3-image-klein/blob/09561231f44e41381c461caf53d5452005a60ac9/LICENSE.md). The example downloads pinned weights by default; the model, encoder and VAE arguments accept local paths or URLs.
+
+The following script generates from text, or edits when reference image paths follow the model arguments. Pass empty strings to keep the default output directory and weights:
+
+```sh
+node --import tsx examples/diffusion-flux3-klein.ts
+node --import tsx examples/diffusion-flux3-klein.ts "Put the cat in a garden" "" "" "" "" cat.png
+```
+
+<Tabs>
+<Tab value="js" label="JavaScript" default>
+<WrapCode>
+
+```js file=<rootDir>/packages/sdk/dist/examples/diffusion-flux3-klein.js title="diffusion-flux3-klein.js" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="ts" label="TypeScript">
+<WrapCode>
+
+```ts file=<rootDir>/packages/sdk/examples/diffusion-flux3-klein.ts title="diffusion-flux3-klein.ts" lineNumbers
+```
+</WrapCode>
+</Tab>
+
+<Tab value="python" label="Python">
+<WrapCode>
+
+```python file=<rootDir>/packages/sdk-python/examples/diffusion_flux3_klein.py title="diffusion_flux3_klein.py" lineNumbers
 ```
 </WrapCode>
 </Tab>
@@ -202,6 +242,7 @@ The following script shows a minimal text-to-image generation example using a si
 Pass `init_image` to transform an existing image guided by a text prompt. Behavior depends on the model family:
 
 - **FLUX.2**: in-context conditioning. Requires `prediction: "flux2_flow"` in `modelConfig` at `loadModel()` time; `strength` is ignored on this path.
+- **FLUX.3 Image Klein** uses reference conditioning with automatic model detection. Leave `prediction` unset; `strength` does not apply.
 - **Qwen-Image-2.1** uses reference conditioning with automatic model detection. Supply `projectionModelSrc` at load time for editing with the GGUF encoder. Use `init_image` or ordered `init_images`; `strength` does not control reference fidelity.
 - **SD / SDXL / SD3**: SDEdit-style. Use `strength` to control how much the source is preserved (`0` = keep source, `1` = ignore source).
 
