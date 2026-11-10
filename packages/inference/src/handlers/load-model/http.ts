@@ -10,13 +10,11 @@ import {
   generateShortHash,
   detectShardedModel,
   parsePatternBasedShardUrl,
-  extractTensorsFromShards,
   calculatePercentage,
   isArchiveUrl,
   sanitizePathComponent,
   extractAndValidateShardedArchive,
-  validateShardedModelCache,
-  checkAllShardsExist,
+  isShardedExtractionComplete,
   generateShardFilenames,
   hasValidGGUFHeader
 } from '@/utils/index'
@@ -777,8 +775,6 @@ async function downloadShardedModelFromHttp(
 
         logger.info(`✅ All ${shardInfos.length} shards downloaded successfully`)
 
-        await extractTensorsFromShards(shardDir, shardInfos[0]!.filename)
-
         return path.join(shardDir, shardInfos[0]!.filename)
       } catch (error) {
         logger.error(
@@ -845,55 +841,25 @@ async function downloadShardedModelFromArchive(
         }
 
         const shardFilename = String(shardedFile)
-        const allShardsExist = await checkAllShardsExist(extractDir, shardFilename)
-
-        if (!allShardsExist) {
-          logger.warn(`⚠️ Incomplete shards found, re-downloading archive`)
+        if (!(await isShardedExtractionComplete(extractDir, shardFilename))) {
+          logger.warn(`⚠️ Incomplete extraction found, re-downloading archive`)
           hooks?.markCacheMiss?.()
           ctx.setCacheHit(false)
           return await downloadAndExtractArchive()
         }
 
         const shardFilenames = generateShardFilenames(shardFilename)
-        const firstShard = path.join(extractDir, shardFilenames[0]!)
-        const isComplete = await validateShardedModelCache(extractDir, shardFilename)
-
-        if (isComplete) {
-          logger.info(`✅ Archive already extracted: ${extractDir}`)
-          hooks?.markCacheHit?.()
-          ctx.setCacheHit(true)
-          ctx.broadcastProgress({
-            type: 'modelProgress',
-            downloaded: 1,
-            total: 1,
-            percentage: 100,
-            downloadKey
-          })
-          return firstShard
-        }
-
-        logger.info(`📝 All shards present but tensors.txt missing, extracting tensors...`)
-        try {
-          await extractTensorsFromShards(extractDir, shardFilename)
-          logger.info(`✅ Tensors extracted successfully`)
-          hooks?.markCacheHit?.()
-          ctx.setCacheHit(true)
-          ctx.broadcastProgress({
-            type: 'modelProgress',
-            downloaded: 1,
-            total: 1,
-            percentage: 100,
-            downloadKey
-          })
-          return firstShard
-        } catch (error) {
-          logger.warn(`Failed to extract tensors, will re-download archive`, {
-            error
-          })
-          hooks?.markCacheMiss?.()
-          ctx.setCacheHit(false)
-          return await downloadAndExtractArchive()
-        }
+        logger.info(`✅ Archive already extracted: ${extractDir}`)
+        hooks?.markCacheHit?.()
+        ctx.setCacheHit(true)
+        ctx.broadcastProgress({
+          type: 'modelProgress',
+          downloaded: 1,
+          total: 1,
+          percentage: 100,
+          downloadKey
+        })
+        return path.join(extractDir, shardFilenames[0]!)
       } catch (error) {
         logger.error('❌ Error downloading/extracting archive:', error)
 

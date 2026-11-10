@@ -16,7 +16,6 @@ import {
   getShardPath,
   checkShardCompleteness,
   measureChecksum,
-  extractTensorsFromShards,
   calculatePercentage,
   joinWithinBase
 } from '@/utils/index'
@@ -574,8 +573,6 @@ async function downloadShardedFilesToFilesystem(
       })
     }
 
-    await extractTensorsFromShards(shardDir, firstShardFileName)
-
     return getShardPath(hyperdriveKey, allFiles[0]!)
   }
 
@@ -691,8 +688,6 @@ async function downloadShardedFilesToFilesystem(
         }
       })
     }
-
-    await extractTensorsFromShards(shardDir, firstShardFileName)
 
     downloadSucceeded = true
   } catch (error) {

@@ -7,7 +7,7 @@ import {
   detectShardedModel,
   getShardedModelCacheDir,
   getShardPath,
-  extractTensorsFromShards,
+  generateShardFilenames,
   calculatePercentage
 } from '@/utils/index'
 import { getSingleFileCachePath } from '@/utils/cache/paths'
@@ -99,6 +99,26 @@ export async function findModelShards(registryPath: string): Promise<
 }
 
 /**
+ * The shards a registry listing holds for the filename's declared shard group.
+ * Fails here, rather than at load time, when the registry is missing one.
+ */
+export function selectDeclaredShards<T extends { path: string }>(
+  registryPath: string,
+  remoteShards: T[]
+) {
+  const dir = registryPath.slice(0, registryPath.lastIndexOf('/') + 1)
+  const byPath = new Map(remoteShards.map((s) => [s.path, s]))
+  const expected = generateShardFilenames(registryPath.slice(dir.length))
+  const declared = expected.flatMap((name) => byPath.get(dir + name) ?? [])
+  if (declared.length !== expected.length) {
+    throw new RegistryDownloadFailedError(
+      `Expected ${expected.length} shards for ${registryPath} but the registry has ${declared.length}`
+    )
+  }
+  return declared
+}
+
+/**
  * Download sharded model files from registry.
  * When localShardMetadata is provided, uses pre-computed metadata + blob direct download
  * instead of querying the registry for shard info.
@@ -149,11 +169,9 @@ async function downloadShardedFilesFromRegistry(
       throw new ModelNotFoundError(`No shards found for ${registryPath}`)
     }
 
-    if (remoteShards.length !== shardInfo.totalShards) {
-      logger.warn(`⚠️ Expected ${shardInfo.totalShards} shards but found ${remoteShards.length}`)
-    }
+    const declared = selectDeclaredShards(registryPath, remoteShards)
 
-    shards = remoteShards.map((s) => ({
+    shards = declared.map((s) => ({
       filename: s.path.split('/').pop() || '',
       size: s.size,
       checksum: s.checksum,
@@ -249,9 +267,6 @@ async function downloadShardedFilesFromRegistry(
     logger.info(`✅ Shard ${i + 1}/${shards.length} downloaded`)
   }
 
-  const firstShardFilename = shards[0]!.filename
-  await extractTensorsFromShards(shardDir, firstShardFilename)
-
   if (progressCallback) {
     const lastShard = shards[shards.length - 1]!
     progressCallback({
@@ -271,7 +286,7 @@ async function downloadShardedFilesFromRegistry(
     })
   }
 
-  return getShardPath(cacheKey, firstShardFilename)
+  return getShardPath(cacheKey, shards[0]!.filename)
 }
 
 export async function downloadModelFromRegistry(
