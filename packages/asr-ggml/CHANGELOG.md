@@ -14,6 +14,17 @@ restarts at `0.1.0`; the two pre-merge histories are preserved verbatim as
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-11-10
+
+### Added
+
+- `RuntimeStats.encoderUsedCoreml` after batch Nemotron 3 Diarization and
+  Sortformer jobs: `1` when every diarization ran on the Core ML diarizers, `0`
+  when any ran on ggml, for example a call longer than every staged bundle.
+  Streaming jobs still omit it
+  ([#5601](https://github.com/tetherto/qvac/pull/5601),
+  [Fabric #415](https://github.com/tetherto/qvac-fabric-speech.cpp/pull/415)).
+
 ## [0.12.0] - 2026-11-05
 
 ### Breaking

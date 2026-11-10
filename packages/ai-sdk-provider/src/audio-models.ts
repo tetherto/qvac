@@ -8,13 +8,14 @@ import {
 } from '@ai-sdk/provider-utils'
 
 interface QvacAudioOptions {
+  /** No trailing slash: `createExternalQvac` normalizes it. */
   readonly baseURL: string
   readonly headers: Record<string, string>
   readonly fetch?: typeof fetch
 }
 
 function endpoint(options: QvacAudioOptions, path: string): string {
-  return `${options.baseURL.replace(/\/+$/, '')}${path}`
+  return `${options.baseURL}${path}`
 }
 
 function requestHeaders(

@@ -27,11 +27,17 @@ const REPORT: ResourceCollectorAcceptanceReport = {
 }
 
 const BUNDLE: BundleSdkResult = {
-  bundlePath: '/tmp/project/qvac/worker.bundle.js',
+  target: 'bare-sidecar',
+  hosts: ['linux-x64'],
+  entryPath: '/tmp/project/qvac/worker.entry.mjs',
+  language: 'javascript',
+  outputDir: '/tmp/project/qvac/worker',
+  bundlePath: '/tmp/project/qvac/worker/index.bundle',
   plugins: [],
   addons: ['bare-cpu-info', 'bare-gpu-info'],
-  entryPaths: { worker: '/tmp/project/qvac/worker.entry.mjs' },
-  manifestPath: '/tmp/project/qvac/addons.manifest.json'
+  addonModules: [],
+  installedPrebuilds: [],
+  linked: []
 }
 
 describe('parseResourceCollectorCheckArgs', () => {
@@ -124,7 +130,9 @@ describe('runResourceCollectorPackagingCheck', () => {
       {
         sdkPackageRoot: '/repo/packages/sdk',
         hosts: ['linux-x64'],
-        json: true
+        json: true,
+        platform: 'linux',
+        arch: 'x64'
       },
       dependencies
     )
@@ -135,19 +143,48 @@ describe('runResourceCollectorPackagingCheck', () => {
         projectRoot: '/tmp/project',
         sdkPath: '/repo/packages/sdk',
         hosts: ['linux-x64'],
-        quiet: true
+        quiet: true,
+        verify: false
       }
     ])
     assert.deepEqual(acceptanceCalls, [
       {
         projectRoot: '/tmp/project',
         bundlePath: BUNDLE.bundlePath,
-        manifestPath: BUNDLE.manifestPath,
         hosts: ['linux-x64']
       }
     ])
     assert.deepEqual(outputs, [JSON.stringify(REPORT, null, 2)])
     assert.deepEqual(removed, ['/tmp/project'])
+  })
+
+  it('bundles for its own host and checks the collectors for every requested host', async () => {
+    const bundledHosts: (string[] | undefined)[] = []
+    const acceptedHosts: string[][] = []
+    const dependencies = createDependencies({
+      bundleSdk: async (options) => {
+        bundledHosts.push(options.hosts)
+        return BUNDLE
+      },
+      acceptResourceCollectorPackaging: async (options) => {
+        acceptedHosts.push(options.hosts)
+        return REPORT
+      }
+    })
+
+    await runResourceCollectorPackagingCheck(
+      {
+        sdkPackageRoot: '/repo/packages/sdk',
+        hosts: ['win32-arm64', 'win32-x64'],
+        json: false,
+        platform: 'linux',
+        arch: 'x64'
+      },
+      dependencies
+    )
+
+    assert.deepEqual(bundledHosts, [['linux-x64']])
+    assert.deepEqual(acceptedHosts, [['win32-arm64', 'win32-x64']])
   })
 
   it('uses the active host and human formatter when hosts are omitted', async () => {
