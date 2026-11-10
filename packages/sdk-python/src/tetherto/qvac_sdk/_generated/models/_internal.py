@@ -12162,7 +12162,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     system_prompt: Annotated[
         str | None,
         Field(
-            description="Seeds conversation history on the JS side only; never forwarded to the addon. Default `'You are a helpful assistant.'`"
+            description="Prepended as the system message when a request's history carries none; applied on the JS side and never forwarded to the addon. Unset by default, so the model sees the history as sent."
         ),
     ] = None
     load_mode: Annotated[
@@ -28665,6 +28665,13 @@ class VectorIndexRequestWrite(GeneratedBaseModel):
     operation: Literal["write"] = "write"
 
 
+class VectorIndexRequestSetStagedSearch(GeneratedBaseModel):
+    enabled: bool
+    type: Literal["vectorIndex"] = "vectorIndex"
+    index_id: Annotated[str, Field(alias="indexId", min_length=1)]
+    operation: Literal["setStagedSearch"] = "setStagedSearch"
+
+
 class VectorIndexRequestDispose(GeneratedBaseModel):
     type: Literal["vectorIndex"] = "vectorIndex"
     index_id: Annotated[str, Field(alias="indexId", min_length=1)]
@@ -28684,6 +28691,8 @@ class VectorIndexResponseCreate(GeneratedBaseModel):
         extra="forbid",
     )
     type: Literal["vectorIndex"] = "vectorIndex"
+    calibrated: bool | None = None
+    staged_search: Annotated[bool | None, Field(alias="stagedSearch")] = None
     operation: Literal["create"] = "create"
     index_id: Annotated[str, Field(alias="indexId", min_length=1)]
     dim: Annotated[int, Field(gt=0, le=9007199254740991)]
@@ -28707,6 +28716,8 @@ class VectorIndexResponseLoad(GeneratedBaseModel):
         extra="forbid",
     )
     type: Literal["vectorIndex"] = "vectorIndex"
+    calibrated: bool | None = None
+    staged_search: Annotated[bool | None, Field(alias="stagedSearch")] = None
     operation: Literal["load"] = "load"
     index_id: Annotated[str, Field(alias="indexId", min_length=1)]
     dim: Annotated[int, Field(gt=0, le=9007199254740991)]
@@ -28722,6 +28733,8 @@ class VectorIndexResponseAdd(GeneratedBaseModel):
         extra="forbid",
     )
     type: Literal["vectorIndex"] = "vectorIndex"
+    calibrated: bool | None = None
+    staged_search: Annotated[bool | None, Field(alias="stagedSearch")] = None
     operation: Literal["add"] = "add"
     length: Annotated[int, Field(ge=0, le=9007199254740991)]
 
@@ -28769,6 +28782,15 @@ class VectorIndexResponseWrite(GeneratedBaseModel):
     type: Literal["vectorIndex"] = "vectorIndex"
     operation: Literal["write"] = "write"
     path: str
+
+
+class VectorIndexResponseSetStagedSearch(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["vectorIndex"] = "vectorIndex"
+    operation: Literal["setStagedSearch"] = "setStagedSearch"
+    staged_search: Annotated[bool, Field(alias="stagedSearch")]
 
 
 class VectorIndexResponseDispose(GeneratedBaseModel):
@@ -29692,6 +29714,7 @@ class Request_9(
         | VectorIndexRequestRemove
         | VectorIndexRequestContains
         | VectorIndexRequestWrite
+        | VectorIndexRequestSetStagedSearch
         | VectorIndexRequestDispose
     ]
 ):
@@ -29703,6 +29726,7 @@ class Request_9(
         | VectorIndexRequestRemove
         | VectorIndexRequestContains
         | VectorIndexRequestWrite
+        | VectorIndexRequestSetStagedSearch
         | VectorIndexRequestDispose,
         Field(title="VectorIndexRequest"),
     ]
@@ -29827,6 +29851,7 @@ class Response_2(
         | VectorIndexResponseRemove
         | VectorIndexResponseContains
         | VectorIndexResponseWrite
+        | VectorIndexResponseSetStagedSearch
         | VectorIndexResponseDispose
     ]
 ):
@@ -29838,6 +29863,7 @@ class Response_2(
         | VectorIndexResponseRemove
         | VectorIndexResponseContains
         | VectorIndexResponseWrite
+        | VectorIndexResponseSetStagedSearch
         | VectorIndexResponseDispose,
         Field(title="VectorIndexResponse"),
     ]

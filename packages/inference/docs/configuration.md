@@ -58,9 +58,12 @@ segments and events keep the native `tokenIds`, `isFinal`, `chunkIndex`,
 
 TranscribePsy-250M-EU-sub (`PARAKEET_TRANSCRIBEPSY_250M_Q8_0`) loads through
 `parakeet-transcription` as a TDT model; it detects its eight European languages
-itself. The 25-language TranscribePsy-250M-EU GGUF takes `language` as `en`,
-`other` or `auto` to pick its English trunk, non-English adapters or automatic
-routing. `longFormWindowFrames` and `longFormContextFrames` bound the offline
+itself. The full TranscribePsy-250M-EU (`PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0`,
+25 European languages) loads the same way from one GGUF that embeds its CAFE
+adapters and language gate; `language` selects `en` (English trunk), `other`
+(non-English adapters) or `auto` (the gate routes the recording; also the default
+when omitted). It runs on ggml only: the EU-sub Core ML bundles do not contain its
+adapters. `longFormWindowFrames` and `longFormContextFrames` bound the offline
 encoder window on long recordings in 80 ms encoder frames; the default `0` takes
 the window the model recommends (60 s with 25 % overlap for TranscribePsy). Its
 Core ML distribution, `PARAKEET_TRANSCRIBEPSY_250M_COREML_Q8_0`, is an
