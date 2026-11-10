@@ -414,7 +414,8 @@ test('orchestrateCompletion: runs tool_search itself and never asks the client',
   const searchResult = seenHistories[1]?.at(-1)
   t.is(searchResult?.role, 'tool', 'the search result was appended as a tool message')
   t.ok(
-    searchResult?.content.includes('"loaded":["create_issue"]'),
+    typeof searchResult?.content === 'string' &&
+      searchResult.content.includes('"loaded":["create_issue"]'),
     'the next turn reads the loaded tool back from the history'
   )
   t.ok(
@@ -482,9 +483,12 @@ test('orchestrateCompletion: tool_search applies the request toolSearch limits',
     )
   )
 
-  const result = (content: string | undefined) =>
-    (JSON.parse(content ?? '{}') as { tool_search: { loaded: string[]; already_loaded: string[] } })
-      .tool_search
+  const result = (content: unknown) =>
+    (
+      JSON.parse(typeof content === 'string' ? content : '{}') as {
+        tool_search: { loaded: string[]; already_loaded: string[] }
+      }
+    ).tool_search
   t.alike(result(seenHistories[1]?.at(-1)?.content).loaded, ['repo_tool_0'], 'defaultLimit applies')
   t.alike(
     result(seenHistories[2]?.at(-1)?.content),
