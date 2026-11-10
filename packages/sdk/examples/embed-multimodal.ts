@@ -3,7 +3,7 @@
 // Defaults use image/test.jpg and audio/sample-16khz.wav from the source repository.
 import {
   close,
-  embed,
+  embedBatch,
   EMBEDDINGGEMMA_2_Q8_0,
   loadModel,
   MMPROJ_EMBEDDINGGEMMA_2_Q8_0,
@@ -43,7 +43,7 @@ try {
       if (p.percentage >= 100) process.stderr.write('\n')
     }
   })
-  const { embedding, stats } = await embed({
+  const { embedding, stats } = await embedBatch({
     modelId,
     inputs: [
       'task: search result | query: a newspaper report about the Titanic',

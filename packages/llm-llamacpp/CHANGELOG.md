@@ -1,6 +1,34 @@
 # Changelog
 
-## [Unreleased]
+## [0.69.0] - 2026-11-09
+
+### Added
+
+- The AMD XDNA NPU can be selected with `backend: "xdna"` or
+  `devices: "XDNA0"`, on Linux x64 with an `@qvac/fabric` that ships the XDNA
+  backend. It is never chosen automatically and never joins an automatic
+  split. The KV cache stays at `f16` on the NPU, whose attention kernels take
+  only `f16` K/V, and a vision model's projector defaults to the CPU
+  (`mmproj-use-gpu: true` moves it to the NPU). `split-mode: "tensor"` with
+  `XDNA0` is rejected with `InvalidArgument`
+  ([#5588](https://github.com/tetherto/qvac/pull/5588)).
+
+### Changed
+
+- `@qvac/fabric` dependency bumped `^0.26.0` -> `^0.28.0`, whose Linux x64
+  package ships the XDNA backend and its NPU kernels (system XRT 2.25 or newer
+  required to load it). A caret on a `0.x` version locks the minor, so
+  `^0.26.0` would not have resolved `0.28.0`. The mobile dev and peer
+  dependencies `@qvac/fabric-android-arm64` / `@qvac/fabric-ios` move to
+  `^0.28.0` with it ([#5574](https://github.com/tetherto/qvac/pull/5574),
+  [#5588](https://github.com/tetherto/qvac/pull/5588)).
+- `@qvac/fabric` 0.28.0 (`qvac-fabric` `11739.1.1`,
+  [#5658](https://github.com/tetherto/qvac/pull/5658)) adds four fields to
+  `common_params`, which this addon uses, so it is rebuilt against the 0.28.0
+  headers and is not ABI-compatible with 0.26.x. Every addon loaded in one
+  process must resolve the same `@qvac/fabric` minor. Mobile apps must move
+  `@qvac/fabric` and `@qvac/fabric-android-arm64` or `@qvac/fabric-ios` to
+  `0.28.0` together.
 
 ### Fixed
 
@@ -9,6 +37,12 @@
   first, as `parallel: 1` does. Without it, consumers that split reasoning on
   the tags returned the reasoning as content
   ([#5562](https://github.com/tetherto/qvac/pull/5562)).
+- On hybrid and recurrent models (such as Qwen3.5), the next user turn after
+  a tool loop now restores the checkpoint taken at the previous user message
+  instead of reprocessing the whole conversation. The tool rounds' checkpoints
+  no longer evict it, and the `cacheKey` file keeps it beside the newest one
+  (checkpoint section version 2; older files still load)
+  ([#5637](https://github.com/tetherto/qvac/pull/5637)).
 
 ## [0.68.0] - 2026-11-04
 
