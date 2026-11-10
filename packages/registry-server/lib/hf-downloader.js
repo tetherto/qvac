@@ -2,8 +2,9 @@
 
 const fs = require('fs')
 const { Readable } = require('stream')
+const { ReadableStream } = require('stream/web')
 const { pipeline } = require('stream/promises')
-const { Agent, fetch } = require('undici')
+const { Agent, fetch, Request } = require('undici')
 
 const MAX_ATTEMPTS = 3
 const BACKOFF_MS = 3000
@@ -25,7 +26,7 @@ function isTransientHfDownloadError(err) {
     return err.statusCode === 429 || err.statusCode >= 500
   }
   if (TRANSIENT_CODES.has(err.code || err.cause?.code)) return true
-  const message = (err.message || '').toLowerCase()
+  const message = `${err.message || ''} ${err.cause?.message || ''}`.toLowerCase()
   return message.includes('terminated') || message.includes('socket hang up')
 }
 
@@ -71,7 +72,13 @@ async function downloadHuggingFace({ url, localPath, accessToken, logger }) {
           headers.Range = `bytes=${offset}-`
           headers['If-Range'] = validator
         }
-        response = await fetch(url, { headers, dispatcher })
+        // Invalid URLs or headers are programming errors, not failed I/O.
+        const request = new Request(url, { headers })
+        try {
+          response = await fetch(request, { dispatcher })
+        } catch (err) {
+          throw downloadFailure(err)
+        }
         if (!response.ok) {
           const err = new Error(`HuggingFace download returned HTTP ${response.status}`)
           err.statusCode = response.status
@@ -115,7 +122,7 @@ async function downloadHuggingFace({ url, localPath, accessToken, logger }) {
         }
 
         await pipeline(
-          Readable.fromWeb(response.body),
+          Readable.fromWeb(responseBodyStream(response.body)),
           async function* trackProgress(source) {
             for await (const chunk of source) {
               bytesDownloaded += chunk.length
@@ -144,6 +151,7 @@ async function downloadHuggingFace({ url, localPath, accessToken, logger }) {
         bytesDownloaded = partial?.size || 0
         const transient = isTransientHfDownloadError(err)
         const code = err.code || err.cause?.code
+        const cause = err.cause?.cause || err.cause
         logger.warn(
           {
             url,
@@ -153,21 +161,14 @@ async function downloadHuggingFace({ url, localPath, accessToken, logger }) {
             code,
             statusCode: err.statusCode,
             error: err.message,
-            cause: err.cause?.message,
-            socketBytesRead: err.cause?.socket?.bytesRead,
-            socketBytesWritten: err.cause?.socket?.bytesWritten
+            cause: cause?.message,
+            socketBytesRead: cause?.socket?.bytesRead,
+            socketBytesWritten: cause?.socket?.bytesWritten
           },
           'HuggingFace download attempt failed'
         )
 
         if (!transient || attempt === MAX_ATTEMPTS) {
-          // Protomux RPC's safety-catch deliberately crashes on TypeError.
-          // Undici uses that type for expected HTTP transfer failures too.
-          if (transient && err instanceof TypeError) {
-            const failure = new Error('HuggingFace download failed', { cause: err })
-            failure.code = code
-            throw failure
-          }
           throw err
         }
       } finally {
@@ -179,6 +180,38 @@ async function downloadHuggingFace({ url, localPath, accessToken, logger }) {
   } finally {
     await dispatcher.destroy()
   }
+}
+
+function downloadFailure(cause) {
+  // RPC treats TypeError as fatal, including Undici's operational failures.
+  const failure = new Error('HuggingFace download failed', { cause })
+  failure.code = cause.code || cause.cause?.code
+  return failure
+}
+
+function responseBodyStream(body) {
+  const reader = body.getReader()
+  return new ReadableStream({
+    async pull(controller) {
+      let chunk
+      try {
+        chunk = await reader.read()
+      } catch (err) {
+        reader.releaseLock()
+        controller.error(downloadFailure(err))
+        return
+      }
+      if (chunk.done) {
+        reader.releaseLock()
+        controller.close()
+      } else {
+        controller.enqueue(chunk.value)
+      }
+    },
+    cancel(reason) {
+      return reader.cancel(reason).finally(() => reader.releaseLock())
+    }
+  })
 }
 
 function parseSize(value) {

@@ -2,6 +2,8 @@
 
 const test = require('brittle')
 const http = require('http')
+const dns = require('dns')
+const tls = require('tls')
 const fs = require('fs').promises
 const path = require('path')
 const { createTempStorage } = require('../helpers/test-utils')
@@ -128,6 +130,62 @@ test('HF download does not retry permanent HTTP failures', async (t) => {
   await t.exception(downloadHuggingFace({ ...fixture, logger }), /403/)
   t.is(requests, 1)
   await t.exception(fs.stat(fixture.localPath), /ENOENT/)
+})
+
+test('HF download returns DNS failures as operational errors without retrying', async (t) => {
+  const storage = await createTempStorage(t)
+  const originalLookup = dns.lookup
+  let lookups = 0
+  dns.lookup = (hostname, options, callback) => {
+    if (hostname !== 'registry-download.invalid') return originalLookup(hostname, options, callback)
+    lookups++
+    const err = Object.assign(new Error('getaddrinfo ENOTFOUND registry-download.invalid'), {
+      code: 'ENOTFOUND'
+    })
+    process.nextTick(callback, err)
+  }
+
+  try {
+    await downloadHuggingFace({
+      url: 'https://registry-download.invalid/model.gguf',
+      localPath: path.join(storage, 'model.gguf'),
+      logger
+    })
+    t.fail('Expected DNS failure')
+  } catch (err) {
+    t.absent(err instanceof TypeError)
+    t.is(err.code, 'ENOTFOUND')
+    t.ok(err.cause instanceof TypeError)
+    t.is(err.cause?.cause?.code, 'ENOTFOUND')
+  } finally {
+    dns.lookup = originalLookup
+  }
+  t.is(lookups, 1, 'permanent DNS failure is not retried')
+})
+
+test('HF download returns TLS handshake failures as operational errors without retrying', async (t) => {
+  const storage = await createTempStorage(t)
+  // A server with no certificate rejects the handshake before any HTTP data.
+  const server = tls.createServer()
+  let handshakes = 0
+  server.on('tlsClientError', () => handshakes++)
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  t.teardown(() => new Promise((resolve) => server.close(resolve)))
+
+  try {
+    await downloadHuggingFace({
+      url: `https://127.0.0.1:${server.address().port}/model.gguf`,
+      localPath: path.join(storage, 'model.gguf'),
+      logger
+    })
+    t.fail('Expected TLS failure')
+  } catch (err) {
+    t.absent(err instanceof TypeError)
+    t.ok(/^ERR_(SSL|TLS)_/.test(err.code))
+    t.ok(err.cause instanceof TypeError)
+    t.is(err.code, err.cause?.cause?.code, 'preserves the original TLS error code')
+  }
+  t.is(handshakes, 1, 'permanent TLS failure is not retried')
 })
 
 test('HF download preserves invalid request arguments as programming errors', async (t) => {
