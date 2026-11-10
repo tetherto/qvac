@@ -338,7 +338,10 @@ void tryEmplaceDevice(
   // a refused device even when `integrated`/`dedicated` skips its type.
   if (isGpuType && !isEligibleGpuDevice(bckI, dev) &&
       !(allowNonAdrenoOpenCl && isOpenCl) && !(allowXdna && isXdna)) {
-    rejectedDevices.emplace_back(deviceIdentity(bckI, dev));
+    // The NPU is opt-in rather than unusable, so say how to select it.
+    rejectedDevices.emplace_back(
+        isXdna ? deviceIdentity(bckI, dev) + " [opt in with backend: 'xdna']"
+               : deviceIdentity(bckI, dev));
     return;
   }
   // Kept in its own bucket, which only the backend override reads, so the

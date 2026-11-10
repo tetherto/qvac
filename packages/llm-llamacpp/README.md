@@ -58,17 +58,25 @@ are loaded from `%CUDA_PATH%\bin\x64`, not from `PATH`.
 
 **Note on the AMD XDNA NPU (Linux x64):**
 On an XDNA2 NPU (Strix Point, Strix Halo, Krackan) with XRT 2.25 or newer installed, and an
-`@qvac/fabric` build that ships the XDNA backend, the NPU registers as `XDNA0`.
+`@qvac/fabric` build that ships the XDNA backend, the NPU registers as `XDNA0` when the
+process can read and write its `/dev/accel` node; otherwise fabric logs that it is not listed.
 
 - It is never chosen automatically. Select it with `backend: "xdna"` or `devices: "XDNA0"`.
-  Without an NPU or XRT, `backend: "xdna"` is skipped like any other absent backend.
-- Selection is opt-in, initialisation is not: on a host with an NPU, fabric opens it and
-  registers its kernels when the backends load, and each process holds an NPU context.
+  Without a listed NPU or XRT, `backend: "xdna"` is skipped like any other absent backend.
+- Fabric lists the NPU without opening it. The first load that uses `XDNA0` opens it and
+  registers its kernels, and the process then holds an NPU context. An NPU that fails to open
+  stays listed but takes no work: the load runs on the CPU and fabric logs
+  `the NPU did not open`.
+- The NPU kernels (`.xclbin` and `.insts.bin` files) are prebuilt and ship in
+  `@qvac/fabric-linux-x64` next to `libqvac-ggml-xdna.so`; nothing is compiled at install or
+  load time. Fabric looks for them in `GGML_XDNA_KERNEL_DIR` when set, then next to that
+  library. If they are missing, fabric logs `no GEMM kernels found` and the matrix
+  multiplications run on the CPU.
 - On an XDNA load the NPU runs the ops it supports and the CPU runs the rest. The GPU is not
   used, so another model can run on it at the same time. All loads in a process share one NPU
   context and take turns on it.
-- A vision model's projector follows the selection onto the NPU; untested there. Set
-  `mmproj-use-gpu: false` to keep it on the CPU.
+- A vision model's projector runs on the CPU with `backend: "xdna"` or with `XDNA0` first in
+  `devices`; it is untested on the NPU. `mmproj-use-gpu: true` moves it there.
 - The backend is built around Qwen3.5. A model whose `ssm_out` quantization the fused decode
   layer does not cover, such as Qwen's own Qwen3.5-0.8B `Q4_K_M` GGUF with `Q8_0` `ssm_out`, fails at
   the first decode with `unsupported fused weight set` instead of falling back. Requantize
@@ -76,9 +84,11 @@ On an XDNA2 NPU (Strix Point, Strix Halo, Krackan) with XRT 2.25 or newer instal
 - Keep flash attention on (the default) and the KV cache at `f16` (the default on XDNA); the
   NPU's attention kernels need both. `poll: 0` (the default) stops the threadpool busy-waiting
   while the NPU works.
-- The NPU reports all of system memory as free, so fit and memory accounting are nominal.
-- Splitting one model across `XDNA0` and a GPU (`devices: "XDNA0,Vulkan0"` with a split mode) is
-  accepted but untested.
+- The NPU reports the host's available memory as free, as the CPU backend does, so fit and
+  memory accounting are nominal.
+- Splitting one model across `XDNA0` and a GPU (`devices: "XDNA0,Vulkan0"`) with
+  `split-mode: "layer"` is accepted but untested. `split-mode: "tensor"` with `XDNA0` is rejected:
+  it never gives the NPU a whole layer.
 
 **Note — BitNet models (TQ1_0 / TQ2_0 quantization):**
 BitNet models require special backend handling on Adreno GPUs. When a BitNet model is detected and no explicit `main-gpu` is set:
@@ -205,7 +215,7 @@ const config = {
 | split-mode        | `"none"`, `"layer"`, or `"tensor"` | `"none"`                     | How to split the model across GPUs. `"tensor"` is EXPERIMENTAL and desktop-only; `"row"` is rejected ([details](./docs/multi-gpu.md)) |
 | tensor-split      | comma-separated proportions (e.g. `"1,1"`)  | —                            | GPU split ratios for the multi-GPU split modes ([details](./docs/multi-gpu.md)) |
 | parallel          | integer                                     | 1                            | Concurrent sequence slots for continuous batching. Values `>= 2` enable batch `run()` and split the KV cache uniformly across slots ([details](./docs/continuous-batching.md)) |
-| cache_checkpoints | 0 – 1024                                    | 1                            | Per-sequence cap on process-local checkpoints kept for cached requests on hybrid / recurrent models, DeepSeek V4 and sliding-window models (Gemma 3/4, gpt-oss), one per committed request at the end of its history. Each holds only the state a tail trim cannot rebuild (about 20 MB on Qwen3.5-0.8B; on sliding-window models the window cells, which reach hundreds of MB on larger models). `1` serves the next turn and a regenerate; editing the user message k-th from the end (1 = the last) without reprocessing the whole conversation needs `k + 1`, so `2` for the last one; `0` disables them. The newest one is also saved in the `cacheKey` file, so a conversation loaded in a new process continues its next turn from it. Also accepted as `cache-checkpoints` ([details](./docs/cache-api.md), [how it works](./docs/cache-lifecycle.md)) |
+| cache_checkpoints | 0 – 1024                                    | 1                            | Per-sequence cap on process-local checkpoints kept for cached requests on hybrid / recurrent models, DeepSeek V4 and sliding-window models (Gemma 3/4, gpt-oss), one per committed request at the end of its history. Each holds only the state a tail trim cannot rebuild (about 20 MB on Qwen3.5-0.8B; on sliding-window models the window cells, which reach hundreds of MB on larger models). `1` serves the next turn and a regenerate; editing the user message k-th from the end (1 = the last) without reprocessing the whole conversation needs `k + 1`, so `2` for the last one; `0` disables them. The newest one ending at a user message is kept on top of this count, so the next user turn after a tool loop can restore it. The newest one, and the newest one ending at a user message, are also saved in the `cacheKey` file, so a conversation loaded in a new process continues from them. Also accepted as `cache-checkpoints` ([details](./docs/cache-api.md), [how it works](./docs/cache-lifecycle.md)) |
 | cache_checkpoints_max_bytes | integer (bytes)                 | 0 (unlimited)                | Byte budget for those checkpoints, enforced before the count. The load fails with `InvalidArgument` when it cannot hold `cache_checkpoints` checkpoints of the largest size the context allows (on a sliding-window model, a full window). Also accepted as `cache-checkpoints-max-bytes` |
 | cache_checkpoint_storage | `"memory"` or `"disk"`             | `"memory"`                   | Where checkpoints and the per-request rollback snapshot live. `"memory"` keeps them in host RAM so a cached chat never touches the disk; `"disk"` writes them to a private directory inside `cache_checkpoint_dir`, which it requires. Also accepted as `cache-checkpoint-storage` |
 | cache_checkpoint_dir | directory path                              | none                         | **Required with `cache_checkpoint_storage: "disk"`**, and refused without it: where checkpoint files go, inside a private directory the addon creates in it (mode 0700; on Windows, the directory itself). On mobile, pass the app's cache directory. The load fails with `InvalidArgument` when it is missing, empty, or unusable. Also accepted as `cache-checkpoint-dir` |
@@ -256,6 +266,7 @@ For vision (VLM) models, the projector / image-encoder backend is auto-selected 
 | Android — Arm Mali | **CPU** | Projector encode measured slower on the Mali GPU than on CPU (QVAC-21257). |
 | Android — Adreno < 800 (e.g. Adreno 740) | **CPU** | Weaker tiers not yet benchmarked; conservative default (may be relaxed once benchmarked). |
 | Android — undetectable Adreno tier | **CPU** | Conservative default when the GPU's Adreno version can't be parsed. |
+| Linux x64 — AMD XDNA NPU (`XDNA0`) | **CPU** | The projector is untested on the NPU. |
 
 In every Android **CPU** case above the LLM layers still run on the GPU — only the projector stays on CPU.
 

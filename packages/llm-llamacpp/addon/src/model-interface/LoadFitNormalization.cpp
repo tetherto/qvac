@@ -1603,6 +1603,17 @@ NormalizedLoad normalizeLoadForFit(
                   "uses only one. Set split-mode to 'layer' or 'tensor'.\n",
                   K_LEGACY_PARSER_NAME.data()));
         }
+        // A tensor split never gives the NPU a whole layer, so its fused
+        // decode path cannot run.
+        if (splitMode == LLAMA_SPLIT_MODE_TENSOR &&
+            usesBackendFamily(true, "", splitSelection.devices, "xdna")) {
+          throw qvac_errors::StatusError(
+              qvac_errors::general_error::InvalidArgument,
+              string_format(
+                  "%s: split-mode 'tensor' does not support the XDNA NPU; use "
+                  "split-mode 'layer' or 'none'.\n",
+                  K_LEGACY_PARSER_NAME.data()));
+        }
       }
       // This path never calls chooseBackend, so apply its Adreno restrictions
       // to the split set; an emptied list falls through to the CPU branch.
@@ -1685,13 +1696,25 @@ NormalizedLoad normalizeLoadForFit(
             .adrenoVersion = maxAdrenoVersion,
             .isOpenCl = anyDevice(&backend_selection::SplitDevice::isOpenCl),
             .isMetal = anyDevice(&backend_selection::SplitDevice::isMetal)};
-      } else if (!splitSelection.rejectedDevices.empty()) {
+      } else if (
+          !splitSelection.rejectedDevices.empty() ||
+          !splitSelection.optInDevices.empty()) {
         std::string rejected;
         for (const std::string& device : splitSelection.rejectedDevices) {
           if (!rejected.empty()) {
             rejected += ", ";
           }
           rejected += device;
+        }
+        // 'backend' cannot be combined with split-mode, so the hint names
+        // 'devices'.
+        for (const backend_selection::SplitDevice& device :
+             splitSelection.optInDevices) {
+          if (!rejected.empty()) {
+            rejected += ", ";
+          }
+          rejected +=
+              device.name + " [opt in with devices: '" + device.name + "']";
         }
         QLOG_IF(
             Priority::WARNING,
@@ -1771,8 +1794,13 @@ NormalizedLoad normalizeLoadForFit(
                                         ? "auto-default, Adreno <800"
                                         : "auto-default, non-Adreno-800+ GPU"));
 #else
-      bool mmprojUseGpu = true;
-      const char* mmprojDefaultReason = "auto-default";
+      // The projector is untested on the XDNA NPU, so it stays on the CPU
+      // unless mmproj-use-gpu asks for the NPU.
+      const bool projectorOnXdna =
+          usesBackendFamily(true, selected.name, {}, "xdna");
+      bool mmprojUseGpu = !projectorOnXdna;
+      const char* mmprojDefaultReason =
+          projectorOnXdna ? "auto-default, XDNA NPU" : "auto-default";
 #endif
       if (mmprojUseGpuOverride.has_value()) {
         mmprojUseGpu = mmprojUseGpuOverride.value();

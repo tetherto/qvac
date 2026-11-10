@@ -9,6 +9,17 @@
       "ctx_size": 2048
     }
   },
+  "llm-shared-cache": {
+    "constant": {
+      "$const": "LLAMA_3_2_1B_INST_Q4_0"
+    },
+    "type": "llamacpp-completion",
+    "config": {
+      "verbosity": 0,
+      "ctx_size": 2048,
+      "cache_share_across_keys": true
+    }
+  },
   "llm-small-ctx": {
     "constant": {
       "$const": "LLAMA_3_2_1B_INST_Q4_0"
@@ -110,13 +121,49 @@
     },
     "type": "llamacpp-embedding"
   },
+  "embeddinggemma2": {
+    "constant": {
+      "$const": "EMBEDDINGGEMMA_2_Q8_0"
+    },
+    "type": "llamacpp-embedding",
+    "config": {
+      "projectionModelSrc": {
+        "$const": "MMPROJ_EMBEDDINGGEMMA_2_Q8_0"
+      },
+      "ctxSize": 2048,
+      "batchSize": 2048
+    },
+    "configOn": {
+      "mobile-android": {
+        "flashAttention": "off"
+      }
+    }
+  },
+  "image-embedding": {
+    "on": [
+      "desktop-macos",
+      "desktop-linux",
+      "desktop-windows",
+      "mobile",
+      "electron",
+      "snap"
+    ],
+    "constant": {
+      "$const": "MEGALOC_MIXED"
+    },
+    "type": "ggml-image-embedding",
+    "config": {
+      "backend": "CPU",
+      "threads": 4
+    }
+  },
   "rerank": {
     "modelSrc": "https://huggingface.co/ggml-org/models/resolve/499bc8821c6b12b4e53c5bffcb21ec206f212d81/jina-reranker-v1-tiny-en/ggml-model-f16.gguf",
     "type": "llamacpp-rerank"
   },
   "whisper": {
     "constant": {
-      "$const": "WHISPER_TINY"
+      "$const": "WHISPER_TINY_Q8_0"
     },
     "type": "whispercpp-transcription",
     "config": {
@@ -441,6 +488,9 @@
     }
   },
   "tts-parler": {
+    "skipPreDownloadOn": [
+      "mobile"
+    ],
     "constant": {
       "$const": "TTS_MINI_V1_EN_PARLER_TTS_Q8_0"
     },
@@ -471,7 +521,7 @@
   },
   "tts-cosyvoice3": {
     "constant": {
-      "$const": "TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0"
+      "$const": "TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0"
     },
     "type": "tts-ggml",
     "config": {
@@ -482,7 +532,7 @@
   },
   "tts-cosyvoice3-native-stream": {
     "constant": {
-      "$const": "TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0"
+      "$const": "TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0"
     },
     "type": "tts-ggml",
     "config": {
@@ -541,7 +591,7 @@
   },
   "tts-supertonic": {
     "constant": {
-      "$const": "TTS_EN_SUPERTONIC_Q8_0"
+      "$const": "TTS_EN_SUPERTONIC_Q4_0"
     },
     "type": "tts-ggml",
     "config": {
@@ -565,7 +615,7 @@
   },
   "tts-supertonic-8k": {
     "constant": {
-      "$const": "TTS_EN_SUPERTONIC_Q8_0"
+      "$const": "TTS_EN_SUPERTONIC_Q4_0"
     },
     "type": "tts-ggml",
     "config": {
@@ -578,7 +628,7 @@
   },
   "tts-supertonic-enhanced": {
     "constant": {
-      "$const": "TTS_EN_SUPERTONIC_Q8_0"
+      "$const": "TTS_EN_SUPERTONIC_Q4_0"
     },
     "type": "tts-ggml",
     "config": {

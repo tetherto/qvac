@@ -4,10 +4,12 @@ import type {
   CompletionParams,
   CompletionStats,
   GenerationParams,
+  HistoryContent,
   ResponseFormat,
   Tool,
   ToolCall,
-  ToolDialect
+  ToolDialect,
+  ToolSearchOptions
 } from '@/schemas/index'
 import {
   logCacheDisabled,
@@ -51,6 +53,7 @@ interface CompletionResult {
   stats?: CompletionStats
   toolCalls: ToolCall[]
   stoppedAtContextBoundary: boolean
+  stopReason?: 'eos' | 'stopSequence'
 }
 
 interface ProcessModelResponseResult extends CompletionResult {
@@ -63,9 +66,17 @@ interface ProcessModelResponseResult extends CompletionResult {
   producedTokens: boolean
 }
 
+/**
+ * One ordered content part as the addon receives it. The addon's media part
+ * carries its path in `content`, so a caller's `{ type: 'media', path }` is
+ * translated here.
+ */
+export type ChatHistoryContentPart =
+  { type: 'text'; text: string } | { type: 'media'; content: string }
+
 interface ChatHistory {
   role?: string
-  content?: string
+  content?: string | ChatHistoryContentPart[]
   type?: string
   name?: string
   description?: string
@@ -113,6 +124,21 @@ function transformMessage(message: HistoryMsg | Tool): ChatHistory[] {
   }
 
   const msg = message as HistoryMsg
+
+  // Ordered parts reach the addon as ONE message, so text and each image share
+  // a turn. Attachments cannot express that: they are all sent before the
+  // text, which leaves the model unable to tell which image is which option.
+  if (Array.isArray(msg.content)) {
+    const parts = msg.content.map((part) => {
+      if (part.type === 'text') return { type: 'text' as const, text: part.text }
+      if (!fs.existsSync(part.path)) {
+        throw new AttachmentNotFoundError(part.path)
+      }
+      return { type: 'media' as const, content: part.path }
+    })
+    transformed.push({ role: msg.role, content: parts })
+    return transformed
+  }
 
   if (msg.attachments && msg.attachments.length > 0) {
     for (const attachment of msg.attachments) {
@@ -177,7 +203,7 @@ function toCacheMessage(msg: HistoryMsg): CacheMessage {
  * none. `transform.ts` strips `system_prompt` from the config handed to the
  * addon, so the conversation is the only way it reaches the model.
  */
-export function seedConfiguredSystemPrompt<T extends { role: string; content: string }>(
+export function seedConfiguredSystemPrompt<T extends { role: string; content: HistoryContent }>(
   history: T[],
   modelConfig: unknown
 ): T[] {
@@ -293,6 +319,8 @@ async function* processModelResponse(
     toolCalls: toolCallsResult,
     responseText: accumulatedText,
     producedTokens,
+    ...(stopReason === 'eos' && { stopReason: 'eos' as const }),
+    ...(stopReason === 'antiprompt' && { stopReason: 'stopSequence' as const }),
     stoppedAtContextBoundary: stopReason === 'contextOverflow'
   }
 }
@@ -300,6 +328,7 @@ async function* processModelResponse(
 export async function* completion(
   params: CompletionParams & {
     tools?: Tool[]
+    toolSearch?: ToolSearchOptions | undefined
     generationParams?: GenerationParams
     toolDialect?: ToolDialect
     responseFormat?: ResponseFormat
@@ -321,6 +350,7 @@ export async function* completion(
     kvCache,
     prefill,
     tools,
+    toolSearch,
     generationParams,
     responseFormat
   } = params
@@ -333,7 +363,7 @@ export async function* completion(
   // With deferred tools the prompt carries the always-loaded ones, `tool_search`
   // and its catalog, and whatever earlier searches loaded. `null` when nothing
   // defers, which leaves the existing path alone.
-  const deferred = resolveDeferredTools(tools, history)
+  const deferred = resolveDeferredTools(tools, history, toolSearch)
   const toolsToRender = deferred?.toolsToRender ?? tools?.map(toWireTool)
   const toolsActive = !!toolsToRender?.length && toolsEnabled
   const dialect =

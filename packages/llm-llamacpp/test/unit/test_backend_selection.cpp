@@ -1580,7 +1580,21 @@ TEST_F(BackendSelectionTest, XdnaOnlyHostFallsBackToCpuByDefault) {
       mockBackend, BackendType::GPU, BackendType::CPU, "none");
   EXPECT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& log) {
     return log.first == GGML_LOG_LEVEL_WARN &&
-           log.second.find("XDNA0 (XDNA)") != std::string::npos;
+           log.second.find("XDNA0 (XDNA) [opt in with backend: 'xdna']") !=
+               std::string::npos;
+  }));
+}
+
+// Only the NPU gets the opt-in hint; other rejected devices are unusable.
+TEST_F(BackendSelectionTest, CpuFallbackHintNamesOnlyXdna) {
+  mockBackend.addDevice(createXdnaDevice());
+  mockBackend.addDevice(createIGPUDevice("Mali-G720", "OpenCL0"));
+  expectChosenForPreference(
+      mockBackend, BackendType::GPU, BackendType::CPU, "none");
+  EXPECT_TRUE(std::ranges::any_of(mockBackend.logs, [](const auto& log) {
+    return log.first == GGML_LOG_LEVEL_WARN &&
+           log.second.find("OpenCL0 (standard); falling back") !=
+               std::string::npos;
   }));
 }
 

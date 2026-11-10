@@ -44,3 +44,22 @@ test('textToSpeechStream preserves Uint8Array fragments', (t) => {
 
   t.is(encodeTextToSpeechFragment(fragment), fragment)
 })
+
+test('textToSpeechStream validates the per-request voice rules before opening the RPC', async (t) => {
+  // A per-request recording must bring its own transcript.
+  const missingTranscript = await captureValidationError({
+    modelId: 'audio8',
+    referenceAudioSrc: '/voices/someone-else.wav'
+  })
+  t.ok(missingTranscript instanceof RequestValidationFailedError)
+  t.ok((missingTranscript as Error).message.includes('referenceText'))
+
+  // `instruct` is a CosyVoice3 control, and CosyVoice3 takes one control per synthesis.
+  const twoControls = await captureValidationError({
+    modelId: 'cosyvoice3',
+    instruct: { dialect: 'cantonese' },
+    emotion: 'happy'
+  })
+  t.ok(twoControls instanceof RequestValidationFailedError)
+  t.ok((twoControls as Error).message.includes('emotion'))
+})

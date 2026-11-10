@@ -32,6 +32,7 @@ import { batchCompletion } from '@/plugins/builtin/llamacpp-completion/ops/batch
 import { finetune } from '@/plugins/builtin/llamacpp-completion/ops/finetune'
 import { translate } from '@/plugins/ops/translate'
 import { transformLlmConfig } from '@/plugins/builtin/llamacpp-completion/transform'
+import { llmFitRequest } from '@/plugins/builtin/llamacpp-completion/fit'
 import { attachModelExecutionMs } from '@/profiling/model-execution'
 import { getModelConfig } from '@/runtime/model-registry'
 import { createCompletionNormalizer } from '@/utils/completion-normalizer'
@@ -119,6 +120,7 @@ export const llmPlugin = definePlugin({
   displayName: 'LLM (llama.cpp)',
   addonPackage: ADDON_LLM,
   loadConfigSchema: llmConfigBaseSchema,
+  fitRequest: llmFitRequest,
   assessFit: LlmLlamacpp.assessFit,
 
   async resolveConfig(cfg: LlmConfigInput, ctx: ResolveContext) {
@@ -171,7 +173,7 @@ export const llmPlugin = definePlugin({
         // includes whatever an earlier `tool_search` loaded.
         const toolsByPosition = request.prompts.map(
           (prompt) =>
-            resolveDeferredTools(prompt.tools, prompt.history)?.toolsToRender ??
+            resolveDeferredTools(prompt.tools, prompt.history, prompt.toolSearch)?.toolsToRender ??
             prompt.tools?.map(toWireTool) ??
             []
         )
@@ -411,6 +413,7 @@ export const llmPlugin = definePlugin({
             kvCache: request.kvCache,
             prefill: request.prefill,
             ...(toolsActive && request.tools && { tools: request.tools }),
+            ...(request.toolSearch && { toolSearch: request.toolSearch }),
             ...(request.generationParams && { generationParams: request.generationParams }),
             ...(toolsActive && { toolDialect: dialect }),
             ...(request.responseFormat && { responseFormat: request.responseFormat })
@@ -436,7 +439,8 @@ export const llmPlugin = definePlugin({
             result = await stream.next()
           }
 
-          const { modelExecutionMs, stats, toolCalls, stoppedAtContextBoundary } = result.value
+          const { modelExecutionMs, stats, toolCalls, stoppedAtContextBoundary, stopReason } =
+            result.value
           // Cancellation rides the done path: observable via the last event's
           // stopReason; client aggregates reject with InferenceCancelledError.
           const cancelled = ctx.signal.aborted
@@ -455,6 +459,7 @@ export const llmPlugin = definePlugin({
           const terminalEvents = normalizer.finish({
             ...(stats && { stats }),
             ...(toolCalls.length > 0 && { toolCalls }),
+            ...(stopReason && { stopReason }),
             ...(cancelled && { stopReason: 'cancelled' as const }),
             ...(lengthStop && { stopReason: 'length' as const })
           })

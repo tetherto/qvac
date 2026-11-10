@@ -1,3 +1,5 @@
+import { EmbeddingGemma2Executor } from '../shared/executors/embeddinggemma2-executor.js'
+import { ImageEmbeddingExecutor } from '../shared/executors/image-embedding-executor.js'
 import { DecisionExecutor } from '../shared/executors/decision-executor.js'
 import { RerankExecutor } from '../shared/executors/rerank-executor.js'
 import { MobileSpeakerAwareExecutor } from './executors/speaker-aware-executor.js'
@@ -185,6 +187,7 @@ export async function bootstrap(filteredTests?: TestDefinition[]) {
 
 export const executor = createExecutor({
   handlers: [
+    new ImageEmbeddingExecutor(resources),
     new MobileSpeakerAwareExecutor(resources),
     // Mobile platform policy -- which suites are off, and on which OS -- is declared in the catalog
     // now; see catalog/platform-skips.ts.
@@ -198,6 +201,7 @@ export const executor = createExecutor({
     new MobileTranscriptionExecutor(resources),
     new MobileTranscribeStreamEventsExecutor(resources),
     new EmbeddingExecutor(resources),
+    new EmbeddingGemma2Executor(resources, resolveTableAsset),
     new DecisionExecutor(resources),
     new RerankExecutor(resources),
     new MobileRagExecutor(resources),

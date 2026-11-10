@@ -59,7 +59,7 @@ USB/TCP, Thunderbolt networking, or standard Ethernet.
 
 That separate mode is what `split-mode: 'tensor'` now exposes, so tensor parallelism **is** available — it simply does not go through `'row'`.
 
-`split-mode: 'tensor'` selects `LLAMA_SPLIT_MODE_TENSOR`, which distributes the model through qvac-fabric's meta-device abstraction. It needs no backend-specific buffer type, so it is available on every shipped backend. Three constraints apply:
+`split-mode: 'tensor'` selects `LLAMA_SPLIT_MODE_TENSOR`, which distributes the model through qvac-fabric's meta-device abstraction. It needs no backend-specific buffer type, so it is available on every shipped GPU backend. The AMD XDNA NPU is the exception: the addon rejects `split-mode: 'tensor'` with `XDNA0` (`InvalidArgument`), because a tensor split never gives the NPU a whole layer. Three constraints apply:
 
 - **Flash attention is mandatory.** qvac-fabric fails context creation without it, so the addon rejects a falsey `flash-attn` together with `split-mode: 'tensor'` up front (`InvalidArgument`). qvac-fabric treats `off`, `disabled`, `false` and `0` as equivalent, and all four are rejected under both the `flash-attn` and `flash_attn` spellings. Leaving it unset is fine — it already defaults to `on`. `'auto'` is accepted too, since qvac-fabric promotes it to ENABLED for this mode itself — but note that makes tensor mode the one place `'auto'` does *not* preserve the runtime capability probe, because the mode requires flash attention unconditionally.
 - **Auto-fit is disabled.** qvac-fabric's memory fitting is not implemented for this mode, so the addon turns it off explicitly and logs a WARNING. The override is applied after argument parsing, so an explicit `fit: 'on'` cannot re-enable it. `gpu_layers` then defaults to every layer and `ctx_size` to the model's trained context. **Set `ctx_size` explicitly for large models**, or the load can OOM where auto-fit would have trimmed the context.
@@ -86,6 +86,7 @@ The second column is the backend allowlist: whether this package will run on a d
 | OpenCL  | Yes, the Adreno path | Meta device, generic all-reduce |
 | CUDA    | Yes | Backend-specific all-reduce for two GPUs, generic otherwise. No NCCL in the shipped build |
 | RPC     | Yes, but qvac-fabric does not build it yet | Meta device, generic all-reduce |
+| XDNA (AMD NPU) | Opt-in only: named in `devices`, never in an automatic split | n/a, rejected with `InvalidArgument` |
 | HIP / ROCm | **No**, rejected by the allowlist | n/a |
 | SYCL    | **No**, rejected by the allowlist | n/a |
 | MUSA    | **No**, rejected by the allowlist | n/a |

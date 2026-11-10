@@ -8,6 +8,12 @@ export const RESOURCE_TABLE: ResourceTable = {
     config: { verbosity: 0, ctx_size: 2048 }
   },
 
+  'llm-shared-cache': {
+    constant: { $const: 'LLAMA_3_2_1B_INST_Q4_0' },
+    type: 'llamacpp-completion',
+    config: { verbosity: 0, ctx_size: 2048, cache_share_across_keys: true }
+  },
+
   'llm-small-ctx': {
     constant: { $const: 'LLAMA_3_2_1B_INST_Q4_0' },
     type: 'llamacpp-completion',
@@ -71,6 +77,24 @@ export const RESOURCE_TABLE: ResourceTable = {
     type: 'llamacpp-embedding'
   },
 
+  embeddinggemma2: {
+    constant: { $const: 'EMBEDDINGGEMMA_2_Q8_0' },
+    type: 'llamacpp-embedding',
+    config: {
+      projectionModelSrc: { $const: 'MMPROJ_EMBEDDINGGEMMA_2_Q8_0' },
+      ctxSize: 2048,
+      batchSize: 2048
+    },
+    configOn: { 'mobile-android': { flashAttention: 'off' } }
+  },
+
+  'image-embedding': {
+    on: ['desktop-macos', 'desktop-linux', 'desktop-windows', 'mobile', 'electron', 'snap'],
+    constant: { $const: 'MEGALOC_MIXED' },
+    type: 'ggml-image-embedding',
+    config: { backend: 'CPU', threads: 4 }
+  },
+
   // The reranker the addon's own tests use, pinned until a reranker is in the registry.
   rerank: {
     modelSrc:
@@ -79,7 +103,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   whisper: {
-    constant: { $const: 'WHISPER_TINY' },
+    constant: { $const: 'WHISPER_TINY_Q8_0' },
     type: 'whispercpp-transcription',
     config: {
       vadModelSrc: { $const: 'VAD_SILERO_5_1_2' },
@@ -297,6 +321,8 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'tts-parler': {
+    // Every leg defines it for `model-fit-tts-parler`; mobile never loads it.
+    skipPreDownloadOn: ['mobile'],
     constant: { $const: 'TTS_MINI_V1_EN_PARLER_TTS_Q8_0' },
     type: 'tts-ggml',
     config: {
@@ -324,7 +350,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'tts-cosyvoice3': {
-    constant: { $const: 'TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0' },
+    constant: { $const: 'TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0' },
     type: 'tts-ggml',
     config: {
       ttsEngine: 'cosyvoice3',
@@ -334,7 +360,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'tts-cosyvoice3-native-stream': {
-    constant: { $const: 'TTS_COSYVOICE3_LLM_COSYVOICE_Q8_0' },
+    constant: { $const: 'TTS_COSYVOICE3_LLM_COSYVOICE_Q4_0' },
     type: 'tts-ggml',
     config: {
       ttsEngine: 'cosyvoice3',
@@ -377,7 +403,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'tts-supertonic': {
-    constant: { $const: 'TTS_EN_SUPERTONIC_Q8_0' },
+    constant: { $const: 'TTS_EN_SUPERTONIC_Q4_0' },
     type: 'tts-ggml',
     config: {
       ttsEngine: 'supertonic',
@@ -398,8 +424,9 @@ export const RESOURCE_TABLE: ResourceTable = {
     }
   },
 
+  // Same model with 8 kHz output, for the sample-rate ratio test.
   'tts-supertonic-8k': {
-    constant: { $const: 'TTS_EN_SUPERTONIC_Q8_0' },
+    constant: { $const: 'TTS_EN_SUPERTONIC_Q4_0' },
     type: 'tts-ggml',
     config: {
       ttsEngine: 'supertonic',
@@ -411,7 +438,7 @@ export const RESOURCE_TABLE: ResourceTable = {
   },
 
   'tts-supertonic-enhanced': {
-    constant: { $const: 'TTS_EN_SUPERTONIC_Q8_0' },
+    constant: { $const: 'TTS_EN_SUPERTONIC_Q4_0' },
     type: 'tts-ggml',
     config: {
       ttsEngine: 'supertonic',

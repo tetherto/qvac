@@ -444,36 +444,34 @@ safeTest(
         return (await collectResponse(response)).text
       }
 
-      const required = await runWithToolChoice('required')
+      // `reasoning_budget: 0` is load-bearing on both forcing choices, and the
+      // reason is a real limit of the feature, not test tidying. `required`,
+      // and a named choice that resolves to it, make the tool grammar eager —
+      // and an eager grammar is built from the whole PEG parser including its
+      // reasoning section, so it *permits* an arbitrarily long `<think>`
+      // prefix. Generation can end inside that prefix before the call is
+      // reached: Qwen3-1.7B has missed the call on linux-arm64 (CPU, ran to
+      // the 1024-token cap) and darwin-arm64 (stopped early), while passing
+      // on linux-x64 and darwin-x64.
+      //
+      // `reasoning_budget: 0` stops the template opening `<think>` at all, so
+      // the grammar's first constrained token is the call. A positive budget
+      // would also work — it builds fabric's reasoning-budget sampler, which
+      // forces the block closed at the cap — but 0 is the tighter pin for the
+      // properties under test: that `required` produces a call, and that a
+      // named choice restricts the call to that function.
+      //
+      // Note this is NOT grammar suppression inside the reasoning block.
+      // `grammar_should_apply` (fabric common/sampling.cpp:452-465) gates
+      // that on `grammar_lazy`, which `required` makes false, so the eager
+      // grammar is active throughout.
+      const required = await runWithToolChoice('required', { reasoning_budget: 0 })
       t.ok(
         required.includes('<tool_call>'),
         `required produced a tool call: ${required.slice(0, 200)}`
       )
       assertDeclaredToolCalls(t, required, clonePrompt(), 'required')
 
-      // `reasoning_budget: 0` is load-bearing, and the reason is a real limit
-      // of the feature, not test tidying. A named choice resolves to
-      // `required`, which makes the tool grammar eager — and an eager grammar
-      // is built from the whole PEG parser including its reasoning section,
-      // so it *permits* an arbitrarily long `<think>` prefix. All of
-      // `n_predict` can be spent inside that prefix before the call is
-      // reached: this case failed on linux-arm64 (84s, ran to the 1024-token
-      // cap) and darwin-arm64 (4.6s, stopped early) while passing on
-      // linux-x64 and darwin-x64. Narrowing the tools to `queryDB` against a
-      // three-part request is what makes Qwen3-1.7B reason long enough to
-      // hit it.
-      //
-      // `reasoning_budget: 0` stops the template opening `<think>` at all, so
-      // the grammar's first constrained token is the call. A positive budget
-      // would also work — it builds fabric's reasoning-budget sampler, which
-      // forces the block closed at the cap — but 0 is the tighter pin for the
-      // property under test: that a named choice restricts the call to that
-      // function.
-      //
-      // Note this is NOT grammar suppression inside the reasoning block.
-      // `grammar_should_apply` (fabric common/sampling.cpp:452-465) gates
-      // that on `grammar_lazy`, which `required` makes false, so the eager
-      // grammar is active throughout.
       const named = await runWithToolChoice('queryDB', { reasoning_budget: 0 })
       const namedCalls = parseToolCalls(named, t)
       t.ok(namedCalls.length > 0, `named function produced a tool call: ${named.slice(0, 200)}`)

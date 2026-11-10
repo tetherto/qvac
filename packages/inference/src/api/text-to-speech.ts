@@ -10,7 +10,9 @@ import {
   type TextToSpeechStreamSession,
   type TextToSpeechStreamResult,
   type TtsSentenceChunkUpdate,
-  type TtsStats
+  type TtsStats,
+  withDecodedTtsPcm,
+  decodeTtsPcm
 } from '@/schemas/index'
 import Buffer from 'bare-buffer'
 import { stream as streamRpc, duplex, type DuplexReadable } from '@/dispatch'
@@ -184,7 +186,13 @@ function buildTextToSpeechStreamRequest(
     ...(params.expressivity !== undefined && { expressivity: params.expressivity }),
     ...(params.noise !== undefined && { noise: params.noise }),
     ...(params.reverb !== undefined && { reverb: params.reverb }),
-    ...(params.quality !== undefined && { quality: params.quality })
+    ...(params.quality !== undefined && { quality: params.quality }),
+    // Per-request voice controls: CosyVoice3's instruct, Audio8's reference pair.
+    ...(params.instruct !== undefined && { instruct: params.instruct }),
+    ...(params.referenceAudioSrc !== undefined && {
+      referenceAudioSrc: params.referenceAudioSrc
+    }),
+    ...(params.referenceText !== undefined && { referenceText: params.referenceText })
   }
 }
 
@@ -195,9 +203,10 @@ function buildTextToSpeechStreamRequest(
  *
  * - `stream: false` — collect all PCM samples and resolve once via
  *   `result.buffer` (`Promise<number[]>`). `bufferStream` is empty.
- * - `stream: true` (default) — yield PCM samples through `result.bufferStream`
- *   (`AsyncGenerator<number>`) as they arrive. `buffer` resolves to an empty
- *   array.
+ * - `stream: true` (default) — yield PCM through `result.chunkStream`
+ *   (`AsyncGenerator<Int16Array>`, one chunk per frame) or
+ *   `result.bufferStream` (`AsyncGenerator<number>`, one sample at a time).
+ *   `buffer` resolves to an empty array.
  * - `stream: true, sentenceStream: true` — also exposes `result.chunkUpdates`
  *   (`AsyncGenerator<TtsSentenceChunkUpdate>`) so callers can mux per-sentence
  *   metadata with the audio. Multiple consumers can iterate the response
@@ -220,7 +229,8 @@ function buildTextToSpeechStreamRequest(
  * before draining the audio); `result.stats` and `result.stopReason` resolve
  * from the terminal frame. All three resolve — with `undefined` when the run
  * produced none — rather than reject. In `stream: true` mode (the default) the
- * run starts lazily: nothing is sent until `bufferStream` is first iterated, so
+ * run starts lazily: nothing is sent until `chunkStream` or `bufferStream` is
+ * first iterated, so
  * `done`, `sampleRate`, `stats` and `stopReason` stay pending until then. In
  * `stream: false` and `sentenceStream: true` modes the run starts immediately.
  * Read `sampleRate` rather than assuming the engine default: `outputSampleRate`
@@ -228,7 +238,7 @@ function buildTextToSpeechStreamRequest(
  *
  * @param params - TTS request parameters (see `TtsClientParamsInput`).
  * @param options - Optional RPC options (timeout, profiling, force new connection).
- * @returns A `TextToSpeechStreamResult` with `bufferStream`, `buffer`, `done`,
+ * @returns A `TextToSpeechStreamResult` with `chunkStream`, `bufferStream`, `buffer`, `done`,
  *          `sampleRate`, `stats`, and (when `sentenceStream: true`)
  *          `chunkUpdates`.
  * @throws {TextToSpeechStreamFailedError} When `sentenceStream: true` is paired
@@ -342,8 +352,9 @@ async function* ttsResponseSource(
   side: TtsSideChannel
 ): AsyncGenerator<TtsResponse> {
   try {
-    for await (const response of streamRpc(request, options)) {
-      if (response.type !== 'textToSpeech') continue
+    for await (const raw of streamRpc(request, options)) {
+      if (raw.type !== 'textToSpeech') continue
+      const response = withDecodedTtsPcm(raw)
       side.observe(response)
       yield response
     }
@@ -365,11 +376,12 @@ function sentenceStreamTts(
   // deferred subscribing until the generators were iterated, the first
   // consumer could trim the queue before the second ever registered,
   // silently dropping earlier frames.
-  const bufferSubscription = multicast.subscribe()
+  const audio = sentenceAudioViews(multicast.subscribe())
   const chunkSubscription = multicast.subscribe()
 
   return {
-    bufferStream: sentenceBufferStream(bufferSubscription),
+    bufferStream: audio.bufferStream,
+    chunkStream: audio.chunkStream,
     chunkUpdates: sentenceChunkUpdates(chunkSubscription),
     buffer: Promise.resolve([]),
     done: multicast.done,
@@ -381,12 +393,30 @@ function sentenceStreamTts(
   }
 }
 
-async function* sentenceBufferStream(source: AsyncGenerator<TtsResponse>): AsyncGenerator<number> {
+// Both audio views share ONE multicast subscription, so an un-iterated
+// `chunkStream` cannot pin the queue for a caller that drains `bufferStream`
+// and `chunkUpdates` only. Exported for test use; not part of the public
+// surface.
+export function sentenceAudioViews(subscription: AsyncGenerator<TtsResponse>): {
+  bufferStream: AsyncGenerator<number>
+  chunkStream: AsyncGenerator<Int16Array>
+} {
+  const chunkStream = pcmChunksOf(subscription)
+  return { bufferStream: samplesOf(chunkStream), chunkStream }
+}
+
+export async function* pcmChunksOf(source: AsyncIterable<TtsResponse>): AsyncGenerator<Int16Array> {
   for await (const m of source) {
     if (m.buffer.length > 0) {
-      yield* m.buffer
+      yield Int16Array.from(m.buffer)
     }
     if (m.done) break
+  }
+}
+
+export async function* samplesOf(chunks: AsyncIterable<Int16Array>): AsyncGenerator<number> {
+  for await (const chunk of chunks) {
+    yield* chunk
   }
 }
 
@@ -425,9 +455,12 @@ function plainStreamTts(
   })
   done.catch(() => {})
   const side = createTtsSideChannel()
+  // Both views share one lazy run; iterating either starts it.
+  const chunkStream = plainTtsChunkStream(request, options, resolveDone, rejectDone, side)
 
   return {
-    bufferStream: plainTtsBufferStream(request, options, resolveDone, rejectDone, side),
+    bufferStream: samplesOf(chunkStream),
+    chunkStream,
     buffer: Promise.resolve([]),
     done,
     requestId: request.requestId as string,
@@ -438,24 +471,28 @@ function plainStreamTts(
   }
 }
 
-async function* plainTtsBufferStream(
+async function* plainTtsChunkStream(
   request: TtsRequest,
   options: RPCOptions | undefined,
   resolveDone: (value: boolean) => void,
   rejectDone: (err: unknown) => void,
   side: TtsSideChannel
-): AsyncGenerator<number> {
+): AsyncGenerator<Int16Array> {
   let settled = false
   try {
-    for await (const response of streamRpc(request, options)) {
-      if (response.type !== 'textToSpeech') continue
+    for await (const raw of streamRpc(request, options)) {
+      if (raw.type !== 'textToSpeech') continue
       // See TtsMulticast.pump — skip per-frame Zod validation; the engine is
       // the source of truth for this response shape.
-      side.observe(response)
-      if (response.buffer.length > 0) {
-        yield* response.buffer
+      // The side channel reads text, rate, stats and stopReason, never the
+      // audio, so a `pcm` frame is decoded straight to the typed array callers
+      // get instead of through an intermediate `number[]`.
+      side.observe(raw)
+      const chunk = raw.pcm !== undefined ? decodeTtsPcm(raw.pcm) : Int16Array.from(raw.buffer)
+      if (chunk.length > 0) {
+        yield chunk
       }
-      if (response.done) {
+      if (raw.done) {
         settled = true
         resolveDone(true)
       }
@@ -490,6 +527,7 @@ function collectTts(
 
   return {
     bufferStream: emptyBufferStream(),
+    chunkStream: emptyChunkStream(),
     buffer: collectTtsBuffer(request, options, resolveDone, rejectDone, side),
     done,
     requestId: request.requestId as string,
@@ -504,6 +542,8 @@ async function* emptyBufferStream(): AsyncGenerator<number> {
   // Non-streaming mode exposes no incremental buffer stream.
 }
 
+async function* emptyChunkStream(): AsyncGenerator<Int16Array> {}
+
 async function collectTtsBuffer(
   request: TtsRequest,
   options: RPCOptions | undefined,
@@ -513,8 +553,9 @@ async function collectTtsBuffer(
 ): Promise<number[]> {
   let buffer: number[] = []
   try {
-    for await (const response of streamRpc(request, options)) {
-      if (response.type !== 'textToSpeech') continue
+    for await (const raw of streamRpc(request, options)) {
+      if (raw.type !== 'textToSpeech') continue
+      const response = withDecodedTtsPcm(raw)
       side.observe(response)
       buffer = buffer.concat(response.buffer)
       if (response.done) {
@@ -644,5 +685,5 @@ function processTextToSpeechStreamLine(line: string): TextToSpeechStreamResponse
     throw new TextToSpeechStreamFailedError((obj['message'] as string) ?? 'Unknown server error')
   }
 
-  return textToSpeechStreamResponseSchema.parse(parsed)
+  return withDecodedTtsPcm(textToSpeechStreamResponseSchema.parse(parsed))
 }

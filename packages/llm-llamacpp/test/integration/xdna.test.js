@@ -1,15 +1,16 @@
 'use strict'
 
-// AMD XDNA NPU (Linux x64, fabric >= 0.27.0).
+// AMD XDNA NPU (Linux x64, fabric >= 0.28.0).
 //
 // Two kinds of test:
 //   - A fallback smoke test that runs on every desktop host without an NPU:
 //     `backend: 'xdna'` is accepted, finds no device and falls back to the
 //     normal backend order.
 //   - Hardware tests that run only on a host whose accel device is bound to the
-//     amdxdna driver. They also need XRT 2.25 or newer under /opt/xilinx/xrt;
-//     without it fabric skips the XDNA module and these tests fail on the
-//     missing `Chosen xdna Backend` line.
+//     amdxdna driver. They also need XRT 2.25 or newer under /opt/xilinx/xrt
+//     and read/write access to the /dev/accel node; without either fabric does
+//     not list the NPU and these tests fail on the missing
+//     `Chosen xdna Backend` line.
 //
 // The chosen device and KV-cache types are not exposed to JS, so the tests read
 // them from the native logs, as kv-cache-type-defaults.test.js does.
@@ -75,8 +76,8 @@ const FUSED_REFUSAL_RE = /unsupported fused weight set|needs the .*-bit activati
 const KERNELS_FOUND_RE = /GEMM geometries: decode=gemm_/
 const KERNELS_MISSING_RE = /no GEMM kernels found|not built for design tag|no fused_layer artifact/
 
-// Fabric logs its kernel discovery once per process, on the first load, so
-// every load's native log is also kept here.
+// Fabric logs its kernel discovery once per process, on the first load that
+// uses the NPU, so every load's native log is also kept here.
 const processLogs = []
 
 function parseKvCacheTypes(logs) {

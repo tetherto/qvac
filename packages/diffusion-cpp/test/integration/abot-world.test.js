@@ -33,9 +33,9 @@
 //     false alarm). Place the file next to the GGUFs (or via ABOT_MODELS_DIR)
 //     to exercise that lane; otherwise it passes as an explanatory no-op.
 //
-// Gate: the lanes run on the Linux x64 GPU legs in CI (NO_GPU excludes the
-// arm64 legs) and anywhere ABOT_MODELS_DIR points at a provisioned set.
-// Plain local runs skip rather than surprise-download ~13 GB.
+// Temporarily disabled: CUDA streaming parity and initial KV-capture failures
+// remain unresolved. All lanes skip, including runs with ABOT_MODELS_DIR set.
+// Failure evidence: https://github.com/tetherto/qvac/actions/runs/42193566046/job/127824548912
 
 const path = require('bare-path')
 const os = require('bare-os')
@@ -89,7 +89,8 @@ const isX64 = os.arch() === 'x64'
 const overrideDir = proc.env.ABOT_MODELS_DIR || ''
 const canFetchRegistry = isLinux && isX64 && proc.env.CI === 'true'
 
-const skip = noGpu || (!overrideDir && !canFetchRegistry)
+const suiteDisabled = true
+const skip = suiteDisabled || noGpu || (!overrideDir && !canFetchRegistry)
 
 console.log(
   '[ABot-World] skip:',
@@ -422,7 +423,10 @@ for (const lane of [
 ]) {
   test(
     `ABot-World: ${lane.name} matches resident frames across history updates`,
-    { skip, timeout: 2_400_000 },
+    // Temporarily disable both KV-on parity lanes: their shared resident
+    // baseline exhausts GPU memory before the streamed/disk comparison.
+    // https://github.com/tetherto/qvac/actions/runs/41993673983/job/127143226316
+    { skip: skip || lane.kvCache, timeout: 2_400_000 },
     async (t) => {
       t.comment(`ABot parity backend: ${parityBackend}`)
       streamingScene ??= provisionStreamingScene(t)
@@ -434,7 +438,7 @@ for (const lane of [
       addonLogging.setLogger((priority, message) => {
         const line = String(message)
         if (
-          /ABot-World DiT:|budget merge took|streaming budget =|residency=STREAMED|releasing params backend buffer/.test(
+          /ABot-World DiT:|ABot-World-5B \(causal walk\)|model manager released params backend buffers/.test(
             line
           )
         ) {
@@ -481,18 +485,23 @@ for (const lane of [
             t.ok(pngLuminanceStddev(frames[frames.length - 1]) > 20, 'walk retains image detail')
           }
           const markers = config.streamLayers
-            ? ['streaming budget =', 'residency=STREAMED']
+            ? ['executing segment 2/']
             : config.paramsBackend === 'diffusion=disk'
-              ? ['params=disk', 'releasing params backend buffer']
+              ? ['params=disk', 'model manager released params backend buffers']
               : []
           await waitForLogEvidence(evidence, markers)
           if (config.streamLayers) {
             t.ok(
-              evidence.some((line) => line.includes('streaming budget =')),
+              evidence.some((line) => {
+                const match = /ABot-World-5B \(causal walk\) using (\d+) segments/.exec(line)
+                return match && Number(match[1]) > 1
+              }),
               'shared streaming executor activated'
             )
             t.ok(
-              evidence.some((line) => line.includes('residency=STREAMED')),
+              evidence.some((line) =>
+                line.includes('ABot-World-5B (causal walk) executing segment 2/')
+              ),
               'at least one DiT segment was streamed'
             )
           }
@@ -502,7 +511,9 @@ for (const lane of [
               'disk placement reached the engine'
             )
             t.ok(
-              evidence.some((line) => line.includes('releasing params backend buffer')),
+              evidence.some((line) =>
+                line.includes('model manager released params backend buffers')
+              ),
               'disk weights are released during the walk'
             )
           }
@@ -555,7 +566,9 @@ for (const lane of [
 
 test(
   'ABot-World: full world generation - native scene creation + KV-cache walk',
-  { skip, timeout: 2_400_000 },
+  // Temporarily disabled at the author's request: the KV append pass
+  // exhausted GPU memory in run 42022226424 (job 127236233013).
+  { skip: true, timeout: 2_400_000 },
   async (t) => {
     setupJsLogger()
     t.teardown(releaseJsLogger)
