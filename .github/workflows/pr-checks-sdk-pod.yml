@@ -57,12 +57,12 @@ permissions:
 # whose other scripts need a tree this job does not build. A name outside that set
 # is a package script run as its own check, after them, and must exist.
 
-# Literal prefix: under workflow_call github.workflow resolves to the caller's
-# name, so without it every workflow Merge Guard calls would share one group and
-# cancel each other. github.workflow keeps the direct pull_request run and the
-# Merge Guard call (also pull_request) in separate groups.
+# Literal prefix, not github.workflow: under workflow_call that resolves to the
+# caller's name, so every workflow Merge Guard calls would share one group and
+# cancel each other. The direct trigger skips main and Merge Guard runs only on
+# main, so the direct run and the Merge Guard call never share a PR.
 concurrency:
-  group: pr-checks-sdk-pod-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  group: pr-checks-sdk-pod-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:

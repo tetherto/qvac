@@ -5,9 +5,8 @@ on:
   # Not pull_request_target (banned org-wide), so this YAML loads from the PR
   # merge ref. The matrix job still runs no PR code: nx-project-matrix checks out
   # the base branch (trusted-pr-checkout) and reads options.ci from the default
-  # branch. Code-running jobs gate on fork-approval + authorize, which fork PRs
-  # cannot pass because fork-approval only records qvac/fork-verified on
-  # pull_request_target.
+  # branch. Code-running jobs gate on fork-approval + authorize, and authorize
+  # denies every fork PR on pull_request.
   pull_request:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches: [main, release-*, feature-*, tmp-*]
@@ -101,7 +100,10 @@ jobs:
       pull-requests: write
       statuses: read
     outputs:
-      allowed: ${{ steps.auth.outputs.allowed }}
+      # A fork can still carry qvac/fork-verified from an earlier
+      # pull_request_target run. Under pull_request it gets no secrets and would
+      # fail late, so deny it here.
+      allowed: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.id == github.event.repository.id) && steps.auth.outputs.allowed || 'false' }}
     steps:
       - name: Checkout authorize-pr (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2
@@ -184,6 +186,16 @@ jobs:
           if [ "$EVENT_NAME" = "pull_request" ] && [ ! -f "$CHANGED_FILES" ]; then
             gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" \
               --jq '.[] | .filename, (.previous_filename // empty)' > "$CHANGED_FILES"
+            # Same guards as the action: an empty or capped list under-selects.
+            count=$(wc -l < "$CHANGED_FILES")
+            if [ "$count" -eq 0 ]; then
+              echo "::error::the API reported no changed paths for PR ${PR_NUMBER}"
+              exit 1
+            fi
+            if [ "$count" -ge 3000 ]; then
+              echo "::error::hit the 3000-file API cap for PR ${PR_NUMBER}; the path list is truncated"
+              exit 1
+            fi
           fi
           # Speech cpp-lint needs a changed source/header, not a dependency bump.
           node .github/actions/nx-project-matrix/cpp-lint-selection.mjs >> "$GITHUB_OUTPUT"

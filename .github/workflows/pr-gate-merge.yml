@@ -5,8 +5,8 @@ on:
   # ref, so a PR can edit its own gate, including on-pr-nx.yml, whose statuses
   # verify-prebuilds trusts. CODEOWNERS gives .github/ to qvac-internal-devops,
   # and the ruleset requires code-owner review, so such an edit needs DevOps
-  # approval. Fork PRs never get qvac/fork-verified (fork-approval records it
-  # only on pull_request_target), so they fail closed at authorize.
+  # approval. authorize denies every fork PR on pull_request, so forks fail
+  # closed here.
   pull_request:
     types:
       - opened
@@ -50,7 +50,10 @@ jobs:
       pull-requests: write
       statuses: read
     outputs:
-      allowed: ${{ steps.auth.outputs.allowed }}
+      # A fork can still carry qvac/fork-verified from an earlier
+      # pull_request_target run. Under pull_request it gets no secrets and would
+      # fail late, so deny it here.
+      allowed: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.id == github.event.repository.id) && steps.auth.outputs.allowed || 'false' }}
     steps:
       - name: Checkout authorize-pr (default branch)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # 6.0.2

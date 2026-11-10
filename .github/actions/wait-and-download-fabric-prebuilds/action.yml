@@ -88,6 +88,8 @@ runs:
           # artifact lookup, are the real gates.
           RUNS=$(gh api "repos/$REPO/actions/workflows/${WORKFLOW_FILE}/runs?head_sha=${HEAD_SHA}&per_page=20" \
             --jq '.workflow_runs[] | .id' 2>/dev/null || true)
+          matched=0
+          startup_failed=0
           for rid in $RUNS; do
             [ "$rid" = "$RUN_ID" ] && continue
 
@@ -142,6 +144,12 @@ runs:
               continue
             }
 
+            matched=$((matched + 1))
+            if [ "$(printf '%s' "$RUN_JSON" | jq -r '.conclusion // ""')" = "startup_failure" ]; then
+              startup_failed=$((startup_failed + 1))
+              continue
+            fi
+
             NAMES=$(gh api "repos/$REPO/actions/runs/$rid/artifacts" \
               --jq '.artifacts[] | select(.expired==false) | .name' 2>/dev/null || true)
             if echo "$NAMES" | grep -qx "$ARTIFACT"; then
@@ -155,6 +163,12 @@ runs:
               fi
             fi
           done
+          # A startup failure has no jobs and cannot be re-run into an artifact,
+          # so when every producer run is one there is nothing left to wait for.
+          if [ "$matched" -gt 0 ] && [ "$matched" -eq "$startup_failed" ]; then
+            echo "::error::$WORKFLOW_FILE failed at startup for head $HEAD_SHA, so $ARTIFACT will never be published. Push again or re-trigger once $WORKFLOW_FILE can start."
+            exit 1
+          fi
           echo "fabric-prebuilds not ready yet — retrying in ${POLL_SECONDS}s"
           sleep "$POLL_SECONDS"
         done

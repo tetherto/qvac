@@ -22,7 +22,11 @@ This must return **only** `pr-gate-merge.yml`. If it returns more than one file,
 
 ## The job graph
 
-`.github/workflows/pr-gate-merge.yml` ("Merge Guard", triggers on `pull_request`, so it loads from the PR merge ref):
+`.github/workflows/pr-gate-merge.yml` ("Merge Guard", triggers on `pull_request`, so it loads from the PR merge ref).
+
+GitHub does not run `pull_request` workflows while a PR has merge conflicts, because there is no merge ref. `Check Approvals` and `qvac-merge-guard / validate-pr` then show "Expected — Waiting for status to be reported" with no run behind them. Resolve the conflicts (rebase or merge the base branch) and the next push triggers both.
+
+The job graph:
 
 ```mermaid
 flowchart LR
