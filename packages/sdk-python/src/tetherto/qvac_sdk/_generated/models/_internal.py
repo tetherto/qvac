@@ -3935,6 +3935,30 @@ class CalcTokensTool(GeneratedBaseModel):
     ]
 
 
+class CalcTokensToolSearch(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    default_limit: Annotated[
+        int | None,
+        Field(
+            alias="defaultLimit",
+            description="How many tool definitions one `tool_search` call loads when the model does not ask for a number with its `limit` argument. Defaults to 3, or `maxLimit` when that is lower.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+    max_limit: Annotated[
+        int | None,
+        Field(
+            alias="maxLimit",
+            description="The most tool definitions one `tool_search` call can load. A larger `limit` from the model is lowered to this. Defaults to 8.",
+            ge=1,
+            le=9007199254740991,
+        ),
+    ] = None
+
+
 class CalcTokensHistoryMessageContentItemText(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -4055,6 +4079,14 @@ class CalcTokensRequest(GeneratedBaseModel):
         list[CalcTokensTool] | None,
         Field(
             description="Tools to include in the rendered prompt when the model was loaded with `modelConfig.tools: true`."
+        ),
+    ] = None
+    tool_search: Annotated[
+        CalcTokensToolSearch | None,
+        Field(
+            alias="toolSearch",
+            description="Limits on what the built-in `tool_search` loads per call. Only used when a tool sets `deferLoading`. The limits are stated in the `tool_search` definition at the front of the prompt, so set them once per conversation: changing them re-prefills from there.",
+            title="CalcTokensToolSearch",
         ),
     ] = None
     text: Annotated[

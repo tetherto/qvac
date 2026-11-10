@@ -26,6 +26,7 @@ test('calcTokens converts Zod tool inputs like completion', async (t) => {
     {
       modelId: 'llm',
       text: 'Weather in Paris?',
+      toolSearch: { defaultLimit: 2, maxLimit: 100 },
       tools: [
         {
           name: 'weather',
@@ -45,6 +46,7 @@ test('calcTokens converts Zod tool inputs like completion', async (t) => {
     type: 'calcTokens',
     modelId: 'llm',
     text: 'Weather in Paris?',
+    toolSearch: { defaultLimit: 2, maxLimit: 100 },
     tools: [
       {
         type: 'function',

@@ -20,7 +20,9 @@ export async function calcTokens(request: CalcTokensRequest): Promise<CalcTokens
   const history = rendersPrompt
     ? seedConfiguredSystemPrompt(requestHistory ?? [], modelConfig)
     : undefined
-  const deferred = toolsEnabled ? resolveDeferredTools(request.tools, history ?? []) : null
+  const deferred = toolsEnabled
+    ? resolveDeferredTools(request.tools, history ?? [], request.toolSearch)
+    : null
   const tools: Tool[] | undefined = toolsEnabled
     ? (deferred?.toolsToRender ?? request.tools?.map(toWireTool))
     : undefined

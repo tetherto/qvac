@@ -3,7 +3,7 @@ import {
   historyMessageWithoutAttachmentsSchema,
   type CompletionClientParams
 } from '@/schemas/completion-stream'
-import { toolSchema } from '@/schemas/tools'
+import { toolSchema, toolSearchOptionsSchema } from '@/schemas/tools'
 
 const modelId = z.string().min(1).describe('Loaded language model to tokenize with.')
 const text = z
@@ -18,10 +18,15 @@ const tools = z
   .describe(
     'Tools to include in the rendered prompt when the model was loaded with `modelConfig.tools: true`.'
   )
+const toolSearch = toolSearchOptionsSchema
+  .clone()
+  .meta({ title: 'CalcTokensToolSearch' })
+  .optional()
 
 const commonFields = {
   modelId,
-  tools
+  tools,
+  toolSearch
 }
 const promptFields = { ...commonFields, text: text.optional(), history: history.optional() }
 

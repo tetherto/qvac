@@ -50,6 +50,7 @@ async def test_calc_tokens_sends_nested_tool_defaults() -> None:
         {
             "modelId": "llm",
             "text": "Hello",
+            "toolSearch": {"defaultLimit": 2, "maxLimit": 100},
             "tools": [
                 {
                     "name": "search",
@@ -67,6 +68,7 @@ async def test_calc_tokens_sends_nested_tool_defaults() -> None:
     assert transport.payload == {
         "modelId": "llm",
         "text": "Hello",
+        "toolSearch": {"defaultLimit": 2, "maxLimit": 100},
         "tools": [
             {
                 "type": "function",

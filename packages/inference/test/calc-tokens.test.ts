@@ -1,7 +1,7 @@
 import test from 'brittle'
 import { calcTokens } from '@/plugins/builtin/llamacpp-completion/ops/calc-tokens'
 import { registerModel, unregisterModel, type AnyModel } from '@/runtime/model-registry'
-import { calcTokensRequestSchema, ModelType, requestSchema } from '@/schemas/index'
+import { calcTokensRequestSchema, ModelType, requestSchema, type Tool } from '@/schemas/index'
 import { formatZodError } from '@/utils/zod-error'
 
 type TestContext = { teardown(cleanup: () => void): void }
@@ -128,6 +128,14 @@ test('calcTokens contract requires text or a non-empty history', (t) => {
       modelId: 'llm',
       text: 'Hello',
       tool: []
+    }).success
+  )
+  t.absent(
+    calcTokensRequestSchema.safeParse({
+      type: 'calcTokens',
+      modelId: 'llm',
+      text: 'Hello',
+      toolSearch: { defaultLimit: 4, maxLimit: 2 }
     }).success
   )
   t.absent(
@@ -339,11 +347,18 @@ test('calcTokens renders always-loaded tools and tool_search for deferred tools'
         deferLoading: true,
         group: 'calendar'
       }
-    ]
+    ],
+    toolSearch: { defaultLimit: 2, maxLimit: 100 }
   })
 
-  const names = (input as { tools?: { name: string }[] }).tools?.map((tool) => tool.name)
+  const renderedTools = (input as { tools?: Tool[] }).tools
+  const names = renderedTools?.map((tool) => tool.name)
   t.alike(names, ['weather', 'tool_search'])
+  const toolSearch = renderedTools?.find((tool) => tool.name === 'tool_search')
+  t.is(
+    toolSearch?.parameters.properties.limit?.description,
+    'Maximum definitions to load (default 2, max 100).'
+  )
 })
 
 test('calcTokens does not add a configured system prompt when history already has one', async (t) => {
