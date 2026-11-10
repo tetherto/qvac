@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import type { CompletionRun, CompletionStats, ToolCall } from '@qvac/sdk'
+import type { completion, CompletionRun, CompletionStats, ToolCall } from '@qvac/sdk'
 import { createServer } from '../helpers/server.js'
 import { JSON_HEADERS, assertStatusAndError, collectSSE } from '../helpers/http.js'
 import { openaiState } from '@/serve/extensions/openai/state'
@@ -49,15 +49,7 @@ function stubRun(stats?: CompletionStats, toolCalls: ToolCall[] = []): Completio
   } as unknown as CompletionRun
 }
 
-interface SeenRequest {
-  kvCache?: string | boolean | undefined
-  stream?: boolean | undefined
-  history: Array<{
-    role: string
-    content?: string | null | undefined
-    toolCallId?: string | undefined
-  }>
-}
+type SeenRequest = Parameters<typeof completion>[0]
 
 describe('serve: Responses KV cache', () => {
   it('allows the extension header through CORS preflight', { timeout: 15000 }, async (t) => {
