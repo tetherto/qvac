@@ -78,7 +78,7 @@ export const llmConfigBaseSchema = z.object({
     .string()
     .optional()
     .describe(
-      "Seeds conversation history on the JS side only; never forwarded to the addon. Default `'You are a helpful assistant.'`"
+      "Prepended as the system message when a request's history carries none; applied on the JS side and never forwarded to the addon. Unset by default, so the model sees the history as sent."
     ),
   load_mode: z
     .enum(['none', 'mmap', 'mlock', 'mmap+mlock', 'dio'])
@@ -452,10 +452,13 @@ export type LlmConfigInput = z.infer<typeof llmConfigBaseSchema>
 // which then aborts its fit instead of placing layers to free device memory.
 // Absent emits no `--gpu-layers`, so the addon keeps fabric's own -1 — already
 // "every layer" whenever the fit does not run.
+//
+// system_prompt carries no default either: a caller that sends no system
+// message gets the model's chat template as written, the same prompt any other
+// llama.cpp host renders for that history.
 export const LLM_CONFIG_DEFAULTS = {
   ctx_size: 1024,
   device: 'gpu',
-  system_prompt: 'You are a helpful assistant.',
   image_tile_mode: 'sequential',
   cache_share_across_keys: false
 } as const satisfies Partial<LlmConfigInput>
