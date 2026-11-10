@@ -23,7 +23,8 @@ import {
   createRegistryCacheKey
 } from '@/handlers/load-model/download-manager'
 import { handleDeleteCache } from '@/handlers/delete-cache'
-import { getSingleFileCachePath } from '@/utils/cache/paths'
+import { getShardedModelCacheDir, getSingleFileCachePath } from '@/utils/cache/paths'
+import { parsePatternBasedShardUrl } from '@/utils/shard-utils'
 import { getQvacPath } from '@/utils/qvac-paths'
 import { initEnv } from '@/runtime/env'
 import { QWEN3_600M_INST_Q4 } from '@/models/registry/index'
@@ -33,7 +34,7 @@ import {
   generateShortHash,
   renameWithCachedChecksum
 } from '@/utils/index'
-import { DownloadCancelledError } from '@/errors/index'
+import { DownloadCancelledError, HTTPError } from '@/errors/index'
 import { useTestCacheDir } from './fixtures/test-cache'
 import { stubClient } from './fixtures/registry-client-stub'
 import { MODEL_CONTENT } from './fixtures/xproc-content'
@@ -254,6 +255,100 @@ test('tryAcquireDownloadLocks: takes every lock or none, without waiting', async
   const both = await tryAcquireDownloadLocks([free, busy])
   t.ok(both, 'granted once no key is held')
   await both?.[Symbol.asyncDispose]()
+})
+
+test('tryAcquireDownloadLocks: releases the locks it took when a later one cannot be opened', async (t) => {
+  const cacheDir = useTestCacheDir()
+  const first = `lock-test:first:${Math.random()}`
+  const broken = `lock-test:broken:${Math.random()}`
+  // A directory where the lock file belongs cannot be opened as one.
+  const brokenPath = path.join(cacheDir, '.locks', `${generateShortHash(broken)}.lock`)
+  fs.mkdirSync(brokenPath, { recursive: true })
+  t.teardown(() => fs.rmSync(brokenPath, { recursive: true, force: true }))
+
+  await t.exception(tryAcquireDownloadLocks([first, broken]))
+  const lock = await tryAcquireDownloadLocks([first])
+  t.ok(lock, 'the lock taken before the failure was released')
+  await lock?.[Symbol.asyncDispose]()
+})
+
+test('downloadModelFromHttp: an archive download holds its lock until the archive is written', async (t) => {
+  useTestCacheDir()
+  const server = await startGatedServer()
+  const url = `${server.base}/archive-${Math.random().toString(16).slice(2)}/model.tar`
+  const hash = generateShortHash(url)
+  t.teardown(async () => {
+    await server.close()
+    fs.rmSync(getShardedModelCacheDir(hash), { recursive: true, force: true })
+  })
+
+  const download = downloadModelFromHttp(url).catch((error: unknown) => error)
+  await waitUntil(() => server.halfSent())
+  const lock = await tryAcquireDownloadLocks([`http-archive:${hash}`])
+  t.is(lock, null, 'the lock is held while the archive downloads')
+  await lock?.[Symbol.asyncDispose]()
+
+  server.release()
+  t.ok(
+    (await download) instanceof Error,
+    'the served bytes are not an archive, so extraction fails'
+  )
+})
+
+test('downloadModelFromHttp: a failed shard stops the other shards before the download fails', async (t) => {
+  useTestCacheDir()
+  let otherShardStarted = false
+  let otherShardClosed = false
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const server = http.createServer((req, res) => {
+    res.on('error', () => {})
+    if (req.method === 'HEAD') {
+      res.writeHead(200, { 'content-length': String(CONTENT.length) })
+      res.end()
+      return
+    }
+    if ((req.url ?? '').endsWith('-00001-of-00002.gguf')) {
+      // Fail the first shard only once the second one is mid-transfer.
+      void waitUntil(() => otherShardStarted).then(() => {
+        res.writeHead(404)
+        res.end()
+      })
+      return
+    }
+    res.on('close', () => {
+      otherShardClosed = true
+    })
+    res.writeHead(200, { 'content-length': String(CONTENT.length) })
+    res.write(CONTENT.subarray(0, CONTENT.length / 2))
+    otherShardStarted = true
+    void gate.then(() => {
+      if (!res.destroyed) res.end(CONTENT.subarray(CONTENT.length / 2))
+    })
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()))
+  const url = `http://127.0.0.1:${server.address()!.port}/shards-${Math.random().toString(16).slice(2)}/model-00001-of-00002.gguf`
+  t.teardown(async () => {
+    release()
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+    const { cacheKey } = parsePatternBasedShardUrl(url)
+    fs.rmSync(getShardedModelCacheDir(cacheKey), { recursive: true, force: true })
+  })
+
+  try {
+    await downloadModelFromHttp(url)
+    t.fail('a missing shard must fail the download')
+  } catch (error) {
+    t.ok(error instanceof HTTPError, 'the failed shard error surfaces')
+  }
+  // Left running, the other shard would keep writing after the lock is released.
+  const stopped = await waitUntil(() => otherShardClosed, 2_000).then(
+    () => true,
+    () => false
+  )
+  t.ok(stopped, 'the other shard download was stopped')
 })
 
 test('deleteCache: refused while another process downloads the model, and deletes nothing', async (t) => {

@@ -758,7 +758,7 @@ export async function downloadModelFromHyperdrive(
           }
         }
 
-        return downloadShardedFilesToFilesystem(
+        return await downloadShardedFilesToFilesystem(
           hyperdriveKey,
           modelFileName,
           model.shardMetadata,

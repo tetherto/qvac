@@ -94,13 +94,18 @@ export async function tryAcquireDownloadLocks(
   const releaseAll = async () => {
     for (const lock of held) await lock[Symbol.asyncDispose]()
   }
-  for (const resourceKey of resourceKeys) {
-    const lock = await openLockFile(resourceKey)
-    held.push(lock)
-    if (!tryLock(lock, resourceKey)) {
-      await releaseAll()
-      return null
+  try {
+    for (const resourceKey of resourceKeys) {
+      const lock = await openLockFile(resourceKey)
+      held.push(lock)
+      if (!tryLock(lock, resourceKey)) {
+        await releaseAll()
+        return null
+      }
     }
+  } catch (error) {
+    await releaseAll()
+    throw error
   }
   return { [Symbol.asyncDispose]: releaseAll }
 }

@@ -841,7 +841,7 @@ async function downloadShardedModelFromArchive(
         if (!shardedFile) {
           hooks?.markCacheMiss?.()
           ctx.setCacheHit(false)
-          return downloadAndExtractArchive()
+          return await downloadAndExtractArchive()
         }
 
         const shardFilename = String(shardedFile)
@@ -851,7 +851,7 @@ async function downloadShardedModelFromArchive(
           logger.warn(`⚠️ Incomplete shards found, re-downloading archive`)
           hooks?.markCacheMiss?.()
           ctx.setCacheHit(false)
-          return downloadAndExtractArchive()
+          return await downloadAndExtractArchive()
         }
 
         const shardFilenames = generateShardFilenames(shardFilename)
@@ -892,7 +892,7 @@ async function downloadShardedModelFromArchive(
           })
           hooks?.markCacheMiss?.()
           ctx.setCacheHit(false)
-          return downloadAndExtractArchive()
+          return await downloadAndExtractArchive()
         }
       } catch (error) {
         logger.error('❌ Error downloading/extracting archive:', error)
@@ -974,9 +974,21 @@ async function downloadShardsWithConcurrency(
 ) {
   const queue = [...shardsToDownload]
   const inFlight = new Set<Promise<void>>()
+  // A failed or cancelled shard stops the others, and every started shard
+  // settles before this returns, so none is still written once the caller
+  // releases its download lock.
+  const shardsController = new AbortController()
+  const stopShards = () => shardsController.abort(undefined)
+  signal.addEventListener('abort', stopShards, { once: true })
+  const stopAndSettle = async () => {
+    stopShards()
+    signal.removeEventListener('abort', stopShards)
+    await Promise.allSettled([...inFlight])
+  }
 
   while (queue.length > 0 || inFlight.size > 0) {
     if (signal.aborted) {
+      await stopAndSettle()
       throw new DownloadCancelledError()
     }
 
@@ -1015,7 +1027,7 @@ async function downloadShardsWithConcurrency(
               })
             }
           },
-          signal,
+          shardsController.signal,
           hooks
         )
 
@@ -1028,9 +1040,15 @@ async function downloadShardsWithConcurrency(
     }
 
     if (inFlight.size > 0) {
-      await Promise.race(inFlight)
+      try {
+        await Promise.race(inFlight)
+      } catch (error) {
+        await stopAndSettle()
+        throw error
+      }
     }
   }
+  signal.removeEventListener('abort', stopShards)
 
   // Mark all downloaded shards as complete
   for (const state of shardsToDownload) {
