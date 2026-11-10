@@ -17,11 +17,15 @@
 // device class is, as stats.backendDevice.
 //
 // XDNA_TEST_MODELS picks the models the hardware tests run, as a comma-separated
-// list of models.manifest.json names (default: the 0.8B Q4_K_M), for example
-//   XDNA_TEST_MODELS=Qwen3.5-0.8B-Q4_K_M.gguf,Qwen3.5-2B-Q4_K_M.gguf,Qwen3.5-4B-Q4_K_M.gguf,Qwen3.5-9B-Q4_K_M.gguf
+// list (default: the 0.8B Q4_K_M). Each entry is a models.manifest.json name,
+// downloaded and verified as usual, or an absolute path to a local GGUF, used
+// as is (a requantized model, say). For example
+//   XDNA_TEST_MODELS=Qwen3.5-0.8B-Q4_K_M.gguf,Qwen3.5-2B-Q4_K_M.gguf,/models/Qwen3.5-9B-custom.gguf
 // Only a 1024-wide model (Qwen3.5-0.8B) reaches the fused NPU decode layer.
 // A wider one (2B 2048, 4B 2560, 9B 4096) keeps the NPU for prefill and runs
-// its decode on the host, and fabric warns once, naming its width.
+// its decode on the host, and fabric warns once, naming its width. The tests
+// read each file's width from its GGUF header, so a renamed file is classified
+// by what it is.
 //
 // Desktop only: not scheduled on mobile (see isOverrideOnly in
 // scripts/lib/validate-test-groups.js).
@@ -77,9 +81,98 @@ function npuModels() {
   return names.length > 0 ? names : [NPU_MODEL]
 }
 
-// The fused decode layer is built for one residual width, Qwen3.5-0.8B's.
-function hasFusedWidth(modelName) {
-  return /^Qwen3\.5-0\.8B-/i.test(modelName)
+// The residual width the fused decode layer is built for, Qwen3.5-0.8B's.
+const FUSED_WIDTH = 1024
+
+// A manifest name is downloaded and verified; an absolute path is used as is.
+async function resolveModel(entry) {
+  if (path.isAbsolute(entry)) {
+    if (!fs.existsSync(entry)) {
+      throw new Error(`XDNA_TEST_MODELS: ${entry} does not exist`)
+    }
+    return [path.basename(entry), path.dirname(entry)]
+  }
+  return await ensureModel({ modelName: entry })
+}
+
+// The residual width, `<arch>.embedding_length`, from a GGUF header; null when
+// the file has none. Reads in 1 MiB chunks, so the tokenizer arrays it may
+// have to skip cost a few reads.
+function ggufEmbeddingLength(filePath) {
+  const SCALAR_BYTES = { 0: 1, 1: 1, 2: 2, 3: 2, 4: 4, 5: 4, 6: 4, 7: 1, 10: 8, 11: 8, 12: 8 }
+  const GGUF_STRING = 8
+  const GGUF_ARRAY = 9
+  const chunk = new Uint8Array(1 << 20)
+  const view = new DataView(chunk.buffer)
+  let chunkStart = 0
+  let chunkEnd = 0
+  let pos = 0
+  const fd = fs.openSync(filePath, 'r')
+
+  const fill = (bytes) => {
+    if (pos >= chunkStart && pos + bytes <= chunkEnd) return pos - chunkStart
+    const read = fs.readSync(fd, chunk, 0, chunk.byteLength, pos)
+    chunkStart = pos
+    chunkEnd = pos + read
+    if (pos + bytes > chunkEnd) throw new Error(`${filePath}: truncated GGUF header`)
+    return 0
+  }
+  const u32 = () => {
+    const value = view.getUint32(fill(4), true)
+    pos += 4
+    return value
+  }
+  const u64 = () => {
+    const value = Number(view.getBigUint64(fill(8), true))
+    pos += 8
+    return value
+  }
+  const str = () => {
+    const length = u64()
+    const at = fill(length)
+    pos += length
+    return String.fromCharCode(...chunk.subarray(at, at + length))
+  }
+  const skip = (type) => {
+    if (type === GGUF_STRING) {
+      // Not `pos += u64()`: that reads pos before u64() moves it past the length.
+      const length = u64()
+      pos += length
+    } else if (type === GGUF_ARRAY) {
+      const elementType = u32()
+      const count = u64()
+      if (elementType in SCALAR_BYTES) {
+        pos += SCALAR_BYTES[elementType] * count
+      } else {
+        for (let i = 0; i < count; i++) skip(elementType)
+      }
+    } else if (type in SCALAR_BYTES) {
+      pos += SCALAR_BYTES[type]
+    } else {
+      throw new Error(`${filePath}: unknown GGUF value type ${type}`)
+    }
+  }
+
+  try {
+    const at = fill(4)
+    if (String.fromCharCode(...chunk.subarray(at, at + 4)) !== 'GGUF') {
+      throw new Error(`${filePath}: not a GGUF file`)
+    }
+    pos += 4
+    u32() // version
+    u64() // tensor count
+    const kvCount = u64()
+    for (let i = 0; i < kvCount; i++) {
+      const key = str()
+      const type = u32()
+      if (key.endsWith('.embedding_length') && (type === 4 || type === 5)) return u32()
+      if (key.endsWith('.embedding_length') && (type === 10 || type === 11)) return u64()
+      skip(type)
+    }
+    return null
+  } finally {
+    fs.closeSync(fd)
+  }
 }
 
 const PROMPT = [
@@ -117,7 +210,7 @@ function parseKvCacheTypes(logs) {
 }
 
 async function loadAndRun(modelName, extraConfig) {
-  const [name, dirPath] = await ensureModel({ modelName })
+  const [name, dirPath] = await resolveModel(modelName)
   const specLogger = attachSpecLogger({
     forwardToConsole: true,
     onLog: (line) => processLogs.push(line)
@@ -156,6 +249,7 @@ async function loadAndRun(modelName, extraConfig) {
       output: chunks.join('').trim(),
       kvTypes: parseKvCacheTypes(specLogger.logs),
       backendDevice: response.stats?.backendDevice,
+      modelPath: path.join(dirPath, name),
       logText
     }
   } finally {
@@ -164,18 +258,19 @@ async function loadAndRun(modelName, extraConfig) {
   }
 }
 
-function assertRanOnNpu(t, modelName, { output, kvTypes, backendDevice, logText }) {
+function assertRanOnNpu(t, { output, kvTypes, backendDevice, modelPath, logText }) {
   const processText = processLogs.join('\n')
   t.is(backendDevice, 'npu', 'stats report the NPU device class')
   t.ok(KERNELS_FOUND_RE.test(processText), 'fabric found its NPU GEMM kernels')
   t.absent(KERNELS_MISSING_RE.test(processText), 'NPU kernel artifacts are present and current')
   t.absent(FUSED_REFUSAL_RE.test(logText), 'fused decode layer accepted the model weights')
-  if (hasFusedWidth(modelName)) {
+  const width = ggufEmbeddingLength(modelPath)
+  t.comment(`${path.basename(modelPath)}: residual width ${width}`)
+  if (width === FUSED_WIDTH) {
     t.absent(WIDER_MODEL_RE.test(logText), 'the model fits the fused decode layer')
-  } else {
-    const wider = processText.match(WIDER_MODEL_RE)
-    t.ok(wider, 'fabric reported a model wider than the fused decode layer')
-    if (wider) t.comment(`${modelName}: first wider residual width seen, ${wider[1]}`)
+  } else if (width !== null) {
+    // Logged once per process, for the first wider model, so read the whole run.
+    t.ok(WIDER_MODEL_RE.test(processText), 'fabric reported a model wider than the fused layer')
   }
   t.ok(XDNA_BUFFER_RE.test(logText), 'model weights were placed in an XDNA buffer')
   t.ok(kvTypes, 'KV-cache allocation line was logged')
@@ -215,8 +310,10 @@ safeTest(
 )
 
 for (const modelName of npuModels()) {
+  const label = path.basename(modelName)
+
   safeTest(
-    `xdna: device npu runs ${modelName} on the NPU`,
+    `xdna: device npu runs ${label} on the NPU`,
     { timeout: 1_800_000, skip: !hasNpu },
     async (t) => {
       const result = await loadAndRun(modelName, { device: 'npu' })
@@ -225,17 +322,17 @@ for (const modelName of npuModels()) {
         CHOSEN_NPU_RE.test(result.logText),
         'NPU chosen through device npu (needs XRT 2.25+ under /opt/xilinx/xrt)'
       )
-      assertRanOnNpu(t, modelName, result)
+      assertRanOnNpu(t, result)
     }
   )
 
   safeTest(
-    `xdna: devices XDNA0 runs ${modelName} on the NPU`,
+    `xdna: devices XDNA0 runs ${label} on the NPU`,
     { timeout: 1_800_000, skip: !hasNpu },
     async (t) => {
       const result = await loadAndRun(modelName, { devices: 'XDNA0' })
 
-      assertRanOnNpu(t, modelName, result)
+      assertRanOnNpu(t, result)
     }
   )
 }
