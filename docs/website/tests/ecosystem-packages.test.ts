@@ -21,7 +21,7 @@ import { projectSurface } from '../scripts/bindings/surface'
 import { checkContract, readKinds } from '../scripts/contract/check-contract'
 import { planLines } from '../scripts/materialize-lines'
 import { packageRoots, packagesSection } from '@/lib/custom-tree'
-import { packageApiAsMarkdown, type PackageApi } from '@/lib/api-reference/package-api'
+import type { PackageApi } from '@/lib/api-reference/package-api'
 import { computeSectionVersionUrl, documentedSoftwareFrom } from '@/lib/versions'
 import { parseVersionsFile } from '@/lib/versions-file'
 
@@ -113,7 +113,7 @@ describe('the TypeDoc normalizer', () => {
   const api = JSON.parse(readFileSync(path.join(DOCS_ROOT, '_generated', 'api.json'), 'utf-8')) as PackageApi
   const find = (name: string) => api.exports.find((entry) => entry.name === name)!
 
-  it('writes the committed data and page, byte for byte', async () => {
+  it('writes the committed data, byte for byte', async () => {
     expect(await generatePackageApi(FIXTURE_FROM_MONOREPO, { check: true })).toEqual([])
   }, 30_000)
 
@@ -146,12 +146,6 @@ describe('the TypeDoc normalizer', () => {
     expect(find('legacyTranslate').deprecated).toBe('Use `translate`.')
   })
 
-  it('renders the same facts as Markdown for agents', () => {
-    const markdown = packageApiAsMarkdown(api)
-    expect(markdown).toContain('## Functions')
-    expect(markdown).toContain('translate(texts: string[], options: TranslateOptions): Promise<Translation[]>')
-    expect(markdown).toContain('- `from?: string` — Source language; detected when omitted.')
-  })
 })
 
 describe('the docs contract of a platform package', () => {
@@ -176,10 +170,10 @@ describe('the docs contract of a platform package', () => {
     ])
   })
 
-  it('refuses a hand-written API reference', () => {
+  it('requires the API reference to bind the whole surface', () => {
     const root = copy()
-    writeFileSync(path.join(root, 'api.mdx'), '---\ntitle: API\n---\n\nWritten by hand.\n')
-    expect(checkContract(parsed, root, kinds, ['/sdk'])).toEqual([expect.stringContaining('is not the generated page')])
+    writeFileSync(path.join(root, 'api.mdx'), '---\ntitle: API\n---\n\nWritten by hand, bound to nothing.\n')
+    expect(checkContract(parsed, root, kinds, ['/sdk'])).toEqual([expect.stringContaining('does not bind `surface`')])
   })
 
   it('requires the overview to link the canonical product', () => {
@@ -209,7 +203,7 @@ describe('the whole-surface binding of a platform package', () => {
     ].sort())
   })
 
-  it('names the usage page when any export changes, and asks for no coverage', () => {
+  it('names every page bound to the surface when any export changes, and asks for no coverage', () => {
     const scan = scanPages(DOCS_ROOT)
     const lock = lockFor(scan.bindings, surface)
     expect(checkBindings({ kind: 'platform', surface, scan, lock })).toEqual([])
@@ -217,6 +211,7 @@ describe('the whole-surface binding of a platform package', () => {
     const changed = new Map(surface)
     changed.set('export:translate', { changed: true })
     expect(checkBindings({ kind: 'platform', surface: changed, scan, lock }).map((problem) => `${problem.kind} ${problem.page}`)).toEqual([
+      'drift api.mdx',
       'drift usage.mdx',
     ])
   })

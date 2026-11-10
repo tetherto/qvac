@@ -8,9 +8,8 @@
 import { functionCard, modelsAsMarkdown, modelsForEngines, shapeAsTypeScript } from './card'
 import { cliAsMarkdown, openApiAsMarkdown, type CliData } from './cli'
 import { functionNames, functionReference, lineApiForUrl, lineGeneratedFile } from './data'
-import { packageApiAsMarkdown, type PackageApi } from './package-api'
 
-const TAG = /<(FunctionReference|SchemaTable|ModelsTable|FunctionIndex|LanguageSwitch|CliReference|OpenApiReference|PackageApiReference)\b([^>]*?)\/>/g
+const TAG = /<(FunctionReference|SchemaTable|ModelsTable|FunctionIndex|LanguageSwitch|CliReference|OpenApiReference)\b([^>]*?)\/>/g
 
 function attribute(attributes: string, name: string): string | null {
   return new RegExp(`${name}="([^"]*)"`).exec(attributes)?.[1] ?? null
@@ -31,10 +30,6 @@ export function renderDataComponentsAsMarkdown(text: string, url: string): strin
     if (component === 'CliReference') {
       const data = lineGeneratedFile<CliData>(url, 'cli.json')
       return data ? cliAsMarkdown(data, attribute(attributes, 'command') ?? undefined, /\btablesOnly\b/.test(attributes)) : '_Command reference data is not available for this documentation line._'
-    }
-    if (component === 'PackageApiReference') {
-      const data = lineGeneratedFile<PackageApi>(url, 'api.json')
-      return data ? packageApiAsMarkdown(data) : '_API reference data is not available for this documentation line._'
     }
     if (component === 'OpenApiReference') {
       const document = lineGeneratedFile<Record<string, unknown>>(url, 'openapi.json')
