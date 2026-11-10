@@ -106,6 +106,31 @@ test('no patterns match = schema defaults only', (t) => {
   t.is(result.ctx_size, LLM_CONFIG_DEFAULTS.ctx_size)
 })
 
+// A resolved config carries a system prompt only when the caller configures one.
+test('no system_prompt default is injected', (t) => {
+  const ctx: RuntimeContext = { runtime: 'node', platform: 'darwin' }
+
+  t.absent('system_prompt' in LLM_CONFIG_DEFAULTS, 'not in the schema defaults')
+
+  const resolved = resolveModelConfigWithContext<Record<string, unknown>>(
+    ModelType.llamacppCompletion,
+    {},
+    ctx,
+    [],
+    []
+  )
+  t.absent('system_prompt' in resolved, 'absent when the caller sets none')
+
+  const configured = resolveModelConfigWithContext<Record<string, unknown>>(
+    ModelType.llamacppCompletion,
+    { system_prompt: 'Answer in French.' },
+    ctx,
+    [],
+    []
+  )
+  t.is(configured.system_prompt, 'Answer in French.', 'a configured prompt is kept')
+})
+
 // gpu_layers stays absent from a resolved config unless the caller sets it.
 test('no gpu_layers default is injected, so the runtime fit can run', (t) => {
   const ctx: RuntimeContext = { runtime: 'node', platform: 'darwin' }

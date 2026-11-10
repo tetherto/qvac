@@ -11986,7 +11986,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfig(GeneratedBaseModel):
     system_prompt: Annotated[
         str | None,
         Field(
-            description="Seeds conversation history on the JS side only; never forwarded to the addon. Default `'You are a helpful assistant.'`"
+            description="Prepended as the system message when a request's history carries none; applied on the JS side and never forwarded to the addon. Unset by default, so the model sees the history as sent."
         ),
     ] = None
     load_mode: Annotated[
