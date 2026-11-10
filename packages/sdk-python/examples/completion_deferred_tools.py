@@ -134,6 +134,9 @@ async def main() -> int:
                     {"role": "user", "content": "What's my horoscope for Aquarius?"},
                 ],
                 tools=TOOLS,
+                # One search loads at most two definitions, one unless the
+                # model asks for more.
+                tool_search={"default_limit": 1, "max_limit": 2},
                 max_tool_turns=4,
             )
 

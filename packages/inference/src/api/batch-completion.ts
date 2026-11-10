@@ -114,7 +114,8 @@ async function resolveBatchPrompts(prompts: BatchPromptParams[]): Promise<Resolv
         generationParams: prompt.generationParams
       }),
       ...(prompt.responseFormat && { responseFormat: prompt.responseFormat }),
-      ...(allTools.length > 0 && { tools: allTools })
+      ...(allTools.length > 0 && { tools: allTools }),
+      ...(prompt.toolSearch && { toolSearch: prompt.toolSearch })
     })
   }
 

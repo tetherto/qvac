@@ -2738,6 +2738,26 @@
                   }
                 ]
               },
+              "toolSearch": {
+                "type": "object",
+                "properties": {
+                  "defaultLimit": {
+                    "description": "How many tool definitions one `tool_search` call loads when the model does not ask for a number with its `limit` argument. Defaults to 3, or `maxLimit` when that is lower.",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "maxLimit": {
+                    "description": "The most tool definitions one `tool_search` call can load. A larger `limit` from the model is lowered to this. Defaults to 8.",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "additionalProperties": false,
+                "description": "Limits on what the built-in `tool_search` loads per call. Only used when a tool sets `deferLoading`. The limits are stated in the `tool_search` definition at the front of the prompt, so set them once per conversation: changing them re-prefills from there.",
+                "title": "BatchCompletionStreamRequestPromptsItemToolSearch"
+              },
               "tools": {
                 "description": "Resolved per-prompt tools the model can call.",
                 "type": "array",
@@ -4442,6 +4462,26 @@
             "title": "CompletionOrchestrateRequestToolsItem"
           }
         },
+        "toolSearch": {
+          "type": "object",
+          "properties": {
+            "defaultLimit": {
+              "description": "How many tool definitions one `tool_search` call loads when the model does not ask for a number with its `limit` argument. Defaults to 3, or `maxLimit` when that is lower.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "maxLimit": {
+              "description": "The most tool definitions one `tool_search` call can load. A larger `limit` from the model is lowered to this. Defaults to 8.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "additionalProperties": false,
+          "description": "Limits on what the built-in `tool_search` loads per call. Only used when a tool sets `deferLoading`. The limits are stated in the `tool_search` definition at the front of the prompt, so set them once per conversation: changing them re-prefills from there.",
+          "title": "CompletionOrchestrateRequestToolSearch"
+        },
         "stream": {
           "type": "boolean",
           "description": "Whether to stream tokens (`true`) or return the complete response once (`false`)."
@@ -5195,6 +5235,26 @@
             "required": ["type", "name", "description", "parameters"],
             "title": "CompletionStreamRequestToolsItem"
           }
+        },
+        "toolSearch": {
+          "type": "object",
+          "properties": {
+            "defaultLimit": {
+              "description": "How many tool definitions one `tool_search` call loads when the model does not ask for a number with its `limit` argument. Defaults to 3, or `maxLimit` when that is lower.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "maxLimit": {
+              "description": "The most tool definitions one `tool_search` call can load. A larger `limit` from the model is lowered to this. Defaults to 8.",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "additionalProperties": false,
+          "description": "Limits on what the built-in `tool_search` loads per call. Only used when a tool sets `deferLoading`. The limits are stated in the `tool_search` definition at the front of the prompt, so set them once per conversation: changing them re-prefills from there.",
+          "title": "CompletionStreamRequestToolSearch"
         },
         "stream": {
           "type": "boolean",
