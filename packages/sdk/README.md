@@ -101,12 +101,9 @@ refused up front with the ggml constant to use instead. See
 which also shows the `longFormWindowFrames` / `longFormContextFrames` knobs
 that bound the offline encoder window on long recordings.
 
-The full TranscribePsy-250M-EU model (`PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0`,
-25 European languages) is one GGUF with its language adapters and gate
-embedded; it runs on ggml everywhere and has no Core ML distribution. It takes
-`language` in `modelConfig`: `"en"` for the English trunk, `"other"` for the
-non-English adapters, or `"auto"` (the default) to let the model route each
-recording itself.
+See the [transcription documentation](https://docs.qvac.tether.io/sdk/ai-capabilities/transcription)
+for the full TranscribePsy-250M-EU model (`PARAKEET_TRANSCRIBEPSY_250M_EU_Q8_0`)
+and its `language` routes.
 
 ## Examples
 
