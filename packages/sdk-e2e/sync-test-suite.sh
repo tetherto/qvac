@@ -8,15 +8,19 @@
 #
 # CI has its own switch for the same thing, `test-suite-source: branch`, which
 # builds the package from the branch under test.
+#
+# The copied templates replace a local @qvac/inference pin in the mobile
+# consumer template; run `npm run pin:consumer-inference` after this to restore it.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 src="$here/../test-suite"
 dest="$here/node_modules/@qvac/test-suite"
 
 ( cd "$src" && npm run build >/dev/null )
-rm -rf "$dest/dist" "$dest/schema"
+rm -rf "$dest/dist" "$dest/schema" "$dest/templates"
 cp -R "$src/dist" "$dest/dist"
 cp -R "$src/schema" "$dest/schema"
+cp -R "$src/templates" "$dest/templates"
 cp "$src/package.json" "$dest/package.json"
 
 # The copy loses the executable bit, and `npx qvac-test` resolves through a
@@ -35,9 +39,10 @@ chmod +x "$dest/dist/cli/index.js"
 synced_consumers=0
 for consumer_dest in "$here"/build/consumers/*/node_modules/@qvac/test-suite; do
   [ -d "$consumer_dest" ] || continue
-  rm -rf "$consumer_dest/dist" "$consumer_dest/schema"
+  rm -rf "$consumer_dest/dist" "$consumer_dest/schema" "$consumer_dest/templates"
   cp -R "$src/dist" "$consumer_dest/dist"
   cp -R "$src/schema" "$consumer_dest/schema"
+  cp -R "$src/templates" "$consumer_dest/templates"
   cp "$src/package.json" "$consumer_dest/package.json"
   synced_consumers=$((synced_consumers + 1))
 done
