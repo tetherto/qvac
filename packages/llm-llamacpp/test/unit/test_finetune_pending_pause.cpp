@@ -288,6 +288,7 @@ TEST(FinetuneNpuTest, GpuAndCpuLoadsAreAccepted) {
   EXPECT_NO_THROW(LlamaFinetuner::rejectNpuTarget({{"device", "gpu"}}, 1));
   EXPECT_NO_THROW(LlamaFinetuner::rejectNpuTarget({{"device", "cpu"}}, 0));
   EXPECT_NO_THROW(LlamaFinetuner::rejectNpuTarget({}, 0));
-  EXPECT_NO_THROW(LlamaFinetuner::rejectNpuTarget(
-      {{"device", "gpu"}, {"devices", "Vulkan0,CUDA0"}}, 1));
+  EXPECT_NO_THROW(
+      LlamaFinetuner::rejectNpuTarget(
+          {{"device", "gpu"}, {"devices", "Vulkan0,CUDA0"}}, 1));
 }
