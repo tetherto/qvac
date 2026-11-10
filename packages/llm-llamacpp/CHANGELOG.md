@@ -5,8 +5,8 @@
 ### Added
 
 - `device: "npu"` selects the AMD XDNA NPU as its own device class, beside
-  `gpu` and `cpu`. It falls back to the CPU with a warning when no NPU is
-  listed, and is rejected with `InvalidArgument` together with `backend`,
+  `gpu` and `cpu`. It takes the first NPU fabric lists, falls back to the CPU
+  with a warning when none is listed, and is rejected with `InvalidArgument` together with `backend`,
   `devices`, `split-mode`, `main-gpu`, `rpc-servers` or finetuning. Runtime
   stats report `backendDevice: "npu"` (native code `2`) for an NPU load,
   including `devices: "XDNA0"`

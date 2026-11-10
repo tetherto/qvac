@@ -557,20 +557,36 @@ std::pair<BackendType, std::string> backend_selection::chooseBackend(
           qvac_errors::general_error::InvalidArgument,
           "Finetuning does not run on the NPU; use device 'gpu' or 'cpu'.");
     }
+    // The first NPU in ggml's registration order wins. Each NPU is built into
+    // its host's processor, so one host lists at most one NPU backend; the
+    // rule only decides between several devices of that backend.
+    std::string chosen;
+    size_t npuCount = 0;
     for (size_t i = 0; i < bckI.ggml_backend_dev_count(); ++i) {
       const ggml_backend_dev_t dev = bckI.ggml_backend_dev_get(i);
       if (::isXdnaDevice(bckI, dev)) {
-        bckI.llamaLogCallback(
-            GGML_LOG_LEVEL_INFO, "Chosen NPU Backend", nullptr);
-        return {BackendType::NPU, lowerCopy(bckI.ggml_backend_dev_name(dev))};
+        if (npuCount++ == 0) {
+          chosen = lowerCopy(bckI.ggml_backend_dev_name(dev));
+        }
       }
     }
-    bckI.llamaLogCallback(
-        GGML_LOG_LEVEL_WARN,
-        "No NPU device found; falling back to CPU",
-        nullptr);
-    bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen CPU", nullptr);
-    return {BackendType::CPU, "none"};
+    if (npuCount == 0) {
+      bckI.llamaLogCallback(
+          GGML_LOG_LEVEL_WARN,
+          "No NPU device found; falling back to CPU",
+          nullptr);
+      bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, "Chosen CPU", nullptr);
+      return {BackendType::CPU, "none"};
+    }
+    const std::string text =
+        npuCount == 1
+            ? string_format("Chosen NPU Backend: %s", chosen.c_str())
+            : string_format(
+                  "Chosen NPU Backend: %s, the first of %zu NPU devices",
+                  chosen.c_str(),
+                  npuCount);
+    bckI.llamaLogCallback(GGML_LOG_LEVEL_INFO, text.c_str(), nullptr);
+    return {BackendType::NPU, chosen};
   }
 
   std::vector<std::string> gpuBackends;

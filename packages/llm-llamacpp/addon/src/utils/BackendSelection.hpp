@@ -91,8 +91,9 @@ std::pair<BackendType, std::string> chooseBackend(
 /// cascade rather than failing, because an absent device is not a config error.
 /// Neither the override nor the cascade ever picks the AMD XDNA NPU.
 ///
-/// A @p preferredBackendType of NPU picks the first XDNA device and falls back
-/// to CPU with a warning when there is none. Finetuning on the NPU throws
+/// A @p preferredBackendType of NPU picks the first NPU device in ggml's
+/// registration order, and falls back to CPU with a warning when there is
+/// none. Finetuning on the NPU throws
 /// StatusError (InvalidArgument).
 ///
 /// For BitNet models with TQ1_0/TQ2_0 quantization on Adreno GPUs:

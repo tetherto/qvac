@@ -1649,7 +1649,25 @@ TEST_F(BackendSelectionTest, DeviceNpuPicksXdna) {
   mockBackend.addDevice(createXdnaDevice());
   expectChosenForPreference(
       mockBackend, BackendType::NPU, BackendType::NPU, "xdna0");
-  EXPECT_TRUE(loggedAt(mockBackend, GGML_LOG_LEVEL_INFO, "Chosen NPU Backend"));
+  EXPECT_TRUE(
+      loggedAt(mockBackend, GGML_LOG_LEVEL_INFO, "Chosen NPU Backend: xdna0"));
+}
+
+// The first NPU in registration order wins, and the log says it was one of
+// several.
+TEST_F(BackendSelectionTest, DeviceNpuPicksFirstOfSeveralNpus) {
+  mockBackend.addDevice(createIGPUDevice(RADEON_DESC, VULKAN0_BACK));
+  mockBackend.addDevice(createXdnaDevice());
+  mockBackend.addDevice(
+      {XDNA_DESC, "XDNA1", GGML_BACKEND_DEVICE_TYPE_IGPU, XDNA_REG});
+  BackendInterface bckI = mockBackend.toBackendInterface();
+  auto result = chooseBackend(BackendType::NPU, bckI);
+  EXPECT_EQ(result.first, BackendType::NPU);
+  EXPECT_EQ(result.second, "xdna0");
+  EXPECT_TRUE(loggedAt(
+      mockBackend,
+      GGML_LOG_LEVEL_INFO,
+      "Chosen NPU Backend: xdna0, the first of 2 NPU devices"));
 }
 
 TEST_F(BackendSelectionTest, DeviceNpuPicksXdnaBesideDiscreteGpu) {
