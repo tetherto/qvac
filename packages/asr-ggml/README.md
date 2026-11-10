@@ -1027,7 +1027,7 @@ ggml.
 | Nemotron 3 Diarization (`Nemotron-3-Diarization`) | `<stem>-diarizer-<frames>.mlmodelc`, one fixed capacity per bundle (358 frames covers offline inputs up to 28.6 s and the default live chunk, 745 the 30 s long-form blocks and offline inputs up to 59.6 s) | offline, long-form and live calls of up to a capacity: the whole network runs on Core ML, with the smallest capacity that fits | calls above every capacity, and every call if the bundle fails |
 | CTC (`parakeet-ctc-0.6b`), Indic Conformer CTC | none in the pinned `speech-cpp` | — | always (the engine adds CTC sidecars from `speech-cpp` `2026-09-24`) |
 | Sortformer v1 | none | — | always |
-| Whisper | none: the `whisper` feature builds without `WHISPER_COREML` | — | always |
+| Whisper | `<model-stem>-encoder.mlmodelc` beside the GGML model (for example, `ggml-tiny-encoder.mlmodelc` beside `ggml-tiny.bin`), enabled by `speech-cpp[whisper,coreml]` on Apple | the encoder's fixed mel window | when the matching sidecar is absent or cannot be loaded; the decoder always stays on ggml |
 | MOSS-Transcribe-Diarize | `moss-transcribe-diarize-encoder.mlmodelc` | every 30 s window: the audio encoder and adaptor run on Core ML, the decoder on ggml | only on fallback |
 
 Diarizer bundles load on first use, and each capacity costs 190-220 MiB of
