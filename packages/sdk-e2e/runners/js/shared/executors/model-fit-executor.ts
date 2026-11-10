@@ -1,6 +1,7 @@
 import { assessModelFit, getLoadedModelInfo, loggingStream, SDK_LOG_ID } from '@qvac/sdk'
 import { ValidationHelpers, type TestResult, type Expectation } from '@qvac/test-suite'
 import { AbstractModelExecutor } from './abstract-model-executor.js'
+import type { ResourceManager } from '../resource-manager.js'
 import {
   modelFitAssessTests,
   modelFitProbeTests,
@@ -21,11 +22,18 @@ const MEASURED_VERDICTS = ['fits', 'does-not-fit']
 
 const LLAMA_MODEL_TYPES = ['llamacpp-completion', 'llamacpp-embedding']
 
-/** A llama load pinned to the CPU, which the llama fitters answer with `unknown`. */
-function pinnedToCpu(load: { modelType?: unknown; modelConfig?: unknown }): boolean {
+/**
+ * A llama load that runs on the CPU, which the llama fitters answer with `unknown`: pinned there by
+ * its config, or left on the host's default where the host places llama loads on the CPU.
+ */
+function pinnedToCpu(
+  load: { modelType?: unknown; modelConfig?: unknown },
+  hostLlamaOnCpu: boolean
+): boolean {
   if (!LLAMA_MODEL_TYPES.includes(String(load.modelType))) return false
   const device = (load.modelConfig as { device?: unknown } | undefined)?.device
-  return typeof device === 'string' && device.toLowerCase() === 'cpu'
+  if (typeof device !== 'string') return hostLlamaOnCpu
+  return device.toLowerCase() === 'cpu'
 }
 
 /**
@@ -128,6 +136,17 @@ export class ModelFitExecutor extends AbstractModelExecutor<typeof modelFitTests
 
   private readonly fitLog = new FitLog()
 
+  /**
+   * @param hostLlamaOnCpu Whether the host's device defaults place llm and embedding loads on the
+   * CPU, as the SDK does on Pixel phones.
+   */
+  constructor(
+    resources: ResourceManager,
+    private readonly hostLlamaOnCpu = false
+  ) {
+    super(resources)
+  }
+
   override async setup(testId: string, context: unknown) {
     await this.fitLog.open()
     await super.setup(testId, context)
@@ -162,7 +181,7 @@ export class ModelFitExecutor extends AbstractModelExecutor<typeof modelFitTests
         return { passed: false, output: `No per-model result for dep="${p.dep}"${fitLog}` }
       }
 
-      const cpu = pinnedToCpu(load)
+      const cpu = pinnedToCpu(load, this.hostLlamaOnCpu)
       const checks = {
         oneModelAssessed: result.models.length === 1,
         verdictMatches: verdictMatches(p.measured, cpu, model.status),
@@ -189,7 +208,8 @@ export class ModelFitExecutor extends AbstractModelExecutor<typeof modelFitTests
 
   /**
    * Assesses measured loads from different addons as one set. Each model must
-   * reach a verdict, and the set must too: a pool both use sums their rows.
+   * reach a verdict unless it runs on the CPU, and the set must too unless one
+   * does: a pool both use sums their rows.
    */
   async together(params: unknown, expectation: unknown): Promise<TestResult> {
     const p = params as TogetherParams
@@ -198,14 +218,18 @@ export class ModelFitExecutor extends AbstractModelExecutor<typeof modelFitTests
       const loads = await Promise.all(p.deps.map((dep) => this.resources.loadParams(dep)))
       const result = await assessModelFit({ models: loads } as never)
       const verdicts = result.models.map((model) => model.status)
+      const cpu = loads.map((load) => pinnedToCpu(load, this.hostLlamaOnCpu))
       const fitLog = reportFitLog(await this.fitLog.collect())
 
+      const allFit = verdicts.every((verdict) => verdict === 'fits')
       const checks = {
         everyModelAssessed: result.models.length === loads.length,
-        everyModelMeasured: verdicts.every((verdict) => MEASURED_VERDICTS.includes(verdict)),
-        setMeasured: MEASURED_VERDICTS.includes(result.verdict),
+        everyVerdictMatches: verdicts.every((verdict, i) =>
+          verdictMatches(true, cpu[i] === true, verdict)
+        ),
+        setMeasured: cpu.some(Boolean) || MEASURED_VERDICTS.includes(result.verdict),
         setFollowsTheModels:
-          result.verdict === 'does-not-fit' || verdicts.every((verdict) => verdict === 'fits'),
+          result.verdict === 'does-not-fit' || result.verdict === (allFit ? 'fits' : 'unknown'),
         everyModelReportsRows: result.models.every(rowsMatchStatus),
         poolsSumRows: poolsSumRows(result)
       }
@@ -250,7 +274,7 @@ export class ModelFitExecutor extends AbstractModelExecutor<typeof modelFitTests
         }
       }
 
-      const cpu = pinnedToCpu(load)
+      const cpu = pinnedToCpu(load, this.hostLlamaOnCpu)
       const model = fit.models[0]
       const checks = {
         oneModelChecked: fit.models.length === 1,
