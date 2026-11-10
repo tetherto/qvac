@@ -6,20 +6,26 @@ import path from 'bare-path'
 import Buffer from 'bare-buffer'
 import { spawn, type Subprocess } from 'bare-subprocess'
 import { AbortController } from 'bare-abort-controller'
+import Corestore from 'corestore'
+import Hyperdrive from 'hyperdrive'
 import {
   acquireDownloadLock,
   partialDownloadPath,
   tryAcquireDownloadLocks
 } from '@/handlers/load-model/download-lock'
 import { downloadModelFromHttp } from '@/handlers/load-model/http'
+import { downloadModelFromHyperdrive } from '@/handlers/load-model/hyperdrive'
 import { validateCachedFile } from '@/handlers/load-model/registry-download-utils'
 import {
   cancelTransfer,
   createHttpDownloadKey,
+  createHyperdriveDownloadKey,
   createRegistryCacheKey
 } from '@/handlers/load-model/download-manager'
 import { handleDeleteCache } from '@/handlers/delete-cache'
 import { getSingleFileCachePath } from '@/utils/cache/paths'
+import { getQvacPath } from '@/utils/qvac-paths'
+import { initEnv } from '@/runtime/env'
 import { QWEN3_600M_INST_Q4 } from '@/models/registry/index'
 import {
   calculateCachedFileChecksum,
@@ -30,6 +36,7 @@ import {
 import { DownloadCancelledError } from '@/errors/index'
 import { useTestCacheDir } from './fixtures/test-cache'
 import { stubClient } from './fixtures/registry-client-stub'
+import { MODEL_CONTENT } from './fixtures/xproc-content'
 
 // Several processes (an app, `qvac sdk serve`, a TUI) can share one models
 // directory. These tests cover the download lock and the partial-file layout
@@ -38,8 +45,7 @@ import { stubClient } from './fixtures/registry-client-stub'
 // The suite runs from the package root, so the compiled child sits here.
 const CHILD_SCRIPT = path.resolve(os.cwd(), 'test/dist/test/fixtures/download-child.js')
 
-const CONTENT = Buffer.alloc(400_000)
-for (let i = 0; i < CONTENT.length; i++) CONTENT[i] = (i * 7) % 251
+const CONTENT = MODEL_CONTENT
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
@@ -137,6 +143,8 @@ interface ChildResult {
   ok: boolean
   path?: string
   locked?: boolean
+  downloads?: number
+  home?: string
   error?: string
 }
 
@@ -153,6 +161,22 @@ function startChild(args: string[]): { child: Subprocess; exited: Promise<void> 
 
 function readResult(resultFile: string): ChildResult {
   return JSON.parse(fs.readFileSync(resultFile, 'utf8') as unknown as string) as ChildResult
+}
+
+// Points the SDK home at a temp directory for one test.
+function useTempSdkHome(t: { teardown(fn: () => void): void }): string {
+  const home = makeTempDir('home')
+  const argv = Bare.argv.slice()
+  Bare.argv.length = 0
+  Bare.argv.push('', '', JSON.stringify({ HOME_DIR: home }))
+  initEnv()
+  t.teardown(() => {
+    Bare.argv.length = 0
+    Bare.argv.push(...argv)
+    initEnv()
+    fs.rmSync(home, { recursive: true, force: true })
+  })
+  return home
 }
 
 function cachedHttpPath(cacheDir: string, url: string, filename: string): string {
@@ -338,6 +362,110 @@ test('two processes downloading the same URL into one models directory leave one
   if (!modelPath) return
   t.ok(bytesEqual(fs.readFileSync(modelPath) as Buffer, CONTENT), 'the cached file is intact')
   t.absent(fs.existsSync(partialDownloadPath(modelPath)), 'no partial file is left behind')
+})
+
+test('two processes downloading the same registry model into one models directory leave one intact file', async (t) => {
+  // Each process has its own SDK home and registry store, like the TUI next to
+  // `qvac sdk serve`, and both share one models directory.
+  const cacheDir = makeTempDir('registry-models')
+  const resultDir = makeTempDir('registry-results')
+  const gate = path.join(resultDir, 'gate')
+  const registryPath = `xproc/${Math.random().toString(16).slice(2)}/model.gguf`
+  const first = path.join(resultDir, 'first.json')
+  const second = path.join(resultDir, 'second.json')
+
+  const firstChild = startChild(['registry-download', cacheDir, first, registryPath, gate])
+  let secondChild: ReturnType<typeof startChild> | undefined
+  t.teardown(async () => {
+    fs.writeFileSync(gate, '')
+    await Promise.all([firstChild.exited, secondChild?.exited])
+    for (const result of [first, second]) {
+      const home = fs.existsSync(result) ? readResult(result).home : undefined
+      if (home) fs.rmSync(home, { recursive: true, force: true })
+    }
+    fs.rmSync(cacheDir, { recursive: true, force: true })
+    fs.rmSync(resultDir, { recursive: true, force: true })
+  })
+  await waitUntil(() => fs.existsSync(`${first}.half`))
+
+  // Without the lock the second process misses the cache and rewrites the
+  // first one's partial file.
+  secondChild = startChild(['registry-download', cacheDir, second, registryPath, gate])
+  await waitUntil(() => fs.existsSync(`${second}.started`))
+  await sleep(1_000)
+  t.absent(fs.existsSync(`${second}.half`), 'the second process does not start its own download')
+  t.absent(fs.existsSync(second), 'the second process is still waiting for the first')
+
+  fs.writeFileSync(gate, '')
+  await Promise.all([firstChild.exited, secondChild.exited])
+
+  const firstResult = readResult(first)
+  const secondResult = readResult(second)
+  t.ok(firstResult.ok, `the first process succeeds ${firstResult.error ?? ''}`)
+  t.ok(secondResult.ok, `the second process succeeds ${secondResult.error ?? ''}`)
+  t.is(firstResult.downloads, 1, 'the first process downloads the model')
+  t.is(secondResult.downloads, 0, 'the second process finds the finished file in the cache')
+  t.is(secondResult.path, firstResult.path, 'both processes use the same cached file')
+
+  const modelPath = firstResult.path
+  if (!modelPath) return
+  t.ok(bytesEqual(fs.readFileSync(modelPath) as Buffer, CONTENT), 'the cached file is intact')
+  t.absent(fs.existsSync(partialDownloadPath(modelPath)), 'no partial file is left behind')
+})
+
+test('downloadModelFromHyperdrive: waits for another process, never exposes a partial file, then publishes', async (t) => {
+  const cacheDir = useTestCacheDir()
+  const resultDir = makeTempDir('hyperdrive')
+  const resultFile = path.join(resultDir, 'result.json')
+  useTempSdkHome(t)
+
+  // A drive whose blocks are already in this home's corestore, so the download
+  // reads them locally without a peer.
+  const seedDir = path.join(resultDir, 'seed-store')
+  const store = new Corestore(seedDir)
+  const drive = new Hyperdrive(store)
+  await drive.ready()
+  // The engine's Hyperdrive typings cover reads only.
+  await (drive as unknown as { put(name: string, data: Buffer): Promise<void> }).put(
+    '/model.gguf',
+    CONTENT
+  )
+  const driveKey = drive.key.toString('hex')
+  await drive.close()
+  await store.close()
+  fs.mkdirSync(path.dirname(getQvacPath('corestore', driveKey)), { recursive: true })
+  fs.renameSync(seedDir, getQvacPath('corestore', driveKey))
+
+  const modelPath = path.join(cacheDir, `${generateShortHash(`${driveKey}/model.gguf`)}_model.gguf`)
+  const { exited } = startChild([
+    'hold-lock',
+    cacheDir,
+    resultFile,
+    createHyperdriveDownloadKey(driveKey, 'model.gguf'),
+    '1500'
+  ])
+  t.teardown(async () => {
+    await exited
+    fs.rmSync(modelPath, { force: true })
+    fs.rmSync(resultDir, { recursive: true, force: true })
+  })
+  await waitUntil(() => fs.existsSync(resultFile))
+
+  let settled = false
+  const download = downloadModelFromHyperdrive(driveKey, 'model.gguf').finally(() => {
+    settled = true
+  })
+  await sleep(500)
+  t.absent(settled, 'the download waits while another process holds its lock')
+  t.absent(fs.existsSync(modelPath), 'nothing is written at the model path while waiting')
+  t.absent(
+    fs.existsSync(partialDownloadPath(modelPath)),
+    'no partial file is started while waiting'
+  )
+
+  t.is(await download, modelPath, 'the download completes once the other process exits')
+  t.ok(bytesEqual(fs.readFileSync(modelPath) as Buffer, CONTENT), 'the published file is complete')
+  t.absent(fs.existsSync(partialDownloadPath(modelPath)), 'the partial file was moved into place')
 })
 
 test('downloadModelFromHttp: a download is not visible at the model path until it completes', async (t) => {
