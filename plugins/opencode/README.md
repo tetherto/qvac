@@ -150,16 +150,32 @@ running `opencode` from the terminal.
 
 ## Without the plugin
 
-OpenCode 2.x also lists QVAC as a provider from [models.dev](https://models.dev),
-backed by `@qvac/ai-sdk-provider`. Use it when you would rather run the server
-yourself:
+To run the server yourself instead, start it with an explicit port:
 
-1. Start `qvac serve --openai --port 11435` with the model you want loaded.
-2. Connect the QVAC provider in OpenCode with any API key. The server you
-   started has no authentication unless you gave it a key.
+```bash
+qvac serve --openai --port 11435
+```
 
-You manage the server's lifetime and model choice yourself; nothing is torn down
-when OpenCode exits.
+Then point OpenCode's `qvac` provider at it. Each key under `models` must match
+an alias in your `serve.models` config:
+
+```json
+{
+  "model": "qvac/qwen3.5-9b",
+  "providers": {
+    "qvac": {
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": { "baseURL": "http://127.0.0.1:11435/v1" },
+      "models": { "qwen3.5-9b": { "name": "Qwen3.5 9B" } }
+    }
+  }
+}
+```
+
+Connect QVAC in OpenCode with any API key, or the key you started the server
+with. Set `baseURL` explicitly: the QVAC entry OpenCode reads from its model
+catalog assumes port 11434. You manage the server's lifetime and model yourself;
+nothing is torn down when OpenCode exits.
 
 ## Requirements
 
