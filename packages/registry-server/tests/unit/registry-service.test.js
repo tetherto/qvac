@@ -114,6 +114,17 @@ test('isTransientHfDownloadError unwraps fetch `cause` for net codes', (t) => {
 test('isTransientHfDownloadError matches undici raw "terminated" / "socket hang up" messages', (t) => {
   t.ok(isTransientHfDownloadError(new Error('terminated')))
   t.ok(isTransientHfDownloadError(new Error('Socket hang up')))
+  t.ok(
+    isTransientHfDownloadError(
+      new Error('HuggingFace download failed', {
+        cause: new TypeError('terminated', {
+          cause: Object.assign(new Error('response length mismatch'), {
+            code: 'UND_ERR_RES_CONTENT_LENGTH_MISMATCH'
+          })
+        })
+      })
+    )
+  )
 })
 
 test('isTransientHfDownloadError retries HF 5xx and 429', (t) => {

@@ -56,6 +56,23 @@ type TtsGgmlDebugModel = {
       steps?: number
       referenceAudio?: string
       promptText?: string
+      streamLeftContextTokens?: number
+      batchCfmSteps?: number
+      nPredict?: number
+      maxSentenceChars?: number
+      crossfadeMs?: number
+      repeatPenalty?: number
+      exaggeration?: number
+      cfgWeight?: number
+      minP?: number
+      voiceDir?: string
+      voiceJsonPath?: string
+      noiseNpyPath?: string
+      prewarmText?: string
+      vulkanDevice?: number
+      flowCutPrompt?: boolean
+      streamChunkTolerancePct?: number
+      streamMinChunkTokens?: number
     }
   }
   getEngineType?: () => string
@@ -859,4 +876,131 @@ test('ttsPlugin createModel: wires CosyVoice3 voice cloning', async (t) => {
   // registry artifacts and do not land in the model directory.
   t.is(model._setup.paths.cosyvoiceS3tokModelPath, '/tmp/s3tok.gguf')
   t.is(model._setup.paths.cosyvoiceCampplusModelPath, '/tmp/campplus.gguf')
+})
+
+test('ttsPlugin createModel: forwards the Chatterbox sampling, prosody and length controls', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-chatterbox-controls',
+    modelPath: '/tmp/chatterbox-t3-mtl.gguf',
+    artifacts: { s3genPath: '/tmp/chatterbox-s3gen-mtl.gguf' },
+    modelConfig: {
+      ttsEngine: 'chatterbox',
+      language: 'en',
+      temperature: 0.8,
+      topK: 1000,
+      topP: 0.95,
+      repeatPenalty: 1.2,
+      exaggeration: 0.7,
+      cfgWeight: 0.5,
+      minP: 0.05,
+      nPredict: 1500,
+      maxSentenceChars: 180,
+      crossfadeMs: 30,
+      batchCfmSteps: 4,
+      streamLeftContextTokens: 32,
+      voiceDir: '/voices/me'
+    }
+  })
+
+  const model = result.model as unknown as TtsGgmlDebugModel
+  t.is(model._setup.settings.temperature, 0.8)
+  t.is(model._setup.settings.topK, 1000)
+  t.is(model._setup.settings.topP, 0.95)
+  t.is(model._setup.settings.repeatPenalty, 1.2)
+  t.is(model._setup.settings.exaggeration, 0.7)
+  t.is(model._setup.settings.cfgWeight, 0.5)
+  t.is(model._setup.settings.minP, 0.05)
+  t.is(model._setup.settings.nPredict, 1500)
+  t.is(model._setup.settings.maxSentenceChars, 180)
+  t.is(model._setup.settings.crossfadeMs, 30)
+  t.is(model._setup.settings.batchCfmSteps, 4)
+  t.is(model._setup.settings.streamLeftContextTokens, 32)
+  t.is(model._setup.settings.voiceDir, '/voices/me')
+})
+
+test('ttsPlugin resolveConfig: resolves the Supertonic voice JSON and noise tensor and strips *Src', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const resolved = await ttsPlugin.resolveConfig!(
+    {
+      ttsEngine: 'supertonic',
+      language: 'en',
+      voiceJsonSrc: 'registry://s3/voices/cloned.json',
+      noiseNpySrc: { src: 'registry://s3/voices/noise.npy', name: 'TTS_SUPERTONIC_NOISE' },
+      prewarmText: 'Warm the pipelines up.',
+      vulkanDevice: -1,
+      streamChunkTokens: 50,
+      lavasrEnhancerModelSrc: undefined
+    },
+    {
+      resolveModelPath: async (src: unknown) =>
+        `/cache/${typeof src === 'string' ? src : (src as { src: string }).src}`,
+      modelSrc: 'registry://s3/supertonic3-q8_0.gguf',
+      modelType: 'tts-ggml'
+    }
+  )
+
+  t.alike(resolved.artifacts, {
+    voiceJsonPath: '/cache/registry://s3/voices/cloned.json',
+    noiseNpyPath: '/cache/registry://s3/voices/noise.npy'
+  })
+  t.is('voiceJsonSrc' in resolved.config, false)
+  t.is('noiseNpySrc' in resolved.config, false)
+  const runtime = resolved.config as {
+    prewarmText?: string
+    vulkanDevice?: number
+    streamChunkTokens?: number
+  }
+  t.is(runtime.prewarmText, 'Warm the pipelines up.')
+  t.is(runtime.vulkanDevice, -1)
+  t.is(runtime.streamChunkTokens, 50)
+})
+
+test('ttsPlugin createModel: forwards the Supertonic streaming, voice and deployment controls', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-supertonic-controls',
+    modelPath: '/tmp/supertonic3-q8_0.gguf',
+    artifacts: { voiceJsonPath: '/cache/cloned.json', noiseNpyPath: '/cache/noise.npy' },
+    modelConfig: {
+      ttsEngine: 'supertonic',
+      language: 'en',
+      voice: 'M1',
+      prewarmText: 'Warm the pipelines up.',
+      vulkanDevice: 1,
+      streamChunkTokens: 50,
+      streamFirstChunkTokens: 20,
+      streamChunkTolerancePct: 15,
+      streamMinChunkTokens: 25
+    }
+  })
+
+  const model = result.model as unknown as TtsGgmlDebugModel
+  t.is(model.getEngineType?.(), 'supertonic')
+  t.is(model._setup.settings.voice, 'M1')
+  t.is(model._setup.settings.voiceJsonPath, '/cache/cloned.json')
+  t.is(model._setup.settings.noiseNpyPath, '/cache/noise.npy')
+  t.is(model._setup.settings.prewarmText, 'Warm the pipelines up.')
+  t.is(model._setup.settings.vulkanDevice, 1)
+  t.is(model._setup.settings.streamChunkTokens, 50)
+  t.is(model._setup.settings.streamFirstChunkTokens, 20)
+  t.is(model._setup.settings.streamChunkTolerancePct, 15)
+  t.is(model._setup.settings.streamMinChunkTokens, 25)
+})
+
+test('ttsPlugin createModel: forwards CosyVoice3 flowCutPrompt and vulkanDevice', async (t) => {
+  const { ttsPlugin } = await import('@/plugins/builtin/tts-ggml/plugin')
+
+  const result = ttsPlugin.createModel({
+    modelId: 'tts-cosyvoice3-controls',
+    modelPath: '/tmp/qvac/sets/cosyvoice3/cosyvoice3-llm-q8_0.gguf',
+    modelConfig: { ttsEngine: 'cosyvoice3', flowCutPrompt: true, vulkanDevice: -1 }
+  })
+
+  const model = result.model as unknown as TtsGgmlDebugModel
+  t.is(model._setup.settings.flowCutPrompt, true)
+  t.is(model._setup.settings.vulkanDevice, -1)
 })

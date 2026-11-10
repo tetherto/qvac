@@ -1,7 +1,10 @@
 package io.tether.qvac.sdk
 
+import io.tether.qvac.sdk.generated.schema.TextToSpeechRequest
+import io.tether.qvac.sdk.generated.schema.TextToSpeechStreamRequest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -177,6 +180,56 @@ class QvacFeatureApisTest {
     }
 
     @Test
+    fun pcmFramesDecodeToTheSameSamplesAsBufferFrames() = runTest {
+        val transport = FeatureTransport()
+        val client = QvacClient(transport)
+        // little-endian int16 for [1, -1, 32767, -32768]
+        transport.responses = flowOf(buildJsonObject {
+            put("type", "textToSpeech")
+            put("buffer", buildJsonArray { })
+            put("pcm", "AQD///9/AIA=")
+            put("done", true)
+        })
+        try {
+            val result = client.speech.synthesize("tts", "hi")
+            assertEquals(listOf(1.0, -1.0, 32767.0, -32768.0), result.samples)
+        } finally {
+            client.close()
+        }
+    }
+
+    @Test
+    fun synthesizeStreamDecodesPcmFramesBeforeTheyReachCallers() = runTest {
+        val transport = FeatureTransport()
+        val client = QvacClient(transport)
+        // little-endian int16 for [1, -1, 32767, -32768]; the last frame is a plain buffer frame
+        transport.responses = flowOf(
+            buildJsonObject {
+                put("type", "textToSpeechStream")
+                put("buffer", buildJsonArray { })
+                put("pcm", "AQD///9/AIA=")
+                put("done", false)
+            },
+            buildJsonObject {
+                put("type", "textToSpeechStream")
+                put("buffer", buildJsonArray { add(JsonPrimitive(7.0)) })
+                put("done", true)
+            },
+        )
+        try {
+            val frames = client.speech
+                .synthesizeStream(TextToSpeechStreamRequest(modelId = "tts"), flowOf("hi".encodeToByteArray()))
+                .toList()
+            assertEquals(listOf(1.0, -1.0, 32767.0, -32768.0), frames[0].buffer)
+            assertEquals(null, frames[0].pcm)
+            assertEquals(listOf(7.0), frames[1].buffer)
+            assertEquals(true, frames[1].done)
+        } finally {
+            client.close()
+        }
+    }
+
+    @Test
     fun embeddingsKeepTextOverloadsAndSerializeMediaInputs() = runTest {
         val transport = FeatureTransport()
         val client = QvacClient(transport)
@@ -211,6 +264,54 @@ class QvacFeatureApisTest {
             client.embed(mediaRequest)
             assertEquals(false, transport.lastPayload?.containsKey("text"))
             assertEquals(true, transport.lastPayload?.containsKey("inputs"))
+        } finally {
+            client.close()
+        }
+    }
+
+    @Test
+    fun publicTypedSpeechMethodsDecodePcmFrames() = runTest {
+        val transport = FeatureTransport()
+        val client = QvacClient(transport)
+        try {
+            // little-endian int16 for [1, -1, 32767, -32768]
+            transport.responses = flowOf(
+                buildJsonObject {
+                    put("type", "textToSpeech")
+                    put("buffer", buildJsonArray { })
+                    put("pcm", "AQD///9/AIA=")
+                    put("done", false)
+                },
+                buildJsonObject {
+                    put("type", "textToSpeech")
+                    put("buffer", buildJsonArray { add(JsonPrimitive(7.0)) })
+                    put("done", true)
+                },
+            )
+            val frames = client.textToSpeech(TextToSpeechRequest(modelId = "tts", text = "hi")).toList()
+            assertEquals(listOf(1.0, -1.0, 32767.0, -32768.0), frames[0].buffer)
+            assertEquals(null, frames[0].pcm)
+            assertEquals(listOf(7.0), frames[1].buffer)
+
+            transport.responses = flowOf(
+                buildJsonObject {
+                    put("type", "textToSpeechStream")
+                    put("buffer", buildJsonArray { })
+                    put("pcm", "AQD///9/AIA=")
+                    put("done", false)
+                },
+                buildJsonObject {
+                    put("type", "textToSpeechStream")
+                    put("buffer", buildJsonArray { })
+                    put("done", true)
+                },
+            )
+            val duplexFrames = client
+                .textToSpeechStream(TextToSpeechStreamRequest(modelId = "tts"), flowOf("hi".encodeToByteArray()))
+                .toList()
+            assertEquals(listOf(1.0, -1.0, 32767.0, -32768.0), duplexFrames[0].buffer)
+            assertEquals(null, duplexFrames[0].pcm)
+            assertEquals(true, duplexFrames[1].done)
         } finally {
             client.close()
         }

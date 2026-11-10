@@ -54,6 +54,10 @@ _CODE_INVALID_RESPONSE_TYPE = _CODES["INVALID_RESPONSE_TYPE"]
 _CODE_STREAM_ENDED_WITHOUT_RESPONSE = _CODES["STREAM_ENDED_WITHOUT_RESPONSE"]
 _CODE_MODEL_TYPE_REQUIRED = _CODES["MODEL_TYPE_REQUIRED"]
 _CODE_MODEL_SRC_TYPE_MISMATCH = _CODES["MODEL_SRC_TYPE_MISMATCH"]
+_CODE_SET_CONFIG_FAILED = _CODES["SET_CONFIG_FAILED"]
+_CODE_WORKER_CRASHED = _CODES["WORKER_CRASHED"]
+_CODE_WORKER_SHUTDOWN = _CODES["WORKER_SHUTDOWN"]
+_CODE_WORKER_STARTUP_FAILED = _CODES["WORKER_STARTUP_FAILED"]
 
 
 class QvacError(Exception):
@@ -439,6 +443,78 @@ class InvalidCancelParamsError(QvacError):
         )
 
 
+# ---- Worker lifecycle errors (raised by the transport) -------------------
+
+
+class SetConfigFailedError(QvacError):
+    """The worker rejected the home folder or config sent when it started."""
+
+    def __init__(self, details: str | None = None, *, cause: Any = None) -> None:
+        super().__init__(
+            f"Failed to set config: {details}" if details else "Failed to set config",
+            name="SET_CONFIG_FAILED",
+            code=_CODE_SET_CONFIG_FAILED,
+            cause=cause,
+        )
+
+
+class WorkerStartupError(QvacError):
+    """The worker failed to start, or did not finish starting within the
+    timeout. `exit_code` and `signal` are set when it exited without a reason."""
+
+    def __init__(
+        self,
+        details: str,
+        *,
+        timed_out: bool = False,
+        exit_code: int | None = None,
+        signal: str | None = None,
+        cause: Any = None,
+    ) -> None:
+        self.timed_out = timed_out
+        self.exit_code = exit_code
+        self.signal = signal
+        super().__init__(
+            details,
+            name="WORKER_STARTUP_FAILED",
+            code=_CODE_WORKER_STARTUP_FAILED,
+            cause=cause,
+        )
+
+
+class WorkerCrashedError(QvacError):
+    """The worker exited while calls were in flight."""
+
+    def __init__(
+        self,
+        exit_code: int | None = None,
+        signal: str | None = None,
+        *,
+        cause: Any = None,
+    ) -> None:
+        self.exit_code = exit_code
+        self.signal = signal
+        super().__init__(
+            f"Bare worker exited mid-request (code={exit_code}, signal={signal})"
+            " — in-flight calls were aborted",
+            name="WORKER_CRASHED",
+            code=_CODE_WORKER_CRASHED,
+            cause=cause,
+        )
+
+
+class WorkerShutdownError(QvacError):
+    """The client was closed while a call was in flight."""
+
+    def __init__(self, *, cause: Any = None) -> None:
+        super().__init__(
+            "SDK is shutting down — in-flight RPC call aborted",
+            name="WORKER_SHUTDOWN",
+            code=_CODE_WORKER_SHUTDOWN,
+            cause=cause,
+        )
+
+
 # ---- Reconstruction ------------------------------------------------------
 
 
@@ -611,5 +687,9 @@ __all__ = [
     "InvalidDeleteCacheParamsError",
     "InvalidCancelParamsError",
     "DeleteCacheFailedError",
+    "SetConfigFailedError",
+    "WorkerStartupError",
+    "WorkerCrashedError",
+    "WorkerShutdownError",
     "reconstruct_error",
 ]

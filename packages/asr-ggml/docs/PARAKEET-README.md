@@ -443,8 +443,8 @@ await response.onUpdate(() => {}).await()
 //                                //   or a vendor/tier declined by policy)
 // response.stats.encoderOnCoreml // 1 when a Core ML encoder sidecar loaded at
 //                                //   load(); else 0
-// response.stats.encoderUsedCoreml // offline ASR only: 1 when every
-//                                  //   transcription in the job ran its
+// response.stats.encoderUsedCoreml // offline ASR and batch diarization only:
+//                                  //   1 when every call in the job ran its
 //                                  //   encoder on Core ML, 0 when any ran on ggml
 // response.stats.audioDurationMs, encoderMs, decoderMs, melSpecMs, totalEncodedFrames, ...
 ```
