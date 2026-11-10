@@ -152,7 +152,7 @@ const LlmLlamacpp = require('@qvac/llm-llamacpp')
 
 ### 2. Create Local Model Paths
 
-The addon reads GGUF files directly from disk. Download the model, then pass absolute local paths to `files.model`.
+The addon reads GGUF files directly from disk. Download the model, then pass its absolute local path to `files.model`.
 
 ```js
 const path = require('bare-path')
@@ -186,7 +186,7 @@ const args = {
 
 The `args` obj contains the following properties:
 
-* `files.model`: Required. An array of absolute paths to the GGUF model file(s) to load. For sharded models, provide every shard and companion file in order.
+* `files.model`: Required. An array with exactly one absolute path: the GGUF file, or the first shard (`*-00001-of-000NN.gguf`) of a sharded model. The addon reads the remaining shards from the same directory.
 * `files.projectionModel`: Optional. Absolute path to the projection model file. This is required for multimodal support.
 * `config`: The model configuration object.
 * `logger`: This property is used to create a `QvacLogger` instance, which handles all logging functionality.
