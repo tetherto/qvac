@@ -161,6 +161,14 @@ object QvacMethods {
         progressResponseType = null,
         progressCondition = null,
     )
+    val embedBatch = QvacMethodDescriptor(
+        name = "embedBatch",
+        callShape = QvacCallShape.REQUEST_REPLY,
+        requestType = "EmbedBatchRequest",
+        responseType = "EmbedBatchResponse",
+        progressResponseType = null,
+        progressCondition = null,
+    )
     val finetune = QvacMethodDescriptor(
         name = "finetune",
         callShape = QvacCallShape.REQUEST_REPLY,
@@ -429,6 +437,7 @@ object QvacMethods {
         discoverRpcServers,
         downloadAsset,
         embed,
+        embedBatch,
         finetune,
         getLoadedModelInfo,
         getModelInfo,

@@ -23,7 +23,7 @@ export type CalcTokensClientParams = OmitTools<CalcTokensParams> & {
  * Otherwise, the conversation is rendered with the model's chat template and
  * `text`, when present, becomes its final user turn. Tools are counted only when
  * the model was loaded with `modelConfig.tools: true`.
- * Attachments are not supported.
+ * Media content and attachments are not supported.
  * The count uses every supplied tool and the load-time reasoning setting. A named
  * `generationParams.tool_choice` or `generationParams.reasoning_budget` override on
  * `completion()` can render a different prompt.

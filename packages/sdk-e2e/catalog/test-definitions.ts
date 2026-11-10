@@ -1,6 +1,7 @@
 import { embeddingGemma2Tests } from './embeddinggemma2-tests.js'
 import { speakerAwareTests } from './speaker-aware-tests.js'
 import { decisionTests } from './decision-tests.js'
+import { imageEmbeddingTests } from './image-embedding-tests.js'
 import { rerankTests } from './rerank-tests.js'
 import { rpcServerTests } from './rpc-server-tests.js'
 // Real SDK tests
@@ -626,6 +627,7 @@ const catalog: TestDefinition[] = [
   ...classificationTests,
   ...decisionTests,
   ...rerankTests,
+  ...imageEmbeddingTests,
 
   // TTS tests
   ...ttsTests,

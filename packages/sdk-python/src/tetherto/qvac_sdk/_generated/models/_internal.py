@@ -72,6 +72,7 @@ class AssessModelFitRequestModelsItemModelSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -179,6 +180,7 @@ class AssessModelFitRequestModelsItemModelType(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -2258,6 +2260,34 @@ class AudioUnderstandResponse(GeneratedBaseModel):
     ] = None
 
 
+class BatchCompletionStreamRequestPromptsItemHistoryItemContentItemText(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["text"] = "text"
+    text: Annotated[
+        str, Field(description="Text rendered at this position in the turn.")
+    ]
+
+
+class BatchCompletionStreamRequestPromptsItemHistoryItemContentItemMedia(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["media"] = "media"
+    path: Annotated[
+        str,
+        Field(
+            description="Absolute or resolvable path to the media file (e.g., image for multimodal models).",
+            min_length=1,
+        ),
+    ]
+
+
 class BatchCompletionStreamRequestPromptsItemHistoryItemAttachmentsItem(
     GeneratedBaseModel
 ):
@@ -2308,9 +2338,14 @@ class BatchCompletionStreamRequestPromptsItemHistoryItem(GeneratedBaseModel):
         ),
     ]
     content: Annotated[
-        str | None,
+        str
+        | list[
+            BatchCompletionStreamRequestPromptsItemHistoryItemContentItemText
+            | BatchCompletionStreamRequestPromptsItemHistoryItemContentItemMedia
+        ]
+        | None,
         Field(
-            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
+            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string. A user turn may instead pass an ordered array of text/media parts, so each image keeps its position in the turn."
         ),
     ] = None
     attachments: Annotated[
@@ -3804,6 +3839,30 @@ class CalcTokensTool(GeneratedBaseModel):
     ]
 
 
+class CalcTokensHistoryMessageContentItemText(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["text"] = "text"
+    text: Annotated[
+        str, Field(description="Text rendered at this position in the turn.")
+    ]
+
+
+class CalcTokensHistoryMessageContentItemMedia(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["media"] = "media"
+    path: Annotated[
+        str,
+        Field(
+            description="Absolute or resolvable path to the media file (e.g., image for multimodal models).",
+            min_length=1,
+        ),
+    ]
+
+
 class CalcTokensHistoryMessageAttachmentsItem(GeneratedBaseModel):
     path: Annotated[
         str,
@@ -3848,9 +3907,14 @@ class CalcTokensHistoryMessage(GeneratedBaseModel):
         ),
     ]
     content: Annotated[
-        str | None,
+        str
+        | list[
+            CalcTokensHistoryMessageContentItemText
+            | CalcTokensHistoryMessageContentItemMedia
+        ]
+        | None,
         Field(
-            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
+            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string. A user turn may instead pass an ordered array of text/media parts, so each image keeps its position in the turn."
         ),
     ] = None
     attachments: Annotated[
@@ -3944,6 +4008,7 @@ class CancelRequestBroadKind(Enum):
     completion = "completion"
     batch_completion = "batchCompletion"
     embeddings = "embeddings"
+    image_embedding = "imageEmbedding"
     decision = "decision"
     rerank = "rerank"
     transcribe = "transcribe"
@@ -4025,6 +4090,30 @@ class ClassifyResponse(GeneratedBaseModel):
     done: bool | None = None
 
 
+class CompletionOrchestrateRequestHistoryItemContentItemText(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["text"] = "text"
+    text: Annotated[
+        str, Field(description="Text rendered at this position in the turn.")
+    ]
+
+
+class CompletionOrchestrateRequestHistoryItemContentItemMedia(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["media"] = "media"
+    path: Annotated[
+        str,
+        Field(
+            description="Absolute or resolvable path to the media file (e.g., image for multimodal models).",
+            min_length=1,
+        ),
+    ]
+
+
 class CompletionOrchestrateRequestHistoryItemAttachmentsItem(GeneratedBaseModel):
     path: Annotated[
         str,
@@ -4071,9 +4160,14 @@ class CompletionOrchestrateRequestHistoryItem(GeneratedBaseModel):
         ),
     ]
     content: Annotated[
-        str | None,
+        str
+        | list[
+            CompletionOrchestrateRequestHistoryItemContentItemText
+            | CompletionOrchestrateRequestHistoryItemContentItemMedia
+        ]
+        | None,
         Field(
-            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
+            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string. A user turn may instead pass an ordered array of text/media parts, so each image keeps its position in the turn."
         ),
     ] = None
     attachments: Annotated[
@@ -4689,6 +4783,30 @@ class CompletionOrchestrateResponse(GeneratedBaseModel):
     ] = None
 
 
+class CompletionStreamRequestHistoryItemContentItemText(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["text"] = "text"
+    text: Annotated[
+        str, Field(description="Text rendered at this position in the turn.")
+    ]
+
+
+class CompletionStreamRequestHistoryItemContentItemMedia(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["media"] = "media"
+    path: Annotated[
+        str,
+        Field(
+            description="Absolute or resolvable path to the media file (e.g., image for multimodal models).",
+            min_length=1,
+        ),
+    ]
+
+
 class CompletionStreamRequestHistoryItemAttachmentsItem(GeneratedBaseModel):
     path: Annotated[
         str,
@@ -4735,9 +4853,14 @@ class CompletionStreamRequestHistoryItem(GeneratedBaseModel):
         ),
     ]
     content: Annotated[
-        str | None,
+        str
+        | list[
+            CompletionStreamRequestHistoryItemContentItemText
+            | CompletionStreamRequestHistoryItemContentItemMedia
+        ]
+        | None,
         Field(
-            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string."
+            description="Message content. May be `null` or omitted only on an `assistant` turn that carries `toolCalls`, as OpenAI histories send it; it then reads as an empty string. A user turn may instead pass an ordered array of text/media parts, so each image keeps its position in the turn."
         ),
     ] = None
     attachments: Annotated[
@@ -5369,6 +5492,7 @@ class ModelType(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
 
 
@@ -5377,6 +5501,7 @@ class PluginId(Enum):
     embedding = "@qvac/sdk/llamacpp-embedding/plugin"
     decision = "@qvac/sdk/llamacpp-decision/plugin"
     rerank = "@qvac/sdk/llamacpp-rerank/plugin"
+    image_embedding = "@qvac/sdk/ggml-image-embedding/plugin"
     whisper = "@qvac/sdk/whispercpp-transcription/plugin"
     bci = "@qvac/sdk/bci-whispercpp-transcription/plugin"
     moss_transcribe = "@qvac/sdk/moss-transcribe/plugin"
@@ -6920,7 +7045,7 @@ class Text(RootModel[str]):
     root: Annotated[
         str,
         Field(
-            description="Text to embed. A string returns one vector; an array returns one vector per string.",
+            description="Legacy text input. A string returns one vector; an array returns one vector per string.",
             min_length=1,
         ),
     ]
@@ -6934,16 +7059,17 @@ class Text1(RootModel[list[Text1Item]]):
     root: Annotated[
         list[Text1Item],
         Field(
-            description="Text to embed. A string returns one vector; an array returns one vector per string.",
+            description="Legacy text input. A string returns one vector; an array returns one vector per string.",
             min_length=1,
         ),
     ]
 
 
 class EmbedTextRequest(GeneratedBaseModel):
-    __forbidden_fields__ = frozenset({"inputs"})
+    __forbidden_fields__ = frozenset({"input", "inputs"})
     __forbidden_field_guidance__ = {
-        "inputs": "This field is not allowed in this request shape."
+        "input": "This field is not allowed in this request shape.",
+        "inputs": "This field is not allowed in this request shape.",
     }
     model_id: Annotated[
         str,
@@ -6954,7 +7080,7 @@ class EmbedTextRequest(GeneratedBaseModel):
     text: Annotated[
         Text | Text1,
         Field(
-            description="Text to embed. A string returns one vector; an array returns one vector per string."
+            description="Legacy text input. A string returns one vector; an array returns one vector per string."
         ),
     ]
     type: Literal["embed"] = "embed"
@@ -7022,9 +7148,10 @@ class EmbedInput(RootModel[EmbedInput1 | EmbedInput2]):
 
 
 class EmbedInputsRequest(GeneratedBaseModel):
-    __forbidden_fields__ = frozenset({"text"})
+    __forbidden_fields__ = frozenset({"input", "text"})
     __forbidden_field_guidance__ = {
-        "text": "This field is not allowed in this request shape."
+        "input": "This field is not allowed in this request shape.",
+        "text": "This field is not allowed in this request shape.",
     }
     model_id: Annotated[
         str,
@@ -7035,8 +7162,127 @@ class EmbedInputsRequest(GeneratedBaseModel):
     inputs: Annotated[
         list[EmbedInput],
         Field(
-            description="One embedding per input. Each input is text or ordered text and media parts. Media requires projectionModelSrc at load time.",
+            description="Legacy batch input. One vector per text or ordered text/media input. Use embedBatch for images.",
             min_length=1,
+        ),
+    ]
+    type: Literal["embed"] = "embed"
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Caller-generated identifier for cancellation with cancel({ requestId }).",
+            min_length=1,
+        ),
+    ] = None
+
+
+class EmbedSingleInputText(RootModel[str]):
+    root: Annotated[
+        str,
+        Field(
+            description="One text, ordered text/media input, or image supported by the model.",
+            min_length=1,
+            title="EmbedSingleInputText",
+        ),
+    ]
+
+
+class EmbedSingleInputPartsItemMediaBase64(GeneratedBaseModel):
+    type: Literal["base64"] = "base64"
+    value: Annotated[
+        str,
+        Field(
+            json_schema_extra={"contentEncoding": "base64"},
+            min_length=1,
+            pattern="^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+        ),
+    ]
+
+
+class EmbedSingleInputPartsItemMediaFilePath(GeneratedBaseModel):
+    type: Literal["filePath"] = "filePath"
+    value: Annotated[str, Field(min_length=1)]
+
+
+class EmbedSingleInputPartsItem(GeneratedBaseModel):
+    media: Annotated[
+        EmbedSingleInputPartsItemMediaBase64 | EmbedSingleInputPartsItemMediaFilePath,
+        Field(
+            description="Image or WAV/MP3/FLAC bytes as base64, or a file path accessible to the inference worker."
+        ),
+    ]
+
+
+class EmbedSingleInputParts(RootModel[list[str | EmbedSingleInputPartsItem]]):
+    root: Annotated[
+        list[str | EmbedSingleInputPartsItem],
+        Field(
+            description="One text, ordered text/media input, or image supported by the model.",
+            min_length=1,
+            title="EmbedSingleInputParts",
+        ),
+    ]
+
+
+class EmbedSingleInputImage(GeneratedBaseModel):
+    width: Annotated[
+        int | None,
+        Field(
+            description="Packed RGB width in pixels. Supply with height and channels, or omit all three for JPEG/PNG.",
+            gt=0,
+            le=16384,
+        ),
+    ] = None
+    height: Annotated[
+        int | None,
+        Field(
+            description="Packed RGB height in pixels, from 1 to 16384.", gt=0, le=16384
+        ),
+    ] = None
+    channels: Annotated[
+        Literal[3] | None, Field(description="Packed RGB channel count. Must be 3.")
+    ] = None
+    image: Annotated[
+        str,
+        Field(
+            description="JPEG/PNG bytes, or packed RGB bytes, encoded as base64.",
+            json_schema_extra={"contentEncoding": "base64"},
+            min_length=1,
+            pattern="^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+        ),
+    ]
+
+
+class EmbedSingleInput(
+    RootModel[EmbedSingleInputText | EmbedSingleInputParts | EmbedSingleInputImage]
+):
+    root: Annotated[
+        EmbedSingleInputText | EmbedSingleInputParts | EmbedSingleInputImage,
+        Field(
+            description="One text, ordered text/media input, or image supported by the model.",
+            title="EmbedSingleInput",
+        ),
+    ]
+
+
+class EmbedSingleRequest(GeneratedBaseModel):
+    __forbidden_fields__ = frozenset({"inputs", "text"})
+    __forbidden_field_guidance__ = {
+        "inputs": "This field is not allowed in this request shape.",
+        "text": "This field is not allowed in this request shape.",
+    }
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId", description="The identifier of the embedding model to use"
+        ),
+    ]
+    input: Annotated[
+        EmbedSingleInput,
+        Field(
+            description="One text, ordered text/media input, or image supported by the model.",
+            title="EmbedSingleInput",
         ),
     ]
     type: Literal["embed"] = "embed"
@@ -7061,25 +7307,65 @@ class EmbedResponseStats(GeneratedBaseModel):
     )
     total_time: Annotated[
         float | None,
-        Field(alias="totalTime", description="Total embedding time in milliseconds"),
+        Field(
+            alias="totalTime",
+            description="Total embedding time in milliseconds. For a MegaLoc batch, the sum of native times.",
+        ),
     ] = None
     tokens_per_second: Annotated[
         float | None,
-        Field(alias="tokensPerSecond", description="Tokens processed per second"),
+        Field(
+            alias="tokensPerSecond",
+            description="Tokens processed per second. llama.cpp embedding models only.",
+        ),
     ] = None
     total_tokens: Annotated[
-        float | None, Field(alias="totalTokens", description="Total tokens processed")
+        float | None,
+        Field(
+            alias="totalTokens",
+            description="Total tokens processed. llama.cpp embedding models only.",
+        ),
     ] = None
     backend_device: Annotated[
         EmbedResponseStatsBackendDevice | None,
         Field(
             alias="backendDevice",
-            description="Compute backend used for inference",
+            description="Compute backend used for inference. llama.cpp embedding models only.",
             title="EmbedResponseStatsBackendDevice",
         ),
     ] = None
     context_size: Annotated[
-        float | None, Field(alias="contextSize", description="Context size in tokens")
+        float | None,
+        Field(
+            alias="contextSize",
+            description="Context size in tokens. llama.cpp embedding models only.",
+        ),
+    ] = None
+    backend_id: Annotated[
+        int | None,
+        Field(
+            alias="backendId",
+            description="Native backend ID: CPU=0, Metal=1, CUDA=2, Vulkan=3, OpenCL=4, other=99. MegaLoc only.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    cpu_fallback_nodes: Annotated[
+        int | None,
+        Field(
+            alias="cpuFallbackNodes",
+            description="Number of graph nodes scheduled on CPU fallback. MegaLoc only.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    weight_bytes: Annotated[
+        float | None,
+        Field(
+            alias="weightBytes",
+            description="Allocated model weight bytes. MegaLoc only.",
+            ge=0.0,
+        ),
     ] = None
 
 
@@ -7092,12 +7378,201 @@ class EmbedResponse(GeneratedBaseModel):
     embedding: Annotated[
         list[float] | list[list[float]],
         Field(
-            description="The embedding vector(s). Single `number[]` when `text` is a string; `number[][]` when `text` is an array or `inputs` is provided."
+            description="One vector for input or a text string. One vector per item for legacy text arrays or inputs."
         ),
     ]
     stats: Annotated[
         EmbedResponseStats | None,
         Field(description="Performance statistics", title="EmbedResponseStats"),
+    ] = None
+    error: str | None = None
+
+
+class EmbedBatchInputText(RootModel[str]):
+    root: Annotated[str, Field(min_length=1, title="EmbedBatchInputText")]
+
+
+class EmbedBatchInputPartsItemMediaBase64(GeneratedBaseModel):
+    type: Literal["base64"] = "base64"
+    value: Annotated[
+        str,
+        Field(
+            json_schema_extra={"contentEncoding": "base64"},
+            min_length=1,
+            pattern="^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+        ),
+    ]
+
+
+class EmbedBatchInputPartsItemMediaFilePath(GeneratedBaseModel):
+    type: Literal["filePath"] = "filePath"
+    value: Annotated[str, Field(min_length=1)]
+
+
+class EmbedBatchInputPartsItem(GeneratedBaseModel):
+    media: Annotated[
+        EmbedBatchInputPartsItemMediaBase64 | EmbedBatchInputPartsItemMediaFilePath,
+        Field(
+            description="Image or WAV/MP3/FLAC bytes as base64, or a file path accessible to the inference worker."
+        ),
+    ]
+
+
+class EmbedBatchInputParts(RootModel[list[str | EmbedBatchInputPartsItem]]):
+    root: Annotated[
+        list[str | EmbedBatchInputPartsItem],
+        Field(min_length=1, title="EmbedBatchInputParts"),
+    ]
+
+
+class EmbedBatchInputImage(GeneratedBaseModel):
+    width: Annotated[
+        int | None,
+        Field(
+            description="Packed RGB width in pixels. Supply with height and channels, or omit all three for JPEG/PNG.",
+            gt=0,
+            le=16384,
+        ),
+    ] = None
+    height: Annotated[
+        int | None,
+        Field(
+            description="Packed RGB height in pixels, from 1 to 16384.", gt=0, le=16384
+        ),
+    ] = None
+    channels: Annotated[
+        Literal[3] | None, Field(description="Packed RGB channel count. Must be 3.")
+    ] = None
+    image: Annotated[
+        str,
+        Field(
+            description="JPEG/PNG bytes, or packed RGB bytes, encoded as base64.",
+            json_schema_extra={"contentEncoding": "base64"},
+            min_length=1,
+            pattern="^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$",
+        ),
+    ]
+
+
+class EmbedBatchInput(
+    RootModel[EmbedBatchInputText | EmbedBatchInputParts | EmbedBatchInputImage]
+):
+    root: Annotated[
+        EmbedBatchInputText | EmbedBatchInputParts | EmbedBatchInputImage,
+        Field(title="EmbedBatchInput"),
+    ]
+
+
+class EmbedBatchRequest(GeneratedBaseModel):
+    __forbidden_fields__ = frozenset({"input", "text"})
+    __forbidden_field_guidance__ = {
+        "input": "This field is not allowed in this request shape.",
+        "text": "This field is not allowed in this request shape.",
+    }
+    model_id: Annotated[
+        str,
+        Field(
+            alias="modelId", description="The identifier of the embedding model to use"
+        ),
+    ]
+    inputs: Annotated[
+        list[EmbedBatchInput],
+        Field(description="One vector per input, in input order.", min_length=1),
+    ]
+    type: Literal["embedBatch"] = "embedBatch"
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Caller-generated identifier for cancellation with cancel({ requestId }).",
+            min_length=1,
+        ),
+    ] = None
+
+
+class EmbedBatchResponseStatsBackendDevice(Enum):
+    cpu = "cpu"
+    gpu = "gpu"
+
+
+class EmbedBatchResponseStats(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    total_time: Annotated[
+        float | None,
+        Field(
+            alias="totalTime",
+            description="Total embedding time in milliseconds. For a MegaLoc batch, the sum of native times.",
+        ),
+    ] = None
+    tokens_per_second: Annotated[
+        float | None,
+        Field(
+            alias="tokensPerSecond",
+            description="Tokens processed per second. llama.cpp embedding models only.",
+        ),
+    ] = None
+    total_tokens: Annotated[
+        float | None,
+        Field(
+            alias="totalTokens",
+            description="Total tokens processed. llama.cpp embedding models only.",
+        ),
+    ] = None
+    backend_device: Annotated[
+        EmbedBatchResponseStatsBackendDevice | None,
+        Field(
+            alias="backendDevice",
+            description="Compute backend used for inference. llama.cpp embedding models only.",
+            title="EmbedBatchResponseStatsBackendDevice",
+        ),
+    ] = None
+    context_size: Annotated[
+        float | None,
+        Field(
+            alias="contextSize",
+            description="Context size in tokens. llama.cpp embedding models only.",
+        ),
+    ] = None
+    backend_id: Annotated[
+        int | None,
+        Field(
+            alias="backendId",
+            description="Native backend ID: CPU=0, Metal=1, CUDA=2, Vulkan=3, OpenCL=4, other=99. MegaLoc only.",
+            ge=-9007199254740991,
+            le=9007199254740991,
+        ),
+    ] = None
+    cpu_fallback_nodes: Annotated[
+        int | None,
+        Field(
+            alias="cpuFallbackNodes",
+            description="Number of graph nodes scheduled on CPU fallback. MegaLoc only.",
+            ge=0,
+            le=9007199254740991,
+        ),
+    ] = None
+    weight_bytes: Annotated[
+        float | None,
+        Field(
+            alias="weightBytes",
+            description="Allocated model weight bytes. MegaLoc only.",
+            ge=0.0,
+        ),
+    ] = None
+
+
+class EmbedBatchResponse(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["embedBatch"] = "embedBatch"
+    success: bool
+    embedding: list[list[float]]
+    stats: Annotated[
+        EmbedBatchResponseStats | None,
+        Field(description="Performance statistics", title="EmbedBatchResponseStats"),
     ] = None
     error: str | None = None
 
@@ -10002,6 +10477,78 @@ class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalByt
     reason: str | None = None
 
 
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[float, Field(ge=0.0)]
+    provenance: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
 class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItem(GeneratedBaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -10058,6 +10605,16 @@ class GetSystemResourcesResponseCapabilitiesGpusSupportedValueItem(GeneratedBase
         | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesUnverified
         | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemMemoryTotalBytesFailed,
         Field(alias="memoryTotalBytes"),
+    ]
+    dedicated_memory_total_bytes: Annotated[
+        GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesSupported
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesUnavailable
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesUnverified
+        | GetSystemResourcesResponseCapabilitiesGpusSupportedValueItemDedicatedMemoryTotalBytesFailed,
+        Field(
+            alias="dedicatedMemoryTotalBytes",
+            description="Memory reserved for this GPU alone. All of a discrete GPU’s memory; for an integrated GPU, the carve-out the firmware sets aside for it, which the OS does not count as system memory (0 when there is none, as on Apple silicon).",
+        ),
     ]
 
 
@@ -10859,6 +11416,78 @@ class GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesFail
     reason: str | None = None
 
 
+class GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupportedProvenanceScope(
+    Enum
+):
+    system = "system"
+    process = "process"
+    device = "device"
+    budget = "budget"
+    shared_system = "shared-system"
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupportedProvenance(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    source: str
+    scope: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupportedProvenanceScope
+        | None,
+        Field(
+            title="GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupportedProvenanceScope"
+        ),
+    ] = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupported(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["supported"] = "supported"
+    value: Annotated[float, Field(ge=0.0)]
+    provenance: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupportedProvenance,
+        Field(
+            title="GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupportedProvenance"
+        ),
+    ]
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesUnavailable(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unavailable"] = "unavailable"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesUnverified(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["unverified"] = "unverified"
+    reason: str | None = None
+
+
+class GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesFailed(
+    GeneratedBaseModel
+):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    status: Literal["failed"] = "failed"
+    reason: str | None = None
+
+
 class GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsSupportedProvenanceScope(
     Enum
 ):
@@ -11039,6 +11668,16 @@ class GetSystemResourcesResponseSampleGpusSupportedValueItem(GeneratedBaseModel)
         | GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesUnverified
         | GetSystemResourcesResponseSampleGpusSupportedValueItemMemoryTotalBytesFailed,
         Field(alias="memoryTotalBytes"),
+    ]
+    dedicated_memory_used_bytes: Annotated[
+        GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesSupported
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesUnavailable
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesUnverified
+        | GetSystemResourcesResponseSampleGpusSupportedValueItemDedicatedMemoryUsedBytesFailed,
+        Field(
+            alias="dedicatedMemoryUsedBytes",
+            description="The part of memoryUsedBytes held in dedicated memory (dedicatedMemoryTotalBytes).",
+        ),
     ]
     power_watts: Annotated[
         GetSystemResourcesResponseSampleGpusSupportedValueItemPowerWattsSupported
@@ -11294,6 +11933,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigProjectionModelSrcAddon(En
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -11405,6 +12045,7 @@ class LoadModelSrcRequestLlamacppCompletionModelConfigDraftModelSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -12195,6 +12836,7 @@ class LoadModelSrcRequestWhispercppTranscriptionModelConfigVadModelSrcAddon(Enum
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -12781,6 +13423,7 @@ class LoadModelSrcRequestBciWhispercppTranscriptionModelConfigEmbedderModelSrcAd
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -13473,6 +14116,7 @@ class LoadModelSrcRequestLlamacppEmbeddingModelConfigProjectionModelSrcAddon(Enu
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -14278,6 +14922,105 @@ class LoadModelSrcRequestLlamacppRerank(GeneratedBaseModel):
     ] = None
 
 
+class LoadModelSrcRequestGgmlImageEmbeddingModelFitPolicy(Enum):
+    log = "log"
+    refuse = "refuse"
+    off = "off"
+
+
+class LoadModelSrcRequestGgmlImageEmbeddingModelConfig(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    backend: Annotated[
+        str | None,
+        Field(
+            description="Exact GGML device name, such as CPU, CUDA0, Vulkan0 or MTL0. Omit to select GPU, then CPU. Metal and Metal0 are accepted aliases. An unavailable explicit device fails to load.",
+            min_length=1,
+        ),
+    ] = None
+    threads: Annotated[
+        int | None,
+        Field(
+            description="CPU thread count, from 1 to 1024. Omit to use the native default.",
+            ge=1,
+            le=1024,
+        ),
+    ] = None
+    backends_dir: Annotated[
+        str | None,
+        Field(
+            alias="backendsDir",
+            description="Directory of GGML backend modules. Omit to use the modules shipped with Fabric.",
+            min_length=1,
+        ),
+    ] = None
+
+
+class LoadModelSrcRequestGgmlImageEmbedding(GeneratedBaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    type: Literal["loadModel"] = "loadModel"
+    model_src: Annotated[
+        str,
+        Field(
+            alias="modelSrc",
+            description="The model to load: a registry model constant for a built-in model, or a model source — a local file path, an HTTP(S) URL, or a `registry://` / `pear://` URI — for HTTP, local, or P2P models.",
+        ),
+    ]
+    model_name: Annotated[str | None, Field(alias="modelName")] = None
+    with_progress: Annotated[bool | None, Field(alias="withProgress")] = None
+    seed: bool | None = None
+    fallback_src: Annotated[
+        str | None,
+        Field(
+            alias="fallbackSrc",
+            description="Alternate source — an HTTP URL or local file path — used to load a built-in registry model when it cannot be downloaded from the registry. The bytes are validated against the model checksum before use.",
+        ),
+    ] = None
+    require_http_checksum: Annotated[
+        bool | None,
+        Field(
+            alias="requireHttpChecksum",
+            description="Reject a Hugging Face HTTP download that exposes no usable SHA-256 instead of downloading it unverified. Overrides the engine config for this call; defaults to the config value (false).",
+        ),
+    ] = None
+    require_secure_transport: Annotated[
+        bool | None,
+        Field(
+            alias="requireSecureTransport",
+            description="Reject plaintext http:// and HTTPS→HTTP downgrades for every HTTP source on this call (loopback exempt); when unset, only Hugging Face transport is hardened. Overrides the engine config for this call; defaults to the config value (false).",
+        ),
+    ] = None
+    model_fit_policy: Annotated[
+        LoadModelSrcRequestGgmlImageEmbeddingModelFitPolicy | None,
+        Field(
+            alias="modelFitPolicy",
+            description="What the engine fitter's verdict does to this load: `log` reports it and loads anyway, `refuse` rejects a load the fitter projects will not fit, `off` skips the check. Overrides the engine config for this call; defaults to the config value (`log`).",
+            title="LoadModelSrcRequestGgmlImageEmbeddingModelFitPolicy",
+        ),
+    ] = None
+    request_id: Annotated[
+        str | None,
+        Field(
+            alias="requestId",
+            description="Stable identifier for this in-flight load, generated by the client at call time. Optional on the wire so legacy clients keep working — the server falls back to a server-generated id when the field is missing. Exposed on the client-side decorated promise so callers can target this load with `cancel({ requestId })`.",
+            min_length=1,
+        ),
+    ] = None
+    model_type: Annotated[Literal["ggml-image-embedding"], Field(alias="modelType")] = (
+        "ggml-image-embedding"
+    )
+    model_config_: Annotated[
+        LoadModelSrcRequestGgmlImageEmbeddingModelConfig | None,
+        Field(
+            alias="modelConfig",
+            title="LoadModelSrcRequestGgmlImageEmbeddingModelConfig",
+        ),
+    ] = None
+
+
 class LoadModelSrcRequestNmtcppTranslationModelFitPolicy(Enum):
     log = "log"
     refuse = "refuse"
@@ -14418,6 +15161,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotSrcVocabSrcAddon(En
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -14529,6 +15273,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotDstVocabSrcAddon(En
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -14646,6 +15391,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelModelSrcA
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -14759,6 +15505,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelSrcVocabS
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -14872,6 +15619,7 @@ class LoadModelSrcRequestNmtcppTranslationModelConfigBergamotPivotModelDstVocabS
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -15372,6 +16120,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxS3genModelSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -15481,6 +16230,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxReferenceAudioSrcAddon(Enum
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -15592,6 +16342,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxMecabDictSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -15701,6 +16452,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxCangjieTsvSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -15810,6 +16562,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrEnhancerModelSrcAddon
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -15921,6 +16674,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigChatterboxLavasrDenoiserModelSrcAddon
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -16398,6 +17152,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrEnhancerModelSrcAddon
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -16509,6 +17264,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicLavasrDenoiserModelSrcAddon
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -16620,6 +17376,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicVoiceJsonSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -16729,6 +17486,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigSupertonicNoiseNpySrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -17091,6 +17849,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrEnhancerModelSrcAddon(Enu
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -17202,6 +17961,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigParlerLavasrDenoiserModelSrcAddon(Enu
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -17594,6 +18354,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrEnhancerModelSrcAddon
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -17705,6 +18466,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3LavasrDenoiserModelSrcAddon
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -17816,6 +18578,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3ReferenceAudioSrcAddon(Enum
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -17927,6 +18690,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3S3tokModelSrcAddo
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -18040,6 +18804,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigCosyvoice3Cosyvoice3CampplusModelSrcA
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -18323,6 +19088,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecDecoderModelSrcAddon
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -18434,6 +19200,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8Audio8CodecEncoderModelSrcAddon
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -18545,6 +19312,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigAudio8ReferenceAudioSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -18780,6 +19548,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecDecoderModelSrcAddon(Enu
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -18891,6 +19660,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossMossCodecEncoderModelSrcAddon(Enu
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -19002,6 +19772,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossReferenceAudioSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -19111,6 +19882,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossDialogueReferenceSrcsItemAddon(En
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -19418,6 +20190,7 @@ class LoadModelSrcRequestTtsGgmlModelConfigMossSpeechMossSpeechCodecModelSrcAddo
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -19687,6 +20460,7 @@ class LoadModelSrcRequestGgmlOcrModelConfigDetectorModelSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -20029,6 +20803,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipLModelSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -20138,6 +20913,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipGModelSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -20247,6 +21023,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigT5XxlModelSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -20356,6 +21133,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigLlmModelSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -20465,6 +21243,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigProjectionModelSrcAddon(Enum)
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -20576,6 +21355,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigVaeModelSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -20687,6 +21467,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigHighNoiseDiffusionModelSrcAdd
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -20798,6 +21579,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUncondModelSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -20907,6 +21689,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigClipVisionModelSrcAddon(Enum)
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -21018,6 +21801,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigAudioVaeModelSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -21129,6 +21913,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigEmbeddingsConnectorsModelSrcA
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -21240,6 +22025,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigTaehvModelSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -21349,6 +22135,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigSceneSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -21578,6 +22365,7 @@ class LoadModelSrcRequestSdcppGenerationModelConfigUpscalerModelSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -22052,6 +22840,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepTextEncModelSrcAddon(Enum
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -22163,6 +22952,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepLmModelSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -22272,6 +23062,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepDitModelSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -22381,6 +23172,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigAcestepVaeModelSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -22590,6 +23382,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxLmModelSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -22699,6 +23492,7 @@ class LoadModelSrcRequestAudiogenGgmlModelConfigMinimaxSynthModelSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -23269,6 +24063,7 @@ class LoadModelSrcRequest(
         | LoadModelSrcRequestLlamacppEmbedding
         | LoadModelSrcRequestLlamacppDecision
         | LoadModelSrcRequestLlamacppRerank
+        | LoadModelSrcRequestGgmlImageEmbedding
         | LoadModelSrcRequestNmtcppTranslation
         | LoadModelSrcRequestTtsGgml
         | LoadModelSrcRequestGgmlOcr
@@ -23288,6 +24083,7 @@ class LoadModelSrcRequest(
         | LoadModelSrcRequestLlamacppEmbedding
         | LoadModelSrcRequestLlamacppDecision
         | LoadModelSrcRequestLlamacppRerank
+        | LoadModelSrcRequestGgmlImageEmbedding
         | LoadModelSrcRequestNmtcppTranslation
         | LoadModelSrcRequestTtsGgml
         | LoadModelSrcRequestGgmlOcr
@@ -23430,6 +24226,7 @@ class ReloadConfigRequestModelConfigVadModelSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -25061,6 +25858,7 @@ class TextToSpeechRequestReferenceAudioSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -25741,6 +26539,7 @@ class TextToSpeechStreamRequestReferenceAudioSrcAddon(Enum):
     sdcpp_generation = "sdcpp-generation"
     audiogen_ggml = "audiogen-ggml"
     ggml_vla = "ggml-vla"
+    ggml_image_embedding = "ggml-image-embedding"
     ggml_classification = "ggml-classification"
     llm = "llm"
     whisper = "whisper"
@@ -28570,8 +29369,11 @@ class Request_3(
     ]
 
 
-class Request_4(RootModel[EmbedTextRequest | EmbedInputsRequest]):
-    root: Annotated[EmbedTextRequest | EmbedInputsRequest, Field(title="EmbedRequest")]
+class Request_4(RootModel[EmbedTextRequest | EmbedInputsRequest | EmbedSingleRequest]):
+    root: Annotated[
+        EmbedTextRequest | EmbedInputsRequest | EmbedSingleRequest,
+        Field(title="EmbedRequest"),
+    ]
 
 
 class Request_5(
@@ -28694,6 +29496,7 @@ class Request(
         | DiscoverRpcServersRequest
         | DownloadAssetRequest
         | Request_4
+        | EmbedBatchRequest
         | Request_5
         | GetLoadedModelInfoRequest
         | GetModelInfoRequest
@@ -28746,6 +29549,7 @@ class Request(
         | DiscoverRpcServersRequest
         | DownloadAssetRequest
         | Request_4
+        | EmbedBatchRequest
         | Request_5
         | GetLoadedModelInfoRequest
         | GetModelInfoRequest
@@ -28829,6 +29633,7 @@ class Response(
         | DiscoverRpcServersResponse
         | DownloadAssetResponse
         | EmbedResponse
+        | EmbedBatchResponse
         | ErrorResponse
         | FinetuneResponse
         | FinetuneProgressResponse
@@ -28885,6 +29690,7 @@ class Response(
         | DiscoverRpcServersResponse
         | DownloadAssetResponse
         | EmbedResponse
+        | EmbedBatchResponse
         | ErrorResponse
         | FinetuneResponse
         | FinetuneProgressResponse

@@ -59,25 +59,27 @@ native value does not establish one, rather than inventing a scope.
 
 ## Metric behavior
 
-| Public metric                                | Accepted value                              | Source and scope when `supported`                                          | Current runtime evidence                            |
-| -------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------- | --------------------------------------------------- |
-| `capabilities.cpu.value.logicalCores`        | Positive integer                            | `bare-cpu-info`; scope omitted                                             | `supported` on `darwin-arm64`                       |
-| `sample.cpu`                                 | Number from 0 through 1                     | `bare-cpu-info`; `system`                                                  | `supported` on `darwin-arm64`                       |
-| `capabilities.memory.totalBytes`             | Positive integer                            | `bare-cpu-info`; `system`                                                  | `supported` on `darwin-arm64`                       |
-| `sample.memory.usedBytes`                    | Non-negative integer                        | `bare-cpu-info`; `system`                                                  | `supported` on `darwin-arm64`                       |
-| `sample.memory.totalBytes`                   | Positive integer                            | `bare-cpu-info`; `system`                                                  | `supported` on `darwin-arm64`                       |
-| `sample.memory.processUsedBytes`             | Non-negative integer                        | `bare-os`; `process`                                                       | `supported` where `bare-os` reports RSS             |
-| `sample.memory.processAvailableBytes`        | Non-negative integer                        | `bare-os`; `process`                                                       | `supported` on `ios-arm64`; `unavailable` elsewhere |
-| `capabilities.gpus`                          | Array, including an empty array             | `bare-gpu-info`; scope omitted                                             | `supported` with one GPU on `darwin-arm64`          |
-| `capabilities.gpus.value[].memoryTotalBytes` | Non-negative number                         | `bare-gpu-info`; `device`, when not unified memory                         | `unverified` on `darwin-arm64` (unified)            |
-| `sample.gpus`                                | Array aligned with the cached GPU inventory | `bare-gpu-info`; scope omitted                                             | `supported` with one GPU sample on `darwin-arm64`   |
-| `sample.gpus.value[].compute`                | Number from 0 through 1                     | `bare-gpu-info`; `device`                                                  | `supported` on `darwin-arm64`                       |
-| `sample.gpus.value[].encode`                 | Number from 0 through 1                     | `bare-gpu-info`; `device`                                                  | `unavailable` on `darwin-arm64`                     |
-| `sample.gpus.value[].decode`                 | Number from 0 through 1                     | `bare-gpu-info`; `device`                                                  | `unavailable` on `darwin-arm64`                     |
-| `sample.gpus.value[].memoryUsedBytes`        | Non-negative number                         | `bare-gpu-info`; `device`, when the sample agrees with the declared memory | `unverified` on `darwin-arm64` (unified)            |
-| `sample.gpus.value[].memoryTotalBytes`       | Non-negative number                         | `bare-gpu-info`; `device`, when the sample agrees with the declared memory | `unverified` on `darwin-arm64` (unified)            |
-| `sample.gpus.value[].powerWatts`             | Non-negative number                         | `bare-gpu-info`; `device`                                                  | `unavailable` on `darwin-arm64`                     |
-| `sample.gpus.value[].temperatureCelsius`     | Non-negative number                         | `bare-gpu-info`; `device`                                                  | `unavailable` on `darwin-arm64`                     |
+| Public metric                                         | Accepted value                              | Source and scope when `supported`                                                 | Current runtime evidence                            |
+| ----------------------------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `capabilities.cpu.value.logicalCores`                 | Positive integer                            | `bare-cpu-info`; scope omitted                                                    | `supported` on `darwin-arm64`                       |
+| `sample.cpu`                                          | Number from 0 through 1                     | `bare-cpu-info`; `system`                                                         | `supported` on `darwin-arm64`                       |
+| `capabilities.memory.totalBytes`                      | Positive integer                            | `bare-cpu-info`; `system`                                                         | `supported` on `darwin-arm64`                       |
+| `sample.memory.usedBytes`                             | Non-negative integer                        | `bare-cpu-info`; `system`                                                         | `supported` on `darwin-arm64`                       |
+| `sample.memory.totalBytes`                            | Positive integer                            | `bare-cpu-info`; `system`                                                         | `supported` on `darwin-arm64`                       |
+| `sample.memory.processUsedBytes`                      | Non-negative integer                        | `bare-os`; `process`                                                              | `supported` where `bare-os` reports RSS             |
+| `sample.memory.processAvailableBytes`                 | Non-negative integer                        | `bare-os`; `process`                                                              | `supported` on `ios-arm64`; `unavailable` elsewhere |
+| `capabilities.gpus`                                   | Array, including an empty array             | `bare-gpu-info`; scope omitted                                                    | `supported` with one GPU on `darwin-arm64`          |
+| `capabilities.gpus.value[].memoryTotalBytes`          | Non-negative number                         | `bare-gpu-info`; `device`, when not unified memory                                | `unverified` on `darwin-arm64` (unified)            |
+| `capabilities.gpus.value[].dedicatedMemoryTotalBytes` | Non-negative number                         | `bare-gpu-info`; `device`                                                         | `supported` (0) on `darwin-arm64`                   |
+| `sample.gpus`                                         | Array aligned with the cached GPU inventory | `bare-gpu-info`; scope omitted                                                    | `supported` with one GPU sample on `darwin-arm64`   |
+| `sample.gpus.value[].compute`                         | Number from 0 through 1                     | `bare-gpu-info`; `device`                                                         | `supported` on `darwin-arm64`                       |
+| `sample.gpus.value[].encode`                          | Number from 0 through 1                     | `bare-gpu-info`; `device`                                                         | `unavailable` on `darwin-arm64`                     |
+| `sample.gpus.value[].decode`                          | Number from 0 through 1                     | `bare-gpu-info`; `device`                                                         | `unavailable` on `darwin-arm64`                     |
+| `sample.gpus.value[].memoryUsedBytes`                 | Non-negative number                         | `bare-gpu-info`; `device`, when the sample agrees with the declared memory        | `unverified` on `darwin-arm64` (unified)            |
+| `sample.gpus.value[].memoryTotalBytes`                | Non-negative number                         | `bare-gpu-info`; `device`, when the sample agrees with the declared memory        | `unverified` on `darwin-arm64` (unified)            |
+| `sample.gpus.value[].dedicatedMemoryUsedBytes`        | Non-negative number                         | `bare-gpu-info`; `device` on a unified-memory GPU, otherwise as `memoryUsedBytes` | `supported` (0) on `darwin-arm64`                   |
+| `sample.gpus.value[].powerWatts`                      | Non-negative number                         | `bare-gpu-info`; `device`                                                         | `unavailable` on `darwin-arm64`                     |
+| `sample.gpus.value[].temperatureCelsius`              | Non-negative number                         | `bare-gpu-info`; `device`                                                         | `unavailable` on `darwin-arm64`                     |
 
 For GPU memory, a missing native value becomes `unavailable`. The native API
 does not identify the scope of a present value, so the SDK establishes it
@@ -100,6 +102,12 @@ itself, per device, and reports `unverified` wherever it cannot:
 
 Declared memory (`capabilities`) is therefore `supported` on any non-unified
 GPU, while the per-sample readings additionally require that agreement.
+
+Dedicated memory is the exception to the unified-memory rule. An integrated
+GPU's carve-out is reserved by the firmware and not counted as system RAM, so
+`dedicatedMemoryTotalBytes` and its usage are `device`-scoped. Apple reports 0.
+On a discrete GPU the fields repeat the declared memory and `memoryUsedBytes`,
+under the same scope.
 
 ## Platform limitations
 

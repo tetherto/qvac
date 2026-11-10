@@ -166,6 +166,36 @@ test('calcTokens accepts completion-compatible text histories', (t) => {
       history: [{ role: 'user', content: 'Hello', attachments: undefined }]
     }).success
   )
+  t.ok(
+    calcTokensRequestSchema.safeParse({
+      type: 'calcTokens',
+      modelId: 'llm',
+      history: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Hello' },
+            { type: 'text', text: 'again' }
+          ]
+        }
+      ]
+    }).success
+  )
+
+  const withMediaContent = calcTokensRequestSchema.safeParse({
+    type: 'calcTokens',
+    modelId: 'llm',
+    history: [
+      {
+        role: 'user',
+        content: [{ type: 'media', path: '/tmp/image.png' }]
+      }
+    ]
+  })
+  t.absent(withMediaContent.success)
+  if (!withMediaContent.success) {
+    t.ok(withMediaContent.error.message.includes('use completion() for media'))
+  }
 
   const withAttachment = calcTokensRequestSchema.safeParse({
     type: 'calcTokens',
