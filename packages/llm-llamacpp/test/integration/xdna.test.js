@@ -23,7 +23,7 @@ const fs = require('bare-fs')
 const os = require('bare-os')
 const path = require('bare-path')
 const LlmLlamacpp = require('../../index.js')
-const { ensureModel, safeTest } = require('./utils')
+const { ensureModel, getMediaPath, safeTest } = require('./utils')
 const { attachSpecLogger } = require('./spec-logger')
 
 const platform = os.platform()
@@ -52,6 +52,7 @@ const hasNpu = hasAmdXdnaNpu()
 
 // prestage-ignore: Llama-3.2-1B-Instruct-Q4_0.gguf — desktop-only; the test skips on mobile
 // prestage-ignore: Qwen3.5-0.8B-Q4_K_M.gguf — desktop-only (Linux x64 XDNA NPU)
+// prestage-ignore: mmproj-Qwen3.5-0.8B-F16.gguf — desktop-only (Linux x64 XDNA NPU)
 
 // Fallback smoke test model: small, cached on CI, no NPU needed.
 const FALLBACK_MODEL = 'Llama-3.2-1B-Instruct-Q4_0.gguf'
@@ -65,6 +66,56 @@ const PROMPT = [
   { role: 'system', content: 'You are a helpful assistant.' },
   { role: 'user', content: 'What is 2+2? Answer in one word.' }
 ]
+
+// The vision projector of NPU_MODEL, for the projector-placement tests.
+const NPU_MMPROJ = 'mmproj-Qwen3.5-0.8B-F16.gguf'
+const IMAGE_FILE = 'elephant.jpg'
+
+function imagePrompt() {
+  return [
+    { role: 'system', content: 'You are a helpful assistant.' },
+    {
+      role: 'user',
+      type: 'media',
+      content: new Uint8Array(fs.readFileSync(getMediaPath(IMAGE_FILE)))
+    },
+    { role: 'user', content: 'What animal is in the image? Answer in one word.' }
+  ]
+}
+
+// The addon logs where it put the projector on every GPU or NPU load:
+// "multimodal projector backend: GPU Vulkan0 (<reason>)", or "CPU (<reason>)".
+// Fabric then logs "clip_ctx: CLIP using <device> backend" when it loads the
+// projector, but on stderr, outside the log capture below: read it from the
+// console output.
+const PROJECTOR_RE = /multimodal projector backend: (?:(GPU|NPU) (\S+)|CPU) \(([^)]*)\)/
+
+function projectorDecision(logText) {
+  const match = logText.match(PROJECTOR_RE)
+  if (!match) return null
+  return { where: match[1] || 'CPU', device: match[2] || null, reason: match[3] }
+}
+
+// An NPU-led load puts the projector on a GPU beside the NPU, or on the CPU
+// when the host has none: never on the NPU by default.
+function assertProjectorDefault(t, logText) {
+  const decision = projectorDecision(logText)
+  t.ok(decision, 'the projector placement was logged')
+  if (!decision) return null
+  t.comment(`projector: ${decision.where}${decision.device ? ' ' + decision.device : ''}`)
+  if (decision.where === 'GPU') {
+    t.absent(/xdna/i.test(decision.device), `the projector GPU is not the NPU (${decision.device})`)
+    t.is(
+      decision.reason,
+      'auto-default, a GPU beside the XDNA NPU',
+      'projector on a GPU beside the NPU'
+    )
+  } else {
+    t.is(decision.where, 'CPU', 'the projector does not default to the NPU')
+    t.is(decision.reason, 'auto-default, XDNA NPU without a GPU', 'no GPU: projector on the CPU')
+  }
+  return decision
+}
 
 const CHOSEN_NPU_RE = /Chosen NPU Backend/
 const NO_NPU_RE = /No NPU device found; falling back to the GPU backend order, then CPU/
@@ -92,15 +143,21 @@ function parseKvCacheTypes(logs) {
   return null
 }
 
-async function loadAndRun(modelName, extraConfig) {
+// `projection` adds a vision projector; `prompt` replaces the text prompt.
+async function loadAndRun(modelName, extraConfig, { projection = null, prompt = PROMPT } = {}) {
   const [name, dirPath] = await ensureModel({ modelName })
+  const files = { model: [path.join(dirPath, name)] }
+  if (projection) {
+    const [projName, projDir] = await ensureModel({ modelName: projection })
+    files.projectionModel = path.join(projDir, projName)
+  }
   const specLogger = attachSpecLogger({
     forwardToConsole: true,
     onLog: (line) => processLogs.push(line)
   })
 
   const model = new LlmLlamacpp({
-    files: { model: [path.join(dirPath, name)] },
+    files,
     config: {
       device: 'gpu',
       gpu_layers: '999',
@@ -120,7 +177,7 @@ async function loadAndRun(modelName, extraConfig) {
 
   try {
     await model.load()
-    const response = await model.run(PROMPT, { generationParams: { reasoning_budget: 0 } })
+    const response = await model.run(prompt, { generationParams: { reasoning_budget: 0 } })
     const chunks = []
     await response
       .onUpdate((data) => {
@@ -152,6 +209,7 @@ function assertRanOnNpu(t, { output, kvTypes, backendDevice, logText }) {
   t.is(kvTypes?.v, 'f16', 'cache-type-v stays f16 on the NPU')
   t.absent(/defaulting kv-cache to q8_0/i.test(logText), 'no q8_0 KV default on the NPU')
   t.ok(/4|four/i.test(output), `NPU output answers the prompt: "${output.slice(0, 100)}"`)
+  assertProjectorDefault(t, logText)
 }
 
 safeTest(
@@ -204,6 +262,49 @@ safeTest(
     const result = await loadAndRun(NPU_MODEL, { devices: 'XDNA0' })
 
     assertRanOnNpu(t, result)
+  }
+)
+
+// The projector is untested on the NPU, so a vision model on the NPU encodes
+// its image on a GPU beside it, or on the CPU when there is none.
+safeTest(
+  'xdna: device npu encodes the image beside the NPU',
+  { timeout: 900_000, skip: !hasNpu },
+  async (t) => {
+    const result = await loadAndRun(
+      NPU_MODEL,
+      { device: 'npu', ctx_size: '4096' },
+      { projection: NPU_MMPROJ, prompt: imagePrompt() }
+    )
+
+    t.is(result.backendDevice, 'npu', 'stats report the NPU device class')
+    t.ok(XDNA_BUFFER_RE.test(result.logText), 'model weights were placed in an XDNA buffer')
+    assertProjectorDefault(t, result.logText)
+    t.ok(
+      /elephant/i.test(result.output),
+      `the answer names the elephant: "${result.output.slice(0, 100)}"`
+    )
+  }
+)
+
+safeTest(
+  'xdna: mmproj-use-gpu false keeps the projector on the CPU',
+  { timeout: 900_000, skip: !hasNpu },
+  async (t) => {
+    const result = await loadAndRun(
+      NPU_MODEL,
+      { device: 'npu', ctx_size: '4096', 'mmproj-use-gpu': 'false' },
+      { projection: NPU_MMPROJ, prompt: imagePrompt() }
+    )
+
+    const decision = projectorDecision(result.logText)
+    t.is(decision?.where, 'CPU', 'the projector stays on the CPU')
+    t.is(decision?.reason, 'mmproj-use-gpu override', 'the override decided it')
+    t.is(result.backendDevice, 'npu', 'the model still runs on the NPU')
+    t.ok(
+      /elephant/i.test(result.output),
+      `the answer names the elephant: "${result.output.slice(0, 100)}"`
+    )
   }
 )
 
