@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from tetherto.qvac_sdk import load_model, unload_model
+from tetherto.qvac_sdk import Client, load_model, unload_model
 from tetherto.qvac_sdk import models as model_constants
 
 # The shared table, relative to this client. Overridable so a run can point at a catalog
@@ -124,8 +124,8 @@ class ResourceManager:
     before the next one.
     """
 
-    def __init__(self, transport: Any, log) -> None:
-        self._transport = transport
+    def __init__(self, client: Client, log) -> None:
+        self._client = client
         self._log = log
         self._loaded: dict[str, str] = {}
         # A dict, not a set: released in load order.
@@ -133,7 +133,13 @@ class ResourceManager:
 
     @property
     def transport(self) -> Any:
-        return self._transport
+        return self._client.transport
+
+    async def restart(self) -> None:
+        """Stops the worker with the models it holds and starts a new one."""
+        self._loaded.clear()
+        await self._client.close()
+        await self._client.connect()
 
     def _definition(self, dep: str) -> dict[str, Any]:
         definition = resources().get(dep)
@@ -180,7 +186,7 @@ class ResourceManager:
 
         self._log(f"loading {dep}")
         model_id = await load_model(
-            self._transport,
+            self.transport,
             model_src=constant if constant is not None else definition.get("modelSrc"),
             model_type=definition.get("type"),
             model_config=config,
@@ -223,7 +229,7 @@ class ResourceManager:
             return
         self._log(f"evicting {dep}")
         try:
-            await unload_model(self._transport, model_id)
+            await unload_model(self.transport, model_id)
         except Exception as error:  # noqa: BLE001 - eviction must not fail a test
             self._log(f"evicting {dep} failed (continuing): {error}")
 
@@ -234,7 +240,7 @@ class ResourceManager:
             model_id = self._loaded.pop(dep)
             self._log(f"evicting {dep}")
             try:
-                await unload_model(self._transport, model_id)
+                await unload_model(self.transport, model_id)
             except Exception as error:  # noqa: BLE001 - eviction must not fail a test
                 self._log(f"evicting {dep} failed (continuing): {error}")
 

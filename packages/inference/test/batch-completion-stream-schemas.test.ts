@@ -208,3 +208,26 @@ test('batchCompletionClientParamsSchema: a demanding tool_choice needs the promp
     'name not among the prompt tools'
   )
 })
+
+test('batch schemas: a prompt carries its own toolSearch limits and rejects invalid ones', (t) => {
+  const deferred = { ...tool, deferLoading: true }
+  for (const [schema, extra] of [
+    [batchCompletionClientParamsSchema, {}],
+    [batchCompletionStreamRequestSchema, { type: 'batchCompletionStream' }]
+  ] as const) {
+    const parse = (toolSearch: unknown) =>
+      schema.safeParse({
+        modelId: 'llama',
+        prompts: [{ ...prompt, tools: [deferred], toolSearch }],
+        ...extra
+      })
+    const accepted = parse({ defaultLimit: 2, maxLimit: 4 })
+    t.is(accepted.success, true)
+    t.alike(accepted.success && accepted.data.prompts[0]?.toolSearch, {
+      defaultLimit: 2,
+      maxLimit: 4
+    })
+    t.is(parse({ defaultLimit: 0 }).success, false)
+    t.is(parse({ defaultLimit: 5, maxLimit: 4 }).success, false)
+  }
+})
