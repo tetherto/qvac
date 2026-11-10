@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ModelType } from '@/schemas/model-types'
+import { sessionScopedRequestSchema } from '@/schemas/request-base'
 
 // QVAC Model Registry entry schema matching the RegistryItem from models/registry/models.ts
 const modelRegistryEntryAddonSchema = z.enum([
@@ -70,9 +71,11 @@ export type ModelRegistryEntryAddon = z.infer<typeof modelRegistryEntryAddonSche
 export type ModelRegistryEngine = z.infer<typeof modelRegistryEngineSchema>
 
 // QVAC Model Registry list request/response
-export const modelRegistryListRequestSchema = z.object({
-  type: z.literal('modelRegistryList')
-})
+export const modelRegistryListRequestSchema = z
+  .object({
+    type: z.literal('modelRegistryList')
+  })
+  .extend(sessionScopedRequestSchema.shape)
 
 export const modelRegistryListResponseSchema = z.object({
   type: z.literal('modelRegistryList'),
@@ -85,13 +88,15 @@ export type ModelRegistryListRequest = z.infer<typeof modelRegistryListRequestSc
 export type ModelRegistryListResponse = z.infer<typeof modelRegistryListResponseSchema>
 
 // QVAC Model Registry search request/response
-export const modelRegistrySearchRequestSchema = z.object({
-  type: z.literal('modelRegistrySearch'),
-  filter: z.string().optional(),
-  engine: z.string().optional(),
-  quantization: z.string().optional(),
-  addon: modelRegistryEntryAddonSchema.optional()
-})
+export const modelRegistrySearchRequestSchema = z
+  .object({
+    type: z.literal('modelRegistrySearch'),
+    filter: z.string().optional(),
+    engine: z.string().optional(),
+    quantization: z.string().optional(),
+    addon: modelRegistryEntryAddonSchema.optional()
+  })
+  .extend(sessionScopedRequestSchema.shape)
 
 export const modelRegistrySearchResponseSchema = z.object({
   type: z.literal('modelRegistrySearch'),
@@ -104,11 +109,13 @@ export type ModelRegistrySearchRequest = z.infer<typeof modelRegistrySearchReque
 export type ModelRegistrySearchResponse = z.infer<typeof modelRegistrySearchResponseSchema>
 
 // QVAC Model Registry get model request/response
-export const modelRegistryGetModelRequestSchema = z.object({
-  type: z.literal('modelRegistryGetModel'),
-  registryPath: z.string(),
-  registrySource: z.string()
-})
+export const modelRegistryGetModelRequestSchema = z
+  .object({
+    type: z.literal('modelRegistryGetModel'),
+    registryPath: z.string(),
+    registrySource: z.string()
+  })
+  .extend(sessionScopedRequestSchema.shape)
 
 export const modelRegistryGetModelResponseSchema = z.object({
   type: z.literal('modelRegistryGetModel'),

@@ -7,8 +7,15 @@ import {
   discoverRpcServersResponseSchema
 } from '@/schemas/rpc-server'
 import { z } from 'zod'
+import type { AbortSignalLike } from '@/schemas/abort-signal'
 import { perCallProfilingSchema } from '@/schemas/profiling'
 import { heartbeatRequestSchema, heartbeatResponseSchema } from '@/schemas/heartbeat'
+import {
+  openSessionRequestSchema,
+  openSessionResponseSchema,
+  closeSessionRequestSchema,
+  closeSessionResponseSchema
+} from '@/schemas/session'
 import {
   completionOrchestrateRequestSchema,
   completionOrchestrateResponseSchema,
@@ -137,6 +144,8 @@ export const requestSchema = z.union([
   discoverRpcServersRequestSchema,
   heartbeatRequestSchema,
   calcTokensRequestSchema,
+  openSessionRequestSchema,
+  closeSessionRequestSchema,
   loadModelRequestSchema,
   downloadAssetRequestSchema,
   completionStreamRequestSchema,
@@ -190,6 +199,8 @@ export const responseSchema = z.discriminatedUnion('type', [
   discoverRpcServersResponseSchema,
   heartbeatResponseSchema,
   calcTokensResponseSchema,
+  openSessionResponseSchema,
+  closeSessionResponseSchema,
   loadModelResponseSchema,
   downloadAssetResponseSchema,
   completionStreamResponseSchema,
@@ -238,12 +249,7 @@ export const responseSchema = z.discriminatedUnion('type', [
   rerankResponseSchema
 ])
 
-/** Structural `AbortSignal`: fits the global one and bare-abort-controller's. */
-export interface AbortSignalLike {
-  readonly aborted: boolean
-  addEventListener(type: 'abort', listener: () => void, options?: { once?: boolean }): void
-  removeEventListener(type: 'abort', listener: () => void): void
-}
+export type { AbortSignalLike }
 
 export const rpcOptionsSchema = z.object({
   timeout: z
@@ -264,6 +270,14 @@ export const rpcOptionsSchema = z.object({
     .optional()
     .describe(
       'Per-call profiler configuration; when present, overrides the global profiler settings for this request.'
+    ),
+  sessionId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      'Caller session to run this request as. Set by a session handle; the ' +
+        'transport copies it onto the request body.'
     )
 })
 
