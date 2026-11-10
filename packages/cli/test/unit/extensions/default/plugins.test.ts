@@ -54,18 +54,18 @@ function fakeOperations(fake: Fake): PluginOperations {
 function hangingStream(chunks: unknown[], hang: { returned: boolean }): AsyncGenerator<unknown> {
   const queue = [...chunks]
   const stream = {
-    next: () =>
+    next: (): Promise<IteratorResult<unknown>> =>
       queue.length > 0
         ? Promise.resolve({ done: false, value: queue.shift() })
-        : new Promise<IteratorResult<unknown>>(() => {}),
-    return: () => {
+        : new Promise(() => {}),
+    return: (): Promise<IteratorResult<unknown>> => {
       hang.returned = true
       return Promise.resolve({ done: true, value: undefined })
     },
     throw: (err: unknown) => Promise.reject(err),
     [Symbol.asyncIterator]: () => stream
   }
-  return stream as AsyncGenerator<unknown>
+  return stream as unknown as AsyncGenerator<unknown>
 }
 
 function sdkError(code: number, message: string): Error {
